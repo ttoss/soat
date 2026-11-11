@@ -1219,7 +1219,7 @@ describe('MCP tools - happy path', () => {
       expect(createDocumentResult.id).toBeDefined();
     });
 
-    // A tag key is read back by IAM as a `soat:ResourceTag/<key>`, so rewriting
+    // A tag key is read back by IAM as a `iam:ResourceTag/<key>`, so rewriting
     // it on read would leave a tag set through one surface not matching a policy
     // written for the other.
     test('create-document preserves multi-word tag keys verbatim', async () => {
@@ -2510,7 +2510,7 @@ describe('MCP tools - happy path', () => {
     // tag the condition selects.
     test('policy condition keys survive a read → write round-trip', async () => {
       const condition = {
-        StringEquals: { 'soat:ResourceTag/cost_center': 'platform' },
+        StringEquals: { 'iam:ResourceTag/cost_center': 'platform' },
       };
 
       const created = await mcpCall('create-policy', {

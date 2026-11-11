@@ -53,6 +53,7 @@ import { payloadsKeepKeyOrder } from './2026-11-01-payloadsKeepKeyOrder';
 import { agentPolicyIds } from './2026-11-10-agentPolicyIds';
 import { generationActedAs } from './2026-11-10-generationActedAs';
 import { policyProjectId } from './2026-11-10-policyProjectId';
+import { iamConditionKeys } from './2026-11-11-iamConditionKeys';
 import { triggerPolicyIds } from './2026-11-10-triggerPolicyIds';
 import { webhookPolicyIds } from './2026-11-10-webhookPolicyIds';
 
@@ -131,4 +132,5 @@ export const MIGRATIONS: Migration[] = [
   triggerPolicyIds,
   webhookPolicyIds,
   policyProjectId,
+  iamConditionKeys,
 ];

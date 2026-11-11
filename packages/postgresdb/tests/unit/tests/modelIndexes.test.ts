@@ -131,7 +131,7 @@ const vectorColumns = modelEntries.flatMap(
  *
  * Every `tags` column qualifies, structurally: a tag bag has exactly one
  * matching rule and `@>` is it — the `?tags=` filter, knowledge search and a
- * `soat:ResourceTag/<key>` policy condition all read the column that way — so
+ * `iam:ResourceTag/<key>` policy condition all read the column that way — so
  * a `tags` column nothing contains does not exist.
  *
  * A `metadata` bag is caller-owned and read back with its row, so it is not
@@ -447,7 +447,7 @@ describe('containment-matched bags carry a GIN index', () => {
 
   test('every containment-matched bag is indexed `USING gin` with `jsonb_path_ops`', () => {
     // A tag bag is only ever matched by containment — the `?tags=` filter,
-    // knowledge search and the `soat:ResourceTag/<key>` policy condition all
+    // knowledge search and the `iam:ResourceTag/<key>` policy condition all
     // read the column through `@>`. Without a GIN index that match is a
     // sequential scan of every row in scope, and the cost grows with the
     // project rather than with the answer.

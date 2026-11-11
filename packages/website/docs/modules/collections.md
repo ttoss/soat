@@ -76,7 +76,7 @@ Item bytes (`data`, `key`, `tags`) count toward the project's [`gb_day`](./usage
 ## Access Rules
 
 - Collection routes authorize against `srn:<project>:collection:<id>`.
-- Every item route passes two checks: the action against the collection's SRN, then against the item's, `srn:<project>:collection_item:<key>`, with the item's tags as `soat:ResourceTag/<key>`. A listing compiles the second check into the query, so it returns only the items the caller may read.
+- Every item route passes two checks: the action against the collection's SRN, then against the item's, `srn:<project>:collection_item:<key>`, with the item's tags as `iam:ResourceTag/<key>`. A listing compiles the second check into the query, so it returns only the items the caller may read.
 - A write is judged against the tags the item holds and the tags it will hold, so a principal scoped by tag cannot move an item into or out of its scope.
 - A read the caller may not make answers `404`.
 
@@ -94,7 +94,7 @@ To confine a principal to one actor's items, grant the collection and condition 
       "effect": "Allow",
       "action": ["collections:*"],
       "resource": ["srn:proj_V1StGXR8Z5jdHi6B:collection_item:*"],
-      "condition": { "StringEquals": { "soat:ResourceTag/actor_id": "actor_V1StGXR8Z5jdHi6B" } }
+      "condition": { "StringEquals": { "iam:ResourceTag/actor_id": "actor_V1StGXR8Z5jdHi6B" } }
     }
   ]
 }

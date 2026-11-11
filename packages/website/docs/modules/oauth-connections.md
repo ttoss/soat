@@ -55,7 +55,7 @@ Whoever consents at the `authorize_url` connects their account to the actor it w
 
 ### Using a connection from a tool
 
-The tool sends the token of the connection held by the actor in the turn's [`tool_context`](../advanced/tool-context.md), which the server pins; a caller cannot name another actor. Each call needs `oauth-connections:UseOauthConnection` on the connection (`srn:<project_id>:oauth_connection:<oauth_connection_id>`) from both the caller and the agent's [`policy_ids`](./agents.md); `${soat:ActorId}` in a policy condition binds to the turn's actor. A refusal reaches the model as the tool's error and nothing is sent.
+The tool sends the token of the connection held by the actor in the turn's [`tool_context`](../advanced/tool-context.md), which the server pins; a caller cannot name another actor. Each call needs `oauth-connections:UseOauthConnection` on the connection (`srn:<project_id>:oauth_connection:<oauth_connection_id>`) from both the caller and the agent's [`policy_ids`](./agents.md); `${iam:ActorId}` in a policy condition binds to the turn's actor. A refusal reaches the model as the tool's error and nothing is sent.
 
 A call with no actor, or an actor with no `connected` connection, fails with `TOOL_AUTH_FAILED` (`meta.reason: oauth_connection_required`) telling the actor to reconnect.
 

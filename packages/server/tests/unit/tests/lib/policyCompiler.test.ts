@@ -204,7 +204,7 @@ describe('compilePolicy', () => {
                 action: ['test:Do'],
                 resource: ['*'],
                 condition: {
-                  StringEquals: { 'soat:ResourceTag/env': 'production' },
+                  StringEquals: { 'iam:ResourceTag/env': 'production' },
                 },
               },
             ],
@@ -240,7 +240,7 @@ describe('compilePolicy', () => {
                 action: ['test:Do'],
                 resource: ['*'],
                 condition: {
-                  StringNotEquals: { 'soat:ResourceTag/env': 'dev' },
+                  StringNotEquals: { 'iam:ResourceTag/env': 'dev' },
                 },
               },
             ],
@@ -265,7 +265,7 @@ describe('compilePolicy', () => {
                 action: ['test:Do'],
                 resource: ['*'],
                 condition: {
-                  StringLike: { 'soat:ResourceTag/env': 'prod*' },
+                  StringLike: { 'iam:ResourceTag/env': 'prod*' },
                 },
               },
             ],
@@ -454,7 +454,7 @@ describe('compilePolicy', () => {
                 effect: 'Allow',
                 action: ['test:Do'],
                 resource: ['*'],
-                condition: { StringLike: { 'soat:ResourceTag/env': 'prod*' } },
+                condition: { StringLike: { 'iam:ResourceTag/env': 'prod*' } },
               },
             ],
           },
@@ -478,7 +478,7 @@ describe('compilePolicy', () => {
                 action: ['test:Do'],
                 resource: ['*'],
                 // The key after the prefix contains a space → rejected as unsafe.
-                condition: { StringLike: { 'soat:ResourceTag/bad key': 'x*' } },
+                condition: { StringLike: { 'iam:ResourceTag/bad key': 'x*' } },
               },
             ],
           },
@@ -503,7 +503,7 @@ describe('compilePolicy', () => {
                 effect: 'Allow',
                 action: ['test:Do'],
                 resource: ['*'],
-                condition: { NumericEquals: { 'soat:ResourceTag/count': '1' } },
+                condition: { NumericEquals: { 'iam:ResourceTag/count': '1' } },
               },
             ],
           },
@@ -600,7 +600,7 @@ describe('compilePolicy', () => {
                 effect: 'Allow',
                 action: ['test:Do'],
                 resource: [],
-                condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+                condition: { StringEquals: { 'iam:ResourceTag/env': 'prod' } },
               },
             ],
           },
@@ -652,7 +652,7 @@ describe('compilePolicy unbound variable', () => {
       action: ['test:Do'],
       resource: ['*'],
       condition: {
-        StringNotEquals: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+        StringNotEquals: { 'iam:ResourceTag/owner': '${iam:ActorId}' },
       },
     };
   };

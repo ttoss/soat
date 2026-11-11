@@ -11,7 +11,7 @@ import { authenticatedTestClient } from '../../testClient';
 /**
  * A request carrying `On-Behalf-Of` for a generation runs as the key capped by
  * that generation's execution identity: its caller and its agent's
- * `policy_ids`, `${soat:ActorId}` bound to its actor.
+ * `policy_ids`, `${iam:ActorId}` bound to its actor.
  */
 
 const HEADER = 'X-Soat-On-Behalf-Of';
@@ -152,7 +152,7 @@ describe('On-Behalf-Of execution identity', () => {
       {
         effect: 'Allow',
         action: ['documents:*'],
-        condition: { StringNotEquals: { 'soat:ResourceTag/team': 'red' } },
+        condition: { StringNotEquals: { 'iam:ResourceTag/team': 'red' } },
       },
     ]);
     const ownDocuments = await createPolicy([
@@ -160,7 +160,7 @@ describe('On-Behalf-Of execution identity', () => {
         effect: 'Allow',
         action: ['documents:*'],
         condition: {
-          StringEquals: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+          StringEquals: { 'iam:ResourceTag/owner': '${iam:ActorId}' },
         },
       },
     ]);
@@ -280,7 +280,7 @@ describe('On-Behalf-Of execution identity', () => {
       expect(res.status).toBe(403);
     });
 
-    test("binds ${soat:ActorId} to the generation's actor", async () => {
+    test("binds ${iam:ActorId} to the generation's actor", async () => {
       const own = await updateDocument({
         documentId: actorDoc,
         generationId: actorGeneration,

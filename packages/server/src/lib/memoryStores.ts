@@ -149,7 +149,7 @@ export const findMemoryStoreScope = async (args: {
 /**
  * What an IAM check on a store needs, alongside the internal id its writes
  * take: the owning project's **public** id (an SRN names public ids) and the
- * store's own tags (the `soat:ResourceTag/<key>` condition inputs).
+ * store's own tags (the `iam:ResourceTag/<key>` condition inputs).
  *
  * Separate from `findMemoryStoreScope`, which answers the numeric-project
  * question a sub-resource write asks *after* the store authorized the call.

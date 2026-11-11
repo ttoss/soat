@@ -2,7 +2,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * `soat:ResourceTag/<key>` conditions on session routes.
+ * `iam:ResourceTag/<key>` conditions on session routes.
  *
  * Sessions advertised `tags` in the spec and the docs long before IAM could
  * read them: every route authorized at project level only, against no SRN and
@@ -90,7 +90,7 @@ describe('Session tag policies', () => {
               action: ['agents:GetSession'],
               resource: ['*'],
               condition: {
-                StringEquals: { 'soat:ResourceTag/env': 'prod' },
+                StringEquals: { 'iam:ResourceTag/env': 'prod' },
               },
             },
             {
@@ -103,7 +103,7 @@ describe('Session tag policies', () => {
               action: ['agents:ListSessions'],
               resource: ['*'],
               condition: {
-                StringEquals: { 'soat:ResourceTag/env': 'staging' },
+                StringEquals: { 'iam:ResourceTag/env': 'staging' },
               },
             },
           ],

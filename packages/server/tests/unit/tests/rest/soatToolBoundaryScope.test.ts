@@ -118,7 +118,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
           effect: 'Allow',
           action: ['memories:*'],
           resource: ['*'],
-          condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+          condition: { StringEquals: { 'iam:ResourceTag/env': 'prod' } },
         },
       ],
     };

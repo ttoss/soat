@@ -707,7 +707,7 @@ The cap applies per hop: a sub-agent called through `create-agent-generation` re
 
 ## Next Steps
 
-- [Agents — Execution Identity](/docs/modules/agents#execution-identity) — `policy_ids` reference, including `${soat:ActorId}` per end user
+- [Agents — Execution Identity](/docs/modules/agents#execution-identity) — `policy_ids` reference, including `${iam:ActorId}` per end user
 - [Permissions in Practice](/docs/tutorials/permissions)
 - [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — a policy per sub-agent
 - [Gate a Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails)

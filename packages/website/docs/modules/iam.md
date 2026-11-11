@@ -168,10 +168,10 @@ Conditions add attribute-based constraints: an operator mapped to key-value pair
 {
   "condition": {
     "StringEquals": {
-      "soat:ResourceTag/environment": "production"
+      "iam:ResourceTag/environment": "production"
     },
     "StringLike": {
-      "soat:ResourceTag/team": "engineering-*"
+      "iam:ResourceTag/team": "engineering-*"
     }
   }
 }
@@ -189,26 +189,26 @@ An **absent** key satisfies `StringNotEquals` and fails `StringEquals`: a resour
 
 ### Condition Keys
 
-| Key                      | Source        | Description                             |
-| ------------------------ | ------------- | --------------------------------------- |
-| `soat:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
-| `soat:ResourceType`      | Request       | The type of the resource being accessed |
+| Key                     | Source        | Description                             |
+| ----------------------- | ------------- | --------------------------------------- |
+| `iam:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
+| `iam:ResourceType`      | Request       | The type of the resource being accessed |
 
-These are the only keys a `condition` may name. Any other key — a typo like `soat:ResourceTags/env`, a different case like `soat:resourcetype`, or a key for a source the platform does not supply — is rejected with `400 VALIDATION_FAILED` when the policy is written, and the error names the key.
+These are the only keys a `condition` may name. Any other key — a typo like `iam:ResourceTags/env`, a different case like `iam:resourcetype`, or a key for a source the platform does not supply — is rejected with `400 VALIDATION_FAILED` when the policy is written, and the error names the key.
 
 The check exists because an unknown key is never present in the evaluation context, so the statement carrying it can never match: an `Allow` silently stops granting, and a `Deny` **silently stops denying**. The second is a fail-open, which is why a typo is refused at authoring time rather than discovered in production. The same rule already applies to [action strings](#actions).
 
-`<key>` after `soat:ResourceTag/` is an opaque tag name and is not checked beyond being non-empty — a condition may name a tag no resource carries yet.
+`<key>` after `iam:ResourceTag/` is an opaque tag name and is not checked beyond being non-empty — a condition may name a tag no resource carries yet.
 
 Operators and keys match **by exact string**; no case conversion applies to a `condition` block or to `tags` (see [Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
 
 ### Policy Variables
 
-A condition value may name `${soat:ActorId}`, replaced at evaluation time:
+A condition value may name `${iam:ActorId}`, replaced at evaluation time:
 
-| Variable          | Bound to                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| `${soat:ActorId}` | The [actor](./actors.md) a generation runs for, in its [agent's `policy_ids`](./agents.md#execution-identity) |
+| Variable         | Bound to                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `${iam:ActorId}` | The [actor](./actors.md) a generation runs for, in its [agent's `policy_ids`](./agents.md#execution-identity) |
 
 Anywhere else, or in a generation with no actor, the variable is **unbound**, and a condition naming an unbound variable matches nothing under every operator, `StringNotEquals` included. Any other `${...}` is rejected with `400 VALIDATION_FAILED` when the policy is written.
 
@@ -305,9 +305,9 @@ Tags are key-value pairs on resources, enabling ABAC via conditions. One mechani
 | Bounds                                                | At most 50 keys, 128-character keys and 256-character values. A write past a bound is `400 VALIDATION_FAILED` with `meta.limit`, and so is a `PATCH` whose merge would grow the stored bag past the key count. `system.*` keys are the platform's and do not count |
 | List filter (`?tags=key:value`, repeatable)           | JSONB containment: every pair present with exactly that value; split on the first colon; a pair without a colon is `400`                                                                                                                                           |
 | Knowledge search (`tags` in the body)                 | Same containment rule across documents and memory entries                                                                                                                                                                                                          |
-| Policy condition (`soat:ResourceTag/<key>`)           | Same pairs, read from the same column                                                                                                                                                                                                                              |
+| Policy condition (`iam:ResourceTag/<key>`)            | Same pairs, read from the same column                                                                                                                                                                                                                              |
 
-Every resource that carries `tags` honors `soat:ResourceTag/<key>` in a policy condition.
+Every resource that carries `tags` honors `iam:ResourceTag/<key>` in a policy condition.
 
 A memory is the one resource governed by two tag bags — its own, and its memory store's. Both are evaluated, so a memory is never more visible than the store holding it; see [Memories — Tag Conditions](memories.md#tag-conditions).
 
@@ -346,10 +346,10 @@ GET /api/v1/<resources>?tags=env:prod&tags=team:finance
 
 ### Tag keys are stored verbatim
 
-A tag key is an opaque label, **never case-converted**: stored, returned, and matched against `soat:ResourceTag/<key>` exactly as written, on REST, in formation templates, and over MCP.
+A tag key is an opaque label, **never case-converted**: stored, returned, and matched against `iam:ResourceTag/<key>` exactly as written, on REST, in formation templates, and over MCP.
 
 - `cost_center` and `costCenter` are **two different tags**; a policy naming one does not match a resource carrying only the other.
-- `GET .../tags` returns the stored key verbatim; copy it into `soat:ResourceTag/<key>`.
+- `GET .../tags` returns the stored key verbatim; copy it into `iam:ResourceTag/<key>`.
 
 ## Tags and metadata
 
@@ -358,7 +358,7 @@ A resource carries two annotation bags, and only one of them is an authorization
 |                      | `tags`                                                                                      | `metadata`                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Shape                | A flat object of string values, bounded (50 keys, 128-character keys, 256-character values) | Any JSON object, nested, with the types it was written with; bounded by the project's storage quota, not by a count      |
-| Governed by          | One mechanism for the write, `?tags=`, knowledge search and `soat:ResourceTag/<key>`        | A [metadata schema](metadata-schemas.md) per resource type and selector, which governs the write only                    |
+| Governed by          | One mechanism for the write, `?tags=`, knowledge search and `iam:ResourceTag/<key>`         | A [metadata schema](metadata-schemas.md) per resource type and selector, which governs the write only                    |
 | Read by the platform | Yes: the IAM context of every access check, containment filters, `system.*` provenance      | Never: not in an IAM context, not in a policy condition, not in a prompt                                                 |
 | Filtered by          | `?tags=key:value`, by containment                                                           | The [structured filter grammar](documents.md#metadata-filters) — equality, `in`, ordering — through the same containment |
 | Reserved keys        | `system.*`, refused on a caller write                                                       | None, and that is the point: nothing in the bag reaches platform state                                                   |
@@ -369,13 +369,13 @@ A record whose bag is unset leaves the field out of its response rather than ans
 
 A `metadata` bag is refused unless it is a JSON object, with `400 VALIDATION_FAILED`, at every endpoint that stores one — the column would keep a bare string as readily as an object, and a stored string then answers no structured filter, so an accepted bad write reads back as a row that simply matches nothing. The two endpoints that take a bag without storing one are not bound by this: knowledge search reads a filter over bags, and the metadata-schema validator answers with a verdict on a bag rather than keeping it.
 
-Which bag a rule may read follows from who writes it. Any caller who may write a resource may put any JSON in its `metadata`, so a policy condition on that bag would let that caller decide what their own rows match — including out of a `Deny`. `tags` are bounded and their `system.*` keys are refused on a caller write, which is what makes them safe to condition on. A policy therefore names `soat:ResourceTag/<key>` and has no spelling for the other bag.
+Which bag a rule may read follows from who writes it. Any caller who may write a resource may put any JSON in its `metadata`, so a policy condition on that bag would let that caller decide what their own rows match — including out of a `Deny`. `tags` are bounded and their `system.*` keys are refused on a caller write, which is what makes them safe to condition on. A policy therefore names `iam:ResourceTag/<key>` and has no spelling for the other bag.
 
 ### Choosing a bag
 
 | A field that…                                                  | Goes in    |
 | -------------------------------------------------------------- | ---------- |
-| a policy scopes rows by, through `soat:ResourceTag/<key>`      | `tags`     |
+| a policy scopes rows by, through `iam:ResourceTag/<key>`       | `tags`     |
 | identifies the row, matched by `?tags=` or knowledge search    | `tags`     |
 | holds a typed value: a number, a date, a list, a nested object | `metadata` |
 | is ordered or compared (`gt`, `lte`, `in`)                     | `metadata` |
@@ -476,7 +476,7 @@ Allow only actors tagged `"internal"`:
       "resource": ["srn:proj_ABC:actor:*"],
       "condition": {
         "StringEquals": {
-          "soat:ResourceTag/visibility": "internal"
+          "iam:ResourceTag/visibility": "internal"
         }
       }
     }

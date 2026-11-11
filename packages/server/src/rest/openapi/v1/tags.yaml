@@ -24,7 +24,7 @@ components:
         `400 VALIDATION_FAILED`, never coerced. Keys are opaque and stored
         verbatim, so `cost_center` and `costCenter` are two different tags.
         Matched by JSONB containment wherever tags are read: the `?tags=`
-        filter, knowledge search, and the IAM `soat:ResourceTag/<key>`
+        filter, knowledge search, and the IAM `iam:ResourceTag/<key>`
         condition.
 
 

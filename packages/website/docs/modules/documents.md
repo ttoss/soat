@@ -152,7 +152,7 @@ An id not in the document's project is `400 SESSION_NOT_FOUND` or `400 ACTOR_NOT
 
 ### Tags
 
-Key-value string pairs set at creation or ingestion, or via the tag sub-endpoints, and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/documents`](/docs/api/documents/list-documents) filters by pair with `?tags=key:value` (repeatable, all must match); [Knowledge search](./knowledge.md) applies the same pairs to chunks. See [IAM — Tags](iam.md#tags).
+Key-value string pairs set at creation or ingestion, or via the tag sub-endpoints, and matched by `iam:ResourceTag/<key>`. [`GET /api/v1/documents`](/docs/api/documents/list-documents) filters by pair with `?tags=key:value` (repeatable, all must match); [Knowledge search](./knowledge.md) applies the same pairs to chunks. See [IAM — Tags](iam.md#tags).
 
 Which field goes in `tags` and which in `metadata`: [IAM — Choosing a bag](iam.md#choosing-a-bag).
 
