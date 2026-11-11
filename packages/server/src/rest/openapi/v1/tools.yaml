@@ -569,6 +569,10 @@ paths:
         '409':
           description: >-
             PROJECT_PAUSED — the project is paused, so nothing new starts in it; `error.meta` carries `paused_at` and `pause_reason`.
+            OAUTH_CONNECTION_REQUIRED — an `oauth_connection` tool ran for an
+            actor holding no connected connection through its
+            `oauth_client_id`; `error.meta` carries `oauth_client_id`,
+            `actor_id` and, when one exists, `oauth_connection_id`.
           content:
             application/json:
               schema:
@@ -775,8 +779,9 @@ components:
             the turn's actor holds through `oauth_client_id`, refreshing it when it
             expires. The call is refused unless both the caller and the agent's
             `policy_ids` allow `oauth-connections:UseOauthConnection` on the
-            connection; with no actor, or no connected connection, it fails with
-            `TOOL_AUTH_FAILED` naming how to reconnect.
+            connection. With no actor it fails with `TOOL_AUTH_FAILED`; for an
+            actor holding no connected connection, `409 OAUTH_CONNECTION_REQUIRED`
+            naming how to reconnect.
 
 
             Credential fields accept `{{secret:...}}` references and should use
@@ -1253,8 +1258,9 @@ components:
         the turn's actor holds through `oauth_client_id`, refreshing it when it
         expires. The call is refused unless both the caller and the agent's
         `policy_ids` allow `oauth-connections:UseOauthConnection` on the
-        connection; with no actor, or no connected connection, it fails with
-        `TOOL_AUTH_FAILED` naming how to reconnect.
+        connection. With no actor it fails with `TOOL_AUTH_FAILED`; for an
+        actor holding no connected connection, `409 OAUTH_CONNECTION_REQUIRED`
+        naming how to reconnect.
 
 
         Credential fields accept `{{secret:...}}` references and should use

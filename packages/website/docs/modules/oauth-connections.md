@@ -57,11 +57,11 @@ Whoever consents at the `authorize_url` connects their account to the actor it w
 
 The tool sends the token of the connection held by the call's actor: the actor in the turn's [`tool_context`](../advanced/tool-context.md), which the server pins, or the `actor_id` of a direct [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), which must be an actor of the calling project. A caller never names the actor through `tool_context`. Each call needs `oauth-connections:UseOauthConnection` on the connection (`srn:<project_id>:oauth_connection:<oauth_connection_id>`) from the caller and, in a turn, the agent's [`policy_ids`](./agents.md); `${iam:ActorId}` in a policy condition binds to the turn's actor. A refusal reaches the model as the tool's error, or answers the direct call, and nothing is sent.
 
-A call with no actor, or an actor with no `connected` connection, fails with `TOOL_AUTH_FAILED` (`meta.reason: oauth_connection_required`) telling the actor to reconnect.
+A call with no actor is `502 TOOL_AUTH_FAILED`. An actor with no `connected` connection (none made, disconnected, or its refresh refused) is `409 OAUTH_CONNECTION_REQUIRED`, telling the actor to reconnect; error `meta` carries `oauth_client_id`, `actor_id` and, when one exists, `oauth_connection_id`, the ids a client needs to start the connection again. In a turn the model reads it as the tool's error.
 
 ### Refresh
 
-An access token within 60 seconds of `expires_at` is refreshed before it is sent. Refreshes take a per-connection lock, so concurrent calls refresh once: providers such as X rotate the refresh token on every use, and a second refresh with the old one would be refused. A refresh the provider refuses (`4xx`) sets the connection `disconnected` with `OAUTH_CONNECTION_REFRESH_FAILED`; a provider that cannot answer (`5xx`, network) fails only that call.
+An access token within 60 seconds of `expires_at` is refreshed before it is sent. Refreshes take a per-connection lock, so concurrent calls refresh once: providers such as X rotate the refresh token on every use, and a second refresh with the old one would be refused. A refresh the provider refuses (`4xx`) sets the connection `disconnected` with `OAUTH_CONNECTION_REFRESH_FAILED` and answers the call `409 OAUTH_CONNECTION_REQUIRED`; a provider that cannot answer (`5xx`, network) fails only that call, `502 TOOL_AUTH_FAILED`.
 
 ### Deletion
 
