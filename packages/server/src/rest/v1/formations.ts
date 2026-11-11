@@ -244,7 +244,6 @@ formationsRouter.get('/formations', async (ctx: Context) => {
     action: 'formations:ListFormations',
     resourceType: 'formation',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listFormations({

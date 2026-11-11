@@ -195,7 +195,6 @@ toolsRouter.get('/tools', async (ctx: Context) => {
     action: 'tools:ListTools',
     resourceType: 'tool',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const page = await listTools({ projectIds, ...parsePagination(ctx) });

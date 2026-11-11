@@ -152,7 +152,6 @@ memoryRulesRouter.get('/memory-rules', async (ctx: Context) => {
     action: 'memories:ListMemoryRules',
     resourceType: 'memory_store',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listMemoryRules({ projectIds, ...parsePagination(ctx) });
 });

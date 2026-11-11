@@ -111,7 +111,6 @@ evaluationsRouter.get('/datasets', async (ctx: Context) => {
     action: 'evaluations:ListDatasets',
     resourceType: 'dataset',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listDatasets({ projectIds, ...parsePagination(ctx) });
@@ -377,7 +376,6 @@ evaluationsRouter.get('/evals', async (ctx: Context) => {
     action: 'evaluations:ListEvals',
     resourceType: 'eval',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listEvals({ projectIds, ...parsePagination(ctx) });

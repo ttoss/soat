@@ -209,11 +209,12 @@ describe('Generations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('returns 404 when user lacks permission', async () => {
+    test('a caller permitted in no project gets an empty page', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         '/api/v1/generations'
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('lists generations filtered by agent_id', async () => {
@@ -331,9 +332,8 @@ describe('Generations', () => {
       expect(response.status).toBe(401);
     });
 
-    // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the generation's own SRN; the
-    // listing above keeps `403`, and so do the writes below.
+    // A read the caller may not perform is indistinguishable from absence: the
+    // route authorizes against the generation's own SRN.
     test('returns 404 when user lacks permission', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/generations/${failedGenerationId}`

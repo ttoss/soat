@@ -34,7 +34,6 @@ oauthConnectionsRouter.get('/oauth-connections', async (ctx: Context) => {
     action: 'oauth-connections:ListOauthConnections',
     resourceType: 'oauth_connection',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listOauthConnections({
     projectIds,

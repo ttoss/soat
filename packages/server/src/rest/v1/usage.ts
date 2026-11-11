@@ -104,7 +104,6 @@ usageRouter.get('/usage/events', async (ctx: Context) => {
     action: 'usage:ListEvents',
     resourceType: 'usage',
     projectSelector: 'none',
-    emptyScope: 'forbidden',
   });
 
   const result = await listUsageEvents({
@@ -153,7 +152,6 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
     action: 'usage:GetAggregate',
     resourceType: 'usage',
     projectSelector: 'required',
-    emptyScope: 'forbidden',
   });
   const projectId = projectIds?.[0];
   if (projectId === undefined || projectPublicId === undefined) {
@@ -189,7 +187,6 @@ usageRouter.get('/usage/thresholds', async (ctx: Context) => {
     action: 'usage:ListThresholds',
     resourceType: 'usage',
     projectSelector: 'optional',
-    emptyScope: 'forbidden',
   });
 
   ctx.body = await listThresholds({
@@ -353,7 +350,6 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
     action: 'usage:GetReceipt',
     resourceType: 'usage',
     projectSelector: 'none',
-    emptyScope: 'forbidden',
   });
 
   const {

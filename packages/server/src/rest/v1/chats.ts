@@ -137,7 +137,6 @@ chatsRouter.get('/chats', async (ctx: Context) => {
     action: 'chats:ListChats',
     resourceType: 'chat',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listChats({

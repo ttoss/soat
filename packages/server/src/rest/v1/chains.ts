@@ -37,7 +37,6 @@ chainsRouter.get('/chains', async (ctx: Context) => {
     action: 'chains:ListChains',
     resourceType: 'chain',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listChains({

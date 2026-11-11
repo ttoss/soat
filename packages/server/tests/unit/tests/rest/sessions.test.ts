@@ -1271,10 +1271,19 @@ describe('Sessions', () => {
       expect(response.status).toBe(403);
     });
 
-    test('user without ListSessions permission returns 403', async () => {
+    test('a caller permitted in no project lists an empty page', async () => {
       const response = await authenticatedTestClient(unprivilegedToken).get(
         `/api/v1/sessions?agent_id=${agentId}`
       );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ data: [], next_cursor: null });
+    });
+
+    test('naming a project without ListSessions permission returns 403', async () => {
+      const response = await authenticatedTestClient(unprivilegedToken)
+        .get('/api/v1/sessions')
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(403);
     });

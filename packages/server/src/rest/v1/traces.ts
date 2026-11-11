@@ -33,7 +33,6 @@ tracesRouter.get('/traces', async (ctx: Context) => {
     action: 'traces:ListTraces',
     resourceType: 'trace',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listTraces({

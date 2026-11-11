@@ -134,7 +134,6 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     action: 'documents:ListDocuments',
     resourceType: 'document',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   // A neighbour filter resolves to row ids once, here, so the listing stays
@@ -181,7 +180,6 @@ documentsRouter.get('/documents/export', async (ctx: Context) => {
     action: 'documents:ExportDocuments',
     resourceType: 'document',
     projectSelector: 'required',
-    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

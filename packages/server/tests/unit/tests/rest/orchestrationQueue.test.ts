@@ -1104,11 +1104,16 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without orchestrations:GetQueueStats gets 403', async () => {
+    test('a user without orchestrations:GetQueueStats gets an empty snapshot', async () => {
       const res = await authenticatedTestClient(userToken).get(
         '/api/v1/orchestrations/queue/stats'
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        queue_depth: 0,
+        claimed_tasks: 0,
+        oldest_queued_age_seconds: null,
+      });
     });
 
     test('admin gets the documented snake_case shape', async () => {
@@ -1164,11 +1169,12 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without orchestrations:GetQueueStats gets 403', async () => {
+    test('a user without orchestrations:GetQueueStats gets an empty page', async () => {
       const res = await authenticatedTestClient(userToken).get(
         '/api/v1/orchestrations/queue/stats/projects'
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('pages the projects with queued or claimed work', async () => {

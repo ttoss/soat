@@ -43,7 +43,6 @@ workflowsRouter.get('/workflows', async (ctx: Context) => {
     action: 'workflows:ListWorkflows',
     resourceType: 'workflow',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listWorkflows({
     projectIds,

@@ -60,7 +60,6 @@ ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
     action: 'ingestion-rules:ListIngestionRules',
     resourceType: 'ingestionRule',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listIngestionRules({ projectIds, limit, cursor });
 });

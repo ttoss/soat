@@ -50,7 +50,6 @@ metadataSchemasRouter.get('/metadata-schemas', async (ctx: Context) => {
     action: 'metadata-schemas:ListMetadataSchemas',
     resourceType: 'metadata_schema',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listMetadataSchemas({

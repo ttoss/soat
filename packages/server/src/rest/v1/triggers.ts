@@ -54,7 +54,6 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
     action: 'triggers:ListTriggers',
     resourceType: 'trigger',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listTriggers({
     projectIds,
@@ -71,7 +70,6 @@ triggersRouter.get('/triggers/count', async (ctx: Context) => {
     action: 'triggers:ListTriggers',
     resourceType: 'trigger',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await countTriggers({
     projectIds,

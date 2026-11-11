@@ -70,7 +70,6 @@ modelRoutesRouter.get('/model-routes', async (ctx: Context) => {
     action: 'model-routes:ListModelRoutes',
     resourceType: 'model_route',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listModelRoutes({ projectIds, ...parsePagination(ctx) });

@@ -67,7 +67,6 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     action: 'tasks:ListTasks',
     resourceType: 'task',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   // The absent status is a value a task really holds, so it is a value of the

@@ -56,7 +56,6 @@ collectionsRouter.get('/collections', async (ctx: Context) => {
     action: 'collections:ListCollections',
     resourceType: 'collection',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listCollections({ projectIds, ...parsePagination(ctx) });
 });

@@ -84,7 +84,6 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
     action: 'quotas:ListQuotas',
     resourceType: 'quota',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listQuotas({ projectIds, ...parsePagination(ctx) });

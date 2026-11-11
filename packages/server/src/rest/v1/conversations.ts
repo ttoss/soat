@@ -34,7 +34,6 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
     action: 'conversations:ListConversations',
     resourceType: 'conversation',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

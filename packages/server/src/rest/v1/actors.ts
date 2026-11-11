@@ -64,7 +64,6 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     action: 'actors:ListActors',
     resourceType: 'actor',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

@@ -54,7 +54,6 @@ filesRouter.get('/files', async (ctx: Context) => {
     action: 'files:GetFile',
     resourceType: 'file',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

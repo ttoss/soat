@@ -213,11 +213,12 @@ describe('Usage', () => {
       expect(response.status).toBe(401);
     });
 
-    test('returns 403 when the user lacks permission', async () => {
+    test('a caller permitted in no project gets an empty page', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         '/api/v1/usage/events'
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ data: [], next_cursor: null });
     });
 
     test('admin without project scoping lists across all projects', async () => {
@@ -1487,11 +1488,11 @@ describe('Usage', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('a caller permitted in no project gets 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         '/api/v1/usage/receipt?generation_id=gen_x'
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('missing generation_id returns 400', async () => {
@@ -2369,9 +2370,14 @@ describe('Usage', () => {
       });
 
       test('a user without permission returns 403', async () => {
-        const list = await authenticatedTestClient(noPermToken).get(
+        const empty = await authenticatedTestClient(noPermToken).get(
           '/api/v1/usage/thresholds'
         );
+        expect(empty.status).toBe(200);
+        expect(empty.body).toEqual({ data: [], next_cursor: null });
+        const list = await authenticatedTestClient(noPermToken)
+          .get('/api/v1/usage/thresholds')
+          .query({ project_id: projectId });
         expect(list.status).toBe(403);
         const create = await authenticatedTestClient(noPermToken)
           .post('/api/v1/usage/thresholds')

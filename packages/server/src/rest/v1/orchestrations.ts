@@ -163,7 +163,6 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
     action: 'orchestrations:ListOrchestrations',
     resourceType: 'orchestration',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listOrchestrations({ projectIds, ...parsePagination(ctx) });
@@ -313,7 +312,6 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
     action: 'orchestrations:ListRuns',
     resourceType: 'orchestration',
     projectSelector: 'optional',
-    emptyScope: 'forbidden',
   });
 
   const orchestrationId = ctx.query['orchestration_id'] as string | undefined;

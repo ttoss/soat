@@ -39,7 +39,6 @@ activityRouter.get('/activity', async (ctx: Context) => {
     action: 'activity:ListActivity',
     resourceType: 'activity',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listActivity({
@@ -58,7 +57,6 @@ activityRouter.get('/activity/export', async (ctx: Context) => {
     action: 'activity:ExportActivity',
     resourceType: 'activity',
     projectSelector: 'required',
-    emptyScope: 'empty',
   });
 
   sendNdjson({
