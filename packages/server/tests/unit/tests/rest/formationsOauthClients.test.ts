@@ -255,6 +255,37 @@ describe('oauth_client formation resource', () => {
     expect(client.body.client_secret).toBeNull();
   });
 
+  test('a client_secret naming an existing secret needs secrets:UseSecret on it', async () => {
+    const secret = await authenticatedTestClient(projectKey)
+      .post('/api/v1/secrets')
+      .send({ project_id: projectId, name: unique('x-secret'), value: 'shh' });
+    expect(secret.status).toBe(201);
+    const template = {
+      resources: {
+        XClient: {
+          type: 'oauth_client',
+          properties: clientProperties({
+            client_secret: `{{secret:${secret.body.id}}}`,
+          }),
+        },
+      },
+    };
+
+    const key = await createProjectKey({ deny: ['secrets:UseSecret'] });
+    const refused = await deploy(template, key);
+    expect(refused.status).toBe(403);
+    expect(refused.body.error.meta.denied_actions).toContainEqual(
+      expect.objectContaining({
+        logical_id: 'XClient',
+        resource_type: 'oauth_client',
+        action: 'secrets:UseSecret',
+      })
+    );
+
+    const applied = await deploy(template);
+    expect(applied.status).toBe(201);
+  });
+
   test('a key without oauth-clients:CreateOauthClient is refused before anything applies', async () => {
     const key = await createProjectKey({
       deny: ['oauth-clients:CreateOauthClient'],
