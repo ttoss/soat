@@ -2436,7 +2436,7 @@ describe('Usage', () => {
         expect(res.body.error.code).toBe('FORBIDDEN');
       });
 
-      test('listing thresholds for an out-of-scope project returns 403', async () => {
+      test('listing thresholds for a project holding none returns an empty list', async () => {
         const other = await authenticatedTestClient(adminToken)
           .post('/api/v1/projects')
           .send({ name: `usage-thresholds-other-${Date.now()}` });
@@ -2445,8 +2445,8 @@ describe('Usage', () => {
         const res = await authenticatedTestClient(userToken).get(
           `/api/v1/usage/thresholds?project_id=${other.body.id}`
         );
-        expect(res.status).toBe(403);
-        expect(res.body.error.code).toBe('FORBIDDEN');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([]);
       });
 
       test('deleting an unknown threshold returns 404', async () => {

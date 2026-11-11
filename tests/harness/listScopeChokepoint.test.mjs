@@ -15,7 +15,8 @@ const routesDir = fileURLToPath(
  */
 const NOT_PROJECT_SCOPED = {
   'apiKeys.ts /api-keys': 'owner-scoped: a user administers their own keys',
-  'memories.ts /memories': 'scoped by the memory store `?memory_store_id` names',
+  'memories.ts /memories':
+    'scoped by the memory store `?memory_store_id` names',
   'oauth.ts /oauth/consent-info': 'consent screen, not a list',
   'oauthConnections.ts /oauth-connections/callback': 'OAuth redirect target',
   'openapi.ts /openapi.json': 'the spec',
@@ -26,7 +27,8 @@ const NOT_PROJECT_SCOPED = {
   'usage.ts /usage/prices': 'global price book',
   'users.ts /users': 'global resource',
   'users.ts /users/me': 'the caller',
-  'webhooks.ts /webhook-deliveries': 'scoped by the webhook `?webhook_id` names',
+  'webhooks.ts /webhook-deliveries':
+    'scoped by the webhook `?webhook_id` names',
 };
 
 const ROUTE = /\.get\(\s*'(\/[^':]*)'/g;
