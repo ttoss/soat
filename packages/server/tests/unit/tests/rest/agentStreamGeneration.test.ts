@@ -382,9 +382,18 @@ describe('Streamed agent generations', () => {
         code: 'TEXT_ENCODED_TOOL_CALL',
       });
 
-      const trace = await authenticatedTestClient(adminToken).get(
+      // The trace's error lands after the generation settles, both fire-and-forget.
+      let trace = await authenticatedTestClient(adminToken).get(
         `/api/v1/traces/${generation.trace_id}`
       );
+      for (let attempt = 0; attempt < 200 && !trace.body.error; attempt += 1) {
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 25);
+        });
+        trace = await authenticatedTestClient(adminToken).get(
+          `/api/v1/traces/${generation.trace_id}`
+        );
+      }
       expect(trace.status).toBe(200);
       expect(trace.body.error).toMatchObject({
         code: 'TEXT_ENCODED_TOOL_CALL',
