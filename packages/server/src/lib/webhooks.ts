@@ -125,6 +125,7 @@ export const createWebhook = async (
   }
   validateEventFilter(args);
   await assertRequiredPoliciesAttachable({
+    carrier: 'webhooks',
     policyIds: args.policyIds ?? [],
     current: null,
     projectId: args.projectId,
@@ -180,6 +181,7 @@ export const updateWebhook = async (
   }
   validateEventFilter(args);
   await assertRequiredPoliciesAttachable({
+    carrier: 'webhooks',
     policyIds: args.policyIds,
     current: webhook.policyIds,
     projectId: webhook.projectId,

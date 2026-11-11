@@ -242,7 +242,7 @@ export const createAgent = async (
     projectId: args.projectId,
   });
 
-  await assertPoliciesAttachable({ ...args, current: null });
+  await assertPoliciesAttachable({ ...args, carrier: 'agents', current: null });
 
   const toolBindings = await resolveBindingsForCreate(args);
 
@@ -409,10 +409,10 @@ export const updateAgent = async (
   });
 
   await assertPoliciesAttachable({
-    policyIds: args.policyIds,
+    ...args,
+    carrier: 'agents',
     current: agent.policyIds,
     projectId: agent.projectId,
-    policyUse: args.policyUse,
   });
 
   const bindingsUpdate = await resolveBindingsForUpdate({

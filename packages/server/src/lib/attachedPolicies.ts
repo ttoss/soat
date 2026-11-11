@@ -4,9 +4,9 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { PolicyDocument } from './iam';
-import { DIRECT_POLICY_CARRIERS } from './policyCarriers';
+import type { PolicyCarrierName } from './policyCarriers';
 import {
-  assertWriterHoldsPolicies,
+  assertWriterMayAttach,
   type GetWriterPolicies,
 } from './policyGrantCoverage';
 import { bindPolicyVariables } from './policyVariables';
@@ -35,6 +35,7 @@ const loadPolicies = async (publicIds: string[]) => {
  * every grant of the ones it adds to `current`.
  */
 export const assertPoliciesAttachable = async (args: {
+  carrier: PolicyCarrierName;
   policyIds?: string[] | null;
   current: string[] | null;
   projectId: number;
@@ -65,9 +66,14 @@ export const assertPoliciesAttachable = async (args: {
   const added = rows.filter((row) => {
     return !(args.current ?? []).includes(row.publicId);
   });
-  await assertWriterHoldsPolicies({
+  if (added.length === 0) return;
+  const project = await db.Project.findByPk(args.projectId, {
+    rejectOnEmpty: true,
+  });
+  await assertWriterMayAttach({
+    carrier: args.carrier,
     getPolicies: args.policyUse,
-    projectId: args.projectId,
+    actsIn: project.publicId as string,
     policyIds: added.map((row) => {
       return row.id as number;
     }),
@@ -79,6 +85,7 @@ export const assertPoliciesAttachable = async (args: {
  * names at least one policy, else `refusal` says what the grant is for.
  */
 export const assertRequiredPoliciesAttachable = async (args: {
+  carrier: PolicyCarrierName;
   policyIds?: string[];
   current: string[] | null;
   projectId: number;
@@ -155,7 +162,10 @@ const carriersOf = async (args: {
   };
 };
 
-/** Live carriers naming the policy, for the refusal to delete it. */
+/**
+ * Live carriers naming the policy, for the refusal to delete it. An API key or
+ * user naming a deleted policy only loses its grant, so neither refuses.
+ */
 export const findPolicyCarriers = async (args: {
   policyPublicId: string;
   limit: number;
@@ -168,12 +178,12 @@ export const findPolicyCarriers = async (args: {
       count: db.Agent.count({ where }),
     }),
     carriersOf({
-      rows: DIRECT_POLICY_CARRIERS.triggers().findAll(query),
-      count: DIRECT_POLICY_CARRIERS.triggers().count({ where }),
+      rows: db.Trigger.findAll(query),
+      count: db.Trigger.count({ where }),
     }),
     carriersOf({
-      rows: DIRECT_POLICY_CARRIERS.webhooks().findAll(query),
-      count: DIRECT_POLICY_CARRIERS.webhooks().count({ where }),
+      rows: db.Webhook.findAll(query),
+      count: db.Webhook.count({ where }),
     }),
   ]);
   return { agents, triggers, webhooks };
