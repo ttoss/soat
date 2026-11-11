@@ -444,7 +444,7 @@ describe('isSoatActionAllowedByBoundary', () => {
           effect: 'Allow',
           action: ['memories:CreateMemory'],
           resource: ['*'],
-          condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+          condition: { StringEquals: { 'iam:ResourceTag/env': 'prod' } },
         },
       ],
     };
@@ -453,7 +453,7 @@ describe('isSoatActionAllowedByBoundary', () => {
       isSoatActionAllowedByBoundary({
         boundaryPolicy: policy,
         iamAction: 'memories:CreateMemory',
-        context: { 'soat:ResourceTag/env': 'prod' },
+        context: { 'iam:ResourceTag/env': 'prod' },
       })
     ).toBe(true);
 
@@ -461,7 +461,7 @@ describe('isSoatActionAllowedByBoundary', () => {
       isSoatActionAllowedByBoundary({
         boundaryPolicy: policy,
         iamAction: 'memories:CreateMemory',
-        context: { 'soat:ResourceTag/env': 'staging' },
+        context: { 'iam:ResourceTag/env': 'staging' },
       })
     ).toBe(false);
   });

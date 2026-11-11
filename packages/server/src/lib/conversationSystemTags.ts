@@ -7,7 +7,7 @@ import { db } from '../db';
  *
  * Tags rather than columns because one filter then reaches both knowledge
  * stores — `tags` is the only search filter that scopes documents and memories
- * alike — and because an IAM `soat:ResourceTag/system.actor` condition fences
+ * alike — and because an IAM `iam:ResourceTag/system.actor` condition fences
  * an actor's turns without any code knowing about conversations.
  *
  * `system.actor` is the conversation's **owner**, not the message's author: the

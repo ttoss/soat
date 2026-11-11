@@ -632,7 +632,7 @@ A generation runs as its **caller** (the user, API key or run credential that st
 
 `policy_ids` name stored [policies](./policies.md). Attaching one needs a caller who holds every grant it carries inside the agent's project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); the same check runs on create, update and a [formation](./formations.md) apply, for each policy the write adds. Editing a policy an agent carries, live or in any [version](#agent-version), is attaching it again, and deleting one is `409 POLICY_HAS_DEPENDENTS`. An unknown id is `400 POLICY_NOT_FOUND`; a policy that no longer resolves at generation time allows nothing.
 
-**Per end user.** `${soat:ActorId}` in a condition value is the [actor](./actors.md) the generation runs for (a [session](./sessions.md)'s actor). One policy then confines every end user to their own resources:
+**Per end user.** `${iam:ActorId}` in a condition value is the [actor](./actors.md) the generation runs for (a [session](./sessions.md)'s actor). One policy then confines every end user to their own resources:
 
 ```json
 {
@@ -641,7 +641,7 @@ A generation runs as its **caller** (the user, API key or run credential that st
       "effect": "Allow",
       "action": ["memories:*"],
       "condition": {
-        "StringEquals": { "soat:ResourceTag/owner": "${soat:ActorId}" }
+        "StringEquals": { "iam:ResourceTag/owner": "${iam:ActorId}" }
       }
     }
   ]

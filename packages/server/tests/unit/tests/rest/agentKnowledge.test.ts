@@ -769,7 +769,7 @@ describe('Agent knowledge', () => {
               action: ['memories:*'],
               resource: ['*'],
               condition: {
-                StringEquals: { 'soat:ResourceTag/env': 'prod' },
+                StringEquals: { 'iam:ResourceTag/env': 'prod' },
               },
             },
           ],

@@ -24,7 +24,7 @@ import { Project } from './Project';
     },
     {
       // Containment (`@>`) is the only way a tag bag is matched, by the
-      // `?tags=` filter, knowledge search and a `soat:ResourceTag/<key>`
+      // `?tags=` filter, knowledge search and a `iam:ResourceTag/<key>`
       // condition alike. `jsonb_path_ops` indexes whole key/value paths,
       // which is exactly what that match asks about.
       name: 'sessions_tags_gin_idx',

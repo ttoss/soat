@@ -1,11 +1,12 @@
 import type { PolicyDocument } from './iam';
+import { ACTOR_ID_VARIABLE } from './iamConditionKeys';
 
 /**
- * `${soat:ActorId}` in a condition value: the end user a generation runs for.
+ * `${iam:ActorId}` in a condition value: the end user a generation runs for.
  * Bound only where the agent's `policy_ids` are resolved for a turn; anywhere
  * else it stays unbound, and an unbound variable matches nothing.
  */
-export const ACTOR_ID_VARIABLE = 'soat:ActorId';
+export { ACTOR_ID_VARIABLE };
 
 const POLICY_VARIABLES = new Set([ACTOR_ID_VARIABLE]);
 
@@ -26,7 +27,7 @@ export const hasUnboundPolicyVariable = (value: string): boolean => {
   return value.includes('${');
 };
 
-/** `document` with each `${soat:ActorId}` replaced; `null` leaves it unbound. */
+/** `document` with each `${iam:ActorId}` replaced; `null` leaves it unbound. */
 export const bindPolicyVariables = (args: {
   document: PolicyDocument;
   actorId: string | null | undefined;

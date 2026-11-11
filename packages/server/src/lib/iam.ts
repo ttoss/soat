@@ -1,3 +1,8 @@
+import {
+  ACTOR_ID_VARIABLE,
+  RESOURCE_TAG_KEY_PREFIX,
+  RESOURCE_TYPE_KEY,
+} from './iamConditionKeys';
 import { listAllActions, listModuleNames } from './permissionCatalog';
 import {
   hasUnboundPolicyVariable,
@@ -41,18 +46,17 @@ const VALID_OPERATORS: ConditionOperator[] = [
  * The context keys the platform supplies to `evaluateCondition`, and the only
  * keys a condition may name.
  *
- * `soat:ResourceTag/<tag>` carries an arbitrary tag name after the slash — tag
+ * `iam:ResourceTag/<tag>` carries an arbitrary tag name after the slash — tag
  * keys are opaque (`.claude/rules/case-convention.md`), so only the prefix is
  * checked and the name must be non-empty.
  */
-const RESOURCE_TAG_CONDITION_PREFIX = 'soat:ResourceTag/';
-const CONDITION_KEYS = new Set(['soat:ResourceType']);
+const CONDITION_KEYS = new Set([RESOURCE_TYPE_KEY]);
 
 const isValidConditionKey = (key: string): boolean => {
   if (CONDITION_KEYS.has(key)) return true;
   return (
-    key.startsWith(RESOURCE_TAG_CONDITION_PREFIX) &&
-    key.length > RESOURCE_TAG_CONDITION_PREFIX.length
+    key.startsWith(RESOURCE_TAG_KEY_PREFIX) &&
+    key.length > RESOURCE_TAG_KEY_PREFIX.length
   );
 };
 
@@ -137,21 +141,21 @@ const validateConditionBlock = (args: {
   // A key the platform never supplies is absent from the evaluation context,
   // so the statement carrying it can never match: an `Allow` silently stops
   // granting and a `Deny` silently stops denying. The second is a fail-open
-  // from a typo, so the key set is checked here rather than the `soat:` prefix
+  // from a typo, so the key set is checked here rather than the `iam:` prefix
   // alone — the rule `isValidAction` already applies to action strings.
   for (const key of Object.keys(args.block)) {
     if (!isValidConditionKey(key)) {
       args.errors.push(
         `${args.prefix}.condition.${args.op}: key "${key}" is not a condition key — must be ${[
           ...CONDITION_KEYS,
-        ].join(', ')} or ${RESOURCE_TAG_CONDITION_PREFIX}<tag>`
+        ].join(', ')} or ${RESOURCE_TAG_KEY_PREFIX}<tag>`
       );
     }
     const value = args.block[key];
     if (typeof value !== 'string') continue;
     for (const variable of unknownPolicyVariables(value)) {
       args.errors.push(
-        `${args.prefix}.condition.${args.op}: "${variable}" is not a policy variable — must be \${soat:ActorId}`
+        `${args.prefix}.condition.${args.op}: "${variable}" is not a policy variable — must be \${${ACTOR_ID_VARIABLE}}`
       );
     }
   }

@@ -134,7 +134,7 @@ actor's turns from another, put the same key in an IAM condition — see
 
 ### Tags
 
-Key-value string pairs managed via the tag sub-endpoints and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/conversations`](/docs/api/conversations/list-conversations) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).
+Key-value string pairs managed via the tag sub-endpoints and matched by `iam:ResourceTag/<key>`. [`GET /api/v1/conversations`](/docs/api/conversations/list-conversations) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).
 
 Tool-call chains (invocations and results alongside the final text) are preserved internally so later turns see the full exchange; this state is separate from `metadata` and never returned.
 

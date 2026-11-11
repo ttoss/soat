@@ -4,11 +4,11 @@ import {
 } from '../../fixtures/agentToolTurn';
 
 /**
- * `${soat:ActorId}` in an agent's policy binds to the end user the
+ * `${iam:ActorId}` in an agent's policy binds to the end user the
  * generation runs for, so one policy confines every end user to their own
  * resources.
  */
-describe('agent policy_ids bind ${soat:ActorId} to the generation actor', () => {
+describe('agent policy_ids bind ${iam:ActorId} to the generation actor', () => {
   let turn: AgentToolTurn;
   let ownStoreAgentId: string;
   let otherStoreAgentId: string;
@@ -76,7 +76,7 @@ describe('agent policy_ids bind ${soat:ActorId} to the generation actor', () => 
               effect: 'Allow',
               action: ['memories:*'],
               condition: {
-                StringEquals: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+                StringEquals: { 'iam:ResourceTag/owner': '${iam:ActorId}' },
               },
             },
           ],

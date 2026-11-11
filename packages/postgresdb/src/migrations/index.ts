@@ -55,6 +55,7 @@ import { generationActedAs } from './2026-11-10-generationActedAs';
 import { policyProjectId } from './2026-11-10-policyProjectId';
 import { triggerPolicyIds } from './2026-11-10-triggerPolicyIds';
 import { webhookPolicyIds } from './2026-11-10-webhookPolicyIds';
+import { iamConditionKeys } from './2026-11-11-iamConditionKeys';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -131,4 +132,5 @@ export const MIGRATIONS: Migration[] = [
   triggerPolicyIds,
   webhookPolicyIds,
   policyProjectId,
+  iamConditionKeys,
 ];

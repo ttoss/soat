@@ -3,7 +3,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
  * An item's tags: the sub-resource, the `?tags=` filter, and the
- * `soat:ResourceTag/<key>` condition that scopes a principal to one actor's
+ * `iam:ResourceTag/<key>` condition that scopes a principal to one actor's
  * items.
  */
 describe('Collection item tags', () => {
@@ -62,7 +62,7 @@ describe('Collection item tags', () => {
               action: ['collections:*'],
               resource: [`srn:${projectId}:collection_item:*`],
               condition: {
-                StringEquals: { 'soat:ResourceTag/actor_id': 'A' },
+                StringEquals: { 'iam:ResourceTag/actor_id': 'A' },
               },
             },
           ],

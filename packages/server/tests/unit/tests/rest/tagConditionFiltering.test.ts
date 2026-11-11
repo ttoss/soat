@@ -121,7 +121,7 @@ describe('Tag-conditioned policies filter list and search surfaces', () => {
           ],
           resource: [`srn:${projectId}:*:*`],
           condition: {
-            StringNotEquals: { 'soat:ResourceTag/team': 'finance' },
+            StringNotEquals: { 'iam:ResourceTag/team': 'finance' },
           },
         },
       ],

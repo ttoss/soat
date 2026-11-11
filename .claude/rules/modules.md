@@ -29,7 +29,7 @@ together.
 - [ ] Formation schema synced (below) if the module has a resource type
 - [ ] Any operation that outlasts a request exposes `wait` (`sync-async.md`)
 - [ ] A `tags` column follows `tags.md` (sub-resource, `?tags=`, validated
-      writes, `soat:ResourceTag` context)
+      writes, `iam:ResourceTag` context)
 
 Never add per-module MCP files; tools derive from the specs
 (`src/lib/soatTools.ts` → `src/mcp/server.ts`).

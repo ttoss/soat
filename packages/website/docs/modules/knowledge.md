@@ -132,7 +132,7 @@ with `query` without `document_paths`.
 
 Results from both stores are ranked together before `limit` applies, so a search reaching both does not reserve slots for either.
 
-`tags` is a key-value object, the same shape every tagged resource stores and the same one the IAM `soat:ResourceTag/<key>` condition reads. All pairs must match (JSONB containment), exact and case-sensitive:
+`tags` is a key-value object, the same shape every tagged resource stores and the same one the IAM `iam:ResourceTag/<key>` condition reads. All pairs must match (JSONB containment), exact and case-sensitive:
 
 ```json
 { "query": "quarterly revenue", "tags": { "team": "finance", "env": "prod" } }
@@ -268,7 +268,7 @@ A search with a `query` embeds it once, billed to the first project in scope, by
 
 ### Policy Conditions Narrow the Candidate Set
 
-The caller's `knowledge:SearchKnowledge` policy for documents is compiled into the search query itself: an SRN restriction and a `soat:ResourceTag/<key>` condition both become part of the filter a chunk has to satisfy to be ranked at all. A document the policy excludes is not a candidate — it does not consume a `limit` slot and never reaches the agent. Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).
+The caller's `knowledge:SearchKnowledge` policy for documents is compiled into the search query itself: an SRN restriction and a `iam:ResourceTag/<key>` condition both become part of the filter a chunk has to satisfy to be ranked at all. A document the policy excludes is not a candidate — it does not consume a `limit` slot and never reaches the agent. Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).
 
 Each statement reaches only the resource type its SRN names. The memory half needs the action on both `memory_store` and `memory`: a policy allowing `knowledge:SearchKnowledge` on `srn:<project_id>:document:*` alone searches documents and no memories, and a `Deny` on `srn:<project_id>:memory:*` removes memories without touching documents.
 

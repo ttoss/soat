@@ -148,7 +148,7 @@ describe('policyGrantCoverage', () => {
     });
 
     test('a conditioned writer Allow covers only the same condition', () => {
-      const condition = { StringEquals: { 'soat:ResourceTag/team': 'red' } };
+      const condition = { StringEquals: { 'iam:ResourceTag/team': 'red' } };
       const writer = [[allow(['agents:GetAgent'], undefined, condition)]];
       expect(
         uncovered({

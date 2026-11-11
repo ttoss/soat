@@ -11,7 +11,7 @@ describe('buildConversationContext', () => {
       tags: null,
     } as never;
     const ctx = buildConversationContext(conversation);
-    expect(ctx).toEqual({ 'soat:ResourceType': 'conversation' });
+    expect(ctx).toEqual({ 'iam:ResourceType': 'conversation' });
   });
 
   test('includes resource tags when conversation has tags', () => {
@@ -21,9 +21,9 @@ describe('buildConversationContext', () => {
       tags: { env: 'prod', team: 'backend' },
     } as never;
     const ctx = buildConversationContext(conversation);
-    expect(ctx['soat:ResourceType']).toBe('conversation');
-    expect(ctx['soat:ResourceTag/env']).toBe('prod');
-    expect(ctx['soat:ResourceTag/team']).toBe('backend');
+    expect(ctx['iam:ResourceType']).toBe('conversation');
+    expect(ctx['iam:ResourceTag/env']).toBe('prod');
+    expect(ctx['iam:ResourceTag/team']).toBe('backend');
   });
 });
 

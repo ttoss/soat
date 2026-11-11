@@ -43,7 +43,7 @@ export const requireItemCollection = async (args: {
 
 /**
  * The item gate: `action` against `srn:<project>:collection_item:<key>`, once
- * per tag bag the write touches, so a `soat:ResourceTag/<key>` condition
+ * per tag bag the write touches, so a `iam:ResourceTag/<key>` condition
  * judges both the item as stored and the item as written — a caller cannot
  * move an item into or out of a scope it does not hold.
  */

@@ -194,7 +194,7 @@ describe('List filters compile every policy set the caller holds', () => {
           action: ['documents:*'],
           resource: [`srn:${projectId}:document:*`],
           condition: {
-            StringNotEquals: { 'soat:ResourceTag/team': 'finance' },
+            StringNotEquals: { 'iam:ResourceTag/team': 'finance' },
           },
         },
         {

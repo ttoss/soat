@@ -3,7 +3,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 /**
  * Resource-tag authorization driven through REST.
  *
- * Every other `soat:ResourceTag/*` test in the suite is a `lib/` test
+ * Every other `iam:ResourceTag/*` test in the suite is a `lib/` test
  * (`policyCompiler`, `fileAuthorization`, `conversationHelpers`) that calls the
  * evaluator with hand-built inputs, so none of them crosses the `caseTransform`
  * middleware — and every one uses a single-word tag (`env`, `team`), the one key
@@ -106,7 +106,7 @@ describe('Resource tag policies (end-to-end)', () => {
               action: ['documents:GetDocument'],
               resource: ['*'],
               condition: {
-                StringEquals: { 'soat:ResourceTag/cost_center': 'platform' },
+                StringEquals: { 'iam:ResourceTag/cost_center': 'platform' },
               },
             },
           ],

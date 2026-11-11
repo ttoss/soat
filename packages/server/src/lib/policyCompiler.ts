@@ -2,6 +2,7 @@ import { Op, Sequelize } from '@ttoss/postgresdb';
 
 import type { PolicyDocument, PolicySets } from './iam';
 import { matchesPattern } from './iam';
+import { RESOURCE_TAG_KEY_PREFIX } from './iamConditionKeys';
 import { jsonbFn } from './jsonbQuery';
 import { hasUnboundPolicyVariable } from './policyVariables';
 
@@ -210,7 +211,7 @@ const buildTagLikeFragment = (
 };
 
 /**
- * Build WHERE fragments for condition keys that match `soat:ResourceTag/<key>`.
+ * Build WHERE fragments for condition keys that match `iam:ResourceTag/<key>`.
  * Uses `Op.contains` for parameterized JSONB equality, and Sequelize.fn for
  * LIKE/NOT-LIKE comparisons.
  */
@@ -257,8 +258,8 @@ const buildTagFragments = (
     for (const [key, expected] of Object.entries(
       block as Record<string, string>
     )) {
-      if (!key.startsWith('soat:ResourceTag/')) continue;
-      const tagKey = key.slice('soat:ResourceTag/'.length);
+      if (!key.startsWith(RESOURCE_TAG_KEY_PREFIX)) continue;
+      const tagKey = key.slice(RESOURCE_TAG_KEY_PREFIX.length);
 
       const tagFrags = buildTagFragmentForKey({
         op,

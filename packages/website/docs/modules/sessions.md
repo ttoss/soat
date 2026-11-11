@@ -88,7 +88,7 @@ A completed turn is stored right after the last message it read, so a message se
 
 ### Tags
 
-Key-value string pairs, set on [`POST /api/v1/sessions`](/docs/api/sessions/create-session) and managed via the tag sub-endpoints. [`GET /api/v1/sessions`](/docs/api/sessions/list-sessions) filters by pair with `?tags=key:value` (repeatable, all must match). Policy conditions read the same pairs through `soat:ResourceTag/<key>`; pass `?project_id=` for a conditioned policy to narrow the listing. See [IAM — Tags](iam.md#tags).
+Key-value string pairs, set on [`POST /api/v1/sessions`](/docs/api/sessions/create-session) and managed via the tag sub-endpoints. [`GET /api/v1/sessions`](/docs/api/sessions/list-sessions) filters by pair with `?tags=key:value` (repeatable, all must match). Policy conditions read the same pairs through `iam:ResourceTag/<key>`; pass `?project_id=` for a conditioned policy to narrow the listing. See [IAM — Tags](iam.md#tags).
 
 ### The Session's End User (Actor)
 

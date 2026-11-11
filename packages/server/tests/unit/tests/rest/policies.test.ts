@@ -119,8 +119,8 @@ describe('Policies', () => {
     // longer matches what a formation template wrote.
     test('condition operators and context keys round-trip verbatim', async () => {
       const condition = {
-        StringEquals: { 'soat:ResourceTag/env': 'prod' },
-        StringNotEquals: { 'soat:ResourceTag/cost_center': 'shared' },
+        StringEquals: { 'iam:ResourceTag/env': 'prod' },
+        StringNotEquals: { 'iam:ResourceTag/cost_center': 'shared' },
       };
 
       const created = await authenticatedTestClient(adminToken)
@@ -164,7 +164,7 @@ describe('Policies', () => {
                 // Plural typo: absent from the evaluation context, so this
                 // Deny would never deny.
                 condition: {
-                  StringEquals: { 'soat:ResourceTags/env': 'prod' },
+                  StringEquals: { 'iam:ResourceTags/env': 'prod' },
                 },
               },
             ],
@@ -174,6 +174,34 @@ describe('Policies', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
+
+    test.each([
+      [{ 'soat:ResourceTag/env': 'prod' }],
+      [{ 'soat:ResourceType': 'file' }],
+      [{ 'iam:ResourceTag/owner': '${soat:ActorId}' }],
+    ])(
+      'returns 400 for a key or variable outside the iam namespace: %o',
+      async (block) => {
+        const response = await authenticatedTestClient(adminToken)
+          .post('/api/v1/policies')
+          .send({
+            name: 'Foreign Namespace Policy',
+            document: {
+              statement: [
+                {
+                  effect: 'Deny',
+                  action: ['files:GetFile'],
+                  resource: ['*'],
+                  condition: { StringEquals: block },
+                },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    );
 
     test('returns 400 for a document with an invalid effect', async () => {
       const response = await authenticatedTestClient(adminToken)

@@ -146,7 +146,7 @@ The bands retire a contradiction only when the two texts are near-identical. *Th
 | A memory already superseded | `400 VALIDATION_FAILED` — no chaining; supersede the replacement instead |
 | No memory with that id | `404 RESOURCE_NOT_FOUND` |
 
-Authorization is the write grant **plus** the target's: `memories:CreateMemory` on the store, and `memories:UpdateMemory` on the memory named — evaluated through the same two tag bags [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) uses, so `soat:ResourceTag` conditions apply to the target as on any update. A declaration therefore says no more, and does no more, than updating that memory directly would.
+Authorization is the write grant **plus** the target's: `memories:CreateMemory` on the store, and `memories:UpdateMemory` on the memory named — evaluated through the same two tag bags [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) uses, so `iam:ResourceTag` conditions apply to the target as on any update. A declaration therefore says no more, and does no more, than updating that memory directly would.
 
 The replacement inherits the retired memory's `tags` and `metadata` exactly as a threshold supersede does, and the [assertion](#assertions) records `declared: true` with the cosine to the target — which decides nothing here, and is the number that says how far apart the two statements were.
 
@@ -298,7 +298,7 @@ POST /api/v1/memory-stores
 }
 ```
 
-Tags are key-value pairs, the same shape documents, actors, files, conversations and sessions carry, and the shape the IAM `soat:ResourceTag/<key>` condition reads.
+Tags are key-value pairs, the same shape documents, actors, files, conversations and sessions carry, and the shape the IAM `iam:ResourceTag/<key>` condition reads.
 
 The `tags` query parameter on [`GET /api/v1/memory-stores`](/docs/api/memory-stores/list-memory-stores) filters by pair, written `key:value` in the query string:
 
@@ -313,7 +313,7 @@ The tag map is also its own sub-resource — [`GET /api/v1/memory-stores/:id/tag
 
 ### Tag Conditions
 
-A policy condition on `soat:ResourceTag/<key>` reads these tags, so access can be granted by attribute rather than by id. Both bags take part, at the level that owns them:
+A policy condition on `iam:ResourceTag/<key>` reads these tags, so access can be granted by attribute rather than by id. Both bags take part, at the level that owns them:
 
 | Surface | What the condition reads |
 |---|---|

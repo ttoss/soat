@@ -175,7 +175,7 @@ describe('validateRequestBody', () => {
                   effect: 'Allow',
                   action: ['files:GetFile'],
                   condition: {
-                    StringEquals: { 'soat:ResourceTag/env': 'prod' },
+                    StringEquals: { 'iam:ResourceTag/env': 'prod' },
                   },
                 },
               ],

@@ -184,7 +184,7 @@ describe('FileTags', () => {
           effect: 'Allow',
           action: ['files:GetFile'],
           resource: ['*'],
-          condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+          condition: { StringEquals: { 'iam:ResourceTag/env': 'prod' } },
         },
       });
     });

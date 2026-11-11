@@ -22,7 +22,7 @@ The same tag bag drives three surfaces, so the vocabulary is written once:
 |---|---|
 | [`GET /api/v1/documents?tags=`](/docs/api/documents/list-documents) | a list filter |
 | [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) | a search filter over chunks |
-| A policy condition on `soat:ResourceTag/<key>` | an authorization rule |
+| A policy condition on `iam:ResourceTag/<key>` | an authorization rule |
 
 ## Prerequisites
 
@@ -252,7 +252,7 @@ curl -s -G "$SOAT_BASE_URL/api/v1/documents" \
 
 ## Step 4 — Grant access by attribute, not by ID
 
-One statement allows listing and searching across the whole project, then **subtracts** everything tagged `team: finance` with a `StringNotEquals` condition on `soat:ResourceTag/team`.
+One statement allows listing and searching across the whole project, then **subtracts** everything tagged `team: finance` with a `StringNotEquals` condition on `iam:ResourceTag/team`.
 
 The condition never names `$FINANCE_DOC_ID`. A document tagged `team: finance` tomorrow is out of scope the moment it is written — no policy edit.
 
@@ -279,7 +279,7 @@ POLICY_ID=$(soat create-policy \
         ],
         "resource": ["srn:'"$PROJECT_ID"':*:*"],
         "condition": {
-          "StringNotEquals": { "soat:ResourceTag/team": "finance" }
+          "StringNotEquals": { "iam:ResourceTag/team": "finance" }
         }
       },
       {
@@ -323,7 +323,7 @@ const { data: policy, error: policyErr } =
             ],
             resource: [`srn:${PROJECT_ID}:*:*`],
             condition: {
-              StringNotEquals: { 'soat:ResourceTag/team': 'finance' },
+              StringNotEquals: { 'iam:ResourceTag/team': 'finance' },
             },
           },
           {
@@ -380,7 +380,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
           ],
           \"resource\": [\"srn:${PROJECT_ID}:*:*\"],
           \"condition\": {
-            \"StringNotEquals\": {\"soat:ResourceTag/team\": \"finance\"}
+            \"StringNotEquals\": {\"iam:ResourceTag/team\": \"finance\"}
           }
         },
         {
@@ -735,7 +735,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
 
 ## Step 8 — A misspelled condition key is refused at write time
 
-`soat:ResourceType` and `soat:ResourceTag/<key>` are the only keys the platform supplies. A key it never supplies can never match, so a `Deny` carrying a typo would silently stop denying — a fail-open produced by a plural. [`POST /api/v1/policies`](/docs/api/policies/create-policy) rejects it with `400 VALIDATION_FAILED` instead ([IAM — Condition Keys](/docs/modules/iam#condition-keys)).
+`iam:ResourceType` and `iam:ResourceTag/<key>` are the only keys the platform supplies. A key it never supplies can never match, so a `Deny` carrying a typo would silently stop denying — a fail-open produced by a plural. [`POST /api/v1/policies`](/docs/api/policies/create-policy) rejects it with `400 VALIDATION_FAILED` instead ([IAM — Condition Keys](/docs/modules/iam#condition-keys)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -752,7 +752,7 @@ soat create-policy \
         "action": ["documents:ListDocuments"],
         "resource": ["srn:'"$PROJECT_ID"':*:*"],
         "condition": {
-          "StringEquals": { "soat:ResourceTags/team": "finance" }
+          "StringEquals": { "iam:ResourceTags/team": "finance" }
         }
       }
     ]
@@ -775,7 +775,7 @@ const { error: typoErr } = await adminSoat.policies.createPolicy({
           resource: [`srn:${PROJECT_ID}:*:*`],
           // Plural — not a key the platform supplies
           condition: {
-            StringEquals: { 'soat:ResourceTags/team': 'finance' },
+            StringEquals: { 'iam:ResourceTags/team': 'finance' },
           },
         },
       ],
@@ -804,7 +804,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
           \"action\": [\"documents:ListDocuments\"],
           \"resource\": [\"srn:${PROJECT_ID}:*:*\"],
           \"condition\": {
-            \"StringEquals\": {\"soat:ResourceTags/team\": \"finance\"}
+            \"StringEquals\": {\"iam:ResourceTags/team\": \"finance\"}
           }
         }
       ]
@@ -819,7 +819,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 ## What this buys you
 
-One tag bag, read three ways: `?tags=` filtered the listing, the same pairs scoped the knowledge search, and `soat:ResourceTag/team` decided authorization — all reading the same column, with the same exact-match rule. Tag a resource and every surface already knows what to do with it.
+One tag bag, read three ways: `?tags=` filtered the listing, the same pairs scoped the knowledge search, and `iam:ResourceTag/team` decided authorization — all reading the same column, with the same exact-match rule. Tag a resource and every surface already knows what to do with it.
 
 The scope of a policy is then a property of the data, not a list of IDs: onboard a team by tagging its documents, and revoke by retagging.
 

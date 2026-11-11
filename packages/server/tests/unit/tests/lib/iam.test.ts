@@ -37,7 +37,7 @@ describe('IAM', () => {
             action: ['files:GetFile', 'files:*'],
             resource: ['srn:proj_ABC:file:*'],
             condition: {
-              StringEquals: { 'soat:ResourceTag/env': 'prod' },
+              StringEquals: { 'iam:ResourceTag/env': 'prod' },
             },
           },
         ],
@@ -190,7 +190,7 @@ describe('IAM', () => {
       };
     };
 
-    test.each(['soat:ResourceType', 'soat:ResourceTag/env'])(
+    test.each(['iam:ResourceType', 'iam:ResourceTag/env'])(
       'the supplied condition key %s passes',
       (key) => {
         expect(validatePolicyDocument(conditionDoc(key)).valid).toBe(true);
@@ -199,20 +199,19 @@ describe('IAM', () => {
 
     test('a tag key is opaque, so any spelling after the slash passes', () => {
       expect(
-        validatePolicyDocument(conditionDoc('soat:ResourceTag/cost_center'))
+        validatePolicyDocument(conditionDoc('iam:ResourceTag/cost_center'))
           .valid
       ).toBe(true);
       expect(
-        validatePolicyDocument(conditionDoc('soat:ResourceTag/costCenter'))
-          .valid
+        validatePolicyDocument(conditionDoc('iam:ResourceTag/costCenter')).valid
       ).toBe(true);
     });
 
     test.each([
-      ['soat:ResourceTags/env', 'a plural typo'],
+      ['iam:ResourceTags/env', 'a plural typo'],
       ['soat:resourcetype', 'the wrong case'],
-      ['soat:ResourceTag', 'the tag prefix with no tag'],
-      ['soat:ResourceTag/', 'an empty tag name'],
+      ['iam:ResourceTag', 'the tag prefix with no tag'],
+      ['iam:ResourceTag/', 'an empty tag name'],
       ['soat:PrincipalTag/team', 'a key no resource supplies'],
     ])('the unknown condition key %s fails (%s)', (key) => {
       const result = validatePolicyDocument(conditionDoc(key));
@@ -222,11 +221,11 @@ describe('IAM', () => {
 
     test('the error names the keys a condition may use', () => {
       const result = validatePolicyDocument(
-        conditionDoc('soat:ResourceTags/env')
+        conditionDoc('iam:ResourceTags/env')
       );
       const message = result.errors.join('\n');
-      expect(message).toContain('soat:ResourceType');
-      expect(message).toContain('soat:ResourceTag/');
+      expect(message).toContain('iam:ResourceType');
+      expect(message).toContain('iam:ResourceTag/');
     });
 
     test('non-object input fails', () => {
@@ -331,14 +330,14 @@ describe('IAM', () => {
           {
             effect: 'Allow',
             action: ['memories:GetMemoryStore'],
-            condition: { StringEquals: { 'soat:ResourceTag/owner': value } },
+            condition: { StringEquals: { 'iam:ResourceTag/owner': value } },
           },
         ],
       };
     };
 
-    test('a condition value may name ${soat:ActorId}', () => {
-      expect(validatePolicyDocument(ownedBy('${soat:ActorId}')).valid).toBe(
+    test('a condition value may name ${iam:ActorId}', () => {
+      expect(validatePolicyDocument(ownedBy('${iam:ActorId}')).valid).toBe(
         true
       );
     });
@@ -351,18 +350,18 @@ describe('IAM', () => {
 
     test('binding the actor makes the condition compare its id', () => {
       const bound = bindPolicyVariables({
-        document: ownedBy('team-${soat:ActorId}'),
+        document: ownedBy('team-${iam:ActorId}'),
         actorId: 'act_1',
       });
 
       expect(bound.statement[0].condition).toEqual({
-        StringEquals: { 'soat:ResourceTag/owner': 'team-act_1' },
+        StringEquals: { 'iam:ResourceTag/owner': 'team-act_1' },
       });
       expect(
         evaluatePolicies({
           policies: [bound],
           action: 'memories:GetMemoryStore',
-          context: { 'soat:ResourceTag/owner': 'team-act_1' },
+          context: { 'iam:ResourceTag/owner': 'team-act_1' },
         })
       ).toBe(true);
     });
@@ -373,20 +372,20 @@ describe('IAM', () => {
         action: ['memories:ListMemoryStores'],
       };
       const document: PolicyDocument = {
-        statement: [unconditioned, ...ownedBy('${soat:ActorId}').statement],
+        statement: [unconditioned, ...ownedBy('${iam:ActorId}').statement],
       };
 
       const bound = bindPolicyVariables({ document, actorId: 'act_1' });
 
       expect(bound.statement[0]).toBe(unconditioned);
       expect(bound.statement[1].condition).toEqual({
-        StringEquals: { 'soat:ResourceTag/owner': 'act_1' },
+        StringEquals: { 'iam:ResourceTag/owner': 'act_1' },
       });
     });
 
     test('with no actor the variable stays unbound and grants nothing', () => {
       const bound = bindPolicyVariables({
-        document: ownedBy('${soat:ActorId}'),
+        document: ownedBy('${iam:ActorId}'),
         actorId: null,
       });
 
@@ -394,7 +393,7 @@ describe('IAM', () => {
         evaluatePolicies({
           policies: [bound],
           action: 'memories:GetMemoryStore',
-          context: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+          context: { 'iam:ResourceTag/owner': '${iam:ActorId}' },
         })
       ).toBe(false);
     });
@@ -592,7 +591,7 @@ describe('IAM', () => {
     });
 
     test('a variable left unbound matches under no operator', () => {
-      const context = { 'soat:ResourceTag/owner': '${soat:ActorId}' };
+      const context = { 'iam:ResourceTag/owner': '${iam:ActorId}' };
       for (const operator of [
         'StringEquals',
         'StringNotEquals',
@@ -601,7 +600,7 @@ describe('IAM', () => {
         expect(
           evaluateCondition({
             condition: {
-              [operator]: { 'soat:ResourceTag/owner': '${soat:ActorId}' },
+              [operator]: { 'iam:ResourceTag/owner': '${iam:ActorId}' },
             },
             context,
           })
