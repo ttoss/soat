@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { pinCallerActorToolContext } from 'src/lib/generationAttribution';
 import { buildSrn } from 'src/lib/iam';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { listToolActions } from 'src/lib/toolActions';
@@ -421,8 +422,9 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     action?: unknown;
     input?: unknown;
     tool_context?: unknown;
+    actor_id?: unknown;
   };
-  const { action, input } = body;
+  const { action, input, actor_id: actorId } = body;
 
   const parsedInput =
     input !== undefined &&
@@ -443,11 +445,15 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     input: parsedInput,
     authHeader,
     // No session here, so nothing downstream will overwrite a forged identity
-    // key — the sanitize is what keeps a caller off the `X-Soat-Context-*`
-    // headers a tool trusts.
-    toolContext: sanitizeCallerToolContext(
-      parseToolContextBody(body.tool_context)
-    ),
+    // key: the sanitize keeps a caller off the `X-Soat-Context-*` headers a
+    // tool trusts, and only a validated `actor_id` is stamped back.
+    toolContext: await pinCallerActorToolContext({
+      toolContext: sanitizeCallerToolContext(
+        parseToolContextBody(body.tool_context)
+      ),
+      actorId,
+      projectId,
+    }),
     attribution: {},
   });
 

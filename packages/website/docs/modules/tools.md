@@ -174,7 +174,7 @@ The allowlist is per tool, not per agent.
 | --------------------- | -------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `aws_sigv4`           | `region`, `service`, `access_key_id`, `secret_access_key`            | `session_token` | `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, plus `X-Amz-Security-Token` and `X-Amz-Content-Sha256` when applicable |
 | `gcp_service_account` | `credentials` (service account key file JSON, as a string), `scopes` | —               | `Authorization: Bearer <access token>`                                                                                    |
-| `oauth_connection`    | `oauth_client_id`                                                    | —               | `Authorization: Bearer <the turn's actor's access token>` — see [OAuth Connections](./oauth-connections.md#using-a-connection-from-a-tool) |
+| `oauth_connection`    | `oauth_client_id`                                                    | —               | `Authorization: Bearer <the call's actor's access token>` — see [OAuth Connections](./oauth-connections.md#using-a-connection-from-a-tool) |
 
 Credential values take [secret references](./secrets.md#secret-references-secret), stored and returned as-is, resolved only before signing:
 
@@ -508,7 +508,8 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 - A target that never answers (the host does not resolve, refuses or drops the connection, or times out) is `502 TOOL_UNREACHABLE`; the message names the network failure and error `meta` carries `tool_url` and `tool_method`. The same holds for an `mcp` tool's server, whose `tool_url` shows a `{{secret:}}` value as its reference.
 - [`execute.auth`](#computed-credentials-executeauth) failing to produce the credential is `502 TOOL_AUTH_FAILED`.
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
-- `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
+- `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped from it — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
+- `actor_id` runs the call for that actor of the calling project: the tool receives `actor_id` and `actor_external_id`, and an [`oauth_connection`](./oauth-connections.md#using-a-connection-from-a-tool) credential is the actor's. An actor outside the calling project is `400 ACTOR_NOT_FOUND`.
 
 ### Sharing a tool
 

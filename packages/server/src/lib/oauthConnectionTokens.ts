@@ -229,7 +229,7 @@ export const resolveOauthConnectionAccessToken = async (args: {
   if (!args.actorId) {
     throw toolAuthFailed({
       message:
-        'execute.auth oauth_connection needs an actor: run the tool in a generation or session for an actor.',
+        'execute.auth oauth_connection needs an actor: run the tool in a generation or session for an actor, or call it with `actor_id`.',
       meta: { reason: 'actor_required', oauth_client_id: args.oauthClientId },
     });
   }
