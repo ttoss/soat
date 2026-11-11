@@ -420,6 +420,64 @@ describe('Actors', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('tags replace the bag and are found by the tag filter', async () => {
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/actors/${actorId}/tags`)
+        .send({ stale: 'yes' });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ tags: { kind: 'pending' } });
+
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toEqual({ kind: 'pending' });
+
+      const tagsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors/${actorId}/tags`
+      );
+      expect(tagsRes.body).toEqual({ kind: 'pending' });
+
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?project_id=${projectId}&tags=kind:pending`
+      );
+      expect(
+        listRes.body.data.map((a: { id: string }) => {
+          return a.id;
+        })
+      ).toContain(actorId);
+    });
+
+    test('a body without tags leaves the bag as it is', async () => {
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/actors/${actorId}/tags`)
+        .send({ kind: 'kept' });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ name: 'StillTagged' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toEqual({ kind: 'kept' });
+    });
+
+    test('a reserved tag key is refused', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ tags: { 'system.owner': 'me' } });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('RESERVED_TAG_KEY');
+    });
+
+    test('a tag value that is not a string is refused', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ tags: { kind: 1 } });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   // An actor carries no memory store link. Retrieval scope comes exclusively
