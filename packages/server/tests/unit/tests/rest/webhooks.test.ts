@@ -1048,11 +1048,20 @@ describe('Webhooks', () => {
     });
 
     test('can get, update, rotate-secret, and delete webhooks', async () => {
+      // An update is held to the webhook's policies, so it carries one the
+      // scoped principal holds.
+      const policy = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['webhooks:GetWebhook'] }],
+          },
+        });
       const created = await authenticatedTestClient(adminToken)
         .post('/api/v1/webhooks')
         .send({
           project_id: projectId,
-          policy_ids: [userPolicyId],
+          policy_ids: [policy.body.id],
           name: 'Scoped Hook',
           url: 'https://example.com/scoped',
           events: ['*'],

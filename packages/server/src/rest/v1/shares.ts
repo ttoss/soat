@@ -77,6 +77,7 @@ sharesRouter.post('/shares', async (ctx: Context) => {
     actions: body.actions,
     grantee: body.grantee,
     cap: body.cap,
+    writer: ctx.authUser,
   });
 });
 
@@ -179,12 +180,17 @@ sharesRouter.get('/shares/:share_id/references', async (ctx: Context) => {
  *     $ref: 'openapi/v1/shares.yaml#/paths/~1api~1v1~1shares~1{share_id}/patch'
  */
 sharesRouter.patch('/shares/:share_id', async (ctx: Context) => {
+  requireAuth(ctx);
   await publisherShareAccess.authorizeWrite({
     ctx,
     action: 'shares:UpdateShare',
   });
   const { cap } = ctx.request.body as { cap?: unknown };
-  ctx.body = await updateShare({ id: ctx.params.share_id, cap });
+  ctx.body = await updateShare({
+    id: ctx.params.share_id,
+    cap,
+    writer: ctx.authUser,
+  });
 });
 
 /**

@@ -153,6 +153,8 @@ beforeAll(async () => {
   const setup = await setupProjectWithUsers({
     prefix: 'orchnodeexec',
     policyActions: [
+      'agents:CreateAgentGeneration',
+      'tools:CallTool',
       'orchestrations:CreateOrchestration',
       'orchestrations:UpdateOrchestration',
       'orchestrations:StartRun',

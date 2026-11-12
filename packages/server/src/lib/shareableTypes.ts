@@ -9,6 +9,8 @@
  */
 import { db } from '../db';
 import { DomainError, type ErrorCode } from '../errors';
+import { inlineBindingSecretIds, toolSecretIds } from './secretUse';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 /** The fields of a shared resource a grantee may see — never its internals. */
 export type ShareProjection = Record<string, unknown>;
@@ -20,6 +22,8 @@ type ShareableType = {
   actions: readonly string[];
   /** The `400` a missing resource answers at create. */
   notFoundCode: ErrorCode;
+  /** The secrets a grantee's call sends, `[]` when the resource is gone. */
+  secretIds: (args: { projectId: number; id: string }) => Promise<string[]>;
   /** Loads the resource in its own project, or `null` when it is gone. */
   findProjection: (args: {
     projectId: number;
@@ -34,6 +38,13 @@ export const SHAREABLE_TYPES: Readonly<Record<string, ShareableType>> = {
     module: 'tools',
     actions: ['tools:CallTool'],
     notFoundCode: 'TOOL_NOT_FOUND',
+    secretIds: async ({ projectId, id }) => {
+      const tool = await db.Tool.findOne({
+        where: { publicId: id, projectId },
+        attributes: ['execute', 'mcp', 'pipeline'],
+      });
+      return tool ? toolSecretIds(tool) : [];
+    },
     findProjection: async ({ projectId, id }) => {
       const tool = await db.Tool.findOne({
         where: { publicId: id, projectId },
@@ -53,6 +64,13 @@ export const SHAREABLE_TYPES: Readonly<Record<string, ShareableType>> = {
     module: 'agents',
     actions: ['agents:CreateAgentGeneration'],
     notFoundCode: 'AGENT_NOT_FOUND',
+    secretIds: async ({ projectId, id }) => {
+      const agent = await db.Agent.findOne({
+        where: { publicId: id, projectId },
+        attributes: ['toolBindings'],
+      });
+      return agent ? inlineBindingSecretIds(agent.toolBindings) : [];
+    },
     findProjection: async ({ projectId, id }) => {
       const agent = await db.Agent.findOne({
         where: { publicId: id, projectId },
@@ -70,6 +88,37 @@ export const findShareableType = (
   return Object.hasOwn(SHAREABLE_TYPES, resourceType)
     ? SHAREABLE_TYPES[resourceType]
     : undefined;
+};
+
+/** A share lets the grantee perform `actions` on the resource, as its writer could. */
+export const assertShareWriterHolds = async (args: {
+  writer: Writer;
+  projectId: number;
+  resourceType: string;
+  resourceId: string;
+  actions: string[];
+}): Promise<void> => {
+  const shareable = findShareableType(args.resourceType);
+  await assertWriterHolds({
+    carrier: 'shares',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      actions: args.actions.map((action) => {
+        return {
+          action,
+          resourceType: args.resourceType,
+          resourceId: args.resourceId,
+        };
+      }),
+      secretIds: shareable
+        ? await shareable.secretIds({
+            projectId: args.projectId,
+            id: args.resourceId,
+          })
+        : [],
+    },
+  });
 };
 
 /** What a grantee reads of a resource shared with it. */

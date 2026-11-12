@@ -198,7 +198,7 @@ echo "Orchestration: $ORCH_ID"
 ## Step 4 — Create a manual trigger
 
 `input` is the [Trigger](/docs/modules/triggers)'s static input, shallow-merged under
-each firing's runtime input. Creating a trigger requires the target-start permission
+each firing's runtime input. Creating or editing a trigger requires the target-start permission
 (`orchestrations:StartRun`), and every firing acts under the trigger's `policy_ids`
 — [Triggers — Execution Identity](/docs/modules/triggers#execution-identity). The
 policy below lets a firing start the orchestration and nothing else.

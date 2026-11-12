@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
+import { mayStart } from 'src/lib/startActions';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import { fireTriggerNow } from 'src/lib/triggerDispatch';
 import { getTriggerFiring, listTriggerFirings } from 'src/lib/triggerFirings';
@@ -12,7 +13,7 @@ import {
   getTrigger,
   getTriggerSecret,
   listTriggers,
-  mayStartTarget,
+  readTargetType,
   readTriggerEvents,
   rotateTriggerSecret,
   TRIGGER_TARGET_TYPES,
@@ -145,19 +146,6 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     action: 'triggers:CreateTrigger',
     resourceType: 'trigger',
   });
-  // No privilege escalation: the caller must also hold the target-start action.
-  const projectPublicId =
-    body.project_id ?? ctx.authUser!.apiKeyProjectPublicId;
-  const canStartTarget = await mayStartTarget({
-    isAllowed: ctx.authUser!.isAllowed,
-    projectPublicId: projectPublicId!,
-    targetType: body.target_type,
-    targetId: body.target_id,
-  });
-  if (!canStartTarget) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-
   const trigger = await createTrigger({
     projectId: Number(targetProjectId),
     createdByUserId: ctx.authUser!.id,
@@ -178,8 +166,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     eventResources: body.event_resources,
     eventData: body.event_data,
     active: body.active,
-    isAllowed: ctx.authUser!.isAllowed,
-    writerPolicies: ctx.authUser!.getPolicies,
+    writer: ctx.authUser,
   });
 
   ctx.status = 201;
@@ -200,51 +187,15 @@ const assertCallerMayStart = async (args: {
   targetType: string;
   targetId: string;
 }): Promise<void> => {
-  const canStartTarget = await mayStartTarget({
+  const canStartTarget = await mayStart({
     isAllowed: args.authUser.isAllowed,
     projectPublicId: args.projectPublicId,
-    targetType: args.targetType,
-    targetId: args.targetId,
+    type: readTargetType(args.targetType),
+    id: args.targetId,
   });
   if (!canStartTarget) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-};
-
-/**
- * A firing runs as the creator, so every field that shapes what it does asks
- * the create route's question again, against the effective target pair.
- */
-const assertMayShapeUpdatedFiring = async (args: {
-  authUser: AuthUser;
-  trigger: { project_id?: string; target_type?: unknown; target_id?: unknown };
-  body: {
-    target_type?: string;
-    target_id?: string;
-    action?: string | null;
-    input?: Record<string, unknown> | null;
-    policy_ids?: string[];
-  };
-  toolContext: Record<string, string> | null | undefined;
-}): Promise<void> => {
-  const { authUser, trigger, body, toolContext } = args;
-  const retypes =
-    body.target_type !== undefined && body.target_type !== trigger.target_type;
-  const repoints =
-    body.target_id !== undefined && body.target_id !== trigger.target_id;
-  const reshapes = [body.action, body.input, toolContext, body.policy_ids].some(
-    (field) => {
-      return field !== undefined;
-    }
-  );
-  if (!retypes && !repoints && !reshapes) return;
-
-  await assertCallerMayStart({
-    authUser,
-    projectPublicId: trigger.project_id!,
-    targetType: body.target_type ?? (trigger.target_type as string),
-    targetId: body.target_id ?? (trigger.target_id as string),
-  });
 };
 
 triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
@@ -273,13 +224,6 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
 
   const toolContext = parseNullableToolContextBody(body.tool_context);
 
-  await assertMayShapeUpdatedFiring({
-    authUser: ctx.authUser,
-    trigger,
-    body,
-    toolContext,
-  });
-
   const updated = await updateTrigger({
     id: ctx.params.trigger_id,
     name: body.name,
@@ -298,8 +242,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     eventData: body.event_data,
     active: body.active,
     policyIds: body.policy_ids,
-    isAllowed: ctx.authUser!.isAllowed,
-    writerPolicies: ctx.authUser!.getPolicies,
+    writer: ctx.authUser,
   });
 
   ctx.body = updated;

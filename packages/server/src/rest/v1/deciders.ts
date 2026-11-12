@@ -249,6 +249,7 @@ decidersRouter.post(
       version: parseVersionParam(ctx.params.version),
       label: parseString(body.label),
       createdBy: requestPrincipalFromCtx(ctx),
+      writer: ctx.authUser,
     });
   }
 );

@@ -201,10 +201,23 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 ```
 
 - The answer is `200 { "allowed": true | false }`, never `403`: the caller's own policies (owner, key or OAuth boundary, project scope), evaluated as for a built-in route.
-- `action` must be a registered `module:Operation`; a built-in action or a wildcard is `400 VALIDATION_FAILED`.
+- `action` must be a registered `module:Operation`, or one the writer rule asks (below); any other built-in action or a wildcard is `400 VALIDATION_FAILED`.
 - The SRN's type must be one the action's module registered; `<id>` may be `*` for a create or a list. The project and resource are not looked up.
 - `context.tags` feeds `iam:ResourceTag/<key>` conditions, and `iam:ResourceType` is the SRN's type.
 - A check is not an action, so it writes no [audit log](./audit-log.md) entry.
+
+### The writer rule
+
+A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, API key, orchestration or share is checked against the resource as the write leaves it, whichever fields the request names:
+
+| The resource | The writer must hold | Refusal |
+| --- | --- | --- |
+| carries `policy_ids` | every grant of each policy, where the resource acts (an API key is instead capped by its owner, see [API keys](./api-keys.md)) | `403 POLICY_GRANT_NOT_HELD` |
+| starts a target | the target's start action: `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask`, `orchestrations:StartRun`, `evaluations:RunEval` | `403 ACTION_NOT_HELD` |
+| grants a shared action | that action on the shared resource | `403 ACTION_NOT_HELD` |
+| sends a secret | `secrets:UseSecret` on it | `403 FORBIDDEN` |
+
+A version restore or a release is an edit. A deployment storing a resource of its own that starts runtime work, such as a channel that runs an agent, asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), which takes these actions on their resource type (`srn:<project_id>:agent:<id>`, `srn:<project_id>:secret:<id>`).
 
 ## Conditions
 

@@ -40,6 +40,9 @@ describe('Formations: tool_context is write-only on a Trigger', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'fmtcwo',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
+        'orchestrations:StartRun',
         'formations:CreateFormation',
         'formations:PlanFormation',
         'formations:UpdateFormation',

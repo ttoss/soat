@@ -102,6 +102,7 @@ agentVersionsRouter.post(
         version: parseVersionParam(ctx.params.version),
         label: typeof body.label === 'string' ? body.label : undefined,
         createdBy: requestPrincipalFromCtx(ctx),
+        writer: ctx.authUser,
       })
     );
   }
@@ -114,6 +115,7 @@ agentVersionsRouter.post(
  *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1release/put'
  */
 agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
+  requireAuth(ctx);
   const { projectIds } = await authorizeAgentWrite({
     ctx,
     action: 'agents:SetAgentRelease',
@@ -135,6 +137,7 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
       canaryVersion: body.canary_version,
       canaryPercent: body.canary_percent,
       promotionGate: body.promotion_gate,
+      writer: ctx.authUser,
     })
   );
 });
@@ -158,6 +161,7 @@ agentVersionsRouter.post(
         projectIds,
         agentId: ctx.params.agent_id,
         createdBy: requestPrincipalFromCtx(ctx),
+        writer: ctx.authUser,
       })
     );
   }
@@ -182,6 +186,7 @@ agentVersionsRouter.post(
         projectIds,
         agentId: ctx.params.agent_id,
         createdBy: requestPrincipalFromCtx(ctx),
+        writer: ctx.authUser,
       })
     );
   }

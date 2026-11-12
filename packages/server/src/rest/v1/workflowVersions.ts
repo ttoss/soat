@@ -130,6 +130,7 @@ workflowVersionsRouter.post(
       version: parseVersionParam(ctx.params['version'] as string),
       label: typeof body.label === 'string' ? body.label : undefined,
       createdBy: requestPrincipalFromCtx(ctx),
+      writer: ctx.authUser,
     });
   }
 );

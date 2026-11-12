@@ -3090,11 +3090,20 @@ describe('Triggers', () => {
         .send({ policy_ids: [policyRes.body.id] });
       repointToken = await loginAs('triggersrepoint', 'repointpass');
 
+      // Every edit is held to the trigger's policies; this one the updater holds.
+      const heldRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['triggers:GetTrigger'] }],
+          },
+        });
+
       triggerId = (
         await authenticatedTestClient(adminToken)
           .post('/api/v1/triggers')
           .send({
-            policy_ids: [triggerPolicyId],
+            policy_ids: [heldRes.body.id],
             project_id: projectId,
             name: 'repoint-subject',
             type: 'manual',
@@ -3110,6 +3119,7 @@ describe('Triggers', () => {
         .send({ target_id: forbiddenOrchestrationId });
 
       expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
     });
 
     test('the trigger still points at the target it was created with', async () => {
@@ -3130,9 +3140,7 @@ describe('Triggers', () => {
       expect(res.body.target_id).toBe(allowedOrchestrationId);
     });
 
-    // An update that names neither field must not pay for a permission check
-    // against a target it is not touching.
-    test('leaves an update that does not touch the target alone', async () => {
+    test('allows a rename from an updater who can start the target', async () => {
       const res = await authenticatedTestClient(repointToken)
         .patch(`/api/v1/triggers/${triggerId}`)
         .send({ name: 'repoint-subject-renamed' });
@@ -3174,11 +3182,19 @@ describe('Triggers', () => {
         .send({ policy_ids: [policyRes.body.id] });
       shaperToken = await loginAs('triggersshaper', 'shaperpass');
 
+      const heldRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['triggers:GetTrigger'] }],
+          },
+        });
+
       triggerId = (
         await authenticatedTestClient(adminToken)
           .post('/api/v1/triggers')
           .send({
-            policy_ids: [triggerPolicyId],
+            policy_ids: [heldRes.body.id],
             project_id: projectId,
             name: 'shape-subject',
             type: 'manual',
@@ -3222,7 +3238,7 @@ describe('Triggers', () => {
         .send({ input: { seed: 3 } });
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
     });
 
     test('refuses a tool_context update from a caller who cannot start the target', async () => {
@@ -3250,13 +3266,13 @@ describe('Triggers', () => {
       expect(res.body.input).toEqual({ seed: 1 });
     });
 
-    test('allows a rename from a caller who cannot start the target', async () => {
+    test('refuses a rename from a caller who cannot start the target', async () => {
       const res = await authenticatedTestClient(shaperToken)
         .patch(`/api/v1/triggers/${triggerId}`)
         .send({ name: 'shape-subject-renamed' });
 
-      expect(res.status).toBe(200);
-      expect(res.body.name).toBe('shape-subject-renamed');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
     });
   });
 
@@ -3273,15 +3289,23 @@ describe('Triggers', () => {
           'triggers:UpdateTrigger',
           'triggers:DeleteTrigger',
           'triggers:ListTriggerFirings',
+          'orchestrations:StartRun',
         ],
       });
     });
 
     test('can get, list firings, update, and delete triggers', async () => {
+      const held = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['triggers:GetTrigger'] }],
+          },
+        });
       const created = await authenticatedTestClient(adminToken)
         .post('/api/v1/triggers')
         .send({
-          policy_ids: [triggerPolicyId],
+          policy_ids: [held.body.id],
           project_id: projectId,
           name: 'scoped-trigger',
           type: 'manual',

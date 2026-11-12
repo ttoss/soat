@@ -5,6 +5,7 @@ import createDebug from 'debug';
 
 import { type PolicySets, validatePolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
+import { deriveSecretKey } from './signedTokens';
 
 /**
  * The authority of the work a tool assertion was sent for: the policy sets a
@@ -23,17 +24,7 @@ const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
 const sealingKey = (): Buffer => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET environment variable is not set');
-  return Buffer.from(
-    crypto.hkdfSync(
-      'sha256',
-      secret,
-      Buffer.alloc(0),
-      'soat tool-assertion authority',
-      32
-    )
-  );
+  return deriveSecretKey({ info: 'soat tool-assertion authority' });
 };
 
 /** AES-256-GCM over the deflated JSON, as base64url `iv | tag | ciphertext`. */

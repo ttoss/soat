@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { type Page, paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import type { VersionStore } from './resourceVersionStore';
+import type { Writer } from './writerRule';
 
 const log = createDebug('soat:versions');
 
@@ -200,6 +201,8 @@ type ArchiveAdapter<TMappedVersion, TMappedResource> = {
     config: ConfigSnapshot;
     label: string | null;
     createdBy: RequestPrincipal | null;
+    /** Whoever writes the config back, held to the writer rule. */
+    writer: Writer;
   }) => Promise<TMappedResource>;
 };
 
@@ -219,6 +222,7 @@ type GetVersionArgs = {
 type RestoreVersionArgs = GetVersionArgs & {
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 };
 
 /** The archive's read side: list and fetch, no writes. */
@@ -295,7 +299,11 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
    * and a config identical to the live one is recognised as a no-op.
    */
   const applyArchivedVersion = async (
-    a: GetVersionArgs & { label: string; createdBy: RequestPrincipal | null }
+    a: GetVersionArgs & {
+      label: string;
+      createdBy: RequestPrincipal | null;
+      writer: Writer;
+    }
   ): Promise<TMappedResource> => {
     const resource = await args.loadResource({
       projectIds: a.projectIds,
@@ -310,6 +318,7 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
       config: store.readArchivedConfig(row),
       label: a.label,
       createdBy: a.createdBy,
+      writer: a.writer,
     });
   };
 
@@ -325,6 +334,7 @@ export const makeVersionArchive = <TMappedVersion, TMappedResource>(
       version: a.version,
       label: a.label ?? `restored from v${a.version}`,
       createdBy: a.createdBy,
+      writer: a.writer,
     });
   };
 

@@ -10,6 +10,7 @@ import {
   mapArchivedVersionFields,
   toResourceRef,
 } from './resourceVersions';
+import type { Writer } from './writerRule';
 
 const log = createDebug('soat:playbooks');
 
@@ -85,6 +86,7 @@ export const restorePlaybookVersion = async (args: {
   version: number;
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
   author: PlaybookAuthor;
 }): Promise<MappedPlaybook> => {
   log(
@@ -98,5 +100,6 @@ export const restorePlaybookVersion = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 };

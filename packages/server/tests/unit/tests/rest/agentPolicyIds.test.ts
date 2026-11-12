@@ -153,7 +153,7 @@ describe('Agent policy_ids', () => {
       expect(read.body.policy_ids).toBeNull();
     });
 
-    test('keeping a policy attached by someone else needs no grant', async () => {
+    test('refuses an edit that keeps a policy the writer does not hold', async () => {
       const agentId = (
         await createAgent({
           token: adminToken,
@@ -163,10 +163,26 @@ describe('Agent policy_ids', () => {
 
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/agents/${agentId}`)
-        .send({ name: 'renamed', policy_ids: [widerPolicyId, heldPolicyId] });
+        .send({ name: 'renamed' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('POLICY_GRANT_NOT_HELD');
+    });
+
+    test('lets the writer drop a policy it does not hold', async () => {
+      const agentId = (
+        await createAgent({
+          token: adminToken,
+          body: { policy_ids: [widerPolicyId] },
+        })
+      ).body.id;
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ policy_ids: [heldPolicyId] });
 
       expect(res.status).toBe(200);
-      expect(res.body.policy_ids).toEqual([widerPolicyId, heldPolicyId]);
+      expect(res.body.policy_ids).toEqual([heldPolicyId]);
     });
 
     test('null detaches every policy', async () => {

@@ -55,6 +55,8 @@ describe('Orchestration tool-node guardrails', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'orchguard',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'guardrails:CreateGuardrail',
         'guardrails:GetGuardrail',
         'tools:CreateTool',

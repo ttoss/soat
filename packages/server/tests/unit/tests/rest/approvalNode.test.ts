@@ -106,6 +106,8 @@ describe('Approval node (orchestration producer)', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'aprnode',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',

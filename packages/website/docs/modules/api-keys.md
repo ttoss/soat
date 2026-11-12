@@ -102,7 +102,7 @@ Owner-or-admin applies on top: the project check decides *which* keys are visibl
 
 ### Policy Attachment
 
-`policy_ids` are `pol_`-prefixed public IDs from the global [Policies](./policies.md) store; the REST API accepts and returns them.
+`policy_ids` are `pol_`-prefixed public IDs from the global [Policies](./policies.md) store; the REST API accepts and returns them. An unknown id is `400 POLICY_NOT_FOUND`; on a project-scoped key, another project's policy is `400 POLICY_OUTSIDE_PROJECT`.
 
 ### Narrowing a key to a capability set
 

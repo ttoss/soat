@@ -23,7 +23,6 @@ describe('tool and agent references', () => {
     'lib/actorFilters.ts': 'narrows a listing already scoped to the caller',
     'lib/agentNonStreamGeneration.ts':
       "reads tools by name inside the running agent's project",
-    'lib/attachedPolicies.ts': "lists a policy's dependents",
     'lib/agents.ts': "lists the caller's agents",
     'lib/agentVersions.ts': "the agent's own version routes",
     'lib/aiProviders.ts': "lists a provider's dependents",

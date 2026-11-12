@@ -51,6 +51,7 @@ export const orchestrationsFormationModule = defineFormationModule({
     return createOrchestration({
       projectId,
       createdBy: actor.author,
+      writer: actor,
       name: properties.name as string,
       description: toNullableString(properties.description),
       nodes: convertCollectionKeys(
@@ -71,6 +72,7 @@ export const orchestrationsFormationModule = defineFormationModule({
     await updateOrchestration({
       id: physicalResourceId,
       createdBy: actor.author,
+      writer: actor,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       // Both are required by OrchestrationResourceProperties, so a template

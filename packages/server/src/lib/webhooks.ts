@@ -2,14 +2,12 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { assertRequiredPoliciesAttachable } from './attachedPolicies';
 import {
   type EventFilterArgs,
   storedEventFilter,
   validateEventFilter,
 } from './eventMatching';
 import { paginatedList } from './pagination';
-import type { GetWriterPolicies } from './policyGrantCoverage';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import {
@@ -18,6 +16,7 @@ import {
   generateSecretValue,
 } from './secrets';
 import { assertTenantHttpUrl } from './tenantUrl';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const log = createDebug('soat:webhooks');
 
@@ -105,9 +104,6 @@ export const findWebhookSecret = async (args: { id: string }) => {
   return { secret: decryptWebhookSecret(webhook.secret as string) };
 };
 
-const POLICY_IDS_REFUSAL =
-  'policy_ids must name at least one policy: the grant that decides which events the webhook may read.';
-
 export const createWebhook = async (
   args: EventFilterArgs & {
     projectId: number;
@@ -115,7 +111,7 @@ export const createWebhook = async (
     name: string;
     description?: string;
     url: string;
-    writerPolicies: GetWriterPolicies;
+    writer: Writer;
   }
 ) => {
   log('createWebhook: projectId=%d name=%s', args.projectId, args.name);
@@ -124,13 +120,11 @@ export const createWebhook = async (
     throw new DomainError('VALIDATION_FAILED', 'events is required.');
   }
   validateEventFilter(args);
-  await assertRequiredPoliciesAttachable({
+  await assertWriterHolds({
     carrier: 'webhooks',
-    policyIds: args.policyIds ?? [],
-    current: null,
+    writer: args.writer,
     projectId: args.projectId,
-    policyUse: args.writerPolicies,
-    refusal: POLICY_IDS_REFUSAL,
+    carried: { policyIds: args.policyIds ?? [] },
   });
 
   const secret = generateSecret();
@@ -167,7 +161,7 @@ export const updateWebhook = async (
     url?: string;
     active?: boolean;
     policyIds?: string[];
-    writerPolicies: GetWriterPolicies;
+    writer: Writer;
   }
 ) => {
   log('updateWebhook: id=%s', args.id);
@@ -180,13 +174,11 @@ export const updateWebhook = async (
     throw new DomainError('VALIDATION_FAILED', 'events cannot be cleared.');
   }
   validateEventFilter(args);
-  await assertRequiredPoliciesAttachable({
+  await assertWriterHolds({
     carrier: 'webhooks',
-    policyIds: args.policyIds,
-    current: webhook.policyIds,
+    writer: args.writer,
     projectId: webhook.projectId,
-    policyUse: args.writerPolicies,
-    refusal: POLICY_IDS_REFUSAL,
+    carried: { policyIds: args.policyIds ?? webhook.policyIds },
   });
 
   const updates: Record<string, unknown> = {};

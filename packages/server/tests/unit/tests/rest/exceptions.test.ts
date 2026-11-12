@@ -53,6 +53,8 @@ describe('Exceptions', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'exc',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'exceptions:ListExceptions',
         'exceptions:GetException',
         'exceptions:AcknowledgeException',
