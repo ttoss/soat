@@ -220,7 +220,7 @@ describe('Resource prices', () => {
       });
     });
 
-    test("another project naming the owner's tool is 403", async () => {
+    test("another project naming the owner's tool is 400", async () => {
       const toolId = await createTool();
 
       const response = await putPrices({
@@ -228,8 +228,8 @@ describe('Resource prices', () => {
         rows: [priceRow({ toolId })],
       });
 
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('FORBIDDEN');
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('a tool_execution row without a resource is 400', async () => {
