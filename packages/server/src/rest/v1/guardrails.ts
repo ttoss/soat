@@ -16,6 +16,7 @@ import {
   restoreGuardrailVersion,
 } from 'src/lib/guardrailVersions';
 import { buildSrn } from 'src/lib/iam';
+import { replayedAuthHeader } from 'src/lib/replayedCredential';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -270,7 +271,7 @@ guardrailsRouter.post(
       args,
       guardrailContext,
       toolId: parseStringOrUndefined(body.tool_id),
-      authHeader: (ctx.headers.authorization as string) ?? '',
+      authHeader: replayedAuthHeader({ ctx }) ?? '',
     });
   }
 );

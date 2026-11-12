@@ -9,6 +9,7 @@ import {
 
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
+import { replayedAuthHeader } from '../lib/replayedCredential';
 import { ISSUER } from '../lib/serverIssuer';
 import { BEARER_TOKEN_TYPES, verifyToken } from '../lib/signedTokens';
 import { buildSoatActionTarget, soatMcpTools } from '../lib/soatTools';
@@ -116,7 +117,7 @@ const mcpRouter = createMcpRouter(mcpServer, {
   getApiHeaders: (ctx) => {
     // Read back inside each tool handler through `getApiHeaders()`
     // (`dispatchMcpApiRequest`); the handlers receive only tool arguments.
-    const authorization = (ctx.headers.authorization as string) ?? '';
+    const authorization = replayedAuthHeader({ ctx }) ?? '';
     return { authorization };
   },
   auth: {

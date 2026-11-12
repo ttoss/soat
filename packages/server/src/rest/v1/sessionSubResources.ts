@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { replayedAuthHeader } from 'src/lib/replayedCredential';
 import { forkSession, listSessionForks } from 'src/lib/sessionFork';
 import {
   addSessionMessage,
@@ -72,7 +73,7 @@ sessionSubResourcesRouter.post(
       documentId: body.document_id,
       toolContext: parseToolContextBody(body.tool_context),
       authUser: ctx.authUser,
-      authHeader: ctx.headers.authorization,
+      authHeader: replayedAuthHeader({ ctx }),
       idempotencyKey: idempotencyKeyOf(ctx),
     });
 
@@ -109,7 +110,7 @@ sessionSubResourcesRouter.post(
       sessionId: ctx.params.session_id,
       model: body.model,
       toolContext: parseToolContextBody(body.tool_context),
-      authHeader: ctx.headers.authorization,
+      authHeader: replayedAuthHeader({ ctx }),
       authUser: ctx.authUser,
     };
 
@@ -165,7 +166,7 @@ sessionSubResourcesRouter.post(
           output: toolOutput.output,
         };
       }),
-      authHeader: ctx.headers.authorization,
+      authHeader: replayedAuthHeader({ ctx }),
       authUser: ctx.authUser,
     });
 

@@ -1,20 +1,40 @@
-import type { PolicyDocument } from './iam';
+import type { PolicyDocument, PolicySets } from './iam';
 import { validatePolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
 
 /**
- * What an IAM token holds its issuing key to: stored policies by id, read as
- * they stand at each check, or an inline document. The key's grant ∩ the bound
- * is the most the token, and any work it starts, may do.
+ * What a credential holds its key to, beyond the key's grant: stored policies
+ * by id, read as they stand at each check; an inline document (an IAM token);
+ * or policy sets each check must satisfy (the authority an `On-Behalf-Of`
+ * assertion carried). The key's grant ∩ the bound is the most the credential,
+ * and any work it starts, may do.
  */
 export type PrincipalBound =
-  { policyIds: string[] } | { policy: PolicyDocument };
+  | { policyIds: string[] }
+  | { policy: PolicyDocument }
+  | { policySets: PolicySets };
+
+/** At least one set, each of valid documents; `[[]]` allows nothing. */
+export const isPolicySets = (value: unknown): value is PolicySets => {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((set) => {
+      return (
+        Array.isArray(set) &&
+        set.every((document) => {
+          return validatePolicyDocument(document).valid;
+        })
+      );
+    })
+  );
+};
 
 /** The stored and signed form, as a JWT claim and a JSON column carry it. */
 export const serializeBound = (bound: PrincipalBound): object => {
-  return 'policyIds' in bound
-    ? { policy_ids: bound.policyIds }
-    : { policy: bound.policy };
+  if ('policyIds' in bound) return { policy_ids: bound.policyIds };
+  if ('policySets' in bound) return { policy_sets: bound.policySets };
+  return { policy: bound.policy };
 };
 
 /**
@@ -36,6 +56,9 @@ export const parseBound = (
     })
   ) {
     return { policyIds };
+  }
+  if (isPolicySets(value.policy_sets)) {
+    return { policySets: value.policy_sets };
   }
   const policy = value.policy;
   if (policy !== undefined && validatePolicyDocument(policy).valid) {

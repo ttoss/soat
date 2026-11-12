@@ -22,6 +22,8 @@ export const narrowToOnBehalfOf = (args: {
   return {
     ...authUser,
     onBehalfOf: asserted.onBehalfOf,
+    // Work the request starts stores the cap with its principal.
+    bound: { policySets: sets },
     ...(principal ? { onBehalfOfPrincipal: principal } : {}),
     ...narrowAuthority({
       authority: authUser,
