@@ -558,6 +558,8 @@ What was injected is recorded on the generation as [`retrieval`](./generations.m
 
 Writing back from a _completed_ turn is not configured here. It is the destination store's own ingestion policy — a [memory rule](./memories.md#memory-rules) — so one store's writers are readable in one place and one agent can feed two stores under different rules.
 
+Retrieval and `write_memory` reach only the agent's own project (its owner's, for a [shared](./shares.md) agent), on every path that runs a turn: the generate route, a session and a conversation. On create and update, a `memory_store_ids`, `document_ids` or `write_memory_store_id` entry naming another project's resource is `400` (`MEMORY_STORE_NOT_FOUND`, `VALIDATION_FAILED` for a document).
+
 Only `memory_store_ids` set → memory-only search. Document search runs when `document_ids`/`document_paths` are set or no scoping filter is set. `tags` scopes both stores, so it counts on both sides ([Knowledge](./knowledge.md#search-modes)).
 
 ### Orchestrated thinking

@@ -9,6 +9,7 @@
  */
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { readKnowledgeConfig } from './agentKnowledgeConfig';
 import { collectStepRuleActiveToolIds } from './agentStepRules';
 import {
   type AgentToolBinding,
@@ -22,7 +23,11 @@ import {
   validateModelRouteExclusivity,
 } from './modelRoutes';
 import { isPlainObject } from './plainObject';
-import { toolReferences } from './resourceReferences';
+import {
+  documentReferences,
+  memoryStoreReferences,
+  toolReferences,
+} from './resourceReferences';
 import { validateAgentTraceContentMode } from './traceContentPolicy';
 
 /**
@@ -138,8 +143,35 @@ const assertActiveToolsBound = (args: ActiveToolsWrite): void => {
   }
 };
 
+/**
+ * Every id a `knowledge_config` names is the agent's own project's: retrieval
+ * and `write_memory` are scoped to it, so another project's id would only ever
+ * resolve to nothing.
+ */
+const assertKnowledgeConfigReferences = async (args: {
+  knowledgeConfig: unknown;
+  projectId: number;
+}): Promise<void> => {
+  const config = readKnowledgeConfig(args.knowledgeConfig);
+  if (!config) return;
+  await memoryStoreReferences.requireMany({
+    ids: [
+      ...(config.memoryStoreIds ?? []),
+      ...(config.writeMemoryStoreId ? [config.writeMemoryStoreId] : []),
+    ],
+    projectId: args.projectId,
+    reach: 'project',
+  });
+  await documentReferences.requireMany({
+    ids: config.documentIds ?? [],
+    projectId: args.projectId,
+    reach: 'project',
+  });
+};
+
 export const assertAgentReferencesExist = async (
   args: {
+    knowledgeConfig?: object | null;
     guardrailIds?: string[] | null;
     toolBindings?: AgentToolBinding[] | null;
     activeToolIds?: string[] | null;
@@ -161,6 +193,10 @@ export const assertAgentReferencesExist = async (
     reach: 'shares',
   });
   assertActiveToolsBound({ ...args, current });
+  await assertKnowledgeConfigReferences({
+    knowledgeConfig: args.knowledgeConfig,
+    projectId,
+  });
   await assertTraceContentModeAllowed({
     traceContentMode: args.traceContentMode,
     projectId,

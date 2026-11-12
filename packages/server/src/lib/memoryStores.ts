@@ -156,12 +156,16 @@ export const findMemoryStoreScope = async (args: {
  */
 export const findMemoryStoreIamScope = async (args: {
   id: string;
+  projectId: number;
 }): Promise<{
   id: number;
   projectPublicId: string;
   tags: Record<string, string> | null;
 } | null> => {
-  const store = await memoryStores.findByPublicId({ id: args.id });
+  const store = await memoryStores.findByPublicId({
+    id: args.id,
+    projectIds: [args.projectId],
+  });
   if (!store) return null;
   return {
     id: store.id as number,

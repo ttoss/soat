@@ -1877,6 +1877,9 @@ describe('Agents', () => {
         'searchKnowledge'
       );
       mockSearchKnowledge.mockResolvedValueOnce([]);
+      const storedStore = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memory-stores')
+        .send({ project_id: projectId, name: 'Stored knowledge store' });
 
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
@@ -1884,7 +1887,7 @@ describe('Agents', () => {
           ai_provider_id: aiProviderId,
           project_id: projectId,
           name: 'Per-Generation Knowledge Agent',
-          knowledge_config: { memory_store_ids: ['mstore_agent_config'] },
+          knowledge_config: { memory_store_ids: [storedStore.body.id] },
         });
       expect(createRes.status).toBe(201);
       const knowledgeAgentId = createRes.body.id;
@@ -1902,7 +1905,7 @@ describe('Agents', () => {
       // stored store is searched.
       expect(mockSearchKnowledge).toHaveBeenCalledWith(
         expect.objectContaining({
-          memoryStoreIds: ['mstore_agent_config'],
+          memoryStoreIds: [storedStore.body.id],
           alsoScopes: [],
         })
       );

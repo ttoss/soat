@@ -1619,7 +1619,8 @@ components:
         knowledge_config:
           description: >-
             Knowledge search run before every generation; its matches are
-            prepended as reference context. See
+            prepended as reference context. Every id it names is a resource
+            of the agent's project, else `400`. See
             [Knowledge Config](/docs/modules/agents#knowledge-config).
           type: object
           additionalProperties: false
@@ -1896,7 +1897,8 @@ components:
         knowledge_config:
           description: >-
             Knowledge search run before every generation; its matches are
-            prepended as reference context. `null` turns it off. See
+            prepended as reference context. `null` turns it off. Every id it
+            names is a resource of the agent's project, else `400`. See
             [Knowledge Config](/docs/modules/agents#knowledge-config).
           type: object
           nullable: true
