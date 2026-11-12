@@ -91,6 +91,11 @@ type SearchKnowledgeArgs = {
   documentIds?: string[];
   memoryStoreIds?: string[];
   /**
+   * Narrows the memory half to this actor's memories, in every scope: the
+   * actor is the caller's, not a scope's. Every owner's when absent.
+   */
+  actorId?: string;
+  /**
    * Key-value pairs a result's own `tags` must all contain. One filter for
    * both stores: it narrows documents and memories alike, and is the
    * only filter that turns on a source on both sides at once.
@@ -270,6 +275,7 @@ const dedupeByKey = (results: KnowledgeResult[]): KnowledgeResult[] => {
 /** One scope's contribution from each store, before ranking. */
 const collectScope = async (args: {
   scope: KnowledgeScope;
+  actorId?: string;
   projectIds?: number[];
   query?: string;
   embedding: number[] | undefined;
@@ -314,6 +320,7 @@ const collectScope = async (args: {
           policyWhere: scope.policyWhere,
           config: {
             memoryStoreIds: scope.memoryStoreIds,
+            actorId: args.actorId,
             tags: scope.tags,
             search: query,
             minSimilarity: args.minSimilarity,
@@ -349,6 +356,7 @@ export const searchKnowledge = async (
     [args, ...(args.alsoScopes ?? [])].map((scope) => {
       return collectScope({
         scope,
+        actorId: args.actorId,
         projectIds: args.projectIds,
         query: args.query,
         embedding,

@@ -249,6 +249,7 @@ describe('query pins', () => {
       .sort();
     assert.deepEqual(declared, [
       'listDocuments?path_prefix',
+      'listMemories?actor_id',
       'listMemories?memory_store_id',
       'listPlaybookCases?actor_id',
     ]);

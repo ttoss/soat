@@ -32,6 +32,7 @@ type Memory = {
   id: string;
   content: string;
   tags: Record<string, string> | null;
+  actor_id: string | null;
 };
 
 type Summary = Record<
@@ -702,6 +703,7 @@ describe('Memory rule dispatch', () => {
         'system.conversation': conversation.body.id,
         'system.actor': actor.body.id,
       });
+      expect(memories[0].actor_id).toBe(actor.body.id);
 
       const [handler] = requestsOf('handler');
       expect(handler.text).toContain('Did my renewal go through?');

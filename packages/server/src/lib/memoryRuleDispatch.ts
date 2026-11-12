@@ -133,6 +133,8 @@ const writeCandidates = async (args: {
   rule: MemoryRuleRow;
   facts: MemoryFact[];
   turn: HandlerTurn;
+  /** The conversation's owner, whose memory each fact is; null for none. */
+  ownerActorId: number | null;
 }): Promise<RuleFiringSummary> => {
   const summary = emptySummary(args.facts.length);
   const memoryStoreId = args.rule.memoryStoreId;
@@ -148,6 +150,7 @@ const writeCandidates = async (args: {
       await assertMemoryStorageQuota({ memoryStoreId, content: fact.content });
       const result = await writeMemory({
         memoryStoreId,
+        actorId: args.ownerActorId,
         content: fact.content,
         // A handler is model-authored, so a `system.*` key it proposed is
         // dropped rather than trusted; the runtime's own stamp wins.
@@ -203,6 +206,10 @@ const recordFiringSummary = async (args: {
       args.generationPublicId
     );
   }
+};
+
+const conversationOwnerOf = (generation: GenerationRow): number | null => {
+  return generation.conversation?.actorId ?? null;
 };
 
 const loadGeneration = async (
@@ -269,7 +276,12 @@ const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
     };
 
     const facts = await runRuleHandler({ handler: handlerFor(rule), turn });
-    summaries[rule.publicId] = await writeCandidates({ rule, facts, turn });
+    summaries[rule.publicId] = await writeCandidates({
+      rule,
+      facts,
+      turn,
+      ownerActorId: conversationOwnerOf(generation),
+    });
 
     log(
       'dispatchMemoryRules: rule=%s candidates=%d created=%d superseded=%d skipped=%d',

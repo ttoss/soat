@@ -56,6 +56,7 @@ import { policyProjectId } from './2026-11-10-policyProjectId';
 import { triggerPolicyIds } from './2026-11-10-triggerPolicyIds';
 import { webhookPolicyIds } from './2026-11-10-webhookPolicyIds';
 import { iamConditionKeys } from './2026-11-11-iamConditionKeys';
+import { memoryActor } from './2026-11-12-memoryActor';
 import { principalBound } from './2026-11-12-principalBound';
 
 /**
@@ -135,4 +136,5 @@ export const MIGRATIONS: Migration[] = [
   policyProjectId,
   iamConditionKeys,
   principalBound,
+  memoryActor,
 ];

@@ -38,6 +38,7 @@ import {
   resolveWriteProjectId,
 } from './helpers';
 import { resolveListScope } from './listScope';
+import { memoryPins } from './memoryPins';
 import { requireMemoryStore } from './memoryStoreAccess';
 import { compileReadPolicy } from './readPolicy';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -278,6 +279,7 @@ memoryStoresRouter.get(
 
     ctx.body = await listMemoryStoreAssertions({
       memoryStoreId: store!.id,
+      actorId: memoryPins.read(ctx, 'actor_id'),
       mechanism: readEnum<MemoryAssertionMechanism>({
         value: ctx.query.mechanism,
         allowed: MEMORY_ASSERTION_MECHANISMS,

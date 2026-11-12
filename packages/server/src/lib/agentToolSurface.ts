@@ -127,6 +127,7 @@ export const resolveAgentToolSurface = async (args: {
           projectId,
           typedAgent: args.typedAgent,
           boundaryPolicy: args.boundaryPolicy,
+          actorId: args.toolContext?.actor_id,
         })
       : [];
 

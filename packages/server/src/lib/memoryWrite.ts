@@ -116,8 +116,9 @@ const loadStoreWriteContext = async (args: {
 };
 
 /**
- * The store's most similar **currently valid** memory, by cosine over the
- * shared content row's vector.
+ * The store's most similar **currently valid** memory of the same owner, by
+ * cosine over the shared content row's vector. Owners never compare: a write
+ * for one actor, or for none, never skips or retires another's fact.
  *
  * The join is what keeps the two halves where they belong: the vector lives on
  * `memory_contents` (where the HNSW index is), and `invalidated_at` stays on
@@ -128,6 +129,7 @@ const loadStoreWriteContext = async (args: {
  */
 const findTopSimilarMemory = async (args: {
   memoryStoreId: number;
+  actorId: number | null;
   embeddingLiteral: string;
 }): Promise<MemoryRow | null> => {
   // The includes join memories to themselves (`supersededByMemory`), so the
@@ -143,6 +145,7 @@ const findTopSimilarMemory = async (args: {
       return db.Memory.findOne({
         where: {
           memoryStoreId: args.memoryStoreId,
+          actorId: args.actorId,
           ...validMemoryWhere(),
         },
         attributes: {
@@ -178,6 +181,7 @@ const findTopSimilarMemory = async (args: {
  */
 const resolveDeclaredTarget = async (args: {
   memoryStoreId: number;
+  actorId: number | null;
   supersedes: string;
 }): Promise<MemoryRow> => {
   const target = (await db.Memory.findOne({
@@ -192,6 +196,12 @@ const resolveDeclaredTarget = async (args: {
     throw new DomainError(
       'VALIDATION_FAILED',
       'supersedes must name a memory in the same memory store'
+    );
+  }
+  if (target.actorId !== args.actorId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'supersedes must name a memory of the same actor'
     );
   }
   if (target.invalidatedAt !== null) {
@@ -268,6 +278,7 @@ const inheritBags = (args: {
 
 const createMemoryRow = async (args: {
   memoryStoreId: number;
+  actorId: number | null;
   contentId: number;
   sourceType?: MemorySource;
   sourceConversationPublicId?: string | null;
@@ -277,6 +288,7 @@ const createMemoryRow = async (args: {
   const conversationPublicId = args.sourceConversationPublicId ?? null;
   return db.Memory.create({
     memoryStoreId: args.memoryStoreId,
+    actorId: args.actorId,
     contentId: args.contentId,
     sourceType: conversationPublicId
       ? 'conversation'
@@ -299,6 +311,7 @@ const createMemoryRow = async (args: {
 const supersedeMemory = async (args: {
   match: MemoryRow;
   memoryStoreId: number;
+  actorId: number | null;
   contentId: number;
   sourceType?: MemorySource;
   sourceConversationPublicId?: string | null;
@@ -307,6 +320,7 @@ const supersedeMemory = async (args: {
 }) => {
   const replacement = await createMemoryRow({
     memoryStoreId: args.memoryStoreId,
+    actorId: args.actorId,
     contentId: args.contentId,
     sourceType: args.sourceType,
     sourceConversationPublicId: args.sourceConversationPublicId,
@@ -326,6 +340,12 @@ const supersedeMemory = async (args: {
 
 export type WriteMemoryArgs = {
   memoryStoreId: number;
+  /**
+   * The internal id of the actor the memory belongs to, or null for none.
+   * Required so every door states it: the write compares, supersedes and
+   * creates within that owner only.
+   */
+  actorId: number | null;
   content: string;
   sourceType?: MemorySource;
   tags?: Record<string, string> | null;
@@ -374,6 +394,7 @@ export type WriteMemoryArgs = {
  */
 const measureWrite = async (args: {
   memoryStoreId: number;
+  actorId: number | null;
   embeddingLiteral: string | null;
   declaredTarget: MemoryRow | null;
 }): Promise<{ match: MemoryRow | null; similarity: number | null }> => {
@@ -393,6 +414,7 @@ const measureWrite = async (args: {
 
   const match = await findTopSimilarMemory({
     memoryStoreId: args.memoryStoreId,
+    actorId: args.actorId,
     embeddingLiteral: args.embeddingLiteral,
   });
 
@@ -449,14 +471,13 @@ export const writeMemory = async (
   args: WriteMemoryArgs
 ): Promise<MemoryWriteResult> => {
   const store = await loadStoreWriteContext(args);
+  // Where the memory lands: every comparison stays inside it.
+  const place = { memoryStoreId: args.memoryStoreId, actorId: args.actorId };
 
   // Before the embedder: a write naming a target it may not have is refused
   // without spending an embedding on content that is not going to be stored.
   const declaredTarget = args.supersedes
-    ? await resolveDeclaredTarget({
-        memoryStoreId: args.memoryStoreId,
-        supersedes: args.supersedes,
-      })
+    ? await resolveDeclaredTarget({ ...place, supersedes: args.supersedes })
     : null;
 
   log(
@@ -476,7 +497,7 @@ export const writeMemory = async (
   });
 
   const { match, similarity } = await measureWrite({
-    memoryStoreId: args.memoryStoreId,
+    ...place,
     embeddingLiteral: content.embedding
       ? `[${content.embedding.join(',')}]`
       : null,
@@ -493,7 +514,7 @@ export const writeMemory = async (
   // Every outcome writes its memory from the same content row and provenance,
   // whether that row is new or the replacement for a retired one.
   const rowArgs = {
-    memoryStoreId: args.memoryStoreId,
+    ...place,
     contentId: content.id as number,
     sourceType: args.sourceType,
     sourceConversationPublicId: args.sourceConversationPublicId,

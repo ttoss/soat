@@ -1,6 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { ownerActorWhere } from './actorOwnership';
 import { distanceExpression } from './knowledgeEmbedding';
 import {
   lexicalMatchWhere,
@@ -21,6 +22,8 @@ import { withIterativeVectorScan } from './vectorSearch';
 
 export type MemoryStoreQueryConfig = {
   memoryStoreIds?: string[];
+  /** Only this actor's memories; every owner's when absent. */
+  actorId?: string;
   tags?: Record<string, string>;
   search?: string;
   /** Cosine floor on the **vector** candidates only. */
@@ -405,6 +408,7 @@ export type MemoryStorePolicyWhere = {
  */
 const buildSearchWheres = (args: {
   selection: Record<string, unknown>;
+  owner: Record<string, unknown>;
   projectIds?: number[];
   policyWhere?: MemoryStorePolicyWhere;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -415,6 +419,7 @@ const buildSearchWheres = (args: {
   const entryWhere = {
     [Op.and]: [
       args.selection,
+      args.owner,
       validMemoryWhere(),
       ...(hasPolicyConstraints(args.policyWhere?.memory)
         ? [args.policyWhere.memory]
@@ -456,6 +461,7 @@ export const resolveMemoryStoreSearchLists = async (args: {
 
   const { entryWhere, memoryStoreWhere } = buildSearchWheres({
     selection,
+    owner: await ownerActorWhere({ actorId: config.actorId }),
     projectIds,
     policyWhere: args.policyWhere,
   });

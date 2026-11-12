@@ -38,6 +38,19 @@ paths:
           schema:
             type: string
             example: mstore_V1StGXR8Z5jdHi6B
+        - name: actor_id
+          in: query
+          required: false
+          x-soat-pin:
+            field: actor_id
+            match: equals
+          description: >-
+            Only the memories that belong to this actor. Pin it in a tool's
+            `preset_parameters` as `{{context:actor_id}}` so an agent lists
+            the memories of the end user it serves only.
+          schema:
+            type: string
+            example: actor_V1StGXR8Z5jdHi6B
         - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
@@ -127,6 +140,16 @@ paths:
                   type: string
                   description: The text content of the memory
                   example: The customer prefers email communication over phone calls
+                actor_id:
+                  x-soat-ref: actors
+                  type: string
+                  description: >-
+                    The end user the memory belongs to, an actor of the memory
+                    store's project; an unknown one is `400 ACTOR_NOT_FOUND`.
+                    The write compares, supersedes and creates among that
+                    actor's memories only. Omitted, the memory belongs to no
+                    actor and is compared with the other memories of no actor.
+                  example: actor_V1StGXR8Z5jdHi6B
                 source_type:
                   type: string
                   enum: [manual, conversation]
@@ -268,6 +291,7 @@ paths:
       x-iam-action: memories:GetMemory
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -321,6 +345,7 @@ paths:
       x-iam-action: memories:UpdateMemory
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -413,6 +438,7 @@ paths:
       x-iam-action: memories:DeleteMemory
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -478,6 +504,7 @@ paths:
       x-iam-action: memories:RetractMemory
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -561,6 +588,7 @@ paths:
       x-iam-action: memories:ListMemoryAssertions
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -623,6 +651,7 @@ paths:
       x-iam-action: memories:GetMemory
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -673,6 +702,7 @@ paths:
       x-iam-action: memories:UpdateMemory
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -735,6 +765,7 @@ paths:
       x-iam-action: memories:UpdateMemory
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
+        - $ref: '#/components/parameters/ActorPin'
         - name: memory_id
           in: path
           required: true
@@ -797,6 +828,19 @@ components:
       schema:
         type: string
         example: mstore_V1StGXR8Z5jdHi6B
+    ActorPin:
+      name: actor_id
+      in: query
+      required: false
+      description: >-
+        Acts only on a memory that belongs to this actor: any other memory,
+        one that belongs to no actor included, is `404` as if it did not
+        exist. Pin it in a tool's `preset_parameters` as
+        `{{context:actor_id}}` so an agent serving an end user reaches that
+        user's memories only.
+      schema:
+        type: string
+        example: actor_V1StGXR8Z5jdHi6B
   securitySchemes:
     bearerAuth:
       type: http
@@ -813,6 +857,15 @@ components:
           x-soat-ref: memory-stores
           type: string
           example: mstore_V1StGXR8Z5jdHi6B
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+          description: >-
+            The end user the memory belongs to; null for none. Set on create
+            and never changed; a replacement written by a supersede belongs to
+            the same actor.
+          example: actor_V1StGXR8Z5jdHi6B
         content:
           type: string
           description: >-

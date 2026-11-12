@@ -2,8 +2,10 @@ import type {
   MemoryAssertionMechanism,
   MemoryAssertionOutcome,
 } from '@soat/postgresdb';
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
+import { ownerActorWhere } from 'src/lib/actorOwnership';
 import {
   emptyPage,
   type ListFilters,
@@ -263,6 +265,8 @@ export const listMemoryAssertions = async (args: {
  */
 export const listMemoryStoreAssertions = async (args: {
   memoryStoreId: number;
+  /** Only the writes that resolved into this actor's memories. */
+  actorId?: string;
   mechanism?: MemoryAssertionMechanism;
   outcome?: MemoryAssertionOutcome;
   generationId?: string;
@@ -281,6 +285,15 @@ export const listMemoryStoreAssertions = async (args: {
   const where: Record<string, unknown> = { memoryStoreId: args.memoryStoreId };
   if (args.mechanism) where.mechanism = args.mechanism;
   if (args.outcome) where.outcome = args.outcome;
+  const owner = await ownerActorWhere({ actorId: args.actorId });
+  if (owner.actorId !== undefined) {
+    // Integer from the actor row, never caller text.
+    where.memoryId = {
+      [Op.in]: db.sequelize.literal(
+        `(SELECT id FROM memories WHERE actor_id = ${owner.actorId})`
+      ),
+    };
+  }
   const createdAt = timeRangeWhere({ from: args.from, to: args.to });
   if (createdAt) where.createdAt = createdAt;
 
@@ -298,6 +311,7 @@ export const listMemoryStoreAssertions = async (args: {
     where,
     filters: {
       memoryStoreId: args.memoryStoreId,
+      actorId: args.actorId,
       mechanism: args.mechanism,
       outcome: args.outcome,
       generationId: args.generationId,

@@ -6,6 +6,7 @@ export type MemoryRow = InstanceType<(typeof db)['Memory']> & {
   memoryStore?: InstanceType<(typeof db)['MemoryStore']>;
   content?: InstanceType<(typeof db)['MemoryContent']>;
   supersededByMemory?: InstanceType<(typeof db)['Memory']> | null;
+  actor?: InstanceType<(typeof db)['Actor']> | null;
 };
 
 /**
@@ -15,7 +16,7 @@ export type MemoryRow = InstanceType<(typeof db)['Memory']> & {
  * link that exists — or, for `content`, fail outright.
  */
 export type MemoryInclude = {
-  model: DB['MemoryStore'] | DB['MemoryContent'] | DB['Memory'];
+  model: DB['MemoryStore'] | DB['MemoryContent'] | DB['Memory'] | DB['Actor'];
   as: string;
 };
 
@@ -24,6 +25,7 @@ export const memoryIncludes = (): MemoryInclude[] => {
     { model: db.MemoryStore, as: 'memoryStore' },
     { model: db.MemoryContent, as: 'content' },
     { model: db.Memory, as: 'supersededByMemory' },
+    { model: db.Actor, as: 'actor' },
   ];
 };
 
@@ -45,6 +47,7 @@ export const mapMemory = (instance: MemoryRow) => {
   return {
     id: instance.publicId,
     memory_store_id: instance.memoryStore?.publicId,
+    actor_id: linkedPublicId(instance.actor),
     // The shared row's text. A memory holds no copy of its own, so an include
     // that skipped `content` would throw here rather than report a wrong value.
     content: instance.content!.content,

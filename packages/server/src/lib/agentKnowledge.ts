@@ -2,6 +2,7 @@ import type { Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
+import { resolveOwnerActorDbId } from './actorOwnership';
 import type { TypedAgent } from './agentGenerationTypes';
 import {
   type KnowledgeConfig,
@@ -107,6 +108,8 @@ export const buildKnowledgeMessages = async (args: {
    */
   embeddingBilling: EmbeddingBilling;
   messages: Array<{ role: string; content: unknown }>;
+  /** The turn's end user: retrieval reads that actor's memories only. */
+  actorId?: string;
 }): Promise<{
   messages: Array<{ role: string; content: string }>;
   /** What was injected, for the generation record. Null when nothing ran. */
@@ -153,6 +156,7 @@ export const buildKnowledgeMessages = async (args: {
     query,
     ...scope,
     alsoScopes,
+    actorId: args.actorId,
     // The agent record spells the cosine floor `min_score`, which is exactly
     // what `minSimilarity` is.
     minSimilarity: config.minScore,
@@ -227,6 +231,8 @@ export const buildWriteMemoryTool = (args: {
   /** The agent's own project, the only one whose store it writes to. */
   projectId: number;
   boundaryPolicy?: unknown;
+  /** The turn's end user, whose memory every write is. */
+  actorId?: string;
 }): Tool => {
   return tool({
     description:
@@ -270,6 +276,11 @@ export const buildWriteMemoryTool = (args: {
       }
       const result = await writeMemory({
         memoryStoreId: memoryStore.id,
+        actorId: await resolveOwnerActorDbId({
+          actorId: args.actorId,
+          projectId: args.projectId,
+          projectLabel: "the agent's project",
+        }),
         content,
         // No `sourceConversationPublicId`: `Memory.source_id` is the pointer a
         // client may supply on a hand-written fact, and this tool has none to
@@ -307,6 +318,7 @@ export const buildKnowledgeBindings = (args: {
   projectId: number;
   typedAgent: TypedAgent;
   boundaryPolicy: PolicyDocument | null;
+  actorId?: string;
 }): BindingTools[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
   if (!knowledgeConfig?.writeMemoryStoreId) return [];
@@ -320,6 +332,7 @@ export const buildKnowledgeBindings = (args: {
           generationId: args.generationId,
           projectId: args.projectId,
           boundaryPolicy: args.boundaryPolicy,
+          actorId: args.actorId,
         }),
       },
     },

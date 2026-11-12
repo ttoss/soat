@@ -8,6 +8,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Actor } from './Actor';
 import { MemoryContent } from './MemoryContent';
 import { MemoryStore } from './MemoryStore';
 
@@ -35,6 +36,10 @@ export type MemorySource = (typeof MEMORY_SOURCES)[number];
       // Every read joins the shared content row for the text and the vector.
       name: 'memories_content_id_idx',
       fields: ['content_id'],
+    },
+    {
+      name: 'memories_memory_store_id_actor_id_idx',
+      fields: ['memory_store_id', 'actor_id'],
     },
   ],
   hooks: {
@@ -65,6 +70,25 @@ export class Memory extends Model {
     { onDelete: 'CASCADE' }
   )
   declare memoryStore: MemoryStore;
+
+  /**
+   * The end user the memory belongs to; its store belongs to no one. SET NULL:
+   * a memory outlives its actor, and a call pinned to an actor then reaches it
+   * no more.
+   */
+  @ForeignKey(() => {
+    return Actor;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare actorId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Actor;
+    },
+    { foreignKey: 'actorId', as: 'actor', onDelete: 'SET NULL' }
+  )
+  declare actor: Actor | null;
 
   /**
    * The text this memory currently holds, shared with every assertion that

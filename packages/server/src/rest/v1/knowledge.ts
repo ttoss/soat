@@ -31,6 +31,7 @@ type KnowledgeSearchBody = {
   // Array-typed filters. Typed loosely to tolerate non-conforming clients that
   // send a single value as a bare scalar; `toStringArray` normalizes them.
   memory_store_ids?: string[] | string;
+  actor_id?: string;
   document_paths?: string[] | string;
   document_ids?: string[] | string;
   tags?: unknown;
@@ -137,6 +138,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     paths: toStringArray(body.document_paths),
     documentIds: toStringArray(body.document_ids),
     memoryStoreIds: toStringArray(body.memory_store_ids),
+    actorId: body.actor_id,
     tags,
     metadata,
     includeDocuments: body.include_documents,

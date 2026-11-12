@@ -117,6 +117,8 @@ const assembleContextMessages = async (args: {
   authUser?: AuthUser;
   boundaryPolicy: PolicyDocument | null;
   unavailableToolNames: string[];
+  /** The turn's end user, from the identity-pinned `tool_context`. */
+  actorId?: string;
 }): Promise<{
   allMessages: Array<{ role: string; content: unknown }>;
   retrieval: KnowledgeRetrieval;
@@ -147,6 +149,7 @@ const assembleContextMessages = async (args: {
       generationId: args.generationId,
     },
     messages: args.resolvedMessages,
+    actorId: args.actorId,
   });
 
   log(
@@ -318,6 +321,7 @@ export const buildGenerationContext = async (
     authUser: args.authUser,
     boundaryPolicy,
     unavailableToolNames: toolSurface.unavailableToolNames,
+    actorId: toolContext?.actor_id,
   });
 
   return {

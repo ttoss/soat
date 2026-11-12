@@ -11,6 +11,7 @@ import {
   findThresholdOrderError,
   getMemory,
   listMemories,
+  resolveMemoryOwner,
   resolveMemoryThresholds,
   updateMemory,
   writeMemory,
@@ -41,10 +42,10 @@ import {
   readThreshold,
   validateTagsBag,
 } from './memoriesRequestBody';
+import { memoryPins } from './memoryPins';
 import { sendNdjson } from './ndjsonResponse';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
-import { resourcePins } from './resourcePins';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoriesRouter = new Router<Context>();
@@ -133,8 +134,6 @@ const resolveMemoryStoreForAction = async (
   return { memoryStore, memoryStoreRowId: memoryStoreRow!.id as number };
 };
 
-const memoryPins = resourcePins({ listOperation: 'listMemories' });
-
 const memoryNotFound = (): DomainError => {
   return new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
 };
@@ -142,15 +141,14 @@ const memoryNotFound = (): DomainError => {
 /**
  * Resolves an entry by its (globally unique) id and verifies access via the
  * owning memory store's project. Every by-id route resolves through here, so
- * a `memory_store_id` pin confines all of them: another store's memory is
- * `404`. Returns the mapped entry, or null after setting the
- * appropriate error response.
+ * the `memory_store_id` and `actor_id` pins confine all of them: another
+ * store's or another actor's memory is `404`. Returns the mapped entry.
  */
 const resolveEntryForAction = async (
   ctx: Context,
   entryId: string,
   action: string
-): Promise<Awaited<ReturnType<typeof getMemory>> | null> => {
+): Promise<NonNullable<Awaited<ReturnType<typeof getMemory>>>> => {
   const entry = memoryPins.assertItem({
     ctx,
     item: await getMemory({ id: entryId }),
@@ -229,6 +227,7 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
 
   ctx.body = await listMemories({
     memoryStoreId: hasAccess ? memoryStoreRowId : NO_MEMORY,
+    actorId: memoryPins.read(ctx, 'actor_id'),
     includeInvalidated: ctx.query.include_invalidated === 'true',
     tags: readTagQuery(ctx.query.tags),
     policyWhere,
@@ -262,8 +261,9 @@ memoriesRouter.get(
     sendNdjson({
       ctx,
       filename: `memories-${memoryStore.id}.ndjson`,
-      lines: streamMemoriesNdjson({
+      lines: await streamMemoriesNdjson({
         memoryStoreId: hasAccess ? memoryStoreRowId : NO_MEMORY,
+        actorId: memoryPins.read(ctx, 'actor_id'),
         includeInvalidated: ctx.query.include_invalidated === 'true',
         tags: readTagQuery(ctx.query.tags),
         policyWhere,
@@ -277,6 +277,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     memory_store_id?: string;
+    actor_id?: unknown;
     content: string;
     source_type?: string;
     source_id?: string;
@@ -332,6 +333,10 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
 
   const result = await writeMemory({
     memoryStoreId: memoryStoreRowId,
+    actorId: await resolveMemoryOwner({
+      memoryStoreId: memoryStoreRowId,
+      actorId: body.actor_id,
+    }),
     content: body.content,
     sourceType,
     sourceConversationPublicId: body.source_id,
@@ -363,7 +368,6 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
     ctx.params.memory_id,
     'memories:GetMemory'
   );
-  if (!entry) return;
 
   ctx.body = entry;
 });
@@ -382,12 +386,11 @@ memoriesRouter.get('/memories/:memory_id/assertions', async (ctx: Context) => {
 
   // Gated on the store's SRN like every other item read, through the same
   // two-bag check the memory's own routes use.
-  const entry = await resolveEntryForAction(
+  await resolveEntryForAction(
     ctx,
     ctx.params.memory_id,
     'memories:ListMemoryAssertions'
   );
-  if (!entry) return;
 
   ctx.body = await listMemoryAssertions({
     memoryId: (await findMemoryRowId({ id: ctx.params.memory_id }))!,
@@ -398,12 +401,11 @@ memoriesRouter.get('/memories/:memory_id/assertions', async (ctx: Context) => {
 memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const entry = await resolveEntryForAction(
+  await resolveEntryForAction(
     ctx,
     ctx.params.memory_id,
     'memories:UpdateMemory'
   );
-  if (!entry) return;
 
   const body = ctx.request.body as {
     content?: string;
@@ -448,12 +450,11 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
 memoriesRouter.post('/memories/:memory_id/retract', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const entry = await resolveEntryForAction(
+  await resolveEntryForAction(
     ctx,
     ctx.params.memory_id,
     'memories:RetractMemory'
   );
-  if (!entry) return;
 
   ctx.body = await retractMemory({
     id: ctx.params.memory_id,
@@ -469,15 +470,11 @@ const resolveEntry = async (args: {
   ctx: AuthenticatedContext;
   access: TagAccess;
 }) => {
-  const entry = await resolveEntryForAction(
+  return resolveEntryForAction(
     args.ctx,
     args.ctx.params.memory_id,
     args.access === 'read' ? 'memories:GetMemory' : 'memories:UpdateMemory'
   );
-  if (!entry) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
-  }
-  return entry;
 };
 
 registerTagRoutes({
@@ -495,12 +492,11 @@ registerTagRoutes({
 memoriesRouter.delete('/memories/:memory_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const entry = await resolveEntryForAction(
+  await resolveEntryForAction(
     ctx,
     ctx.params.memory_id,
     'memories:DeleteMemory'
   );
-  if (!entry) return;
 
   await deleteMemory({ id: ctx.params.memory_id });
   ctx.status = 204;
