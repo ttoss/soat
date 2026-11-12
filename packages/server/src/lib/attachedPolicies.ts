@@ -10,6 +10,7 @@ import {
   type GetWriterPolicies,
 } from './policyGrantCoverage';
 import { bindPolicyVariables } from './policyVariables';
+import type { PrincipalBound } from './principalBound';
 
 const log = createDebug('soat:attachedPolicies');
 
@@ -145,6 +146,14 @@ export const resolveAttachedPolicySet = async (args: {
     actorId: null,
   });
   return grant ? [grant] : [];
+};
+
+/** The policy set an IAM token bound adds: one every request must satisfy. */
+export const resolveBoundSet = async (
+  bound: PrincipalBound
+): Promise<PolicyDocument[]> => {
+  if ('policy' in bound) return [bound.policy];
+  return resolveAttachedPolicySet({ policyIds: bound.policyIds });
 };
 
 type Carriers = { count: number; sample: string[] };

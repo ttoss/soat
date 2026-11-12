@@ -130,8 +130,7 @@ const runAgentDispatch = async (args: {
   onDispatchStarted?: DispatchStarted;
 }): Promise<DispatchResult> => {
   const authHeader = await buildRunAuthHeader({
-    principalKind: args.principal?.principalType ?? null,
-    principalId: args.principal?.principalId ?? null,
+    principal: args.principal,
     projectId: args.projectId,
     workPublicId: args.taskPublicId,
   });
@@ -198,8 +197,7 @@ const runToolDispatch = async (args: {
   toolContext?: Record<string, string>;
 }): Promise<DispatchResult> => {
   const authHeader = await buildRunAuthHeader({
-    principalKind: args.principal?.principalType ?? null,
-    principalId: args.principal?.principalId ?? null,
+    principal: args.principal,
     projectId: args.projectId,
     workPublicId: args.taskPublicId,
   });

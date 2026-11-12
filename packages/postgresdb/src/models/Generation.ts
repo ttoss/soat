@@ -235,6 +235,11 @@ export class Generation extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare actedAsPrincipalId: string | null;
 
+  // The IAM token bound `acted_as` was held to, so work outliving the token
+  // stays inside it. Null when the principal acted unbounded.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare actedAsPrincipalBound: object | null;
+
   @Column({
     type: DataType.STRING(32),
     allowNull: false,

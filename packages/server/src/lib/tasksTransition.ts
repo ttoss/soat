@@ -4,7 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
-import { readStoredStartingPrincipal } from './orchestrationRunToken';
+import { readStoredRunPrincipal } from './orchestrationRunToken';
 import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
@@ -387,14 +387,9 @@ const resolveDispatchPrincipal = async (
   if (!args.orchestrationRunId) return undefined;
   const run = await db.OrchestrationRun.findOne({
     where: { publicId: args.orchestrationRunId },
-    attributes: ['principalKind', 'principalId'],
+    attributes: ['principalKind', 'principalId', 'principalBound'],
   });
-  return (
-    readStoredStartingPrincipal({
-      kind: run?.principalKind,
-      id: run?.principalId,
-    }) ?? undefined
-  );
+  return readStoredRunPrincipal(run) ?? undefined;
 };
 
 const currentTask = async (id: string) => {

@@ -29,7 +29,7 @@ export const resolveRunAs = async (args: {
   const { row } = args;
   const version = await db.PlaybookVersion.findOne({
     where: { playbookId: row.playbookId, version: row.playbookVersion },
-    attributes: ['principalKind', 'principalId'],
+    attributes: ['principalKind', 'principalId', 'principalBound'],
   });
   const runAs = await resolvePlaybookRunAs({
     version: version!,

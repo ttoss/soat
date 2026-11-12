@@ -4,6 +4,11 @@ import jwt from 'jsonwebtoken';
 import { db } from '../db';
 import { JWT_SECRET } from '../middleware/auth';
 import {
+  parseBound,
+  type PrincipalBound,
+  serializeBound,
+} from './principalBound';
+import {
   principalFromAuthUser,
   type RequestPrincipal,
   type StartingPrincipal,
@@ -36,6 +41,8 @@ export const signRunToken = (payload: {
    */
   workPublicId: string;
   apiKeyPublicId?: string;
+  /** The IAM token bound the work's principal acted under, held again here. */
+  bound?: PrincipalBound;
 }) => {
   const ttl = process.env.SOAT_RUN_TOKEN_TTL || '1h';
   return jwt.sign(
@@ -48,6 +55,7 @@ export const signRunToken = (payload: {
       // out of its absent `scope` claim — an allow-nothing policy.
       orn: payload.workPublicId,
       ...(payload.apiKeyPublicId ? { key: payload.apiKeyPublicId } : {}),
+      ...(payload.bound ? { bnd: serializeBound(payload.bound) } : {}),
     },
     JWT_SECRET,
     { expiresIn: ttl as jwt.SignOptions['expiresIn'] }
@@ -65,13 +73,12 @@ export const signRunToken = (payload: {
  * that they now fail loudly instead of storing a 401 body as a result.
  */
 export const buildRunAuthHeader = async (args: {
-  principalKind: string | null;
-  principalId: string | null;
+  principal: StartingPrincipal | null | undefined;
   projectId: number;
   workPublicId: string;
 }): Promise<string | undefined> => {
-  const { principalKind, principalId } = args;
-  if (!principalKind || !principalId) return undefined;
+  if (!args.principal) return undefined;
+  const { principalType: principalKind, principalId, bound } = args.principal;
 
   const project = await db.Project.findOne({ where: { id: args.projectId } });
   if (!project) return undefined;
@@ -96,6 +103,7 @@ export const buildRunAuthHeader = async (args: {
       projectPublicId: project.publicId as string,
       workPublicId: args.workPublicId,
       apiKeyPublicId: principalId,
+      bound,
     })}`;
   }
 
@@ -109,7 +117,24 @@ export const buildRunAuthHeader = async (args: {
     role: user.role as string,
     projectPublicId: project.publicId as string,
     workPublicId: args.workPublicId,
+    bound,
   })}`;
+};
+
+/** The principal a run token's or an IAM token's verified claims name. */
+const principalOfClaims = (
+  payload: jwt.JwtPayload
+): (RequestPrincipal & { bound?: PrincipalBound }) | null => {
+  const bound = parseBound(payload.bnd);
+  if (bound === null) return null;
+  const boundField = bound ? { bound } : {};
+  const keyClaim = payload.key;
+  if (typeof keyClaim === 'string') {
+    return { principalType: 'api_key', principalId: keyClaim, ...boundField };
+  }
+  const publicId = payload.publicId;
+  if (typeof publicId !== 'string' || payload.itk === true) return null;
+  return { principalType: 'user', principalId: publicId, ...boundField };
 };
 
 /**
@@ -119,13 +144,13 @@ export const buildRunAuthHeader = async (args: {
  * would persist no principal, and a crash-redrive of that child — the one path
  * that cannot reuse the parent's in-memory header — would lose its identity.
  *
- * Returns null for anything that is not one of our own run tokens; a plain user
- * JWT or an `sk_` key is not decoded here, because those call sites pass an
- * explicit principal instead.
+ * An IAM token reads as its issuing key with the token's bound. Returns null
+ * for anything else; a plain user JWT or an `sk_` key is not decoded here,
+ * because those call sites pass an explicit principal instead.
  */
 export const readRunTokenPrincipal = (
   authHeader: string | undefined
-): RequestPrincipal | null => {
+): (RequestPrincipal & { bound?: PrincipalBound }) | null => {
   if (!authHeader?.startsWith('Bearer ')) return null;
   try {
     const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
@@ -135,15 +160,9 @@ export const readRunTokenPrincipal = (
     // living in the *token*, not the principal. Re-minting either as a plain
     // run token would drop that boundary and hand the run more access than the
     // credential that started it, so those runs record no principal at all.
-    if (typeof payload.orn !== 'string') return null;
+    if (typeof payload.orn !== 'string' && payload.itk !== true) return null;
 
-    const keyClaim = payload.key;
-    if (typeof keyClaim === 'string') {
-      return { principalType: 'api_key', principalId: keyClaim };
-    }
-    const publicId = payload.publicId;
-    if (typeof publicId !== 'string') return null;
-    return { principalType: 'user', principalId: publicId };
+    return principalOfClaims(payload);
   } catch {
     return null;
   }
@@ -168,7 +187,9 @@ export const readRunTokenWork = (
 };
 
 /** The one construction of the brand; every other module receives it. */
-const brand = (principal: RequestPrincipal | null) => {
+const brand = (
+  principal: (RequestPrincipal & { bound?: PrincipalBound }) | null
+) => {
   return principal as StartingPrincipal | null;
 };
 
@@ -195,12 +216,16 @@ export const resolveStartingPrincipal = (args: {
     oauthProjectPublicId?: string;
     isTriggerToken?: boolean;
     isRunToken?: boolean;
+    bound?: PrincipalBound;
   };
   authHeader?: string;
 }): StartingPrincipal | null => {
   const { authUser } = args;
   if (!authUser) return brand(readRunTokenPrincipal(args.authHeader));
   if (authUser.isTriggerToken) return null;
+  if (authUser.bound) {
+    return brand({ ...principalFromAuthUser(authUser), bound: authUser.bound });
+  }
   if (authUser.oauthProjectPublicId && !authUser.isRunToken) return null;
   return brand(principalFromAuthUser(authUser));
 };
@@ -212,9 +237,35 @@ export const resolveStartingPrincipal = (args: {
 export const readStoredStartingPrincipal = (args: {
   kind: string | null | undefined;
   id: string | null | undefined;
+  bound: unknown;
 }): StartingPrincipal | null => {
   if ((args.kind !== 'user' && args.kind !== 'api_key') || !args.id) {
     return null;
   }
-  return brand({ principalType: args.kind, principalId: args.id });
+  const bound = parseBound(args.bound);
+  // A bound that no longer parses cannot be held, so the work acts as nobody.
+  if (bound === null) return null;
+  return brand({
+    principalType: args.kind,
+    principalId: args.id,
+    ...(bound ? { bound } : {}),
+  });
+};
+
+/** The principal stored in a row's `principal*` columns. */
+export const readStoredRunPrincipal = (
+  row:
+    | {
+        principalKind: string | null;
+        principalId: string | null;
+        principalBound: object | null;
+      }
+    | null
+    | undefined
+): StartingPrincipal | null => {
+  return readStoredStartingPrincipal({
+    kind: row?.principalKind,
+    id: row?.principalId,
+    bound: row?.principalBound,
+  });
 };

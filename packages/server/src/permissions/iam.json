@@ -1,0 +1,10 @@
+{
+  "module": "iam",
+  "operations": [
+    {
+      "operationId": "createIamToken",
+      "action": "iam:CreateToken",
+      "description": "Issue a short-lived token that holds the calling API key to a policy"
+    }
+  ]
+}

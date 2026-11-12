@@ -125,7 +125,7 @@ Key management is self-service, so the boundary also guards the key being writte
 
 ### A project-scoped token writes no key
 
-An OAuth access token, a trigger run-as token and a run token carry their boundary inside the token (the consented scope, the trigger's policy, the starting key's policies), and a key cannot carry it. Under any of them, [`POST /api-keys`](/docs/api/api-keys/create-api-key), [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) and an `api_key` [formation](./formations.md) resource return `403 API_KEY_SCOPED_TOKEN`. Create and update keys with a user token or an API key; reading, listing and deleting keys are unaffected.
+An OAuth access token, a trigger run-as token, a run token and an [IAM token](./iam.md#iam-tokens) carry their boundary inside the token (the consented scope, the trigger's policy, the starting key's policies, the token's bound), and a key cannot carry it. Under any of them, [`POST /api-keys`](/docs/api/api-keys/create-api-key), [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) and an `api_key` [formation](./formations.md) resource return `403 API_KEY_SCOPED_TOKEN`. Create and update keys with a user token or an API key; reading, listing and deleting keys are unaffected.
 
 ### Revoking a Key
 

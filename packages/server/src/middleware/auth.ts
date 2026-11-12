@@ -2,10 +2,18 @@ import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-import type { Context } from '../Context';
+import type { AuthUser, Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
+import { resolveBoundSet } from '../lib/attachedPolicies';
 import { requestOnBehalfOf } from '../lib/onBehalfOf';
 import { resolvePolicySets } from '../lib/permissions';
+import { parseBound } from '../lib/principalBound';
+import {
+  actingKeyOf,
+  type BoundClaims,
+  boundIdentityFields,
+  holdsItsBound,
+} from './authBound';
 import { narrowToOnBehalfOf } from './authOnBehalfOf';
 import { type Authority, buildAuthority } from './authority';
 import {
@@ -149,14 +157,15 @@ const buildScopedIdentityFields = (args: {
   runApiKeyPublicId?: string;
   runWorkPublicId?: string;
   oauthScope?: string;
-}): {
-  oauthProjectPublicId?: string;
-  oauthScope?: string;
-  isTriggerToken?: boolean;
-  isRunToken?: boolean;
-  runWorkPublicId?: string;
-  apiKeyPublicId?: string;
-} => {
+}): Pick<
+  AuthUser,
+  | 'oauthProjectPublicId'
+  | 'oauthScope'
+  | 'isTriggerToken'
+  | 'isRunToken'
+  | 'runWorkPublicId'
+  | 'apiKeyPublicId'
+> => {
   return {
     ...(args.scopedProjectPublicId
       ? { oauthProjectPublicId: args.scopedProjectPublicId }
@@ -167,8 +176,8 @@ const buildScopedIdentityFields = (args: {
     ...(args.isRunToken && args.runWorkPublicId
       ? { runWorkPublicId: args.runWorkPublicId }
       : {}),
-    // Gated on `isRunToken`: only a run token's `key` claim names an acting key.
-    ...(args.isRunToken && args.runApiKeyPublicId
+    // Set only from a run token's or an IAM token's `key` claim.
+    ...(args.runApiKeyPublicId
       ? { apiKeyPublicId: args.runApiKeyPublicId }
       : {}),
   };
@@ -191,13 +200,14 @@ type JwtClaims = {
   clr?: boolean;
   ckey?: string;
   cscope?: string;
-};
+} & BoundClaims;
 
 /** Verifies a bearer JWT, or null when it is not a valid token of ours. */
 const verifyJwtClaims = (token: string): JwtClaims | null => {
   try {
     const claims = jwt.verify(token, JWT_SECRET) as JwtClaims;
     if (typeof claims.publicId !== 'string') return null;
+    if (!holdsItsBound(claims)) return null;
     // A `scope` claim marks an OAuth token, which is only valid bound to a project.
     return claims.scope !== undefined && !claims.prj ? null : claims;
   } catch {
@@ -250,6 +260,7 @@ const resolveJwtAuthority = async (args: {
                 userPolicyIds,
                 apiKeyPublicId: payload.ckey,
                 oauthScope: payload.cscope,
+                bound: parseBound(payload.cbnd) ?? undefined,
               }
             : undefined,
           db,
@@ -260,22 +271,26 @@ const resolveJwtAuthority = async (args: {
   }
   const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
     scopedProjectPublicId: scoped,
-    isRunToken: typeof payload.orn === 'string',
+    actsAsKey: typeof payload.orn === 'string' || payload.itk === true,
     runApiKeyPublicId:
       typeof payload.key === 'string' ? payload.key : undefined,
     scopeClaim: payload.scope,
     db,
   });
+  // An IAM token's bound, or the one a run token carries for work a token
+  // started: one more set, read per check, so it only narrows.
+  const bound = parseBound(payload.bnd) ?? undefined;
   return buildAuthority({
     reach: { pinned: scoped },
-    getSets: () => {
-      return resolvePolicySets({
+    getSets: async () => {
+      const sets = await resolvePolicySets({
         userRole: role,
         userPolicyIds,
         apiKeyPolicyIds: [],
         boundaryPolicyDocs,
         db,
       });
+      return bound ? [...sets, await resolveBoundSet(bound)] : sets;
     },
     db,
   });
@@ -306,8 +321,7 @@ export const resolveJwtAuthUser = async (args: {
   const scopedProjectPublicId = payload.prj;
   const isTriggerToken = typeof payload.trg === 'string';
   const isRunToken = typeof payload.orn === 'string';
-  const runApiKeyPublicId =
-    typeof payload.key === 'string' ? payload.key : undefined;
+  const runApiKeyPublicId = actingKeyOf(payload);
 
   const authority = await resolveJwtAuthority({
     payload,
@@ -329,6 +343,7 @@ export const resolveJwtAuthUser = async (args: {
       runWorkPublicId: payload.orn,
       oauthScope: isTriggerToken || isRunToken ? undefined : payload.scope,
     }),
+    ...boundIdentityFields(payload),
     ...authority,
   };
 };

@@ -59,6 +59,7 @@ import {
 } from './orchestrationRunPause';
 import {
   buildRunAuthHeader,
+  readStoredRunPrincipal,
   resolveStartingPrincipal,
 } from './orchestrationRunToken';
 import type {
@@ -72,7 +73,7 @@ import {
   resolveStartRunProjectScope,
 } from './orchestrationStartRun';
 import { kickWorker } from './orchestrationWorker';
-import type { StartingPrincipal } from './principals';
+import { runPrincipalColumns, type StartingPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 import { acceptStoredToolContext } from './toolContextCarrier';
 
@@ -531,15 +532,12 @@ const driveRunToRest = async (args: {
 const resolveRunPrincipal = (args: {
   principal?: StartingPrincipal | null;
   authHeader?: string;
-}): { principalKind: string | null; principalId: string | null } => {
+}): ReturnType<typeof runPrincipalColumns> => {
   const principal =
     args.principal === undefined
       ? resolveStartingPrincipal({ authHeader: args.authHeader })
       : args.principal;
-  return {
-    principalKind: principal?.principalType ?? null,
-    principalId: principal?.principalId ?? null,
-  };
+  return runPrincipalColumns(principal);
 };
 
 /**
@@ -845,8 +843,7 @@ const runAuthHeader = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<string | undefined> => {
   return buildRunAuthHeader({
-    principalKind: args.run.principalKind ?? null,
-    principalId: args.run.principalId ?? null,
+    principal: readStoredRunPrincipal(args.run),
     projectId: args.run.projectId as number,
     workPublicId: args.run.publicId as string,
   });

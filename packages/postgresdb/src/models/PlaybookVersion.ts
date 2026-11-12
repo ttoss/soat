@@ -89,6 +89,10 @@ export class PlaybookVersion extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare principalId: string | null;
 
+  // The IAM token bound the author wrote this version under, or null.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare principalBound: object | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 }

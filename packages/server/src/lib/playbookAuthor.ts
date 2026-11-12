@@ -7,6 +7,7 @@ import { resolveJwtAuthUser } from '../middleware/auth';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import {
   buildRunAuthHeader,
+  readStoredRunPrincipal,
   resolveStartingPrincipal,
 } from './orchestrationRunToken';
 import type {
@@ -20,7 +21,7 @@ import {
   type ToolStart,
 } from './playbookExecutorReferences';
 import { throwPlaybookDefinitionProblems } from './playbookWire';
-import type { StartingPrincipal } from './principals';
+import { runPrincipalColumns, type StartingPrincipal } from './principals';
 import { mayStart, START_ACTIONS } from './startActions';
 import type { ValidationProblem } from './validationProblems';
 
@@ -193,10 +194,7 @@ export const assertAuthorCanRun = async (args: {
 
 /** The version row's author columns. */
 export const authorColumns = (principal: StartingPrincipal | null) => {
-  return {
-    principalKind: principal?.principalType ?? null,
-    principalId: principal?.principalId ?? null,
-  };
+  return runPrincipalColumns(principal);
 };
 
 /** The author a case's executors run as: who wrote its pinned version. */
@@ -212,14 +210,16 @@ export type PlaybookRunAs = {
  * as they stand now, with an API key's boundary intact.
  */
 export const resolvePlaybookRunAs = async (args: {
-  version: { principalKind: string | null; principalId: string | null };
+  version: {
+    principalKind: string | null;
+    principalId: string | null;
+    principalBound: object | null;
+  };
   projectId: number;
   workPublicId: string;
 }): Promise<PlaybookRunAs> => {
-  const { principalKind, principalId } = args.version;
   const authHeader = await buildRunAuthHeader({
-    principalKind,
-    principalId,
+    principal: readStoredRunPrincipal(args.version),
     projectId: args.projectId,
     workPublicId: args.workPublicId,
   });

@@ -1,6 +1,7 @@
 import type { DB } from './db';
 import type { PolicySets } from './lib/iam';
 import type { OnBehalfOf } from './lib/onBehalfOf';
+import type { PrincipalBound } from './lib/principalBound';
 
 export type AuthUser = {
   id: number;
@@ -86,6 +87,14 @@ export type AuthUser = {
    * back into the work that minted it, so it can narrow and never grant.
    */
   runWorkPublicId?: string;
+  /**
+   * The IAM token bound the credential carries beyond its key: an IAM token's
+   * own, or the one a run token re-mints for work an IAM token started. Work
+   * the request starts stores it with its principal.
+   */
+  bound?: PrincipalBound;
+  /** Set for an IAM token (`POST /iam/tokens`): what the audit log records. */
+  iamToken?: { jti: string; principal?: { type: string; id: string } };
   /**
    * The tool call the request writes on behalf of, from a verified
    * `On-Behalf-Of` assertion (`lib/onBehalfOf.ts`). Recorded; its generation

@@ -1,8 +1,12 @@
 import type { Context } from '../Context';
-import { resolveAttachedPolicySet } from '../lib/attachedPolicies';
+import {
+  resolveAttachedPolicySet,
+  resolveBoundSet,
+} from '../lib/attachedPolicies';
 import type { PolicyDocument, PolicySets } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
 import { resolvePolicySets } from '../lib/permissions';
+import type { PrincipalBound } from '../lib/principalBound';
 
 /**
  * An orchestration run-as token's boundary: the policies of the API key that
@@ -31,9 +35,9 @@ const resolveRunTokenBoundaryDocs = async (args: {
 /**
  * Resolves the boundary PolicyDocuments for a project-scoped JWT credential:
  * - OAuth: the consented scope, rebuilt from the `scope` claim.
- * - Orchestration run-as: the starting API key's own policies, so a run can
- *   never reach further than the credential that started it; when a user
- *   started it, no boundary.
+ * - Orchestration run-as and IAM token: the acting API key's own policies, so
+ *   the credential never reaches further than that key; when a user started
+ *   the run, no boundary.
  * Returns `undefined` for an unscoped (plain user) JWT.
  *
  * Order matters: the OAuth branch is the fallback, so every other kind must be
@@ -43,13 +47,14 @@ const resolveRunTokenBoundaryDocs = async (args: {
 export const resolveScopedBoundaryDocs = async (args: {
   scopedProjectPublicId?: string;
   runApiKeyPublicId?: string;
-  isRunToken?: boolean;
+  /** A run token or an IAM token: bounded by the key its `key` claim names. */
+  actsAsKey?: boolean;
   scopeClaim?: string;
   db: Context['db'];
 }): Promise<PolicyDocument[] | undefined> => {
   if (!args.scopedProjectPublicId) return undefined;
 
-  if (args.isRunToken) {
+  if (args.actsAsKey) {
     return resolveRunTokenBoundaryDocs({
       apiKeyPublicId: args.runApiKeyPublicId,
       db: args.db,
@@ -78,6 +83,7 @@ export const resolveTriggerPolicySets = async (args: {
     userPolicyIds: number[];
     apiKeyPublicId?: string;
     oauthScope?: string;
+    bound?: PrincipalBound;
   };
   db: Context['db'];
 }): Promise<PolicySets> => {
@@ -106,5 +112,8 @@ export const resolveTriggerPolicySets = async (args: {
           }),
     db: args.db,
   });
-  return [...callerSets, triggerDocs];
+  const boundSets = args.caller.bound
+    ? [await resolveBoundSet(args.caller.bound)]
+    : [];
+  return [...callerSets, ...boundSets, triggerDocs];
 };

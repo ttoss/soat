@@ -361,6 +361,7 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
       role: ctx.authUser.role,
       apiKeyPublicId: ctx.authUser.apiKeyPublicId,
       oauthScope: ctx.authUser.oauthScope,
+      bound: ctx.authUser.bound,
     },
   });
 

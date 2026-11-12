@@ -6,7 +6,10 @@ import { DomainError } from 'src/errors';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import * as orchestrationEngineModule from 'src/lib/orchestrationEngine';
-import { buildRunAuthHeader } from 'src/lib/orchestrationRunToken';
+import {
+  buildRunAuthHeader,
+  readStoredStartingPrincipal,
+} from 'src/lib/orchestrationRunToken';
 import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
@@ -4359,8 +4362,11 @@ describe('Tasks', () => {
       test('counts against the chain budget rather than resetting it', async () => {
         const taskId = await startPingPong();
         const header = await buildRunAuthHeader({
-          principalKind: 'user',
-          principalId: userId,
+          principal: readStoredStartingPrincipal({
+            kind: 'user',
+            id: userId,
+            bound: null,
+          }),
           projectId: (await db.Project.findOne({
             where: { publicId: projectId },
           }))!.id as number,
