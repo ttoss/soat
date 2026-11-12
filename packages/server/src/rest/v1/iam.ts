@@ -60,7 +60,7 @@ iamRouter.post('/iam/tokens', async (ctx: Context) => {
   ctx.status = 201;
   ctx.body = await createIamToken({
     issuer,
-    body: (ctx.request.body ?? {}) as Record<string, unknown>,
+    body: ctx.request.body as Record<string, unknown>,
   });
 });
 
