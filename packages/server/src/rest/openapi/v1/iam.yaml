@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >-
     Ask the policy engine whether the calling credential may perform an
-    action a deployment registered, and issue short-lived tokens that hold an
+    action, built-in or one a deployment registered, and issue short-lived tokens that hold an
     API key to a narrower policy.
   contact:
     name: SOAT Team
@@ -30,10 +30,9 @@ paths:
       description: >-
         Evaluates the calling credential's own policies (its owner's and, for
         an API key or OAuth token, its boundary and project scope) for an
-        action the deployment registered (`IAM_REGISTRATIONS_CONFIG`), or an
-        action the writer rule asks of whoever writes a resource that acts
-        later (a target's start action, `secrets:UseSecret`), on an SRN, with
-        the engine the runtime's own routes use. A denial is `200`
+        action the deployment registered (`IAM_REGISTRATIONS_CONFIG`) or any
+        built-in action, such as one a resource the deployment stores will
+        perform later, on an SRN, with the engine the runtime's own routes use. A denial is `200`
         with `allowed: false`, never `403`. Only policies are evaluated: the
         answer says nothing about whether the resource exists.
       operationId: checkIamPermission
@@ -131,18 +130,16 @@ components:
         action:
           type: string
           description: >-
-            A `module:Operation` action the deployment registered, or one the
-            writer rule asks (`agents:CreateAgentGeneration`, `tools:CallTool`,
-            `deciders:CreateDecision`, `tasks:CreateTask`,
-            `orchestrations:StartRun`, `evaluations:RunEval`,
-            `secrets:UseSecret`); any other built-in action or a wildcard is
-            `400`.
+            A `module:Operation` action the deployment registered or a
+            built-in one (`agents:DeleteAgent`); an unknown action or a
+            wildcard is `400`.
           example: channels:GetChannel
         resource:
           type: string
           description: >-
             `srn:<project_id>:<resource_type>:<id>`, where the type is one the
-            action's module registered and `<id>` may be `*` for an action on
+            action's module registered, or for a built-in action one its
+            module's routes check it on, and `<id>` may be `*` for an action on
             no single resource (a create or a list).
           example: srn:proj_V1StGXR8Z5jdHi6B:channel:ch_1
         context:
