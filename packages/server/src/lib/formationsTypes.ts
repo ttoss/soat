@@ -1,6 +1,6 @@
 import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
-import type { PolicySets } from './iam';
+import type { SenderCredential } from './assertionSender';
 import type { RequestPrincipal, StartingPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
@@ -96,6 +96,8 @@ export type FormationResourceContext = {
  * `author` is who a config version names: the key itself when a key deploys.
  * `principal` and `isAllowed` are the credential a `playbook` version runs as,
  * so a deploying key's own boundary bounds what the playbook may start.
+ * Its sender credential (policy sets, principal) is what a registered type's
+ * handler receives sealed in each write's assertion.
  *
  * Carried by the three **write** operations only, and required there: every path
  * that mutates comes from an authenticated route, so a call site that cannot
@@ -108,8 +110,6 @@ export type FormationActor = {
   author: RequestPrincipal;
   principal: StartingPrincipal | null;
   isAllowed: IsAllowedFn;
-  /** The deploying credential's policy sets in a project. */
-  getPolicies: (projectPublicId: string) => Promise<PolicySets>;
   /**
    * The deploying key's `policy_ids` (`undefined` when it carries none), so an
    * `api_key` resource cannot be minted wider than the credential deploying it.
@@ -119,7 +119,7 @@ export type FormationActor = {
   scopedToken: boolean;
   /** Records a refusal the module makes before any `isAllowed` call. */
   recordRefusal: (action: string) => void;
-};
+} & SenderCredential;
 
 export type FormationActingPrincipal = { actor: FormationActor };
 
@@ -179,8 +179,9 @@ export type FormationModuleAuthorization =
       /**
        * An operator-registered type has no SOAT action to check: its
        * actions are not in the permission catalog, so no policy could grant
-       * them and every apply would be denied. Such a type stays gated on the
-       * request's own `formations:*` action, as before.
+       * them and every apply would be denied. Such a type is gated on the
+       * request's own `formations:*` action; its handler receives the
+       * deployer's authority and acts within it.
        */
       operatorRegistered: true;
     };

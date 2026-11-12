@@ -14,6 +14,10 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import {
+  type AssertionAuthority,
+  sealAssertionAuthority,
+} from './assertionAuthority';
 import { readCappedText } from './cappedBody';
 import type { FormationResourceTypeRegistration } from './formationResourceTypeConfig';
 import { soatHeader } from './headerPrefix';
@@ -24,6 +28,7 @@ import {
 } from './hmacSignature';
 import { isObjectRecord } from './openapiSchemaFields';
 import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
+import { toolAssertionHeaders } from './toolAssertion';
 
 const log = createDebug('soat:formations:handler');
 
@@ -171,6 +176,35 @@ const parseResponse = async (args: {
 };
 
 /**
+ * Who a write is sent for: the handler receives the deployer's authority
+ * sealed in a tool assertion it can present back in `On-Behalf-Of`, so its
+ * callbacks act no further than the deployer could.
+ */
+export type HandlerAssertion = {
+  projectPublicId: string;
+  authority: AssertionAuthority;
+};
+
+const assertionHeaders = (args: {
+  assertion: HandlerAssertion | null;
+  url: string;
+  body: string;
+}): Record<string, string> => {
+  if (!args.assertion) return {};
+  return toolAssertionHeaders({
+    identity: {
+      toolId: null,
+      projectId: args.assertion.projectPublicId,
+      authority: sealAssertionAuthority({
+        authority: args.assertion.authority,
+      }),
+    },
+    url: args.url,
+    body: args.body,
+  });
+};
+
+/**
  * Performs one signed handler call and returns its parsed 2xx body.
  *
  * Every non-2xx, unreachable host, timeout, and non-object body throws — a
@@ -180,6 +214,8 @@ const parseResponse = async (args: {
 export const callFormationHandler = async (args: {
   registration: FormationResourceTypeRegistration;
   request: HandlerRequest;
+  /** Every write names one; a `read` or `validate` acts for nobody. */
+  assertion: HandlerAssertion | null;
 }): Promise<Record<string, unknown>> => {
   const { registration, request } = args;
   const resourceType = registration.name;
@@ -205,6 +241,11 @@ export const callFormationHandler = async (args: {
           secret: registration.handler.secret,
         }),
         [idempotencyHeader()]: idempotencyKey({ resourceType, request }),
+        ...assertionHeaders({
+          assertion: args.assertion,
+          url: registration.handler.url,
+          body: payload,
+        }),
       },
       body: payload,
       signal: AbortSignal.timeout(registration.handler.timeoutMs),
