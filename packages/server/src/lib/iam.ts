@@ -324,12 +324,6 @@ export const matchesPattern = (args: {
   if (pattern === '*') return true;
   if (pattern === value) return true;
 
-  // module:* matches module:Anything (but only if there's a single wildcard)
-  if (pattern.endsWith(':*') && !pattern.includes('*:*')) {
-    const prefix = pattern.slice(0, -1); // e.g. "files:"
-    return value.startsWith(prefix);
-  }
-
   // Glob: * = any chars, ? = single char
   const regexStr = pattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex special chars
@@ -501,5 +495,5 @@ export const evaluatePoliciesMultiResource = (args: {
 
 export {
   extractProjectIdsFromPolicies,
-  extractProjectIdsFromPolicySets,
+  policySetsConcernProject,
 } from './policyProjectIds';

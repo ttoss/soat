@@ -21,6 +21,7 @@ import { storeResumedConversationTurn } from 'src/lib/conversationGeneration';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
 import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
+import { replayedAuthHeader } from 'src/lib/replayedCredential';
 
 import { authorizeAgentWrite } from './agentAccess';
 import { parseToolContextBody } from './helpers';
@@ -158,7 +159,7 @@ const buildGenerationArgs = (args: {
     rootTraceId: body.root_trace_id,
     remainingDepth:
       typeof body.max_call_depth === 'number' ? body.max_call_depth : undefined,
-    authHeader: (ctx.headers.authorization as string) ?? '',
+    authHeader: replayedAuthHeader({ ctx }) ?? '',
     authUser: ctx.authUser,
     toolContext: parseToolContextBody(body.tool_context),
     knowledgeConfig: toObjectOrUndefined(body.knowledge_config),
@@ -314,7 +315,7 @@ agentGenerationRouter.post(
           output: toolOutput.output,
         };
       }),
-      authHeader: (ctx.headers.authorization as string) ?? undefined,
+      authHeader: replayedAuthHeader({ ctx }),
       actedAs: resolveStartingPrincipal({ authUser: ctx.authUser }),
     });
     await storeResumedConversationTurn({

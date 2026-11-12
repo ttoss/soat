@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { pinCallerActorToolContext } from 'src/lib/generationAttribution';
 import { buildSrn } from 'src/lib/iam';
+import { replayedAuthHeader } from 'src/lib/replayedCredential';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { listToolActions } from 'src/lib/toolActions';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
@@ -433,7 +434,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
       ? (input as Record<string, unknown>)
       : undefined;
 
-  const authHeader = ctx.request.headers.authorization;
+  const authHeader = replayedAuthHeader({ ctx });
 
   const result = await startToolCall({
     guardrails: 'apply',

@@ -3,8 +3,9 @@ import zlib from 'node:zlib';
 
 import createDebug from 'debug';
 
-import { type PolicySets, validatePolicyDocument } from './iam';
+import type { PolicySets } from './iam';
 import { isPlainObject } from './plainObject';
+import { isPolicySets } from './principalBound';
 import { deriveSecretKey } from './signedTokens';
 
 /**
@@ -47,21 +48,6 @@ const isPrincipal = (value: unknown): value is { type: string; id: string } => {
     isPlainObject(value) &&
     typeof value.type === 'string' &&
     typeof value.id === 'string'
-  );
-};
-
-const isPolicySets = (value: unknown): value is PolicySets => {
-  return (
-    Array.isArray(value) &&
-    value.length > 0 &&
-    value.every((set) => {
-      return (
-        Array.isArray(set) &&
-        set.every((document) => {
-          return validatePolicyDocument(document).valid;
-        })
-      );
-    })
   );
 };
 

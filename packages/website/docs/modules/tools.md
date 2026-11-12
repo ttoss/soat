@@ -528,6 +528,7 @@ A tool server that writes back into SOAT with its project's API key can send the
 - An assertion naming a `generation_id` is further capped by that generation's [execution identity](./agents.md#execution-identity): its caller (its `acted_as` principal) and the agent's `policy_ids`, `${iam:ActorId}` bound to the generation's actor. A [trigger](./triggers.md)-fired generation's caller is the trigger's `policy_ids`. A generation outside the key's project allows nothing.
 - What the request names as content is resolved under that cap: a `document` message, a `tool_output` message and the `builtin` action it runs.
 - A tool the request calls carries the cap on in its own assertion.
+- Work the request starts keeps the authority the assertion carried: a generation, a session or conversation turn, an orchestration run, a decision, a guardrail evaluation or a tool call runs its `builtin` calls and the assertions of its `mcp` calls on the key held to it, and a generation, task, orchestration run or playbook execution stores it beside its principal, so a later drive or [approved](./approvals.md#continuation-identity) continuation holds it too, as for an [IAM token](./iam.md#iam-tokens)'s bound.
 - Refusals are the route's own (`403`, `404` where the caller may not read the resource).
 - A playbook case refuses a write carrying the assertion of a call its own work made ([own work](./playbooks.md#writes-from-a-cases-own-work)).
 
