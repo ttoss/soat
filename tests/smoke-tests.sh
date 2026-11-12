@@ -3338,9 +3338,12 @@ echo "Agent SSE stream OK."
 # `extraction` field is rejected rather than accepted and ignored. What a store
 # ingests from a finished turn is a memory rule now, covered above.
 echo "--- Setting knowledge_config with the write-memory grant ---"
+KC_MEM_ID=$($SOAT_CLI create-memory-store \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "Smoke Test Write Grant Store" | jq -r '.id')
 KC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --knowledge_config "{\"write_memory_store_id\":\"$MEM_ID\"}")
-if ! printf '%s\n' "$KC_UPDATE_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config.write_memory_store_id == $mem' >/dev/null 2>&1; then
+  --knowledge_config "{\"write_memory_store_id\":\"$KC_MEM_ID\"}")
+if ! printf '%s\n' "$KC_UPDATE_RESP" | jq -e --arg mem "$KC_MEM_ID" '.knowledge_config.write_memory_store_id == $mem' >/dev/null 2>&1; then
   echo "ERROR: update-agent did not round-trip knowledge_config.write_memory_store_id" >&2
   echo "$KC_UPDATE_RESP" >&2
   exit 1
@@ -3348,12 +3351,13 @@ fi
 KC_EXTRACTION_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"knowledge_config\":{\"write_memory_store_id\":\"$MEM_ID\",\"extraction\":true}}")
+  -d "{\"knowledge_config\":{\"write_memory_store_id\":\"$KC_MEM_ID\",\"extraction\":true}}")
 if [ "$KC_EXTRACTION_STATUS" != "400" ]; then
   echo "ERROR: knowledge_config.extraction expected 400, got $KC_EXTRACTION_STATUS" >&2
   exit 1
 fi
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
+$SOAT_CLI delete-memory-store --memory-store-id "$KC_MEM_ID"
 echo "knowledge_config write grant round-trip: OK"
 
 # 22b3. `reasoning` carries only `effort`: a reasoning pipeline config is
