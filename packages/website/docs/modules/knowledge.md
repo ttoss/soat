@@ -78,6 +78,7 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
 | `query`          | `string`   | Search query — ranks results by [hybrid retrieval](#hybrid-retrieval)                      |
 | `memory_store_ids` | `string[]` | Search memories within these specific memory stores                                        |
+| `actor_id`       | `string`   | Search only the memories of this [actor](./memories.md#memories-of-an-end-user); documents are not narrowed |
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 | `tags`           | `object`   | Filter **both** stores to results whose `tags` contain every one of these key-value pairs (exact, case-sensitive) |

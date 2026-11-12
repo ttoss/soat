@@ -165,6 +165,7 @@ export const seedGoldenCorpus = async (args: {
       memoryStoreId: await resolveContainer(
         fixture.memory_store ?? MEMORY_STORE_NAME
       ),
+      actorId: null,
       content: fixture.content,
       tags: fixture.tags ?? null,
       // The eval seeds a corpus to measure retrieval against; there is no real

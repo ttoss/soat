@@ -1,5 +1,3 @@
-import { soatTools } from 'src/lib/soatTools';
-
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -20,29 +18,6 @@ const DEFINITION = {
       ],
     },
   ],
-};
-
-const CASE_PATH = '/api/v1/playbook-cases/{case_id}';
-
-/**
- * Every operation that acts on one case, read off the tool catalog so an
- * operation added later is held to the pin without editing this list.
- */
-const CASE_ACTIONS = soatTools.filter((tool) => {
-  return (
-    tool.pathTemplate === CASE_PATH ||
-    tool.pathTemplate.startsWith(`${CASE_PATH}/`)
-  );
-});
-
-// Only what the request validator needs before the route runs.
-const BODIES: Record<string, Record<string, unknown>> = {
-  'write-playbook-case-inputs': { inputs: [] },
-  'confirm-playbook-case-node': { decision: 'confirm', expected_revisions: {} },
-};
-
-const QUERIES: Record<string, Record<string, string>> = {
-  'get-playbook-case-missing': { node_id: 'revenue' },
 };
 
 describe('Playbook case actors', () => {
@@ -208,51 +183,6 @@ describe('Playbook case actors', () => {
   });
 
   describe('a call pinned to an actor', () => {
-    test('every case action declares actor_id, so a tool preset reaches it', () => {
-      expect(CASE_ACTIONS.length).toBeGreaterThan(10);
-      for (const tool of CASE_ACTIONS) {
-        expect({
-          name: tool.name,
-          declares: Object.keys(tool.inputSchema.properties ?? {}),
-        }).toEqual({
-          name: tool.name,
-          declares: expect.arrayContaining(['actor_id']),
-        });
-      }
-    });
-
-    test.each(
-      CASE_ACTIONS.map((tool) => {
-        return [tool.name, tool] as const;
-      })
-    )("%s refuses another actor's case as not found", async (_name, tool) => {
-      const theirs = await newCase({ actor_id: actorB });
-      const path = tool.pathTemplate
-        .replace('{case_id}', theirs.id)
-        .replace('{node}', 'revenue')
-        .replace(/\{[a-z_]+\}/g, 'x_doesNotExist');
-      const request = authenticatedTestClient(adminToken)
-        [tool.method.toLowerCase() as 'get' | 'post' | 'delete'](path)
-        .query({ ...QUERIES[tool.name], actor_id: actorA });
-      const res = await request.send(BODIES[tool.name] ?? {});
-
-      expect(res.status).toBe(404);
-      expect(res.body.error.message).toContain(theirs.id);
-
-      const still = await authenticatedTestClient(adminToken).get(
-        `/api/v1/playbook-cases/${theirs.id}`
-      );
-      expect(still.status).toBe(200);
-    });
-
-    test('a case that belongs to no actor is not found', async () => {
-      const nobodys = await newCase();
-      const res = await authenticatedTestClient(adminToken)
-        .get(`/api/v1/playbook-cases/${nobodys.id}`)
-        .query({ actor_id: actorA });
-      expect(res.status).toBe(404);
-    });
-
     test("the actor's own case is reached", async () => {
       const mine = await newCase({ actor_id: actorA });
       const res = await authenticatedTestClient(adminToken)

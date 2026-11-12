@@ -1,5 +1,6 @@
 import type { MemorySource } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { ownerActorWhere, resolveOwnerActorDbId } from 'src/lib/actorOwnership';
 import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
@@ -46,6 +47,24 @@ const resolveMemoryStoreProjectId = async (args: {
     attributes: ['projectId'],
   });
   return memoryStore?.projectId ?? null;
+};
+
+/**
+ * The internal id of the actor a memory is written for, held to the store's
+ * project; null when none is named.
+ */
+export const resolveMemoryOwner = async (args: {
+  memoryStoreId: number;
+  actorId: unknown;
+}): Promise<number | null> => {
+  const projectId = await resolveMemoryStoreProjectId({
+    memoryStoreId: args.memoryStoreId,
+  });
+  return resolveOwnerActorDbId({
+    actorId: args.actorId,
+    projectId,
+    projectLabel: "the memory store's project",
+  });
 };
 
 /**
@@ -134,6 +153,8 @@ export const createMemory = async (args: {
 
 export const listMemories = async (args: {
   memoryStoreId: number;
+  /** Only this actor's memories; every owner's when absent. */
+  actorId?: string;
   limit?: number;
   cursor?: string;
   /** Invalidated (superseded) memories are excluded unless this is set. */
@@ -143,6 +164,7 @@ export const listMemories = async (args: {
 }) => {
   const where: Record<string, unknown> = {
     memoryStoreId: args.memoryStoreId,
+    ...(await ownerActorWhere({ actorId: args.actorId })),
     ...(args.includeInvalidated ? {} : validMemoryWhere()),
   };
   applyTagFilter({ where, tags: args.tags });
@@ -154,6 +176,7 @@ export const listMemories = async (args: {
     cursor: args.cursor,
     filters: {
       memoryStoreId: args.memoryStoreId,
+      actorId: args.actorId,
       includeInvalidated: args.includeInvalidated,
       tags: args.tags,
     },

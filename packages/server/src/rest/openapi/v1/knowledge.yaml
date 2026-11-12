@@ -126,6 +126,15 @@ paths:
                   items:
                     type: string
                   example: ['mstore_V1StGXR8Z5jdHi6B']
+                actor_id:
+                  x-soat-ref: actors
+                  type: string
+                  description: >-
+                    Searches only the memories that belong to this actor;
+                    documents are not narrowed. Pin it in a tool's
+                    `preset_parameters` as `{{context:actor_id}}` so an agent
+                    searches the memories of the end user it serves only.
+                  example: actor_V1StGXR8Z5jdHi6B
                 document_paths:
                   type: array
                   description: Filter results to documents whose file path starts with one of these prefixes

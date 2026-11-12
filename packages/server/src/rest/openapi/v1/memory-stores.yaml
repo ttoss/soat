@@ -403,6 +403,16 @@ paths:
           schema:
             type: string
             example: mstore_V1StGXR8Z5jdHi6B
+        - name: actor_id
+          in: query
+          required: false
+          description: >-
+            Only the writes that resolved into this actor's memories. Pin it
+            in a tool's `preset_parameters` as `{{context:actor_id}}` to
+            confine it to the end user an agent serves.
+          schema:
+            type: string
+            example: actor_V1StGXR8Z5jdHi6B
         - name: mechanism
           in: query
           required: false
@@ -515,6 +525,14 @@ paths:
           schema:
             type: string
             example: mem_store_V1StGXR8Z5jdHi6B
+        - name: actor_id
+          in: query
+          required: false
+          description: >-
+            Only the memories that belong to this actor.
+          schema:
+            type: string
+            example: actor_V1StGXR8Z5jdHi6B
         - name: include_invalidated
           in: query
           description: Include memories that were retracted or superseded

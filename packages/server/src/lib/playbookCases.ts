@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { ownerActorWhere, resolveOwnerActorDbId } from './actorOwnership';
 import { type Page, paginatedList } from './pagination';
 import { advancePlaybookCase } from './playbookCascade';
 import { automationWhere, caseAutomation } from './playbookCaseAutomation';
@@ -129,27 +130,6 @@ const mapCaseSummary = (args: {
   };
 };
 
-/** The actor a case is created for, held to the playbook's project. */
-const resolveCaseActorDbId = async (args: {
-  actorId: unknown;
-  projectId: number;
-}): Promise<number | null> => {
-  if (args.actorId === undefined || args.actorId === null) return null;
-  const actor =
-    typeof args.actorId === 'string'
-      ? await db.Actor.findOne({
-          where: { publicId: args.actorId, projectId: args.projectId },
-        })
-      : null;
-  if (!actor) {
-    throw new DomainError(
-      'ACTOR_NOT_FOUND',
-      `Actor '${String(args.actorId)}' not found in the playbook's project.`
-    );
-  }
-  return actor.id as number;
-};
-
 export const createPlaybookCase = async (args: {
   projectIds?: number[];
   playbookId: string;
@@ -171,9 +151,10 @@ export const createPlaybookCase = async (args: {
     projectIds: args.projectIds,
     id: args.playbookId,
   });
-  const actorDbId = await resolveCaseActorDbId({
+  const actorDbId = await resolveOwnerActorDbId({
     actorId: args.actorId,
     projectId: playbook.projectId,
+    projectLabel: "the playbook's project",
   });
   const bindings = await readCaseBindings({
     definition: parsePlaybookDefinition({ definition: playbook.definition }),
@@ -232,16 +213,7 @@ export const listPlaybookCases = async (args: {
     // An unknown or unreachable playbook filters to nothing, never to all.
     where.playbookId = (playbook?.id as number | undefined) ?? -1;
   }
-  if (args.actorId !== undefined) {
-    const actor = await db.Actor.findOne({
-      where: {
-        publicId: args.actorId,
-        ...projectScopeWhere({ projectIds: args.projectIds }),
-      },
-    });
-    // An unknown or unreachable actor filters to nothing, never to all.
-    where.actorId = (actor?.id as number | undefined) ?? -1;
-  }
+  Object.assign(where, await ownerActorWhere({ actorId: args.actorId }));
   if (args.subject !== undefined) where.subject = args.subject;
 
   const page = await paginatedList({

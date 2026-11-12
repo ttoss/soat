@@ -1,0 +1,26 @@
+openapi: 3.0.3
+info:
+  title: SOAT Actor Ownership
+  version: 1.0.0
+  description: >-
+    Shared components for a resource whose items belong to an actor. This file
+    declares no paths: every operation on one item of such a resource takes the
+    pin here, so the rule reads the same on each.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  parameters:
+    ActorPin:
+      name: actor_id
+      in: query
+      required: false
+      description: >-
+        Acts only on an item that belongs to this actor: any other item, one
+        that belongs to no actor included, is `404` as if it did not exist.
+        Pin it in a tool's `preset_parameters` as `{{context:actor_id}}` so an
+        agent serving an end user reaches that user's items only.
+      schema:
+        type: string
+        example: actor_V1StGXR8Z5jdHi6B

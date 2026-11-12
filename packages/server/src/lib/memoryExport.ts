@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
+import { ownerActorWhere } from 'src/lib/actorOwnership';
 import { mapMemory, memoryIncludes } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
 import {
@@ -21,12 +22,14 @@ const log = createDebug('soat:memories');
  * holds, and an export that carried it silently would put it back into
  * whatever reads the file.
  */
-export const streamMemoriesNdjson = (args: {
+export const streamMemoriesNdjson = async (args: {
   memoryStoreId: number;
+  /** Only this actor's memories; every owner's when absent. */
+  actorId?: string;
   includeInvalidated?: boolean;
   tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
-}): AsyncGenerator<string> => {
+}): Promise<AsyncGenerator<string>> => {
   log(
     'streamMemoriesNdjson: memoryStoreId=%d includeInvalidated=%o',
     args.memoryStoreId,
@@ -35,6 +38,7 @@ export const streamMemoriesNdjson = (args: {
 
   const where: Record<string, unknown> = {
     memoryStoreId: args.memoryStoreId,
+    ...(await ownerActorWhere({ actorId: args.actorId })),
     ...(args.includeInvalidated ? {} : validMemoryWhere()),
   };
   applyTagFilter({ where, tags: args.tags });

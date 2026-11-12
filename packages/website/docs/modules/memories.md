@@ -52,6 +52,7 @@ When a memory is created or updated, its `content` is embedded for semantic simi
 | ------------ | -------- | ------------------------------------------------------- |
 | `id`         | `string` | Public ID (`mem_` prefix)                               |
 | `memory_store_id` | `string` | ID of the parent memory store                      |
+| `actor_id`   | `string \| null` | The [actor](./actors.md) the memory belongs to; `null` for none — see [Memories of an end user](#memories-of-an-end-user) |
 | `content`    | `string` | Text content of the memory                              |
 | `source_type` | `string` | Whether there is a source to point at: `manual` (default) or `conversation` — see [Provenance](#provenance) |
 | `source_id`  | `string \| null` | The [conversation](./conversations.md) this fact was learned in when `source_type` is `conversation`; `null` when `manual` |
@@ -275,6 +276,26 @@ serialize, and the loser sees the conflict rather than silently overwriting the 
 ### Pinning a call to a store
 
 `memory_store_id` in the query string, the parameter that scopes [`GET /api/v1/memories`](/docs/api/memories/list-memories), also pins every `/memories/{memory_id}` route — get, [`PUT`](/docs/api/memories/update-memory), delete, retract, assertions and tags. A memory of another store is `404`, as if it did not exist. A [builtin tool](./tools.md) presetting `memory_store_id` therefore confines an agent to that store on every memory action.
+
+### Memories of an end user
+
+A store is project configuration and belongs to no one; each memory in it may belong to one [actor](./actors.md). A memory written with `actor_id` on [`POST /api/v1/memories`](/docs/api/memories/create-memory) belongs to that actor, one of the store's project (`400 ACTOR_NOT_FOUND` otherwise). `actor_id` is set on create only; a replacement written by a supersede belongs to the same actor. Deleting an actor leaves its memories with `actor_id: null`.
+
+A write compares, supersedes and creates among the memories of its own actor only, or among the memories of no actor when it names none: the same fact known for one actor is `created` for another, and `supersedes` naming another actor's memory is `400`.
+
+Every read of a store narrows to one actor when the call names `actor_id`:
+
+| Read | `actor_id` |
+| --- | --- |
+| [`GET /api/v1/memories`](/docs/api/memories/list-memories) | query; lists that actor's memories |
+| every `/memories/{memory_id}` route | query; a memory of another actor, or of none, is `404` as if it did not exist |
+| [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) | body; searches that actor's memories, documents are not narrowed |
+| [`GET /api/v1/memory-stores/{memory_store_id}/export`](/docs/api/memory-stores/export-memories) | query; exports that actor's memories |
+| [`GET /api/v1/memory-stores/{memory_store_id}/assertions`](/docs/api/memory-stores/list-memory-store-assertions) | query; the writes that resolved into that actor's memories |
+
+Without it, every actor's memories are read. A repeated `actor_id` is `400`. A [builtin tool](./tools.md#builtin) whose [`preset_parameters`](./tools.md#pinning-to-a-per-run-value-context) pin `actor_id` to `{{context:actor_id}}` confines an agent to the memories of the end user it serves.
+
+An agent's own memory follows the turn's actor, the [session](./sessions.md)'s, with no tool to configure: retrieval from `memory_store_ids` reads that actor's memories only, `write_memory` writes memories of that actor, and a [memory rule](#memory-rules) writes the facts of a conversation turn as memories of the conversation's actor. A turn with no actor reads every memory and writes memories of no actor.
 
 ### NDJSON export
 
