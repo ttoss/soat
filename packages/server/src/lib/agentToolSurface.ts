@@ -124,7 +124,7 @@ export const resolveAgentToolSurface = async (args: {
       ? buildKnowledgeBindings({
           agentId: args.agentId,
           generationId: args.generationId,
-          projectIds: args.projectIds,
+          projectId,
           typedAgent: args.typedAgent,
           boundaryPolicy: args.boundaryPolicy,
         })

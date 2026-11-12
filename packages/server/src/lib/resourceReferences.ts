@@ -4,10 +4,11 @@ import { findShareableType } from './shareableTypes';
 import { PUBLIC_GRANTEE } from './shares';
 
 /**
- * Where a tool or agent named by id — in a stored field or in a request that
- * runs it — is resolved: in `projectId`, the project of the row or run that
- * holds the reference, never the caller's scope, so a credential reaching
- * several projects cannot let one project's row name another's resource.
+ * Where a tool, agent, memory store or document named by id — in a stored
+ * field or in a request that runs it — is resolved: in `projectId`, the
+ * project of the row or run that holds the reference, never the caller's
+ * scope, so a credential reaching several projects cannot let one project's
+ * row name another's resource.
  *
  * `reach` is required so every site states whether the reference may also be
  * a resource another project shares with `projectId` (`'shares'`) or only one
@@ -18,6 +19,8 @@ import { PUBLIC_GRANTEE } from './shares';
  */
 type ToolRow = InstanceType<(typeof db)['Tool']>;
 type AgentRow = InstanceType<(typeof db)['Agent']>;
+type MemoryStoreRow = InstanceType<(typeof db)['MemoryStore']>;
+type DocumentRow = InstanceType<(typeof db)['Document']>;
 
 /**
  * `'shares'` also resolves a resource another project shares with
@@ -173,6 +176,38 @@ export const agentReferences: ReferenceResolver<AgentRow> =
     resourceType: 'agent',
     notFoundCode: 'AGENT_NOT_FOUND',
     label: 'Agent',
+  });
+
+export const memoryStoreReferences: ReferenceResolver<MemoryStoreRow> =
+  makeReferenceResolver({
+    findAll: (where) => {
+      return db.MemoryStore.findAll({ where });
+    },
+    resourceType: 'memory_store',
+    notFoundCode: 'MEMORY_STORE_NOT_FOUND',
+    label: 'Memory store',
+  });
+
+/** A document's project is its backing file's. */
+export const documentReferences: ReferenceResolver<DocumentRow> =
+  makeReferenceResolver({
+    findAll: (where) => {
+      return db.Document.findAll({
+        where: { publicId: where.publicId },
+        include: [
+          {
+            model: db.File,
+            as: 'file',
+            attributes: [],
+            required: true,
+            where: { projectId: where.projectId },
+          },
+        ],
+      });
+    },
+    resourceType: 'document',
+    notFoundCode: 'VALIDATION_FAILED',
+    label: 'Document',
   });
 
 /**

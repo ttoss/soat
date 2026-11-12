@@ -398,7 +398,8 @@ export const buildWriteMemoryTool = (args: {
    * resolved; it simply was not forwarded this far.
    */
   generationId: string;
-  projectIds?: number[];
+  /** The agent's own project, the only one whose store it writes to. */
+  projectId: number;
   boundaryPolicy?: unknown;
 }): Tool => {
   return tool({
@@ -420,6 +421,7 @@ export const buildWriteMemoryTool = (args: {
       // comes from the agent's own `knowledge_config`, not from the model.
       const memoryStore = await findMemoryStoreIamScope({
         id: args.writeMemoryStoreId,
+        projectId: args.projectId,
       });
       if (!memoryStore) {
         return { error: `Memory store ${args.writeMemoryStoreId} not found` };
@@ -476,7 +478,7 @@ const KNOWLEDGE_BINDING_NAME = 'knowledge';
 export const buildKnowledgeBindings = (args: {
   agentId: string;
   generationId: string;
-  projectIds?: number[];
+  projectId: number;
   typedAgent: TypedAgent;
   boundaryPolicy: PolicyDocument | null;
 }): BindingTools[] => {
@@ -490,7 +492,7 @@ export const buildKnowledgeBindings = (args: {
           writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
           agentId: args.agentId,
           generationId: args.generationId,
-          projectIds: args.projectIds,
+          projectId: args.projectId,
           boundaryPolicy: args.boundaryPolicy,
         }),
       },

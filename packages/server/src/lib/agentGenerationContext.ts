@@ -6,7 +6,7 @@ import type { AuthUser } from 'src/Context';
 import { DomainError } from '../errors';
 import { buildAllMessages } from './agentGenerationHelpers';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
-import type { TypedAgent } from './agentGenerationTypes';
+import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import {
   buildKnowledgeMessages,
   mergeKnowledgeConfig,
@@ -111,7 +111,6 @@ const resolveGenerationModel = async (args: {
 const assembleContextMessages = async (args: {
   agentId: string;
   generationId: string;
-  projectIds?: number[];
   typedAgent: TypedAgent;
   resolvedMessages: Array<{ role: string; content: unknown }>;
   knowledgeConfig?: object;
@@ -125,10 +124,9 @@ const assembleContextMessages = async (args: {
       base: readKnowledgeConfig(args.typedAgent.knowledgeConfig),
       override: readKnowledgeConfig(args.knowledgeConfig),
     }),
-    // A shared agent's knowledge is its owner's.
-    projectIds: args.typedAgent.ownerProject
-      ? [args.typedAgent.ownerProject.id]
-      : args.projectIds,
+    // The agent's own project (its owner's when shared), never the caller's
+    // scope: a turn with no caller scope would otherwise search every project.
+    projectIds: [ownerProjectId(args.typedAgent)],
     embeddingBilling: {
       projectId: args.typedAgent.project.id,
       generationId: args.generationId,
@@ -299,7 +297,6 @@ export const buildGenerationContext = async (
   const { allMessages, retrieval } = await assembleContextMessages({
     agentId: args.agentId,
     generationId,
-    projectIds: args.projectIds,
     typedAgent,
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,

@@ -235,6 +235,7 @@ export const createAgent = async (
   const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
 
   await assertAgentReferencesExist({
+    knowledgeConfig: args.knowledgeConfig,
     guardrailIds: args.guardrailIds,
     toolBindings: args.toolBindings,
     activeToolIds: args.activeToolIds,
