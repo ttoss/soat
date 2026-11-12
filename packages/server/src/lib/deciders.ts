@@ -25,6 +25,7 @@ import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
 import type { VersionedWrite } from './writePrecondition';
+import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 const log = createDebug('soat:deciders');
 
@@ -162,6 +163,25 @@ export const resolveDeciderBackend = async (args: {
   return { agent: null, tool };
 };
 
+/** Holds the writer to the backend the decider starts on every decision. */
+const assertWriterStartsBackend = (args: {
+  writer: Writer;
+  projectId: number;
+  backend: { agent: DeciderAgentRow | null; tool: DeciderToolRow | null };
+}): Promise<unknown> => {
+  const { agent, tool } = args.backend;
+  return assertWriterHolds({
+    carrier: 'deciders',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      actions: agent
+        ? [startOf({ type: 'agent', id: agent.publicId })]
+        : [startOf({ type: 'tool', id: tool!.publicId })],
+    },
+  });
+};
+
 export const createDecider = async (
   args: {
     projectId: number;
@@ -170,6 +190,7 @@ export const createDecider = async (
     agentId?: unknown;
     toolId?: unknown;
     questions: unknown;
+    writer: Writer;
   } & VersionedWrite
 ): Promise<MappedDecider> => {
   log('createDecider: projectId=%d', args.projectId);
@@ -178,6 +199,11 @@ export const createDecider = async (
   const description = validateDescription(args.description);
   const questions = parseDeciderQuestions(args.questions);
   const backend = await resolveDeciderBackend(args);
+  await assertWriterStartsBackend({
+    writer: args.writer,
+    projectId: args.projectId,
+    backend,
+  });
   await assertNameAvailable({ projectId: args.projectId, name });
 
   const decider = await db.Decider.create({
@@ -288,6 +314,7 @@ export const updateDecider = async (
     agentId?: unknown;
     toolId?: unknown;
     questions?: unknown;
+    writer: Writer;
   } & VersionedWrite
 ): Promise<MappedDecider> => {
   log('updateDecider: id=%s', args.id);
@@ -305,6 +332,11 @@ export const updateDecider = async (
   // pre- and post-write question set.
   const before = buildDeciderConfigSnapshot(mapDecider(decider));
   await applyMetadata({ decider, ...args });
+  await assertWriterStartsBackend({
+    writer: args.writer,
+    projectId: decider.projectId,
+    backend: decider,
+  });
   if (questions !== undefined) decider.questions = questions;
 
   // Only a changed question set bumps the version; a rename, a repoint or an

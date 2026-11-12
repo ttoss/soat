@@ -208,7 +208,7 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 
 ### The writer rule
 
-A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, API key, orchestration or share is checked against the resource as the write leaves it, whichever fields the request names:
+A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, API key, orchestration, share, decider, eval, guardrail, ingestion rule, memory rule or playbook version is checked against the resource as the write leaves it, whichever fields the request names:
 
 | The resource | The writer must hold | Refusal |
 | --- | --- | --- |

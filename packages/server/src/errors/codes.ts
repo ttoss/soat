@@ -804,7 +804,7 @@ export const ERROR_CODES = {
   PLAYBOOK_EXECUTOR_FORBIDDEN: {
     httpStatus: 403,
     description:
-      "The playbook version's author may not start an executor the definition names. Refused when the version is written, and again when a node runs if the author's permission was removed since. `meta` names the `node` and the IAM `action`.",
+      "The playbook version's author may not start an executor the definition names, checked when a node runs or exports. `meta` names the `node` and the IAM `action`.",
   },
   PLAYBOOK_AUTHOR_UNAVAILABLE: {
     httpStatus: 409,

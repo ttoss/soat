@@ -98,6 +98,7 @@ decidersRouter.post('/deciders', async (ctx: Context) => {
     questions: body.questions,
     versionLabel: parseString(body.version_label),
     createdBy: requestPrincipalFromCtx(ctx),
+    writer: ctx.authUser,
   });
 });
 
@@ -158,6 +159,7 @@ decidersRouter.patch('/deciders/:decider_id', async (ctx: Context) => {
     versionLabel: parseString(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
     createdBy: requestPrincipalFromCtx(ctx),
+    writer: ctx.authUser,
   });
 });
 

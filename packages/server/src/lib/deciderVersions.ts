@@ -42,6 +42,7 @@ const deciderVersionArchive = makeVersionArchive({
       questions: args.config.questions,
       versionLabel: args.label,
       createdBy: args.createdBy,
+      writer: args.writer,
     });
   },
 });

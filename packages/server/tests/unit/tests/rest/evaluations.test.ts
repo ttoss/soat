@@ -116,6 +116,8 @@ describe('Evaluations', () => {
         'evaluations:DeleteEval',
         'evaluations:RunEval',
         'agents:CreateAgent',
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'agents:UpdateAgent',
         'generations:PurgeGenerationContent',
         'tools:CreateTool',

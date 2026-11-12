@@ -23,6 +23,8 @@ const RESOURCE_ACTIONS = [
   'deciders:UpdateDecider',
   'deciders:DeleteDecider',
   'deciders:GetDecider',
+  'agents:CreateAgentGeneration',
+  'tools:CallTool',
 ];
 
 const ROUTE = {

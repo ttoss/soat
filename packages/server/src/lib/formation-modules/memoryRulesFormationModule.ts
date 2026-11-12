@@ -97,7 +97,7 @@ export const memoryRulesFormationModule = defineFormationModule({
     if (message) errors.push({ path: basePath, message });
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties, projectId, actor }) => {
     const memoryStoreId = await lookupMemoryStoreInternalId({
       publicId: properties.memory_store_id as string,
       projectId,
@@ -109,10 +109,15 @@ export const memoryRulesFormationModule = defineFormationModule({
       sourceAgentIds: args.sourceAgentIds,
     });
 
-    return createMemoryRule({ memoryStoreId, ...args, ...refs });
+    return createMemoryRule({
+      memoryStoreId,
+      ...args,
+      ...refs,
+      writer: actor,
+    });
   },
 
-  update: async ({ properties, physicalResourceId, projectId }) => {
+  update: async ({ properties, physicalResourceId, projectId, actor }) => {
     const refs = await resolveHandlerRefs({ properties, projectId });
     const args = writeArgs(properties);
     await assertSourceAgentIds({
@@ -120,7 +125,12 @@ export const memoryRulesFormationModule = defineFormationModule({
       sourceAgentIds: args.sourceAgentIds,
     });
 
-    await updateMemoryRule({ id: physicalResourceId, ...args, ...refs });
+    await updateMemoryRule({
+      id: physicalResourceId,
+      ...args,
+      ...refs,
+      writer: actor,
+    });
   },
 
   remove: ({ physicalResourceId }) => {

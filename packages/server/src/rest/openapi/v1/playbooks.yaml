@@ -85,7 +85,7 @@ paths:
 
         The caller becomes the version's author, whom its executors run as, so
         it must be allowed to start every executor the definition names
-        (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`), and each must exist in the
+        (`403 ACTION_NOT_HELD`), and each must exist in the
         project, or be an agent or tool shared with it (`400
         PLAYBOOK_VALIDATION_FAILED`, an `EXECUTOR_NOT_FOUND` problem). A
         `tool` executor on an `mcp` tool must name in `operation_id` an action
@@ -261,7 +261,7 @@ paths:
 
 
         A new version is authored by the caller, checked as on create: `403
-        PLAYBOOK_EXECUTOR_FORBIDDEN` for an executor it may not start, an
+        ACTION_NOT_HELD` for an executor it may not start, an
         `EXECUTOR_NOT_FOUND` problem for one that does not exist,
         `EXECUTOR_ACTION_REQUIRED` or `EXECUTOR_ACTION_UNAVAILABLE` for an
         `mcp` tool action a run could not call, `EXECUTOR_TOOL_UNSUPPORTED`

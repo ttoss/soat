@@ -56,6 +56,8 @@ describe('tool and agent references', () => {
     'lib/usageGenerationAttribution.ts':
       "reads a generation's own agent to name its publisher",
     'lib/usageToolRecording.ts': 'maps a metered call to its internal ids',
+    'lib/writerRule.ts':
+      'reads the public id of a target already resolved to an internal id',
   };
 
   // A direct query, or the model handed to a generic lookup — never an

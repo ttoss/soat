@@ -109,6 +109,10 @@ To gate several tools differently, create a guardrail per tool and [attach](#att
 }
 ```
 
+### Who may write a guardrail with a context tool
+
+A guardrail with a `context_tool_id` calls that tool on every evaluation. Every create, update, version restore and formation apply of one needs `tools:CallTool` on it, even when the write leaves `context_tool_id` as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+
 ### Guards and Guardrail Context
 
 `class` and `guard` are single JSON Logic expressions (the evaluator [orchestration](./orchestrations.md) mappings use); compose with `if`/`and`/`or`/`!`, not arrays. Every `var` resolves against three namespaces:

@@ -67,6 +67,7 @@ export const playbookAuthorOf = (ctx: Context): PlaybookAuthor => {
   return {
     principal: resolveStartingPrincipal({ authUser: ctx.authUser }),
     isAllowed: ctx.authUser!.isAllowed,
+    getPolicies: ctx.authUser!.getPolicies,
   };
 };
 

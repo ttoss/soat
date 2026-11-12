@@ -152,6 +152,10 @@ Converter-related `error.code` values on a failed document (alongside `FILE_PARS
 | `CONVERTER_OUTPUT_INVALID` | The tool (or callback) returned an unrecognized output shape |
 | `CONVERSION_TIMEOUT` | An async conversion did not call back within `CONVERSION_STALL_TIMEOUT_MS` |
 
+### Who may write a converter
+
+A rule runs its converter on every matching document. Every create, update and formation apply needs the converter's start action (`tools:CallTool` on the tool, `agents:CreateAgentGeneration` on the agent), even when the write leaves the converter as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+
 ### Who may act on an ingestion rule
 
 Every route that acts on one ingestion rule is authorized against **that ingestion rule's** SRN,

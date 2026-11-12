@@ -11,6 +11,7 @@ import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { serverSideToolProblem } from './toolsCallDispatch';
+import { assertWriterHolds, startsOfRow, type Writer } from './writerRule';
 
 const log = createDebug('soat:memoryRules');
 
@@ -167,8 +168,26 @@ const assertValid = async (
   }
 };
 
+/** Holds the writer to the handler the rule starts on every event. */
+const assertWriterStartsHandler = async (args: {
+  writer: Writer;
+  memoryStoreId: number;
+  shape: { agentId?: number | null; toolId?: number | null };
+}): Promise<void> => {
+  const store = await db.MemoryStore.findByPk(args.memoryStoreId, {
+    attributes: ['projectId'],
+    rejectOnEmpty: true,
+  });
+  await assertWriterHolds({
+    carrier: 'memoryRules',
+    writer: args.writer,
+    projectId: store.projectId,
+    carried: { actions: await startsOfRow(args.shape) },
+  });
+};
+
 export const createMemoryRule = async (
-  args: MemoryRuleWriteArgs & { memoryStoreId: number }
+  args: MemoryRuleWriteArgs & { memoryStoreId: number; writer: Writer }
 ): Promise<MappedMemoryRule> => {
   log(
     'createMemoryRule: memoryStoreId=%d on=%s agentId=%s toolId=%s',
@@ -179,6 +198,11 @@ export const createMemoryRule = async (
   );
 
   await assertValid(args);
+  await assertWriterStartsHandler({
+    writer: args.writer,
+    memoryStoreId: args.memoryStoreId,
+    shape: args,
+  });
 
   const rule = await db.MemoryRule.create({
     memoryStoreId: args.memoryStoreId,
@@ -286,13 +310,23 @@ const effectiveShape = (args: {
 };
 
 export const updateMemoryRule = async (
-  args: MemoryRuleWriteArgs & { id: string; projectIds?: number[] }
+  args: MemoryRuleWriteArgs & {
+    id: string;
+    projectIds?: number[];
+    writer: Writer;
+  }
 ): Promise<MappedMemoryRule> => {
   log('updateMemoryRule: id=%s', args.id);
 
   const rule = await loadRule(args);
 
-  await assertValid(effectiveShape({ rule, updates: args }));
+  const shape = effectiveShape({ rule, updates: args });
+  await assertValid(shape);
+  await assertWriterStartsHandler({
+    writer: args.writer,
+    memoryStoreId: rule.memoryStoreId,
+    shape,
+  });
 
   const updates: Record<string, unknown> = {};
   for (const field of WRITABLE_FIELDS) {

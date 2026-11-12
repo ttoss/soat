@@ -16,6 +16,7 @@ import { toolReferences } from './resourceReferences';
 import { toResourceRef } from './resourceVersions';
 import { serverSideToolProblem } from './toolsCallDispatch';
 import type { VersionedWrite } from './writePrecondition';
+import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 const log = createDebug('soat:guardrails');
 
@@ -37,7 +38,7 @@ type GuardrailInstance = InstanceType<(typeof db)['Guardrail']> & {
  * Threaded through every write path so a REST edit, a restore and a formation
  * apply all leave the same history.
  */
-export type GuardrailVersionAuthorship = VersionedWrite;
+export type GuardrailVersionAuthorship = VersionedWrite & { writer: Writer };
 
 const getGuardrailIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
@@ -218,6 +219,24 @@ const assertContextToolRunnable = async (args: {
   );
 };
 
+/** Holds the writer to the context tool the guardrail calls on every evaluation. */
+const assertWriterCallsContextTool = (args: {
+  writer: Writer;
+  projectId: number;
+  contextToolId: string | null | undefined;
+}): Promise<unknown> => {
+  return assertWriterHolds({
+    carrier: 'guardrails',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      actions: args.contextToolId
+        ? [startOf({ type: 'tool', id: args.contextToolId })]
+        : [],
+    },
+  });
+};
+
 export const createGuardrail = async (
   args: {
     projectId: number;
@@ -240,6 +259,11 @@ export const createGuardrail = async (
   await assertContextToolRunnable({
     contextToolId: args.contextToolId,
     projectId: args.projectId,
+  });
+  await assertWriterCallsContextTool({
+    writer: args.writer,
+    projectId: args.projectId,
+    contextToolId: args.contextToolId,
   });
 
   const guardrail = await db.Guardrail.create({
@@ -362,6 +386,14 @@ export const updateGuardrail = async (
     validateGuardrailDocument(args.document);
     updates.document = args.document;
   }
+  await assertWriterCallsContextTool({
+    writer: args.writer,
+    projectId: guardrail.projectId,
+    contextToolId:
+      args.contextToolId === undefined
+        ? guardrail.contextToolId
+        : args.contextToolId,
+  });
 
   // A `document` write bumps the version, so the audit chain survives edits.
   // Metadata-only edits and re-writing the identical document leave it

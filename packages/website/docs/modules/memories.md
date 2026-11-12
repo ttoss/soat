@@ -412,6 +412,8 @@ That makes it the opposite half of the [`write_memory` tool](#write_memory-tool)
 
 Because a rule belongs to its store, one store can have several (a cheap general one, a strict one for billing turns), one agent can feed two stores under different rules, and "what feeds this store?" is one listing instead of a sweep over every agent in the project.
 
+A rule starts its handler on every event it reads. Every create, update and formation apply of a rule with a handler needs its start action (`agents:CreateAgentGeneration` on the agent, `tools:CallTool` on the tool), even when the write leaves the handler as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+
 #### The rule
 
 | Field | Type | Description |

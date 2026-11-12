@@ -215,6 +215,8 @@ curl -X POST https://api.example.com/api/v1/deciders \
 
 A decider names exactly one of `agent_id` and `tool_id`. Naming one on [`PATCH /api/v1/deciders/{decider_id}`](/docs/api/deciders/update-decider) replaces the other; naming both, on a create or an update, is `400`. The backend is not part of the question set, so changing it leaves `version` alone.
 
+Every create, update, version restore and formation apply needs the backend's start action (`agents:CreateAgentGeneration` on the agent, `tools:CallTool` on the tool), even when the write leaves the backend as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+
 ### The agent runs tool-less
 
 A decider's agent may carry no tool surface: no binding left active by `active_tool_ids`, and no `knowledge_config.write_memory_store_id`. A tool call is the only thing that parks a generation, and a decision has no route to resume one; nor may evaluating an input take a side effect the decision cannot record. Knowledge retrieval is inline, not a tool, and stays available.
@@ -625,6 +627,7 @@ A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) 
 | `AGENT_NOT_FOUND`             | 400    | `agent_id` names no agent in the project                                          |
 | `TOOL_NOT_FOUND`              | 400    | `tool_id` names no tool in the project                                            |
 | `VALIDATION_FAILED`           | 400    | Invalid questions or `input`, a write naming both backends, or one naming neither |
+| `ACTION_NOT_HELD`             | 403    | The writer may not start the decider's backend                                    |
 | `NAME_CONFLICT`               | 409    | Another decider in the project has the name                                       |
 | `VERSION_CONFLICT`            | 409    | `expected_version` is stale                                                       |
 | `PROJECT_PAUSED`              | 409    | The project is paused                                                             |

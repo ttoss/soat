@@ -111,7 +111,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
     if (message) errors.push({ path: basePath, message });
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties, projectId, actor }) => {
     const contentTypeGlob = requireString({
       value: properties.content_type_glob,
       fieldName: 'content_type_glob',
@@ -124,6 +124,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
 
     return createIngestionRule({
       projectId,
+      writer: actor,
       contentTypeGlob,
       toolId,
       agentId,
@@ -138,7 +139,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId, projectId }) => {
+  update: async ({ properties, physicalResourceId, projectId, actor }) => {
     const [toolId, agentId] = await Promise.all([
       resolveToolId({ value: properties.tool_id, projectId }),
       resolveAgentId({ value: properties.agent_id, projectId }),
@@ -146,6 +147,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
 
     await updateIngestionRule({
       id: physicalResourceId,
+      writer: actor,
       contentTypeGlob: toOptionalString(properties.content_type_glob),
       toolId,
       agentId,

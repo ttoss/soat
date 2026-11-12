@@ -17,6 +17,7 @@ const DECISION_ACTIONS = [
   'deciders:CreateDecider',
   'deciders:UpdateDecider',
   'deciders:CreateDecision',
+  'agents:CreateAgentGeneration',
   'deciders:ListDecisions',
   'deciders:GetDecision',
   'usage:ListEvents',

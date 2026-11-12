@@ -35,6 +35,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parsePagination,
   parseToolContextBody,
+  requireAuth,
   resolveWriteProjectId,
 } from './helpers';
 import { resolveListScope } from './listScope';
@@ -343,6 +344,7 @@ evaluationsRouter.delete(
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals/post'
  */
 evaluationsRouter.post('/evals', async (ctx: Context) => {
+  requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
 
   const projectId = await resolveWriteProjectId({
@@ -361,6 +363,7 @@ evaluationsRouter.post('/evals', async (ctx: Context) => {
     scorers: body.scorers,
     passThreshold: body.pass_threshold,
     groupBy: body.group_by,
+    writer: ctx.authUser,
   });
 });
 
@@ -406,6 +409,7 @@ evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
     ctx,
     action: 'evaluations:CreateEval',
   });
+  requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
 
   ctx.body = await updateEval({
@@ -417,6 +421,7 @@ evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
     scorers: body.scorers,
     passThreshold: body.pass_threshold,
     groupBy: body.group_by,
+    writer: ctx.authUser,
   });
 });
 

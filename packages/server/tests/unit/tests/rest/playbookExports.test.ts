@@ -553,10 +553,10 @@ describe('Playbook exports', () => {
         });
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
       expect(res.body.error.meta).toEqual({
-        node_id: 'pricing',
         action: 'tools:CallTool',
+        resource: `srn:${projectId}:tool:${pdfToolId}`,
       });
     });
 

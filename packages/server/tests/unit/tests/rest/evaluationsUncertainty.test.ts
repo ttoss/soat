@@ -118,6 +118,7 @@ describe('Evaluations — uncertainty', () => {
         'evaluations:CreateEval',
         'evaluations:GetEval',
         'evaluations:RunEval',
+        'agents:CreateAgentGeneration',
       ],
     });
     adminToken = setup.adminToken;

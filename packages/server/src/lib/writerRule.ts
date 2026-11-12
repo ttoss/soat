@@ -54,6 +54,12 @@ export const WRITER_RULE_CARRIERS = {
   users: { policies: 'users' },
   orchestrations: { models: ['Orchestration'] },
   shares: { models: ['Share'] },
+  deciders: { models: ['Decider'] },
+  evals: { models: ['Eval'] },
+  guardrails: { models: ['Guardrail'] },
+  ingestionRules: { models: ['IngestionRule'] },
+  memoryRules: { models: ['MemoryRule'] },
+  playbookVersions: { models: ['PlaybookVersion'] },
 } satisfies Record<string, WriterRuleCarrier>;
 
 export type WriterRuleCarrierName = keyof typeof WRITER_RULE_CARRIERS;
@@ -81,6 +87,25 @@ export const startOf = (args: {
     resourceType: start.resourceType,
     resourceId: start.byId ? args.id : '*',
   };
+};
+
+/** What starting the agent and the tool a row names by database id performs. */
+export const startsOfRow = async (args: {
+  agentId?: number | null;
+  toolId?: number | null;
+}): Promise<CarriedAction[]> => {
+  const [agent, tool] = await Promise.all([
+    args.agentId
+      ? db.Agent.findByPk(args.agentId, { attributes: ['publicId'] })
+      : null,
+    args.toolId
+      ? db.Tool.findByPk(args.toolId, { attributes: ['publicId'] })
+      : null,
+  ]);
+  return [
+    ...(agent ? [startOf({ type: 'agent', id: agent.publicId })] : []),
+    ...(tool ? [startOf({ type: 'tool', id: tool.publicId })] : []),
+  ];
 };
 
 /**
