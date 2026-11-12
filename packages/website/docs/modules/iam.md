@@ -120,6 +120,7 @@ The `<project_id>` segment is the primary project restriction. A [project policy
 - `resource: ["*"]` — all resources in **all projects**
 - `resource: ["srn:proj_ABC:*:*"]` — `proj_ABC` only
 - `resource: ["srn:*:document:*"]` — all documents across all projects
+- `resource: ["srn:proj_AB*:document:*"]` — documents in every project whose id matches the glob (`*`, `?`), in a list without `project_id` too
 
 :::tip
 Grant a **user** (JWT) a project with `resource: ["srn:proj_ABC:*:*"]`. API keys are scoped via `project_id` (see [API Keys](./api-keys.md#project-scoping)).
@@ -354,7 +355,7 @@ A statement matches a request when **all** of the following are true:
 - `*` matches everything.
 - `module:*` matches all actions in a module.
 - `srn:proj_ABC:document:*` matches all documents in a project.
-- Wildcards apply only at segment boundaries — partial wildcards like `doc_X*` are not supported.
+- `*` and `?` glob within any segment, partial ones included: `srn:proj_AB*:document:doc_X*`.
 - **Path-based patterns**: when a resource has a `path` field, the resource ID segment of the SRN may be a logical path. Both the resource's `id` and its `path` are tested when evaluating a single-resource check. Glob patterns (`/reports/*`) are expanded to SQL `LIKE` for list queries.
 
 ## Tags

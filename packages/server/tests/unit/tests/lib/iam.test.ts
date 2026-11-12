@@ -4,9 +4,9 @@ import {
   evaluatePolicies,
   evaluatePoliciesMultiResource,
   extractProjectIdsFromPolicies,
-  extractProjectIdsFromPolicySets,
   matchesPattern,
   type PolicyDocument,
+  policySetsConcernProject,
   statementMatches,
   validatePolicyActions,
   validatePolicyDocument,
@@ -503,6 +503,27 @@ describe('IAM', () => {
         })
       ).toBe(false);
     });
+
+    test('a glob project segment matches before a trailing wildcard', () => {
+      expect(
+        matchesPattern({
+          pattern: 'srn:proj_A*:file:*',
+          value: 'srn:proj_ABC:file:file_123',
+        })
+      ).toBe(true);
+      expect(
+        matchesPattern({
+          pattern: 'srn:*:file:*',
+          value: 'srn:proj_ABC:file:file_123',
+        })
+      ).toBe(true);
+      expect(
+        matchesPattern({
+          pattern: 'srn:proj_A*:file:*',
+          value: 'srn:proj_XYZ:file:file_123',
+        })
+      ).toBe(false);
+    });
   });
 
   describe('evaluateCondition', () => {
@@ -748,6 +769,24 @@ describe('IAM', () => {
       ]);
       expect(result).toBeUndefined();
     });
+
+    test.each(['srn:proj_A*:file:*', 'srn:proj_?:file:*'])(
+      'returns undefined for a glob project segment (%s)',
+      (resource) => {
+        const result = extractProjectIdsFromPolicies([
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['files:GetFile'],
+                resource: [resource],
+              },
+            ],
+          },
+        ]);
+        expect(result).toBeUndefined();
+      }
+    );
   });
 
   describe('statementMatches', () => {
@@ -919,7 +958,7 @@ describe('IAM', () => {
     });
   });
 
-  describe('extractProjectIdsFromPolicySets', () => {
+  describe('policySetsConcernProject', () => {
     const naming = (...projects: string[]): PolicyDocument[] => {
       return [
         {
@@ -939,29 +978,49 @@ describe('IAM', () => {
       { statement: [{ effect: 'Allow', action: ['files:GetFile'] }] },
     ];
 
-    test('names the projects every set names', () => {
-      expect(
-        extractProjectIdsFromPolicySets([
-          naming('proj_A', 'proj_B'),
-          naming('proj_B', 'proj_C'),
-        ])
-      ).toEqual(['proj_B']);
+    const concerns = (sets: PolicyDocument[][], projectPublicId: string) => {
+      return policySetsConcernProject({ sets, projectPublicId });
+    };
+
+    test('concerns a project every set names', () => {
+      const sets = [naming('proj_A', 'proj_B'), naming('proj_B', 'proj_C')];
+      expect(concerns(sets, 'proj_B')).toBe(true);
+      expect(concerns(sets, 'proj_A')).toBe(false);
     });
 
     test('an unrestricted set leaves the others to decide', () => {
-      expect(
-        extractProjectIdsFromPolicySets([unrestricted, naming('proj_A')])
-      ).toEqual(['proj_A']);
+      const sets = [unrestricted, naming('proj_A')];
+      expect(concerns(sets, 'proj_A')).toBe(true);
+      expect(concerns(sets, 'proj_B')).toBe(false);
     });
 
-    test('is undefined when every set is unrestricted', () => {
-      expect(
-        extractProjectIdsFromPolicySets([unrestricted, unrestricted])
-      ).toBeUndefined();
+    test('concerns every project when every set is unrestricted', () => {
+      expect(concerns([unrestricted, unrestricted], 'proj_A')).toBe(true);
     });
 
-    test('no set names no project', () => {
-      expect(extractProjectIdsFromPolicySets([])).toEqual([]);
+    test('a glob project segment concerns the projects it matches', () => {
+      const sets = [naming('proj_A*')];
+      expect(concerns(sets, 'proj_AB')).toBe(true);
+      expect(concerns(sets, 'proj_B')).toBe(false);
+    });
+
+    test('a set with only Deny statements concerns no project', () => {
+      const denyOnly: PolicyDocument[] = [
+        {
+          statement: [
+            {
+              effect: 'Deny',
+              action: ['files:GetFile'],
+              resource: ['srn:proj_A:file:*'],
+            },
+          ],
+        },
+      ];
+      expect(concerns([denyOnly], 'proj_A')).toBe(false);
+    });
+
+    test('no set concerns no project', () => {
+      expect(concerns([], 'proj_A')).toBe(false);
     });
   });
 });
