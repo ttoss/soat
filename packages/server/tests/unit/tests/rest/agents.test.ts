@@ -1871,7 +1871,7 @@ describe('Agents', () => {
       expect([200, 502]).toContain(genRes.status);
     });
 
-    test('per-generation knowledge_config memory_store_ids is unioned with the agent stored config', async () => {
+    test('per-generation knowledge_config memory_store_ids the caller cannot search add no scope', async () => {
       const mockSearchKnowledge = jest.spyOn(
         knowledgeModule,
         'searchKnowledge'
@@ -1898,16 +1898,14 @@ describe('Agents', () => {
 
       // No live Ollama server in this suite — see the toolContext test above.
       expect([200, 502]).toContain(genRes.status);
+      // userToken holds no `knowledge:SearchKnowledge`, so only the agent's
+      // stored store is searched.
       expect(mockSearchKnowledge).toHaveBeenCalledWith(
         expect.objectContaining({
-          memoryStoreIds: expect.arrayContaining([
-            'mstore_agent_config',
-            'mstore_per_generation',
-          ]),
+          memoryStoreIds: ['mstore_agent_config'],
+          alsoScopes: [],
         })
       );
-      const callArgs = mockSearchKnowledge.mock.calls[0][0];
-      expect(callArgs.memoryStoreIds).toHaveLength(2);
 
       mockSearchKnowledge.mockRestore();
     });

@@ -7,7 +7,8 @@ import { DomainError } from '../errors';
 import { buildAllMessages } from './agentGenerationHelpers';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import type { TypedAgent } from './agentGenerationTypes';
-import { buildKnowledgeMessages, readKnowledgeConfig } from './agentKnowledge';
+import { buildKnowledgeMessages } from './agentKnowledge';
+import { readKnowledgeConfig } from './agentKnowledgeConfig';
 import { resolveRequestedKnowledgePolicy } from './agentKnowledgeScopes';
 import { resolveAgentModel } from './agentModelResolution';
 import {

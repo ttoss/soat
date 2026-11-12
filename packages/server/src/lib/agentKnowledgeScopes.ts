@@ -1,6 +1,6 @@
 import type { AuthUser } from 'src/Context';
 
-import type { KnowledgeConfig } from './agentKnowledge';
+import type { KnowledgeConfig } from './agentKnowledgeConfig';
 import type { PolicyDocument } from './iam';
 import type { KnowledgeScope } from './knowledge';
 import {
