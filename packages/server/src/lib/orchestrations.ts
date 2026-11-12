@@ -107,6 +107,9 @@ export type OrchestrationNode = {
   // is handed to the child run, the way a tool's `contextKeys` narrows what
   // egresses to it. `undefined`/`null` inherits everything.
   contextKeys?: string[] | null;
+  // loop node — `tool_context` key → JSON Logic over `{ <itemVariable>, state }`,
+  // laid over each child's inherited bag (`orchestrationLoopItemContext.ts`).
+  itemToolContext?: Record<string, unknown>;
   // poll node — reuses the tool fields above; `exitCondition` is JSON Logic,
   // truthy to stop.
   exitCondition?: unknown;

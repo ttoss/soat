@@ -111,7 +111,7 @@ A record holds external I/O only (resolved input, returned artifact) and no gene
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
 | `approval`     | Proposes a guarded tool call and pauses for a human decision via the [Approvals](./approvals.md) queue. Uses `tool_id`, `arguments`, and `expires_in`. See [Approval Nodes](#approval-nodes).                         |
-| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, `parallelism`, `on_item_error`, and `context_keys`. See [Loops](#loops-collection-iteration). |
+| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, `parallelism`, `on_item_error`, `context_keys` and `item_tool_context`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. See [Emitting events](#emitting-events). |
@@ -173,6 +173,7 @@ A `loop` node runs a **sub-orchestration once per item** of an array in run stat
 | `parallelism` | `5` | Items are processed in batches of this size |
 | `on_item_error` | `fail` | `fail` fails the node on the first item whose run settles `failed`, `cancelled` or `expired`. `collect` records that item in `results` and carries on |
 | `context_keys` | `null` | Allowlist of the run's `tool_context` keys each child inherits; `null` hands down the whole bag, `[]` none. See [Narrowing what a child run inherits](#narrowing-what-a-child-run-inherits) |
+| `item_tool_context` | — | Per-item `tool_context` keys for each child, as JSON Logic over the item. See [Per-item tool context](#per-item-tool-context) |
 
 Artifact: `{ results: [...], failed_count }`, one entry per item in order, each the sub-run's `output`. A graph with a `loop` node is exempt from [cycle detection](#static-validation).
 
@@ -195,6 +196,30 @@ A child run that could not be started at all, such as one past the [nesting dept
   "state_mapping": { "state.summaries": { "var": "output.results" } }
 }
 ```
+
+#### Per-item tool context
+
+`item_tool_context` gives each child run its own `tool_context` keys, so one run fans out per user and each child's tools read that user's `{{context:*}}`. Each value is JSON Logic over `{ <item_variable>: <item>, "state": <run state> }`:
+
+```json
+{
+  "id": "sync_each_actor",
+  "type": "loop",
+  "orchestration_id": "orch_dailySync",
+  "collection": "state.actors",
+  "item_variable": "actor",
+  "context_keys": ["tenant"],
+  "item_tool_context": {
+    "x_actor": { "var": "actor.id" },
+    "x_memory_store": { "var": "actor.memory_store_id" }
+  }
+}
+```
+
+- A child's bag is the inherited one (after `context_keys`) with these keys laid over it; a key replaces an inherited one in any casing.
+- A value evaluating to `null` drops the key, the inherited value included, so an item without a value never runs under the parent's.
+- A value evaluating to anything but a string or `null` fails that item with `LOOP_ITEM_TOOL_CONTEXT_INVALID`; one whose expression throws, with `EXPRESSION_FAILED`. Every item is evaluated before any child starts: under `fail` the node fails and no child runs; under `collect` the item's entry in `results` is `{ "error": { "code", "message" } }`, with no `orchestration_run_id`, and counts in `failed_count`.
+- A key outside the header-name grammar, two keys differing only in case, or a server-reserved key (`session_id`, `actor_id`, `actor_external_id`, `calling_project_id`) is `400 INVALID_TOOL_CONTEXT_KEY` at write time.
 
 ### Polling
 
@@ -750,7 +775,7 @@ Each generation carries its own `trace_id` for the full [trace](./traces.md) of 
 
 The bag is **write-only**: it is accepted at run start and never returned on a run read, because what it carries is a credential and a run is a record every principal who may read runs can read. It does not outlive the work either — the bag is cleared once the run reaches a terminal state (`completed`, `failed`, `cancelled` or `expired`), the same way an [eval run's](evaluations.md#run-tool-context) is.
 
-It is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
+It is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits) or, on a `loop`, [`item_tool_context`](#per-item-tool-context). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

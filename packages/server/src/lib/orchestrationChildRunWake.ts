@@ -14,6 +14,10 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { newLeaseExpiry } from './orchestrationLease';
+import {
+  type LoopItemError,
+  readLoopItemErrors,
+} from './orchestrationLoopItemContext';
 import type { NestedRunResult } from './orchestrationNestedNodes';
 import { isNestedRunSettled } from './orchestrationNestedRunOutcome';
 import type { RequiredAction } from './orchestrationNodeTypes';
@@ -25,7 +29,11 @@ const log = createDebug('soat:orchestrations');
 type RunRow = InstanceType<typeof db.OrchestrationRun>;
 
 /** The children a run is parked on, as the node that parked it. */
-export type ParkedChildRuns = { nodeId: string; runs: NestedRunResult[] };
+export type ParkedChildRuns = {
+  nodeId: string;
+  runs: NestedRunResult[];
+  itemErrors: LoopItemError[];
+};
 
 export const isParkedOnChildRuns = (run: {
   status: string;
@@ -73,7 +81,11 @@ const readSettledChildRuns = async (
       error: row.error,
     });
   }
-  return { nodeId: action.nodeId, runs };
+  return {
+    nodeId: action.nodeId,
+    runs,
+    itemErrors: readLoopItemErrors(action.context.item_errors),
+  };
 };
 
 /**

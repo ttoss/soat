@@ -6,6 +6,7 @@ import {
   computeDominators,
   transitivePredecessors,
 } from './orchestrationGraphAnalysis';
+import { assertValidItemToolContext } from './orchestrationLoopItemContext';
 import { checkUnsafeStateMappingPaths } from './orchestrationMappingPath';
 import {
   checkNodeShapes,
@@ -360,6 +361,7 @@ export const assertOrchestrationValid = (args: {
   // run mysteriously missing its credential.
   for (const node of args.nodes) {
     assertValidToolContextAllowlist(node.contextKeys);
+    assertValidItemToolContext(node.itemToolContext);
   }
 
   const result = validateOrchestrationGraph(args);
