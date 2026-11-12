@@ -1049,7 +1049,11 @@ const applyChildRunsOutcome = async (args: {
   })!;
   let artifact: Record<string, unknown>;
   try {
-    artifact = nestedNodeArtifact({ node, runs: childRuns.runs });
+    artifact = nestedNodeArtifact({
+      node,
+      runs: childRuns.runs,
+      itemErrors: childRuns.itemErrors,
+    });
   } catch (error: unknown) {
     await recordParkedNodeFailure({
       runRecord: run,

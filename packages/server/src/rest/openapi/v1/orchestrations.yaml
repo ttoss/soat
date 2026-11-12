@@ -1402,6 +1402,25 @@ components:
             `actor_external_id`) are unaffected — they are re-derived per
             generation in the child regardless of this list. Ignored for other
             node types.
+        item_tool_context:
+          type: object
+          additionalProperties: true
+          description: >-
+            For loop nodes — per-item `tool_context` keys for each child run.
+            Each key is a `tool_context` key; each value is JSON Logic
+            evaluated against `{ <item_variable>: <item>, "state": <run state> }`.
+            A child's bag is the inherited one (after `context_keys`) with
+            these keys laid over it, matched case-insensitively. A value
+            evaluating to `null` drops the key, the inherited value included.
+            A value that evaluates to anything else but a string, or throws,
+            fails that item: under `on_item_error: fail` the node fails before
+            any child starts; under `collect` the item's entry in `results`
+            is `{ "error": { "code", "message" } }` and no child runs for it.
+            A key outside the header-name grammar, two keys differing only in
+            case, or a server-reserved key (`session_id`, `actor_id`,
+            `actor_external_id`, `calling_project_id`) is rejected at write
+            time with `INVALID_TOOL_CONTEXT_KEY`. Ignored for other node
+            types.
         interval:
           type: string
           description: >
@@ -2051,6 +2070,9 @@ components:
             values. `child_run` is a `loop` or `sub_orchestration` node whose
             child runs, listed in `context.orchestration_run_ids`, have not
             settled; their settle resumes it, and it accepts no human input.
+            A `loop` collecting item errors also lists, in
+            `context.item_errors` (`[{ index, code, message }]`), the items
+            whose `item_tool_context` failed and started no child.
         node_id:
           type: string
           description: >-

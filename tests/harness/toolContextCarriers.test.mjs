@@ -92,7 +92,7 @@ describe('tool_context carriers', () => {
         );
       })
       .filter((entry) => {
-        return /tool_context\s*:/.test(code(path.join(libDir, entry)));
+        return /\btool_context\s*:/.test(code(path.join(libDir, entry)));
       })
       .sort();
 

@@ -51,32 +51,7 @@ export const buildContextHeaderName = (key: string): string => {
   return `${getContextHeaderPrefix()}${key}`;
 };
 
-/**
- * Throws `VALIDATION_FAILED` (400) when a `tool_context` value is not a
- * string, the rule a tag bag follows (`readStringBag`), and
- * `INVALID_TOOL_CONTEXT_KEY` (400) when a key cannot survive the trip to an
- * outbound header. Two key failure modes, both silent without this guard:
- *
- * - a key outside the header-name grammar only fails inside `fetch`, so the
- *   caller sees a failed tool call rather than a rejected write;
- * - two keys that differ only in the casing of a later character collapse into
- *   one header (header names are case-insensitive) and the last value wins,
- *   dropping the other without a trace.
- *
- * Accepts every key shape that already works — snake_case, kebab-case and
- * dotted keys are all valid header names and keep their current behavior.
- */
-export const assertValidToolContext = (
-  // `unknown` values because a generation body reaches here untyped; the
-  // value check below is what establishes them as strings.
-  toolContext?: Record<string, unknown> | null
-): void => {
-  if (!toolContext) return;
-
-  const keys = Object.keys(
-    readStringBag({ field: 'tool_context', value: toolContext })
-  );
-
+const assertValidToolContextKeys = (keys: string[]): void => {
   const invalid = keys.filter((key) => {
     return !HEADER_TOKEN_RE.test(key);
   });
@@ -107,6 +82,32 @@ export const assertValidToolContext = (
     }
     byHeader.set(header.toLowerCase(), key);
   }
+};
+
+/**
+ * Throws `VALIDATION_FAILED` (400) when a `tool_context` value is not a
+ * string, the rule a tag bag follows (`readStringBag`), and
+ * `INVALID_TOOL_CONTEXT_KEY` (400) when a key cannot survive the trip to an
+ * outbound header. Two key failure modes, both silent without this guard:
+ *
+ * - a key outside the header-name grammar only fails inside `fetch`, so the
+ *   caller sees a failed tool call rather than a rejected write;
+ * - two keys that differ only in the casing of a later character collapse into
+ *   one header (header names are case-insensitive) and the last value wins,
+ *   dropping the other without a trace.
+ *
+ * Accepts every key shape that already works — snake_case, kebab-case and
+ * dotted keys are all valid header names and keep their current behavior.
+ */
+export const assertValidToolContext = (
+  // `unknown` values because a generation body reaches here untyped; the
+  // value check below is what establishes them as strings.
+  toolContext?: Record<string, unknown> | null
+): void => {
+  if (!toolContext) return;
+  assertValidToolContextKeys(
+    Object.keys(readStringBag({ field: 'tool_context', value: toolContext }))
+  );
 };
 
 /**
@@ -181,6 +182,34 @@ const RESERVED_LOWER = new Set(
     return key.toLowerCase();
   })
 );
+
+/**
+ * Throws `INVALID_TOOL_CONTEXT_KEY` (400) unless `keys` are keys a graph may
+ * assign: valid, distinct header names, none of them server-reserved. A
+ * reserved key is refused rather than stripped, since a graph that assigns one
+ * expects it to arrive.
+ */
+export const assertAssignableToolContextKeys = (args: {
+  field: string;
+  keys: string[];
+}): void => {
+  assertValidToolContextKeys(args.keys);
+  const reserved = args.keys.filter((key) => {
+    return RESERVED_LOWER.has(key.toLowerCase());
+  });
+  if (reserved.length === 0) return;
+  throw new DomainError(
+    'INVALID_TOOL_CONTEXT_KEY',
+    `${args.field} cannot assign the server-reserved key(s) ${reserved
+      .map((key) => {
+        return `'${key}'`;
+      })
+      .join(
+        ', '
+      )}; ${RESERVED_TOOL_CONTEXT_KEYS.join(', ')} are derived by the server.`,
+    { keys: reserved }
+  );
+};
 
 /**
  * Makes the reserved identity keys unaddressable by a caller: every reserved

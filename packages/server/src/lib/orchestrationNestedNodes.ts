@@ -8,7 +8,13 @@
  * carries a containment rule the other node types have no equivalent of — see
  * `contextKeys` below.
  */
+import { DomainError } from '../errors';
 import { applyInputMapping } from './jsonLogicMapping';
+import {
+  type LoopItemError,
+  type LoopItemStart,
+  resolveLoopItemStarts,
+} from './orchestrationLoopItemContext';
 import { type NestedRunParent, startNestedRun } from './orchestrationNestedRun';
 import {
   assertNestedRunCompleted,
@@ -53,14 +59,29 @@ export type NestedRunResult = {
 export const nestedNodeArtifact = (args: {
   node: Pick<OrchestrationNode, 'id' | 'type' | 'onItemError'>;
   runs: NestedRunResult[];
+  // Items that started no child, each slotted back at its `index`.
+  itemErrors: LoopItemError[];
 }): Record<string, unknown> => {
   const { node, runs } = args;
   if (node.type !== 'loop') {
     assertNestedRunCompleted({ run: runs[0], nodeId: node.id });
     return runs[0].output ?? {};
   }
+  const itemErrors = new Map(
+    args.itemErrors.map((itemError) => {
+      return [itemError.index, itemError];
+    })
+  );
+  const pending = [...runs];
   let failedCount = 0;
-  const results = runs.map((run) => {
+  const total = runs.length + itemErrors.size;
+  const results = Array.from({ length: total }, (_, index) => {
+    const itemError = itemErrors.get(index);
+    if (itemError) {
+      failedCount += 1;
+      return { error: { code: itemError.code, message: itemError.message } };
+    }
+    const run = pending.shift()!;
     if ((node.onItemError ?? 'fail') === 'fail') {
       assertNestedRunCompleted({ run, nodeId: node.id });
       return run.output;
@@ -83,13 +104,17 @@ export const nestedNodeArtifact = (args: {
 const settleNestedNode = (args: {
   node: OrchestrationNode;
   runs: NestedRunResult[];
+  itemErrors: LoopItemError[];
 }): NodeExecutionResult => {
-  const { node, runs } = args;
+  const { node, runs, itemErrors } = args;
   const parked = runs.some((run) => {
     return !isNestedRunSettled(run.status);
   });
   if (!parked) {
-    return { kind: 'artifact', artifact: nestedNodeArtifact({ node, runs }) };
+    return {
+      kind: 'artifact',
+      artifact: nestedNodeArtifact({ node, runs, itemErrors }),
+    };
   }
   return {
     kind: 'requires_action',
@@ -100,45 +125,46 @@ const settleNestedNode = (args: {
       orchestration_run_ids: runs.map((run) => {
         return run.id;
       }),
+      ...(itemErrors.length > 0 ? { item_errors: itemErrors } : {}),
     },
   };
 };
 
 const runLoopBatches = async (args: {
-  items: unknown[];
+  starts: LoopItemStart[];
   parallelism: number;
   itemVariable: string;
   onItemError: LoopItemErrorMode;
   orchestrationId: string;
   projectIds: number[];
   authHeader?: string;
-  toolContext?: Record<string, string>;
   parent: NestedRunParent;
 }): Promise<NestedRunResult[]> => {
   const {
-    items,
+    starts,
     parallelism,
     itemVariable,
     onItemError,
     orchestrationId,
     projectIds,
     authHeader,
-    toolContext,
     parent,
   } = args;
   const runs: NestedRunResult[] = [];
-  for (let i = 0; i < items.length; i += parallelism) {
-    const batch = items.slice(i, i + parallelism);
+  for (let i = 0; i < starts.length; i += parallelism) {
+    const batch = starts.slice(i, i + parallelism);
     const batchResults = await Promise.all(
-      batch.map((item) => {
-        const itemInput: Record<string, unknown> = { [itemVariable]: item };
+      batch.map((start) => {
+        const itemInput: Record<string, unknown> = {
+          [itemVariable]: start.item,
+        };
         return startNestedRun({
           orchestrationPublicId: orchestrationId,
           projectIds,
           input: itemInput,
           authHeader,
-          // Already narrowed by the node's `contextKeys` in `executeLoopNode`.
-          toolContext,
+          // Narrowed by `contextKeys`, then overlaid by `itemToolContext`.
+          toolContext: start.toolContext,
           // Every item's run is attributable to the node that fanned it out, so
           // the loop's real cost is the sum of its children.
           parent,
@@ -176,23 +202,36 @@ export const executeLoopNode = async (args: {
   const collectionPath = node.collection ?? 'state.items';
   const itemVariable = node.itemVariable ?? 'item';
   const parallelism = node.parallelism ?? 5;
-  const items = resolveLoopCollection({ collectionPath, state });
-  const runs = await runLoopBatches({
-    items,
-    parallelism,
+  const onItemError = node.onItemError ?? 'fail';
+  const { starts, itemErrors } = resolveLoopItemStarts({
+    items: resolveLoopCollection({ collectionPath, state }),
     itemVariable,
-    onItemError: node.onItemError ?? 'fail',
-    orchestrationId,
-    projectIds,
-    authHeader,
-    toolContext: filterToolContext({
+    itemToolContext: node.itemToolContext,
+    state,
+    inherited: filterToolContext({
       toolContext,
       contextKeys: node.contextKeys,
     }),
+  });
+  const [firstError] = itemErrors;
+  if (firstError && onItemError === 'fail') {
+    throw new DomainError(firstError.code, firstError.message, {
+      node_id: node.id,
+      item_index: firstError.index,
+    });
+  }
+  const runs = await runLoopBatches({
+    starts,
+    parallelism,
+    itemVariable,
+    onItemError,
+    orchestrationId,
+    projectIds,
+    authHeader,
     parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
   });
 
-  return settleNestedNode({ node, runs });
+  return settleNestedNode({ node, runs, itemErrors });
 };
 
 export const executeSubOrchestrationNode = async (args: {
@@ -229,5 +268,5 @@ export const executeSubOrchestrationNode = async (args: {
     wait: true,
   });
 
-  return settleNestedNode({ node, runs: [run] });
+  return settleNestedNode({ node, runs: [run], itemErrors: [] });
 };

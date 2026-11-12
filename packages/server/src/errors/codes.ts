@@ -431,6 +431,11 @@ export const ERROR_CODES = {
     description:
       "A `loop` / `sub_orchestration` child run settled in a non-success terminal status (failed, cancelled, or expired) carrying no code of its own, so the node that started it failed too. A child that carries a code fails its parent under that code instead, so the cause reaches the run a caller reads. Matches ORCHESTRATION_DISPATCH_FAILED, the same rule for a workflow on_enter dispatch's run.",
   },
+  LOOP_ITEM_TOOL_CONTEXT_INVALID: {
+    httpStatus: 422,
+    description:
+      "A `loop` node's `item_tool_context` value evaluated to something other than a string or `null` for an item, so that item's child run could not be given a `tool_context`. Under `on_item_error: fail` the node fails before any child starts; under `collect` the item's entry in `results` carries this code.",
+  },
   ORCHESTRATION_RUN_DEPTH_LIMIT: {
     httpStatus: 409,
     description:
