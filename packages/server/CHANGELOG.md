@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.108.0](https://github.com/ttoss/soat/compare/v0.107.0...v0.108.0) (2026-11-12)
+
+* feat(tools)!: cap every tool callback by the authority sealed in its assertion (#1888) ([73b9004](https://github.com/ttoss/soat/commit/73b90041e088fced4480e126d0767be052ed3b23)), closes [#1888](https://github.com/ttoss/soat/issues/1888)
+
+### Bug Fixes
+
+* **agents:** read a generation's knowledge_config override as the caller ([#1884](https://github.com/ttoss/soat/issues/1884)) ([82422d1](https://github.com/ttoss/soat/commit/82422d12df38c3c5e02b301fb2748df7bc9ba545))
+* **agents:** scope a turn's knowledge to the agent's project ([#1887](https://github.com/ttoss/soat/issues/1887)) ([ad4e1dc](https://github.com/ttoss/soat/commit/ad4e1dc68e172bb5c6ba0e494947e9369947fdc4))
+
+### Features
+
+* **formations:** a registered type's handler receives the deployer's authority ([#1891](https://github.com/ttoss/soat/issues/1891)) ([d6710fe](https://github.com/ttoss/soat/commit/d6710feaa8cad8fba16a92ff9be25b3573fede0b))
+* **iam:** issue short-lived IAM tokens bounded by a policy ([#1886](https://github.com/ttoss/soat/issues/1886)) ([9b2df4a](https://github.com/ttoss/soat/commit/9b2df4a22f4d59c26d484e1c9ca45f9407a2a066))
+
+### BREAKING CHANGES
+
+* an On-Behalf-Of assertion with no readable `ath` is 400 ON_BEHALF_OF_INVALID (reason bound); every callback is capped by the credential the call was made on, including direct calls and generations that record no caller.
+
 # [0.107.0](https://github.com/ttoss/soat/compare/v0.106.1...v0.107.0) (2026-11-12)
 
 * fix(iam)!: every list answers an empty page to a caller permitted in no project (#1880) ([9da0cb2](https://github.com/ttoss/soat/commit/9da0cb2a3a43f91d3c6189fbd4b00c505e9dd3c6)), closes [#1880](https://github.com/ttoss/soat/issues/1880)
