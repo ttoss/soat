@@ -24,6 +24,7 @@ import {
   updateOrchestration,
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
+import { replayedAuthHeader } from 'src/lib/replayedCredential';
 
 import {
   parseEnumListQuery,
@@ -278,7 +279,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   // before it executes, so a bag the caller cannot be told about later has to
   // fail while the caller is still listening.
   const metadata = parseMetadataBag(body.metadata);
-  const authHeader = ctx.headers['authorization'] as string | undefined;
+  const authHeader = replayedAuthHeader({ ctx });
 
   const result = await startOrchestrationRun({
     orchestrationPublicId: orchestrationId,

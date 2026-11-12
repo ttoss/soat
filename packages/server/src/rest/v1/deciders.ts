@@ -24,6 +24,7 @@ import {
 } from 'src/lib/decisions';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
+import { replayedAuthHeader } from 'src/lib/replayedCredential';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -278,7 +279,7 @@ decidersRouter.post('/deciders/:decider_id/decisions', async (ctx: Context) => {
     // 201 long before it settles.
     metadata: parseMetadataBag(body.metadata),
     wait: body.wait === true,
-    authHeader: ctx.request.headers.authorization,
+    authHeader: replayedAuthHeader({ ctx }),
   });
 });
 
@@ -308,7 +309,7 @@ decidersRouter.post('/decisions', async (ctx: Context) => {
     input: body.input,
     metadata: parseMetadataBag(body.metadata),
     wait: body.wait === true,
-    authHeader: ctx.request.headers.authorization,
+    authHeader: replayedAuthHeader({ ctx }),
   });
 });
 

@@ -1,7 +1,7 @@
 import type { Context } from '../Context';
 import {
   resolveAttachedPolicySet,
-  resolveBoundSet,
+  resolveBoundSets,
 } from '../lib/attachedPolicies';
 import type { PolicyDocument, PolicySets } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
@@ -104,7 +104,7 @@ export const resolveTriggerPolicySets = async (args: {
     db: args.db,
   });
   const boundSets = args.caller.bound
-    ? [await resolveBoundSet(args.caller.bound)]
+    ? await resolveBoundSets(args.caller.bound)
     : [];
   return [...callerSets, ...boundSets, triggerDocs];
 };

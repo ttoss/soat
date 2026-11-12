@@ -6,7 +6,7 @@ import { resolveServedAgentVersion } from './agentServedVersion';
 import {
   resolveAttachedPolicies,
   resolveAttachedPolicySet,
-  resolveBoundSet,
+  resolveBoundSets,
 } from './attachedPolicies';
 import type { PolicySets } from './iam';
 import { resolvePolicySets } from './permissions';
@@ -66,7 +66,7 @@ const actedAsSets = async (args: {
   const bound = parseBound(args.bound);
   if (bound === null) return NOTHING;
   const principal = await principalSets(args);
-  return bound ? [...principal, await resolveBoundSet(bound)] : principal;
+  return bound ? [...principal, ...(await resolveBoundSets(bound))] : principal;
 };
 
 /**

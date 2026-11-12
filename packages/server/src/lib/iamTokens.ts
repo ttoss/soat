@@ -187,21 +187,22 @@ const parseTtl = (value: unknown): number => {
 };
 
 /**
- * Issues a token that is the issuing key held to a bound: every request on it
- * is checked against the key's grant as it stands then ∩ the bound, and work
- * it starts keeps the bound after it expires.
+ * The issuing key held to `bound`, as an IAM token: every request on it is
+ * checked against the key's grant as it stands then ∩ the bound, and work it
+ * starts stores the bound.
  */
-export const createIamToken = async (args: {
-  issuer: Issuer;
-  body: Record<string, unknown>;
-}): Promise<{ token: string; expires_at: string }> => {
-  const { issuer, body } = args;
-  const bound = await parseBoundBody({ body, issuer });
-  const principal = parsePrincipal(body.principal);
-  const ttlSeconds = parseTtl(body.ttl_seconds);
+export const signIamToken = (args: {
+  issuer: Pick<
+    Issuer,
+    'publicId' | 'role' | 'apiKeyPublicId' | 'projectPublicId'
+  >;
+  bound: PrincipalBound;
+  principal?: { type: string; id: string };
+  ttlSeconds: number;
+}): { token: string; jti: string; expiresAt: number } => {
+  const { issuer, principal } = args;
   const jti = randomUUID();
   const issuedAt = Math.floor(Date.now() / 1000);
-  const expiresAt = issuedAt + ttlSeconds;
   const token = signToken({
     typ: 'iam',
     claims: {
@@ -209,12 +210,28 @@ export const createIamToken = async (args: {
       role: issuer.role,
       prj: issuer.projectPublicId,
       key: issuer.apiKeyPublicId,
-      bnd: serializeBound(bound),
+      bnd: serializeBound(args.bound),
       ...(principal ? { prn: principal } : {}),
       jti,
       iat: issuedAt,
     },
-    expiresIn: ttlSeconds,
+    expiresIn: args.ttlSeconds,
+  });
+  return { token, jti, expiresAt: issuedAt + args.ttlSeconds };
+};
+
+/** Issues an IAM token for `POST /iam/tokens`; its bound outlives it. */
+export const createIamToken = async (args: {
+  issuer: Issuer;
+  body: Record<string, unknown>;
+}): Promise<{ token: string; expires_at: string }> => {
+  const { issuer, body } = args;
+  const ttlSeconds = parseTtl(body.ttl_seconds);
+  const { token, jti, expiresAt } = signIamToken({
+    issuer,
+    bound: await parseBoundBody({ body, issuer }),
+    principal: parsePrincipal(body.principal),
+    ttlSeconds,
   });
   log(
     'createIamToken: key=%s jti=%s ttl=%d',

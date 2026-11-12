@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 
 import type { AuthUser, Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
-import { resolveBoundSet } from '../lib/attachedPolicies';
+import { resolveBoundSets } from '../lib/attachedPolicies';
 import { requestOnBehalfOf } from '../lib/onBehalfOf';
 import { resolvePolicySets } from '../lib/permissions';
 import { parseBound } from '../lib/principalBound';
@@ -296,7 +296,7 @@ const resolveJwtAuthority = async (args: {
         boundaryPolicyDocs,
         db,
       });
-      return bound ? [...sets, await resolveBoundSet(bound)] : sets;
+      return bound ? [...sets, ...(await resolveBoundSets(bound))] : sets;
     },
     db,
   });

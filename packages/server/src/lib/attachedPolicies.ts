@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import type { PolicyDocument } from './iam';
+import type { PolicyDocument, PolicySets } from './iam';
 import { bindPolicyVariables } from './policyVariables';
 import type { PrincipalBound } from './principalBound';
 
@@ -58,10 +58,11 @@ export const resolveAttachedPolicySet = async (args: {
   return grant ? [grant] : [];
 };
 
-/** The policy set an IAM token bound adds: one every request must satisfy. */
-export const resolveBoundSet = async (
+/** The policy sets a bound adds, each of which every request must satisfy. */
+export const resolveBoundSets = async (
   bound: PrincipalBound
-): Promise<PolicyDocument[]> => {
-  if ('policy' in bound) return [bound.policy];
-  return resolveAttachedPolicySet({ policyIds: bound.policyIds });
+): Promise<PolicySets> => {
+  if ('policySets' in bound) return bound.policySets;
+  if ('policy' in bound) return [[bound.policy]];
+  return [await resolveAttachedPolicySet({ policyIds: bound.policyIds })];
 };
