@@ -1,6 +1,10 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import {
+  type AssertionAuthority,
+  openAssertionAuthority,
+} from './assertionAuthority';
 import { soatHeader } from './headerPrefix';
 import { verifyOwnToolAssertion } from './toolAssertion';
 
@@ -8,8 +12,8 @@ const log = createDebug('soat:onBehalfOf');
 
 /**
  * The tool call a request writes on behalf of, as recorded beside the
- * `createdBy` principal. Attribution only: it never widens what the credential
- * may do.
+ * `createdBy` principal. The authority the call carries caps the request
+ * (`authOnBehalfOf.ts`); this record names the call and never widens it.
  */
 export type OnBehalfOf = {
   tool_id: string | null;
@@ -30,15 +34,22 @@ const claim = (claims: Record<string, unknown>, key: string) => {
   return typeof value === 'string' ? value : null;
 };
 
+/** A verified assertion: the call it names and the authority it carries. */
+export type AssertedCall = {
+  onBehalfOf: OnBehalfOf;
+  authority: AssertionAuthority;
+};
+
 /**
  * Reads a tool assertion this deployment signed, sent back by a key scoped to
  * the assertion's project. Anything else is refused rather than dropped, so a
- * write never lands attributed to the key when its caller asked otherwise.
+ * write never lands attributed to the key when its caller asked otherwise, and
+ * never runs uncapped when its authority cannot be read.
  */
 const readOnBehalfOf = (args: {
   token: string;
   apiKeyProjectPublicId: string | undefined;
-}): OnBehalfOf => {
+}): AssertedCall => {
   const claims = verifyOwnToolAssertion(args.token.trim());
   if (!claims) {
     throw new DomainError(
@@ -57,6 +68,14 @@ const readOnBehalfOf = (args: {
       { reason: 'project' }
     );
   }
+  const authority = openAssertionAuthority({ value: claims.ath });
+  if (!authority) {
+    throw new DomainError(
+      'ON_BEHALF_OF_INVALID',
+      `${onBehalfOfHeaderName()} carries no authority this deployment can read.`,
+      { reason: 'bound' }
+    );
+  }
   const onBehalfOf = {
     tool_id: claim(claims, 'tool_id'),
     agent_id: claim(claims, 'agent_id'),
@@ -66,7 +85,7 @@ const readOnBehalfOf = (args: {
     actor_id: claim(claims, 'actor_id'),
   };
   log('readOnBehalfOf: tool=%s', onBehalfOf.tool_id);
-  return onBehalfOf;
+  return { onBehalfOf, authority };
 };
 
 /**
@@ -77,7 +96,7 @@ const readOnBehalfOf = (args: {
 export const requestOnBehalfOf = (args: {
   headers: Record<string, string | string[] | undefined>;
   apiKeyProjectPublicId: string | undefined;
-}): OnBehalfOf | undefined => {
+}): AssertedCall | undefined => {
   const named = Object.keys(args.headers).some((name) => {
     return name.toLowerCase().endsWith('on-behalf-of');
   });

@@ -60,7 +60,7 @@ A route making several checks (e.g. binding a trigger checks `triggers:CreateTri
 - On success, the primary `action` is the first (route-level) check.
 - On a `403`, the primary is the denied check.
 
-Remaining checks are recorded under `detail.additional_checks` (`{ action, resource, allowed }` each).
+Remaining checks are recorded under `detail.additional_checks` (`{ action, resource, allowed }` each). A request on an [IAM token](./iam.md#iam-tokens) records `detail.iam_token`; one carrying [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a call made for an opaque principal records it under `detail.on_behalf_of_principal`.
 
 ### Principals
 

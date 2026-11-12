@@ -1133,6 +1133,10 @@ const resolveToolByType = async (
     toolId: typedTool.publicId || null,
     workId: readRunTokenWork(args.authHeader),
     attribution: args.attribution,
+    sender: {
+      authHeader: args.authHeader,
+      boundaryPolicy: args.boundaryPolicy,
+    },
   };
 
   if (!isAgentToolType(toolType)) {

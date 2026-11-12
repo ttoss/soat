@@ -102,6 +102,11 @@ export type AuthUser = {
    * back into the work whose generation made the call.
    */
   onBehalfOf?: OnBehalfOf;
+  /**
+   * The opaque principal that assertion's work acts for, sealed in it: what
+   * the audit log records and a tool call this request makes carries on.
+   */
+  onBehalfOfPrincipal?: { type: string; id: string };
 };
 
 export type Context = {

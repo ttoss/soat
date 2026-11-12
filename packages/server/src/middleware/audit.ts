@@ -239,9 +239,12 @@ const resolvePrincipal = (
 const buildDetail = (args: {
   additional: RecordedCheck[];
   iamToken: AuthUser['iamToken'];
+  onBehalfOfPrincipal: AuthUser['onBehalfOfPrincipal'];
 }): Record<string, unknown> | null => {
-  const { additional, iamToken } = args;
-  if (additional.length === 0 && !iamToken) return null;
+  const { additional, iamToken, onBehalfOfPrincipal } = args;
+  if (additional.length === 0 && !iamToken && !onBehalfOfPrincipal) {
+    return null;
+  }
   return {
     ...(additional.length > 0
       ? {
@@ -256,6 +259,8 @@ const buildDetail = (args: {
       : {}),
     // The token's own id, so every request one token made can be found.
     ...(iamToken ? { iamToken } : {}),
+    // Sealed in the assertion, so only the audit log names it.
+    ...(onBehalfOfPrincipal ? { onBehalfOfPrincipal } : {}),
   };
 };
 
@@ -390,7 +395,11 @@ const recordEntry = (
     requestId: ctx.state?.requestId ?? null,
     ip: ctx.ip ?? null,
     userAgent: ctx.headers?.['user-agent'] ?? null,
-    detail: buildDetail({ additional, iamToken: ctx.authUser!.iamToken }),
+    detail: buildDetail({
+      additional,
+      iamToken: ctx.authUser!.iamToken,
+      onBehalfOfPrincipal: ctx.authUser!.onBehalfOfPrincipal,
+    }),
     isRead: !MUTATING_METHODS.has(ctx.method),
   });
 };

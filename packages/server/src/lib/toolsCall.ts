@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { SenderCredential } from './assertionSender';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import { readRunTokenWork } from './orchestrationRunToken';
 import type { PipelineStepCaller } from './pipelineTools';
@@ -202,6 +203,8 @@ type CallResolvedToolArgs = {
    * action the call reaches is held to it, a pipeline's steps included.
    */
   boundaryPolicy?: unknown;
+  /** The request's resolved credential, when the call is made in one. */
+  caller?: SenderCredential;
 };
 
 /**
@@ -226,6 +229,7 @@ const callPipelineStep = (args: {
     remainingDepth: step.remainingDepth,
     toolContext: pipeline.toolContext,
     boundaryPolicy: pipeline.boundaryPolicy,
+    caller: pipeline.caller,
     attribution,
   };
   if (step.tool) {
@@ -307,17 +311,26 @@ const resolveCallPresets = async (args: {
   };
 };
 
-const runResolvedTool = async (
-  args: CallResolvedToolArgs
-): Promise<unknown> => {
-  const type = args.tool.type ?? 'http';
-  const meter = {
+const meterOf = (args: CallResolvedToolArgs): ToolExecutionMeter => {
+  return {
     projectId: args.toolProjectId,
     callerProjectId: args.callerProjectId,
     toolId: args.toolPublicId ?? null,
     workId: readRunTokenWork(args.authHeader),
     attribution: args.attribution,
+    sender: {
+      caller: args.caller,
+      authHeader: args.authHeader,
+      boundaryPolicy: args.boundaryPolicy,
+    },
   };
+};
+
+const runResolvedTool = async (
+  args: CallResolvedToolArgs
+): Promise<unknown> => {
+  const type = args.tool.type ?? 'http';
+  const meter = meterOf(args);
   const { presetParameters, mcp } = await resolveCallPresets({
     call: args,
     type,

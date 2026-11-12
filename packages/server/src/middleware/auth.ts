@@ -389,6 +389,27 @@ export const verifyApiKeyToken = async (
   };
 };
 
+/** The caller capped by the `On-Behalf-Of` assertion it sends, if any. */
+const applyOnBehalfOf = (args: {
+  ctx: Context;
+  authUser: AuthUser;
+}): AuthUser => {
+  const { authUser } = args;
+  const projectPublicId = authUser.apiKeyProjectPublicId;
+  const asserted = requestOnBehalfOf({
+    headers: args.ctx.headers ?? {},
+    apiKeyProjectPublicId: projectPublicId,
+  });
+  // An assertion is admitted only from a key scoped to its project.
+  if (!asserted || !projectPublicId) return authUser;
+  return narrowToOnBehalfOf({
+    authUser,
+    asserted,
+    projectPublicId,
+    db: args.ctx.db,
+  });
+};
+
 export const authMiddleware = async (ctx: Context, next: Next) => {
   const authHeader: string | undefined = ctx.headers?.authorization;
 
@@ -403,11 +424,7 @@ export const authMiddleware = async (ctx: Context, next: Next) => {
   }
 
   if (ctx.authUser) {
-    ctx.authUser.onBehalfOf = requestOnBehalfOf({
-      headers: ctx.headers ?? {},
-      apiKeyProjectPublicId: ctx.authUser.apiKeyProjectPublicId,
-    });
-    ctx.authUser = narrowToOnBehalfOf({ authUser: ctx.authUser, db: ctx.db });
+    ctx.authUser = applyOnBehalfOf({ ctx, authUser: ctx.authUser });
   }
 
   await next();
