@@ -3,6 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import type { TypedAgent } from './agentGenerationTypes';
+import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import { agentPolicyDenial } from './agentPolicyDenial';
 import type { BindingTools } from './agentToolNames';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
@@ -13,6 +14,7 @@ import {
   type KnowledgeRetrieval,
   toKnowledgeRetrieval,
 } from './knowledgeRetrievalRecord';
+import type { KnowledgeSearchPolicy } from './knowledgeSearchPolicy';
 import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
 import { isPlainObject } from './plainObject';
@@ -128,14 +130,6 @@ export const readKnowledgeConfig = (
   return config;
 };
 
-const anyLength = (arr: unknown[] | undefined): boolean => {
-  return (arr?.length ?? 0) > 0;
-};
-
-const anyKeys = (record: Record<string, unknown> | undefined): boolean => {
-  return Object.keys(record ?? {}).length > 0;
-};
-
 const mergeRecords = (
   a: Record<string, string> | undefined,
   b: Record<string, string> | undefined
@@ -159,12 +153,11 @@ const unionArrays = (
  * agent's retrieval scope; `tags` pairs are merged with the override winning
  * per key; scalar fields use the override value when present.
  */
-export const mergeKnowledgeConfig = (args: {
-  base: unknown;
-  override: unknown;
+const mergeKnowledgeConfig = (args: {
+  base: KnowledgeConfig | null | undefined;
+  override: KnowledgeConfig | undefined;
 }): KnowledgeConfig | null | undefined => {
-  const base = args.base as KnowledgeConfig | null | undefined;
-  const override = args.override as KnowledgeConfig | null | undefined;
+  const { base, override } = args;
   if (!override) return base;
   if (!base) return override;
   return {
@@ -175,29 +168,6 @@ export const mergeKnowledgeConfig = (args: {
     documentPaths: unionArrays(base.documentPaths, override.documentPaths),
     tags: mergeRecords(base.tags, override.tags),
   };
-};
-
-const hasKnowledgeFilters = (config: KnowledgeConfig): boolean => {
-  return (
-    anyLength(config.memoryStoreIds) ||
-    anyLength(config.documentPaths) ||
-    anyLength(config.documentIds) ||
-    anyKeys(config.tags)
-  );
-};
-
-// `tags` scopes both stores, so it counts on both sides: a tags-only config is
-// a scoped document search, not the unscoped widening `includeDocuments` guards.
-const hasMemoryStoreFilters = (config: KnowledgeConfig): boolean => {
-  return anyLength(config.memoryStoreIds) || anyKeys(config.tags);
-};
-
-const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
-  return (
-    anyLength(config.documentPaths) ||
-    anyLength(config.documentIds) ||
-    anyKeys(config.tags)
-  );
 };
 
 /**
@@ -268,7 +238,12 @@ const buildKnowledgeContent = (knowledgeText: string): string => {
 };
 
 export const buildKnowledgeMessages = async (args: {
-  knowledgeConfig: unknown;
+  storedConfig: KnowledgeConfig | null | undefined;
+  /**
+   * The generation's own `knowledge_config`, and the policy what it adds is
+   * read under (`resolveRequestedKnowledgePolicy`).
+   */
+  requested?: { config: KnowledgeConfig; policy: KnowledgeSearchPolicy };
   projectIds?: number[];
   /**
    * The agent's own project and the turn — what the query embedding is billed
@@ -281,7 +256,10 @@ export const buildKnowledgeMessages = async (args: {
   /** What was injected, for the generation record. Null when nothing ran. */
   retrieval: KnowledgeRetrieval;
 }> => {
-  const config = args.knowledgeConfig as KnowledgeConfig | null | undefined;
+  const config = mergeKnowledgeConfig({
+    base: args.storedConfig,
+    override: args.requested?.config,
+  });
   if (!config) return { messages: [], retrieval: null };
 
   const lastUserMessage = [...args.messages].reverse().find((m) => {
@@ -306,33 +284,25 @@ export const buildKnowledgeMessages = async (args: {
     return { messages: [], retrieval: null };
   }
 
-  // `searchKnowledge` treats any defined `query` as "both stores", but here
-  // `query` is auto-derived from the chat message every turn — letting it pick
-  // the stores would silently widen a config scoped to one of them into an
-  // all-project search of the other. So each store follows the config: on when
-  // the config names it, or when the config names neither and the agent asked
-  // for project-wide knowledge. `query` still ranks whatever is searched.
-  const includeDocuments =
-    hasDocumentFilters(config) || !hasMemoryStoreFilters(config);
-  const includeMemories =
-    hasMemoryStoreFilters(config) || !hasDocumentFilters(config);
+  const [scope, ...alsoScopes] = knowledgeScopes({
+    merged: config,
+    stored: args.storedConfig,
+    requestedPolicy: args.requested?.policy,
+  });
+  if (!scope) return { messages: [], retrieval: null };
 
   const results = await searchKnowledge({
     projectIds: args.projectIds,
     embeddingBilling: args.embeddingBilling,
     query,
-    memoryStoreIds: config.memoryStoreIds,
-    paths: config.documentPaths,
-    documentIds: config.documentIds,
-    tags: config.tags,
+    ...scope,
+    alsoScopes,
     // The agent record spells the cosine floor `min_score`, which is exactly
     // what `minSimilarity` is.
     minSimilarity: config.minScore,
     rrfK: config.rrfK,
     recencyHalfLifeDays: config.recencyHalfLifeDays,
     limit: config.limit,
-    includeDocuments,
-    includeMemories,
   });
 
   log('buildKnowledgeMessages: results count=%d', results.length);
