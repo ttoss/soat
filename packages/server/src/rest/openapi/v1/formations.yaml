@@ -1124,7 +1124,8 @@ components:
                   nullable: true
                   description: >-
                     `oauth_connection`: the OAuth client whose connection the
-                    turn's actor holds
+                    turn's actor holds; `{ "ref": "<LogicalId>" }` for a
+                    template `oauth_client`
         mcp:
           type: object
           nullable: true
@@ -1817,6 +1818,68 @@ components:
           type: string
           description: The secret value to encrypt and store
 
+    OauthClientResourceProperties:
+      description: >-
+        Registers an OAuth 2.0 client (your app at a provider) in the
+        formation's project. A `tool` names it by `ref` in
+        `execute.auth.oauth_client_id`.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - authorize_url
+        - token_url
+        - client_id
+        - scopes
+      properties:
+        name:
+          type: string
+          description: Display name
+        authorize_url:
+          type: string
+          description: The provider's authorization endpoint
+        token_url:
+          type: string
+          description: The provider's token endpoint
+        revocation_url:
+          type: string
+          nullable: true
+          description: The provider's RFC 7009 revocation endpoint
+        client_id:
+          type: string
+          description: Your app's client ID at the provider
+        client_secret:
+          type: string
+          nullable: true
+          description: >-
+            A `{{secret:sec_...}}` reference to the client secret, never the
+            value; for a template secret, `{ "sub": "{{secret:${MySecret}}}" }`.
+            Omit for a public client, which relies on PKCE.
+        scopes:
+          type: array
+          items:
+            type: string
+          description: The scopes requested at authorization
+        pkce:
+          type: boolean
+          description: Whether the authorization uses PKCE (`S256`); default `true`
+        token_endpoint_auth_method:
+          type: string
+          enum: [client_secret_basic, client_secret_post]
+          description: How the client authenticates at the token endpoint
+        redirect_uri:
+          type: string
+          nullable: true
+          description: >-
+            The callback registered with the provider. Omitted, the server's
+            own `/api/v1/oauth-connections/callback`.
+        authorize_params:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          description: Extra query parameters for the authorize URL
+
     ProjectPriceResourceProperties:
       description: >-
         Upserts a project-scoped price row so a deployed stack produces
@@ -2382,7 +2445,7 @@ components:
             `agent`, `actor`, `api_key`, `chat`, `collection`, `conversation`, `dataset`,
             `dataset_item`, `decider`, `document`, `file`, `guardrail`, `ingestion_rule`,
             `memory_store`, `memory`, `memory_rule`, `metadata_schema`,
-            `model_route`, `eval`, `orchestration`, `playbook`,
+            `model_route`, `eval`, `oauth_client`, `orchestration`, `playbook`,
             `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`,
             `trigger` and `workflow`.
 

@@ -45,6 +45,48 @@ An OAuth client belongs to a project and holds what the provider issued you when
 
 Register `redirect_uri` with the provider. Left `null`, it is this server's own callback, which needs `SOAT_BASE_URL`. A front end that receives the provider's redirect itself (its own domain on the consent screen) forwards `code` and `state` to [`GET /api/v1/oauth-connections/callback`](/docs/api/oauth-connections/complete-oauth-connection).
 
+### In a formation
+
+A template declares a client as an `oauth_client` resource with the fields of [`POST /api/v1/oauth-clients`](/docs/api/oauth-clients/create-oauth-client), authorized by the same actions. `client_secret` references a template `secret` with a `sub`, and a `tool` names the client with a `ref`, which also orders the client before the tool:
+
+```json
+{
+  "resources": {
+    "XSecret": {
+      "type": "secret",
+      "properties": { "name": "x-client-secret", "value": "<client secret>" }
+    },
+    "XClient": {
+      "type": "oauth_client",
+      "properties": {
+        "name": "x",
+        "authorize_url": "https://x.com/i/oauth2/authorize",
+        "token_url": "https://api.x.com/2/oauth2/token",
+        "client_id": "Tm9ZWdEX2hQ",
+        "client_secret": { "sub": "{{secret:${XSecret}}}" },
+        "scopes": ["tweet.read", "users.read", "offline.access"]
+      }
+    },
+    "XProfile": {
+      "type": "tool",
+      "properties": {
+        "name": "x-profile",
+        "type": "http",
+        "execute": {
+          "url": "https://api.x.com/2/users/me",
+          "auth": {
+            "type": "oauth_connection",
+            "oauth_client_id": { "ref": "XClient" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+A literal `client_secret` fails `validate-formation`. Deleting the formation deletes the client and its connections.
+
 ### Deletion
 
 Deleting a client deletes every connection made through it, without revoking them at the provider; delete the connections first to revoke.

@@ -92,15 +92,20 @@ const validateAuthorizeParams = (value: unknown): void => {
   if (!valid) throw invalid('authorize_params must map names to strings.');
 };
 
+export const CLIENT_SECRET_REFERENCE_MESSAGE =
+  'client_secret must be a secret reference ({{secret:sec_...}}), never the value.';
+
+export const isClientSecretReference = (value: string): boolean => {
+  return SECRET_REFERENCE_RE.test(value);
+};
+
 const validateInput = (input: OauthClientInput): void => {
   validateUrls(input);
   if (
     typeof input.clientSecret === 'string' &&
-    !SECRET_REFERENCE_RE.test(input.clientSecret)
+    !isClientSecretReference(input.clientSecret)
   ) {
-    throw invalid(
-      'client_secret must be a secret reference ({{secret:sec_...}}), never the value.'
-    );
+    throw invalid(CLIENT_SECRET_REFERENCE_MESSAGE);
   }
   if (
     input.tokenEndpointAuthMethod !== undefined &&
@@ -115,7 +120,9 @@ const validateInput = (input: OauthClientInput): void => {
   validateAuthorizeParams(input.authorizeParams);
 };
 
-const secretIdOf = (reference: string | null | undefined): string[] => {
+export const clientSecretIds = (
+  reference: string | null | undefined
+): string[] => {
   const match = reference ? SECRET_REFERENCE_RE.exec(reference) : null;
   return match ? [match[1]] : [];
 };
@@ -186,7 +193,7 @@ export const createOauthClient = async (args: {
   );
   validateInput(args.input);
   await assertSecretUseAllowed({
-    secretIds: secretIdOf(args.input.clientSecret),
+    secretIds: clientSecretIds(args.input.clientSecret),
     projectId: args.projectId,
     isAllowed: args.isAllowed,
   });
@@ -208,7 +215,7 @@ export const updateOauthClient = async (args: {
   validateInput(args.input);
   const row = await oauthClients.getByPublicId({ id: args.id });
   await assertSecretUseAllowed({
-    secretIds: secretIdOf(args.input.clientSecret),
+    secretIds: clientSecretIds(args.input.clientSecret),
     projectId: row.projectId,
     isAllowed: args.isAllowed,
   });
