@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.108.0](https://github.com/ttoss/soat/compare/v0.107.0...v0.108.0) (2026-11-12)
+
+### Features
+
+* **iam:** issue short-lived IAM tokens bounded by a policy ([#1886](https://github.com/ttoss/soat/issues/1886)) ([9b2df4a](https://github.com/ttoss/soat/commit/9b2df4a22f4d59c26d484e1c9ca45f9407a2a066))
+
 # [0.107.0](https://github.com/ttoss/soat/compare/v0.106.1...v0.107.0) (2026-11-12)
 
 **Note:** Version bump only for package @soat/postgresdb
