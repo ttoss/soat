@@ -699,7 +699,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
       responses:
         '200':
           description: The case
@@ -742,7 +742,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
       responses:
         '204':
           description: Case deleted
@@ -805,7 +805,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
       requestBody:
         required: true
         content:
@@ -876,7 +876,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - name: node_id
           in: query
           required: true
@@ -929,7 +929,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - name: node_id
           in: query
           description: Only the entries of this node
@@ -1016,7 +1016,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/NodeKey'
       requestBody:
         required: false
@@ -1081,7 +1081,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - name: node_id
           in: query
           description: Only the executions of this node
@@ -1135,7 +1135,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/ExecutionId'
       responses:
         '200':
@@ -1196,7 +1196,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/NodeKey'
       requestBody:
         required: false
@@ -1273,7 +1273,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - name: node_id
           in: query
           description: Only the exports of this node
@@ -1333,7 +1333,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/ExportId'
       responses:
         '200':
@@ -1398,7 +1398,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
       requestBody:
         required: false
         content:
@@ -1466,7 +1466,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
@@ -1518,7 +1518,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
       responses:
         '200':
           description: The paused case
@@ -1568,7 +1568,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
       responses:
         '200':
           description: The resumed case
@@ -1638,7 +1638,7 @@ paths:
         from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
-        - $ref: '#/components/parameters/ActorPin'
+        - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
         - $ref: '#/components/parameters/NodeKey'
       requestBody:
         required: true
@@ -1713,19 +1713,6 @@ components:
       schema:
         type: string
         example: pbk_case_V1StGXR8Z5jdHi6B
-    ActorPin:
-      name: actor_id
-      in: query
-      required: false
-      description: >-
-        Acts only on a case that belongs to this actor: any other case,
-        one that belongs to no actor included, is `404` as if it did not
-        exist. Pin it in a tool's `preset_parameters` as
-        `{{context:actor_id}}` so an agent serving an end user reaches that
-        user's cases only.
-      schema:
-        type: string
-        example: actor_V1StGXR8Z5jdHi6B
     NodeKey:
       name: node
       in: path

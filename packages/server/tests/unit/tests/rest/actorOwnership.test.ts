@@ -1,3 +1,7 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+import { load } from 'js-yaml';
 import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { soatTools } from 'src/lib/soatTools';
 
@@ -40,6 +44,8 @@ const PLAYBOOK_DEFINITION = {
     },
   ],
 };
+
+const SPEC_DIR = path.resolve(__dirname, '../../../../src/rest/openapi/v1');
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -185,6 +191,24 @@ describe('Actor ownership', () => {
 
   afterAll(() => {
     delete process.env.PLAYBOOK_WORKER_DISABLED;
+  });
+
+  test('the item pin is declared once, in actor-ownership.yaml', () => {
+    const declaredAt = fs.readdirSync(SPEC_DIR).filter((file) => {
+      const spec = load(fs.readFileSync(path.join(SPEC_DIR, file), 'utf8'));
+      const parameters =
+        isRecord(spec) && isRecord(spec.components)
+          ? spec.components.parameters
+          : undefined;
+      return (
+        isRecord(parameters) &&
+        Object.values(parameters).some((parameter) => {
+          return isRecord(parameter) && parameter.name === 'actor_id';
+        })
+      );
+    });
+
+    expect(declaredAt).toEqual(['actor-ownership.yaml']);
   });
 
   test('every resource pinned by actor_id has an owner here', () => {
