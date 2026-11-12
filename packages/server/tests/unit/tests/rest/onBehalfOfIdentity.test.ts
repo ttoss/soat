@@ -1,5 +1,9 @@
 import crypto from 'node:crypto';
 
+import {
+  type AssertionAuthority,
+  sealAssertionAuthority,
+} from 'src/lib/assertionAuthority';
 import { ISSUER } from 'src/lib/serverIssuer';
 
 import {
@@ -10,11 +14,19 @@ import { authenticatedTestClient } from '../../testClient';
 
 /**
  * A request carrying `On-Behalf-Of` for a generation runs as the key capped by
- * that generation's execution identity: its caller and its agent's
- * `policy_ids`, `${iam:ActorId}` bound to its actor.
+ * the authority the call was sent with and by that generation's execution
+ * identity: its caller and its agent's `policy_ids`, `${iam:ActorId}` bound
+ * to its actor.
  */
 
 const HEADER = 'X-Soat-On-Behalf-Of';
+
+// The sender's own authority allows everything, so only the generation caps.
+const SENDER_AUTHORITY: AssertionAuthority = {
+  sets: [
+    [{ statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }] }],
+  ],
+};
 
 const encode = (value: object): string => {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -53,6 +65,7 @@ describe('On-Behalf-Of execution identity', () => {
       tool_id: toolId,
       project_id: turn.projectId,
       generation_id: generationId,
+      ath: sealAssertionAuthority({ authority: SENDER_AUTHORITY }),
     };
     const input = `${encode({ alg: 'EdDSA', typ: 'JWT', kid })}.${encode(claims)}`;
     const signature = crypto.sign(null, Buffer.from(input), privateKey);

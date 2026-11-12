@@ -1,6 +1,8 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { sealAssertionAuthority } from './assertionAuthority';
+import { resolveSenderAuthority } from './assertionSender';
 import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
 import { withRequestIdHeader } from './requestCorrelation';
 import { resolveSecretRefsWithValues } from './secrets';
@@ -50,6 +52,10 @@ const identityOf = async (args: {
   if (!project) {
     throw new Error(`Tool project ${args.meter.projectId} does not exist.`);
   }
+  const authority = await resolveSenderAuthority({
+    sender: args.meter.sender,
+    projectPublicId: project.publicId,
+  });
   return {
     toolId: args.meter.toolId,
     projectId: project.publicId,
@@ -57,6 +63,7 @@ const identityOf = async (args: {
     generationId: args.meter.attribution.generationId,
     workId: args.meter.workId,
     context: args.toolContext,
+    authority: sealAssertionAuthority({ authority }),
   };
 };
 

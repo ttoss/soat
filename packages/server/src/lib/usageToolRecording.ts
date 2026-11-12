@@ -4,6 +4,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type { AssertionSender } from './assertionSender';
 import { resolveEndUserAttribution } from './generationAttribution';
 import { sumComponentCostUsd } from './priceCompute';
 import { insertUsageEvent, reportLostUsageEvent } from './usageEventWrite';
@@ -70,6 +71,8 @@ export type ToolExecutionMeter = {
    */
   workId: string | null;
   attribution: ToolCallAttribution;
+  /** Whose authority the call's assertion carries. */
+  sender: AssertionSender;
 };
 
 /** The attribution a nested call inherits, with the gate that released it added. */

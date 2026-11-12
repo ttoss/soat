@@ -8,7 +8,7 @@ import {
   type PolicyDocument,
   validatePolicyDocument,
 } from './iam';
-import { resolveSoatActionBoundaryScope } from './soatActionBoundary';
+import { resolveSoatActionScope } from './soatActionBoundary';
 import { soatTools } from './soatTools';
 import { buildResourceTagContext } from './tags';
 import { callTool, tools } from './tools';
@@ -261,6 +261,39 @@ const resolveDocumentContent = async (args: {
   };
 };
 
+/**
+ * A builtin action a `tool_output` message names, checked against the same SRN
+ * and tags the model's own call to it would be: a boundary confined to one
+ * resource must not be wider through the door a caller drives, and the caller
+ * names the action, so it must hold it too.
+ */
+const assertBuiltinActionAllowed = async (args: {
+  action: string;
+  input?: Record<string, unknown>;
+  projectPublicId: string;
+  authUser?: AuthUser;
+  agentBoundaryPolicy?: unknown;
+}) => {
+  const action = resolveSoatIamAction(args.action);
+  const scope = await resolveSoatActionScope({
+    resourceRef: findSoatToolDefinition(args.action)?.resource,
+    toolArgs: args.input,
+  });
+  assertBoundaryAllowed({
+    boundaryPolicy: args.agentBoundaryPolicy,
+    action,
+    resource: scope?.resource ?? '*',
+    context: scope?.context,
+  });
+  await assertCallerAllowed({
+    authUser: args.authUser,
+    projectPublicId: args.projectPublicId,
+    action,
+    resource: scope?.resource,
+    context: scope?.context,
+  });
+};
+
 const resolveToolOutputContent = async (args: {
   content: ToolOutputMessageContent;
   projectIds?: number[];
@@ -288,19 +321,12 @@ const resolveToolOutputContent = async (args: {
   });
 
   if (tool.type === 'builtin' && args.content.action) {
-    // The same SRN and tags the model's own call to this action would be
-    // checked against: a boundary confined to one resource must not be wider
-    // through the door a caller drives.
-    const scope = await resolveSoatActionBoundaryScope({
-      resourceRef: findSoatToolDefinition(args.content.action)?.resource,
-      toolArgs: args.content.input,
-      boundaryPolicy: args.agentBoundaryPolicy,
-    });
-    assertBoundaryAllowed({
-      boundaryPolicy: args.agentBoundaryPolicy,
-      action: resolveSoatIamAction(args.content.action),
-      resource: scope?.resource ?? '*',
-      context: scope?.context,
+    await assertBuiltinActionAllowed({
+      action: args.content.action,
+      input: args.content.input,
+      projectPublicId: tool.project_id,
+      authUser: args.authUser,
+      agentBoundaryPolicy: args.agentBoundaryPolicy,
     });
   }
 
@@ -312,6 +338,7 @@ const resolveToolOutputContent = async (args: {
     action: args.content.action,
     input: args.content.input,
     authHeader: args.authHeader,
+    caller: args.authUser,
     // The generation calling a tool on its own behalf, so it carries the same
     // bag the model's own tool calls resolve from.
     toolContext: args.toolContext,

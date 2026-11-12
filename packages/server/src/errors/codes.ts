@@ -828,7 +828,7 @@ export const ERROR_CODES = {
   ON_BEHALF_OF_INVALID: {
     httpStatus: 400,
     description:
-      'The `On-Behalf-Of` header is not an unexpired tool assertion this deployment signed (`meta.reason: unverified`), or the request is not made with an API key scoped to the project the assertion names (`meta.reason: project`).',
+      'The `On-Behalf-Of` header is not an unexpired tool assertion this deployment signed (`meta.reason: unverified`), the request is not made with an API key scoped to the project the assertion names (`meta.reason: project`), or the assertion carries no authority this deployment can read (`meta.reason: bound`).',
   },
   PLAYBOOK_SELF_WRITE: {
     httpStatus: 403,

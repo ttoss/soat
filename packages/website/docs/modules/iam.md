@@ -59,6 +59,7 @@ It answers `201 { "token", "expires_at" }`.
 - Work the token starts keeps the bound after the token expires: a generation (its tool calls, approvals and `tool-outputs` continuations), a session turn, a task dispatch, an orchestration run, a playbook version and a manual trigger fire. `policy_ids` are re-read by id; an inline `policy` is kept as a snapshot.
 - Only an API key scoped to a project issues one. A user login, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 API_KEY_SCOPED_TOKEN`).
 - Records name the issuing key as the principal; `principal` is opaque, grants nothing, and is recorded with the token's `jti` under `detail.iam_token` on every [audit log](./audit-log.md) entry the token makes.
+- An `mcp` tool called on the token carries the bound and `principal` encrypted in its [assertion](./tools.md#tool-assertions); a tool server calling back with that assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) is capped by them, and its audit entries record `principal` under `detail.on_behalf_of_principal`.
 
 ## Policy Documents
 

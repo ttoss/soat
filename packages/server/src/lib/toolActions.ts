@@ -4,6 +4,7 @@
  */
 import { DomainError } from '../errors';
 import { boundMcpTools, exposedMcpInputSchema } from './agentToolResolverMcp';
+import type { SenderCredential } from './assertionSender';
 import { fetchMcpToolListing } from './mcpToolListing';
 import { openMcpTransport } from './mcpTransport';
 import { type Page, pageOf, type PageRequest } from './pagination';
@@ -19,7 +20,11 @@ const noopLogToolCallingError = () => {};
 
 /** The server answers its whole listing at once, so the page applies to what it returned. */
 export const listToolActions = async (
-  args: PageRequest & { projectIds?: number[]; id: string }
+  args: PageRequest & {
+    projectIds?: number[];
+    id: string;
+    caller: SenderCredential | undefined;
+  }
 ): Promise<Page<ToolAction>> => {
   const tool = await tools.getByPublicId(args);
   const mcp = tool.mcp as {
@@ -40,6 +45,7 @@ export const listToolActions = async (
       toolId: tool.publicId,
       workId: null,
       attribution: {},
+      sender: { caller: args.caller, authHeader: undefined },
     },
     contextKeys: tool.contextKeys,
   });
