@@ -37,7 +37,7 @@
  */
 import type { Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
-import { buildSrn, extractProjectIdsFromPolicySets } from 'src/lib/iam';
+import { buildSrn, policySetsConcernProject } from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { findSharedUse } from 'src/lib/resourceReferences';
 import { findGranteeScope } from 'src/lib/shares';
@@ -74,9 +74,9 @@ export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
  * project that tool is in. Reading that as a tenant boundary would hide a
  * sibling the caller *can* see — the very refusal that must be stated plainly.
  *
- * `extractProjectIdsFromPolicySets` asks the first question directly, over the
- * effective policy sets for this request, and answers `undefined` when no set
- * names a project at all — an unrestricted grant, or an admin.
+ * `policySetsConcernProject` asks the first question directly, over the
+ * effective policy sets for this request, matching each project segment as
+ * `isAllowed` does — `*`, a glob, or an unrestricted grant.
  *
  * A caller whose policies name **no** project is beyond every boundary rather
  * than inside none: nothing they hold concerns this project, so the least
@@ -95,12 +95,10 @@ const beyondReach = async (args: {
   ctx: AuthenticatedContext;
   projectPublicId: string;
 }): Promise<boolean> => {
-  const named = extractProjectIdsFromPolicySets(
-    await args.ctx.authUser.getPolicies(args.projectPublicId)
-  );
-
-  if (named === undefined) return false;
-  return !named.includes(args.projectPublicId);
+  return !policySetsConcernProject({
+    sets: await args.ctx.authUser.getPolicies(args.projectPublicId),
+    projectPublicId: args.projectPublicId,
+  });
 };
 
 /**

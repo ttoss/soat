@@ -1,4 +1,5 @@
 import type { PolicyDocument, PolicySets } from './iam';
+import { matchesPattern } from './iam';
 
 // Sentinel distinguishing "this statement grants access to all projects" from
 // a (possibly empty) list of specific project ids, without reusing `undefined`
@@ -6,17 +7,24 @@ import type { PolicyDocument, PolicySets } from './iam';
 const ALL_PROJECTS = Symbol('ALL_PROJECTS');
 
 /**
- * The project segment one resource pattern names: ALL_PROJECTS for `*` or
- * `srn:*:…`, `null` for a pattern that is not a full SRN.
+ * The project segment one resource pattern names, `*` for the pattern `*`, or
+ * `null` for a pattern that is not a full SRN. The segment may be a glob.
  */
-const projectOfResourcePattern = (
-  resource: string
-): string | typeof ALL_PROJECTS | null => {
-  if (resource === '*') return ALL_PROJECTS;
+const projectSegment = (resource: string): string | null => {
+  if (resource === '*') return '*';
   if (!resource.startsWith('srn:')) return null;
   const parts = resource.split(':');
   if (parts.length < 4) return null;
-  return parts[1] === '*' ? ALL_PROJECTS : parts[1];
+  return parts[1];
+};
+
+/** ALL_PROJECTS for a glob segment, which only `isAllowed` can resolve. */
+const projectOfResourcePattern = (
+  resource: string
+): string | typeof ALL_PROJECTS | null => {
+  const segment = projectSegment(resource);
+  if (segment === null) return null;
+  return /[*?]/.test(segment) ? ALL_PROJECTS : segment;
 };
 
 // Parses the resource patterns of a single Allow statement into the project
@@ -47,7 +55,7 @@ export const findAllowResourcesOutsideProject = (args: {
   return args.document.statement.flatMap((statement) => {
     if (statement.effect !== 'Allow') return [];
     return (statement.resource ?? ['*']).filter((resource) => {
-      return projectOfResourcePattern(resource) !== args.projectPublicId;
+      return projectSegment(resource) !== args.projectPublicId;
     });
   });
 };
@@ -57,7 +65,7 @@ export const findAllowResourcesOutsideProject = (args: {
  * policies by parsing SRN resource patterns.
  *
  * Returns `undefined` when any statement grants access to all projects
- * (wildcard `*` or `srn:*:...`), meaning the caller should treat the result
+ * (wildcard `*`, `srn:*:...` or a glob such as `srn:proj_a*:...`), meaning the caller should treat the result
  * as "all projects".
  *
  * Returns a (possibly empty) string[] of project publicIds when all patterns
@@ -82,24 +90,38 @@ export const extractProjectIdsFromPolicies = (
   return Array.from(projectIds);
 };
 
+const policyReachesProject = (args: {
+  policy: PolicyDocument;
+  projectPublicId: string;
+}): boolean => {
+  return args.policy.statement.some((statement) => {
+    if (statement.effect !== 'Allow') return false;
+    return (statement.resource ?? ['*']).some((resource) => {
+      const segment = projectSegment(resource);
+      return (
+        segment !== null &&
+        matchesPattern({ pattern: segment, value: args.projectPublicId })
+      );
+    });
+  });
+};
+
 /**
- * The projects every set names, or `undefined` when no set narrows projects:
- * a request must satisfy each set, so it concerns only what they all name.
+ * Whether every set has an `Allow` whose project segment matches the project:
+ * a request must satisfy each set, so it concerns only what they all reach.
+ * No set concerns no project.
  */
-export const extractProjectIdsFromPolicySets = (
-  sets: PolicySets
-): string[] | undefined => {
-  if (sets.length === 0) return [];
-  let named: string[] | undefined;
-  for (const policies of sets) {
-    const ids = extractProjectIdsFromPolicies(policies);
-    if (ids === undefined) continue;
-    named =
-      named === undefined
-        ? ids
-        : named.filter((id) => {
-            return ids.includes(id);
-          });
-  }
-  return named;
+export const policySetsConcernProject = (args: {
+  sets: PolicySets;
+  projectPublicId: string;
+}): boolean => {
+  if (args.sets.length === 0) return false;
+  return args.sets.every((policies) => {
+    return policies.some((policy) => {
+      return policyReachesProject({
+        policy,
+        projectPublicId: args.projectPublicId,
+      });
+    });
+  });
 };

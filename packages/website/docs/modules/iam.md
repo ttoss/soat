@@ -120,6 +120,7 @@ The `<project_id>` segment is the primary project restriction. A [project policy
 - `resource: ["*"]` — all resources in **all projects**
 - `resource: ["srn:proj_ABC:*:*"]` — `proj_ABC` only
 - `resource: ["srn:*:document:*"]` — all documents across all projects
+- `resource: ["srn:proj_AB*:document:*"]` — documents in every project whose id matches the glob (`*`, `?`), in a list without `project_id` too
 
 :::tip
 Grant a **user** (JWT) a project with `resource: ["srn:proj_ABC:*:*"]`. API keys are scoped via `project_id` (see [API Keys](./api-keys.md#project-scoping)).

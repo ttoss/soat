@@ -501,5 +501,5 @@ export const evaluatePoliciesMultiResource = (args: {
 
 export {
   extractProjectIdsFromPolicies,
-  extractProjectIdsFromPolicySets,
+  policySetsConcernProject,
 } from './policyProjectIds';
