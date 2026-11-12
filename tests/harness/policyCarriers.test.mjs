@@ -24,13 +24,14 @@ const code = (file) => {
 /** Each `POLICY_CARRIERS` entry: its name, models and attach check. */
 const registry = () => {
   const source = code(registryFile);
-  const body = source.slice(source.indexOf('export const POLICY_CARRIERS'));
+  const start = source.indexOf('export const POLICY_CARRIERS');
+  const body = source.slice(start, source.indexOf('} satisfies', start) + 1);
   const entries = [
     ...body.matchAll(/^ {2}(\w+): ([\s\S]*?)(?=^ {2}\w+: |^\})/gm),
   ];
   return entries.map(([, name, entry]) => {
     const listed = /models: \[([^\]]*)\]/.exec(entry);
-    const single = /projectJsonbCarrier\(\{ model: '(\w+)'/.exec(entry);
+    const single = /projectJsonbCarrier\(\{\s*model: '(\w+)'/.exec(entry);
     const models = listed
       ? [...listed[1].matchAll(/'(\w+)'/g)].map((m) => {
           return m[1];
@@ -126,13 +127,17 @@ describe('policy carriers', () => {
         return file.replace(/\.ts$/, '');
       })
       .sort();
-    const refusing = [
-      ...code(path.join(srcDir, 'lib/attachedPolicies.ts')).matchAll(
-        /db\.(\w+)\.count\(/g
-      ),
-    ]
-      .map((match) => {
-        return match[1];
+    const source = code(registryFile);
+    const refusing = registry()
+      .filter((carrier) => {
+        const body = source.slice(
+          source.indexOf(`  ${carrier.name}: `),
+          source.indexOf('\n  },', source.indexOf(`  ${carrier.name}: `))
+        );
+        return /dependents: \{|projectJsonbCarrier\(/.test(body);
+      })
+      .map((carrier) => {
+        return carrier.models[0];
       })
       .sort();
     assert.deepEqual(jsonbCarriers, refusing);

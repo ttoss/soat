@@ -2,11 +2,12 @@ import { Cron } from 'croner';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { agentReferences, toolReferences } from './resourceReferences';
-import { mayStart, type StartableType } from './startActions';
+import { secretRefIds } from './secretUse';
+import type { StartableType } from './startActions';
 import { serverSideToolProblem } from './toolsCallDispatch';
 import { validateTriggerEventFilter } from './triggerEventFilter';
+import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 export const TRIGGER_TYPES = [
   'manual',
@@ -42,21 +43,58 @@ export const readTargetType = (targetType: string): TriggerTargetType => {
   return targetType;
 };
 
-/**
- * Whether `isAllowed` may start the target — the no-privilege-escalation
- * guard: a trigger can only start what its creator could start directly.
- */
-export const mayStartTarget = (args: {
-  isAllowed: IsAllowedFn;
-  projectPublicId: string;
+/** A trigger fires under its `policyIds` and starts its target. */
+export const assertTriggerWriterHolds = async (args: {
+  writer: Writer;
+  projectId: number;
+  policyIds: string[] | null;
   targetType: string;
   targetId: string;
-}): Promise<boolean> => {
-  return mayStart({
-    isAllowed: args.isAllowed,
-    projectPublicId: args.projectPublicId,
-    type: readTargetType(args.targetType),
-    id: args.targetId,
+  secretIds?: string[];
+}): Promise<void> => {
+  await assertWriterHolds({
+    carrier: 'triggers',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      policyIds: args.policyIds,
+      actions: [
+        startOf({ type: readTargetType(args.targetType), id: args.targetId }),
+      ],
+      secretIds: args.secretIds,
+    },
+  });
+};
+
+/**
+ * An edit is checked against the trigger it leaves. A new bag is checked by
+ * its own ingress; the stored one goes wherever the edited trigger points.
+ */
+export const assertTriggerUpdateWriterHolds = async (args: {
+  trigger: {
+    projectId: number;
+    policyIds: string[] | null;
+    targetType: string;
+    targetId: string;
+    toolContext: unknown;
+  };
+  update: {
+    writer: Writer;
+    policyIds?: string[];
+    targetType?: string;
+    targetId?: string;
+    toolContext?: unknown;
+  };
+}): Promise<void> => {
+  const { trigger, update } = args;
+  await assertTriggerWriterHolds({
+    writer: update.writer,
+    projectId: trigger.projectId,
+    policyIds: update.policyIds ?? trigger.policyIds,
+    targetType: update.targetType ?? trigger.targetType,
+    targetId: update.targetId ?? trigger.targetId,
+    secretIds:
+      update.toolContext === undefined ? secretRefIds(trigger.toolContext) : [],
   });
 };
 

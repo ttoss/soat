@@ -6,6 +6,7 @@ import { resolveJwtAuthUser } from '../middleware/auth';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { principalFromAuthUser } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
+import { mayStart } from './startActions';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { resolveStoredToolContext } from './toolContextCarrier';
 import {
@@ -17,7 +18,7 @@ import {
 } from './triggerFirings';
 import { dispatchToTarget } from './triggerTargets';
 import { signTriggerToken, type TriggerCallerCredential } from './triggerToken';
-import { mayStartTarget } from './triggerValidation';
+import { readTargetType } from './triggerValidation';
 
 const log = createDebug('soat:triggers');
 
@@ -162,11 +163,11 @@ const resolveFiringIdentity = async (args: {
   const identity = await resolveJwtAuthUser({ db, token });
   const canStart =
     identity !== undefined &&
-    (await mayStartTarget({
+    (await mayStart({
       isAllowed: identity.isAllowed,
       projectPublicId,
-      targetType: trigger.targetType as string,
-      targetId: trigger.targetId as string,
+      type: readTargetType(trigger.targetType as string),
+      id: trigger.targetId as string,
     }));
   if (!canStart) {
     throw new DomainError(

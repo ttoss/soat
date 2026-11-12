@@ -220,7 +220,7 @@ Each attempt is signed when sent, so a retry carries a fresh timestamp.
 
 A delivery happens when nobody is present, so a webhook carries its own identity: `policy_ids`, at least one [policy](./policies.md). An event is delivered only when those policies allow reading its resource (the resource's `Get` action, such as `files:GetFile`, on the event's SRN; a custom `emit_event` event is about its run, `orchestrations:GetRun`), so a webhook never learns of a resource its identity cannot see. The guard is evaluated per event, so editing or detaching a policy takes effect on the next one.
 
-- Attaching a policy needs a caller who holds every grant in it inside the webhook's project, else `403 POLICY_GRANT_NOT_HELD`; on update only the policies added are checked. Editing an attached policy is checked the same way in every project a webhook carries it.
+- Every create and update needs a caller who holds every grant of the policies the webhook carries after the write, inside its project, else `403 POLICY_GRANT_NOT_HELD`: repointing `url` is checked like attaching them. Editing an attached policy is checked the same way in every project a webhook carries it.
 - A policy a webhook names cannot be deleted (`409 POLICY_HAS_DEPENDENTS`, `meta.webhook_sample`).
 - Missing or empty `policy_ids` is `400 VALIDATION_FAILED`; a policy id that does not exist is `400 POLICY_NOT_FOUND`.
 

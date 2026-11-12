@@ -5,8 +5,8 @@ import {
   getApiKey,
   updateApiKey,
 } from '../apiKeys';
-import { lookupPolicyInternalIds } from '../formationLookups';
 import { toOptionalString } from '../resource-inputs/normalizers';
+import { assertWriterHolds, type Writer } from '../writerRule';
 import { defineFormationModule } from './defineFormationModule';
 
 /** `undefined` when the template omits `policy_ids`. */
@@ -22,12 +22,21 @@ const readPolicyPublicIds = (
     : [];
 };
 
-const lookupPolicyIds = async (
-  publicIds: string[] | undefined
-): Promise<number[] | undefined> => {
-  return publicIds === undefined
-    ? undefined
-    : lookupPolicyInternalIds(publicIds);
+const lookupPolicyIds = async (args: {
+  publicIds: string[] | undefined;
+  writer: Writer;
+  projectId: number;
+}): Promise<number[] | undefined> => {
+  if (args.publicIds === undefined) return undefined;
+  const policies = await assertWriterHolds({
+    carrier: 'apiKeys',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: { policyIds: args.publicIds },
+  });
+  return policies.map((policy) => {
+    return policy.id;
+  });
 };
 
 export const apiKeysFormationModule = defineFormationModule({
@@ -50,7 +59,11 @@ export const apiKeysFormationModule = defineFormationModule({
       scopedToken: actor.scopedToken,
       boundaryPolicyIds: actor.keyPolicyBoundary,
       requestedPolicyPublicIds: policyPublicIds,
-      requestedPolicyIds: await lookupPolicyIds(policyPublicIds),
+      requestedPolicyIds: await lookupPolicyIds({
+        publicIds: policyPublicIds,
+        writer: actor,
+        projectId,
+      }),
       inheritWhenOmitted: true,
       onRefused: () => {
         actor.recordRefusal('api-keys:CreateApiKey');
@@ -65,13 +78,17 @@ export const apiKeysFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId, actor }) => {
+  update: async ({ properties, physicalResourceId, projectId, actor }) => {
     const policyPublicIds = readPolicyPublicIds(properties);
     const policyIds = await boundKeyPolicyIds({
       scopedToken: actor.scopedToken,
       boundaryPolicyIds: actor.keyPolicyBoundary,
       requestedPolicyPublicIds: policyPublicIds,
-      requestedPolicyIds: await lookupPolicyIds(policyPublicIds),
+      requestedPolicyIds: await lookupPolicyIds({
+        publicIds: policyPublicIds,
+        writer: actor,
+        projectId,
+      }),
       inheritWhenOmitted: false,
       onRefused: () => {
         actor.recordRefusal('api-keys:UpdateApiKey');

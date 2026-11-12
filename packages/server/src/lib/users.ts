@@ -8,11 +8,7 @@ import {
 } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
 import { paginatedList } from './pagination';
-import { EVERY_PROJECT } from './policyCarriers';
-import {
-  assertWriterMayAttach,
-  type GetWriterPolicies,
-} from './policyGrantCoverage';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const mapUser = (user: InstanceType<(typeof db)['User']>) => {
   return {
@@ -133,7 +129,7 @@ export const deleteUser = async (args: { id: string }) => {
 export const attachUserPolicies = async (args: {
   userId: string;
   policyIds: string[];
-  writerPolicies: GetWriterPolicies;
+  writer: Writer;
 }): Promise<void> => {
   const user = await db.User.findOne({ where: { publicId: args.userId } });
 
@@ -144,30 +140,15 @@ export const attachUserPolicies = async (args: {
     );
   }
 
-  if (args.policyIds.length === 0) {
-    await user.update({ policyIds: [] });
-    return;
-  }
-
-  const policies = await db.Policy.findAll({
-    where: { publicId: args.policyIds },
-  });
-
-  if (policies.length !== args.policyIds.length) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      'One or more of the specified policies was not found.'
-    );
-  }
-
-  const policyIds = policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-    return p.id as number;
-  });
-  await assertWriterMayAttach({
+  const policies = await assertWriterHolds({
     carrier: 'users',
-    getPolicies: args.writerPolicies,
-    actsIn: EVERY_PROJECT,
-    policyIds,
+    writer: args.writer,
+    projectId: null,
+    carried: { policyIds: args.policyIds },
   });
-  await user.update({ policyIds });
+  await user.update({
+    policyIds: policies.map((policy) => {
+      return policy.id;
+    }),
+  });
 };

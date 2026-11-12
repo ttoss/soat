@@ -16,7 +16,6 @@ import {
 } from './agentStopConditions';
 import {
   type AgentToolBinding,
-  type BindingSecretUse,
   readAgentToolBindings,
   resolveBindingsForCreate,
   resolveBindingsForUpdate,
@@ -32,10 +31,6 @@ import {
   requireAiProviderDbId,
   resolveCreateModelBinding,
 } from './agentWriteValidation';
-import {
-  assertPoliciesAttachable,
-  type PolicyAttachUse,
-} from './attachedPolicies';
 import { emitResourceEvent } from './eventBus';
 import { resolveModelRouteDbId } from './modelRoutes';
 import { validateOutputSchema } from './outputSchema';
@@ -44,10 +39,12 @@ import { projectScopeWhere } from './projectScope';
 import { assertValidPromptCaching } from './promptCaching';
 import { parseActiveRelease } from './releaseAssignment';
 import { toResourceRef } from './resourceVersions';
+import { inlineBindingSecretIds } from './secretUse';
 import { type InlineToolDefinition } from './tools';
 import { redactAgentToolSecrets } from './toolSecretRedaction';
 import { invalidateTraceContentModeCache } from './traceContentPolicy';
 import type { VersionedWrite } from './writePrecondition';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 
@@ -190,6 +187,27 @@ const AGENT_CREATE_DEFAULTS = {
   onApprovalExpiry: null,
 };
 
+/**
+ * An agent's generations run capped by its `policyIds` and send the secrets
+ * of its inline tools, so whoever writes one holds both.
+ */
+export const assertAgentWriterHolds = async (args: {
+  writer: Writer;
+  projectId: number;
+  policyIds?: string[] | null;
+  toolBindings?: unknown;
+}): Promise<void> => {
+  await assertWriterHolds({
+    carrier: 'agents',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      policyIds: args.policyIds,
+      secretIds: inlineBindingSecretIds(args.toolBindings),
+    },
+  });
+};
+
 export const createAgent = async (
   args: {
     projectId: number;
@@ -216,9 +234,7 @@ export const createAgent = async (
     guardrailIds?: string[] | null;
     traceContentMode?: string | null;
     onApprovalExpiry?: string | null;
-    secretUse: BindingSecretUse;
-    /** Whose grant `policyIds` is checked against. */
-    policyUse: PolicyAttachUse;
+    writer: Writer;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
@@ -243,9 +259,12 @@ export const createAgent = async (
     projectId: args.projectId,
   });
 
-  await assertPoliciesAttachable({ ...args, carrier: 'agents', current: null });
+  await assertAgentWriterHolds(args);
 
-  const toolBindings = await resolveBindingsForCreate(args);
+  const toolBindings = await resolveBindingsForCreate({
+    ...args,
+    secretUse: args.writer.isAllowed,
+  });
 
   const agent = await db.Agent.create({
     ...AGENT_CREATE_DEFAULTS,
@@ -368,9 +387,7 @@ export const updateAgent = async (
   args: {
     projectIds?: number[];
     id: string;
-    secretUse: BindingSecretUse;
-    /** Whose grant the policies `policyIds` adds are checked against. */
-    policyUse: PolicyAttachUse;
+    writer: Writer;
   } & AgentUpdateFields &
     AgentVersionAuthorship
 ): Promise<MappedAgent> => {
@@ -402,17 +419,18 @@ export const updateAgent = async (
 
   await assertAgentReferencesExist({ ...args, current: agent });
 
-  await assertPoliciesAttachable({
-    ...args,
-    carrier: 'agents',
-    current: agent.policyIds,
+  await assertAgentWriterHolds({
+    writer: args.writer,
     projectId: agent.projectId,
+    policyIds: args.policyIds === undefined ? agent.policyIds : args.policyIds,
+    // New bindings are checked as they are validated.
+    toolBindings: args.toolBindings === undefined ? agent.toolBindings : null,
   });
 
   const bindingsUpdate = await resolveBindingsForUpdate({
     projectId: agent.projectId,
     toolBindings: args.toolBindings,
-    secretUse: args.secretUse,
+    secretUse: args.writer.isAllowed,
   });
 
   const updates = buildAgentUpdates(args);

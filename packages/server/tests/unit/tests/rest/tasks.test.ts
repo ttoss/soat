@@ -99,6 +99,8 @@ describe('Tasks', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'tasks',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'workflows:CreateWorkflow',
         'tasks:CreateTask',
         'tasks:ListTasks',

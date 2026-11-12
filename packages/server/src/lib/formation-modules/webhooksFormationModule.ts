@@ -32,7 +32,7 @@ export const webhooksFormationModule = defineFormationModule({
         toNullableArray<string>(properties.event_resources) ?? undefined,
       eventData: toNullableRecord(properties.event_data) ?? undefined,
       description: toOptionalString(properties.description) ?? undefined,
-      writerPolicies: actor.getPolicies,
+      writer: actor,
     });
   },
 
@@ -47,7 +47,7 @@ export const webhooksFormationModule = defineFormationModule({
       events: properties.events as string[],
       eventResources: toNullableArray<string>(properties.event_resources),
       eventData: toNullableRecord(properties.event_data),
-      writerPolicies: actor.getPolicies,
+      writer: actor,
     });
   },
 

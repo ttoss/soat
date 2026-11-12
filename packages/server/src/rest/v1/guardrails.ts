@@ -337,6 +337,7 @@ guardrailsRouter.post(
       version: parseVersionParam(ctx.params.version),
       label: typeof body.label === 'string' ? body.label : undefined,
       createdBy: requestPrincipalFromCtx(ctx),
+      writer: ctx.authUser,
     });
   }
 );

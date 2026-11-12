@@ -14,6 +14,7 @@ import {
   mapArchivedVersionFields,
   toResourceRef,
 } from './resourceVersions';
+import type { Writer } from './writerRule';
 
 /**
  * Orchestration graph version history.
@@ -88,6 +89,7 @@ const orchestrationVersionArchive = makeVersionArchive({
     return updateOrchestration({
       projectIds: args.projectIds,
       id: args.id,
+      writer: args.writer,
       nodes: graph.nodes,
       edges: graph.edges,
       // A version replaces the whole graph, so an absent schema means "cleared",
@@ -137,6 +139,7 @@ export const restoreOrchestrationVersion = async (args: {
   version: number;
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }): Promise<MappedOrchestration> => {
   // Appends rather than rewinding the counter, so a run pinned to any version
   // in between still resolves the graph it started on. A restore is an ordinary
@@ -147,5 +150,6 @@ export const restoreOrchestrationVersion = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 };

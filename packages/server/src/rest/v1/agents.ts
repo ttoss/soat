@@ -7,11 +7,10 @@ import { toStoredKnowledgeConfig } from 'src/lib/agentKnowledgeConfig';
 import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
-import type { GetWriterPolicies } from 'src/lib/policyGrantCoverage';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { redactAgentToolSecrets } from 'src/lib/toolSecretRedaction';
+import type { Writer } from 'src/lib/writerRule';
 import { setAuditResourceHint } from 'src/middleware/audit';
-import type { IsAllowedFn } from 'src/middleware/authProjectResolvers';
 
 import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
 import { agentGenerationRouter } from './agentGeneration';
@@ -163,15 +162,13 @@ const buildCreateAgentArgs = (args: {
   projectId: number;
   body: CreateAgentBody;
   createdBy: RequestPrincipal | null;
-  secretUse: IsAllowedFn;
-  policyUse: GetWriterPolicies;
+  writer: Writer;
 }): Parameters<typeof createAgent>[0] => {
   const { projectId, body, createdBy } = args;
   return {
     projectId,
     createdBy,
-    secretUse: args.secretUse,
-    policyUse: args.policyUse,
+    writer: args.writer,
     versionLabel: parseNullableString(body.version_label),
     ...parseModelBinding(body),
     name: typeof body.name === 'string' ? body.name : undefined,
@@ -238,8 +235,7 @@ const runAgentUpdate = async (args: {
     expectedVersion: writePreconditionOf(ctx),
     // Attributes the archived version to whoever made the change.
     createdBy: requestPrincipalFromCtx(ctx),
-    secretUse: ctx.authUser.isAllowed,
-    policyUse: ctx.authUser.getPolicies,
+    writer: ctx.authUser,
   });
 };
 
@@ -264,8 +260,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
       projectId: targetProjectId,
       body: reqBody,
       createdBy: requestPrincipalFromCtx(ctx),
-      secretUse: ctx.authUser.isAllowed,
-      policyUse: ctx.authUser.getPolicies,
+      writer: ctx.authUser,
     })
   );
 

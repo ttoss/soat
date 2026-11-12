@@ -2,6 +2,7 @@ import { agentReferences, toolReferences } from './resourceReferences';
 import { serverSideToolValidationProblem } from './serverSideToolValidation';
 import type { ValidationProblem } from './validationProblems';
 import { throwValidationProblems } from './validationProblems';
+import { type CarriedAction, startOf } from './writerRule';
 
 /** The node fields that name another resource; structural, so this module needs no graph types. */
 type ReferencingNode = {
@@ -9,12 +10,33 @@ type ReferencingNode = {
   toolId?: string | null;
   agentId?: string | null;
   operationId?: string | null;
+  orchestrationId?: string | null;
 };
 
 const TOOL_REFERENCING_TYPES = new Set(['tool', 'poll', 'approval']);
 
 /** The nodes whose run calls their tool; an `approval` node only proposes it. */
 const TOOL_CALLING_TYPES = new Set(['tool', 'poll']);
+
+/**
+ * What a run of the graph starts: each node's agent, tool (an approved
+ * `approval` node calls it too) and child orchestration.
+ */
+export const nodeStarts = (nodes: ReferencingNode[]): CarriedAction[] => {
+  return nodes.flatMap((node) => {
+    const starts: CarriedAction[] = [];
+    if (node.type === 'agent' && node.agentId) {
+      starts.push(startOf({ type: 'agent', id: node.agentId }));
+    }
+    if (TOOL_REFERENCING_TYPES.has(node.type) && node.toolId) {
+      starts.push(startOf({ type: 'tool', id: node.toolId }));
+    }
+    if (node.orchestrationId) {
+      starts.push(startOf({ type: 'orchestration', id: node.orchestrationId }));
+    }
+    return starts;
+  });
+};
 
 /**
  * Refuses a node naming a tool or agent outside `projectId`, the

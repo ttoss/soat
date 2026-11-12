@@ -30,8 +30,10 @@ paths:
       description: >-
         Evaluates the calling credential's own policies (its owner's and, for
         an API key or OAuth token, its boundary and project scope) for an
-        action the deployment registered (`IAM_REGISTRATIONS_CONFIG`) on an
-        SRN, with the engine the runtime's own routes use. A denial is `200`
+        action the deployment registered (`IAM_REGISTRATIONS_CONFIG`), or an
+        action the writer rule asks of whoever writes a resource that acts
+        later (a target's start action, `secrets:UseSecret`), on an SRN, with
+        the engine the runtime's own routes use. A denial is `200`
         with `allowed: false`, never `403`. Only policies are evaluated: the
         answer says nothing about whether the resource exists.
       operationId: checkIamPermission
@@ -129,8 +131,12 @@ components:
         action:
           type: string
           description: >-
-            A `module:Operation` action the deployment registered; a
-            built-in action or a wildcard is `400`.
+            A `module:Operation` action the deployment registered, or one the
+            writer rule asks (`agents:CreateAgentGeneration`, `tools:CallTool`,
+            `deciders:CreateDecision`, `tasks:CreateTask`,
+            `orchestrations:StartRun`, `evaluations:RunEval`,
+            `secrets:UseSecret`); any other built-in action or a wildcard is
+            `400`.
           example: channels:GetChannel
         resource:
           type: string

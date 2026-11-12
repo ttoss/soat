@@ -13,8 +13,13 @@ import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor, type ResourceScope } from './resourceAccessor';
-import { findShareableType, type ShareProjection } from './shareableTypes';
+import {
+  assertShareWriterHolds,
+  findShareableType,
+  type ShareProjection,
+} from './shareableTypes';
 import { parseShareCap } from './shareCapShape';
+import type { Writer } from './writerRule';
 
 const log = createDebug('soat:shares');
 
@@ -188,6 +193,7 @@ export const createShare = async (args: {
   actions: string[];
   grantee: string;
   cap?: unknown;
+  writer: Writer;
 }): Promise<MappedShare> => {
   const { resourceType, resourceId } = parseShareResource(args);
   const cap = args.cap === undefined ? null : parseShareCap(args.cap);
@@ -208,6 +214,13 @@ export const createShare = async (args: {
     );
   }
   assertGrantee(args);
+  await assertShareWriterHolds({
+    writer: args.writer,
+    projectId: args.projectId,
+    resourceType,
+    resourceId,
+    actions: args.actions,
+  });
 
   const projection = await shareable.findProjection({
     projectId: args.projectId,
@@ -236,9 +249,17 @@ export const createShare = async (args: {
 export const updateShare = async (args: {
   id: string;
   cap: unknown;
+  writer: Writer;
 }): Promise<MappedShare> => {
   log('updateShare: id=%s', args.id);
   const share = await shares.getByPublicId({ id: args.id });
+  await assertShareWriterHolds({
+    writer: args.writer,
+    projectId: share.projectId as number,
+    resourceType: share.resourceType as string,
+    resourceId: share.resourceId as string,
+    actions: share.actions as string[],
+  });
   if (args.cap !== undefined) {
     await share.update({ cap: parseShareCap(args.cap) });
   }

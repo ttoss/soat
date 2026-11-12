@@ -19,6 +19,7 @@ import {
   mapArchivedVersionFields,
   toResourceRef,
 } from './resourceVersions';
+import type { Writer } from './writerRule';
 
 /**
  * Document version history.
@@ -192,6 +193,7 @@ export const restoreDocumentVersion = async (args: {
   version: number;
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }) => {
   const document = await loadDocumentRef({ id: args.documentId });
   const withdrawn = await isWithdrawn({ documentDbId: document.dbId });
@@ -203,6 +205,7 @@ export const restoreDocumentVersion = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 
   if (withdrawn) {

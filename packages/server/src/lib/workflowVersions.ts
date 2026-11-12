@@ -16,6 +16,7 @@ import {
 } from './workflows';
 import { workflowCollectionToCamel } from './workflowsWire';
 import { workflowVersionStore } from './workflowVersionSnapshot';
+import type { Writer } from './writerRule';
 
 /**
  * Workflow state-machine version history.
@@ -155,6 +156,7 @@ export const restoreWorkflowVersion = async (args: {
   version: number;
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }): Promise<MappedWorkflow> => {
   // Appends rather than rewinding the counter, so a task pinned to any version
   // in between still resolves the machine it entered on. A restore is an
@@ -164,5 +166,6 @@ export const restoreWorkflowVersion = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 };

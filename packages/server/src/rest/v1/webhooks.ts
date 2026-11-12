@@ -70,7 +70,7 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     events: body.events,
     eventResources: body.event_resources,
     eventData: body.event_data,
-    writerPolicies: ctx.authUser.getPolicies,
+    writer: ctx.authUser,
   });
 
   ctx.status = 201;
@@ -151,7 +151,7 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     eventData: body.event_data,
     active: body.active,
     policyIds: body.policy_ids,
-    writerPolicies: ctx.authUser.getPolicies,
+    writer: ctx.authUser,
   });
 
   ctx.body = updated;

@@ -30,6 +30,8 @@ describe('Orchestration → generation attribution', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'orchgenattr',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',

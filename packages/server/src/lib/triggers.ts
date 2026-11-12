@@ -4,9 +4,7 @@ import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
-import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { type EventFilterArgs, storedEventFilter } from './eventMatching';
-import type { GetWriterPolicies } from './policyGrantCoverage';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
   decryptStoredSecret,
@@ -20,19 +18,18 @@ import {
 import { effectiveEventFilter } from './triggerEventFilter';
 import {
   assertTriggerConfigValid,
+  assertTriggerUpdateWriterHolds,
+  assertTriggerWriterHolds,
   computeNextFireAt,
   type TriggerTargetType,
   type TriggerType,
 } from './triggerValidation';
-import {
-  assertTriggerPoliciesHeld,
-  assertTriggerUpdateAuthority,
-} from './triggerWriteAuthority';
+import type { Writer } from './writerRule';
 
 export { readTriggerEvents } from './triggerEventFilter';
 export type { TriggerTargetType, TriggerType } from './triggerValidation';
 export {
-  mayStartTarget,
+  readTargetType,
   TRIGGER_TARGET_TYPES,
   TRIGGER_TYPES,
   validateCronExpression,
@@ -234,9 +231,7 @@ type CreateTriggerArgs = EventFilterArgs & {
   toolContext?: Record<string, string> | null;
   cron?: string | null;
   active?: boolean;
-  isAllowed: IsAllowedFn;
-  /** The writer's policy sets, which must hold every grant of `policyIds`. */
-  writerPolicies: GetWriterPolicies;
+  writer: Writer;
 };
 
 /**
@@ -303,6 +298,13 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     args.targetType
   );
 
+  await assertTriggerWriterHolds({
+    writer: args.writer,
+    projectId: args.projectId,
+    policyIds: args.policyIds ?? [],
+    targetType: args.targetType,
+    targetId: args.targetId,
+  });
   await assertTriggerConfigValid({
     type: args.type,
     targetType: args.targetType,
@@ -320,15 +322,9 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     toolContext: args.toolContext,
     projectId: args.projectId,
     secretRefs: 'resolved',
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
   await assertNameAvailable({ projectId: args.projectId, name: args.name });
-  await assertTriggerPoliciesHeld({
-    writerPolicies: args.writerPolicies,
-    projectId: args.projectId,
-    policyIds: args.policyIds ?? [],
-    current: null,
-  });
 
   const trigger = await db.Trigger.create(
     buildCreateAttributes({ ...args, toolContext })
@@ -352,9 +348,7 @@ type UpdateTriggerArgs = EventFilterArgs & {
   toolContext?: Record<string, string> | null;
   cron?: string | null;
   active?: boolean;
-  isAllowed: IsAllowedFn;
-  /** The writer's policy sets, which must hold every grant of `policyIds`. */
-  writerPolicies: GetWriterPolicies;
+  writer: Writer;
 };
 
 /**
@@ -408,6 +402,8 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
 
   const trigger = await findTriggerOrThrow({ id: args.id });
 
+  await assertTriggerUpdateWriterHolds({ trigger, update: args });
+
   const targetChanged =
     args.targetType !== undefined ||
     args.targetId !== undefined ||
@@ -428,9 +424,8 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     toolContext: args.toolContext,
     projectId: trigger.projectId as number,
     secretRefs: 'resolved',
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
-  await assertTriggerUpdateAuthority({ trigger, args, targetChanged });
 
   if (args.name !== undefined && args.name !== trigger.name) {
     await assertNameAvailable({

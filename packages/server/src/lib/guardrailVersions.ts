@@ -13,6 +13,7 @@ import {
   mapArchivedVersionFields,
   toResourceRef,
 } from './resourceVersions';
+import type { Writer } from './writerRule';
 
 /**
  * Guardrail version history.
@@ -107,6 +108,7 @@ export const restoreGuardrailVersion = async (args: {
   version: number;
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }): Promise<MappedGuardrail> => {
   // Appends a new version rather than rewinding the counter, so an evaluation
   // record citing any version in between still resolves.
@@ -116,5 +118,6 @@ export const restoreGuardrailVersion = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 };

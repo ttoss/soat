@@ -295,7 +295,12 @@ export const ERROR_CODES = {
   POLICY_GRANT_NOT_HELD: {
     httpStatus: 403,
     description:
-      "The request attaches a policy to a trigger or an agent, or edits a policy one carries, and the policy grants a permission the caller does not hold in that resource's project. A resource acting under a policy may do no more than whoever attached it. `meta.ungranted` lists each grant not held: `policy_id`, `statement` index, `action` and `resource`.",
+      "The request creates or edits a resource carrying a policy (an agent, trigger, webhook or user), or edits a policy one carries, and the policy grants a permission the caller does not hold in that resource's project. A resource acting under a policy may do no more than whoever last wrote it. `meta.ungranted` lists each grant not held: `policy_id`, `statement` index, `action` and `resource`.",
+  },
+  ACTION_NOT_HELD: {
+    httpStatus: 403,
+    description:
+      'The resource being created or edited would perform an action the caller may not: start a target (an agent, tool, orchestration, eval, decider or workflow) or grant a shared action. A resource that acts later may do no more than whoever writes it. `meta` names the `action` and the `resource`.',
   },
   IAM_TOKEN_POLICY_INVALID: {
     httpStatus: 400,

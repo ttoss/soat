@@ -103,6 +103,9 @@ describe('Shares', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'shares',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
+        'orchestrations:StartRun',
         'shares:CreateShare',
         'shares:ListShares',
         'shares:GetShare',
