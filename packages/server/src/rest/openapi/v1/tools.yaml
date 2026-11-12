@@ -536,7 +536,9 @@ paths:
                   produced no output — a `builtin` action answering `204 No
                   Content`, for instance.
         '400':
-          description: Bad Request — invalid input or unknown action
+          description: >-
+            Bad Request — invalid input or unknown action; `VALIDATION_FAILED`
+            when the input does not satisfy the tool's `parameters`.
           content:
             application/json:
               schema:
@@ -731,7 +733,11 @@ components:
         parameters:
           type: object
           nullable: true
-          description: JSON Schema for tool input
+          description: >-
+            JSON Schema for tool input. On `http` and `pipeline` tools every
+            call's input, `preset_parameters` merged in, must satisfy it:
+            otherwise the call is `400 VALIDATION_FAILED` before any guardrail
+            or dispatch. `mcp` actions declare their own on the server.
         execute:
           type: object
           nullable: true
@@ -953,7 +959,11 @@ components:
           description: What the tool does
         parameters:
           type: object
-          description: JSON Schema for tool input
+          description: >-
+            JSON Schema for tool input. On `http` and `pipeline` tools every
+            call's input, `preset_parameters` merged in, must satisfy it:
+            otherwise the call is `400 VALIDATION_FAILED` before any guardrail
+            or dispatch. `mcp` actions declare their own on the server.
         execute:
           $ref: '#/components/schemas/ToolExecuteConfig'
         mcp:

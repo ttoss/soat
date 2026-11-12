@@ -56,6 +56,7 @@ import {
   pinCallingProject,
 } from './toolContext';
 import { fetchWithEgressGuard } from './toolEgress';
+import { assertToolInputValid } from './toolInputValidation';
 import {
   CLIENT_TOOL_PRESETS,
   mergePresetParameters,
@@ -651,6 +652,39 @@ const authIdentity = (args: {
   };
 };
 
+/**
+ * The call's arguments, presets merged in, refused when they fail the tool's
+ * `parameters`. Resolved per call, not at tool-resolution time, so a missing
+ * `{{context:}}` key fails this call rather than every other tool the agent has.
+ */
+const validHttpToolArgs = (args: {
+  call: Pick<
+    HttpToolExecuteArgs,
+    'toolName' | 'presetParameters' | 'parameterSchema'
+  >;
+  toolArgs: unknown;
+  toolContext?: Record<string, string>;
+}): Record<string, unknown> => {
+  const input = mergePresetParameters({
+    presetParameters: resolvePresetParametersForCall({
+      presetParameters: args.call.presetParameters,
+      toolContext: args.toolContext,
+      toolName: args.call.toolName,
+      schema: args.call.parameterSchema,
+    }),
+    input: args.toolArgs,
+  });
+  assertToolInputValid({
+    tool: {
+      name: args.call.toolName,
+      type: 'http',
+      parameters: args.call.parameterSchema,
+    },
+    input,
+  });
+  return input;
+};
+
 const sendHttpToolRequest = async (
   args: Omit<HttpToolExecuteArgs, 'meter'> & {
     toolArgs: unknown;
@@ -665,17 +699,7 @@ const sendHttpToolRequest = async (
   const hasBody = !['GET', 'HEAD'].includes(method);
   let url = args.execute.url;
   try {
-    // Here, not at tool-resolution time, so a missing `{{context:}}` key
-    // fails this call rather than every other tool the agent has.
-    const rawArgs = mergePresetParameters({
-      presetParameters: resolvePresetParametersForCall({
-        presetParameters: args.presetParameters,
-        toolContext,
-        toolName: args.toolName,
-        schema: args.parameterSchema,
-      }),
-      input: toolArgs,
-    });
+    const rawArgs = validHttpToolArgs({ call: args, toolArgs, toolContext });
     const { resolvedUrl: afterPathParams, remainingArgs: afterPathParamsArgs } =
       resolveUrlPathParams({ url: args.execute.url, toolArgs: rawArgs });
     const { resolvedUrl, remainingArgs } = resolveBodyParamInterpolations({

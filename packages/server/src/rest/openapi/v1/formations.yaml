@@ -1040,7 +1040,7 @@ components:
         parameters:
           type: object
           nullable: true
-          description: JSON Schema describing the tool's input parameters (free-form, user-defined)
+          description: JSON Schema describing the tool's input parameters (free-form, user-defined). On `http` and `pipeline` tools a call whose input does not satisfy it is refused with `VALIDATION_FAILED`.
         execute:
           type: object
           nullable: true
