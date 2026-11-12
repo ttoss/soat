@@ -607,12 +607,13 @@ One signed `POST` to the registration's URL per operation, with a JSON body:
 
 `physical_resource_id` replaces `properties` on `delete` and accompanies it on `update` and `read`. `project_id` is on **every** request type except `validate`, which is not bound to a deploy.
 
-Two headers travel with every call ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
+Two headers travel with every call, and a third with every write ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
 
-| Header                   | Meaning                                                                                                                                                                                                        |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `X-Soat-Signature`       | `t=<unix>,v1=<hex hmac-sha256 of "{t}.{body}">`, keyed with the registration's secret — the same scheme [webhooks](./webhooks.md) are signed with. Verify over the **raw** body bytes, and reject a stale `t`. |
-| `X-Soat-Idempotency-Key` | Stable per (resource, operation) across re-applies, distinct between resources. A handler that has already completed this key can answer with the same result instead of acting twice.                         |
+| Header                   | Meaning                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X-Soat-Signature`       | `t=<unix>,v1=<hex hmac-sha256 of "{t}.{body}">`, keyed with the registration's secret — the same scheme [webhooks](./webhooks.md) are signed with. Verify over the **raw** body bytes, and reject a stale `t`.                                                                                                  |
+| `X-Soat-Idempotency-Key` | Stable per (resource, operation) across re-applies, distinct between resources. A handler that has already completed this key can answer with the same result instead of acting twice.                                                                                                                          |
+| `X-Soat-Tool-Assertion`  | On `create`, `update` and `delete` only, when the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](./tools.md#configuration): a [tool assertion](./tools.md#tool-assertions) naming the project, with no `tool_id`, whose `ath` carries the authority of the credential that deployed or tore down the formation. |
 
 What a 2xx must answer with, per operation:
 
@@ -623,6 +624,8 @@ What a 2xx must answer with, per operation:
 | `delete`       | `{}` — and it must be idempotent: deleting an already-gone resource is a 2xx                                       |
 | `validate`     | `{ "errors": [{ "path": "properties.kind", "message": "…" }] }` — an empty list means valid                        |
 | `read`         | `{ "exists": true, "physical_resource_id": "…", "properties": { … }, "outputs": { … } }`, or `{ "exists": false }` |
+
+**The handler acts as the deployer.** A registered type is gated on the formation's own actions only, so a handler that calls back into SOAT sends that assertion, unchanged, in `X-Soat-On-Behalf-Of` with its project's API key: the callback is then capped by the deploying credential, narrowings and an [IAM token](./iam.md#iam-tokens)'s bound included, exactly as a [tool server's callback](./tools.md#writing-on-behalf-of-a-tool-call) is. The assertion expires 60 seconds after it is signed; `validate` and `read` act for nobody and carry none.
 
 To refuse, answer 4xx/5xx with `{ "message": "…" }`; the message is relayed verbatim on the deploy event. Any non-2xx, unreachable host, timeout, 2xx body over 8 MiB, or body outside the protocol fails the deploy with `FORMATION_HANDLER_FAILED` and enters the ordinary [rollback](#rollback-on-a-failed-deploy) path.
 
