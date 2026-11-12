@@ -160,8 +160,7 @@ export const triggersFormationModule = defineFormationModule({
         toNullableArray<string>(properties.event_resources) ?? undefined,
       eventData: toNullableRecord(properties.event_data) ?? undefined,
       active: toOptionalBoolean(properties.active),
-      isAllowed: actor.isAllowed,
-      writerPolicies: actor.getPolicies,
+      writer: actor,
     });
   },
 
@@ -181,8 +180,7 @@ export const triggersFormationModule = defineFormationModule({
       eventResources: toNullableArray<string>(properties.event_resources),
       eventData: toNullableRecord(properties.event_data),
       active: toOptionalBoolean(properties.active),
-      isAllowed: actor.isAllowed,
-      writerPolicies: actor.getPolicies,
+      writer: actor,
     });
   },
 

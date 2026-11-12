@@ -11,10 +11,12 @@ import {
   updateApiKey,
 } from 'src/lib/apiKeys';
 import { buildSrn } from 'src/lib/iam';
+import { assertWriterHolds } from 'src/lib/writerRule';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
   assertCredentialProjectScope,
+  type AuthenticatedContext,
   parsePagination,
   requireAuth,
   requireOwnerOrAdmin,
@@ -72,31 +74,22 @@ const resolveProjectId = async (args: {
   return { id: project.id as number };
 };
 
-/**
- * Resolves policy public IDs to their internal IDs
- */
-const resolvePolicyIds = async (args: {
+/** The internal ids of `policyIds`; `undefined` when the body omits it. */
+const resolveKeyPolicyIds = async (args: {
+  ctx: AuthenticatedContext;
   policyIds: string[] | undefined;
-}): Promise<{ ids: number[] | undefined; error?: string }> => {
-  if (args.policyIds === undefined) {
-    return { ids: undefined };
-  }
-  if (args.policyIds.length === 0) {
-    return { ids: [] };
-  }
-
-  const policies = await db.Policy.findAll({
-    where: { publicId: args.policyIds },
+  projectId: number | null;
+}): Promise<number[] | undefined> => {
+  if (args.policyIds === undefined) return undefined;
+  const policies = await assertWriterHolds({
+    carrier: 'apiKeys',
+    writer: args.ctx.authUser,
+    projectId: args.projectId,
+    carried: { policyIds: args.policyIds },
   });
-  if (policies.length !== args.policyIds.length) {
-    return { ids: undefined, error: 'One or more invalid policy IDs' };
-  }
-
-  return {
-    ids: policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-      return p.id as number;
-    }),
-  };
+  return policies.map((policy) => {
+    return policy.id;
+  });
 };
 
 /**
@@ -207,16 +200,15 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', projectResult.error);
   }
 
-  const policyResult = await resolvePolicyIds({ policyIds });
-  if (policyResult.error) {
-    throw new DomainError('VALIDATION_FAILED', policyResult.error);
-  }
-
   const boundedPolicyIds = await boundKeyPolicyIds({
     scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
     boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
     requestedPolicyPublicIds: policyIds,
-    requestedPolicyIds: policyResult.ids,
+    requestedPolicyIds: await resolveKeyPolicyIds({
+      ctx,
+      policyIds,
+      projectId: projectResult.id ?? null,
+    }),
     inheritWhenOmitted: true,
     onRefused: () => {
       recordAuthorizationDecision(ctx, {
@@ -312,16 +304,20 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', projectResult.error);
   }
 
-  const policyResult = await resolvePolicyIds({ policyIds });
-  if (policyResult.error) {
-    throw new DomainError('VALIDATION_FAILED', policyResult.error);
-  }
-
   const boundedPolicyIds = await boundKeyPolicyIds({
     scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
     boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
     requestedPolicyPublicIds: policyIds,
-    requestedPolicyIds: policyResult.ids,
+    requestedPolicyIds: await resolveKeyPolicyIds({
+      ctx,
+      policyIds,
+      projectId:
+        projectResult.id === undefined
+          ? ((
+              await resolveProjectId({ projectId: existing.project_id ?? null })
+            ).id ?? null)
+          : projectResult.id,
+    }),
     inheritWhenOmitted: false,
     onRefused: () => {
       recordAuthorizationDecision(ctx, {

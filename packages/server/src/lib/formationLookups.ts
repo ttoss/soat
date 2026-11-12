@@ -122,24 +122,3 @@ export const lookupToolInternalId = async (
   }
   return tool.id as number;
 };
-
-export const lookupPolicyInternalIds = async (
-  publicIds: string[]
-): Promise<number[]> => {
-  if (publicIds.length === 0) return [];
-  const policies = await db.Policy.findAll({ where: { publicId: publicIds } });
-  if (policies.length !== publicIds.length) {
-    const foundIds = new Set(
-      policies.map((policy) => {
-        return policy.publicId;
-      })
-    );
-    const missing = publicIds.find((id) => {
-      return !foundIds.has(id);
-    });
-    throw new DomainError('POLICY_NOT_FOUND', `Policy not found: ${missing}`);
-  }
-  return policies.map((policy) => {
-    return policy.id;
-  });
-};

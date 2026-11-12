@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import jwt, { type JwtPayload, type SignOptions } from 'jsonwebtoken';
 
 const requireJwtSecret = () => {
@@ -86,4 +88,11 @@ export const verifyToken = <T extends TokenType>(args: {
   } catch {
     return null;
   }
+};
+
+/** A 32-byte key derived from the server's secret, distinct per `info` label. */
+export const deriveSecretKey = (args: { info: string }): Buffer => {
+  return Buffer.from(
+    crypto.hkdfSync('sha256', JWT_SECRET, Buffer.alloc(0), args.info, 32)
+  );
 };

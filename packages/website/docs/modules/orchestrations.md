@@ -118,6 +118,8 @@ A record holds external I/O only (resolved input, returned artifact) and no gene
 | `webhook`      | Pauses awaiting an inbound callback (`mode: "receive"`). The run enters `awaiting_input` with `required_action.type: "webhook_receive"`; resume it via `human-input`. (To send data _out_ of a graph, use `emit_event`.) |
 | `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — the child's [`output_mapping`](#run-output) result, or `{ terminalNodeId: terminalArtifact }` when it declares none. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly. |
 
+An orchestration does no more than its writer could. Every create, update, version restore and formation apply needs the start action of every node's target in the graph the write leaves: `agents:CreateAgentGeneration` on an `agent` node's agent, `tools:CallTool` on a `tool`, `poll` or `approval` node's tool, and `orchestrations:StartRun` on a `sub_orchestration` or `loop` node's orchestration. One it lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`), asked before the target is looked up.
+
 ### Node artifacts
 
 Every completed node produces an **artifact**: what `state_mapping` reads as `output` and downstream nodes read as [`nodes.<id>`](#the-nodesid-namespace).
@@ -884,6 +886,7 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 
 | Code                              | Status | Cause                                                                                       | What to do                                                                                                 |
 | ---------------------------------- | ------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `ACTION_NOT_HELD`                  | `403`  | The graph names an agent, tool or orchestration the writer may not start                      | Name a target you may start (`meta.action` on `meta.resource`), or have a caller who may write it |
 | `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.problems`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
 | `ORCHESTRATION_CYCLE_DETECTED`     | —      | A cycle reached execution (graphs with a cycle are normally rejected at validation time)      | Remove the cycle, or use a `loop` node if the repetition is intentional — see [Cycle Detection](#cycle-detection) |
 | `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's [node execution](#node-executions) record for the exact `error` — see [Node Executions](#node-executions) |

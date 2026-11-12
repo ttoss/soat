@@ -9,6 +9,7 @@ import {
   mapArchivedVersionFields,
   toResourceRef,
 } from './resourceVersions';
+import type { Writer } from './writerRule';
 
 const log = createDebug('soat:deciders');
 
@@ -80,6 +81,7 @@ export const restoreDeciderVersion = async (args: {
   version: number;
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }): Promise<MappedDecider> => {
   log('restoreDeciderVersion: id=%s version=%d', args.deciderId, args.version);
   return deciderVersionArchive.restoreVersion({
@@ -88,5 +90,6 @@ export const restoreDeciderVersion = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 };

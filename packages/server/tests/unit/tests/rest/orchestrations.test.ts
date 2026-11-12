@@ -152,6 +152,8 @@ describe('Orchestrations', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'orch',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'orchestrations:CreateOrchestration',
         'orchestrations:ListOrchestrations',
         'orchestrations:GetOrchestration',

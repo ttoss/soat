@@ -94,6 +94,8 @@ describe('Event delivery resilience', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'evtresilience',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'files:CreateFile',
         'files:GetFile',
         'webhooks:CreateWebhook',

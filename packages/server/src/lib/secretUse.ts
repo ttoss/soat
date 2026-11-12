@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { buildSrn } from './iam';
+import { isPlainObject } from './plainObject';
 import { collectSecretRefs } from './secrets';
 
 const log = createDebug('soat:secrets');
@@ -29,6 +30,18 @@ export const toolSecretIds = (args: {
     mcp: args.mcp,
     pipeline: args.pipeline,
   });
+};
+
+/** Every secret the inline tools of an agent's `tool_bindings` send. */
+export const inlineBindingSecretIds = (bindings: unknown): string[] => {
+  if (!Array.isArray(bindings)) return [];
+  return secretRefIds(
+    bindings.flatMap((binding) => {
+      return isPlainObject(binding) && isPlainObject(binding.tool)
+        ? [toolSecretIds(binding.tool)]
+        : [];
+    })
+  );
 };
 
 /**

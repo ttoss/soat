@@ -9,7 +9,7 @@ import {
   resolvePromotionGate,
   validatePromotionGateInput,
 } from './agentPromotionGate';
-import { getAgent, updateAgent } from './agents';
+import { assertAgentWriterHolds, getAgent, updateAgent } from './agents';
 import {
   type AgentConfigSnapshot,
   agentVersionStore,
@@ -30,6 +30,7 @@ import {
   toResourceRef,
 } from './resourceVersions';
 import { redactAgentToolSecrets } from './toolSecretRedaction';
+import type { Writer } from './writerRule';
 
 const log = createDebug('soat:agents');
 
@@ -169,8 +170,7 @@ const agentVersionArchive = makeVersionArchive({
       ...archivedConfigToUpdateArgs(args.config),
       versionLabel: args.label,
       createdBy: args.createdBy,
-      secretUse: 'archived',
-      policyUse: 'archived',
+      writer: args.writer,
     });
   },
 });
@@ -209,6 +209,7 @@ export const restoreAgentVersion = async (args: {
   version: number;
   label?: string | null;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }): Promise<MappedAgent> => {
   return agentVersionArchive.restoreVersion({
     projectIds: args.projectIds,
@@ -216,6 +217,28 @@ export const restoreAgentVersion = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
+  });
+};
+
+/** A release serves an archived version, so setting one writes its config. */
+const assertWriterHoldsVersion = async (args: {
+  agent: AgentInstance;
+  version: number;
+  writer: Writer;
+}): Promise<void> => {
+  const row = await agentVersionStore.findVersionRow({
+    resource: toResourceRef(args.agent),
+    version: args.version,
+  });
+  const config = archivedConfigToUpdateArgs(
+    agentVersionStore.readArchivedConfig(row)
+  );
+  await assertAgentWriterHolds({
+    writer: args.writer,
+    projectId: args.agent.projectId as number,
+    policyIds: config.policyIds,
+    toolBindings: config.toolBindings,
   });
 };
 
@@ -272,6 +295,7 @@ export const setAgentRelease = async (args: {
   canaryVersion: unknown;
   canaryPercent: unknown;
   promotionGate?: unknown;
+  writer: Writer;
 }): Promise<MappedAgent> => {
   log(
     'setAgentRelease: agentId=%s stable=%o canary=%o percent=%o gate=%o',
@@ -313,6 +337,9 @@ export const setAgentRelease = async (args: {
     resource: toResourceRef(agent),
     versions: [release.stable_version, release.canary_version],
   });
+  for (const version of [release.stable_version, release.canary_version]) {
+    await assertWriterHoldsVersion({ agent, version, writer: args.writer });
+  }
 
   // `activeRelease` is a rollout pointer, not configuration: it is deliberately
   // outside the versioned surface, so setting one does not archive a version
@@ -349,6 +376,7 @@ const settleRelease = async (args: {
   version: number;
   label: string;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
   evalRunDbId?: number | null;
 }): Promise<MappedAgent> => {
   await agentVersionArchive.applyArchivedVersion({
@@ -357,6 +385,7 @@ const settleRelease = async (args: {
     version: args.version,
     label: args.label,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 
   // Re-read after the write: `applyArchivedVersion` goes through `updateAgent`,
@@ -382,6 +411,7 @@ export const promoteAgentRelease = async (args: {
   projectIds?: number[];
   agentId: string;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }): Promise<MappedAgent> => {
   const agent = await findAgentInstance({
     projectIds: args.projectIds,
@@ -412,6 +442,7 @@ export const promoteAgentRelease = async (args: {
     version: release.canary_version,
     label: `promoted v${release.canary_version}`,
     createdBy: args.createdBy,
+    writer: args.writer,
     evalRunDbId,
   });
 };
@@ -420,6 +451,7 @@ export const abortAgentRelease = async (args: {
   projectIds?: number[];
   agentId: string;
   createdBy: RequestPrincipal | null;
+  writer: Writer;
 }): Promise<MappedAgent> => {
   const agent = await findAgentInstance({
     projectIds: args.projectIds,
@@ -439,5 +471,6 @@ export const abortAgentRelease = async (args: {
     version: release.stable_version,
     label: `aborted to v${release.stable_version}`,
     createdBy: args.createdBy,
+    writer: args.writer,
   });
 };

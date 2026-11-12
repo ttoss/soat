@@ -63,6 +63,8 @@ The types a share may name, and what it may grant on each, are one fixed table. 
 
 `resource` names one concrete resource in the publishing project. There is no wildcard: `srn:proj_P:tool:*` would grant tools that do not exist yet, so ten tools are ten shares. A resource in another project is `400 VALIDATION_FAILED`, and one that does not exist is `400 TOOL_NOT_FOUND` / `400 AGENT_NOT_FOUND`.
 
+A share grants no more than its writer holds. Creating one, or changing its `cap`, needs every action it grants on the resource and `secrets:UseSecret` on every secret the resource sends (a tool's `execute`, `mcp` and `pipeline`; an agent's inline tools), else `403 ACTION_NOT_HELD` or `403 FORBIDDEN`.
+
 ### Grantee and acceptance
 
 `grantee` is a project id, or `*` for a **public share**. A public share is an offer: each consuming project still accepts it, so the publisher can list and revoke consumers one by one. `*` is `403 PUBLIC_SHARES_DISABLED` unless the deployment sets `SHARES_ALLOW_PUBLIC=true`.

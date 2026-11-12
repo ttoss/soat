@@ -12,7 +12,10 @@ import type {
   mapOrchestrationNode,
 } from './orchestrationGraphWire';
 import { mapOrchestrationGraph } from './orchestrationGraphWire';
-import { assertNodeReferencesInProject } from './orchestrationNodeReferences';
+import {
+  assertNodeReferencesInProject,
+  nodeStarts,
+} from './orchestrationNodeReferences';
 import {
   assertOrchestrationUpdateValid,
   assertOrchestrationValid,
@@ -27,6 +30,7 @@ import { toResourceRef } from './resourceVersions';
 import { getOrchestrationRunUsageRollups } from './usageReceipt';
 import type { UsageTotals } from './usageTotals';
 import type { VersionedWrite } from './writePrecondition';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const log = createDebug('soat:orchestrations');
 
@@ -347,6 +351,7 @@ export const createOrchestration = async (
     stateSchema?: object | null;
     inputSchema?: object | null;
     outputMapping?: Record<string, unknown> | null;
+    writer: Writer;
   } & OrchestrationVersionAuthorship
 ): Promise<MappedOrchestration> => {
   log('createOrchestration %o', { projectId: args.projectId, name: args.name });
@@ -355,6 +360,12 @@ export const createOrchestration = async (
     nodes: args.nodes,
     edges: args.edges,
     inputSchema: args.inputSchema,
+  });
+  await assertWriterHolds({
+    carrier: 'orchestrations',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: { actions: nodeStarts(args.nodes) },
   });
   await assertNodeReferencesInProject({
     nodes: args.nodes,
@@ -455,6 +466,7 @@ export const updateOrchestration = async (
     stateSchema?: object | null;
     inputSchema?: object | null;
     outputMapping?: Record<string, unknown> | null;
+    writer: Writer;
   } & OrchestrationVersionAuthorship
 ): Promise<MappedOrchestration> => {
   log('updateOrchestration %o', { id: args.id });
@@ -484,6 +496,14 @@ export const updateOrchestration = async (
       nodes: orch.nodes as OrchestrationNode[],
       edges: orch.edges as OrchestrationEdge[],
       inputSchema: orch.inputSchema as object | null,
+    },
+  });
+  await assertWriterHolds({
+    carrier: 'orchestrations',
+    writer: args.writer,
+    projectId: orch.projectId,
+    carried: {
+      actions: nodeStarts(args.nodes ?? (orch.nodes as OrchestrationNode[])),
     },
   });
   if (args.nodes !== undefined) {

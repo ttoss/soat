@@ -69,6 +69,8 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'orchqueue',
       policyActions: [
+        'agents:CreateAgentGeneration',
+        'tools:CallTool',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',

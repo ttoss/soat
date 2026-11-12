@@ -14,10 +14,22 @@ export const EVERY_PROJECT = '*';
  */
 export type PolicyAttachCheck = 'writer_holds_grants' | 'bounded_by_owner';
 
+/**
+ * A carrier naming policies by public id acts under them, so a policy it names
+ * cannot be deleted. `table` holds its jsonb `policy_ids`; `noun` and `meta`
+ * name it in the refusal.
+ */
+type PolicyDependents = {
+  table: string;
+  noun: string;
+  meta: { count: string; sample: string };
+};
+
 export type PolicyCarrier = {
   /** The models whose rows name the policies, by `@soat/postgresdb` name. */
   models: string[];
   attach: PolicyAttachCheck;
+  dependents?: PolicyDependents;
   /**
    * The project public id of every row naming the policy, or `EVERY_PROJECT`
    * for one acting in every project. An edit to the policy is checked in each.
@@ -41,10 +53,13 @@ const publicIdsOf = async (args: {
 const projectJsonbCarrier = (args: {
   model: string;
   table: string;
+  noun: string;
+  meta: PolicyDependents['meta'];
 }): PolicyCarrier => {
   return {
     models: [args.model],
     attach: 'writer_holds_grants',
+    dependents: { table: args.table, noun: args.noun, meta: args.meta },
     actsIn: (policy) => {
       return publicIdsOf({
         sql: `SELECT DISTINCT p.public_id
@@ -66,6 +81,11 @@ export const POLICY_CARRIERS = {
   agents: {
     models: ['Agent', 'AgentVersion'],
     attach: 'writer_holds_grants',
+    dependents: {
+      table: 'agents',
+      noun: 'agent',
+      meta: { count: 'agents', sample: 'agent_sample' },
+    },
     actsIn: (policy) => {
       return publicIdsOf({
         sql: `SELECT DISTINCT p.public_id
@@ -80,8 +100,18 @@ export const POLICY_CARRIERS = {
       });
     },
   },
-  triggers: projectJsonbCarrier({ model: 'Trigger', table: 'triggers' }),
-  webhooks: projectJsonbCarrier({ model: 'Webhook', table: 'webhooks' }),
+  triggers: projectJsonbCarrier({
+    model: 'Trigger',
+    table: 'triggers',
+    noun: 'trigger',
+    meta: { count: 'triggers', sample: 'sample' },
+  }),
+  webhooks: projectJsonbCarrier({
+    model: 'Webhook',
+    table: 'webhooks',
+    noun: 'webhook',
+    meta: { count: 'webhooks', sample: 'webhook_sample' },
+  }),
   apiKeys: {
     models: ['ApiKey'],
     attach: 'bounded_by_owner',
@@ -110,3 +140,38 @@ export const POLICY_CARRIERS = {
 } satisfies Record<string, PolicyCarrier>;
 
 export type PolicyCarrierName = keyof typeof POLICY_CARRIERS;
+
+export type PolicyDependentCount = PolicyDependents & {
+  count: number;
+  sample: string[];
+};
+
+/** Each carrier refusing the delete of the policy, with its live rows naming it. */
+export const findPolicyDependents = async (args: {
+  policyPublicId: string;
+  limit: number;
+}): Promise<PolicyDependentCount[]> => {
+  const carriers: PolicyCarrier[] = Object.values(POLICY_CARRIERS);
+  const replacements = { ids: JSON.stringify([args.policyPublicId]) };
+  return Promise.all(
+    carriers.flatMap(({ dependents }) => {
+      if (!dependents) return [];
+      const where = `FROM ${dependents.table} WHERE policy_ids @> :ids::jsonb`;
+      return [
+        (async () => {
+          const [sample, [rows]] = await Promise.all([
+            publicIdsOf({
+              sql: `SELECT public_id ${where} ORDER BY id LIMIT ${Number(args.limit)}`,
+              replacements,
+            }),
+            db.sequelize.query(`SELECT count(*)::int AS count ${where}`, {
+              replacements,
+            }),
+          ]);
+          const [counted] = rows as { count: number }[];
+          return { ...dependents, count: counted.count, sample };
+        })(),
+      ];
+    })
+  );
+};

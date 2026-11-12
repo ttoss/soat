@@ -75,19 +75,13 @@ export const splitToolBindings = (
 
 // ── Validation ────────────────────────────────────────────────────────────
 
-/**
- * Who answers `secrets:UseSecret` for an inline tool a write stores: the
- * caller, or `'archived'` when the write replays an archived version, whose
- * bindings the write that archived them already answered for.
- */
-export type BindingSecretUse = IsAllowedFn | 'archived';
-
 // An inline binding tool must be a plain object of an ephemeral-supported
 // type, carrying a definition that is valid within the project.
 const validateInlineBindingTool = async (args: {
   tool: unknown;
   projectId: number;
-  secretUse: BindingSecretUse;
+  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
+  secretUse: IsAllowedFn;
 }): Promise<void> => {
   if (!isPlainObject(args.tool)) {
     throw new DomainError(
@@ -97,13 +91,11 @@ const validateInlineBindingTool = async (args: {
   }
   const definition = args.tool as InlineToolDefinition;
   assertEphemeralTypeSupported(definition);
-  if (args.secretUse !== 'archived') {
-    await assertToolSecretUseAllowed({
-      tool: definition,
-      projectId: args.projectId,
-      isAllowed: args.secretUse,
-    });
-  }
+  await assertToolSecretUseAllowed({
+    tool: definition,
+    projectId: args.projectId,
+    isAllowed: args.secretUse,
+  });
   await validateToolDefinition({ definition, projectId: args.projectId });
 };
 
@@ -113,7 +105,8 @@ const validateInlineBindingTool = async (args: {
 const validateBindingEntry = async (args: {
   entry: unknown;
   projectId: number;
-  secretUse: BindingSecretUse;
+  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
+  secretUse: IsAllowedFn;
 }): Promise<AgentToolBinding> => {
   const { entry, projectId } = args;
   if (!isPlainObject(entry)) {
@@ -269,7 +262,8 @@ export const toWireToolBinding = (
 export const validateToolBindings = async (args: {
   projectId: number;
   bindings: AgentToolBinding[];
-  secretUse: BindingSecretUse;
+  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
+  secretUse: IsAllowedFn;
 }): Promise<AgentToolBinding[]> => {
   if (!Array.isArray(args.bindings)) {
     throw new DomainError(
@@ -308,7 +302,8 @@ export const validateToolBindings = async (args: {
 export const resolveBindingsForCreate = async (args: {
   projectId: number;
   toolBindings?: AgentToolBinding[] | null;
-  secretUse: BindingSecretUse;
+  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
+  secretUse: IsAllowedFn;
 }): Promise<AgentToolBinding[] | null> => {
   if (!args.toolBindings) return null;
   return validateToolBindings({
@@ -326,7 +321,8 @@ export const resolveBindingsForCreate = async (args: {
 export const resolveBindingsForUpdate = async (args: {
   projectId: number;
   toolBindings?: AgentToolBinding[] | null;
-  secretUse: BindingSecretUse;
+  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
+  secretUse: IsAllowedFn;
 }): Promise<AgentToolBinding[] | null | undefined> => {
   if (args.toolBindings === undefined) return undefined;
   if (args.toolBindings === null) return null;

@@ -2,7 +2,6 @@ import { db } from 'src/db';
 import {
   lookupActorInternalId,
   lookupAgentInternalId,
-  lookupPolicyInternalIds,
   lookupToolInternalId,
 } from 'src/lib/formationLookups';
 import {
@@ -819,26 +818,6 @@ describe('formationsHelpers', () => {
           reach: 'project',
         })
       ).resolves.toBe(tool.id);
-    });
-
-    test('lookupPolicyInternalIds resolves multiple public ids to internal ids', async () => {
-      const policyA = await db.Policy.create({ document: { statement: [] } });
-      const policyB = await db.Policy.create({ document: { statement: [] } });
-
-      await expect(
-        lookupPolicyInternalIds([policyA.publicId, policyB.publicId])
-      ).resolves.toEqual([policyA.id, policyB.id]);
-    });
-
-    test('lookupPolicyInternalIds throws when one public id is missing', async () => {
-      const policyA = await db.Policy.create({ document: { statement: [] } });
-
-      await expect(
-        lookupPolicyInternalIds([policyA.publicId, 'pol_doesnotexist000'])
-      ).rejects.toMatchObject({
-        code: 'POLICY_NOT_FOUND',
-        message: 'Policy not found: pol_doesnotexist000',
-      });
     });
   });
 

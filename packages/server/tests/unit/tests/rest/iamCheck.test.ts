@@ -119,6 +119,44 @@ describe('POST /api/v1/iam/check', () => {
     expect(otherAction.body).toEqual({ allowed: false });
   });
 
+  // A resource a deployment stores starts runtime work later, so its writer
+  // is asked what the writer rule asks of a runtime carrier.
+  test('evaluates the start and secret-use actions of the writer rule', async () => {
+    const policyId = await createPolicy([
+      {
+        effect: 'Allow',
+        action: ['agents:CreateAgentGeneration', 'secrets:UseSecret'],
+        resource: [
+          `srn:${projectId}:agent:agt_1`,
+          `srn:${projectId}:secret:sec_1`,
+        ],
+      },
+    ]);
+    const key = await mintKey({ policyIds: [policyId] });
+
+    const answers = await Promise.all(
+      [
+        ['agents:CreateAgentGeneration', `srn:${projectId}:agent:agt_1`],
+        ['agents:CreateAgentGeneration', `srn:${projectId}:agent:agt_2`],
+        ['secrets:UseSecret', `srn:${projectId}:secret:sec_1`],
+        ['tools:CallTool', `srn:${projectId}:tool:tool_1`],
+      ].map(([action, resource]) => {
+        return check(key, { action, resource });
+      })
+    );
+
+    expect(
+      answers.map((res) => {
+        return [res.status, res.body.allowed];
+      })
+    ).toEqual([
+      [200, true],
+      [200, false],
+      [200, true],
+      [200, false],
+    ]);
+  });
+
   test('a caller with no policies is denied', async () => {
     const res = await check(noPermToken, {
       action: 'channels:GetChannel',
@@ -256,6 +294,15 @@ describe('POST /api/v1/iam/check', () => {
           return {
             action: 'secrets:GetSecret',
             resource: `srn:${projectId}:secret:sec_1`,
+          };
+        },
+      ],
+      [
+        'a writer-rule action on a resource type it does not start',
+        () => {
+          return {
+            action: 'tools:CallTool',
+            resource: `srn:${projectId}:agent:agt_1`,
           };
         },
       ],

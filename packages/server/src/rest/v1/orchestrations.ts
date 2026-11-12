@@ -123,6 +123,7 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
         ? body.input_schema
         : undefined,
     outputMapping: parseOutputMapping(body.output_mapping) ?? undefined,
+    writer: ctx.authUser,
     versionLabel: parseVersionLabel(body.version_label),
     createdBy: requestPrincipalFromCtx(ctx),
   });
@@ -217,6 +218,7 @@ orchestrationsRouter.patch(
       ...parseUpdateBody(body),
       expectedVersion: writePreconditionOf(ctx),
       createdBy: requestPrincipalFromCtx(ctx),
+      writer: ctx.authUser,
     });
 
     ctx.body = result;

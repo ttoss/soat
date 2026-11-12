@@ -143,21 +143,20 @@ immediately.
 
 Security invariants:
 
-- **No privilege escalation.** Creating a trigger requires the target-start
-  action (`orchestrations:StartRun`, `agents:CreateAgentGeneration`, or
-  `tools:CallTool`), and
-  [`PATCH /api/v1/triggers/{trigger_id}`](/docs/api/triggers/update-trigger)
-  re-asks it whenever a request changes `target_type` or `target_id` or sends
-  `action`, `input`, `tool_context` or `policy_ids`. An updater who could not
-  start the effective target gets `403` and the trigger is unchanged.
+- **A trigger does no more than its writer could.** Every create and every
+  update, through the REST API or a formation, is checked against the trigger
+  as the write leaves it, whichever fields the request names: the writer
+  holds every grant of its `policy_ids` inside the trigger's project (else
+  `403 POLICY_GRANT_NOT_HELD`, with `meta.ungranted` listing each grant not
+  held), may start its target (`orchestrations:StartRun`,
+  `agents:CreateAgentGeneration`, `tools:CallTool` or `evaluations:RunEval`,
+  else `403 ACTION_NOT_HELD`) and may use every secret its stored
+  `tool_context` names. A refused write leaves the trigger unchanged.
   [`POST /api/v1/triggers/{trigger_id}/fire`](/docs/api/triggers/fire-trigger)
-  asks it of the firer whenever the body carries a non-empty `input` or
-  `tool_context`; the firing itself acts as the firer ∩ `policy_ids`.
-- **A policy grants no more than its writer holds.** Setting `policy_ids` on
-  create or update, through the REST API or a formation, needs a caller who
-  holds every grant each added policy carries inside the trigger's project;
-  else `403 POLICY_GRANT_NOT_HELD`, with `meta.ungranted` listing each grant
-  not held. Editing a policy a trigger carries
+  asks the target-start action of the firer whenever the body carries a
+  non-empty `input` or `tool_context`; the firing itself acts as the firer ∩
+  `policy_ids`.
+- **Editing a policy a trigger carries**
   ([`PUT /api/v1/policies/{policy_id}`](/docs/api/policies/update-policy))
   asks the same of the editor in every project such a trigger lives in. A
   grant is held when one `Allow` of each of the caller's policy sets covers
@@ -358,7 +357,8 @@ catch-up firing on restart.
 | `TRIGGER_CREATOR_UNAVAILABLE`  | `409`  | The user who created the trigger no longer exists                                                              | The trigger cannot fire under a deleted user's identity — recreate it under a live user              |
 | `TRIGGER_RECURSION_FORBIDDEN`  | `403`  | A trigger-scoped run-as credential tried to call the fire endpoint                                             | Fire the trigger with a user/API-key credential; a trigger cannot fire another trigger               |
 | `NAME_CONFLICT`                | `409`  | A trigger with that `name` already exists in the project                                                       | Choose a different name                                                                              |
-| `POLICY_GRANT_NOT_HELD`        | `403`  | `policy_ids` names a policy granting a permission the caller does not hold in the trigger's project            | Attach a policy inside your own grants (`meta.ungranted` lists the rest), or have a caller who holds them attach it |
+| `POLICY_GRANT_NOT_HELD`        | `403`  | The trigger, as the write leaves it, carries a policy granting a permission the caller does not hold in its project | Carry only policies inside your own grants (`meta.ungranted` lists the rest), or have a caller who holds them write it |
+| `ACTION_NOT_HELD`              | `403`  | The trigger, as the write leaves it, starts a target the caller may not start                                  | Point it at a target you may start (`meta.action` on `meta.resource`), or have a caller who may write it |
 | `POLICY_HAS_DEPENDENTS`        | `409`  | Attempted to delete a policy while a trigger's `policy_ids` still names it                                     | Detach the policy from the trigger first, or delete the trigger                                      |
 | `RESOURCE_NOT_FOUND`           | `404`  | The trigger or firing ID doesn't exist (or isn't in the caller's project)                                      | Check the ID and project scope                                                                        |
 | `SECRET_NOT_DECRYPTABLE`       | `500`  | The stored signing secret is not valid ciphertext — encrypted under a different `SECRETS_ENCRYPTION_KEY` | Rotate the secret ([`POST /triggers/{id}/rotate-secret`](/docs/api/triggers/rotate-trigger-secret)) to replace it, or restore the original key. A webhook trigger in this state cannot authenticate inbound deliveries until it is fixed |

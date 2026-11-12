@@ -3,10 +3,10 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { findPolicyCarriers } from './attachedPolicies';
 import type { PolicyDocument } from './iam';
 import { validatePolicyActions, validatePolicyDocument } from './iam';
 import { emptyPage, paginatedList } from './pagination';
+import { findPolicyDependents } from './policyCarriers';
 import {
   assertWriterHoldsAttachedEdit,
   type GetWriterPolicies,
@@ -237,22 +237,29 @@ export const deletePolicy = async (args: {
     );
   }
 
-  const { agents, triggers, webhooks } = await findPolicyCarriers({
+  const dependents = await findPolicyDependents({
     policyPublicId: args.policyId,
     limit: MAX_DEPENDENT_SAMPLE,
   });
-  if (triggers.count > 0 || agents.count > 0 || webhooks.count > 0) {
+  if (
+    dependents.some((dependent) => {
+      return dependent.count > 0;
+    })
+  ) {
+    const counts = dependents.map((dependent) => {
+      return `${dependent.count} ${dependent.noun}(s)`;
+    });
     throw new DomainError(
       'POLICY_HAS_DEPENDENTS',
-      `Policy '${args.policyId}' is attached to ${triggers.count} trigger(s), ${agents.count} agent(s) and ${webhooks.count} webhook(s); it cannot be deleted.`,
-      {
-        triggers: triggers.count,
-        sample: triggers.sample,
-        agents: agents.count,
-        agent_sample: agents.sample,
-        webhooks: webhooks.count,
-        webhook_sample: webhooks.sample,
-      }
+      `Policy '${args.policyId}' is attached to ${counts.join(', ')}; it cannot be deleted.`,
+      Object.fromEntries(
+        dependents.flatMap((dependent) => {
+          return [
+            [dependent.meta.count, dependent.count],
+            [dependent.meta.sample, dependent.sample],
+          ];
+        })
+      )
     );
   }
 

@@ -110,7 +110,7 @@ usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
   await attachUserPolicies({
     userId: ctx.params.user_id,
     policyIds,
-    writerPolicies: ctx.authUser.getPolicies,
+    writer: ctx.authUser,
   });
 
   ctx.status = 204;
