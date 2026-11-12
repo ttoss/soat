@@ -19,13 +19,16 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../../errors';
+import { resolveSenderAuthority } from '../assertionSender';
 import {
   callFormationHandler,
+  type HandlerAssertion,
   requirePhysicalResourceId,
 } from '../formationHandlerClient';
 import type { FormationResourceTypeRegistration } from '../formationResourceTypeConfig';
 import { normalizeDeclaredProperties } from '../formationsProperties';
 import type {
+  FormationActor,
   FormationModule,
   UpdateOutcome,
   ValidationError,
@@ -120,6 +123,7 @@ const readLiveProperties = async (args: {
 }): Promise<Record<string, unknown> | null> => {
   const body = await callFormationHandler({
     registration: args.registration,
+    assertion: null,
     request: {
       requestType: 'read',
       logicalId: '',
@@ -134,6 +138,20 @@ const readLiveProperties = async (args: {
 };
 
 // ── Lifecycle operations ──────────────────────────────────────────────────
+
+/** The deployer's authority in the project, as a direct tool call seals it. */
+const deployerAssertion = async (args: {
+  actor: FormationActor;
+  projectPublicId: string;
+}): Promise<HandlerAssertion> => {
+  return {
+    projectPublicId: args.projectPublicId,
+    authority: await resolveSenderAuthority({
+      sender: { caller: args.actor, authHeader: undefined },
+      projectPublicId: args.projectPublicId,
+    }),
+  };
+};
 
 type AssertValid = (args: {
   properties: unknown;
@@ -154,11 +172,13 @@ const buildUpdate = (args: {
     projectId,
     logicalId,
     resourceKey,
+    actor,
   }): Promise<UpdateOutcome | void> => {
     const properties = assertValid({ properties: raw, forUpdate: true });
     const projectPublicId = await findProjectPublicId({ id: projectId });
     const body = await callFormationHandler({
       registration,
+      assertion: await deployerAssertion({ actor, projectPublicId }),
       request: {
         requestType: 'update',
         logicalId: logicalId ?? '',
@@ -198,13 +218,20 @@ const buildOperations = (args: {
   const resourceType = registration.name;
 
   return {
-    create: async ({ properties: raw, projectId, logicalId, resourceKey }) => {
+    create: async ({
+      properties: raw,
+      projectId,
+      logicalId,
+      resourceKey,
+      actor,
+    }) => {
       const properties = assertValid({ properties: raw, forUpdate: false });
       // The handler is told which project in the id its own callers use; the
       // internal row id never leaves the process.
       const projectPublicId = await findProjectPublicId({ id: projectId });
       const body = await callFormationHandler({
         registration,
+        assertion: await deployerAssertion({ actor, projectPublicId }),
         request: {
           requestType: 'create',
           logicalId: logicalId ?? '',
@@ -234,10 +261,12 @@ const buildOperations = (args: {
       projectId,
       logicalId,
       resourceKey,
+      actor,
     }) => {
       const projectPublicId = await findProjectPublicId({ id: projectId });
       await callFormationHandler({
         registration,
+        assertion: await deployerAssertion({ actor, projectPublicId }),
         request: {
           requestType: 'delete',
           logicalId: logicalId ?? '',
@@ -270,6 +299,7 @@ const buildCapabilityMembers = (args: {
           validatePropertiesAsync: async ({ properties, basePath }) => {
             const body = await callFormationHandler({
               registration,
+              assertion: null,
               request: {
                 requestType: 'validate',
                 logicalId: '',
@@ -330,6 +360,7 @@ const buildCapabilityMembers = (args: {
       try {
         body = await callFormationHandler({
           registration,
+          assertion: null,
           request: {
             requestType: 'read',
             logicalId: '',
@@ -380,8 +411,9 @@ export const buildRegisteredFormationModule = (args: {
     resourceType,
 
     // An operator-registered type's operations are not in the permission
-    // catalog, so no policy could grant them; it stays gated on the request's
-    // own `formations:*` action. See `FormationModuleAuthorization`.
+    // catalog, so no policy could grant them; it is gated on the request's own
+    // `formations:*` action and its handler acts within the deployer's
+    // authority (`deployerAssertion`). See `FormationModuleAuthorization`.
     authorization: { operatorRegistered: true },
 
     validateProperties: ({ properties, basePath }) => {
