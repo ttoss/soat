@@ -9,17 +9,16 @@ import {
   emitIngestFailed,
   finalizeIngestedPages,
 } from './documentIngestionCore';
-import { verifyIngestionCallbackToken } from './ingestionCallbackToken';
+import {
+  getConversionStallTimeoutMs,
+  verifyIngestionCallbackToken,
+} from './ingestionCallbackToken';
 
 const log = createDebug('soat:documents');
 
 // Past this with no progress a document is considered abandoned and marked
 // `failed` on the next read, so callers can recover.
 const INGESTION_STALL_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-// Longer, for a document awaiting an async converter: speech-to-text and
-// similar jobs run well past the plain ingestion stall window.
-const CONVERSION_STALL_DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 const getStallTimeoutMs = (): number => {
   const raw = process.env.INGESTION_STALL_TIMEOUT_MS;
@@ -28,15 +27,6 @@ const getStallTimeoutMs = (): number => {
   return Number.isFinite(parsed) && parsed >= 0
     ? parsed
     : INGESTION_STALL_DEFAULT_TIMEOUT_MS;
-};
-
-const getConversionStallTimeoutMs = (): number => {
-  const raw = process.env.CONVERSION_STALL_TIMEOUT_MS;
-  if (!raw) return CONVERSION_STALL_DEFAULT_TIMEOUT_MS;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0
-    ? parsed
-    : CONVERSION_STALL_DEFAULT_TIMEOUT_MS;
 };
 
 /**

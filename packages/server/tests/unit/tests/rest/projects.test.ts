@@ -2,7 +2,7 @@ import fs from 'node:fs';
 
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
-import { JWT_SECRET } from 'src/middleware/auth';
+import { signToken } from 'src/lib/signedTokens';
 
 import { createAllowAllPolicy } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -239,17 +239,17 @@ describe('Projects', () => {
           publicId: string;
           role: string;
         };
-        adminOauthToken = jwt.sign(
-          {
+        adminOauthToken = signToken({
+          typ: 'oauth',
+          claims: {
             sub: decoded.publicId,
             publicId: decoded.publicId,
             role: decoded.role,
             scope: `* mcp:access prj:${oauthScopedProjectId}`,
             prj: oauthScopedProjectId,
           },
-          JWT_SECRET,
-          { expiresIn: '1h' }
-        );
+          expiresIn: '1h',
+        });
       });
 
       test('OAuth token only sees its scoped project', async () => {

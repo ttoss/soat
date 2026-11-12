@@ -1,12 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
 import createDebug from 'debug';
-import jwt from 'jsonwebtoken';
 
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { JWT_SECRET } from '../middleware/auth';
 import {
   type PolicyDocument,
   validatePolicyActions,
@@ -14,6 +12,7 @@ import {
 } from './iam';
 import { isPlainObject } from './plainObject';
 import { type PrincipalBound, serializeBound } from './principalBound';
+import { signToken } from './signedTokens';
 
 const log = createDebug('soat:iamTokens');
 
@@ -203,21 +202,20 @@ export const createIamToken = async (args: {
   const jti = randomUUID();
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + ttlSeconds;
-  const token = jwt.sign(
-    {
+  const token = signToken({
+    typ: 'iam',
+    claims: {
       publicId: issuer.publicId,
       role: issuer.role,
       prj: issuer.projectPublicId,
       key: issuer.apiKeyPublicId,
-      itk: true,
       bnd: serializeBound(bound),
       ...(principal ? { prn: principal } : {}),
       jti,
       iat: issuedAt,
-      exp: expiresAt,
     },
-    JWT_SECRET
-  );
+    expiresIn: ttlSeconds,
+  });
   log(
     'createIamToken: key=%s jti=%s ttl=%d',
     issuer.apiKeyPublicId,

@@ -33,40 +33,31 @@ const resolveRunTokenBoundaryDocs = async (args: {
 };
 
 /**
- * Resolves the boundary PolicyDocuments for a project-scoped JWT credential:
+ * The boundary PolicyDocuments of a project-scoped JWT credential:
  * - OAuth: the consented scope, rebuilt from the `scope` claim.
- * - Orchestration run-as and IAM token: the acting API key's own policies, so
- *   the credential never reaches further than that key; when a user started
- *   the run, no boundary.
- * Returns `undefined` for an unscoped (plain user) JWT.
- *
- * Order matters: the OAuth branch is the fallback, so every other kind must be
- * identified by its own marker claim first. Falling through to it builds a
- * consent policy from an absent `scope` claim, which allows nothing at all.
+ * - Run and IAM token: the acting API key's own policies, so the credential
+ *   never reaches further than that key; when a user started the run, none.
  */
 export const resolveScopedBoundaryDocs = async (args: {
-  scopedProjectPublicId?: string;
-  runApiKeyPublicId?: string;
-  /** A run token or an IAM token: bounded by the key its `key` claim names. */
-  actsAsKey?: boolean;
-  scopeClaim?: string;
+  scopedProjectPublicId: string;
+  credential:
+    | { typ: 'oauth'; scopeClaim?: string }
+    | { typ: 'run' | 'iam'; apiKeyPublicId?: string };
   db: Context['db'];
 }): Promise<PolicyDocument[] | undefined> => {
-  if (!args.scopedProjectPublicId) return undefined;
-
-  if (args.actsAsKey) {
-    return resolveRunTokenBoundaryDocs({
-      apiKeyPublicId: args.runApiKeyPublicId,
-      db: args.db,
-    });
+  const { credential } = args;
+  if (credential.typ === 'oauth') {
+    return [
+      buildConsentPolicyFromScopeClaim({
+        projectPublicId: args.scopedProjectPublicId,
+        scopeClaim: credential.scopeClaim,
+      }),
+    ];
   }
-
-  return [
-    buildConsentPolicyFromScopeClaim({
-      projectPublicId: args.scopedProjectPublicId,
-      scopeClaim: args.scopeClaim,
-    }),
-  ];
+  return resolveRunTokenBoundaryDocs({
+    apiKeyPublicId: credential.apiKeyPublicId,
+    db: args.db,
+  });
 };
 
 /**

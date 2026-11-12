@@ -1,7 +1,6 @@
-import jwt from 'jsonwebtoken';
 import { signRunToken } from 'src/lib/orchestrationRunToken';
+import { signToken } from 'src/lib/signedTokens';
 import { signTriggerToken } from 'src/lib/triggerToken';
-import { JWT_SECRET } from 'src/middleware/auth';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
@@ -37,16 +36,16 @@ describe('API key writes from a project-scoped token', () => {
       [
         'OAuth',
         () => {
-          return jwt.sign(
-            {
+          return signToken({
+            typ: 'oauth',
+            claims: {
               publicId: userId,
               role: 'user',
               scope: `* prj:${projectId}`,
               prj: projectId,
             },
-            JWT_SECRET,
-            { expiresIn: '1h' }
-          );
+            expiresIn: '1h',
+          });
         },
       ],
       [
