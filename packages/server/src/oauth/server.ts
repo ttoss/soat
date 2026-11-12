@@ -17,14 +17,14 @@ import type {
   StoredAuthorizationCode,
   StoredRefreshToken,
 } from '@ttoss/auth-core';
-import { createRefreshRotation, signJwt, verifyJwt } from '@ttoss/auth-core';
+import { createRefreshRotation } from '@ttoss/auth-core';
 import { oauthServer } from '@ttoss/http-server-auth';
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { ISSUER } from '../lib/serverIssuer';
-import { JWT_SECRET } from '../middleware/auth';
+import { signToken } from '../lib/signedTokens';
 
 const log = createDebug('soat:oauth');
 
@@ -175,16 +175,16 @@ export const oauthAuthorizationServer = oauthServer({
     });
 
     return {
-      accessToken: signJwt({
-        payload: {
+      accessToken: signToken({
+        typ: 'oauth',
+        claims: {
           sub: subject,
           publicId: subject,
           role,
           scope: scopes.join(' '),
           prj: project,
         },
-        secret: JWT_SECRET,
-        expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
+        expiresIn: ACCESS_TOKEN_TTL_SECONDS,
       }),
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
       refreshToken,
@@ -237,8 +237,3 @@ export const oauthAuthorizationServer = oauthServer({
     };
   },
 });
-
-/** Verifies a SOAT-issued OAuth access token. Returns the payload or null. */
-export const verifyOauthAccessToken = (token: string) => {
-  return verifyJwt({ token, secret: JWT_SECRET });
-};

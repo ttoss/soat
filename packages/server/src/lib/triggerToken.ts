@@ -1,7 +1,5 @@
-import jwt from 'jsonwebtoken';
-
-import { JWT_SECRET } from '../middleware/auth';
 import { type PrincipalBound, serializeBound } from './principalBound';
+import { signToken, ttlFromEnv } from './signedTokens';
 
 /**
  * The credential a manual fire's caller authenticated with, beyond the user:
@@ -15,8 +13,8 @@ export type TriggerCallerCredential = {
 };
 
 /**
- * Mints a short-lived run-as token for a trigger firing, confined to the
- * project (`prj`) and naming the trigger (`trg`). `resolveJwt` grants it the
+ * Mints a short-lived trigger token for a firing, confined to the project
+ * (`prj`) and naming the trigger (`trg`). `resolveJwt` grants it the
  * trigger's `policy_ids`: alone for a firing nobody called, the token's user
  * being only the creator it names; intersected with the caller's own grant
  * when `caller` is set (`clr`), the token's user then being that caller. It
@@ -30,9 +28,9 @@ export const signTriggerToken = (payload: {
   triggerId: string;
   caller?: TriggerCallerCredential;
 }) => {
-  const ttl = process.env.SOAT_TRIGGER_TOKEN_TTL || '1h';
-  return jwt.sign(
-    {
+  return signToken({
+    typ: 'trigger',
+    claims: {
       publicId: payload.publicId,
       role: payload.role,
       prj: payload.projectPublicId,
@@ -52,7 +50,6 @@ export const signTriggerToken = (payload: {
           }
         : {}),
     },
-    JWT_SECRET,
-    { expiresIn: ttl as jwt.SignOptions['expiresIn'] }
-  );
+    expiresIn: ttlFromEnv({ name: 'SOAT_TRIGGER_TOKEN_TTL', fallback: '1h' }),
+  });
 };

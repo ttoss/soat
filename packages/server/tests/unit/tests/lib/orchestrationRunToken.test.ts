@@ -7,7 +7,7 @@ import {
   resolveStartingPrincipal,
   signRunToken,
 } from 'src/lib/orchestrationRunToken';
-import { JWT_SECRET } from 'src/middleware/auth';
+import { signToken, type TokenType } from 'src/lib/signedTokens';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 
@@ -25,10 +25,14 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
  * `rest/runAsRevokedPrincipal.test.ts` (key revoked, user deleted).
  */
 
-// A trigger run-as token, as an internal caller would forward it: it must not
-// become a starting principal on the `authHeader` path either.
+const bearer = (typ: TokenType, claims: Record<string, unknown>): string => {
+  return `Bearer ${signToken({ typ, claims, expiresIn: '5m' })}`;
+};
+
+// A trigger token, as an internal caller would forward it: it must not become
+// a starting principal on the `authHeader` path either.
 const bearerTriggerToken = (publicId: string, prj: string): string => {
-  return `Bearer ${jwt.sign({ publicId, role: 'user', prj, trg: 'trg_abc' }, JWT_SECRET, { expiresIn: '5m' })}`;
+  return bearer('trigger', { publicId, role: 'user', prj, trg: 'trg_abc' });
 };
 
 describe('orchestration run-as token', () => {
@@ -69,10 +73,6 @@ describe('orchestration run-as token', () => {
   });
 
   describe('readRunTokenPrincipal', () => {
-    const bearer = (claims: Record<string, unknown>): string => {
-      return `Bearer ${jwt.sign(claims, JWT_SECRET, { expiresIn: '5m' })}`;
-    };
-
     test('reads back the user principal a run token was minted with', () => {
       const header = `Bearer ${signRunToken({
         publicId: userPublicId,
@@ -100,10 +100,10 @@ describe('orchestration run-as token', () => {
       });
     });
 
-    test('a trigger run-as token is not inherited', () => {
+    test('a trigger token is not inherited', () => {
       // Its boundary is the trigger's policy, which lives in the token — a
       // re-minted run token would drop it and widen the run's access.
-      const header = bearer({
+      const header = bearer('trigger', {
         publicId: userPublicId,
         role: 'user',
         prj: projectId,
@@ -113,7 +113,7 @@ describe('orchestration run-as token', () => {
     });
 
     test('an OAuth access token is not inherited', () => {
-      const header = bearer({
+      const header = bearer('oauth', {
         publicId: userPublicId,
         role: 'user',
         prj: projectId,
@@ -123,7 +123,7 @@ describe('orchestration run-as token', () => {
     });
 
     test('a plain user JWT is not inherited', () => {
-      const header = bearer({ publicId: userPublicId, role: 'user' });
+      const header = bearer('login', { publicId: userPublicId, role: 'user' });
       expect(readRunTokenPrincipal(header)).toBeNull();
     });
 
@@ -133,13 +133,17 @@ describe('orchestration run-as token', () => {
       expect(readRunTokenPrincipal('Bearer not.a.jwt')).toBeNull();
       expect(
         readRunTokenPrincipal(
-          `Bearer ${jwt.sign({ publicId: userPublicId, prj: projectId, orn: 'orun_x' }, 'a-different-secret')}`
+          `Bearer ${jwt.sign({ typ: 'run', publicId: userPublicId, prj: projectId, orn: 'orun_x' }, 'a-different-secret', { expiresIn: '5m' })}`
         )
       ).toBeNull();
     });
 
     test('a run token whose publicId claim is missing yields null', () => {
-      const header = bearer({ role: 'user', prj: projectId, orn: 'orun_y' });
+      const header = bearer('run', {
+        role: 'user',
+        prj: projectId,
+        orn: 'orun_y',
+      });
       expect(readRunTokenPrincipal(header)).toBeNull();
     });
   });
@@ -169,17 +173,9 @@ describe('orchestration run-as token', () => {
     });
 
     test('a run token names the same principal it was minted for', () => {
-      // A run token is project-scoped, so it carries `oauthProjectPublicId`
-      // like an OAuth token does — the `isRunToken` marker is what separates
-      // the two, and getting that wrong would strand every nested chain.
       expect(
         resolveStartingPrincipal({
-          authUser: {
-            publicId: userPublicId,
-            apiKeyPublicId: 'key_abc',
-            oauthProjectPublicId: projectId,
-            isRunToken: true,
-          },
+          authUser: { publicId: userPublicId, apiKeyPublicId: 'key_abc' },
         })
       ).toEqual({ principalType: 'api_key', principalId: 'key_abc' });
     });
@@ -190,11 +186,7 @@ describe('orchestration run-as token', () => {
       // the owning user may do.
       expect(
         resolveStartingPrincipal({
-          authUser: {
-            publicId: userPublicId,
-            oauthProjectPublicId: projectId,
-            isTriggerToken: true,
-          },
+          authUser: { publicId: userPublicId, isTriggerToken: true },
         })
       ).toBeNull();
     });
@@ -203,10 +195,7 @@ describe('orchestration run-as token', () => {
       // Same reasoning, with the consented scope as the boundary.
       expect(
         resolveStartingPrincipal({
-          authUser: {
-            publicId: userPublicId,
-            oauthProjectPublicId: projectId,
-          },
+          authUser: { publicId: userPublicId, oauthScope: 'tools:ListTools' },
         })
       ).toBeNull();
     });

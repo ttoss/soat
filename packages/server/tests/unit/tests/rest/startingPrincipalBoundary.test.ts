@@ -1,8 +1,7 @@
-import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import { flushProjectResumes } from 'src/lib/projectPauseActions';
+import { signToken } from 'src/lib/signedTokens';
 import { type ActiveDispatch, flushTaskAutomations } from 'src/lib/tasks';
-import { JWT_SECRET } from 'src/middleware/auth';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
@@ -52,16 +51,16 @@ beforeAll(async () => {
   userToken = setup.userToken;
   userId = setup.userId;
   projectId = setup.projectId;
-  oauthToken = jwt.sign(
-    {
+  oauthToken = signToken({
+    typ: 'oauth',
+    claims: {
       publicId: userId,
       role: 'user',
       scope: `* mcp:access prj:${projectId}`,
       prj: projectId,
     },
-    JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+    expiresIn: '1h',
+  });
 
   const orchestrationRes = await authenticatedTestClient(userToken)
     .post('/api/v1/orchestrations')

@@ -1081,6 +1081,26 @@ describe('IngestionRules', () => {
         expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
       });
 
+      test('a callback token past the conversion stall window is refused with 401', async () => {
+        const docId = await ingestPendingAudio('callback-expired-token.mp3');
+        const token = latestCallbackToken();
+
+        const clock = jest
+          .spyOn(Date, 'now')
+          .mockReturnValue(Date.now() + 31 * 60 * 1000);
+        try {
+          const res = await testClient
+            .post(
+              `/api/v1/documents/${docId}/ingestion-callback?token=${token}`
+            )
+            .send({ text: 'Too late.' });
+          expect(res.status).toBe(401);
+          expect(res.body.error.code).toBe('INGESTION_CALLBACK_INVALID_TOKEN');
+        } finally {
+          clock.mockRestore();
+        }
+      });
+
       test('a stale conversion times out with CONVERSION_TIMEOUT, and a late callback then loses the race', async () => {
         const docId = await ingestPendingAudio('callback-timeout.mp3');
         const token = latestCallbackToken();

@@ -10,8 +10,9 @@ import {
   signRunToken,
 } from 'src/lib/orchestrationRunToken';
 import type { PrincipalBound } from 'src/lib/principalBound';
+import { signToken } from 'src/lib/signedTokens';
 import { signTriggerToken } from 'src/lib/triggerToken';
-import { JWT_SECRET, resolveJwtAuthUser } from 'src/middleware/auth';
+import { resolveJwtAuthUser } from 'src/middleware/auth';
 
 import {
   type AgentToolTurn,
@@ -79,9 +80,20 @@ describe('IAM tokens', () => {
   };
 
   const expired = (token: string) => {
-    const claims = jwt.decode(token) as Record<string, unknown>;
+    const claims = Object.entries(jwt.decode(token, { json: true }) ?? {});
     const now = Math.floor(Date.now() / 1000);
-    return jwt.sign({ ...claims, iat: now - 120, exp: now - 60 }, JWT_SECRET);
+    return signToken({
+      typ: 'iam',
+      claims: {
+        ...Object.fromEntries(
+          claims.filter(([name]) => {
+            return name !== 'exp';
+          })
+        ),
+        iat: now - 120,
+      },
+      expiresIn: 60,
+    });
   };
 
   beforeAll(async () => {

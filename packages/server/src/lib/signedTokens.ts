@@ -1,0 +1,89 @@
+import jwt, { type JwtPayload, type SignOptions } from 'jsonwebtoken';
+
+const requireJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
+  return secret;
+};
+
+const JWT_SECRET = requireJwtSecret();
+
+/**
+ * Every kind of JWT the server signs. All share one secret, so a token is told
+ * apart by its `typ` claim alone, never by which other claims it carries.
+ */
+export const TOKEN_TYPES = [
+  'login',
+  'oauth',
+  'trigger',
+  'run',
+  'iam',
+  'file-download',
+  'ingestion-callback',
+] as const;
+
+export type TokenType = (typeof TOKEN_TYPES)[number];
+
+/** The kinds a request may present as `Authorization: Bearer`, on REST and `/mcp`. */
+export const BEARER_TOKEN_TYPES = [
+  'login',
+  'oauth',
+  'trigger',
+  'run',
+  'iam',
+] as const satisfies readonly TokenType[];
+
+export type BearerTokenType = (typeof BEARER_TOKEN_TYPES)[number];
+
+export type VerifiedToken<T extends TokenType> = JwtPayload & { typ: T };
+
+export type TokenTtl = NonNullable<SignOptions['expiresIn']>;
+
+/** A TTL read from an env var in `ms` notation (`1h`), else the fallback. */
+export const ttlFromEnv = (args: {
+  name: string;
+  fallback: TokenTtl;
+}): TokenTtl => {
+  const value = process.env[args.name];
+  return value ? (value as TokenTtl) : args.fallback;
+};
+
+/** `typ` is written last, so no claim can overwrite it. */
+export const signToken = (args: {
+  typ: TokenType;
+  claims: Record<string, unknown>;
+  expiresIn: TokenTtl;
+}): string => {
+  return jwt.sign({ ...args.claims, typ: args.typ }, JWT_SECRET, {
+    expiresIn: args.expiresIn,
+  });
+};
+
+const isAccepted = <T extends TokenType>(
+  accept: readonly T[],
+  typ: unknown
+): typ is T => {
+  return accept.some((kind) => {
+    return kind === typ;
+  });
+};
+
+/** The verified claims, or null for a token that is invalid, expired or of another kind. */
+export const verifyToken = <T extends TokenType>(args: {
+  token: string;
+  accept: readonly T[];
+}): VerifiedToken<T> | null => {
+  try {
+    const payload = jwt.verify(args.token, JWT_SECRET);
+    if (typeof payload === 'string' || typeof payload.exp !== 'number') {
+      return null;
+    }
+    const { typ } = payload;
+    if (!isAccepted(args.accept, typ)) return null;
+    return { ...payload, typ };
+  } catch {
+    return null;
+  }
+};

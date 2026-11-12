@@ -1,43 +1,28 @@
-import jwt from 'jsonwebtoken';
-
 import { DomainError } from '../errors';
-import { JWT_SECRET } from '../middleware/auth';
+import { signToken, verifyToken } from './signedTokens';
 
 // Lets an external converter fetch one file without being a SOAT user. Scoped
 // to a single file id, so it cannot read any other.
 
-const DOWNLOAD_TOKEN_PURPOSE = 'file-download';
 const DEFAULT_TTL_SECONDS = 10 * 60; // 10 minutes
-
-type DownloadTokenPayload = {
-  fileId: string;
-  purpose: string;
-};
 
 export const signFileDownloadToken = (args: {
   fileId: string;
   ttlSeconds?: number;
 }): string => {
-  return jwt.sign(
-    { fileId: args.fileId, purpose: DOWNLOAD_TOKEN_PURPOSE },
-    JWT_SECRET,
-    { expiresIn: args.ttlSeconds ?? DEFAULT_TTL_SECONDS }
-  );
+  return signToken({
+    typ: 'file-download',
+    claims: { fileId: args.fileId },
+    expiresIn: args.ttlSeconds ?? DEFAULT_TTL_SECONDS,
+  });
 };
 
 export const verifyFileDownloadToken = (args: {
   token: string;
   fileId: string;
 }): boolean => {
-  try {
-    const payload = jwt.verify(args.token, JWT_SECRET) as DownloadTokenPayload;
-    return (
-      payload.purpose === DOWNLOAD_TOKEN_PURPOSE &&
-      payload.fileId === args.fileId
-    );
-  } catch {
-    return false;
-  }
+  const payload = verifyToken({ token: args.token, accept: ['file-download'] });
+  return payload?.fileId === args.fileId;
 };
 
 /**

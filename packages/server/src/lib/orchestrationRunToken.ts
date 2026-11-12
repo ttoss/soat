@@ -1,8 +1,6 @@
 import createDebug from 'debug';
-import jwt from 'jsonwebtoken';
 
 import { db } from '../db';
-import { JWT_SECRET } from '../middleware/auth';
 import {
   parseBound,
   type PrincipalBound,
@@ -13,6 +11,12 @@ import {
   type RequestPrincipal,
   type StartingPrincipal,
 } from './principals';
+import {
+  signToken,
+  ttlFromEnv,
+  type VerifiedToken,
+  verifyToken,
+} from './signedTokens';
 
 const log = createDebug('soat:orchestrations');
 
@@ -35,31 +39,26 @@ export const signRunToken = (payload: {
   projectPublicId: string;
   /**
    * The durable work this token acts for: an orchestration run, or the task
-   * whose `on_enter` automation dispatched an agent generation. Carried
-   * in `orn`, whose *presence* is what marks a run-as token; the value itself
-   * is a provenance breadcrumb and is never an authorization input.
+   * whose `on_enter` automation dispatched an agent generation. Carried in
+   * `orn`, a provenance breadcrumb that is never an authorization input.
    */
   workPublicId: string;
   apiKeyPublicId?: string;
   /** The IAM token bound the work's principal acted under, held again here. */
   bound?: PrincipalBound;
 }) => {
-  const ttl = process.env.SOAT_RUN_TOKEN_TTL || '1h';
-  return jwt.sign(
-    {
+  return signToken({
+    typ: 'run',
+    claims: {
       publicId: payload.publicId,
       role: payload.role,
       prj: payload.projectPublicId,
-      // Without this marker the middleware cannot tell a project-scoped run
-      // token from an OAuth access token, and would build a consent boundary
-      // out of its absent `scope` claim — an allow-nothing policy.
       orn: payload.workPublicId,
       ...(payload.apiKeyPublicId ? { key: payload.apiKeyPublicId } : {}),
       ...(payload.bound ? { bnd: serializeBound(payload.bound) } : {}),
     },
-    JWT_SECRET,
-    { expiresIn: ttl as jwt.SignOptions['expiresIn'] }
-  );
+    expiresIn: ttlFromEnv({ name: 'SOAT_RUN_TOKEN_TTL', fallback: '1h' }),
+  });
 };
 
 /**
@@ -123,7 +122,7 @@ export const buildRunAuthHeader = async (args: {
 
 /** The principal a run token's or an IAM token's verified claims name. */
 const principalOfClaims = (
-  payload: jwt.JwtPayload
+  payload: VerifiedToken<'run' | 'iam'>
 ): (RequestPrincipal & { bound?: PrincipalBound }) | null => {
   const bound = parseBound(payload.bnd);
   if (bound === null) return null;
@@ -133,7 +132,7 @@ const principalOfClaims = (
     return { principalType: 'api_key', principalId: keyClaim, ...boundField };
   }
   const publicId = payload.publicId;
-  if (typeof publicId !== 'string' || payload.itk === true) return null;
+  if (typeof publicId !== 'string' || payload.typ === 'iam') return null;
   return { principalType: 'user', principalId: publicId, ...boundField };
 };
 
@@ -152,20 +151,14 @@ export const readRunTokenPrincipal = (
   authHeader: string | undefined
 ): (RequestPrincipal & { bound?: PrincipalBound }) | null => {
   if (!authHeader?.startsWith('Bearer ')) return null;
-  try {
-    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
-    if (typeof payload === 'string') return null;
-
-    // A trigger run-as token and an OAuth access token each carry a boundary
-    // living in the *token*, not the principal. Re-minting either as a plain
-    // run token would drop that boundary and hand the run more access than the
-    // credential that started it, so those runs record no principal at all.
-    if (typeof payload.orn !== 'string' && payload.itk !== true) return null;
-
-    return principalOfClaims(payload);
-  } catch {
-    return null;
-  }
+  // A trigger token and an OAuth token each carry a boundary living in the
+  // *token*, not the principal. Re-minting either as a run token would drop
+  // that boundary, so those runs record no principal at all.
+  const payload = verifyToken({
+    token: authHeader.slice(7),
+    accept: ['run', 'iam'],
+  });
+  return payload ? principalOfClaims(payload) : null;
 };
 
 /**
@@ -177,13 +170,8 @@ export const readRunTokenWork = (
   authHeader: string | undefined
 ): string | null => {
   if (!authHeader?.startsWith('Bearer ')) return null;
-  try {
-    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
-    if (typeof payload === 'string') return null;
-    return typeof payload.orn === 'string' ? payload.orn : null;
-  } catch {
-    return null;
-  }
+  const payload = verifyToken({ token: authHeader.slice(7), accept: ['run'] });
+  return typeof payload?.orn === 'string' ? payload.orn : null;
 };
 
 /** The one construction of the brand; every other module receives it. */
@@ -205,17 +193,13 @@ const brand = (
  * consented scope — not in the principal, so re-minting a plain run token later
  * would drop that boundary and hand the work the whole of the owning user's
  * access. No principal means self-calls stay unauthenticated, as before.
- *
- * OAuth is identified by elimination — the only project-scoped JWT carrying
- * neither marker claim — mirroring `resolveScopedBoundaryDocs`.
  */
 export const resolveStartingPrincipal = (args: {
   authUser?: {
     publicId: string;
     apiKeyPublicId?: string;
-    oauthProjectPublicId?: string;
+    oauthScope?: string;
     isTriggerToken?: boolean;
-    isRunToken?: boolean;
     bound?: PrincipalBound;
   };
   authHeader?: string;
@@ -226,7 +210,7 @@ export const resolveStartingPrincipal = (args: {
   if (authUser.bound) {
     return brand({ ...principalFromAuthUser(authUser), bound: authUser.bound });
   }
-  if (authUser.oauthProjectPublicId && !authUser.isRunToken) return null;
+  if (authUser.oauthScope !== undefined) return null;
   return brand(principalFromAuthUser(authUser));
 };
 

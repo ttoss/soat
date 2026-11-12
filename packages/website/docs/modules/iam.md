@@ -27,6 +27,8 @@ Every request is authenticated via JWT (users) or an API key, and authorized ent
 
 Three methods, all via `Authorization: Bearer <token>`.
 
+Every token the server signs states its kind, and each endpoint accepts only its own kinds: a bearer on the REST API and on `/mcp` is a login, OAuth, trigger, run or [IAM token](#iam-tokens); a file download token and an ingestion-callback token are accepted only by the one route they were issued for. Any other token is `401`.
+
 ### JWT (Users)
 
 [`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password returns a signed JWT carrying the user's public ID and role. Admins bypass policy evaluation; regular users are authorized by their attached [policies](./policies.md).

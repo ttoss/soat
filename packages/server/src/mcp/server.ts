@@ -10,9 +10,9 @@ import {
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
 import { ISSUER } from '../lib/serverIssuer';
+import { BEARER_TOKEN_TYPES, verifyToken } from '../lib/signedTokens';
 import { buildSoatActionTarget, soatMcpTools } from '../lib/soatTools';
 import { verifyApiKeyToken } from '../middleware/auth';
-import { verifyOauthAccessToken } from '../oauth/server';
 import { dispatchMcpApiRequest } from './dispatchApi';
 import { toMcpText } from './toMcpText';
 
@@ -129,7 +129,7 @@ const mcpRouter = createMcpRouter(mcpServer, {
         if (!apiKeyPayload) throw new Error('Invalid token');
         return apiKeyPayload;
       }
-      const payload = verifyOauthAccessToken(token);
+      const payload = verifyToken({ token, accept: BEARER_TOKEN_TYPES });
       if (!payload) throw new Error('Invalid token');
       return payload;
     },

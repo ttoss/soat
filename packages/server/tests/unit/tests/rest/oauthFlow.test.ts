@@ -3,9 +3,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 
 import { db } from '../../../../src/db';
-import { JWT_SECRET } from '../../../../src/middleware/auth';
-import { verifyOauthAccessToken } from '../../../../src/oauth/server';
+import { signToken, verifyToken } from '../../../../src/lib/signedTokens';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+
+const verifyOauthAccessToken = (token: string) => {
+  return verifyToken({ token, accept: ['oauth'] });
+};
 
 const REDIRECT_URI = 'https://client.example.com/cb';
 
@@ -487,17 +490,17 @@ describe('OAuth authorization server (SPA consent)', () => {
 
       // An OAuth token for that user consenting to ALL permissions (`*`). The
       // broad consent must not let the token exceed the user's read-only ceiling.
-      readOnlyOauthToken = jwt.sign(
-        {
+      readOnlyOauthToken = signToken({
+        typ: 'oauth',
+        claims: {
           sub: userPublicId,
           publicId: userPublicId,
           role: 'user',
           scope: `* mcp:access prj:${projectId}`,
           prj: projectId,
         },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+        expiresIn: '1h',
+      });
     });
 
     test('an all-permissions token can still do what the user is allowed (read)', async () => {
@@ -517,16 +520,16 @@ describe('OAuth authorization server (SPA consent)', () => {
 
     test('a token carrying a scope claim but no project is refused', async () => {
       const userPublicId = jwt.decode(readOnlyOauthToken, { json: true })?.sub;
-      const projectlessToken = jwt.sign(
-        {
+      const projectlessToken = signToken({
+        typ: 'oauth',
+        claims: {
           sub: userPublicId,
           publicId: userPublicId,
           role: 'user',
           scope: '* mcp:access',
         },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+        expiresIn: '1h',
+      });
 
       const res = await authenticatedTestClient(projectlessToken).get(
         `/api/v1/files/${fileId}`
@@ -536,16 +539,16 @@ describe('OAuth authorization server (SPA consent)', () => {
 
     test('a project-scoped token with no scope claim grants nothing', async () => {
       const userPublicId = jwt.decode(readOnlyOauthToken, { json: true })?.sub;
-      const unscopedToken = jwt.sign(
-        {
+      const unscopedToken = signToken({
+        typ: 'oauth',
+        claims: {
           sub: userPublicId,
           publicId: userPublicId,
           role: 'user',
           prj: projectId,
         },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+        expiresIn: '1h',
+      });
 
       const res = await authenticatedTestClient(unscopedToken).get(
         `/api/v1/files/${fileId}`
