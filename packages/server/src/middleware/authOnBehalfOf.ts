@@ -1,8 +1,6 @@
 import type { AuthUser, Context } from '../Context';
-import type { PolicySets } from '../lib/iam';
 import { resolveGenerationIdentitySets } from '../lib/onBehalfOfIdentity';
-import { createPolicySetsIsAllowed } from '../lib/permissions';
-import { createApiKeyResolveProjectIds } from './authProjectResolvers';
+import { narrowAuthority } from './authority';
 
 /**
  * A request carrying the assertion of a generation's tool call runs as the key
@@ -18,37 +16,18 @@ export const narrowToOnBehalfOf = (args: {
   const projectPublicId = authUser.apiKeyProjectPublicId;
   if (!generationPublicId || !projectPublicId) return authUser;
 
-  let identity: Promise<PolicySets> | undefined;
-  const getSets = () => {
-    identity ??= resolveGenerationIdentitySets({
-      generationPublicId,
-      projectPublicId,
-    });
-    return identity;
-  };
-  const identityIsAllowed = createPolicySetsIsAllowed({
-    projectPublicId,
-    getSets,
-  });
-
-  const isAllowed: AuthUser['isAllowed'] = async (reqArgs) => {
-    return (
-      (await authUser.isAllowed(reqArgs)) && (await identityIsAllowed(reqArgs))
-    );
-  };
-
   return {
     ...authUser,
-    isAllowed,
-    resolveProjectIds: createApiKeyResolveProjectIds({
-      apiKeyProjectPublicId: projectPublicId,
-      apiKeyIsAllowed: isAllowed,
+    ...narrowAuthority({
+      authority: authUser,
+      projectPublicId,
+      bound: () => {
+        return resolveGenerationIdentitySets({
+          generationPublicId,
+          projectPublicId,
+        });
+      },
       db: args.db,
     }),
-    getPolicies: async (reqProjectPublicId) => {
-      const own = await authUser.getPolicies(reqProjectPublicId);
-      if (own.length === 0) return own;
-      return [...own, ...(await getSets())];
-    },
   };
 };
