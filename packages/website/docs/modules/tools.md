@@ -386,7 +386,7 @@ A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`co
 
 `steps` may be empty when `output` is set: the pipeline then computes `output` over `{ input, steps: {} }` and calls nothing, so a deterministic calculation (a price from cost and margin) is a tool with no outbound call. `round`, `floor`, `ceil` and `let` ([Operators](../advanced/expressions-and-templating.md#operators-beyond-the-standard-set)) keep such a formula short. Empty `steps` with no `output` is `400 PIPELINE_INVALID_STEP`.
 
-Each step's output is captured under `steps.<id>`; a step may reference only earlier steps (forward references rejected at create). The first failing step aborts with `PIPELINE_STEP_FAILED`. Nested `pipeline` targets are bounded by a maximum depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools.
+Each step's output is captured under `steps.<id>`; a step may reference only earlier steps (forward references rejected at create; a `var` inside a `map`, `filter`, `some`, `all`, `none` or `reduce` body reads the element and is not a step reference). The first failing step aborts with `PIPELINE_STEP_FAILED`. Nested `pipeline` targets are bounded by a maximum depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools.
 
 > **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). A step's `input` keys are preserved verbatim as the sub-tool's arguments; author them, and `var` paths, in the casing of the data.
 

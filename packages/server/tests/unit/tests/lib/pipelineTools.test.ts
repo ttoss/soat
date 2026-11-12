@@ -104,6 +104,40 @@ describe('validatePipelineConfig', () => {
     }).not.toThrow();
   });
 
+  test('allows an iterator body var that reads the element, not a step', () => {
+    expect(() => {
+      return validatePipelineConfig({
+        steps: [
+          { id: 'a', toolId: 't1' },
+          {
+            id: 'b',
+            toolId: 't2',
+            input: {
+              x: { some: [{ var: 'steps.a.items' }, { var: 'steps.zzz' }] },
+            },
+          },
+        ],
+      });
+    }).not.toThrow();
+  });
+
+  test('throws on a forward reference read outside any iterator', () => {
+    expect(() => {
+      return validatePipelineConfig({
+        steps: [
+          {
+            id: 'a',
+            toolId: 't1',
+            input: {
+              x: { map: [{ var: 'steps.b.items' }, { var: 'name' }] },
+            },
+          },
+          { id: 'b', toolId: 't2' },
+        ],
+      });
+    }).toThrow(/not an earlier step/i);
+  });
+
   test('throws when output is not an object', () => {
     expect(() => {
       return validatePipelineConfig({
@@ -164,6 +198,31 @@ describe('findUnreferencedPipelineParams', () => {
       },
     });
     expect(unreferenced).toEqual([]);
+  });
+
+  test('flags a parameter read only as an element field inside map or filter', () => {
+    const config = validatePipelineConfig({
+      steps: [
+        {
+          id: 'a',
+          toolId: 't1',
+          input: {
+            names: { map: [{ var: 'input.rows' }, { var: 'input.title' }] },
+            kept: {
+              filter: [{ var: 'input.rows' }, { var: 'input.enabled' }],
+            },
+          },
+        },
+      ],
+    });
+    const unreferenced = findUnreferencedPipelineParams({
+      config,
+      parameters: {
+        type: 'object',
+        properties: { rows: {}, title: {}, enabled: {} },
+      },
+    });
+    expect(unreferenced).toEqual(['title', 'enabled']);
   });
 
   test('returns an empty array when no parameters schema is declared', () => {

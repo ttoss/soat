@@ -2,6 +2,7 @@ import createDebug from 'debug';
 import { LogicEngine } from 'json-logic-engine';
 
 import { DomainError } from '../errors';
+import { rootVarPaths } from './jsonLogicVars';
 
 const log = createDebug('soat:jsonLogicMapping');
 
@@ -139,22 +140,6 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
-/** The first segment of every `var` path in `expression`, at any depth. */
-const varRoots = (expression: unknown, roots: Set<string>): Set<string> => {
-  if (Array.isArray(expression)) {
-    for (const item of expression) varRoots(item, roots);
-  } else if (isPlainObject(expression)) {
-    for (const [key, value] of Object.entries(expression)) {
-      const path = Array.isArray(value) ? value[0] : value;
-      if (key === 'var' && typeof path === 'string') {
-        roots.add(path.split('.')[0]);
-      }
-      varRoots(value, roots);
-    }
-  }
-  return roots;
-};
-
 /**
  * The binding names in evaluation order: each after the bindings it reads.
  * Key order cannot decide it: a binding may read one written after it.
@@ -169,7 +154,8 @@ const bindingOrder = (bindings: Record<string, unknown>): string[] => {
       throw new Error(`let bindings read each other in a cycle at '${name}'.`);
     }
     state.set(name, 'visiting');
-    for (const root of varRoots(bindings[name], new Set())) {
+    for (const path of rootVarPaths(bindings[name])) {
+      const [root] = path.split('.');
       if (root !== name && root in bindings) visit(root);
     }
     state.set(name, 'done');
