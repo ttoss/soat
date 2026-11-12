@@ -325,7 +325,7 @@ describe('Playbook executor references', () => {
         token
       );
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
     });
   });
 

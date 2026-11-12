@@ -362,6 +362,7 @@ describe('versioned write contract', () => {
       prefix: 'verwrite',
       policyActions: [
         'agents:*',
+        'tools:CallTool',
         'deciders:*',
         'guardrails:*',
         'orchestrations:*',

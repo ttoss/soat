@@ -185,6 +185,7 @@ memoryRulesRouter.post('/memory-rules', async (ctx: Context) => {
     memoryStoreId: store.id,
     ...writeArgs(body),
     ...refs,
+    writer: ctx.authUser,
   });
 });
 
@@ -206,6 +207,7 @@ memoryRulesRouter.patch(
       id: ctx.params.memory_rule_id,
       ...writeArgs(body),
       ...refs,
+      writer: ctx.authUser,
     });
   }
 );

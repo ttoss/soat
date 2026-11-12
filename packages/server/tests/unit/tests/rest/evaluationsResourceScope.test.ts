@@ -38,6 +38,7 @@ describe('a policy scoped to one dataset or eval does not reach another', () => 
     'evaluations:RunEval',
     'evaluations:ListEvals',
     'generations:GetGeneration',
+    'agents:CreateAgentGeneration',
   ];
 
   const createDataset = async (name: string): Promise<string> => {
@@ -132,6 +133,7 @@ describe('a policy scoped to one dataset or eval does not reach another', () => 
                 `srn:${projectId}:dataset:${allowedDatasetId}`,
                 `srn:${projectId}:eval:${allowedEvalId}`,
                 `srn:${projectId}:generation:*`,
+                `srn:${projectId}:agent:*`,
               ],
             },
           ],

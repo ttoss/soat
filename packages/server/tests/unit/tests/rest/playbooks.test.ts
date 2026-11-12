@@ -91,6 +91,7 @@ const definitionOf = (ids: { deciderId: string; toolId: string }) => {
 
 describe('Playbooks', () => {
   let DEFINITION: ReturnType<typeof definitionOf>;
+  let deciderId: string;
   let adminToken: string;
   let userToken: string;
   let projectId: string;
@@ -144,15 +145,13 @@ describe('Playbooks', () => {
       projectId,
       name: 'pricing-tool',
     });
-    DEFINITION = definitionOf({
+    deciderId = await createPlaybookDecider({
+      token: adminToken,
+      projectId,
+      name: 'regime-decider',
       toolId,
-      deciderId: await createPlaybookDecider({
-        token: adminToken,
-        projectId,
-        name: 'regime-decider',
-        toolId,
-      }),
     });
+    DEFINITION = definitionOf({ toolId, deciderId });
   });
 
   describe('POST /api/v1/playbooks', () => {
@@ -263,10 +262,10 @@ describe('Playbooks', () => {
       });
       const res = await createPlaybook(token);
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
       expect(res.body.error.meta).toEqual({
-        node_id: 'tax_regime',
         action: 'deciders:CreateDecision',
+        resource: `srn:${projectId}:decider:${deciderId}`,
       });
     });
 

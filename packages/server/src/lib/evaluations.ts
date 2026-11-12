@@ -11,7 +11,10 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { validateScorerReferences } from './evaluationScorerReferences';
+import {
+  evalStarts,
+  validateScorerReferences,
+} from './evaluationScorerReferences';
 import { validateScorers } from './evaluationScorers';
 import {
   assertValid,
@@ -26,6 +29,7 @@ import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 import { rethrowAsConflict } from './uniqueViolation';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const log = createDebug('soat:evaluations');
 
@@ -139,14 +143,16 @@ export const createEval = async (args: {
   scorers: unknown;
   passThreshold?: unknown;
   groupBy?: unknown;
+  writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   const name = requireName(args.name);
   log('createEval: projectId=%d name=%s', args.projectId, name);
 
+  const agentPublicId = requireReferenceId(args.agentId, 'agent_id');
   const agent = await resolveReference({
     model: 'Agent',
     field: 'agent_id',
-    publicId: requireReferenceId(args.agentId, 'agent_id'),
+    publicId: agentPublicId,
     projectId: args.projectId,
   });
   const dataset = await resolveReference({
@@ -167,6 +173,14 @@ export const createEval = async (args: {
   await validateScorerReferences({
     scorers: args.scorers,
     projectId: args.projectId,
+  });
+  await assertWriterHolds({
+    carrier: 'evals',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      actions: evalStarts({ agentId: agentPublicId, scorers: args.scorers }),
+    },
   });
   assertValid(validatePassThreshold(args.passThreshold));
   assertValid(validateGroupBy(args.groupBy));
@@ -273,6 +287,30 @@ const applyEvalReferences = async (args: {
   return agentOutputSchema;
 };
 
+/** The writer rule against the eval as an update leaves it. */
+const assertWriterStartsUpdatedEval = (args: {
+  evaluation: EvalRow;
+  writer: Writer;
+  agentId?: unknown;
+  scorers?: unknown;
+}): Promise<unknown> => {
+  const { evaluation } = args;
+  return assertWriterHolds({
+    carrier: 'evals',
+    writer: args.writer,
+    projectId: evaluation.projectId as number,
+    carried: {
+      actions: evalStarts({
+        agentId:
+          args.agentId === undefined
+            ? (evaluation.agent?.publicId as string)
+            : String(args.agentId),
+        scorers: args.scorers === undefined ? evaluation.scorers : args.scorers,
+      }),
+    },
+  });
+};
+
 export const updateEval = async (args: {
   projectIds?: number[];
   id: string;
@@ -282,6 +320,7 @@ export const updateEval = async (args: {
   scorers?: unknown;
   passThreshold?: unknown;
   groupBy?: unknown;
+  writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   log('updateEval: id=%s', args.id);
 
@@ -317,6 +356,8 @@ export const updateEval = async (args: {
     });
     updates.scorers = scorers;
   }
+
+  await assertWriterStartsUpdatedEval({ ...args, evaluation });
 
   if (args.passThreshold !== undefined) {
     assertValid(validatePassThreshold(args.passThreshold));

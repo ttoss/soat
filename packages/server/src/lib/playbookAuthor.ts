@@ -24,6 +24,7 @@ import { throwPlaybookDefinitionProblems } from './playbookWire';
 import { runPrincipalColumns, type StartingPrincipal } from './principals';
 import { mayStart, START_ACTIONS } from './startActions';
 import type { ValidationProblem } from './validationProblems';
+import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 const log = createDebug('soat:playbooks');
 
@@ -82,23 +83,6 @@ export const executorsOf = (node: PlaybookNode): PlaybookExecutor[] => {
 };
 
 /**
- * Refuses an executor `isAllowed` may not start. Run against the writer when a
- * version is written, and against the version's author before each run, so a
- * permission removed since the write stops the next run.
- */
-export const assertExecutorsStartable = async (args: {
-  definition: PlaybookDefinition;
-  projectPublicId: string;
-  isAllowed: IsAllowedFn;
-}): Promise<void> => {
-  for (const node of args.definition.nodes) {
-    for (const executor of executorsOf(node)) {
-      await assertExecutorStartable({ ...args, node: node.id, executor });
-    }
-  }
-};
-
-/**
  * Every executor `isAllowed` may start that names nothing a run in the project
  * could start, or a tool or tool action a run could not call. One it may not
  * start is left to the permission check, so the answer never tells a caller
@@ -152,10 +136,7 @@ export const executorReferenceProblems = async (args: {
  * is null for a credential carrying its boundary in the token (a trigger or
  * OAuth token): no run can be minted from it.
  */
-export type PlaybookAuthor = {
-  principal: StartingPrincipal | null;
-  isAllowed: IsAllowedFn;
-};
+export type PlaybookAuthor = Writer & { principal: StartingPrincipal | null };
 
 /**
  * Refuses a definition its writer could not run as the version's author: one
@@ -177,10 +158,15 @@ export const assertAuthorCanRun = async (args: {
       'A definition with executors or transformations must be written by a user or an API key: they run as the credential that wrote it.'
     );
   }
-  await assertExecutorsStartable({
-    definition,
-    projectPublicId: args.projectPublicId,
-    isAllowed: author.isAllowed,
+  await assertWriterHolds({
+    carrier: 'playbookVersions',
+    writer: author,
+    projectId: args.projectId,
+    carried: {
+      actions: definition.nodes.flatMap((node) => {
+        return executorsOf(node).map(startOf);
+      }),
+    },
   });
   throwPlaybookDefinitionProblems(
     await executorReferenceProblems({

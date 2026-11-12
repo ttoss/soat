@@ -131,6 +131,7 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
     contextMode: parseNullableString(body.context_mode),
     versionLabel: parseStringOrUndefined(body.version_label),
     createdBy: requestPrincipalFromCtx(ctx),
+    writer: ctx.authUser,
   });
 
   ctx.status = 201;
@@ -205,6 +206,7 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
     versionLabel: parseStringOrUndefined(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
     createdBy: requestPrincipalFromCtx(ctx),
+    writer: ctx.authUser,
   });
 });
 

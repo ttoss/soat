@@ -130,6 +130,10 @@ One row per dataset item per run.
 
 The engine's guarantees hold identically for built-in and custom scorers.
 
+### Who may write an eval
+
+An eval starts its agent, and each `tool` and `decider` scorer, on every run. Every create, update and formation apply therefore needs `agents:CreateAgentGeneration` on the agent, `tools:CallTool` on each scorer tool and `deciders:CreateDecision` on each scorer decider, even when the write changes none of them: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+
 ### Scorers
 
 `scorers` is a discriminated union on `type`. Every scorer produces

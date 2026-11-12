@@ -23,6 +23,8 @@ const ACTIONS = [
   'tools:CreateTool',
   'tools:UpdateTool',
   'tools:DeleteTool',
+  'tools:CallTool',
+  'agents:CreateAgentGeneration',
   'usage:ListEvents',
 ];
 

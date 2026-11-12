@@ -70,6 +70,7 @@ const guardrailVersionArchive = makeVersionArchive({
       document,
       versionLabel: args.label,
       createdBy: args.createdBy,
+      writer: args.writer,
     });
   },
 });

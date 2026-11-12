@@ -40,6 +40,7 @@ describe('every metadata ingress refuses a non-object bag', () => {
         'ingestion-rules:CreateIngestionRule',
         'ingestion-rules:UpdateIngestionRule',
         'tools:CreateTool',
+        'tools:CallTool',
         'metadata-schemas:ListMetadataSchemas',
       ],
     });

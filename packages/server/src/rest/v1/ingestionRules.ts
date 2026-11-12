@@ -109,6 +109,7 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
     metadata: parseMetadataBag(body.metadata),
+    writer: ctx.authUser,
   });
 
   ctx.status = 201;
@@ -122,6 +123,7 @@ ingestionRulesRouter.patch(
       ctx,
       action: 'ingestion-rules:UpdateIngestionRule',
     });
+    requireAuth(ctx);
     const body = ctx.request.body as UpdateBody;
 
     const refs = await resolveConverterRefs({
@@ -145,6 +147,7 @@ ingestionRulesRouter.patch(
       chunkSize: body.chunk_size,
       chunkOverlap: body.chunk_overlap,
       metadata: readNullableMetadataBag(body.metadata),
+      writer: ctx.authUser,
     });
   }
 );

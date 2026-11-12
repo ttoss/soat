@@ -79,6 +79,7 @@ export const guardrailsFormationModule = defineFormationModule({
     return createGuardrail({
       projectId,
       createdBy: actor.author,
+      writer: actor,
       name: properties.name as string,
       description: toOptionalString(properties.description),
       document: buildGuardrailDocument(properties)!,
@@ -91,6 +92,7 @@ export const guardrailsFormationModule = defineFormationModule({
     await updateGuardrail({
       id: physicalResourceId,
       createdBy: actor.author,
+      writer: actor,
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       document: buildGuardrailDocument(properties),

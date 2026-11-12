@@ -95,18 +95,6 @@ const NOT_A_CARRIER = {
   UsageEvent: 'records metered use',
 };
 
-/**
- * Model → what it starts that its writer is not yet held to. Each moves into
- * `WRITER_RULE_CARRIERS` with its own `policy_ids` grant.
- */
-const NOT_YET_HELD = {
-  Decider: 'starts its agent or tool on every decision',
-  Eval: 'runs its agent on every eval run',
-  Guardrail: 'calls its context tool on every evaluation',
-  IngestionRule: 'runs its converter tool or agent on every document',
-  MemoryRule: 'runs its agent or tool on every event',
-};
-
 const START_COLUMN =
   /\bdeclare (policyIds|targetId|agentId|toolId|contextToolId|orchestrationId)\b/;
 
@@ -132,16 +120,11 @@ describe('writer rule', () => {
     for (const model of naming) {
       assert.ok(
         registered.includes(model) ||
-          Object.hasOwn(NOT_A_CARRIER, model) ||
-          Object.hasOwn(NOT_YET_HELD, model),
+          Object.hasOwn(NOT_A_CARRIER, model),
         `${model} names a policy, agent, tool or target: add it to WRITER_RULE_CARRIERS (${RULE}) and write it through assertWriterHolds`
       );
     }
-    for (const model of [
-      ...registered,
-      ...Object.keys(NOT_A_CARRIER),
-      ...Object.keys(NOT_YET_HELD),
-    ]) {
+    for (const model of [...registered, ...Object.keys(NOT_A_CARRIER)]) {
       assert.ok(
         fs.existsSync(path.join(modelsDir, `${model}.ts`)),
         `a writer-rule list names a model that does not exist: ${model}`

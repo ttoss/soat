@@ -11,6 +11,8 @@ const DECIDER_ACTIONS = [
   'deciders:GetDeciderVersion',
   'deciders:RestoreDeciderVersion',
   'agents:DeleteAgent',
+  'agents:CreateAgentGeneration',
+  'tools:CallTool',
 ];
 
 const ROUTE_CHOICES = [

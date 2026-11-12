@@ -14,9 +14,10 @@ export const evalsFormationModule = defineFormationModule({
     delete: 'evaluations:DeleteEval',
   },
 
-  create: ({ properties, projectId }) => {
+  create: ({ properties, projectId, actor }) => {
     return createEval({
       projectId,
+      writer: actor,
       name: properties.name,
       agentId: properties.agent_id,
       datasetId: properties.dataset_id,
@@ -26,9 +27,10 @@ export const evalsFormationModule = defineFormationModule({
     });
   },
 
-  update: ({ properties, physicalResourceId }) => {
+  update: ({ properties, physicalResourceId, actor }) => {
     return updateEval({
       id: physicalResourceId,
+      writer: actor,
       name: toOptionalString(properties.name),
       agentId: toOptionalString(properties.agent_id),
       datasetId: toOptionalString(properties.dataset_id),

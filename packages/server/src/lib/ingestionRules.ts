@@ -12,6 +12,7 @@ import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { isUniqueViolation } from './uniqueViolation';
+import { assertWriterHolds, startsOfRow, type Writer } from './writerRule';
 
 const log = createDebug('soat:ingestionRules');
 
@@ -193,6 +194,7 @@ export const createIngestionRule = async (args: {
   chunkSize?: number | null;
   chunkOverlap?: number | null;
   metadata?: object | null;
+  writer: Writer;
 }): Promise<MappedIngestionRule> => {
   log(
     'createIngestionRule: projectId=%d contentTypeGlob=%s toolId=%s agentId=%s',
@@ -219,6 +221,12 @@ export const createIngestionRule = async (args: {
   if (validationError) {
     throw new DomainError('INGESTION_RULE_VALIDATION_FAILED', validationError);
   }
+  await assertWriterHolds({
+    carrier: 'ingestionRules',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: { actions: await startsOfRow(args) },
+  });
 
   const rule = await createIngestionRuleRow(
     buildIngestionRuleCreateValues(args)
@@ -319,6 +327,7 @@ export const updateIngestionRule = async (args: {
   chunkSize?: number | null;
   chunkOverlap?: number | null;
   metadata?: object | null;
+  writer: Writer;
 }): Promise<MappedIngestionRule> => {
   log('updateIngestionRule: id=%s', args.id);
 
@@ -360,6 +369,17 @@ export const updateIngestionRule = async (args: {
   if (validationError) {
     throw new DomainError('INGESTION_RULE_VALIDATION_FAILED', validationError);
   }
+  await assertWriterHolds({
+    carrier: 'ingestionRules',
+    writer: args.writer,
+    projectId: rule.projectId,
+    carried: {
+      actions: await startsOfRow({
+        toolId: finalToolId,
+        agentId: finalAgentId,
+      }),
+    },
+  });
 
   await updateIngestionRuleRow({
     rule,

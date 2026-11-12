@@ -269,9 +269,8 @@ describe('Formations — playbook resources', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(res.body.error.message).toBe(
-        "The playbook's author may not start the tool on node 'pricing'."
-      );
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
+      expect(res.body.error.meta.action).toBe('tools:CallTool');
     });
 
     test('returns 403 naming the action the deployer lacks', async () => {
