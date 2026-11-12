@@ -202,8 +202,8 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 ```
 
 - The answer is `200 { "allowed": true | false }`, never `403`: the caller's own policies (owner, key or OAuth boundary, project scope), evaluated as for a built-in route.
-- `action` must be a registered `module:Operation`, or one the writer rule asks (below); any other built-in action or a wildcard is `400 VALIDATION_FAILED`.
-- The SRN's type must be one the action's module registered; `<id>` may be `*` for a create or a list. The project and resource are not looked up.
+- `action` must be a registered `module:Operation` or a built-in action (`agents:DeleteAgent`); an unknown action or a wildcard is `400 VALIDATION_FAILED`.
+- The SRN's type must be one the action's module registered, or for a built-in action one its module's routes check it on (`agent` or `session` for `agents:*`); any other type is `400 VALIDATION_FAILED`. `projects:*` and `users:*` are checked on no typed SRN, so they are always `400`. `<id>` may be `*` for a create or a list. The project and resource are not looked up.
 - `context.tags` feeds `iam:ResourceTag/<key>` conditions, and `iam:ResourceType` is the SRN's type.
 - A check is not an action, so it writes no [audit log](./audit-log.md) entry.
 
@@ -218,7 +218,7 @@ A resource that acts after the write that made it does no more than whoever writ
 | grants a shared action | that action on the shared resource | `403 ACTION_NOT_HELD` |
 | sends a secret | `secrets:UseSecret` on it | `403 FORBIDDEN` |
 
-A version restore or a release is an edit. A deployment storing a resource of its own that starts runtime work, such as a channel that runs an agent, asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), which takes these actions on their resource type (`srn:<project_id>:agent:<id>`, `srn:<project_id>:secret:<id>`).
+A version restore or a release is an edit. A deployment storing a resource of its own that starts runtime work, such as a channel that runs an agent, asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), which takes these actions, and any other built-in action the resource will perform, on their resource type (`srn:<project_id>:agent:<id>`, `srn:<project_id>:secret:<id>`).
 
 ## Conditions
 

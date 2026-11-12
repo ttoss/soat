@@ -9,7 +9,7 @@ import {
   assertWriterMayAttach,
   type GetWriterPolicies,
 } from './policyGrantCoverage';
-import { assertSecretUseAllowed, SECRET_USE_ACTION } from './secretUse';
+import { assertSecretUseAllowed } from './secretUse';
 import { START_ACTIONS, type StartableType } from './startActions';
 
 const log = createDebug('soat:writerRule');
@@ -63,18 +63,6 @@ export const WRITER_RULE_CARRIERS = {
 } satisfies Record<string, WriterRuleCarrier>;
 
 export type WriterRuleCarrierName = keyof typeof WRITER_RULE_CARRIERS;
-
-/**
- * Each action the rule asks of a writer beyond policies, with the resource
- * type it is asked on. A resource stored outside the runtime asks them of its
- * writer through `POST /api/v1/iam/check`.
- */
-export const WRITER_RULE_ACTIONS: ReadonlyMap<string, string> = new Map([
-  ...Object.values(START_ACTIONS).map((start): [string, string] => {
-    return [start.action, start.resourceType];
-  }),
-  [SECRET_USE_ACTION, 'secret'],
-]);
 
 /** What starting the work of `type` named `id` performs. */
 export const startOf = (args: {

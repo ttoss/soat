@@ -119,13 +119,13 @@ describe('POST /api/v1/iam/check', () => {
     expect(otherAction.body).toEqual({ allowed: false });
   });
 
-  // A resource a deployment stores starts runtime work later, so its writer
-  // is asked what the writer rule asks of a runtime carrier.
-  test('evaluates the start and secret-use actions of the writer rule', async () => {
+  // A resource a deployment stores performs runtime actions later, so its
+  // writer is asked whether they may perform each one.
+  test('evaluates any built-in action on a resource type its module checks', async () => {
     const policyId = await createPolicy([
       {
         effect: 'Allow',
-        action: ['agents:CreateAgentGeneration', 'secrets:UseSecret'],
+        action: ['agents:DeleteAgent', 'secrets:UseSecret'],
         resource: [
           `srn:${projectId}:agent:agt_1`,
           `srn:${projectId}:secret:sec_1`,
@@ -136,10 +136,12 @@ describe('POST /api/v1/iam/check', () => {
 
     const answers = await Promise.all(
       [
+        ['agents:DeleteAgent', `srn:${projectId}:agent:agt_1`],
+        ['agents:DeleteAgent', `srn:${projectId}:agent:agt_2`],
         ['agents:CreateAgentGeneration', `srn:${projectId}:agent:agt_1`],
-        ['agents:CreateAgentGeneration', `srn:${projectId}:agent:agt_2`],
         ['secrets:UseSecret', `srn:${projectId}:secret:sec_1`],
-        ['tools:CallTool', `srn:${projectId}:tool:tool_1`],
+        ['secrets:GetSecret', `srn:${projectId}:secret:sec_1`],
+        ['ai-providers:GetAiProvider', `srn:${projectId}:aiProvider:aip_1`],
       ].map(([action, resource]) => {
         return check(key, { action, resource });
       })
@@ -152,7 +154,9 @@ describe('POST /api/v1/iam/check', () => {
     ).toEqual([
       [200, true],
       [200, false],
+      [200, false],
       [200, true],
+      [200, false],
       [200, false],
     ]);
   });
@@ -289,20 +293,29 @@ describe('POST /api/v1/iam/check', () => {
         },
       ],
       [
-        'a built-in action',
+        'an action no built-in module performs',
         () => {
           return {
-            action: 'secrets:GetSecret',
-            resource: `srn:${projectId}:secret:sec_1`,
+            action: 'agents:DeleteEverything',
+            resource: `srn:${projectId}:agent:agt_1`,
           };
         },
       ],
       [
-        'a writer-rule action on a resource type it does not start',
+        'a built-in action on a resource type its module does not check',
         () => {
           return {
-            action: 'tools:CallTool',
-            resource: `srn:${projectId}:agent:agt_1`,
+            action: 'agents:DeleteAgent',
+            resource: `srn:${projectId}:tool:tool_1`,
+          };
+        },
+      ],
+      [
+        'a built-in action checked on no typed resource',
+        () => {
+          return {
+            action: 'projects:UpdateProject',
+            resource: `srn:${projectId}:project:${projectId}`,
           };
         },
       ],
