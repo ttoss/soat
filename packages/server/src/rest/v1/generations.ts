@@ -55,7 +55,6 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     action: 'generations:ListGenerations',
     resourceType: 'generation',
     projectSelector: 'none',
-    emptyScope: 'forbidden',
   });
 
   const {

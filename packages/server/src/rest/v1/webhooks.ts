@@ -30,7 +30,6 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
     action: 'webhooks:ListWebhooks',
     resourceType: 'webhook',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listWebhooks({

@@ -131,6 +131,25 @@ test('no list route reads project_id or resolves its scope itself', () => {
   assert.deepEqual(offenders, []);
 });
 
+const EMPTY_SCOPE_CHECK = /\bprojectIds\??\.length\s*(?:===|<)\s*[01]\b|\.length\s*===\s*0[^;]*\bFORBIDDEN\b/;
+const LIST_SCOPE_SOURCE = path.join(routesDir, 'listScope.ts');
+
+test('no list route answers 403 to a caller permitted in no project', () => {
+  const offenders = scoped()
+    .filter((route) => {
+      return EMPTY_SCOPE_CHECK.test(route.body);
+    })
+    .map((route) => {
+      return route.key;
+    });
+  const chokepoint = stripComments(
+    fs.readFileSync(LIST_SCOPE_SOURCE, 'utf-8')
+  );
+  if (/\bFORBIDDEN\b/.test(chokepoint)) offenders.push('listScope.ts');
+
+  assert.deepEqual(offenders, []);
+});
+
 test('exports require project_id through the chokepoint', () => {
   const offenders = scoped()
     .filter((route) => {

@@ -160,7 +160,6 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     action: 'approvals:ListApprovals',
     resourceType: 'approval',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listApprovals({
@@ -183,7 +182,6 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
     action: 'approvals:ListApprovalRecurrences',
     resourceType: 'approval',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const minCountRaw = ctx.query.min_count as string | undefined;

@@ -114,7 +114,6 @@ decidersRouter.get('/deciders', async (ctx: Context) => {
     action: 'deciders:ListDeciders',
     resourceType: 'decider',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listDeciders({ projectIds, ...parsePagination(ctx) });
@@ -323,7 +322,6 @@ decidersRouter.get('/decisions', async (ctx: Context) => {
     action: 'deciders:ListDecisions',
     resourceType: 'decision',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listDecisions({

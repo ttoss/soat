@@ -61,7 +61,6 @@ oauthClientsRouter.get('/oauth-clients', async (ctx: Context) => {
     action: 'oauth-clients:ListOauthClients',
     resourceType: 'oauth_client',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listOauthClients({
     projectIds,

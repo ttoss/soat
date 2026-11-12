@@ -78,7 +78,7 @@ Every guard in `src/rest/v1/helpers.ts` throws; call one as a bare statement:
 |---|---|---|
 | `requireAuth(ctx)` | no project to resolve; TS assertion, narrows `ctx.authUser` (never `ctx.authUser!`) | `UNAUTHORIZED` |
 | `resolveReadProjectIds({ ctx, action, resourceType, projectPublicId? })` | `Get`/`List`/`Search`/`Export` only; empty scope → empty result | `UNAUTHORIZED` · `API_KEY_PROJECT_SCOPE` · `FORBIDDEN` |
-| `resolveListScope({ ctx, action, resourceType, projectSelector, emptyScope })` (`listScope.ts`) | every list route; reads `?project_id` itself (`tests/harness/listScopeChokepoint.test.mjs`) | same + `VALIDATION_FAILED` |
+| `resolveListScope({ ctx, action, resourceType, projectSelector })` (`listScope.ts`) | every list route; reads `?project_id` itself; empty scope → empty result (`tests/harness/listScopeChokepoint.test.mjs`) | same + `VALIDATION_FAILED` |
 | `requireProjectAccess({ … })` | loads one resource; empty scope → `403` | same + `FORBIDDEN` |
 | `resolveWriteProjectId({ … })` | create/write needing one project | same + `VALIDATION_FAILED` |
 | `requireAdmin(ctx, action)` | non-IAM role gate | `UNAUTHORIZED` · `FORBIDDEN` |

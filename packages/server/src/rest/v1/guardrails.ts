@@ -151,7 +151,6 @@ guardrailsRouter.get('/guardrails', async (ctx: Context) => {
     action: 'guardrails:ListGuardrails',
     resourceType: 'guardrail',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listGuardrails({ projectIds, ...parsePagination(ctx) });

@@ -44,7 +44,6 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
     action: 'exceptions:ListExceptions',
     resourceType: 'exception',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listExceptions({

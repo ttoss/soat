@@ -40,7 +40,6 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
     action: 'secrets:ListSecrets',
     resourceType: 'secret',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listSecrets({

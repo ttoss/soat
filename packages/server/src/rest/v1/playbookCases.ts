@@ -93,7 +93,6 @@ playbookCasesRouter.get('/playbook-cases', async (ctx: Context) => {
     action: 'playbooks:ListPlaybookCases',
     resourceType: 'playbook_case',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listPlaybookCases({

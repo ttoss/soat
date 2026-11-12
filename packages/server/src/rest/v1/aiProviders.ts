@@ -52,7 +52,6 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
     action: 'ai-providers:ListAiProviders',
     resourceType: 'aiProvider',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const page = await listAiProviders({

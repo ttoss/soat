@@ -101,7 +101,6 @@ sharesRouter.get('/shares', async (ctx: Context) => {
       action: 'shares:ListShares',
       resourceType: 'share',
       projectSelector: 'implied',
-      emptyScope: 'empty',
     });
     ctx.body =
       projectIds?.length && projectPublicId
@@ -119,7 +118,6 @@ sharesRouter.get('/shares', async (ctx: Context) => {
     action: 'shares:ListShares',
     resourceType: 'share',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
   ctx.body = await listPublishedShares({
     projectIds,

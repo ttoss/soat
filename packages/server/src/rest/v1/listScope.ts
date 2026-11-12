@@ -14,9 +14,6 @@ import { resolveReadProjectIds, resolveWriteProjectPublicId } from './helpers';
  */
 export type ProjectSelector = 'optional' | 'required' | 'implied' | 'none';
 
-/** What a caller permitted in no project gets: an empty scope, or `403`. */
-export type EmptyScope = 'empty' | 'forbidden';
-
 export type ListScope = {
   /** `undefined` is no project filter; `[]` matches no project. */
   projectIds: number[] | undefined;
@@ -50,8 +47,9 @@ const selectedProjectPublicId = (args: {
 };
 
 /**
- * The project scope of every list route. Both answers are required, so a new
- * list states whether it spans projects and what an empty scope means;
+ * The project scope of every list route. `projectSelector` is required, so a
+ * new list states whether it spans projects. A caller permitted in no project
+ * gets `[]`, an empty page, never a `403`;
  * `tests/harness/listScopeChokepoint.test.mjs` holds list routes to it.
  */
 export const resolveListScope = async (args: {
@@ -59,7 +57,6 @@ export const resolveListScope = async (args: {
   action: string;
   resourceType: string;
   projectSelector: ProjectSelector;
-  emptyScope: EmptyScope;
 }): Promise<ListScope> => {
   const projectPublicId = selectedProjectPublicId(args);
   const projectIds = await resolveReadProjectIds({
@@ -68,10 +65,6 @@ export const resolveListScope = async (args: {
     action: args.action,
     resourceType: args.resourceType,
   });
-
-  if (args.emptyScope === 'forbidden' && projectIds?.length === 0) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   return { projectIds, projectPublicId };
 };

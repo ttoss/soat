@@ -40,11 +40,6 @@ const mapQueueStats = (args: { stats: QueueStats; restricted: boolean }) => {
   };
 };
 
-/**
- * The caller's queue scope. An empty scope — the action granted on no project —
- * is forbidden for these operator endpoints, not an empty result, so this takes
- * the stricter of the two preambles.
- */
 const queueStatsFor = async (ctx: Context) => {
   requireAuth(ctx);
   const { projectIds } = await resolveListScope({
@@ -52,7 +47,6 @@ const queueStatsFor = async (ctx: Context) => {
     action: 'orchestrations:GetQueueStats',
     resourceType: 'orchestration',
     projectSelector: 'none',
-    emptyScope: 'forbidden',
   });
   return {
     stats: await getOrchestrationQueueDriver().stats({ projectIds }),

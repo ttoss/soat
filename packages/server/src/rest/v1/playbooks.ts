@@ -138,7 +138,6 @@ playbooksRouter.get('/playbooks', async (ctx: Context) => {
     action: 'playbooks:ListPlaybooks',
     resourceType: 'playbook',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listPlaybooks({ projectIds, ...parsePagination(ctx) });

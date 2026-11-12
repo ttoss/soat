@@ -3167,13 +3167,18 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
-    // Unlike get-by-id, the list route explicitly checks for an empty
-    // projectIds array and 403s rather than falling through to an
-    // empty-filter query.
-    test('user without permission returns 404', async () => {
+    test('a caller permitted in no project gets an empty page', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
       );
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ data: [], next_cursor: null });
+    });
+
+    test('naming a project the caller may not read returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .get('/api/v1/orchestration-runs')
+        .query({ project_id: projectId });
       expect(response.status).toBe(403);
     });
   });

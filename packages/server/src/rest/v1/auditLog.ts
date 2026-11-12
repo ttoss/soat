@@ -33,7 +33,6 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
     action: 'audit:ListAuditEntries',
     resourceType: 'audit',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   ctx.body = await listAuditEntries({
@@ -60,7 +59,6 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
     action: 'audit:ExportAuditEntries',
     resourceType: 'audit',
     projectSelector: 'required',
-    emptyScope: 'empty',
   });
 
   // The generator emits the snake_case read contract directly.

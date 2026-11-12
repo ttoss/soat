@@ -173,7 +173,6 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     action: 'agents:ListSessions',
     resourceType: 'session',
     projectSelector: 'optional',
-    emptyScope: 'forbidden',
   });
 
   // A list authorizes before it has rows, so the policy is compiled into the

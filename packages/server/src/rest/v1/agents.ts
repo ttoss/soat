@@ -281,7 +281,6 @@ agentsRouter.get('/agents', async (ctx: Context) => {
     action: 'agents:ListAgents',
     resourceType: 'agent',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const page = await listAgents({ projectIds, ...parsePagination(ctx) });

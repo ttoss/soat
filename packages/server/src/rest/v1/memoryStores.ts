@@ -132,7 +132,6 @@ memoryStoresRouter.get('/memory-stores', async (ctx: Context) => {
     action: 'memories:ListMemoryStores',
     resourceType: 'memory_store',
     projectSelector: 'optional',
-    emptyScope: 'empty',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({
