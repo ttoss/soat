@@ -503,6 +503,27 @@ describe('IAM', () => {
         })
       ).toBe(false);
     });
+
+    test('a glob project segment matches before a trailing wildcard', () => {
+      expect(
+        matchesPattern({
+          pattern: 'srn:proj_A*:file:*',
+          value: 'srn:proj_ABC:file:file_123',
+        })
+      ).toBe(true);
+      expect(
+        matchesPattern({
+          pattern: 'srn:*:file:*',
+          value: 'srn:proj_ABC:file:file_123',
+        })
+      ).toBe(true);
+      expect(
+        matchesPattern({
+          pattern: 'srn:proj_A*:file:*',
+          value: 'srn:proj_XYZ:file:file_123',
+        })
+      ).toBe(false);
+    });
   });
 
   describe('evaluateCondition', () => {
