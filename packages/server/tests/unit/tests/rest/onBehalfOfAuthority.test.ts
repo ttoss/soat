@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import { ISSUER } from 'src/lib/serverIssuer';
-import { JWT_SECRET } from 'src/middleware/auth';
+import { signToken } from 'src/lib/signedTokens';
 
 import {
   type AgentToolTurn,
@@ -299,16 +299,16 @@ describe('On-Behalf-Of authority', () => {
       });
       const admin = jwt.decode(turn.adminToken) as { publicId: string };
       // An OAuth token starts a generation that records no caller.
-      const oauthToken = jwt.sign(
-        {
+      const oauthToken = signToken({
+        typ: 'oauth',
+        claims: {
           publicId: admin.publicId,
           role: 'admin',
           scope: `agents:* tools:* prj:${turn.projectId}`,
           prj: turn.projectId,
         },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+        expiresIn: '1h',
+      });
       const generation = await authenticatedTestClient(oauthToken)
         .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [proposeCalls([{ name: 'echo', args: {} }])] });
