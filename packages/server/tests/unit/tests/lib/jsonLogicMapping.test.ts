@@ -197,6 +197,23 @@ describe('jsonLogicMapping', () => {
       ).toBe(3);
     });
 
+    test('an element field inside map or filter is not a binding dependency', () => {
+      expect(
+        evaluateLogic(
+          {
+            let: [
+              {
+                a: { map: [{ var: 'rows' }, { var: 'b' }] },
+                b: { filter: [{ var: 'a' }, { var: '' }] },
+              },
+              { var: 'b' },
+            ],
+          },
+          { rows: [{ b: 1 }, { b: 0 }, { b: 2 }] }
+        )
+      ).toEqual([1, 2]);
+    });
+
     test('bindings that read each other in a cycle fail', () => {
       expect(() => {
         return evaluateLogic(

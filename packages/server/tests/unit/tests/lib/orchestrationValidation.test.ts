@@ -35,6 +35,14 @@ describe('collectVarRefs', () => {
     expect(collectVarRefs({ var: 0 })).toEqual([]);
   });
 
+  test('leaves out vars that read an iterator element', () => {
+    expect(
+      collectVarRefs({
+        map: [{ var: 'items' }, { cat: [{ var: 'name' }, { var: '../../x' }] }],
+      })
+    ).toEqual(['items', 'x']);
+  });
+
   test('returns nothing for literals', () => {
     expect(collectVarRefs('hello')).toEqual([]);
     expect(collectVarRefs(42)).toEqual([]);
