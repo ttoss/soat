@@ -1,5 +1,5 @@
 import { db } from 'src/db';
-import { readKnowledgeConfig } from 'src/lib/agentKnowledge';
+import { readKnowledgeConfig } from 'src/lib/agentKnowledgeConfig';
 import {
   backfillKnowledgeConfigCasing,
   toWireKnowledgeConfig,

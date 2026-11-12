@@ -121,7 +121,27 @@ type SearchKnowledgeArgs = {
    */
   includeMemories?: boolean;
   policyWhere?: KnowledgePolicyWhere;
+  /**
+   * Further scopes searched with the same query, embedding and ranking: a row
+   * any scope reaches is one candidate, ranked once. Each scope carries its
+   * own filters and policy, so one search can read part of the corpus as one
+   * principal and part as another.
+   */
+  alsoScopes?: KnowledgeScope[];
 };
+
+/** Which rows one scope of a search reaches, and the policy bounding them. */
+export type KnowledgeScope = Pick<
+  SearchKnowledgeArgs,
+  | 'paths'
+  | 'documentIds'
+  | 'memoryStoreIds'
+  | 'tags'
+  | 'metadata'
+  | 'includeDocuments'
+  | 'includeMemories'
+  | 'policyWhere'
+>;
 
 /**
  * The caller's compiled policy, one clause per store the search reads. Keyed
@@ -149,7 +169,7 @@ const namesAny = (...filters: Array<string[] | undefined>): boolean => {
  * happens to name the other store.
  */
 const getSearchFlags = (
-  args: SearchKnowledgeArgs
+  args: KnowledgeScope & { query?: string }
 ): { hasDocumentSearch: boolean; hasMemoryStoreSearch: boolean } => {
   // `query` and `tags` name no store, so either one reaches both.
   const everyStore = args.query !== undefined || hasTagFilter(args.tags);
@@ -237,25 +257,87 @@ const knowledgeKey = (result: KnowledgeResult): string => {
     : `memory:${result.memory_id}`;
 };
 
+const dedupeByKey = (results: KnowledgeResult[]): KnowledgeResult[] => {
+  const seen = new Set<string>();
+  return results.filter((result) => {
+    const key = knowledgeKey(result);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+/** One scope's contribution from each store, before ranking. */
+const collectScope = async (args: {
+  scope: KnowledgeScope;
+  projectIds?: number[];
+  query?: string;
+  embedding: number[] | undefined;
+  minSimilarity?: number;
+  limit: number;
+}): Promise<{
+  documents: SearchCandidates<QueryDocumentResult>;
+  memoryStores: SearchCandidates<MemoryKnowledgeResult>;
+}> => {
+  const { scope, query, limit } = args;
+  const { hasDocumentSearch, hasMemoryStoreSearch } = getSearchFlags({
+    ...scope,
+    query,
+  });
+  const metadataWhere = compileStructuredWhere({
+    filter: scope.metadata,
+    attribute: 'metadata',
+    column: DOCUMENT_METADATA_COLUMN,
+  });
+
+  const [documents, memoryStores] = await Promise.all([
+    hasDocumentSearch
+      ? resolveDocumentSearchLists({
+          projectIds: args.projectIds,
+          embedding: args.embedding,
+          policyWhere: scope.policyWhere?.document,
+          config: {
+            search: query,
+            minSimilarity: args.minSimilarity,
+            limit,
+            paths: scope.paths,
+            documentIds: scope.documentIds,
+            tags: scope.tags,
+            metadataWhere,
+          },
+        })
+      : Promise.resolve(emptyCandidates<QueryDocumentResult>(query)),
+    hasMemoryStoreSearch
+      ? resolveMemoryStoreSearchLists({
+          projectIds: args.projectIds,
+          embedding: args.embedding,
+          policyWhere: scope.policyWhere,
+          config: {
+            memoryStoreIds: scope.memoryStoreIds,
+            tags: scope.tags,
+            search: query,
+            minSimilarity: args.minSimilarity,
+            limit,
+          },
+        })
+      : Promise.resolve(emptyCandidates<MemoryKnowledgeResult>(query)),
+  ]);
+  return { documents, memoryStores };
+};
+
 export const searchKnowledge = async (
   args: SearchKnowledgeArgs
 ): Promise<KnowledgeResult[]> => {
-  const { hasDocumentSearch, hasMemoryStoreSearch } = getSearchFlags(args);
   // Clamped here rather than at the route: every caller — the search route,
   // agent knowledge injection and the orchestration node — reaches the vector
   // scan through this one function.
   const limit = clampKnowledgeSearchLimit(args.limit);
 
-  // Once, for both stores. Embedding per store would bill the same text twice
-  // and let the halves disagree: one call failing would leave documents with a
-  // `similarity_score` and memory stores without, which the contract reserves for a
-  // search that answered from the lexical channel alone.
-  const metadataWhere = compileStructuredWhere({
-    filter: args.metadata,
-    attribute: 'metadata',
-    column: DOCUMENT_METADATA_COLUMN,
-  });
-
+  // Once, for every store and scope. Embedding per store would bill the same
+  // text twice and let the halves disagree: one call failing would leave
+  // documents with a `similarity_score` and memory stores without, which the
+  // contract reserves for a search that answered from the lexical channel
+  // alone.
   const embedding = args.query
     ? await embedQueryOrDegrade({
         text: args.query,
@@ -263,63 +345,55 @@ export const searchKnowledge = async (
       })
     : undefined;
 
-  const [documents, memoryStores] = await Promise.all([
-    hasDocumentSearch
-      ? resolveDocumentSearchLists({
-          projectIds: args.projectIds,
-          embedding,
-          policyWhere: args.policyWhere?.document,
-          config: {
-            search: args.query,
-            minSimilarity: args.minSimilarity,
-            limit,
-            paths: args.paths,
-            documentIds: args.documentIds,
-            tags: args.tags,
-            metadataWhere,
-          },
-        })
-      : Promise.resolve(emptyCandidates<QueryDocumentResult>(args.query)),
-    hasMemoryStoreSearch
-      ? resolveMemoryStoreSearchLists({
-          projectIds: args.projectIds,
-          embedding,
-          policyWhere: args.policyWhere,
-          config: {
-            memoryStoreIds: args.memoryStoreIds,
-            tags: args.tags,
-            search: args.query,
-            minSimilarity: args.minSimilarity,
-            limit,
-          },
-        })
-      : Promise.resolve(emptyCandidates<MemoryKnowledgeResult>(args.query)),
-  ]);
+  const scopes = await Promise.all(
+    [args, ...(args.alsoScopes ?? [])].map((scope) => {
+      return collectScope({
+        scope,
+        projectIds: args.projectIds,
+        query: args.query,
+        embedding,
+        minSimilarity: args.minSimilarity,
+        limit,
+      });
+    })
+  );
 
   if (!args.query) {
     // No query, no ranking signal: each store contributed its one deterministic
     // read — chunk order, then oldest-first entries.
-    return [
-      ...orderedResultsOf(documents).map(toDocumentResult),
-      ...orderedResultsOf(memoryStores),
-    ].slice(0, limit);
+    return dedupeByKey([
+      ...scopes.flatMap((scope) => {
+        return orderedResultsOf(scope.documents).map(toDocumentResult);
+      }),
+      ...scopes.flatMap((scope) => {
+        return orderedResultsOf(scope.memoryStores);
+      }),
+    ]).slice(0, limit);
   }
 
-  const documentShards = signalShardsOf(documents);
-  const memoryStoreShards = signalShardsOf(memoryStores);
+  const shards = scopes.map((scope) => {
+    return {
+      documents: signalShardsOf(scope.documents),
+      memoryStores: signalShardsOf(scope.memoryStores),
+    };
+  });
 
   // Two rankings, not four: each signal's per-store shards are merged on that
   // signal's own comparable value first, so a store cannot claim result slots
   // by position alone. See `mergeSignalShards`.
   return fuseCandidates<KnowledgeResult>({
-    vector: [
-      documentShards.vector.map(toDocumentCandidate),
-      memoryStoreShards.vector,
-    ],
-    lexical: [
-      documentShards.lexical.map(toDocumentCandidate),
-      memoryStoreShards.lexical,
-    ],
+    vector: shards.flatMap((scope) => {
+      return [
+        scope.documents.vector.map(toDocumentCandidate),
+        scope.memoryStores.vector,
+      ];
+    }),
+    lexical: shards.flatMap((scope) => {
+      return [
+        scope.documents.lexical.map(toDocumentCandidate),
+        scope.memoryStores.lexical,
+      ];
+    }),
     keyOf: knowledgeKey,
     rrfK: args.rrfK,
     isMemory: isMemoryResult,

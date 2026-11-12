@@ -1,5 +1,5 @@
 import { deleteAgent, findAgentDeletionBlocker } from '../agentDelete';
-import { toStoredKnowledgeConfig } from '../agentKnowledge';
+import { toStoredKnowledgeConfig } from '../agentKnowledgeConfig';
 import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import type { ValidationError } from '../formationsTypes';

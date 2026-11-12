@@ -68,10 +68,16 @@ export type SignalCandidate<T> = {
  * stores — both embed through one provider into one vector space, and
  * `ts_rank_cd` is the same function over the same configuration — and only the
  * two cross-store rankings are fused.
+ *
+ * Shards may overlap — a search over several scopes reaches one row through
+ * each — and a row counted twice in one ranking would fuse twice, so `keyOf`
+ * keeps its first occurrence.
  */
 export const mergeSignalShards = <T>(args: {
   shards: Array<ReadonlyArray<SignalCandidate<T>>>;
+  keyOf: (item: T) => string;
 }): T[] => {
+  const seen = new Set<string>();
   return args.shards
     .flat()
     .sort((a, b) => {
@@ -79,6 +85,12 @@ export const mergeSignalShards = <T>(args: {
     })
     .map((candidate) => {
       return candidate.item;
+    })
+    .filter((item) => {
+      const key = args.keyOf(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
 };
 
@@ -337,8 +349,8 @@ export const fuseCandidates = <
 }): T[] => {
   const fused = fuseByReciprocalRank({
     lists: [
-      mergeSignalShards({ shards: args.vector }),
-      mergeSignalShards({ shards: args.lexical }),
+      mergeSignalShards({ shards: args.vector, keyOf: args.keyOf }),
+      mergeSignalShards({ shards: args.lexical, keyOf: args.keyOf }),
     ],
     keyOf: args.keyOf,
     k: resolveRrfK(args.rrfK),

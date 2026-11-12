@@ -4,7 +4,7 @@ import {
   compilePolicy,
   registerResourceFieldMap,
 } from 'src/lib/policyCompiler';
-import { compileAcrossPolicySets } from 'src/rest/v1/readPolicy';
+import { compileAcrossPolicySets } from 'src/lib/scopePolicySets';
 
 registerResourceFieldMap({
   resourceType: 'readPolicyResource',
