@@ -4,21 +4,10 @@ import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
-import type { PolicyDocument, PolicySets } from '../lib/iam';
 import { requestOnBehalfOf } from '../lib/onBehalfOf';
-import {
-  createApiKeyIsAllowed,
-  createJwtIsAllowed,
-  createPolicySetsIsAllowed,
-  resolvePolicySets,
-} from '../lib/permissions';
+import { resolvePolicySets } from '../lib/permissions';
 import { narrowToOnBehalfOf } from './authOnBehalfOf';
-import type { IsAllowedFn } from './authProjectResolvers';
-import {
-  createApiKeyResolveProjectIds,
-  createJwtResolveProjectIds,
-  createUnscopedApiKeyResolveProjectIds,
-} from './authProjectResolvers';
+import { type Authority, buildAuthority } from './authority';
 import {
   resolveScopedBoundaryDocs,
   resolveTriggerPolicySets,
@@ -57,29 +46,36 @@ export const signUserToken = (payload: { publicId: string; role: string }) => {
 
 type Next = () => Promise<void>;
 
-const createApiKeyGetPolicies = (args: {
-  apiKeyProjectPublicId: string | undefined;
-  apiKeyPolicyIds: number[];
-  boundaryPolicyDocs?: PolicyDocument[];
-  userPolicyIds: number[];
+/**
+ * An API key's authority: its owner's policies capped by the key's own, pinned
+ * to the key's project when it has one.
+ */
+const apiKeyAuthority = (args: {
+  projectPublicId: string | undefined;
   role: 'admin' | 'user';
+  userPolicyIds: number[];
+  apiKeyPolicyIds: number[];
   db: Context['db'];
-}) => {
-  return async (reqProjectPublicId: string): Promise<PolicySets> => {
-    if (
-      args.apiKeyProjectPublicId &&
-      reqProjectPublicId !== args.apiKeyProjectPublicId
-    ) {
-      return [];
-    }
-    return resolvePolicySets({
-      userRole: args.role,
-      userPolicyIds: args.userPolicyIds,
-      apiKeyPolicyIds: args.apiKeyPolicyIds,
-      boundaryPolicyDocs: args.boundaryPolicyDocs,
-      db: args.db,
-    });
-  };
+}): Authority => {
+  const { role, userPolicyIds, apiKeyPolicyIds, db } = args;
+  return buildAuthority({
+    reach: args.projectPublicId
+      ? { pinned: args.projectPublicId }
+      : {
+          pinned: null,
+          everyProject: role === 'admin' && apiKeyPolicyIds.length === 0,
+          candidatePolicyIds: 'all',
+        },
+    getSets: () => {
+      return resolvePolicySets({
+        userRole: role,
+        userPolicyIds,
+        apiKeyPolicyIds,
+        db,
+      });
+    },
+    db,
+  });
 };
 
 /** The caller a raw `sk_` key resolves to, or undefined when it is not live. */
@@ -110,14 +106,6 @@ const resolveApiKeyAuthUser = async (args: {
     }
   }
 
-  const apiKeyIsAllowed = createApiKeyIsAllowed({
-    apiKeyProjectPublicId,
-    userRole: role,
-    userPolicyIds,
-    apiKeyPolicyIds,
-    db,
-  });
-
   return {
     id: keyUser.id as number,
     publicId: keyUser.publicId as string,
@@ -129,24 +117,11 @@ const resolveApiKeyAuthUser = async (args: {
     ...(apiKeyPolicyIds.length > 0 ? { apiKeyPolicyIds } : {}),
     isControlPlaneKey:
       role === 'admin' && rawProjectId == null && apiKeyPolicyIds.length === 0,
-    isAllowed: apiKeyIsAllowed,
-    resolveProjectIds: apiKeyProjectPublicId
-      ? createApiKeyResolveProjectIds({
-          apiKeyProjectPublicId,
-          apiKeyIsAllowed,
-          db,
-        })
-      : createUnscopedApiKeyResolveProjectIds({
-          userRole: role,
-          hasKeyBoundary: apiKeyPolicyIds.length > 0,
-          apiKeyIsAllowed,
-          db,
-        }),
-    getPolicies: createApiKeyGetPolicies({
-      apiKeyProjectPublicId,
-      apiKeyPolicyIds,
-      userPolicyIds,
+    ...apiKeyAuthority({
+      projectPublicId: apiKeyProjectPublicId,
       role,
+      userPolicyIds,
+      apiKeyPolicyIds,
       db,
     }),
   };
@@ -199,22 +174,6 @@ const buildScopedIdentityFields = (args: {
   };
 };
 
-/** Builds the `getPolicies` implementation for a plain (unscoped) user JWT. */
-const createJwtGetPolicies = (args: {
-  role: 'admin' | 'user';
-  userPolicyIds: number[];
-  db: Context['db'];
-}) => {
-  return async (_: string): Promise<PolicySets> => {
-    return resolvePolicySets({
-      userRole: args.role,
-      userPolicyIds: args.userPolicyIds,
-      apiKeyPolicyIds: [],
-      db: args.db,
-    });
-  };
-};
-
 /**
  * The claims one of our own JWTs can carry. `prj` scopes the token to a project;
  * `trg` / `orn` / `scope` are the marker claims that say *which kind* of
@@ -247,81 +206,79 @@ const verifyJwtClaims = (token: string): JwtClaims | null => {
 };
 
 /**
- * What a JWT may do. A project-scoped credential intersects the owning user's
- * policies with a boundary through the same evaluator API keys use; a trigger
- * token instead acts under the trigger's own policy sets.
+ * What a JWT may do. A project-scoped credential is pinned to its project and
+ * intersects the owning user's policies with its boundary; a trigger token
+ * instead acts under the trigger's own policy sets.
  */
 const resolveJwtAuthority = async (args: {
   payload: JwtClaims;
   role: 'admin' | 'user';
   userPolicyIds: number[];
   db: Context['db'];
-}): Promise<{
-  isAllowed: IsAllowedFn;
-  getPolicies: (projectPublicId: string) => Promise<PolicySets>;
-}> => {
+}): Promise<Authority> => {
   const { payload, role, userPolicyIds, db } = args;
   const scoped = payload.prj;
   if (!scoped) {
-    return {
-      isAllowed: createJwtIsAllowed({ role, userPolicyIds, db }),
-      getPolicies: createJwtGetPolicies({ role, userPolicyIds, db }),
-    };
+    return buildAuthority({
+      reach: {
+        pinned: null,
+        everyProject: role === 'admin',
+        candidatePolicyIds: userPolicyIds,
+      },
+      getSets: () => {
+        return resolvePolicySets({
+          userRole: role,
+          userPolicyIds,
+          apiKeyPolicyIds: [],
+          db,
+        });
+      },
+      db,
+    });
   }
   if (typeof payload.trg === 'string') {
     const triggerPublicId = payload.trg;
-    const getSets = () => {
-      return resolveTriggerPolicySets({
-        triggerPublicId,
-        projectPublicId: scoped,
-        caller: payload.clr
-          ? {
-              role,
-              userPolicyIds,
-              apiKeyPublicId: payload.ckey,
-              oauthScope: payload.cscope,
-            }
-          : undefined,
-        db,
-      });
-    };
-    return {
-      isAllowed: createPolicySetsIsAllowed({
-        projectPublicId: scoped,
-        getSets,
-      }),
-      getPolicies: async (projectPublicId) => {
-        return projectPublicId === scoped ? getSets() : [];
+    return buildAuthority({
+      reach: { pinned: scoped },
+      getSets: () => {
+        return resolveTriggerPolicySets({
+          triggerPublicId,
+          projectPublicId: scoped,
+          caller: payload.clr
+            ? {
+                role,
+                userPolicyIds,
+                apiKeyPublicId: payload.ckey,
+                oauthScope: payload.cscope,
+              }
+            : undefined,
+          db,
+        });
       },
-    };
+      db,
+    });
   }
-  const isRunToken = typeof payload.orn === 'string';
   const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
     scopedProjectPublicId: scoped,
-    isRunToken,
+    isRunToken: typeof payload.orn === 'string',
     runApiKeyPublicId:
       typeof payload.key === 'string' ? payload.key : undefined,
     scopeClaim: payload.scope,
     db,
   });
-  return {
-    isAllowed: createApiKeyIsAllowed({
-      apiKeyProjectPublicId: scoped,
-      userRole: role,
-      userPolicyIds,
-      apiKeyPolicyIds: [],
-      boundaryPolicyDocs,
-      db,
-    }),
-    getPolicies: createApiKeyGetPolicies({
-      apiKeyProjectPublicId: scoped,
-      apiKeyPolicyIds: [],
-      boundaryPolicyDocs,
-      userPolicyIds,
-      role,
-      db,
-    }),
-  };
+  return buildAuthority({
+    reach: { pinned: scoped },
+    getSets: () => {
+      return resolvePolicySets({
+        userRole: role,
+        userPolicyIds,
+        apiKeyPolicyIds: [],
+        boundaryPolicyDocs,
+        db,
+      });
+    },
+    db,
+  });
 };
 
 /**
@@ -346,14 +303,13 @@ export const resolveJwtAuthUser = async (args: {
   const userId = user.id as number;
   const role = user.role as 'admin' | 'user';
   const userPolicyIds = (user.policyIds as number[]) ?? [];
-  const jwtIsAllowed = createJwtIsAllowed({ role, userPolicyIds, db });
   const scopedProjectPublicId = payload.prj;
   const isTriggerToken = typeof payload.trg === 'string';
   const isRunToken = typeof payload.orn === 'string';
   const runApiKeyPublicId =
     typeof payload.key === 'string' ? payload.key : undefined;
 
-  const { isAllowed, getPolicies } = await resolveJwtAuthority({
+  const authority = await resolveJwtAuthority({
     payload,
     role,
     userPolicyIds,
@@ -373,20 +329,7 @@ export const resolveJwtAuthUser = async (args: {
       runWorkPublicId: payload.orn,
       oauthScope: isTriggerToken || isRunToken ? undefined : payload.scope,
     }),
-    isAllowed,
-    resolveProjectIds: scopedProjectPublicId
-      ? createApiKeyResolveProjectIds({
-          apiKeyProjectPublicId: scopedProjectPublicId,
-          apiKeyIsAllowed: isAllowed,
-          db,
-        })
-      : createJwtResolveProjectIds({
-          role,
-          userPolicyIds,
-          jwtIsAllowed,
-          db,
-        }),
-    getPolicies,
+    ...authority,
   };
 };
 
