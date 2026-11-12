@@ -114,6 +114,8 @@ export type ToolAssertionIdentity = {
   /** Public id of the run-as work making the call (`readRunTokenWork`). */
   workId?: string | null;
   context?: Record<string, string>;
+  /** The sender's authority, sealed (`assertionAuthority.ts`): the `ath` claim. */
+  authority: string;
 };
 
 const encode = (value: object): string => {
@@ -170,6 +172,7 @@ export const toolAssertionHeaders = (args: {
       : {}),
     ...(args.identity.workId ? { work_id: args.identity.workId } : {}),
     ...identityClaims(args.identity.context),
+    ath: args.identity.authority,
     body_sha256: crypto
       .createHash('sha256')
       .update(args.body)

@@ -369,6 +369,7 @@ toolsRouter.get('/tools/:tool_id/actions', async (ctx: Context) => {
   ctx.body = await listToolActions({
     projectIds,
     id: ctx.params.tool_id,
+    caller: ctx.authUser,
     ...parsePagination(ctx),
   });
 });
@@ -442,6 +443,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     action: typeof action === 'string' ? action : undefined,
     input: parsedInput,
     authHeader,
+    caller: ctx.authUser,
     // No session here, so nothing downstream will overwrite a forged identity
     // key: the sanitize keeps a caller off the `X-Soat-Context-*` headers a
     // tool trusts, and only a validated `actor_id` is stamped back.

@@ -1,6 +1,6 @@
 import type { db } from '../db';
 import { DomainError } from '../errors';
-import { readKnowledgeConfig } from './agentKnowledge';
+import { readKnowledgeConfig } from './agentKnowledgeConfig';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { narrowToActiveTools } from './agentToolSelection';
 import { agentReferences } from './resourceReferences';

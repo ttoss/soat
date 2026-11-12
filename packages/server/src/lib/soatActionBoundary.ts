@@ -52,19 +52,12 @@ const readResourceId = (args: {
   return typeof value === 'string' && value ? value : null;
 };
 
-/**
- * `null` leaves the caller with today's resource-less check. That happens when
- * the operation names no resource, when the argument naming it is absent, or
- * when the id resolves to nothing — each of which is fail-closed against a
- * scoped boundary, since `*` matches no statement that names an SRN.
- */
-export const resolveSoatActionBoundaryScope = async (args: {
+/** The SRN and tag context of the resource a builtin call names, if any. */
+export const resolveSoatActionScope = async (args: {
   resourceRef?: SoatResourceRef;
   toolArgs: unknown;
-  boundaryPolicy: unknown;
 }): Promise<SoatActionBoundaryScope | null> => {
   if (!args.resourceRef) return null;
-  if (!boundaryNeedsResourceScope(args.boundaryPolicy)) return null;
 
   const publicId = readResourceId({
     ref: args.resourceRef,
@@ -78,7 +71,7 @@ export const resolveSoatActionBoundaryScope = async (args: {
   });
   if (!scope) {
     log(
-      'resolveSoatActionBoundaryScope: %s %s resolved to no scope',
+      'resolveSoatActionScope: %s %s resolved to no scope',
       args.resourceRef.kind,
       publicId
     );
@@ -96,4 +89,19 @@ export const resolveSoatActionBoundaryScope = async (args: {
       tags: scope.tags,
     }),
   };
+};
+
+/**
+ * `null` leaves the caller with today's resource-less check. That happens when
+ * the operation names no resource, when the argument naming it is absent, or
+ * when the id resolves to nothing — each of which is fail-closed against a
+ * scoped boundary, since `*` matches no statement that names an SRN.
+ */
+export const resolveSoatActionBoundaryScope = async (args: {
+  resourceRef?: SoatResourceRef;
+  toolArgs: unknown;
+  boundaryPolicy: unknown;
+}): Promise<SoatActionBoundaryScope | null> => {
+  if (!boundaryNeedsResourceScope(args.boundaryPolicy)) return null;
+  return resolveSoatActionScope(args);
 };

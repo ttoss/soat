@@ -27,6 +27,8 @@ Every request is authenticated via JWT (users) or an API key, and authorized ent
 
 Three methods, all via `Authorization: Bearer <token>`.
 
+Every token the server signs states its kind, and each endpoint accepts only its own kinds: a bearer on the REST API and on `/mcp` is a login, OAuth, trigger, run or [IAM token](#iam-tokens); a file download token and an ingestion-callback token are accepted only by the one route they were issued for. Any other token is `401`.
+
 ### JWT (Users)
 
 [`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password returns a signed JWT carrying the user's public ID and role. Admins bypass policy evaluation; regular users are authorized by their attached [policies](./policies.md).
@@ -59,6 +61,7 @@ It answers `201 { "token", "expires_at" }`.
 - Work the token starts keeps the bound after the token expires: a generation (its tool calls, approvals and `tool-outputs` continuations), a session turn, a task dispatch, an orchestration run, a playbook version and a manual trigger fire. `policy_ids` are re-read by id; an inline `policy` is kept as a snapshot.
 - Only an API key scoped to a project issues one. A user login, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 API_KEY_SCOPED_TOKEN`).
 - Records name the issuing key as the principal; `principal` is opaque, grants nothing, and is recorded with the token's `jti` under `detail.iam_token` on every [audit log](./audit-log.md) entry the token makes.
+- An `mcp` tool called on the token carries the bound and `principal` encrypted in its [assertion](./tools.md#tool-assertions); a tool server calling back with that assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) is capped by them, and its audit entries record `principal` under `detail.on_behalf_of_principal`.
 
 ## Policy Documents
 

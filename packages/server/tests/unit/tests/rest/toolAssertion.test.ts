@@ -212,6 +212,7 @@ describe('Tool assertions', () => {
         jti: expect.any(String),
         tool_id: tool.id,
         project_id: turn.projectId,
+        ath: expect.any(String),
         body_sha256: expect.any(String),
       });
       expect((claims.exp as number) - (claims.iat as number)).toBe(60);

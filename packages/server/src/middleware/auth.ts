@@ -1,6 +1,5 @@
 import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 
 import type { AuthUser, Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
@@ -8,6 +7,13 @@ import { resolveBoundSet } from '../lib/attachedPolicies';
 import { requestOnBehalfOf } from '../lib/onBehalfOf';
 import { resolvePolicySets } from '../lib/permissions';
 import { parseBound } from '../lib/principalBound';
+import {
+  BEARER_TOKEN_TYPES,
+  type BearerTokenType,
+  signToken,
+  type VerifiedToken,
+  verifyToken,
+} from '../lib/signedTokens';
 import {
   actingKeyOf,
   type BoundClaims,
@@ -20,16 +26,6 @@ import {
   resolveScopedBoundaryDocs,
   resolveTriggerPolicySets,
 } from './authScopedBoundary';
-
-const requireJwtSecret = () => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET environment variable is not set');
-  }
-  return secret;
-};
-
-export const JWT_SECRET = requireJwtSecret();
 
 export const BCRYPT_SALT_ROUNDS = 12;
 
@@ -49,7 +45,7 @@ export const comparePassword = (password: string, hash: string) => {
 };
 
 export const signUserToken = (payload: { publicId: string; role: string }) => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return signToken({ typ: 'login', claims: payload, expiresIn: '7d' });
 };
 
 type Next = () => Promise<void>;
@@ -184,10 +180,8 @@ const buildScopedIdentityFields = (args: {
 };
 
 /**
- * The claims one of our own JWTs can carry. `prj` scopes the token to a project;
- * `trg` / `orn` / `scope` are the marker claims that say *which kind* of
- * project-scoped credential it is (trigger, run-as, OAuth), each with its own
- * boundary rule in `resolveScopedBoundaryDocs`.
+ * The claims a bearer JWT carries, by its `typ`. Every kind but a login token
+ * is pinned to a project (`prj`).
  */
 type JwtClaims = {
   publicId: string;
@@ -200,19 +194,31 @@ type JwtClaims = {
   clr?: boolean;
   ckey?: string;
   cscope?: string;
-} & BoundClaims;
+} & BoundClaims &
+  (
+    | { typ: 'login' }
+    | { typ: 'oauth'; prj: string }
+    | { typ: 'trigger'; prj: string; trg: string }
+    | { typ: 'run'; prj: string; orn: string }
+    | { typ: 'iam'; prj: string }
+  );
 
-/** Verifies a bearer JWT, or null when it is not a valid token of ours. */
+const isJwtClaims = (
+  claims: VerifiedToken<BearerTokenType>
+): claims is VerifiedToken<BearerTokenType> & JwtClaims => {
+  if (typeof claims.publicId !== 'string') return false;
+  if (claims.typ === 'login') return claims.prj === undefined;
+  if (typeof claims.prj !== 'string') return false;
+  if (claims.typ === 'trigger') return typeof claims.trg === 'string';
+  if (claims.typ === 'run') return typeof claims.orn === 'string';
+  return true;
+};
+
+/** Verifies a bearer JWT, or null when it is not a valid bearer token of ours. */
 const verifyJwtClaims = (token: string): JwtClaims | null => {
-  try {
-    const claims = jwt.verify(token, JWT_SECRET) as JwtClaims;
-    if (typeof claims.publicId !== 'string') return null;
-    if (!holdsItsBound(claims)) return null;
-    // A `scope` claim marks an OAuth token, which is only valid bound to a project.
-    return claims.scope !== undefined && !claims.prj ? null : claims;
-  } catch {
-    return null;
-  }
+  const claims = verifyToken({ token, accept: BEARER_TOKEN_TYPES });
+  if (!claims || !isJwtClaims(claims)) return null;
+  return holdsItsBound(claims) ? claims : null;
 };
 
 /**
@@ -227,8 +233,7 @@ const resolveJwtAuthority = async (args: {
   db: Context['db'];
 }): Promise<Authority> => {
   const { payload, role, userPolicyIds, db } = args;
-  const scoped = payload.prj;
-  if (!scoped) {
+  if (payload.typ === 'login') {
     return buildAuthority({
       reach: {
         pinned: null,
@@ -246,7 +251,8 @@ const resolveJwtAuthority = async (args: {
       db,
     });
   }
-  if (typeof payload.trg === 'string') {
+  const scoped = payload.prj;
+  if (payload.typ === 'trigger') {
     const triggerPublicId = payload.trg;
     return buildAuthority({
       reach: { pinned: scoped },
@@ -271,10 +277,10 @@ const resolveJwtAuthority = async (args: {
   }
   const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
     scopedProjectPublicId: scoped,
-    actsAsKey: typeof payload.orn === 'string' || payload.itk === true,
-    runApiKeyPublicId:
-      typeof payload.key === 'string' ? payload.key : undefined,
-    scopeClaim: payload.scope,
+    credential:
+      payload.typ === 'oauth'
+        ? { typ: payload.typ, scopeClaim: payload.scope }
+        : { typ: payload.typ, apiKeyPublicId: actingKeyOf(payload) },
     db,
   });
   // An IAM token's bound, or the one a run token carries for work a token
@@ -319,8 +325,8 @@ export const resolveJwtAuthUser = async (args: {
   const role = user.role as 'admin' | 'user';
   const userPolicyIds = (user.policyIds as number[]) ?? [];
   const scopedProjectPublicId = payload.prj;
-  const isTriggerToken = typeof payload.trg === 'string';
-  const isRunToken = typeof payload.orn === 'string';
+  const isTriggerToken = payload.typ === 'trigger';
+  const isRunToken = payload.typ === 'run';
   const runApiKeyPublicId = actingKeyOf(payload);
 
   const authority = await resolveJwtAuthority({
@@ -341,7 +347,7 @@ export const resolveJwtAuthUser = async (args: {
       isRunToken,
       runApiKeyPublicId,
       runWorkPublicId: payload.orn,
-      oauthScope: isTriggerToken || isRunToken ? undefined : payload.scope,
+      oauthScope: payload.typ === 'oauth' ? payload.scope : undefined,
     }),
     ...boundIdentityFields(payload),
     ...authority,
@@ -389,6 +395,27 @@ export const verifyApiKeyToken = async (
   };
 };
 
+/** The caller capped by the `On-Behalf-Of` assertion it sends, if any. */
+const applyOnBehalfOf = (args: {
+  ctx: Context;
+  authUser: AuthUser;
+}): AuthUser => {
+  const { authUser } = args;
+  const projectPublicId = authUser.apiKeyProjectPublicId;
+  const asserted = requestOnBehalfOf({
+    headers: args.ctx.headers ?? {},
+    apiKeyProjectPublicId: projectPublicId,
+  });
+  // An assertion is admitted only from a key scoped to its project.
+  if (!asserted || !projectPublicId) return authUser;
+  return narrowToOnBehalfOf({
+    authUser,
+    asserted,
+    projectPublicId,
+    db: args.ctx.db,
+  });
+};
+
 export const authMiddleware = async (ctx: Context, next: Next) => {
   const authHeader: string | undefined = ctx.headers?.authorization;
 
@@ -403,11 +430,7 @@ export const authMiddleware = async (ctx: Context, next: Next) => {
   }
 
   if (ctx.authUser) {
-    ctx.authUser.onBehalfOf = requestOnBehalfOf({
-      headers: ctx.headers ?? {},
-      apiKeyProjectPublicId: ctx.authUser.apiKeyProjectPublicId,
-    });
-    ctx.authUser = narrowToOnBehalfOf({ authUser: ctx.authUser, db: ctx.db });
+    ctx.authUser = applyOnBehalfOf({ ctx, authUser: ctx.authUser });
   }
 
   await next();

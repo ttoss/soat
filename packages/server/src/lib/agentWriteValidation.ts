@@ -9,7 +9,7 @@
  */
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { readKnowledgeConfig } from './agentKnowledge';
+import { readKnowledgeConfig } from './agentKnowledgeConfig';
 import { collectStepRuleActiveToolIds } from './agentStepRules';
 import {
   type AgentToolBinding,

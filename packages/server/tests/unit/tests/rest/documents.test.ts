@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 
-import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import * as eventBusModule from 'src/lib/eventBus';
 import * as pdfModule from 'src/lib/pdf';
-import { JWT_SECRET } from 'src/middleware/auth';
+import { signToken } from 'src/lib/signedTokens';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER, THREE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
@@ -169,16 +168,16 @@ describe('Documents', () => {
       // `scope: '*'` mirrors an "all permissions" consent. Consent is enforced
       // at request time, so the token must carry the granted action scopes; the
       // `prj` claim still confines it to the one project.
-      const oauthToken = jwt.sign(
-        {
+      const oauthToken = signToken({
+        typ: 'oauth',
+        claims: {
           publicId: adminUser!.publicId,
           role: 'admin',
           scope: `* mcp:access prj:${projectId}`,
           prj: projectId,
         },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+        expiresIn: '1h',
+      });
 
       const response = await authenticatedTestClient(oauthToken).get(
         `/api/v1/documents?project_id=${projectId}`

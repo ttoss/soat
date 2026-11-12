@@ -5,7 +5,13 @@ import { HttpToolError } from 'src/lib/httpToolError';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-const UNMETERED = { projectId: 0, toolId: null, workId: null, attribution: {} };
+const UNMETERED = {
+  projectId: 0,
+  toolId: null,
+  workId: null,
+  attribution: {},
+  sender: { authHeader: undefined },
+};
 
 /**
  * A builtin tool presetting `path_prefix` confines the model to one directory:

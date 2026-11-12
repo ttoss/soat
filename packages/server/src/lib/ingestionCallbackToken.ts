@@ -1,55 +1,51 @@
-import jwt from 'jsonwebtoken';
-
-import { JWT_SECRET } from '../middleware/auth';
+import { signToken, verifyToken } from './signedTokens';
 
 // Lets an external converter deliver an async result without being a SOAT user.
 // Scoped to one document + attempt, so a superseded attempt or a replay is
-// rejected. No `exp`: a conversion's duration is unknown up front, so expiry is
-// governed by CONVERSION_STALL_TIMEOUT_MS and the document's state instead.
+// rejected.
 
-const INGESTION_CALLBACK_PURPOSE = 'ingestion-callback';
+// Longer, for a document awaiting an async converter: speech-to-text and
+// similar jobs run well past the plain ingestion stall window.
+const CONVERSION_STALL_DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
-type IngestionCallbackTokenPayload = {
-  documentId: string;
-  attemptId: string;
-  purpose: string;
+export const getConversionStallTimeoutMs = (): number => {
+  const raw = process.env.CONVERSION_STALL_TIMEOUT_MS;
+  if (!raw) return CONVERSION_STALL_DEFAULT_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : CONVERSION_STALL_DEFAULT_TIMEOUT_MS;
 };
 
+/**
+ * Expires with the conversion stall window: past it the attempt is timed out,
+ * and a callback cannot itself defer, so no callback can still land.
+ */
 export const signIngestionCallbackToken = (args: {
   documentId: string;
   attemptId: string;
 }): string => {
-  return jwt.sign(
-    {
-      documentId: args.documentId,
-      attemptId: args.attemptId,
-      purpose: INGESTION_CALLBACK_PURPOSE,
-    },
-    JWT_SECRET
-  );
+  return signToken({
+    typ: 'ingestion-callback',
+    claims: { documentId: args.documentId, attemptId: args.attemptId },
+    expiresIn: Math.ceil(getConversionStallTimeoutMs() / 1000),
+  });
 };
 
 export const verifyIngestionCallbackToken = (args: {
   token: string;
   documentId: string;
 }): { attemptId: string } | null => {
-  let payload: IngestionCallbackTokenPayload;
-  try {
-    payload = jwt.verify(
-      args.token,
-      JWT_SECRET
-    ) as IngestionCallbackTokenPayload;
-  } catch {
-    return null;
-  }
-
+  const payload = verifyToken({
+    token: args.token,
+    accept: ['ingestion-callback'],
+  });
   if (
-    payload.purpose !== INGESTION_CALLBACK_PURPOSE ||
-    payload.documentId !== args.documentId
+    payload?.documentId !== args.documentId ||
+    typeof payload.attemptId !== 'string'
   ) {
     return null;
   }
-
   return { attemptId: payload.attemptId };
 };
 

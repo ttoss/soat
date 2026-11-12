@@ -64,12 +64,12 @@ export type AuthUser = {
   /** An OAuth token's consented scope claim, which narrows what it may do. */
   oauthScope?: string;
   /**
-   * True when the caller authenticated with a trigger run-as token (`trg`
-   * claim). Used by the fire endpoint to reject trigger→trigger recursion.
+   * True when the caller authenticated with a trigger token (`typ:
+   * 'trigger'`). Used by the fire endpoint to reject trigger→trigger recursion.
    */
   isTriggerToken?: boolean;
   /**
-   * True when the caller authenticated with a run-as token (`orn` claim) — the
+   * True when the caller authenticated with a run token (`typ: 'run'`) — the
    * short-lived credential durable, request-less work re-mints for its own
    * platform self-calls (`orchestrationRunToken.ts`).
    *
@@ -102,6 +102,11 @@ export type AuthUser = {
    * back into the work whose generation made the call.
    */
   onBehalfOf?: OnBehalfOf;
+  /**
+   * The opaque principal that assertion's work acts for, sealed in it: what
+   * the audit log records and a tool call this request makes carries on.
+   */
+  onBehalfOfPrincipal?: { type: string; id: string };
 };
 
 export type Context = {

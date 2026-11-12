@@ -7,11 +7,9 @@ import { DomainError } from '../errors';
 import { buildAllMessages } from './agentGenerationHelpers';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
-import {
-  buildKnowledgeMessages,
-  mergeKnowledgeConfig,
-  readKnowledgeConfig,
-} from './agentKnowledge';
+import { buildKnowledgeMessages } from './agentKnowledge';
+import { readKnowledgeConfig } from './agentKnowledgeConfig';
+import { resolveRequestedKnowledgePolicy } from './agentKnowledgeScopes';
 import { resolveAgentModel } from './agentModelResolution';
 import {
   resolveServedAgentVersion,
@@ -27,6 +25,7 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
+import type { PolicyDocument } from './iam';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { assertGenerationModelPriced } from './modelPricingGate';
 import { withPromptCacheBreakpoint } from './promptCaching';
@@ -114,19 +113,35 @@ const assembleContextMessages = async (args: {
   typedAgent: TypedAgent;
   resolvedMessages: Array<{ role: string; content: unknown }>;
   knowledgeConfig?: object;
+  /** Who named {@link knowledgeConfig}, and what bounds the agent. */
+  authUser?: AuthUser;
+  boundaryPolicy: PolicyDocument | null;
   unavailableToolNames: string[];
 }): Promise<{
   allMessages: Array<{ role: string; content: unknown }>;
   retrieval: KnowledgeRetrieval;
 }> => {
+  const { typedAgent } = args;
+  // The agent's own project (its owner's when shared), never the caller's
+  // scope: a turn with no caller scope would otherwise search every project.
+  const projectIds = [ownerProjectId(typedAgent)];
+  const requestedConfig = readKnowledgeConfig(args.knowledgeConfig);
   const knowledge = await buildKnowledgeMessages({
-    knowledgeConfig: mergeKnowledgeConfig({
-      base: readKnowledgeConfig(args.typedAgent.knowledgeConfig),
-      override: readKnowledgeConfig(args.knowledgeConfig),
-    }),
-    // The agent's own project (its owner's when shared), never the caller's
-    // scope: a turn with no caller scope would otherwise search every project.
-    projectIds: [ownerProjectId(args.typedAgent)],
+    storedConfig: readKnowledgeConfig(typedAgent.knowledgeConfig),
+    requested: requestedConfig
+      ? {
+          config: requestedConfig,
+          policy: await resolveRequestedKnowledgePolicy({
+            authUser: args.authUser,
+            projectIds,
+            knowledgeProjectPublicId: (
+              typedAgent.ownerProject ?? typedAgent.project
+            ).publicId,
+            boundaryPolicy: args.boundaryPolicy,
+          }),
+        }
+      : undefined,
+    projectIds,
     embeddingBilling: {
       projectId: args.typedAgent.project.id,
       generationId: args.generationId,
@@ -300,6 +315,8 @@ export const buildGenerationContext = async (
     typedAgent,
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
+    authUser: args.authUser,
+    boundaryPolicy,
     unavailableToolNames: toolSurface.unavailableToolNames,
   });
 

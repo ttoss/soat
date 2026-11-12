@@ -3,7 +3,7 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { deleteAgent } from 'src/lib/agentDelete';
-import { toStoredKnowledgeConfig } from 'src/lib/agentKnowledge';
+import { toStoredKnowledgeConfig } from 'src/lib/agentKnowledgeConfig';
 import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';

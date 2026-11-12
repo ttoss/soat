@@ -3,6 +3,12 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import type { TypedAgent } from './agentGenerationTypes';
+import {
+  type KnowledgeConfig,
+  mergeKnowledgeConfig,
+  readKnowledgeConfig,
+} from './agentKnowledgeConfig';
+import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import { agentPolicyDenial } from './agentPolicyDenial';
 import type { BindingTools } from './agentToolNames';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
@@ -13,192 +19,12 @@ import {
   type KnowledgeRetrieval,
   toKnowledgeRetrieval,
 } from './knowledgeRetrievalRecord';
+import type { KnowledgeSearchPolicy } from './knowledgeSearchPolicy';
 import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
-import { isPlainObject } from './plainObject';
 import { buildResourceTagContext } from './tags';
 
 const log = createDebug('soat:knowledge');
-
-export type KnowledgeConfig = {
-  memoryStoreIds?: string[];
-  documentIds?: string[];
-  documentPaths?: string[];
-  /**
-   * Key-value pairs a result's own `tags` must all contain (exact match).
-   * Scopes documents and memories alike.
-   */
-  tags?: Record<string, string>;
-  minScore?: number;
-  /**
-   * The `k` in RRF's `1 / (k + rank)`. Tuning, not scope: on its own it turns
-   * no retrieval on, the way a filter does.
-   */
-  rrfK?: number;
-  /** Half-life in days of the recency decay over memory results. `0` is off. */
-  recencyHalfLifeDays?: number;
-  limit?: number;
-  /**
-   * The store the `write_memory` tool may write to — a capability grant on the
-   * agent, and all that is left here of memory writing. What a store *accepts*
-   * from a finished turn is its own ingestion policy, a `memory_rules` row, so
-   * `extraction` is gone rather than accepted and ignored.
-   */
-  writeMemoryStoreId?: string;
-};
-
-/**
- * Accepts a `knowledge_config` bag on a write path and returns it **verbatim**,
- * having only checked that it is a bag at all.
- *
- * `knowledge_config` is stored in the wire casing (snake_case), exactly as the
- * client sent it, so a write performs no transform: the value is copied, not
- * walked. `null` clears the config; anything that is not a plain object is
- * ignored (`strictFields` has already rejected unknown members of a bag that
- * *is* an object).
- */
-export const toStoredKnowledgeConfig = (
-  value: unknown
-): Record<string, unknown> | null | undefined => {
-  if (value === null) return null;
-  if (!isPlainObject(value)) return undefined;
-  return value;
-};
-
-const readStringArray = (value: unknown): string[] | undefined => {
-  if (!Array.isArray(value)) return undefined;
-  return value.filter((item): item is string => {
-    return typeof item === 'string';
-  });
-};
-
-const readStringRecord = (
-  value: unknown
-): Record<string, string> | undefined => {
-  if (!isPlainObject(value)) return undefined;
-  const out: Record<string, string> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string') out[key] = item;
-  }
-  return out;
-};
-
-const readString = (value: unknown): string | undefined => {
-  return typeof value === 'string' ? value : undefined;
-};
-
-const readNumber = (value: unknown): number | undefined => {
-  return typeof value === 'number' ? value : undefined;
-};
-
-/**
- * Reads a stored (or per-generation) `knowledge_config` bag — snake_case, the
- * wire casing — into the internal camelCase `KnowledgeConfig`, the inbound half
- * of the case convention applied at one boundary.
- *
- * Field by field on purpose: a recursive key transform is what
- * `.claude/rules/case-convention.md` bans. Only keys actually present are
- * assigned, so a per-generation override merges over the stored config without
- * an absent field clearing a set one.
- */
-export const readKnowledgeConfig = (
-  value: unknown
-): KnowledgeConfig | null | undefined => {
-  if (value === null) return null;
-  if (!isPlainObject(value)) return undefined;
-
-  const config: KnowledgeConfig = {};
-  const set = <K extends keyof KnowledgeConfig>(
-    key: K,
-    read: KnowledgeConfig[K] | undefined
-  ): void => {
-    if (read !== undefined) config[key] = read;
-  };
-
-  set('memoryStoreIds', readStringArray(value.memory_store_ids));
-  set('documentIds', readStringArray(value.document_ids));
-  set('documentPaths', readStringArray(value.document_paths));
-  set('tags', readStringRecord(value.tags));
-  set('minScore', readNumber(value.min_score));
-  set('rrfK', readNumber(value.rrf_k));
-  set('recencyHalfLifeDays', readNumber(value.recency_half_life_days));
-  set('limit', readNumber(value.limit));
-  set('writeMemoryStoreId', readString(value.write_memory_store_id));
-
-  return config;
-};
-
-const anyLength = (arr: unknown[] | undefined): boolean => {
-  return (arr?.length ?? 0) > 0;
-};
-
-const anyKeys = (record: Record<string, unknown> | undefined): boolean => {
-  return Object.keys(record ?? {}).length > 0;
-};
-
-const mergeRecords = (
-  a: Record<string, string> | undefined,
-  b: Record<string, string> | undefined
-): Record<string, string> | undefined => {
-  if (!a && !b) return undefined;
-  return { ...(a ?? {}), ...(b ?? {}) };
-};
-
-const unionArrays = (
-  a: string[] | undefined,
-  b: string[] | undefined
-): string[] | undefined => {
-  if (!a && !b) return undefined;
-  return Array.from(new Set([...(a ?? []), ...(b ?? [])]));
-};
-
-/**
- * Merges a per-generation `knowledge_config` override into the agent's
- * stored config. Array filters (memoryStoreIds, documentIds,
- * documentPaths) are unioned so a single call can extend, not replace, the
- * agent's retrieval scope; `tags` pairs are merged with the override winning
- * per key; scalar fields use the override value when present.
- */
-export const mergeKnowledgeConfig = (args: {
-  base: unknown;
-  override: unknown;
-}): KnowledgeConfig | null | undefined => {
-  const base = args.base as KnowledgeConfig | null | undefined;
-  const override = args.override as KnowledgeConfig | null | undefined;
-  if (!override) return base;
-  if (!base) return override;
-  return {
-    ...base,
-    ...override,
-    memoryStoreIds: unionArrays(base.memoryStoreIds, override.memoryStoreIds),
-    documentIds: unionArrays(base.documentIds, override.documentIds),
-    documentPaths: unionArrays(base.documentPaths, override.documentPaths),
-    tags: mergeRecords(base.tags, override.tags),
-  };
-};
-
-const hasKnowledgeFilters = (config: KnowledgeConfig): boolean => {
-  return (
-    anyLength(config.memoryStoreIds) ||
-    anyLength(config.documentPaths) ||
-    anyLength(config.documentIds) ||
-    anyKeys(config.tags)
-  );
-};
-
-// `tags` scopes both stores, so it counts on both sides: a tags-only config is
-// a scoped document search, not the unscoped widening `includeDocuments` guards.
-const hasMemoryStoreFilters = (config: KnowledgeConfig): boolean => {
-  return anyLength(config.memoryStoreIds) || anyKeys(config.tags);
-};
-
-const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
-  return (
-    anyLength(config.documentPaths) ||
-    anyLength(config.documentIds) ||
-    anyKeys(config.tags)
-  );
-};
 
 /**
  * The conversation a runtime-written message document belongs to, read back out
@@ -268,7 +94,12 @@ const buildKnowledgeContent = (knowledgeText: string): string => {
 };
 
 export const buildKnowledgeMessages = async (args: {
-  knowledgeConfig: unknown;
+  storedConfig: KnowledgeConfig | null | undefined;
+  /**
+   * The generation's own `knowledge_config`, and the policy what it adds is
+   * read under (`resolveRequestedKnowledgePolicy`).
+   */
+  requested?: { config: KnowledgeConfig; policy: KnowledgeSearchPolicy };
   projectIds?: number[];
   /**
    * The agent's own project and the turn — what the query embedding is billed
@@ -281,7 +112,10 @@ export const buildKnowledgeMessages = async (args: {
   /** What was injected, for the generation record. Null when nothing ran. */
   retrieval: KnowledgeRetrieval;
 }> => {
-  const config = args.knowledgeConfig as KnowledgeConfig | null | undefined;
+  const config = mergeKnowledgeConfig({
+    base: args.storedConfig,
+    override: args.requested?.config,
+  });
   if (!config) return { messages: [], retrieval: null };
 
   const lastUserMessage = [...args.messages].reverse().find((m) => {
@@ -306,33 +140,25 @@ export const buildKnowledgeMessages = async (args: {
     return { messages: [], retrieval: null };
   }
 
-  // `searchKnowledge` treats any defined `query` as "both stores", but here
-  // `query` is auto-derived from the chat message every turn — letting it pick
-  // the stores would silently widen a config scoped to one of them into an
-  // all-project search of the other. So each store follows the config: on when
-  // the config names it, or when the config names neither and the agent asked
-  // for project-wide knowledge. `query` still ranks whatever is searched.
-  const includeDocuments =
-    hasDocumentFilters(config) || !hasMemoryStoreFilters(config);
-  const includeMemories =
-    hasMemoryStoreFilters(config) || !hasDocumentFilters(config);
+  const [scope, ...alsoScopes] = knowledgeScopes({
+    merged: config,
+    stored: args.storedConfig,
+    requestedPolicy: args.requested?.policy,
+  });
+  if (!scope) return { messages: [], retrieval: null };
 
   const results = await searchKnowledge({
     projectIds: args.projectIds,
     embeddingBilling: args.embeddingBilling,
     query,
-    memoryStoreIds: config.memoryStoreIds,
-    paths: config.documentPaths,
-    documentIds: config.documentIds,
-    tags: config.tags,
+    ...scope,
+    alsoScopes,
     // The agent record spells the cosine floor `min_score`, which is exactly
     // what `minSimilarity` is.
     minSimilarity: config.minScore,
     rrfK: config.rrfK,
     recencyHalfLifeDays: config.recencyHalfLifeDays,
     limit: config.limit,
-    includeDocuments,
-    includeMemories,
   });
 
   log('buildKnowledgeMessages: results count=%d', results.length);

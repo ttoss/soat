@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
+import type { SenderCredential } from './assertionSender';
 import { assertGuardrailsExist } from './guardrails';
 import { validateHttpExecute } from './httpToolResponse';
 import type { ResourceIncludes } from './modelIncludes';
@@ -383,6 +384,8 @@ export const callTool = async (args: {
   signedOff?: SignedOffCall;
   /** The calling agent's `policy_ids`, held over every `builtin` action. */
   boundaryPolicy?: unknown;
+  /** The request's resolved credential, when the call is made in one. */
+  caller?: SenderCredential;
 }): Promise<unknown> => {
   const referenced = await toolReferences.find({
     id: args.id,
@@ -409,6 +412,7 @@ export const callTool = async (args: {
     attribution: args.attribution,
     signedOff: args.signedOff,
     boundaryPolicy: args.boundaryPolicy,
+    caller: args.caller,
   });
 };
 
