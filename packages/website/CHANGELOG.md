@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.107.0](https://github.com/ttoss/soat/compare/v0.106.1...v0.107.0) (2026-11-12)
+
+* feat(tools)!: a missing actor oauth connection answers 409 OAUTH_CONNECTION_REQUIRED (#1879) ([76676a5](https://github.com/ttoss/soat/commit/76676a55566e204549e111b7d446765c6759c26a)), closes [#1879](https://github.com/ttoss/soat/issues/1879)
+
+### Bug Fixes
+
+* **agents:** refuse an active tool id the agent does not bind ([#1876](https://github.com/ttoss/soat/issues/1876)) ([5d7dded](https://github.com/ttoss/soat/commit/5d7dded84e5eebb40da052e5b58f65b77019462a))
+* **agents:** word an agent policy refusal by its policy_ids ([#1878](https://github.com/ttoss/soat/issues/1878)) ([087b8b4](https://github.com/ttoss/soat/commit/087b8b410f00fe2c87a16a8766a73fc5e188351f))
+* **guardrails:** read an iterator's element vars in its own scope ([#1881](https://github.com/ttoss/soat/issues/1881)) ([8ad6b60](https://github.com/ttoss/soat/commit/8ad6b60f491ec17a2ffd3f46a20c9645a50c6c33))
+* **policies:** answer 404 for an unknown policy id, not 403 ([#1875](https://github.com/ttoss/soat/issues/1875)) ([703a923](https://github.com/ttoss/soat/commit/703a9232faa61c69dffb5ab3142aeef0f93b6c5b))
+
+### Features
+
+* **formations:** oauth_client as a formation resource type ([#1877](https://github.com/ttoss/soat/issues/1877)) ([eaddfee](https://github.com/ttoss/soat/commit/eaddfee81e1226b4d4f8034b04b03270208dcaef))
+* **tools:** refuse a call whose input fails the tool's parameters ([#1882](https://github.com/ttoss/soat/issues/1882)) ([ca3d942](https://github.com/ttoss/soat/commit/ca3d9426c38b16ca97447eed747c6f2f49467dd6))
+
+### BREAKING CHANGES
+
+* callers branching on 502 TOOL_AUTH_FAILED with
+  meta.reason oauth_connection_required now get 409
+  OAUTH_CONNECTION_REQUIRED, without meta.reason.
+
 ## [0.106.1](https://github.com/ttoss/soat/compare/v0.106.0...v0.106.1) (2026-11-11)
 
 ### Bug Fixes
