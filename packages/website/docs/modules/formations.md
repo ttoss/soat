@@ -529,8 +529,11 @@ The check runs over the whole template **before anything is applied**: no format
 {
   "error": {
     "code": "FORBIDDEN",
-    "message": "Not permitted to apply 1 resource(s) this template declares: MyGuardrail (guardrails:CreateGuardrail). A formation may only do what the caller could do directly.",
+    "message": "Forbidden: user user_01HXYZ's policies deny guardrails:CreateGuardrail on srn:proj_01HXYZ:guardrail:*",
     "meta": {
+      "action": "guardrails:CreateGuardrail",
+      "resource": "srn:proj_01HXYZ:guardrail:*",
+      "denied_by": { "type": "user", "id": "user_01HXYZ" },
       "denied_actions": [
         {
           "logical_id": "MyGuardrail",

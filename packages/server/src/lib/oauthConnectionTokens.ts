@@ -4,7 +4,11 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveBearerAuthUser } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
-import { agentPolicyDenial } from './agentPolicyDenial';
+import {
+  agentDenied,
+  authorizationDenied,
+  callerPrincipal,
+} from './authorizationDenial';
 import {
   buildSrn,
   evaluatePolicies,
@@ -52,11 +56,6 @@ const assertUseAllowed = async (args: {
   authHeader?: string;
   boundaryPolicy?: unknown;
 }) => {
-  const deny = (message: string) => {
-    return new DomainError('FORBIDDEN', message, {
-      action: USE_OAUTH_CONNECTION_ACTION,
-    });
-  };
   if (args.boundaryPolicy) {
     const valid = validatePolicyDocument(args.boundaryPolicy).valid;
     if (
@@ -67,7 +66,10 @@ const assertUseAllowed = async (args: {
         resource: args.resource,
       })
     ) {
-      throw deny(agentPolicyDenial({ action: USE_OAUTH_CONNECTION_ACTION }));
+      throw agentDenied({
+        action: USE_OAUTH_CONNECTION_ACTION,
+        resource: args.resource,
+      });
     }
   }
   const caller = await resolveBearerAuthUser({
@@ -80,9 +82,14 @@ const assertUseAllowed = async (args: {
     resource: args.resource,
   });
   if (!allowed) {
-    throw deny(
-      `Forbidden: the caller's policy denies ${USE_OAUTH_CONNECTION_ACTION}`
-    );
+    throw authorizationDenied({
+      principal: caller
+        ? callerPrincipal(caller)
+        : { type: 'caller', id: null },
+      denied: [
+        { action: USE_OAUTH_CONNECTION_ACTION, resource: args.resource },
+      ],
+    });
   }
 };
 

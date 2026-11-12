@@ -167,8 +167,8 @@ describe('work a capped callback starts', () => {
       const capped = await readThroughTurn(await cappedAssertion());
 
       expect(JSON.parse(full.output)[0].id).toBe(documentId);
-      expect(JSON.parse(capped.output)[0]).toBe(
-        "HttpToolError: SOAT action 'get-document' failed"
+      expect(JSON.parse(capped.output)[0]).toMatch(
+        /^DomainError: Forbidden: API key \S+'s policies deny documents:GetDocument on /
       );
     });
 

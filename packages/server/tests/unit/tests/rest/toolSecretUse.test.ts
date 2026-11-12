@@ -113,7 +113,7 @@ describe('Tool secret use', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('FORBIDDEN');
-      expect(res.body.error.meta).toEqual({
+      expect(res.body.error.meta).toMatchObject({
         action: 'secrets:UseSecret',
         secret_ids: [secretId],
       });

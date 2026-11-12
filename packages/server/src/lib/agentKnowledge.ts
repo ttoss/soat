@@ -10,9 +10,9 @@ import {
   readKnowledgeConfig,
 } from './agentKnowledgeConfig';
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
-import { agentPolicyDenial } from './agentPolicyDenial';
 import type { BindingTools } from './agentToolNames';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
+import { agentDenied, denialToolResult } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
 import { buildSrn, type PolicyDocument } from './iam';
 import { searchKnowledge } from './knowledge';
@@ -258,13 +258,14 @@ export const buildWriteMemoryTool = (args: {
       if (!memoryStore) {
         return { error: `Memory store ${args.writeMemoryStoreId} not found` };
       }
+      const resource = buildSrn({
+        projectPublicId: memoryStore.projectPublicId,
+        resourceType: 'memory_store',
+        resourceId: args.writeMemoryStoreId,
+      });
       const deniedAction = findBoundaryDeniedMemoryWriteAction({
         boundaryPolicy: args.boundaryPolicy,
-        resource: buildSrn({
-          projectPublicId: memoryStore.projectPublicId,
-          resourceType: 'memory_store',
-          resourceId: args.writeMemoryStoreId,
-        }),
+        resource,
         context: buildResourceTagContext({
           resourceType: 'memory_store',
           tags: memoryStore.tags,
@@ -272,7 +273,9 @@ export const buildWriteMemoryTool = (args: {
       });
       if (deniedAction) {
         log('write_memory: denied %s', deniedAction);
-        return { error: agentPolicyDenial({ action: deniedAction }) };
+        return denialToolResult(
+          agentDenied({ action: deniedAction, resource })
+        );
       }
       const result = await writeMemory({
         memoryStoreId: memoryStore.id,

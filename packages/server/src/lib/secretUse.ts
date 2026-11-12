@@ -1,8 +1,8 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
+import { authorizationDenied } from './authorizationDenial';
 import { buildSrn } from './iam';
 import { isPlainObject } from './plainObject';
 import { collectSecretRefs } from './secrets';
@@ -79,11 +79,21 @@ export const assertSecretUseAllowed = async (args: {
   if (denied.length === 0) return;
 
   log('assertSecretUseAllowed: denied secrets=%d', denied.length);
-  throw new DomainError(
-    'FORBIDDEN',
-    `Referencing a secret requires ${SECRET_USE_ACTION} on it: ${denied.join(', ')}.`,
-    { action: SECRET_USE_ACTION, secret_ids: denied }
-  );
+  const [first, ...rest] = denied.map((id) => {
+    return {
+      action: SECRET_USE_ACTION,
+      resource: buildSrn({
+        projectPublicId: project.publicId,
+        resourceType: 'secret',
+        resourceId: id,
+      }),
+    };
+  });
+  throw authorizationDenied({
+    principal: { type: 'caller', id: null },
+    denied: [first, ...rest],
+    extra: { secret_ids: denied },
+  });
 };
 
 /** {@link assertSecretUseAllowed} over the secrets a tool definition names. */

@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
 import {
   getWorkflowMigration,
@@ -9,7 +10,7 @@ import {
 import { getWorkflow } from 'src/lib/workflows';
 
 import { requestPrincipalFromCtx, requireAuth } from './helpers';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 /** Mounted onto `workflowsRouter`, like `workflowVersions.ts`. */
 export const workflowMigrationsRouter = new Router<Context>();
@@ -18,25 +19,22 @@ const authorizeWorkflow = async (args: { ctx: Context; action: string }) => {
   const { ctx } = args;
   requireAuth(ctx);
   const workflow = await getWorkflow({ id: ctx.params['workflow_id'] });
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: workflow.project_id!,
-    action: args.action,
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: workflow.project_id!,
-      resourceType: 'workflow',
-      resourceId: workflow.id,
-    }),
+      action: args.action,
+      resource: buildSrn({
+        projectPublicId: workflow.project_id!,
+        resourceType: 'workflow',
+        resourceId: workflow.id,
+      }),
+    },
+    notFound: new DomainError(
+      'WORKFLOW_NOT_FOUND',
+      `Workflow '${ctx.params.workflow_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: workflow.project_id!,
-      notFound: new DomainError(
-        'WORKFLOW_NOT_FOUND',
-        `Workflow '${ctx.params.workflow_id}' not found.`
-      ),
-    });
-  }
   return workflow;
 };
 
@@ -67,16 +65,20 @@ workflowMigrationsRouter.post(
       stateMap: body.state_map,
       wait: body.wait === true,
       principal: { kind: principalType, id: principalId },
-      mayMigrate: (task) => {
-        return authUser.isAllowed({
-          projectPublicId: workflow.project_id!,
+      mayMigrate: async (task) => {
+        const check = {
           action: 'tasks:MigrateTask',
           resource: buildSrn({
             projectPublicId: workflow.project_id!,
             resourceType: 'task',
             resourceId: task.publicId,
           }),
+        };
+        const allowed = await authUser.isAllowed({
+          projectPublicId: workflow.project_id!,
+          ...check,
         });
+        return allowed ? null : callerDenied({ authUser, ...check });
       },
     });
   }

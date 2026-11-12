@@ -905,7 +905,7 @@ describe('Files', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('FORBIDDEN');
-      expect(response.body.error.message).toBe('Forbidden');
+      expect(response.body.error.meta.action).toBe('files:CreateFile');
     });
 
     test('creating a metadata record at an existing key returns 409, not 500', async () => {

@@ -1,5 +1,10 @@
 import { getApiHeaders } from '@ttoss/http-server-mcp';
 
+import {
+  denialToolResult,
+  isAuthorizationDenial,
+  readForwardedDenial,
+} from '../lib/authorizationDenial';
 import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
 import { isPlainObject } from '../lib/plainObject';
 
@@ -45,6 +50,8 @@ export const dispatchMcpApiRequest = async (args: {
     headers: { authorization: getApiHeaders().authorization ?? '' },
     body: args.body,
     wrapError: (response) => {
+      const denial = readForwardedDenial({ body: response.body });
+      if (denial) return denial;
       return new Error(
         hasErrorMessage(response.body)
           ? response.body.error.message
@@ -52,4 +59,19 @@ export const dispatchMcpApiRequest = async (args: {
       );
     },
   });
+};
+
+/**
+ * A tool call's authorization denial as the `isError` result an MCP client
+ * reads: the REST error body as text, so the client relays the same code,
+ * action and message rather than a bare message. `null` for any other error.
+ */
+export const mcpDenialResult = (
+  error: unknown
+): { isError: true; content: Array<{ type: 'text'; text: string }> } | null => {
+  if (!isAuthorizationDenial(error)) return null;
+  return {
+    isError: true,
+    content: [{ type: 'text', text: JSON.stringify(denialToolResult(error)) }],
+  };
 };

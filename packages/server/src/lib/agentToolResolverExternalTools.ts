@@ -8,8 +8,12 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
-import { agentPolicyDenial } from './agentPolicyDenial';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
+import {
+  agentDenied,
+  denialToolResult,
+  readForwardedDenial,
+} from './authorizationDenial';
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
@@ -97,6 +101,8 @@ export const executeSoatTool = async (args: {
             body,
             wrapError: (response) => {
               log('soat tool result: %s status=%d', toolId, response.status);
+              const denial = readForwardedDenial({ body: response.body });
+              if (denial) return denial;
               return new HttpToolError(
                 `SOAT action '${args.def.name}' failed`,
                 response.status,
@@ -141,7 +147,7 @@ export const soatActionBoundaryRefusal = async (args: {
   rawArgs: Record<string, unknown>;
   boundaryPolicy: unknown;
   isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
-}): Promise<{ error: string } | null> => {
+}): Promise<ReturnType<typeof denialToolResult> | null> => {
   const iamAction = args.def.iamAction ?? args.def.name;
   // The SRN and tags of whatever this call names, so a boundary scoped to one
   // resource means what it says. `null` leaves the resource-less `*`, which
@@ -156,7 +162,11 @@ export const soatActionBoundaryRefusal = async (args: {
     iamAction,
     ...(scope ?? {}),
   });
-  return allowed ? null : { error: agentPolicyDenial({ action: iamAction }) };
+  return allowed
+    ? null
+    : denialToolResult(
+        agentDenied({ action: iamAction, resource: scope?.resource ?? null })
+      );
 };
 
 /**

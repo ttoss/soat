@@ -1,8 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
-
+import { agentRefusal } from '../../fixtures/agentRefusal';
 import {
   type ChatRequest,
   startChatCompletionStub,
@@ -682,9 +681,9 @@ describe('Agent knowledge', () => {
           content: 'Client name is Acme.',
         });
 
-        expect(JSON.parse(result)).toEqual({
-          error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
-        });
+        expect(JSON.parse(result)).toEqual(
+          agentRefusal({ action: 'memories:CreateMemory' })
+        );
         expect(
           (await memoriesIn(storeId)).map((memory) => {
             return memory.content;
@@ -709,9 +708,9 @@ describe('Agent knowledge', () => {
 
         const { result } = await remember({ agentId, content: 'A fact.' });
 
-        expect(JSON.parse(result)).toEqual({
-          error: agentPolicyDenial({ action: 'memories:UpdateMemory' }),
-        });
+        expect(JSON.parse(result)).toEqual(
+          agentRefusal({ action: 'memories:UpdateMemory' })
+        );
       });
 
       test('a boundary naming another store denies the write', async () => {
@@ -731,9 +730,9 @@ describe('Agent knowledge', () => {
           content: 'A fact the boundary does not reach.',
         });
 
-        expect(JSON.parse(result)).toEqual({
-          error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
-        });
+        expect(JSON.parse(result)).toEqual(
+          agentRefusal({ action: 'memories:CreateMemory' })
+        );
       });
 
       test('a boundary naming the target store permits the write', async () => {
@@ -785,9 +784,7 @@ describe('Agent knowledge', () => {
         expect(JSON.parse(result)).toEqual(
           outcome === 'created'
             ? expect.objectContaining({ action: 'created' })
-            : {
-                error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
-              }
+            : agentRefusal({ action: 'memories:CreateMemory' })
         );
       });
     });

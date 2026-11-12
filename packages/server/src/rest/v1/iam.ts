@@ -1,6 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { checkIamPermission } from 'src/lib/iamCheck';
 import {
   assertIamTokenIssuer,
@@ -56,7 +56,13 @@ iamRouter.post('/iam/tokens', async (ctx: Context) => {
     action: IAM_TOKEN_ACTION,
     resource: `srn:${issuer.projectPublicId}:iam_token:*`,
   });
-  if (!allowed) throw new DomainError('FORBIDDEN', 'Forbidden');
+  if (!allowed) {
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: IAM_TOKEN_ACTION,
+      resource: `srn:${issuer.projectPublicId}:iam_token:*`,
+    });
+  }
   ctx.status = 201;
   ctx.body = await createIamToken({
     issuer,

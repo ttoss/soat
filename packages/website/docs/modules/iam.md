@@ -322,6 +322,26 @@ A list without `project_id` spans every project the caller may read, which for a
 
 A write is refused **before** body validation, so an unauthorized caller gets `403` whether the body is well-formed or not.
 
+Every `403 FORBIDDEN` has one shape, whoever was refused: the caller's credential, an [agent's `policy_ids`](./agents.md#execution-identity), a [trigger's](./triggers.md), or a [formation's](./formations.md) deployer. `meta` names the action, the resource and whose policies denied it, and the message says the same:
+
+```json
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Forbidden: API key key_01HXYZ's policies deny tools:DeleteTool on srn:proj_01HXYZ:tool:tool_01HXYZ",
+    "meta": {
+      "action": "tools:DeleteTool",
+      "resource": "srn:proj_01HXYZ:tool:tool_01HXYZ",
+      "denied_by": { "type": "api_key", "id": "key_01HXYZ" }
+    }
+  }
+}
+```
+
+- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, or `caller` where the check holds the caller's policies but not its id; `denied_by.id` is `null` when it is unknown, as for an agent's `policy_ids` on a tool call.
+- `resource` is `null` for a check that names none (an admin-only route, a resource-less boundary check). A refusal of several actions (a formation template, several secrets) names the first in `action`/`resource` and every one in the message.
+- The same body reaches an agent as a refused tool's result, the [MCP endpoint](../mcp/introduction.md) as an `isError` result whose text is this body, and an `mcp` or `http` tool's caller when the server it calls answers this body: that denial is relayed with the same code, action and message.
+
 The `403`/`404` split on a write is about **which project**, not which resource. Being told plainly that one agent in a project you work in is off limits tells you nothing you could not already work out, so that stays `403`. A resource in a project none of your policies name is `404`: a `403` there would confirm it exists to someone with no business knowing it does — including to a caller whose policies name no project at all, for whom every project is someone else's. A denied write never says more than a denied read of the same resource would.
 
 A credential scoped to one project reaches nothing outside it, so every resource elsewhere is beyond it in exactly that sense: addressed by id, it answers the `404` a made-up id gets, and nothing in the response names its project. `403 API_KEY_PROJECT_SCOPE` is kept for a request that names another project itself, which leaks nothing the caller did not send, and for a tool or agent an accepted [share](./shares.md) lets the credential's project read.

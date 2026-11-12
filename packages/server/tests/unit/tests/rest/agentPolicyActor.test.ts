@@ -1,5 +1,4 @@
-import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
-
+import { agentRefusal } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -107,9 +106,9 @@ describe('agent policy_ids bind ${iam:ActorId} to the generation actor', () => {
   });
 
   test("another actor's store is refused", async () => {
-    expect(await writeAsActor(otherStoreAgentId)).toEqual({
-      error: agentPolicyDenial({ action: 'memories:CreateMemory' }),
-    });
+    expect(await writeAsActor(otherStoreAgentId)).toEqual(
+      agentRefusal({ action: 'memories:CreateMemory' })
+    );
   });
 
   test('a generation with no actor binds nothing and is refused', async () => {
@@ -119,7 +118,7 @@ describe('agent policy_ids bind ${iam:ActorId} to the generation actor', () => {
     });
 
     expect(results).toEqual([
-      { error: agentPolicyDenial({ action: 'memories:CreateMemory' }) },
+      agentRefusal({ action: 'memories:CreateMemory' }),
     ]);
   });
 });

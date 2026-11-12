@@ -1,5 +1,5 @@
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { computeDetachedGuardrailIds } from 'src/lib/guardrails';
 import { buildSrn } from 'src/lib/iam';
 
@@ -58,10 +58,15 @@ export const assertGuardrailDetachAllowed = async (args: {
     }),
   });
   if (!allowed) {
-    throw new DomainError(
-      'FORBIDDEN',
-      'Detaching a guardrail requires the guardrails:DetachGuardrail permission.',
-      { detached }
-    );
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: 'guardrails:DetachGuardrail',
+      resource: buildSrn({
+        projectPublicId: args.projectPublicId,
+        resourceType: 'guardrail',
+        resourceId: '*',
+      }),
+      extra: { detached },
+    });
   }
 };

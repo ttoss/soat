@@ -426,8 +426,8 @@ describe('IAM tokens', () => {
       const token = await mintToken({ policy: GENERATE_ONLY });
 
       expect((await readThroughTurn(key)).id).toBe(documentId);
-      expect(await readThroughTurn(token)).toBe(
-        "HttpToolError: SOAT action 'get-document' failed"
+      expect(await readThroughTurn(token)).toMatch(
+        /^DomainError: Forbidden: API key \S+'s policies deny documents:GetDocument on srn:/
       );
     });
 

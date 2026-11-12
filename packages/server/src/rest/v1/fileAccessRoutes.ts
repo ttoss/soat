@@ -9,6 +9,7 @@ import {
   updateFileMetadata,
   updateFileTags,
 } from 'src/lib/files';
+import { buildSrn } from 'src/lib/iam';
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
 
 import { db } from '../../db';
@@ -72,6 +73,12 @@ const ensureAllowed = async (args: {
       ctx: args.ctx,
       projectPublicId: args.file.project_id!,
       notFound: fileNotFound(),
+      action: args.action,
+      resource: buildSrn({
+        projectPublicId: args.file.project_id!,
+        resourceType: 'file',
+        resourceId: args.file.id,
+      }),
     });
   }
 };

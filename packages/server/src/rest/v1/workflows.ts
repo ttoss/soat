@@ -21,7 +21,7 @@ import {
   writePreconditionOf,
 } from './helpers';
 import { resolveListScope } from './listScope';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 import { workflowMigrationsRouter } from './workflowMigrations';
 import { workflowVersionsRouter } from './workflowVersions';
 
@@ -54,25 +54,22 @@ workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {
   requireAuth(ctx);
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
-  const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.project_id!,
-    action: 'workflows:GetWorkflow',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: workflow.project_id!,
-      resourceType: 'workflow',
-      resourceId: workflow.id,
-    }),
+      action: 'workflows:GetWorkflow',
+      resource: buildSrn({
+        projectPublicId: workflow.project_id!,
+        resourceType: 'workflow',
+        resourceId: workflow.id,
+      }),
+    },
+    notFound: new DomainError(
+      'WORKFLOW_NOT_FOUND',
+      `Workflow '${ctx.params.workflow_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: workflow.project_id!,
-      notFound: new DomainError(
-        'WORKFLOW_NOT_FOUND',
-        `Workflow '${ctx.params.workflow_id}' not found.`
-      ),
-    });
-  }
 
   ctx.body = workflow;
 });
@@ -115,25 +112,22 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
   requireAuth(ctx);
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
-  const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.project_id!,
-    action: 'workflows:UpdateWorkflow',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: workflow.project_id!,
-      resourceType: 'workflow',
-      resourceId: workflow.id,
-    }),
+      action: 'workflows:UpdateWorkflow',
+      resource: buildSrn({
+        projectPublicId: workflow.project_id!,
+        resourceType: 'workflow',
+        resourceId: workflow.id,
+      }),
+    },
+    notFound: new DomainError(
+      'WORKFLOW_NOT_FOUND',
+      `Workflow '${ctx.params.workflow_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: workflow.project_id!,
-      notFound: new DomainError(
-        'WORKFLOW_NOT_FOUND',
-        `Workflow '${ctx.params.workflow_id}' not found.`
-      ),
-    });
-  }
 
   const body = ctx.request.body as {
     name?: string;
@@ -163,25 +157,22 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
   requireAuth(ctx);
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
-  const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.project_id!,
-    action: 'workflows:DeleteWorkflow',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: workflow.project_id!,
-      resourceType: 'workflow',
-      resourceId: workflow.id,
-    }),
+      action: 'workflows:DeleteWorkflow',
+      resource: buildSrn({
+        projectPublicId: workflow.project_id!,
+        resourceType: 'workflow',
+        resourceId: workflow.id,
+      }),
+    },
+    notFound: new DomainError(
+      'WORKFLOW_NOT_FOUND',
+      `Workflow '${ctx.params.workflow_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: workflow.project_id!,
-      notFound: new DomainError(
-        'WORKFLOW_NOT_FOUND',
-        `Workflow '${ctx.params.workflow_id}' not found.`
-      ),
-    });
-  }
 
   await deleteWorkflow({ id: ctx.params.workflow_id });
   ctx.status = 204;

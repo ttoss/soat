@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { callerPrincipal } from 'src/lib/authorizationDenial';
 import {
   createFormation,
   deleteFormation,
@@ -31,7 +32,7 @@ import {
 } from './helpers';
 import { resolveListScope } from './listScope';
 import { playbookAuthorOf } from './playbookAccess';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 export const formationsRouter = new Router<Context>();
 
@@ -48,20 +49,27 @@ const formationAuthorizer = (args: {
   ctx: Context & { authUser: AuthUser };
   projectPublicId: string;
 }): FormationAuthorizer => {
-  return async (request) => {
-    const allowed = await args.ctx.authUser.isAllowed({
-      projectPublicId: args.projectPublicId,
-      action: request.action,
-      resource: buildSrn({
+  return {
+    principal: callerPrincipal(args.ctx.authUser),
+    check: async (request) => {
+      const resource = buildSrn({
         projectPublicId: args.projectPublicId,
         resourceType: request.srnResourceType,
         resourceId: request.resourceId,
-      }),
-    });
+      });
+      const allowed = await args.ctx.authUser.isAllowed({
+        projectPublicId: args.projectPublicId,
+        action: request.action,
+        resource,
+      });
 
-    recordAuthorizationDecision(args.ctx, { action: request.action, allowed });
+      recordAuthorizationDecision(args.ctx, {
+        action: request.action,
+        allowed,
+      });
 
-    return allowed;
+      return { allowed, resource };
+    },
   };
 };
 
@@ -259,25 +267,22 @@ formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
 
   const formation = await getFormation({ id: ctx.params.formation_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.project_id,
-    action: 'formations:GetFormation',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: formation.project_id,
-      resourceType: 'formation',
-      resourceId: formation.id,
-    }),
+      action: 'formations:GetFormation',
+      resource: buildSrn({
+        projectPublicId: formation.project_id,
+        resourceType: 'formation',
+        resourceId: formation.id,
+      }),
+    },
+    notFound: new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Formation '${ctx.params.formation_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: formation.project_id,
-      notFound: new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Formation '${ctx.params.formation_id}' not found.`
-      ),
-    });
-  }
 
   ctx.body = formation;
 });
@@ -287,25 +292,22 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
 
   const formation = await getFormation({ id: ctx.params.formation_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.project_id,
-    action: 'formations:UpdateFormation',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: formation.project_id,
-      resourceType: 'formation',
-      resourceId: formation.id,
-    }),
+      action: 'formations:UpdateFormation',
+      resource: buildSrn({
+        projectPublicId: formation.project_id,
+        resourceType: 'formation',
+        resourceId: formation.id,
+      }),
+    },
+    notFound: new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Formation '${ctx.params.formation_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: formation.project_id,
-      notFound: new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Formation '${ctx.params.formation_id}' not found.`
-      ),
-    });
-  }
 
   const body = ctx.request.body as {
     template?: unknown;
@@ -353,25 +355,22 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
 
   const formation = await getFormation({ id: ctx.params.formation_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.project_id,
-    action: 'formations:DeleteFormation',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: formation.project_id,
-      resourceType: 'formation',
-      resourceId: formation.id,
-    }),
+      action: 'formations:DeleteFormation',
+      resource: buildSrn({
+        projectPublicId: formation.project_id,
+        resourceType: 'formation',
+        resourceId: formation.id,
+      }),
+    },
+    notFound: new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Formation '${ctx.params.formation_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: formation.project_id,
-      notFound: new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Formation '${ctx.params.formation_id}' not found.`
-      ),
-    });
-  }
 
   const result = await deleteFormation({
     id: ctx.params.formation_id,
@@ -392,25 +391,22 @@ formationsRouter.get(
 
     const formation = await getFormation({ id: ctx.params.formation_id });
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: formation.project_id,
-      action: 'formations:ListFormationEvents',
-      resource: buildSrn({
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: formation.project_id,
-        resourceType: 'formation',
-        resourceId: formation.id,
-      }),
+        action: 'formations:ListFormationEvents',
+        resource: buildSrn({
+          projectPublicId: formation.project_id,
+          resourceType: 'formation',
+          resourceId: formation.id,
+        }),
+      },
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Formation '${ctx.params.formation_id}' not found.`
+      ),
     });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: formation.project_id,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          `Formation '${ctx.params.formation_id}' not found.`
-        ),
-      });
-    }
 
     ctx.body = await listFormationEvents({
       formationId: ctx.params.formation_id,

@@ -16,8 +16,8 @@
  */
 import createDebug from 'debug';
 import type { db } from 'src/db';
-import { DomainError } from 'src/errors';
 
+import { authorizationDenied } from './authorizationDenial';
 import { isCreateChange } from './formationsApplyHelpers';
 import { getFormationModule } from './formationsRegistry';
 import {
@@ -170,11 +170,13 @@ export const collectAuthorizationDenials = async (args: {
 }): Promise<FormationAuthorizationDenial[]> => {
   const denials: FormationAuthorizationDenial[] = [];
   for (const request of args.requests) {
-    if (await args.authorize(request)) continue;
+    const { allowed, resource } = await args.authorize.check(request);
+    if (allowed) continue;
     denials.push({
       logicalId: request.logicalId,
       resourceType: request.resourceType,
       action: request.action,
+      resource,
     });
   }
   return denials;
@@ -192,24 +194,14 @@ export const assertResourceActionsAuthorized = async (args: {
   authorize: FormationAuthorizer;
   requests: FormationAuthorizationRequest[];
 }): Promise<void> => {
-  const denials = await collectAuthorizationDenials(args);
-  if (denials.length === 0) return;
+  const [first, ...rest] = await collectAuthorizationDenials(args);
+  if (!first) return;
 
-  const named = denials
-    .map((denial) => {
-      return `${denial.logicalId} (${denial.action})`;
-    })
-    .join(', ');
+  log('assertResourceActionsAuthorized: denied %d action(s)', rest.length + 1);
 
-  log(
-    'assertResourceActionsAuthorized: denied %d action(s): %s',
-    denials.length,
-    named
-  );
-
-  throw new DomainError(
-    'FORBIDDEN',
-    `Not permitted to apply ${String(denials.length)} resource(s) this template declares: ${named}. A formation may only do what the caller could do directly.`,
-    { denied_actions: denials.map(authorizationDenialToWire) }
-  );
+  throw authorizationDenied({
+    principal: args.authorize.principal,
+    denied: [first, ...rest],
+    extra: { denied_actions: [first, ...rest].map(authorizationDenialToWire) },
+  });
 };

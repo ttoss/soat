@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
 import type { UsageNarrowings } from 'src/lib/usage';
@@ -155,7 +156,11 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
   });
   const projectId = projectIds?.[0];
   if (projectId === undefined || projectPublicId === undefined) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: 'usage:GetAggregate',
+      resource: null,
+    });
   }
 
   ctx.body = await aggregateUsage({

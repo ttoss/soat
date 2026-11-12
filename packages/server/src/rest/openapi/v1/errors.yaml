@@ -64,7 +64,13 @@ components:
           example:
             error:
               code: 'FORBIDDEN'
-              message: 'Forbidden'
+              message: "Forbidden: API key key_01HXYZ's policies deny tools:DeleteTool on srn:proj_01HXYZ:tool:tool_01HXYZ"
+              meta:
+                action: 'tools:DeleteTool'
+                resource: 'srn:proj_01HXYZ:tool:tool_01HXYZ'
+                denied_by:
+                  type: 'api_key'
+                  id: 'key_01HXYZ'
               hint: >-
                 The credential authenticated but is not allowed this action.
                 Attach an IAM policy granting the action to the caller, or use a

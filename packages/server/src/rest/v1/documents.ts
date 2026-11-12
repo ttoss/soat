@@ -114,6 +114,8 @@ export const checkDocumentPermission = async (
       ctx,
       projectPublicId: doc.project_id!,
       notFound: new DomainError('RESOURCE_NOT_FOUND', 'Document not found'),
+      action,
+      resource: resources[0],
     });
   }
   return allowed;

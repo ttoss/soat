@@ -4,11 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createSweep } from './scheduler';
-import {
-  INTERNAL_FAILURE,
-  type StoredError,
-  toStoredError,
-} from './storedError';
+import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import type { TaskPrincipal, TaskPrincipalKind } from './tasks';
 import {
   assertStateMapTargets,
@@ -34,8 +30,6 @@ const PROGRESS_EVERY = 25;
 
 type MigrationRow = InstanceType<(typeof db)['WorkflowMigration']>;
 type MigrationItem = MigrationRow['items'][number];
-
-const FORBIDDEN_ITEM: StoredError = { code: 'FORBIDDEN', message: 'Forbidden' };
 
 const leaseFromNow = () => {
   return new Date(Date.now() + LEASE_MS);
@@ -182,7 +176,8 @@ const runInBackground = async (args: { id: number }): Promise<void> => {
   }
 };
 
-type MayMigrate = (task: { publicId: string }) => Promise<boolean>;
+/** The refusal of migrating `task`, or `null` when the caller may. */
+type MayMigrate = (task: { publicId: string }) => Promise<DomainError | null>;
 
 /** The open tasks behind `toVersion`, each pending or refused by permission. */
 const selectItems = async (args: {
@@ -204,12 +199,18 @@ const selectItems = async (args: {
   });
   const items: MigrationItem[] = [];
   for (const task of tasks) {
-    const allowed = await args.mayMigrate({ publicId: task.publicId });
+    const refusal = await args.mayMigrate({ publicId: task.publicId });
     items.push({
       taskId: task.id as number,
       taskPublicId: task.publicId,
-      status: allowed ? 'pending' : 'refused',
-      error: allowed ? null : FORBIDDEN_ITEM,
+      status: refusal ? 'refused' : 'pending',
+      error: refusal
+        ? toStoredError({
+            error: refusal,
+            opaque: INTERNAL_FAILURE,
+            label: 'selectItems',
+          })
+        : null,
     });
   }
   return items;

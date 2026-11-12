@@ -1,5 +1,4 @@
-import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
-
+import { agentRefusal } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -16,7 +15,7 @@ const ALLOW_GET_FILE = {
   statement: [{ effect: 'Allow', action: ['files:GetFile'], resource: ['*'] }],
 };
 
-const REFUSAL = { error: agentPolicyDenial({ action: 'files:GetFile' }) };
+const REFUSAL = agentRefusal({ action: 'files:GetFile' });
 
 describe("an agent's policy_ids bound the builtin steps of its pipeline tools", () => {
   let turn: AgentToolTurn;

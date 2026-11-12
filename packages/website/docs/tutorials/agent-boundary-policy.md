@@ -576,7 +576,17 @@ echo "Content after the agent ran: $CONTENT"
 The tool result the model received:
 
 ```json
-{ "error": "Forbidden: the agent's policies deny documents:UpdateDocument" }
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Forbidden: the agent's policies deny documents:UpdateDocument on srn:…",
+    "meta": {
+      "action": "documents:UpdateDocument",
+      "resource": "srn:…",
+      "denied_by": { "type": "agent", "id": null }
+    }
+  }
+}
 ```
 
 ---

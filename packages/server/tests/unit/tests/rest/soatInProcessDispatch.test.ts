@@ -276,9 +276,9 @@ describe('SOAT in-process dispatch', () => {
       const denied = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${creatorRes.body.id}/call`)
         .send(createInput('soat-inproc-created-while-denied'));
-      expect(denied.status).toBe(502);
-      expect(denied.body.error.code).toBe('TOOL_HTTP_ERROR');
-      expect(denied.body.error.meta.tool_status_code).toBe(403);
+      expect(denied.status).toBe(403);
+      expect(denied.body.error.code).toBe('FORBIDDEN');
+      expect(denied.body.error.meta.action).toBe('tools:CreateTool');
 
       const neverCreated = await db.Tool.findOne({
         where: { name: 'soat-inproc-created-while-denied' },

@@ -137,8 +137,9 @@ with `MISSING_TOOL_CONTEXT_KEY`.
 An approved `builtin` action is held to the proposing agent's
 [`policy_ids`](./agents.md#execution-identity) as they stand at
 decision time, against the same resource SRN and tags as the agent's own calls.
-A denied action does not run; its result is
-`{"error": "Forbidden: the agent's policies deny <action>"}`. An agent that no
+A denied action does not run; its result is the
+[denial body](./iam.md#what-a-denial-looks-like), `error.code` `FORBIDDEN` and
+`error.message` `Forbidden: the agent's policies deny <action>`. An agent that no
 longer exists bounds nothing in, so its approved `builtin` actions are refused.
 
 ### Duplicate proposals (dedup)

@@ -1,8 +1,8 @@
 import type { Tool } from 'ai';
-import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
 import { isSoatActionAllowedByBoundary } from 'src/lib/agentToolResolver';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 
+import { agentRefusal } from '../../fixtures/agentRefusal';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs } from '../../testClient';
 
@@ -113,9 +113,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
 
     const result = await callWith({ tool, memoryStoreId: otherStoreId });
 
-    expect(result).toEqual({
-      error: agentPolicyDenial({ action: 'memories:GetMemoryStore' }),
-    });
+    expect(result).toEqual(agentRefusal({ action: 'memories:GetMemoryStore' }));
   });
 
   test('a resource-tag condition reads the target resource tags', async () => {
@@ -140,9 +138,9 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       tool: resolveGetMemoryStore(boundaryPolicy),
       memoryStoreId: otherStoreId,
     });
-    expect(untagged).toEqual({
-      error: agentPolicyDenial({ action: 'memories:GetMemoryStore' }),
-    });
+    expect(untagged).toEqual(
+      agentRefusal({ action: 'memories:GetMemoryStore' })
+    );
   });
 
   test('a preset-supplied resource is the one the boundary is checked against', async () => {

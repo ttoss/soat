@@ -1,5 +1,6 @@
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
+import { agentDenied, callerDenied } from './authorizationDenial';
 import { getDocument } from './documents';
 import {
   buildSrn,
@@ -175,7 +176,10 @@ const assertBoundaryAllowed = (args: {
       context: args.context,
     })
   ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw agentDenied({
+      action: args.action,
+      resource: args.resource ?? args.resources?.[0] ?? null,
+    });
   }
 };
 
@@ -197,7 +201,11 @@ const assertCallerAllowed = async (args: {
   });
 
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser,
+      action: args.action,
+      resource: args.resource ?? args.resources?.[0] ?? null,
+    });
   }
 };
 
@@ -206,7 +214,7 @@ const assertToolAllowedForAgent = (args: {
   toolId: string;
 }) => {
   if (!args.allowedToolIds?.includes(args.toolId)) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw agentDenied({ action: 'tools:CallTool', resource: null });
   }
 };
 

@@ -18,7 +18,7 @@ import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
 import { resolveListScope } from './listScope';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 const aiProvidersRouter = new Router<Context>();
 
@@ -69,22 +69,19 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: provider.project_id!,
-    action: 'ai-providers:GetAiProvider',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: provider.project_id!,
-      resourceType: 'aiProvider',
-      resourceId: provider.id,
-    }),
+      action: 'ai-providers:GetAiProvider',
+      resource: buildSrn({
+        projectPublicId: provider.project_id!,
+        resourceType: 'aiProvider',
+        resourceId: provider.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: provider.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
-    });
-  }
 
   ctx.body = redactAiProviderSecrets(provider);
 });
@@ -113,22 +110,19 @@ const authorizeProviderPrices = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: provider.project_id!,
-    action,
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: provider.project_id!,
-      resourceType: 'aiProvider',
-      resourceId: provider.id,
-    }),
+      action,
+      resource: buildSrn({
+        projectPublicId: provider.project_id!,
+        resourceType: 'aiProvider',
+        resourceId: provider.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: provider.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
-    });
-  }
 
   return provider;
 };
@@ -225,25 +219,19 @@ aiProvidersRouter.patch(
       throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: existing.project_id!,
-      action: 'ai-providers:UpdateAiProvider',
-      resource: buildSrn({
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: existing.project_id!,
-        resourceType: 'aiProvider',
-        resourceId: existing.id,
-      }),
+        action: 'ai-providers:UpdateAiProvider',
+        resource: buildSrn({
+          projectPublicId: existing.project_id!,
+          resourceType: 'aiProvider',
+          resourceId: existing.id,
+        }),
+      },
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
     });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: existing.project_id!,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          'AI provider not found'
-        ),
-      });
-    }
 
     const body = ctx.request.body as {
       secret_id?: string;
@@ -293,25 +281,19 @@ aiProvidersRouter.get(
       throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: existing.project_id!,
-      action: 'ai-providers:ListAiProviderModels',
-      resource: buildSrn({
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: existing.project_id!,
-        resourceType: 'aiProvider',
-        resourceId: existing.id,
-      }),
+        action: 'ai-providers:ListAiProviderModels',
+        resource: buildSrn({
+          projectPublicId: existing.project_id!,
+          resourceType: 'aiProvider',
+          resourceId: existing.id,
+        }),
+      },
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
     });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: existing.project_id!,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          'AI provider not found'
-        ),
-      });
-    }
 
     ctx.body = await listAiProviderModels({
       aiProviderId: ctx.params.ai_provider_id,
@@ -331,25 +313,19 @@ aiProvidersRouter.delete(
       throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: existing.project_id!,
-      action: 'ai-providers:DeleteAiProvider',
-      resource: buildSrn({
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: existing.project_id!,
-        resourceType: 'aiProvider',
-        resourceId: existing.id,
-      }),
+        action: 'ai-providers:DeleteAiProvider',
+        resource: buildSrn({
+          projectPublicId: existing.project_id!,
+          resourceType: 'aiProvider',
+          resourceId: existing.id,
+        }),
+      },
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found'),
     });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: existing.project_id!,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          'AI provider not found'
-        ),
-      });
-    }
 
     await deleteAiProvider({
       id: ctx.params.ai_provider_id,

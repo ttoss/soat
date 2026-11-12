@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { readRetrievalMode } from 'src/lib/conversationRetrieval';
 import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
@@ -57,7 +58,11 @@ const authorizeProjectAction = async (args: {
     resource: `srn:${projectPublicId}:*:*`,
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action,
+      resource: `srn:${projectPublicId}:*:*`,
+    });
   }
 
   return projectPublicId;

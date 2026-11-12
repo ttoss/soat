@@ -21,7 +21,7 @@ import {
   requireAuth,
 } from './helpers';
 import { resolveListScope } from './listScope';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 const exceptionsRouter = new Router<Context>();
 
@@ -68,21 +68,18 @@ exceptionsRouter.get('/exceptions/:exception_id', async (ctx: Context) => {
 
   const exception = await getException({ id: ctx.params.exception_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: exception.project_id!,
-    action: 'exceptions:GetException',
-    resource: exceptionSrn(exception),
-  });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: exception.project_id!,
-      notFound: new DomainError(
-        'EXCEPTION_NOT_FOUND',
-        `Exception '${ctx.params.exception_id}' not found.`
-      ),
-    });
-  }
+      action: 'exceptions:GetException',
+      resource: exceptionSrn(exception),
+    },
+    notFound: new DomainError(
+      'EXCEPTION_NOT_FOUND',
+      `Exception '${ctx.params.exception_id}' not found.`
+    ),
+  });
 
   ctx.body = exception;
 });
@@ -94,21 +91,18 @@ exceptionsRouter.post(
 
     const exception = await getException({ id: ctx.params.exception_id });
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: exception.project_id!,
-      action: 'exceptions:AcknowledgeException',
-      resource: exceptionSrn(exception),
-    });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: exception.project_id!,
-        notFound: new DomainError(
-          'EXCEPTION_NOT_FOUND',
-          `Exception '${ctx.params.exception_id}' not found.`
-        ),
-      });
-    }
+        action: 'exceptions:AcknowledgeException',
+        resource: exceptionSrn(exception),
+      },
+      notFound: new DomainError(
+        'EXCEPTION_NOT_FOUND',
+        `Exception '${ctx.params.exception_id}' not found.`
+      ),
+    });
 
     ctx.body = await acknowledgeException({
       id: ctx.params.exception_id,
@@ -124,21 +118,18 @@ exceptionsRouter.post(
 
     const exception = await getException({ id: ctx.params.exception_id });
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: exception.project_id!,
-      action: 'exceptions:ResolveException',
-      resource: exceptionSrn(exception),
-    });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: exception.project_id!,
-        notFound: new DomainError(
-          'EXCEPTION_NOT_FOUND',
-          `Exception '${ctx.params.exception_id}' not found.`
-        ),
-      });
-    }
+        action: 'exceptions:ResolveException',
+        resource: exceptionSrn(exception),
+      },
+      notFound: new DomainError(
+        'EXCEPTION_NOT_FOUND',
+        `Exception '${ctx.params.exception_id}' not found.`
+      ),
+    });
 
     const body = ctx.request.body as { note?: string };
 

@@ -4,6 +4,7 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { invalidateReadAuditCache } from './auditLog';
+import { callerDenied } from './authorizationDenial';
 import { type RetrievalMode } from './conversationRetrieval';
 import { assertGuardrailsExist } from './guardrails';
 import {
@@ -215,10 +216,11 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
   });
 
   if (!allowed) {
-    throw new DomainError(
-      'FORBIDDEN',
-      `You do not have permission to access project '${args.id}'.`
-    );
+    throw callerDenied({
+      authUser: args.authUser,
+      action: 'projects:GetProject',
+      resource: `srn:${args.id}:*:*`,
+    });
   }
 
   return mapProject(project);

@@ -653,11 +653,11 @@ describe('SOAT self-call', () => {
       });
 
       expect(writeRun.status).toBe('failed');
-      // A run's persisted error keeps `code` and `message` only, so the
-      // upstream status is asserted through the message it carries.
       const error = writeRun.error as { code?: string; message?: string };
-      expect(error.code).toBe('TOOL_HTTP_ERROR');
-      expect(error.message).toContain('403');
+      expect(error.code).toBe('FORBIDDEN');
+      expect(error.message).toMatch(
+        /^Forbidden: API key \S+'s policies deny tools:CreateTool on /
+      );
 
       const created = await db.Tool.findOne({
         where: { name: 'escalated-tool' },
@@ -958,7 +958,7 @@ describe('SOAT self-call', () => {
       // failure rather than a created resource.
       expect(
         JSON.stringify(toolResultFromFollowUp(completionBodies))
-      ).toContain('HttpToolError');
+      ).toContain('policies deny tools:CreateTool');
       const created = await db.Tool.findOne({
         where: { name: 'agent-escalated-tool' },
       });
@@ -1233,7 +1233,7 @@ describe('SOAT self-call', () => {
         JSON.stringify(
           await approveAndAwaitContinuation({ generationId: writeGenerationId })
         )
-      ).toContain('HttpToolError');
+      ).toContain('policies deny tools:CreateTool');
 
       const created = await db.Tool.findOne({
         where: { name: 'approval-escalated-tool' },

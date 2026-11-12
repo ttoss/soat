@@ -38,20 +38,30 @@ export const START_ACTIONS = {
 export type StartableType = keyof typeof START_ACTIONS;
 
 /** Whether `isAllowed` may start the work of `type` named `id`. */
-export const mayStart = (args: {
-  isAllowed: IsAllowedFn;
+export const startCheck = (args: {
   projectPublicId: string;
   type: StartableType;
   id: string;
-}): Promise<boolean> => {
+}): { action: string; resource: string } => {
   const start: StartAction = START_ACTIONS[args.type];
-  return args.isAllowed({
-    projectPublicId: args.projectPublicId,
+  return {
     action: start.action,
     resource: buildSrn({
       projectPublicId: args.projectPublicId,
       resourceType: start.resourceType,
       resourceId: start.byId ? args.id : '*',
     }),
+  };
+};
+
+export const mayStart = (args: {
+  isAllowed: IsAllowedFn;
+  projectPublicId: string;
+  type: StartableType;
+  id: string;
+}): Promise<boolean> => {
+  return args.isAllowed({
+    projectPublicId: args.projectPublicId,
+    ...startCheck(args),
   });
 };

@@ -84,7 +84,7 @@ some codes.
 | Situation                                 | Status | Body                                                                                   |
 | ----------------------------------------- | ------ | -------------------------------------------------------------------------------------- |
 | Missing or invalid credentials            | `401`  | `code: "UNAUTHORIZED"`, `message: "Unauthorized"`                   |
-| Insufficient permissions                  | `403`  | `code: "FORBIDDEN"`, `message: "Forbidden"`                         |
+| Insufficient permissions                  | `403`  | `code: "FORBIDDEN"`, `meta`: `action`, `resource`, `denied_by`      |
 | Unparseable request body                  | `400`  | `code: "VALIDATION_FAILED"`, `message: "Malformed request body: …"` |
 | Rejected by the HTTP layer before routing | varies | `code: "REQUEST_REJECTED"`                          |
 | Unhandled server failure                  | `500`  | `code: "INTERNAL_ERROR"`, `message: "Internal Server Error"`        |

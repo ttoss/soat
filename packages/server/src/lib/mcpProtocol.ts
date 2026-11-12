@@ -7,6 +7,7 @@
  * (`agentToolResolverMcp.ts`) share one reading of the protocol rather than
  * each keeping the subset it happened to need.
  */
+import { readForwardedDenial } from './authorizationDenial';
 import { readToolResponseBody } from './httpToolResponse';
 import { isPlainObject } from './plainObject';
 
@@ -159,7 +160,8 @@ const describeFailure = (result: McpCallResult | null): string => {
 
 /**
  * Turns a `tools/call` answer into the tool's output, throwing
- * {@link McpToolError} for either kind of failure the protocol can report.
+ * {@link McpToolError} for either kind of failure the protocol can report, or
+ * the server's own authorization denial, relayed as it answered it.
  */
 export const readMcpCallResult = (args: {
   body: unknown;
@@ -180,6 +182,11 @@ export const readMcpCallResult = (args: {
 
   const result = readResult(args.body);
   if (result?.isError === true) {
+    const denial = readForwardedDenial({
+      body: result.structuredContent ?? joinedText(contentBlocks(result)),
+      extra: { mcp_tool: args.toolName, mcp_url: args.url },
+    });
+    if (denial) throw denial;
     throw new McpToolError({
       message: `tools/call reported a tool error: ${describeFailure(result)}`,
       toolName: args.toolName,
