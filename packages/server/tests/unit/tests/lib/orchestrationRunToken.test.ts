@@ -3,6 +3,7 @@ import { db } from 'src/db';
 import {
   buildRunAuthHeader,
   readRunTokenPrincipal,
+  readStoredStartingPrincipal,
   resolveStartingPrincipal,
   signRunToken,
 } from 'src/lib/orchestrationRunToken';
@@ -55,8 +56,11 @@ describe('orchestration run-as token', () => {
 
       await expect(
         buildRunAuthHeader({
-          principalKind: 'user',
-          principalId: userPublicId,
+          principal: readStoredStartingPrincipal({
+            kind: 'user',
+            id: userPublicId,
+            bound: null,
+          }),
           projectId: goneId,
           workPublicId: 'orun_test6',
         })

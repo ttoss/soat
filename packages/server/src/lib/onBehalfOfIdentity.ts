@@ -6,9 +6,11 @@ import { resolveServedAgentVersion } from './agentServedVersion';
 import {
   resolveAttachedPolicies,
   resolveAttachedPolicySet,
+  resolveBoundSet,
 } from './attachedPolicies';
 import type { PolicySets } from './iam';
 import { resolvePolicySets } from './permissions';
+import { parseBound } from './principalBound';
 
 const log = createDebug('soat:onBehalfOfIdentity');
 
@@ -36,8 +38,7 @@ const userSets = async (args: {
   });
 };
 
-/** The grant of the principal a generation's tool calls ran as. */
-const actedAsSets = async (args: {
+const principalSets = async (args: {
   type: string;
   id: string;
 }): Promise<PolicySets> => {
@@ -56,6 +57,18 @@ const actedAsSets = async (args: {
   });
 };
 
+/** The grant of the principal a generation's tool calls ran as. */
+const actedAsSets = async (args: {
+  type: string;
+  id: string;
+  bound: unknown;
+}): Promise<PolicySets> => {
+  const bound = parseBound(args.bound);
+  if (bound === null) return NOTHING;
+  const principal = await principalSets(args);
+  return bound ? [...principal, await resolveBoundSet(bound)] : principal;
+};
+
 /**
  * The caller half: its `acted_as` principal and, when fired, the trigger's.
  * A turn that records neither (a session or conversation turn) has none, so
@@ -70,6 +83,7 @@ const callerSets = async (
       ...(await actedAsSets({
         type: gen.actedAsPrincipalType,
         id: gen.actedAsPrincipalId,
+        bound: gen.actedAsPrincipalBound,
       }))
     );
   }

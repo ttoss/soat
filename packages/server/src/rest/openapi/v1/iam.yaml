@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: >-
     Ask the policy engine whether the calling credential may perform an
-    action a deployment registered.
+    action a deployment registered, and issue short-lived tokens that hold an
+    API key to a narrower policy.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -61,6 +62,56 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/iam/tokens:
+    post:
+      tags:
+        - IAM
+      summary: Issue an IAM token
+      description: >-
+        Issues a short-lived token that acts as the calling API key held to a
+        bound: `policy`, an inline policy document, or `policy_ids`, policies of
+        the key's project or global ones. Every request on the token is
+        authorized against the key's grant as it stands at that request ∩ the
+        bound, so an `Allow` beyond the key grants nothing and a permission
+        removed from the key leaves the token too. Work the token starts (a
+        generation, a session turn, a task dispatch, an orchestration run, a
+        playbook version) keeps the bound after the token expires. Only an
+        API key scoped to a project issues one (`403
+        IAM_TOKEN_ISSUER_NOT_ALLOWED`); a token creates neither tokens nor API
+        keys. The audit log records the token's `jti` and `principal` under
+        `detail.iam_token` on every entry the token makes.
+      operationId: createIamToken
+      x-iam-action: iam:CreateToken
+      x-soat-agent-exclude: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IamTokenRequest'
+      responses:
+        '201':
+          description: The token and when it expires
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IamToken'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
 components:
   securitySchemes:
     bearerAuth:
@@ -107,3 +158,82 @@ components:
         allowed:
           type: boolean
           description: Whether the caller's policies allow the action.
+    IamTokenRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Exactly one of `policy` and `policy_ids`; neither or both is `400
+        VALIDATION_FAILED`.
+      properties:
+        policy:
+          type: object
+          description: >-
+            An inline policy document, validated as `POST /api/v1/policies`
+            validates one (`400 IAM_TOKEN_POLICY_INVALID` otherwise). Work the
+            token starts holds this snapshot.
+          additionalProperties: false
+          required:
+            - statement
+          properties:
+            statement:
+              type: array
+              description: The policy statements.
+              items:
+                type: object
+                description: A statement, as a policy document's.
+          example:
+            statement:
+              - effect: Allow
+                action: ['agents:CreateAgentGeneration']
+        policy_ids:
+          type: array
+          x-soat-ref: policies
+          description: >-
+            Policies of the key's project or global ones, read as they stand at
+            each request. An unknown id is `400 IAM_TOKEN_POLICY_INVALID`.
+          items:
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6B']
+        principal:
+          type: object
+          description: >-
+            Who the caller issues the token for, opaque to the runtime and
+            recorded in the audit log; it grants nothing.
+          additionalProperties: false
+          required:
+            - type
+            - id
+          properties:
+            type:
+              type: string
+              maxLength: 255
+              description: The caller's own kind of principal.
+              example: service
+            id:
+              type: string
+              maxLength: 255
+              description: The caller's own id for it.
+              example: billing-sync
+        ttl_seconds:
+          type: integer
+          minimum: 30
+          maximum: 900
+          default: 300
+          description: Seconds until the token expires.
+    IamToken:
+      type: object
+      required:
+        - token
+        - expires_at
+      properties:
+        token:
+          type: string
+          description: >-
+            Send as `Authorization: Bearer <token>`. Shown once; an expired
+            token is `401`.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.sig
+        expires_at:
+          type: string
+          format: date-time
+          description: When the token expires.
+          example: '2024-01-01T00:05:00.000Z'

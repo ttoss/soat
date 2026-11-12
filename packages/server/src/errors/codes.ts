@@ -297,10 +297,20 @@ export const ERROR_CODES = {
     description:
       "The request attaches a policy to a trigger or an agent, or edits a policy one carries, and the policy grants a permission the caller does not hold in that resource's project. A resource acting under a policy may do no more than whoever attached it. `meta.ungranted` lists each grant not held: `policy_id`, `statement` index, `action` and `resource`.",
   },
+  IAM_TOKEN_POLICY_INVALID: {
+    httpStatus: 400,
+    description:
+      "An IAM token request names a bound that cannot be held: `policy` is not a valid policy document or names an unknown action (its `meta.errors` say why), or `policy_ids` names a policy that is neither one of the issuing key's project nor a global one.",
+  },
+  IAM_TOKEN_ISSUER_NOT_ALLOWED: {
+    httpStatus: 403,
+    description:
+      'Only an API key scoped to one project issues an IAM token. A user token, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` are refused.',
+  },
   API_KEY_SCOPED_TOKEN: {
     httpStatus: 403,
     description:
-      'The credential is a project-scoped token (an OAuth access token, a trigger run-as token or a run token), whose boundary lives in the token and cannot be carried by an API key. Such a token never creates or updates an API key, directly or through an `api_key` formation resource.',
+      'The credential is a project-scoped token (an OAuth access token, a trigger run-as token, a run token or an IAM token), whose boundary lives in the token and cannot be carried by an API key. Such a token never creates or updates an API key, directly or through an `api_key` formation resource.',
   },
   API_KEY_PROJECT_SCOPE: {
     httpStatus: 403,

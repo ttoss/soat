@@ -13,7 +13,10 @@ import {
 import { resolveAttachedPolicies } from './attachedPolicies';
 import { expireChainIfSettled } from './generationChains';
 import type { PolicyDocument } from './iam';
-import { buildRunAuthHeader } from './orchestrationRunToken';
+import {
+  buildRunAuthHeader,
+  readStoredStartingPrincipal,
+} from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
@@ -43,13 +46,20 @@ const resolveContinuationAuthHeader = async (args: {
 
   const proposing = await db.Generation.findOne({
     where: { publicId: args.item.generation_id },
-    attributes: ['actedAsPrincipalType', 'actedAsPrincipalId'],
+    attributes: [
+      'actedAsPrincipalType',
+      'actedAsPrincipalId',
+      'actedAsPrincipalBound',
+    ],
   });
   if (!proposing) return undefined;
 
   return buildRunAuthHeader({
-    principalKind: proposing.actedAsPrincipalType,
-    principalId: proposing.actedAsPrincipalId,
+    principal: readStoredStartingPrincipal({
+      kind: proposing.actedAsPrincipalType,
+      id: proposing.actedAsPrincipalId,
+      bound: proposing.actedAsPrincipalBound,
+    }),
     projectId: args.projectInternalId,
     workPublicId: args.item.id,
   });

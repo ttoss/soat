@@ -1,3 +1,6 @@
+import type { PrincipalBound } from './principalBound';
+import { serializeBound } from './principalBound';
+
 /**
  * Every kind of principal a record can name, `PrincipalType` in
  * `principals.yaml`; `principalFieldContract.test.ts` holds the two equal.
@@ -36,7 +39,13 @@ declare const startingPrincipalBrand: unique symbol;
  * every writer of a starting principal is held to `resolveStartingPrincipal`.
  */
 export type StartingPrincipal = RequestPrincipal & {
+  /** The IAM token bound the principal acted under, kept with it. */
+  bound?: PrincipalBound;
   readonly [startingPrincipalBrand]: true;
+};
+
+const boundColumn = (principal: StartingPrincipal | null): object | null => {
+  return principal?.bound ? serializeBound(principal.bound) : null;
 };
 
 /**
@@ -86,10 +95,30 @@ export const actedAsPrincipalColumns = (
 ): {
   actedAsPrincipalType: string | null;
   actedAsPrincipalId: string | null;
+  actedAsPrincipalBound: object | null;
 } => {
   return {
     actedAsPrincipalType: principal?.principalType ?? null,
     actedAsPrincipalId: principal?.principalId ?? null,
+    actedAsPrincipalBound: boundColumn(principal),
+  };
+};
+
+/**
+ * The `principal*` columns of work a background drive re-mints a credential
+ * from (an orchestration run, a playbook version's author).
+ */
+export const runPrincipalColumns = (
+  principal: StartingPrincipal | null
+): {
+  principalKind: string | null;
+  principalId: string | null;
+  principalBound: object | null;
+} => {
+  return {
+    principalKind: principal?.principalType ?? null,
+    principalId: principal?.principalId ?? null,
+    principalBound: boundColumn(principal),
   };
 };
 

@@ -127,7 +127,7 @@ export const boundKeyPolicyIds = async (args: {
     args.onRefused();
     throw new DomainError(
       'API_KEY_SCOPED_TOKEN',
-      'A project-scoped token (OAuth, trigger or run) cannot create or ' +
+      'A project-scoped token (OAuth, trigger, run or IAM) cannot create or ' +
         'update an API key.'
     );
   }

@@ -160,6 +160,10 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare principalId: string | null;
 
+  // The IAM token bound the principal started the run under, or null.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare principalBound: object | null;
+
   // Set only while `sleeping`: the scheduler wakes runs whose `wakeAt` is due
   // and continues them from `wakeContext`.
   @Column({ type: DataType.DATE, allowNull: true })

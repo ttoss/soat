@@ -152,7 +152,11 @@ const resolveFiringIdentity = async (args: {
     projectPublicId,
     triggerId: trigger.publicId as string,
     caller: caller
-      ? { apiKeyPublicId: caller.apiKeyPublicId, oauthScope: caller.oauthScope }
+      ? {
+          apiKeyPublicId: caller.apiKeyPublicId,
+          oauthScope: caller.oauthScope,
+          bound: caller.bound,
+        }
       : undefined,
   });
   const identity = await resolveJwtAuthUser({ db, token });

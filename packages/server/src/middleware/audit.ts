@@ -236,14 +236,26 @@ const resolvePrincipal = (
   return principalFromAuthUser(authUser);
 };
 
-const buildDetail = (
-  additional: RecordedCheck[]
-): Record<string, unknown> | null => {
-  if (additional.length === 0) return null;
+const buildDetail = (args: {
+  additional: RecordedCheck[];
+  iamToken: AuthUser['iamToken'];
+}): Record<string, unknown> | null => {
+  const { additional, iamToken } = args;
+  if (additional.length === 0 && !iamToken) return null;
   return {
-    additionalChecks: additional.map((c) => {
-      return { action: c.action, resource: c.resource, allowed: c.allowed };
-    }),
+    ...(additional.length > 0
+      ? {
+          additionalChecks: additional.map((c) => {
+            return {
+              action: c.action,
+              resource: c.resource,
+              allowed: c.allowed,
+            };
+          }),
+        }
+      : {}),
+    // The token's own id, so every request one token made can be found.
+    ...(iamToken ? { iamToken } : {}),
   };
 };
 
@@ -378,7 +390,7 @@ const recordEntry = (
     requestId: ctx.state?.requestId ?? null,
     ip: ctx.ip ?? null,
     userAgent: ctx.headers?.['user-agent'] ?? null,
-    detail: buildDetail(additional),
+    detail: buildDetail({ additional, iamToken: ctx.authUser!.iamToken }),
     isRead: !MUTATING_METHODS.has(ctx.method),
   });
 };

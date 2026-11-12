@@ -42,7 +42,11 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   API_KEY_POLICY_BOUNDARY:
     "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `boundary_policy_ids`; a wider key requires a credential that carries that permission.",
   API_KEY_SCOPED_TOKEN:
-    'Create or update the key with a user token or an API key; a project-scoped token (OAuth, trigger or run) cannot write API keys.',
+    'Create or update the key with a user token or an API key; a project-scoped token (OAuth, trigger, run or IAM) cannot write API keys.',
+  IAM_TOKEN_POLICY_INVALID:
+    "Send `policy` as a valid policy document naming known actions, or `policy_ids` naming policies of the key's project or global ones.",
+  IAM_TOKEN_ISSUER_NOT_ALLOWED:
+    'Issue the token with an API key scoped to the project, never with a user token, an unscoped key or another token.',
   API_KEY_PROJECT_SCOPE:
     "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use an unscoped credential.",
   RESOURCE_NOT_FOUND:

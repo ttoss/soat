@@ -1,15 +1,17 @@
 import jwt from 'jsonwebtoken';
 
 import { JWT_SECRET } from '../middleware/auth';
+import { type PrincipalBound, serializeBound } from './principalBound';
 
 /**
  * The credential a manual fire's caller authenticated with, beyond the user:
- * the key that acted, or the consent an OAuth token carries. Each narrows the
- * caller's half of the firing's grant.
+ * the key that acted, the consent an OAuth token carries, or an IAM token's
+ * bound. Each narrows the caller's half of the firing's grant.
  */
 export type TriggerCallerCredential = {
   apiKeyPublicId?: string;
   oauthScope?: string;
+  bound?: PrincipalBound;
 };
 
 /**
@@ -43,6 +45,9 @@ export const signTriggerToken = (payload: {
               : {}),
             ...(payload.caller.oauthScope !== undefined
               ? { cscope: payload.caller.oauthScope }
+              : {}),
+            ...(payload.caller.bound
+              ? { cbnd: serializeBound(payload.caller.bound) }
               : {}),
           }
         : {}),

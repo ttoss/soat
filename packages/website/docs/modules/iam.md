@@ -25,7 +25,7 @@ Every request is authenticated via JWT (users) or an API key, and authorized ent
 
 ## Authentication
 
-Two methods, both via `Authorization: Bearer <token>`.
+Three methods, all via `Authorization: Bearer <token>`.
 
 ### JWT (Users)
 
@@ -34,6 +34,31 @@ Two methods, both via `Authorization: Bearer <token>`.
 ### API Keys
 
 Keys are prefixed `sk_` with a `key_` public ID, always scoped to a single project via `project_id`, optionally with their own policies. With key policies, **intersection semantics** apply: the owning user's policies _and_ the key's must both allow the action, so a key never exceeds its owner. See [API Keys](./api-keys.md) and [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions).
+
+### IAM Tokens
+
+An API key scoped to a project issues a short-lived token that acts as the key held to a narrower policy, for a caller the key serves on behalf of someone with less reach. [`POST /api/v1/iam/tokens`](/docs/api/iam/create-iam-token) needs `iam:CreateToken`:
+
+```json
+{
+  "policy": {
+    "statement": [
+      { "effect": "Allow", "action": ["agents:CreateAgentGeneration"] }
+    ]
+  },
+  "principal": { "type": "service", "id": "billing-sync" },
+  "ttl_seconds": 300
+}
+```
+
+It answers `201 { "token", "expires_at" }`.
+
+- The bound is `policy`, an inline document, or `policy_ids`, policies of the key's project or global ones; exactly one. An invalid document or an unknown id is `400 IAM_TOKEN_POLICY_INVALID`.
+- `ttl_seconds` runs from 30 to 900 (default 300). An expired token is `401`.
+- Every request is checked against the key's grant **as it stands at that request** ∩ the bound: an `Allow` beyond the key grants nothing, and a permission removed from the key, or the key deleted, leaves every live token too.
+- Work the token starts keeps the bound after the token expires: a generation (its tool calls, approvals and `tool-outputs` continuations), a session turn, a task dispatch, an orchestration run, a playbook version and a manual trigger fire. `policy_ids` are re-read by id; an inline `policy` is kept as a snapshot.
+- Only an API key scoped to a project issues one. A user login, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 API_KEY_SCOPED_TOKEN`).
+- Records name the issuing key as the principal; `principal` is opaque, grants nothing, and is recorded with the token's `jti` under `detail.iam_token` on every [audit log](./audit-log.md) entry the token makes.
 
 ## Policy Documents
 
@@ -243,6 +268,7 @@ Authorization is **policy-only**: every decision is evaluated against the reques
 | **API key (no policies)**   | Inherits the owning user's policies, hard-locked to the key's project                     |
 | **API key (with policies)** | Intersection of user policies and key policies — both must allow the action               |
 | **OAuth token**             | Intersection of user policies and the consented scope, hard-locked to the token's project |
+| **IAM token**               | Its issuing key's policies ∩ the token's bound, hard-locked to the key's project          |
 
 Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope, never the scope binding, and passes the instance-wide admin gates (users, policies, project creation, the price book) only through a credential with no project and no policies, so a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource there addressed by id is `404`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
 

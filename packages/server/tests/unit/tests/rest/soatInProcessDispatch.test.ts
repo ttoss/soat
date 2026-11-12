@@ -1,6 +1,9 @@
 import { db } from 'src/db';
 import { dispatchApiRequest } from 'src/lib/inProcessApi';
-import { buildRunAuthHeader } from 'src/lib/orchestrationRunToken';
+import {
+  buildRunAuthHeader,
+  readStoredStartingPrincipal,
+} from 'src/lib/orchestrationRunToken';
 import { callTool } from 'src/lib/tools';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -322,8 +325,11 @@ describe('SOAT in-process dispatch', () => {
       where: { publicId: projectId },
     });
     const authHeader = await buildRunAuthHeader({
-      principalKind: 'user',
-      principalId: userId,
+      principal: readStoredStartingPrincipal({
+        kind: 'user',
+        id: userId,
+        bound: null,
+      }),
       projectId: project!.id as number,
       workPublicId: taskRes.body.id,
     });
