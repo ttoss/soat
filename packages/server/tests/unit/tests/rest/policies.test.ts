@@ -550,6 +550,10 @@ describe('Policies', () => {
         agent_sample: [],
         webhooks: 0,
         webhook_sample: [],
+        api_keys: 0,
+        api_key_sample: [],
+        users: 0,
+        user_sample: [],
       });
 
       const other = await client.post('/api/v1/policies').send(sendDoc());
@@ -560,6 +564,33 @@ describe('Policies', () => {
 
       const deleted = await client.delete(`/api/v1/policies/${policyId}`);
       expect(deleted.status).toBe(204);
+    });
+
+    test('returns 409 while a user or an API key names the policy', async () => {
+      const client = authenticatedTestClient(adminToken);
+      const policyRes = await client.post('/api/v1/policies').send(sendDoc());
+      const policyId = policyRes.body.id;
+      const holder = await client
+        .post('/api/v1/users')
+        .send({ username: 'policy-dependents-user', password: 'dependents' });
+      const attached = await client
+        .put(`/api/v1/users/${holder.body.id}/policies`)
+        .send({ policy_ids: [policyId] });
+      expect(attached.status).toBe(204);
+      const key = await client
+        .post('/api/v1/api-keys')
+        .send({ name: 'policy-dependents-key', policy_ids: [policyId] });
+      expect(key.status).toBe(201);
+
+      const refused = await client.delete(`/api/v1/policies/${policyId}`);
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.meta).toMatchObject({
+        users: 1,
+        user_sample: [holder.body.id],
+        api_keys: 1,
+        api_key_sample: [key.body.id],
+      });
     });
   });
 

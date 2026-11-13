@@ -113,13 +113,13 @@ describe('policy carriers', () => {
     assert.deepEqual(querying, ['lib/policyCarriers.ts']);
   });
 
-  // A `JSONB` `policyIds` names public ids a resource acts under, so a policy
-  // it names cannot be deleted; key and user ids only lose the grant.
+  // A `policyIds` column names public ids its row acts under, so a policy it
+  // names cannot be deleted.
   test('every carrier of policy public ids refuses the policy delete', () => {
-    const jsonbCarriers = fs
+    const carriers = fs
       .readdirSync(modelsDir)
       .filter((file) => {
-        return /DataType\.JSONB[^)]*\)\s*\n\s*declare policyIds/.test(
+        return /declare policyIds: string\[\]/.test(
           fs.readFileSync(path.join(modelsDir, file), 'utf-8')
         );
       })
@@ -140,6 +140,6 @@ describe('policy carriers', () => {
         return carrier.models[0];
       })
       .sort();
-    assert.deepEqual(jsonbCarriers, refusing);
+    assert.deepEqual(carriers, refusing);
   });
 });

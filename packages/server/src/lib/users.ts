@@ -148,7 +148,7 @@ export const attachUserPolicies = async (args: {
   });
   await user.update({
     policyIds: policies.map((policy) => {
-      return policy.id;
+      return policy.publicId;
     }),
   });
 };

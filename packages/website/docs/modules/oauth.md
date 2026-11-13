@@ -86,6 +86,8 @@ The catalog is derived from `packages/server/src/permissions/*.json`.
 
 Whatever the tier, the grant is scoped to the project via `srn:<project_id>:*:*`, carried in the token's `scope` claim and rebuilt into an IAM [policy document](./policies.md) on every request; see [Permission enforcement](#permission-enforcement).
 
+The token holds the consenting user's own policies ∩ the selection, so `POST /api/v1/oauth/consent` takes a credential nothing caps: a login, or an API key with no `policy_ids` (a key's `project_id` pins the consent to that project). A key with `policy_ids`, any token, or a request carrying `On-Behalf-Of` gets `403 CREDENTIAL_NARROWED`.
+
 ## Permission enforcement
 
 An access token is a **scoped credential** evaluated by the same IAM evaluator as [API keys](./api-keys.md#permission-inheritance). On each request the server rebuilds the consent policy from `scope` (stripping the synthetic `mcp:access` and `prj:<id>` markers) and evaluates the **intersection** of:

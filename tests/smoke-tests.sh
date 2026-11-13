@@ -377,7 +377,9 @@ fi
 $SOAT_CLI delete-api-key --api-key-id "$UNSCOPED_KEY_ID"
 echo "API keys coverage: OK"
 
-# Delete policies (cleanup + CRUD coverage)
+# Delete policies (cleanup + CRUD coverage): a policy a user carries is refused
+expect_cli_error_status 409 delete-policy --policy-id "$POLICY_READ_ID"
+$SOAT_CLI attach-user-policies --user-id "$ADMIN_USER_ID" --policy_ids "[\"$POLICY_WRITE_ID\"]"
 $SOAT_CLI delete-policy --policy-id "$POLICY_READ_ID"
 expect_cli_error_status 404 get-policy --policy-id "$POLICY_READ_ID"
 echo "Policy DELETE coverage: OK"

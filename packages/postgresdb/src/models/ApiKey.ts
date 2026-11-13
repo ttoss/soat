@@ -76,12 +76,13 @@ export class ApiKey extends Model {
   )
   declare project: Project;
 
+  /** Public ids of the policies capping the owner's grant; empty caps nothing. */
   @Column({
-    type: DataType.ARRAY(DataType.INTEGER),
+    type: DataType.ARRAY(DataType.STRING),
     allowNull: false,
     defaultValue: [],
   })
-  declare policyIds: number[];
+  declare policyIds: string[];
 
   @Column({
     type: DataType.STRING,

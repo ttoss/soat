@@ -280,6 +280,20 @@ describe('On-Behalf-Of authority', () => {
     });
   });
 
+  describe('POST /api/v1/api-keys', () => {
+    test('a callback creates no API key', async () => {
+      const assertion = await directCallAssertion(projectKey);
+
+      const res = await authenticatedTestClient(projectKey)
+        .post('/api/v1/api-keys')
+        .set(HEADER, assertion)
+        .send({ name: turn.unique('obo-key') });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
+    });
+  });
+
   describe('every callback is capped', () => {
     test('a call a capped callback makes carries its cap on', async () => {
       const capped = await directCallAssertion(
@@ -333,7 +347,7 @@ describe('On-Behalf-Of authority', () => {
 
       const res = await readDocument(assertion);
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

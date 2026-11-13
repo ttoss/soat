@@ -83,9 +83,9 @@ const listWhere = async (args: {
   });
   if (args.userId !== undefined) {
     const user = await db.User.findOne({ where: { publicId: args.userId } });
-    const policyIds = (user?.policyIds as number[] | undefined) ?? [];
+    const policyIds = user?.policyIds ?? [];
     if (policyIds.length === 0) return null;
-    where.id = policyIds;
+    where.publicId = policyIds;
   }
   return where;
 };
