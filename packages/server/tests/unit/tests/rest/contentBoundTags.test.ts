@@ -196,6 +196,19 @@ describe('Content-bound tag keys', () => {
       expect(await readTags(id)).toEqual({ team: 'ops' });
     });
 
+    test('a restore with the same text keeps the current verdict, not the archived one', async () => {
+      const id = await createDocument();
+      const flagged = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${id}/tags`)
+        .send({ screened: 'flagged' });
+      expect(flagged.status).toBe(200);
+      const restored = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/versions/1/restore`)
+        .send({});
+      expect(restored.status).toBe(200);
+      expect(await readTags(id)).toEqual({ screened: 'flagged', team: 'ops' });
+    });
+
     test('reviving a withdrawn document removes the key', async () => {
       const id = await createDocument();
       const withdrawn = await authenticatedTestClient(userToken)

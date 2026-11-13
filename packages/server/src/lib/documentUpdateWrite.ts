@@ -1,6 +1,7 @@
 import type { ChunkStrategy } from './chunking';
 import {
   changesReadableText,
+  restoredTags,
   withoutContentBoundTags,
 } from './contentBoundTags';
 import type { Transaction } from './dbTransaction';
@@ -67,10 +68,11 @@ export const writeDocumentUpdate = async (a: {
 /**
  * The bag an update writes (`lib/contentBoundTags.ts`):
  * - the one the caller sets, as sent: its keys are the ones that write stated;
- * - else, when the update changes text an agent can read, the archived bag a
- *   restore brings back, or the stored one, minus the project's content-bound
- *   keys: a verdict nobody restated in this write;
- * - else the archived bag, or `undefined` to leave the stored one.
+ * - else a restore's archived bag, which never brings back a content-bound
+ *   value (`restoredTags`);
+ * - else, when the update changes text an agent can read, the stored bag minus
+ *   the project's content-bound keys: a verdict nobody restated in this write;
+ * - else `undefined`, leaving the stored bag.
  */
 export const tagsAfterUpdate = (args: {
   doc: LoadedDoc;
@@ -101,9 +103,15 @@ export const tagsAfterUpdate = (args: {
       ],
       [update.metadata, doc.metadata],
     ]);
-  if (!changed) return update.archivedTags;
-  return withoutContentBoundTags({
-    keys: doc.file?.project?.contentBoundTagKeys ?? [],
-    tags: update.archivedTags !== undefined ? update.archivedTags : doc.tags,
-  });
+  const keys = doc.file?.project?.contentBoundTagKeys ?? [];
+  if (update.archivedTags !== undefined) {
+    return restoredTags({
+      keys,
+      archived: update.archivedTags,
+      current: doc.tags,
+      textChanged: changed,
+    });
+  }
+  if (!changed) return undefined;
+  return withoutContentBoundTags({ keys, tags: doc.tags });
 };
