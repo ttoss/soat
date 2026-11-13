@@ -50,13 +50,14 @@ export class User extends Model {
   })
   declare role: 'admin' | 'user';
 
+  /** Public ids of the policies the user holds; empty holds nothing. */
   @Column({
-    type: DataType.ARRAY(DataType.INTEGER),
+    type: DataType.ARRAY(DataType.STRING),
     allowNull: false,
     defaultValue: [],
     field: 'policy_ids',
   })
-  declare policyIds: number[];
+  declare policyIds: string[];
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

@@ -100,13 +100,13 @@ describe('API key writes from a project-scoped token', () => {
   };
 
   describe('POST /api/v1/api-keys', () => {
-    each('returns 403 API_KEY_SCOPED_TOKEN', async (token) => {
+    each('returns 403 CREDENTIAL_NARROWED', async (token) => {
       const res = await authenticatedTestClient(token)
         .post('/api/v1/api-keys')
         .send({ name: 'Minted', project_id: projectId });
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_SCOPED_TOKEN');
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
     });
 
     test('a user token still mints a key', async () => {
@@ -131,13 +131,13 @@ describe('API key writes from a project-scoped token', () => {
   });
 
   describe('PUT /api/v1/api-keys/:api_key_id', () => {
-    each('returns 403 API_KEY_SCOPED_TOKEN', async (token) => {
+    each('returns 403 CREDENTIAL_NARROWED', async (token) => {
       const res = await authenticatedTestClient(token)
         .put(`/api/v1/api-keys/${ownKeyId}`)
         .send({ policy_ids: [] });
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_SCOPED_TOKEN');
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
     });
 
     test('a user token still updates a key', async () => {
@@ -151,7 +151,7 @@ describe('API key writes from a project-scoped token', () => {
 
   describe('an api_key formation resource', () => {
     each(
-      'is refused with API_KEY_SCOPED_TOKEN',
+      'is refused with CREDENTIAL_NARROWED',
       async (token) => {
         const res = await authenticatedTestClient(token)
           .post('/api/v1/formations')
@@ -166,7 +166,7 @@ describe('API key writes from a project-scoped token', () => {
           });
 
         expect(res.body.status).not.toBe('active');
-        expect(JSON.stringify(res.body)).toContain('API_KEY_SCOPED_TOKEN');
+        expect(JSON.stringify(res.body)).toContain('CREDENTIAL_NARROWED');
         // A trigger token's boundary needs a live trigger, which is beside the
         // point here: the refusal reads the credential kind, not its boundary.
       },

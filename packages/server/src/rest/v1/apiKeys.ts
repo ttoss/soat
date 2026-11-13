@@ -7,16 +7,15 @@ import {
   createApiKey,
   deleteApiKey,
   getApiKey,
+  heldKeyPolicyIds,
   listApiKeys,
   updateApiKey,
 } from 'src/lib/apiKeys';
 import { buildSrn } from 'src/lib/iam';
-import { assertWriterHolds } from 'src/lib/writerRule';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
   assertCredentialProjectScope,
-  type AuthenticatedContext,
   parsePagination,
   requireAuth,
   requireOwnerOrAdmin,
@@ -72,24 +71,6 @@ const resolveProjectId = async (args: {
     return { id: undefined, error: 'Invalid project' };
   }
   return { id: project.id as number };
-};
-
-/** The internal ids of `policyIds`; `undefined` when the body omits it. */
-const resolveKeyPolicyIds = async (args: {
-  ctx: AuthenticatedContext;
-  policyIds: string[] | undefined;
-  projectId: number | null;
-}): Promise<number[] | undefined> => {
-  if (args.policyIds === undefined) return undefined;
-  const policies = await assertWriterHolds({
-    carrier: 'apiKeys',
-    writer: args.ctx.authUser,
-    projectId: args.projectId,
-    carried: { policyIds: args.policyIds },
-  });
-  return policies.map((policy) => {
-    return policy.id;
-  });
 };
 
 /**
@@ -155,13 +136,13 @@ apiKeysRouter.get('/api-keys', async (ctx: Context) => {
     return;
   }
 
-  // JWT admin sees all API keys
-  if (ctx.authUser.role === 'admin') {
+  // The operator sees every user's API keys.
+  if (ctx.authUser.unrestricted) {
     ctx.body = await listApiKeys({ ...parsePagination(ctx) });
     return;
   }
 
-  // JWT regular user sees only their own API keys
+  // Anyone else sees only their own.
   ctx.body = await listApiKeys({
     userId: ctx.authUser.id,
     ...parsePagination(ctx),
@@ -201,11 +182,10 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   }
 
   const boundedPolicyIds = await boundKeyPolicyIds({
-    scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
+    narrowed: ctx.authUser.narrowing === 'beyond_key',
     boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
-    requestedPolicyPublicIds: policyIds,
-    requestedPolicyIds: await resolveKeyPolicyIds({
-      ctx,
+    requestedPolicyIds: await heldKeyPolicyIds({
+      writer: ctx.authUser,
       policyIds,
       projectId: projectResult.id ?? null,
     }),
@@ -305,11 +285,10 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   const boundedPolicyIds = await boundKeyPolicyIds({
-    scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
+    narrowed: ctx.authUser.narrowing === 'beyond_key',
     boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
-    requestedPolicyPublicIds: policyIds,
-    requestedPolicyIds: await resolveKeyPolicyIds({
-      ctx,
+    requestedPolicyIds: await heldKeyPolicyIds({
+      writer: ctx.authUser,
       policyIds,
       projectId:
         projectResult.id === undefined

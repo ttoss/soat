@@ -288,7 +288,7 @@ paths:
       description: >-
         Deletes a policy. A project policy needs `policies:DeletePolicy` in its
         project; a global one, the unrestricted admin. Refused with `409
-        POLICY_HAS_DEPENDENTS` while a trigger, agent or webhook names it in
+        POLICY_HAS_DEPENDENTS` while a trigger, agent, webhook, user or API key names it in
         its `policy_ids`.
       operationId: deletePolicy
       x-iam-action: policies:DeletePolicy
@@ -327,7 +327,7 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
-            `POLICY_HAS_DEPENDENTS`: a trigger, agent or webhook still names
+            `POLICY_HAS_DEPENDENTS`: a trigger, agent, webhook, user or API key still names
             the policy in its `policy_ids`. Detach it or delete them first.
           content:
             application/json:

@@ -19,11 +19,9 @@ export type AuthUser = {
     context?: Record<string, string>;
   }) => Promise<boolean>) & { refusedBy?: RefusedBy };
   /**
-   * Resolves the internal project IDs the caller may access for the given action.
-   * - Explicit projectPublicId: verifies permission and returns [id], or null if forbidden/not found.
-   * - project key (no explicit id): infers from the key's scoped project.
-   * - JWT admin (no explicit id): returns undefined (no filter — all projects).
-   * - JWT user (no explicit id): enumerates all projects the user has access to.
+   * The internal project ids the caller may read for `action`
+   * (`resolveReachableProjectIds`): `null` when refused, `undefined` (no
+   * project filter) only for an {@link AuthUser.unrestricted} authority.
    */
   resolveProjectIds: (args: {
     projectPublicId?: string;
@@ -40,12 +38,27 @@ export type AuthUser = {
   }) => Promise<number[] | undefined | null>;
   /**
    * The caller's effective policy sets for the given project, each of which a
-   * request must satisfy (`resolvePolicySets`); none when the credential is
-   * pinned elsewhere. The policy compiler turns them into SQL access filters.
+   * request must satisfy: its grant's, then each cap's. Never empty: a project
+   * the credential is pinned away from yields a set allowing nothing. The
+   * policy compiler turns them into SQL access filters.
    */
   getPolicies: (projectPublicId: string) => Promise<PolicySets>;
   /** `getPolicies`, each set labeled with the principal that holds it. */
-  getLabeledPolicies?: (projectPublicId: string) => Promise<LabeledPolicySets>;
+  getLabeledPolicies: (projectPublicId: string) => Promise<LabeledPolicySets>;
+  /**
+   * The grant is unrestricted (`admin`), no cap narrows it and no project pins
+   * it: what operator-only actions and an unfiltered read require.
+   */
+  unrestricted: boolean;
+  /** The grant is unrestricted (`admin`), whatever caps or pins it. */
+  operator: boolean;
+  /**
+   * What narrows the grant: `none`, only the presenting key's own `policy_ids`
+   * (`key_policies`), or anything else (`beyond_key`). A durable credential
+   * never outlives the narrowing it was made under: a `beyond_key` request
+   * creates no API key, and only a `none` one consents to an OAuth client.
+   */
+  narrowing: 'none' | 'key_policies' | 'beyond_key';
   /** Public string id (`key_...`) of the API key used to authenticate, if any. */
   apiKeyPublicId?: string;
   /** Internal numeric DB id of the project the API key is scoped to. */
@@ -56,13 +69,7 @@ export type AuthUser = {
    * Internal numeric ids of the policies the API key is narrowed to. Absent
    * when the key carries no policy boundary.
    */
-  apiKeyPolicyIds?: number[];
-  /**
-   * True for an admin's API key bound to no project and narrowed by no policy
-   * of its own: the deployment's control plane, whose requests are operator
-   * traffic rather than any project's (`requestAttribution.ts`).
-   */
-  isControlPlaneKey?: boolean;
+  apiKeyPolicyIds?: string[];
   /** Public string id of the project an OAuth token is scoped to. */
   oauthProjectPublicId?: string;
   /** An OAuth token's consented scope claim, which narrows what it may do. */
@@ -79,7 +86,7 @@ export type AuthUser = {
    *
    * It marks *how* the request arrived, never what it may do: the `orn` value
    * is not an authorization input, and the boundary a run token carries is
-   * resolved separately in `resolveScopedBoundaryDocs`. The one thing it tells
+   * stated separately, as a cap (`actingKeyCap`). The one thing it tells
    * a handler is that the caller is machinery continuing a chain rather than a
    * person starting one — which is what lets the task engine bound a composed
    * dispatch→transition→dispatch cycle that otherwise looks like a series of

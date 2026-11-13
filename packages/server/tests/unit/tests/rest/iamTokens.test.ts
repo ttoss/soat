@@ -388,7 +388,7 @@ describe('IAM tokens', () => {
       expect(res.status).toBe(401);
     });
 
-    test('403 API_KEY_SCOPED_TOKEN: a token creates no API key', async () => {
+    test('403 CREDENTIAL_NARROWED: a token creates no API key', async () => {
       const token = await mintToken({
         policy: { statement: [{ effect: 'Allow', action: ['*'] }] },
       });
@@ -396,7 +396,7 @@ describe('IAM tokens', () => {
         .post('/api/v1/api-keys')
         .send({ name: turn.unique('fromtoken') });
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_SCOPED_TOKEN');
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
     });
 
     test('the audit log names the key and records the token id and principal', async () => {

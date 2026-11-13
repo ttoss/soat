@@ -81,9 +81,8 @@ describe('authority: grant ∩ caps', () => {
 
   describe('an absent grant allows nothing', () => {
     test('a user holding no policy lists no project', async () => {
-      const res = await authenticatedTestClient(noPermToken).get(
-        '/api/v1/projects'
-      );
+      const res =
+        await authenticatedTestClient(noPermToken).get('/api/v1/projects');
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -126,9 +125,8 @@ describe('authority: grant ∩ caps', () => {
     });
 
     test('lists only its project', async () => {
-      const res = await authenticatedTestClient(adminPinnedKey).get(
-        '/api/v1/projects'
-      );
+      const res =
+        await authenticatedTestClient(adminPinnedKey).get('/api/v1/projects');
 
       expect(res.status).toBe(200);
       expect(
@@ -163,18 +161,16 @@ describe('authority: grant ∩ caps', () => {
     });
 
     test('lists no project its policies do not allow', async () => {
-      const res = await authenticatedTestClient(adminCappedKey).get(
-        '/api/v1/projects'
-      );
+      const res =
+        await authenticatedTestClient(adminCappedKey).get('/api/v1/projects');
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
 
     test("lists no other user's API key", async () => {
-      const res = await authenticatedTestClient(adminCappedKey).get(
-        '/api/v1/api-keys'
-      );
+      const res =
+        await authenticatedTestClient(adminCappedKey).get('/api/v1/api-keys');
 
       expect(res.status).toBe(200);
       expect(
@@ -196,7 +192,7 @@ describe('authority: grant ∩ caps', () => {
       const res = await consent(userCappedKey, projectId);
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_SCOPED_TOKEN');
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
     });
 
     test('is 401 without a credential', async () => {

@@ -252,7 +252,7 @@ export const ERROR_CODES = {
   POLICY_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The policy is in the `policy_ids` of one or more triggers, agents or webhooks, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.agents` and `meta.agent_sample` do the same for agents, `meta.webhooks` and `meta.webhook_sample` for webhooks.',
+      'The policy is in the `policy_ids` of one or more triggers, agents, webhooks, users or API keys, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.agents` and `meta.agent_sample` do the same for agents, `meta.webhooks` and `meta.webhook_sample` for webhooks, `meta.users` and `meta.user_sample` for users, `meta.api_keys` and `meta.api_key_sample` for API keys.',
   },
   PROJECT_PAUSED: {
     httpStatus: 409,
@@ -312,10 +312,10 @@ export const ERROR_CODES = {
     description:
       'Only an API key scoped to one project issues an IAM token. A user token, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` are refused.',
   },
-  API_KEY_SCOPED_TOKEN: {
+  CREDENTIAL_NARROWED: {
     httpStatus: 403,
     description:
-      'The credential is a project-scoped token (an OAuth access token, a trigger run-as token, a run token or an IAM token), whose boundary lives in the token and cannot be carried by an API key. Such a token never creates or updates an API key, directly or through an `api_key` formation resource.',
+      "The request is narrowed beyond its credential's own grant (an OAuth access token, a trigger run-as token, a run token, an IAM token, or an `On-Behalf-Of` assertion), and a credential it wrote would outlive that narrowing. Such a request never creates or updates an API key, directly or through an `api_key` formation resource; consenting to an OAuth client also needs a credential its own `policy_ids` do not narrow.",
   },
   API_KEY_PROJECT_SCOPE: {
     httpStatus: 403,

@@ -211,3 +211,14 @@ export const readForwardedDenial = (args: {
     ...meta,
   });
 };
+
+/**
+ * A request narrowed beyond its credential's own grant writes no durable
+ * credential: the credential would outlive the narrowing it was made under.
+ */
+export const credentialNarrowed = (args: { writing: string }): DomainError => {
+  return new DomainError(
+    'CREDENTIAL_NARROWED',
+    `This request is narrowed beyond its credential's own grant and cannot write ${args.writing}.`
+  );
+};

@@ -12,7 +12,6 @@ import {
 } from 'src/lib/policies';
 
 import {
-  isUnrestrictedAdmin,
   parsePagination,
   requireAdmin,
   requireAuth,
@@ -52,7 +51,7 @@ const authorizePolicy = async (args: {
   const { ctx } = args;
   requireAuth(ctx);
   const policyId = ctx.params.policy_id;
-  if (isUnrestrictedAdmin(ctx.authUser)) {
+  if (ctx.authUser.unrestricted) {
     requireAdmin(ctx, args.action);
     return;
   }
@@ -96,7 +95,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
     requireAdmin(ctx, action);
   }
   const projectIds =
-    projectPublicId !== undefined || !isUnrestrictedAdmin(ctx.authUser)
+    projectPublicId !== undefined || !ctx.authUser.unrestricted
       ? await requireProjectAccess({
           ctx,
           projectPublicId,

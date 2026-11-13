@@ -71,7 +71,7 @@ All projects: a wildcard project segment:
 
 ### Visibility Rules
 
-- **Admin users** see all projects.
+- **An unrestricted admin** (a login, or an admin's key with no `project_id` and no `policy_ids`) sees all projects. An admin's key pinned to a project or narrowed by `policy_ids` sees only what that pin and those policies allow.
 - **API key callers** scoped to a project see only that project.
 - **Regular users** see only the projects covered by the SRN patterns in their attached policies.
 

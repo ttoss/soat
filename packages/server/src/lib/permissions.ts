@@ -1,6 +1,5 @@
 import createDebug from 'debug';
 
-import type { DB } from '../db';
 import type { DeniedPrincipal, RefusedBy } from './authorizationDenial';
 import {
   evaluatePolicies,
@@ -71,48 +70,6 @@ const evalDocs = (args: {
   });
 };
 
-const ADMIN_WILDCARD_POLICY: PolicyDocument = {
-  statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
-};
-
-const loadPolicyDocs = async (args: {
-  policyIds: number[];
-  db: DB;
-}): Promise<PolicyDocument[]> => {
-  if (args.policyIds.length === 0) return [];
-  const policies = await args.db.Policy.findAll({
-    where: { id: args.policyIds },
-  });
-  return policies.map((p: InstanceType<DB['Policy']>) => {
-    return p.document as PolicyDocument;
-  });
-};
-
-/**
- * The policy sets a caller's request must each satisfy: the owning user's
- * (an admin's allow anything) and, when the credential carries one, its
- * boundary — inline docs (OAuth consent) first, else the key's own policies.
- * Authorization (`isAllowed`) and list filters (`getPolicies`) both read it, so a row filter never grants what a check would refuse.
- */
-export const resolvePolicySets = async (args: {
-  userRole: 'admin' | 'user';
-  userPolicyIds: number[];
-  apiKeyPolicyIds: number[];
-  boundaryPolicyDocs?: PolicyDocument[];
-  db: DB;
-}): Promise<PolicySets> => {
-  const userDocs =
-    args.userRole === 'admin'
-      ? [ADMIN_WILDCARD_POLICY]
-      : await loadPolicyDocs({ policyIds: args.userPolicyIds, db: args.db });
-  const boundaryDocs =
-    args.boundaryPolicyDocs ??
-    (args.apiKeyPolicyIds.length > 0
-      ? await loadPolicyDocs({ policyIds: args.apiKeyPolicyIds, db: args.db })
-      : null);
-  return boundaryDocs === null ? [userDocs] : [userDocs, boundaryDocs];
-};
-
 /** Policy sets grouped by the principal they belong to, so a refusal names it. */
 export type LabeledPolicySets = {
   principal: DeniedPrincipal;
@@ -168,16 +125,20 @@ export const createPolicySetsIsAllowed = (args: {
       return false;
     }
 
+    // A group holding no set allows nothing, as one holding an empty set.
     const refusing = (await args.getSets()).find(({ sets }) => {
-      return !sets.every((policies) => {
-        return evalDocs({
-          policies,
-          action: reqArgs.action,
-          resource: reqArgs.resource,
-          resources: reqArgs.resources,
-          context: reqArgs.context,
-        });
-      });
+      return (
+        sets.length === 0 ||
+        !sets.every((policies) => {
+          return evalDocs({
+            policies,
+            action: reqArgs.action,
+            resource: reqArgs.resource,
+            resources: reqArgs.resources,
+            context: reqArgs.context,
+          });
+        })
+      );
     });
     if (!refusing) return true;
     const resources = [

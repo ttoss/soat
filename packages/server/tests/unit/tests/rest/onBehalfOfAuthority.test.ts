@@ -290,7 +290,7 @@ describe('On-Behalf-Of authority', () => {
         .send({ name: turn.unique('obo-key') });
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_SCOPED_TOKEN');
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
     });
   });
 
@@ -347,7 +347,7 @@ describe('On-Behalf-Of authority', () => {
 
       const res = await readDocument(assertion);
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
