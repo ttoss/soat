@@ -28,6 +28,7 @@ import {
   parsePagination,
   requireAuth,
   requireProjectAccess,
+  scopeSrn,
 } from './helpers';
 import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
@@ -187,7 +188,7 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     throw callerDenied({
       authUser: ctx.authUser,
       action: 'agents:ListSessions',
-      resource: projectPublicId ? `srn:${projectPublicId}:session:*` : null,
+      resource: scopeSrn({ projectPublicId, resourceType: 'session' }),
     });
   }
   const policyWhere = compiled.where;

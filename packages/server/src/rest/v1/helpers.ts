@@ -210,7 +210,7 @@ export const isUnrestrictedAdmin = (authUser: AuthUser): boolean => {
 };
 
 /** The SRN a project-level check probes, or `null` when it names no project. */
-const scopeSrn = (args: {
+export const scopeSrn = (args: {
   projectPublicId?: string;
   resourceType?: string;
 }): string | null => {
