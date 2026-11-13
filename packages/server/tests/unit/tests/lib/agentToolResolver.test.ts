@@ -1,6 +1,6 @@
 import {
   HttpToolError,
-  isSoatActionAllowedByBoundary,
+  isSoatActionAllowedByAgentPolicy,
   parseHttpExecuteConfig,
   resolveBodyParamInterpolations,
   resolveUrlPathParams,
@@ -345,19 +345,19 @@ describe('assertValidToolContext', () => {
   });
 });
 
-describe('isSoatActionAllowedByBoundary', () => {
-  test('returns true when boundaryPolicy is null', () => {
-    const result = isSoatActionAllowedByBoundary({
-      boundaryPolicy: null,
+describe('isSoatActionAllowedByAgentPolicy', () => {
+  test('returns true when agentPolicy is null', () => {
+    const result = isSoatActionAllowedByAgentPolicy({
+      agentPolicy: null,
       iamAction: 'agents:CreateGeneration',
     });
 
     expect(result).toBe(true);
   });
 
-  test('returns true when boundaryPolicy is undefined', () => {
-    const result = isSoatActionAllowedByBoundary({
-      boundaryPolicy: undefined,
+  test('returns true when agentPolicy is undefined', () => {
+    const result = isSoatActionAllowedByAgentPolicy({
+      agentPolicy: undefined,
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -365,8 +365,8 @@ describe('isSoatActionAllowedByBoundary', () => {
   });
 
   test('returns false when boundary policy is structurally invalid', () => {
-    const result = isSoatActionAllowedByBoundary({
-      boundaryPolicy: { invalid: 'policy', notAStatement: true },
+    const result = isSoatActionAllowedByAgentPolicy({
+      agentPolicy: { invalid: 'policy', notAStatement: true },
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -383,8 +383,8 @@ describe('isSoatActionAllowedByBoundary', () => {
       ],
     };
 
-    const result = isSoatActionAllowedByBoundary({
-      boundaryPolicy: policy,
+    const result = isSoatActionAllowedByAgentPolicy({
+      agentPolicy: policy,
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -401,8 +401,8 @@ describe('isSoatActionAllowedByBoundary', () => {
       ],
     };
 
-    const result = isSoatActionAllowedByBoundary({
-      boundaryPolicy: policy,
+    const result = isSoatActionAllowedByAgentPolicy({
+      agentPolicy: policy,
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -421,16 +421,16 @@ describe('isSoatActionAllowedByBoundary', () => {
     };
 
     expect(
-      isSoatActionAllowedByBoundary({
-        boundaryPolicy: policy,
+      isSoatActionAllowedByAgentPolicy({
+        agentPolicy: policy,
         iamAction: 'memories:CreateMemory',
         resource: 'srn:proj_abc:memory_store:mstore_support',
       })
     ).toBe(true);
 
     expect(
-      isSoatActionAllowedByBoundary({
-        boundaryPolicy: policy,
+      isSoatActionAllowedByAgentPolicy({
+        agentPolicy: policy,
         iamAction: 'memories:CreateMemory',
         resource: 'srn:proj_abc:memory_store:mstore_other',
       })
@@ -450,16 +450,16 @@ describe('isSoatActionAllowedByBoundary', () => {
     };
 
     expect(
-      isSoatActionAllowedByBoundary({
-        boundaryPolicy: policy,
+      isSoatActionAllowedByAgentPolicy({
+        agentPolicy: policy,
         iamAction: 'memories:CreateMemory',
         context: { 'iam:ResourceTag/env': 'prod' },
       })
     ).toBe(true);
 
     expect(
-      isSoatActionAllowedByBoundary({
-        boundaryPolicy: policy,
+      isSoatActionAllowedByAgentPolicy({
+        agentPolicy: policy,
         iamAction: 'memories:CreateMemory',
         context: { 'iam:ResourceTag/env': 'staging' },
       })
@@ -478,8 +478,8 @@ describe('isSoatActionAllowedByBoundary', () => {
     };
 
     expect(
-      isSoatActionAllowedByBoundary({
-        boundaryPolicy: policy,
+      isSoatActionAllowedByAgentPolicy({
+        agentPolicy: policy,
         iamAction: 'memories:CreateMemory',
       })
     ).toBe(true);
@@ -495,8 +495,8 @@ describe('isSoatActionAllowedByBoundary', () => {
       ],
     };
 
-    const result = isSoatActionAllowedByBoundary({
-      boundaryPolicy: policy,
+    const result = isSoatActionAllowedByAgentPolicy({
+      agentPolicy: policy,
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -753,7 +753,7 @@ describe('resolveSoatTools', () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByBoundary: () => {
+      isSoatActionAllowedByAgentPolicy: () => {
         return true;
       },
       logToolCallingError: () => {},

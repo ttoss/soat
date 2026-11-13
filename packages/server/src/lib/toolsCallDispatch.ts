@@ -4,16 +4,16 @@
  * protocol primitive it reaches.
  */
 import { DomainError } from '../errors';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import {
   buildHttpToolExecute,
-  isSoatActionAllowedByBoundary,
+  isSoatActionAllowedByAgentPolicy,
   parseHttpExecuteConfig,
   toHttpToolDomainError,
 } from './agentToolResolver';
 import {
   executeSoatTool,
-  soatActionBoundaryRefusal,
+  soatActionAgentRefusal,
 } from './agentToolResolverExternalTools';
 import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
@@ -44,7 +44,7 @@ export const callHttpTool = (
     idempotencyKey?: string;
     toolContext?: Record<string, string>;
     authHeader?: string;
-    boundary?: AgentBoundary;
+    agentAuthority?: AgentAuthority;
   } = {}
 ): Promise<unknown> => {
   const { idempotencyKey, toolContext } = call;
@@ -72,7 +72,7 @@ export const callHttpTool = (
         ? { 'Idempotency-Key': idempotencyKey }
         : undefined,
       authHeader: call.authHeader,
-      boundary: call.boundary,
+      agentAuthority: call.agentAuthority,
     },
     toolContext
     // Presets were already merged into `mergedInput` by `callResolvedTool`, so
@@ -90,7 +90,7 @@ export const callSoatTool = async (
     meter: ToolExecutionMeter;
     authHeader?: string;
     toolContext?: Record<string, string>;
-    boundary?: AgentBoundary;
+    agentAuthority?: AgentAuthority;
   }
 ): Promise<unknown> => {
   const { authHeader } = args;
@@ -124,11 +124,11 @@ export const callSoatTool = async (
       `action "${action}" is not a known SOAT action.`
     );
   }
-  const refusal = await soatActionBoundaryRefusal({
+  const refusal = await soatActionAgentRefusal({
     def,
     rawArgs: mergedInput,
-    boundary: args.boundary,
-    isSoatActionAllowedByBoundary,
+    agentAuthority: args.agentAuthority,
+    isSoatActionAllowedByAgentPolicy,
   });
   if (refusal) return refusal;
   return executeSoatTool({
@@ -137,6 +137,7 @@ export const callSoatTool = async (
     rawArgs: mergedInput,
     meter: args.meter,
     authHeader,
+    agentAuthority: args.agentAuthority,
     toolContext: args.toolContext,
     contextKeys: tool.contextKeys,
     buildContextHeaders,
@@ -336,14 +337,14 @@ export const dispatchDirectTool = async (args: {
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(args.tool, args.mergedInput, args.meter, {
       idempotencyKey: args.idempotencyKey,
       toolContext: args.toolContext,
       authHeader: args.authHeader,
-      boundary: args.boundary,
+      agentAuthority: args.agentAuthority,
     });
   }
   if (args.type === 'builtin') {
@@ -353,7 +354,7 @@ export const dispatchDirectTool = async (args: {
       meter: args.meter,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
-      boundary: args.boundary,
+      agentAuthority: args.agentAuthority,
     });
   }
   throw new DomainError(

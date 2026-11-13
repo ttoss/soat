@@ -23,20 +23,20 @@ export type SenderCredential = Pick<
 /**
  * Whose authority a tool call carries in its assertion. `caller` is the
  * request's own resolved credential, narrowings included; without one the
- * credential the work replays (`authHeader`) is resolved. `boundaryPolicy` is
+ * credential the work replays (`authHeader`) is resolved. `agentPolicy` is
  * the calling agent's `policy_ids`, as every `builtin` call of the turn is
  * held to it.
  */
 export type AssertionSender = {
   caller?: SenderCredential;
   authHeader: string | undefined;
-  boundaryPolicy?: unknown;
+  agentPolicy?: unknown;
 };
 
-const boundarySets = (boundaryPolicy: unknown): PolicySets => {
-  if (!boundaryPolicy) return [];
-  return validatePolicyDocument(boundaryPolicy).valid
-    ? [[boundaryPolicy as PolicyDocument]]
+const agentPolicySets = (agentPolicy: unknown): PolicySets => {
+  if (!agentPolicy) return [];
+  return validatePolicyDocument(agentPolicy).valid
+    ? [[agentPolicy as PolicyDocument]]
     : NOTHING;
 };
 
@@ -68,7 +68,7 @@ export const resolveSenderAuthority = async (args: {
   return {
     sets: [
       ...(credentialSets.length > 0 ? credentialSets : NOTHING),
-      ...boundarySets(sender.boundaryPolicy),
+      ...agentPolicySets(sender.agentPolicy),
     ],
     ...(principal ? { principal } : {}),
   };

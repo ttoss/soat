@@ -8,7 +8,7 @@ import {
 } from 'src/lib/iam';
 
 import { DomainError } from '../errors';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import {
   type ActivityCallContext,
   recordToolActivity,
@@ -163,23 +163,23 @@ export { assertValidToolContext, buildContextHeaderName, buildContextHeaders };
  * what a list or a create-in-project means, and all a caller that cannot name
  * its resource may claim.
  */
-export const isSoatActionAllowedByBoundary = (args: {
-  boundaryPolicy: unknown;
+export const isSoatActionAllowedByAgentPolicy = (args: {
+  agentPolicy: unknown;
   iamAction: string;
   resource?: string;
   context?: Record<string, string>;
 }): boolean => {
-  if (!args.boundaryPolicy) {
+  if (!args.agentPolicy) {
     return true;
   }
 
-  const validation = validatePolicyDocument(args.boundaryPolicy);
+  const validation = validatePolicyDocument(args.agentPolicy);
   if (!validation.valid) {
     return false;
   }
 
   return evaluatePolicies({
-    policies: [args.boundaryPolicy as PolicyDocument],
+    policies: [args.agentPolicy as PolicyDocument],
     action: args.iamAction,
     resource: args.resource ?? '*',
     context: args.context,
@@ -642,18 +642,21 @@ type HttpToolExecuteArgs = {
   extraHeaders?: Record<string, string>;
   // Who the call runs for: gates and selects an `oauth_connection` credential.
   authHeader?: string;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
 };
 
 const authIdentity = (args: {
-  call: Pick<HttpToolExecuteArgs, 'projectId' | 'authHeader' | 'boundary'>;
+  call: Pick<
+    HttpToolExecuteArgs,
+    'projectId' | 'authHeader' | 'agentAuthority'
+  >;
   toolContext?: Record<string, string>;
 }): HttpToolAuthIdentity => {
   return {
     projectId: args.call.projectId,
     actorId: args.toolContext?.actor_id,
     authHeader: args.call.authHeader,
-    boundary: args.call.boundary,
+    agentAuthority: args.call.agentAuthority,
   };
 };
 
@@ -807,7 +810,7 @@ const resolveHttpTool = (
   typedTool: TypedHttpTool,
   meter: ToolExecutionMeter,
   toolContext?: Record<string, string>,
-  identity?: { authHeader?: string; boundary?: AgentBoundary }
+  identity?: { authHeader?: string; agentAuthority?: AgentAuthority }
 ): Tool => {
   const parameters =
     typeof typedTool.parameters === 'string'
@@ -836,7 +839,7 @@ const resolveHttpTool = (
             presetParameters: typedTool.presetParameters,
             parameterSchema: parameters,
             authHeader: identity?.authHeader,
-            boundary: identity?.boundary,
+            agentAuthority: identity?.agentAuthority,
           },
           toolContext
         )
@@ -1066,7 +1069,7 @@ const resolvePipelineTool = (
     authHeader?: string;
     remainingDepth?: number;
     attribution: ToolCallAttribution;
-    boundary?: AgentBoundary;
+    agentAuthority?: AgentAuthority;
   }
 ): Tool => {
   const parameters =
@@ -1097,7 +1100,7 @@ const resolvePipelineTool = (
         authHeader: args.authHeader,
         remainingDepth: args.remainingDepth,
         attribution: args.attribution,
-        boundary: args.boundary,
+        agentAuthority: args.agentAuthority,
       });
     },
   });
@@ -1140,7 +1143,7 @@ const resolveToolByType = async (
     attribution: args.attribution,
     sender: {
       authHeader: args.authHeader,
-      boundaryPolicy: args.boundary?.policy,
+      agentPolicy: args.agentAuthority?.policy,
     },
   };
 
@@ -1162,7 +1165,7 @@ const resolveToolByType = async (
       return {
         [typedTool.name]: resolveHttpTool(typedTool, meter, args.toolContext, {
           authHeader: args.authHeader,
-          boundary: args.boundary,
+          agentAuthority: args.agentAuthority,
         }),
       };
     case 'client':
@@ -1176,7 +1179,7 @@ const resolveToolByType = async (
           authHeader: args.authHeader,
           remainingDepth: args.remainingDepth,
           attribution: args.attribution,
-          boundary: args.boundary,
+          agentAuthority: args.agentAuthority,
         }),
       };
     case 'mcp':
@@ -1191,7 +1194,7 @@ const resolveToolByType = async (
       return resolveSoatTools({
         typedTool,
         meter,
-        boundary: args.boundary,
+        agentAuthority: args.agentAuthority,
         authHeader: args.authHeader,
         projectPublicId: args.projectPublicId,
         toolContext: args.toolContext,
@@ -1200,7 +1203,7 @@ const resolveToolByType = async (
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
         buildContextHeaders,
-        isSoatActionAllowedByBoundary,
+        isSoatActionAllowedByAgentPolicy,
         logToolCallingError,
       });
     default: {
@@ -1280,7 +1283,7 @@ export const resolveEphemeralAgentTool = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
   callerProjectId?: number;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   authHeader?: string;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -1343,7 +1346,7 @@ type ResolveToolByTypeArgs = {
    * tool's own project when that is where the tool lives.
    */
   callerProjectId?: number;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   authHeader?: string;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -1488,7 +1491,7 @@ export const resolveAgentToolBindings = async (args: {
    */
   projectPublicId?: string;
   projectIds?: number[];
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   authHeader?: string;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -1529,7 +1532,7 @@ export const resolveAgentToolBindings = async (args: {
       definition,
       projectId: args.projectId,
       callerProjectId: args.callerProjectId,
-      boundary: args.boundary,
+      agentAuthority: args.agentAuthority,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
       traceId: args.traceId,

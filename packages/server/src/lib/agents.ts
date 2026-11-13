@@ -11,6 +11,11 @@ import {
   assertValidReasoning,
 } from './agentModelSettings';
 import {
+  type AgentRunAs,
+  assertRunAsHasPolicies,
+  readAgentRunAs,
+} from './agentRunAs';
+import {
   assertForcedToolChoiceCanStop,
   assertValidStopConditions,
 } from './agentStopConditions';
@@ -70,6 +75,7 @@ export const mapAgent = (agent: AgentRow): MappedAgent => {
     active_tool_ids: agent.activeToolIds,
     step_rules: agent.stepRules,
     policy_ids: agent.policyIds,
+    run_as: readAgentRunAs(agent.runAs),
     temperature: agent.temperature,
     max_output_tokens: agent.maxOutputTokens,
     reasoning: agent.reasoning,
@@ -105,6 +111,7 @@ type AgentUpdateFields = {
   activeToolIds?: string[] | null;
   stepRules?: object[] | null;
   policyIds?: string[] | null;
+  runAs?: AgentRunAs;
   temperature?: number | null;
   maxOutputTokens?: number | null;
   reasoning?: object | null;
@@ -143,6 +150,7 @@ export const AGENT_SCALAR_FIELDS = [
   'activeToolIds',
   'stepRules',
   'policyIds',
+  'runAs',
   'temperature',
   'maxOutputTokens',
   'reasoning',
@@ -179,6 +187,7 @@ const AGENT_CREATE_DEFAULTS = {
   activeToolIds: null,
   stepRules: null,
   policyIds: null,
+  runAs: 'caller',
   temperature: null,
   maxOutputTokens: null,
   reasoning: null,
@@ -188,15 +197,18 @@ const AGENT_CREATE_DEFAULTS = {
 };
 
 /**
- * An agent's generations run capped by its `policyIds` and send the secrets
- * of its inline tools, so whoever writes one holds both.
+ * An agent's generations run under its `policyIds` and send the secrets of
+ * its inline tools, so whoever writes one holds both; a `run_as: agent` agent
+ * acts under them alone, so it carries at least one.
  */
 export const assertAgentWriterHolds = async (args: {
   writer: Writer;
   projectId: number;
+  runAs: AgentRunAs | undefined;
   policyIds?: string[] | null;
   toolBindings?: unknown;
 }): Promise<void> => {
+  assertRunAsHasPolicies({ runAs: args.runAs, policyIds: args.policyIds });
   await assertWriterHolds({
     carrier: 'agents',
     writer: args.writer,
@@ -223,6 +235,7 @@ export const createAgent = async (
     activeToolIds?: string[];
     stepRules?: object[];
     policyIds?: string[] | null;
+    runAs?: AgentRunAs;
     temperature?: number;
     maxOutputTokens?: number;
     reasoning?: object;
@@ -252,7 +265,7 @@ export const createAgent = async (
 
   await assertAgentReferencesExist(args);
 
-  await assertAgentWriterHolds(args);
+  await assertAgentWriterHolds({ ...args, runAs: args.runAs ?? 'caller' });
 
   const toolBindings = await resolveBindingsForCreate({
     ...args,
@@ -415,6 +428,7 @@ export const updateAgent = async (
   await assertAgentWriterHolds({
     writer: args.writer,
     projectId: agent.projectId,
+    runAs: args.runAs ?? readAgentRunAs(agent.runAs),
     policyIds: args.policyIds === undefined ? agent.policyIds : args.policyIds,
     // New bindings are checked as they are validated.
     toolBindings: args.toolBindings === undefined ? agent.toolBindings : null,

@@ -188,6 +188,7 @@ describe('Orchestration → generation attribution', () => {
         nodeAttempt: number;
       }) => {
         await createGenerationRecord({
+          actsAsAgent: null,
           publicId: `gen_attrfilter_${args.suffix}`,
           projectId: projectPk,
           agentId,

@@ -7,6 +7,7 @@
  * CRUD module is only free of a new cycle because the accessor lives here.
  */
 import { db } from '../db';
+import type { AgentRunAs } from './agentRunAs';
 import type { WireAgentToolBinding } from './agentToolBindings';
 import type { ResourceIncludes } from './modelIncludes';
 import type { ActiveRelease } from './releaseAssignment';
@@ -30,6 +31,8 @@ export type MappedAgent = {
   step_rules: object[] | null;
   /** Policies capping every generation; see `attachedPolicies.ts`. */
   policy_ids: string[] | null;
+  /** What `policy_ids` are; see `agentRunAs.ts`. */
+  run_as: AgentRunAs;
   temperature: number | null;
   max_output_tokens: number | null;
   /** `{ effort }` — see `agentModelSettings.ts`. Null is the model's default. */

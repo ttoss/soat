@@ -5,6 +5,8 @@ import createDebug from 'debug';
 
 import type { Context } from '../Context';
 import { DomainError } from '../errors';
+import type { ResolvedCredential } from '../middleware/authOnBehalfOf';
+import { attachInProcessCredential } from '../middleware/inProcessCredential';
 
 const log = createDebug('soat:inprocess');
 
@@ -172,6 +174,8 @@ export const dispatchApiRequest = async (args: {
   headers?: Record<string, string | undefined>;
   /** Serialized as a JSON request body. `undefined` sends none. */
   body?: unknown;
+  /** A credential passed as a value, in place of an `Authorization` header. */
+  credential?: ResolvedCredential;
 }): Promise<InProcessApiResponse> => {
   // Imported at call time: `app` mounts the REST router, which reaches this
   // module through the tool layer, so a static import would close that cycle at
@@ -180,6 +184,9 @@ export const dispatchApiRequest = async (args: {
 
   const method = args.method.toUpperCase();
   const req = buildRequest(args);
+  if (args.credential) {
+    attachInProcessCredential({ req, credential: args.credential });
+  }
   const ctx: Context = app.createContext(req, new ServerResponse(req));
 
   // Koa's own `handleRequest` seeds this, so an unmatched route reports 404
@@ -217,6 +224,7 @@ export const dispatchApiRequestOrThrow = async (args: {
   path: string;
   headers?: Record<string, string | undefined>;
   body?: unknown;
+  credential?: ResolvedCredential;
   /** Builds the error thrown for a non-2xx response, in the caller's own vocabulary. */
   wrapError: (response: InProcessApiResponse) => Error;
 }): Promise<unknown> => {
@@ -225,6 +233,7 @@ export const dispatchApiRequestOrThrow = async (args: {
     path: args.path,
     headers: args.headers,
     body: args.body,
+    credential: args.credential,
   });
 
   if (response.status < 200 || response.status >= 300) {

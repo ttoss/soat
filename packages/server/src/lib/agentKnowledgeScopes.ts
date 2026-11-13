@@ -15,7 +15,7 @@ import { readScopePolicySets } from './scopePolicySets';
  * The agent's stored `knowledge_config` is the agent's own and reads as the
  * agent. A generation's `knowledge_config` override is named by the caller, so
  * a row only the override reaches is read under the caller's
- * `knowledge:SearchKnowledge` policy and the agent's boundary. The turn then
+ * `knowledge:SearchKnowledge` policy and the agent's `policy_ids`. The turn then
  * searches the merged config as two scopes: the part the stored config also
  * reaches, unbounded, and the whole of it, bounded by that policy.
  */
@@ -146,7 +146,7 @@ export const resolveRequestedKnowledgePolicy = async (args: {
   projectIds?: number[];
   /** Names the project when `projectIds` is unrestricted. */
   knowledgeProjectPublicId: string;
-  boundaryPolicy: PolicyDocument | null;
+  agentPolicy: PolicyDocument | null;
 }): Promise<KnowledgeSearchPolicy> => {
   if (!args.authUser) return { forbidden: true };
   const policySets = await readScopePolicySets({
@@ -157,11 +157,11 @@ export const resolveRequestedKnowledgePolicy = async (args: {
   });
   // No set compiles to unrestricted access, which is no caller's policy.
   if (policySets.length === 0) return { forbidden: true };
-  const { boundaryPolicy } = args;
+  const { agentPolicy } = args;
   return compileKnowledgeSearchPolicy({
-    policySets: boundaryPolicy
+    policySets: agentPolicy
       ? policySets.map((set) => {
-          return { ...set, policies: [...set.policies, [boundaryPolicy]] };
+          return { ...set, policies: [...set.policies, [agentPolicy]] };
         })
       : policySets,
   });

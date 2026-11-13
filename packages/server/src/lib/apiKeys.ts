@@ -39,30 +39,30 @@ const mapApiKeyWithAssociations = (apiKey: ApiKeyWithAssociations) => {
 
 /**
  * Whether a key write may store `requestedPolicyIds` when the caller is itself
- * an API key narrowed by `boundaryPolicyIds`: only a non-empty subset of that
+ * an API key narrowed by `keyPolicyIds`: only a non-empty subset of that
  * boundary, so a narrowed key never writes a key wider than itself. An omitted
  * list inherits the boundary when `inheritWhenOmitted` (create) and stays
  * unchanged otherwise (update).
  */
 const resolveKeyPolicyBoundary = (args: {
-  boundaryPolicyIds: string[] | undefined;
+  keyPolicyIds: string[] | undefined;
   requestedPolicyIds: string[] | undefined;
   inheritWhenOmitted: boolean;
 }): { allowed: boolean; policyIds: string[] | undefined } => {
-  const { boundaryPolicyIds, requestedPolicyIds } = args;
-  if (!boundaryPolicyIds || boundaryPolicyIds.length === 0) {
+  const { keyPolicyIds, requestedPolicyIds } = args;
+  if (!keyPolicyIds || keyPolicyIds.length === 0) {
     return { allowed: true, policyIds: requestedPolicyIds };
   }
   if (requestedPolicyIds === undefined) {
     return {
       allowed: true,
-      policyIds: args.inheritWhenOmitted ? boundaryPolicyIds : undefined,
+      policyIds: args.inheritWhenOmitted ? keyPolicyIds : undefined,
     };
   }
   const allowed =
     requestedPolicyIds.length > 0 &&
     requestedPolicyIds.every((id) => {
-      return boundaryPolicyIds.includes(id);
+      return keyPolicyIds.includes(id);
     });
   log(
     'resolveKeyPolicyBoundary: allowed=%s requested=%o',
@@ -101,7 +101,7 @@ export const heldKeyPolicyIds = async (args: {
  */
 export const boundKeyPolicyIds = (args: {
   narrowed: boolean;
-  boundaryPolicyIds: string[] | undefined;
+  keyPolicyIds: string[] | undefined;
   requestedPolicyIds: string[] | undefined;
   inheritWhenOmitted: boolean;
   onRefused: () => void;
@@ -121,7 +121,7 @@ export const boundKeyPolicyIds = (args: {
     'This API key is narrowed by policy_ids and cannot write a key outside ' +
       'that boundary. Name a non-empty subset of its policy_ids.',
     {
-      boundary_policy_ids: args.boundaryPolicyIds ?? [],
+      key_policy_ids: args.keyPolicyIds ?? [],
       requested_policy_ids: args.requestedPolicyIds ?? [],
     }
   );

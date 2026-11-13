@@ -43,6 +43,7 @@ describe('On-Behalf-Of execution identity', () => {
   let taggedGeneration: string;
   let uncappedGeneration: string;
   let narrowCallerGeneration: string;
+  let runAsAgentGeneration: string;
   let blueDoc: string;
   let redDoc: string;
   let actorId: string;
@@ -203,6 +204,19 @@ describe('On-Behalf-Of execution identity', () => {
     expect(narrowRes.status).toBe(200);
     narrowCallerGeneration = narrowRes.body.id;
 
+    const runAsAgent = await turn.createAgent({
+      tool_bindings: [{ tool_id: toolId }],
+      run_as: 'agent',
+      policy_ids: [notRedDocuments],
+    });
+    const runAsRes = await authenticatedTestClient(narrowKey.body.key)
+      .post(`/api/v1/agents/${runAsAgent}/generate?wait=true`)
+      .send({
+        messages: [{ role: 'user', content: JSON.stringify({ calls: ECHO }) }],
+      });
+    expect(runAsRes.status).toBe(200);
+    runAsAgentGeneration = runAsRes.body.id;
+
     const actor = await turn
       .api()
       .post('/api/v1/actors')
@@ -299,6 +313,20 @@ describe('On-Behalf-Of execution identity', () => {
         type: 'generation',
         id: narrowCallerGeneration,
       });
+    });
+
+    test("a run_as: agent generation acts under the agent's policy_ids, not its caller's", async () => {
+      const allowed = await updateDocument({
+        documentId: blueDoc,
+        generationId: runAsAgentGeneration,
+      });
+      const refused = await updateDocument({
+        documentId: redDoc,
+        generationId: runAsAgentGeneration,
+      });
+
+      expect(allowed.status).toBe(200);
+      expect(refused.status).toBe(403);
     });
 
     test("binds ${iam:ActorId} to the generation's actor", async () => {
