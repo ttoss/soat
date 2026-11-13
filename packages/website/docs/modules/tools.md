@@ -512,7 +512,7 @@ curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 | `tool_id`                                     | The tool's ID; absent for an inline definition                                                                           |
 | `project_id`                                  | The tool's own project                                                                                                   |
 | `agent_id`, `generation_id`                   | The agent and generation whose turn made the call, when one did                                                          |
-| `work_id`                                     | The run-as work that made the call, when one did: a playbook case or execution, a task, or an orchestration run          |
+| `work_id`                                     | The durable work that made the call, when one did: a playbook case or execution, a task, or an orchestration run          |
 | `calling_project_id`                          | The caller's project, on a call through a [share](./shares.md)                                                           |
 | `session_id`, `actor_id`, `actor_external_id` | The [server-derived identity](../advanced/tool-context.md#auto-populated-keys-sessions), when the call runs in a session |
 | `ath`                                         | The authority the call was sent with, encrypted with a key only SOAT holds; opaque to the receiver                       |

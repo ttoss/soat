@@ -1,6 +1,7 @@
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
 import { principalFromAuthUser } from './principals';
+import type { ActingPrincipal } from './workAuthority';
 
 /**
  * Whose policies refused: the request's credential (`user`, `api_key`, or
@@ -94,8 +95,7 @@ export const authorizationDenied = (args: {
 
 /** The request's credential, as the principal whose policies refused it. */
 export const callerPrincipal = (authUser: {
-  publicId: string;
-  apiKeyPublicId?: string;
+  terms: { principal: ActingPrincipal };
 }): DeniedPrincipal => {
   const { principalType, principalId } = principalFromAuthUser(authUser);
   return { type: principalType, id: principalId };
@@ -107,8 +107,7 @@ export const callerPrincipal = (authUser: {
  */
 export const callerDenied = (args: {
   authUser: {
-    publicId: string;
-    apiKeyPublicId?: string;
+    terms: { principal: ActingPrincipal };
     isAllowed?: { refusedBy?: RefusedBy };
   };
   action: string;

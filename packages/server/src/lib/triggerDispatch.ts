@@ -1,11 +1,12 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 
+import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
-import { resolveJwtAuthUser } from '../middleware/auth';
+import { authUserOfWork } from '../middleware/auth';
 import { authorizationDenied } from './authorizationDenial';
 import type { GenerationInputMessage } from './generationInputMessages';
-import { principalFromAuthUser } from './principals';
+import { principalOfAuthority } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 import { mayStart, startCheck } from './startActions';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
@@ -18,8 +19,15 @@ import {
   reloadFiring,
 } from './triggerFirings';
 import { dispatchToTarget } from './triggerTargets';
-import { signTriggerToken, type TriggerCallerCredential } from './triggerToken';
 import { readTargetType } from './triggerValidation';
+import {
+  captureAuthority,
+  parseWorkAuthority,
+  requireWorkAuthority,
+  triggerAuthority,
+  type WorkAuthority,
+  workAuthorityMissing,
+} from './workAuthority';
 
 const log = createDebug('soat:triggers');
 
@@ -105,63 +113,64 @@ export const validateOrchestrationInput = (args: {
   }
 };
 
-/**
- * The caller of a manual fire: the firing acts as this caller ∩ the trigger's
- * `policy_ids`, and records it as `acted_as`.
- */
-export type FiringCaller = TriggerCallerCredential & {
-  publicId: string;
-  role: 'admin' | 'user';
-};
-
 /** The principal a firing acted as: the trigger, or the caller of a fire. */
 export type FiringPrincipal = { principalType: string; principalId: string };
 
-/** The user a firing's token names: the caller, else the creator. */
-const tokenUser = async (args: {
+/**
+ * The authority a firing runs under: the trigger's `policy_ids` alone when
+ * nobody called it; for a manual fire, the trigger's grant capped by the
+ * caller's whole authority, acting as the caller.
+ */
+const firingAuthority = (args: {
   trigger: InstanceType<(typeof db)['Trigger']>;
-  caller?: FiringCaller;
-}): Promise<{ publicId: string; role: string }> => {
-  if (args.caller) return args.caller;
-  const creatorId = args.trigger.createdByUserId as number | null;
-  const creator = creatorId
-    ? await db.User.findOne({ where: { id: creatorId } })
-    : null;
-  if (!creator) {
+  projectPublicId: string;
+  caller?: AuthUser;
+}): WorkAuthority => {
+  const own = triggerAuthority({
+    triggerPublicId: args.trigger.publicId as string,
+    projectPublicId: args.projectPublicId,
+  });
+  const { caller } = args;
+  if (!caller) return own;
+  const { terms } = caller;
+  if (terms.grant.holder !== 'user') {
     throw new DomainError(
-      'TRIGGER_CREATOR_UNAVAILABLE',
-      'The trigger creator no longer exists.'
+      'TRIGGER_RECURSION_FORBIDDEN',
+      'A trigger-scoped credential cannot fire a trigger.'
     );
   }
-  return { publicId: creator.publicId as string, role: creator.role as string };
+  const callerAuthority = captureAuthority({
+    authUser: caller,
+    projectPublicId: args.projectPublicId,
+  })!;
+  return {
+    ...callerAuthority,
+    grant: own.grant,
+    caps: [{ kind: 'user', user: terms.grant.user }, ...terms.caps],
+    trigger: own.trigger,
+  };
 };
 
 /**
- * Resolves who a firing acts as and mints its run-as token: the trigger's
- * `policy_ids` alone when nobody called it, the caller ∩ `policy_ids` for a
- * manual fire. That identity must be able to start the target.
+ * Checks that a firing's authority can start the trigger's target, and names
+ * who it acts as.
  */
 const resolveFiringIdentity = async (args: {
   trigger: InstanceType<(typeof db)['Trigger']>;
-  projectPublicId: string;
-  caller?: FiringCaller;
-}): Promise<{ authHeader: string; actedAs: FiringPrincipal }> => {
-  const { trigger, projectPublicId, caller } = args;
-  const user = await tokenUser({ trigger, caller });
-  const token = signTriggerToken({
-    publicId: user.publicId,
-    role: user.role,
-    projectPublicId,
-    triggerId: trigger.publicId as string,
-    caller: caller
-      ? {
-          apiKeyPublicId: caller.apiKeyPublicId,
-          oauthScope: caller.oauthScope,
-          bound: caller.bound,
-        }
-      : undefined,
+  authority: WorkAuthority | null;
+}): Promise<{ authority: WorkAuthority; actedAs: FiringPrincipal }> => {
+  const { trigger } = args;
+  const authority = requireWorkAuthority({
+    authority: args.authority,
+    work: `Firing of trigger '${trigger.publicId as string}'`,
   });
-  const identity = await resolveJwtAuthUser({ db, token });
+  const projectPublicId = authority.project;
+  if (!projectPublicId) {
+    throw workAuthorityMissing({
+      work: `Firing of trigger '${trigger.publicId as string}'`,
+    });
+  }
+  const identity = await authUserOfWork({ db, authority });
   const canStart =
     identity !== undefined &&
     (await mayStart({
@@ -182,12 +191,7 @@ const resolveFiringIdentity = async (args: {
       ],
     });
   }
-  return {
-    authHeader: `Bearer ${token}`,
-    actedAs: caller
-      ? principalFromAuthUser(caller)
-      : { principalType: 'trigger', principalId: trigger.publicId as string },
-  };
+  return { authority, actedAs: principalOfAuthority(authority)! };
 };
 
 /** Pre-flight input validation per target type (throws 400 before any record). */
@@ -218,7 +222,7 @@ export type PreparedFiring = {
   effectiveInput: Record<string, unknown>;
   /** Resolved at fire time, so a rotated secret takes effect on the next firing. */
   effectiveToolContext?: Record<string, string>;
-  authHeader: string;
+  authority: WorkAuthority | null;
   actedAs: FiringPrincipal;
 };
 
@@ -272,26 +276,22 @@ export { assertFireInputValid };
 /**
  * The credentials and context a dispatch needs, resolved at fire time.
  *
- * Deliberately not stored on the firing row: a run-as token is short-lived and
- * a `tool_context` secret may have been rotated, so a firing the sweep
- * redelivers must mint both again rather than replay the ones its first
- * attempt held.
+ * The authority is the one the firing row stores; the `tool_context` is
+ * resolved again, since a secret may have been rotated since the first
+ * attempt.
  */
 const resolveDispatchCredentials = async (args: {
   trigger: TriggerInstance;
+  stored: unknown;
   fireToolContext?: Record<string, string> | null;
 }): Promise<{
-  authHeader: string;
+  authority: WorkAuthority;
   actedAs: FiringPrincipal;
   effectiveToolContext?: Record<string, string>;
 }> => {
-  const project = await db.Project.findOne({
-    where: { id: args.trigger.projectId as number },
-  });
-
-  const { authHeader, actedAs } = await resolveFiringIdentity({
+  const { authority, actedAs } = await resolveFiringIdentity({
     trigger: args.trigger,
-    projectPublicId: project?.publicId as string,
+    authority: parseWorkAuthority(args.stored),
   });
 
   const effectiveToolContext = await resolveStoredToolContext({
@@ -300,7 +300,7 @@ const resolveDispatchCredentials = async (args: {
     projectId: args.trigger.projectId as number,
   });
 
-  return { authHeader, actedAs, effectiveToolContext };
+  return { authority, actedAs, effectiveToolContext };
 };
 
 export const prepareFiring = async (args: {
@@ -311,7 +311,7 @@ export const prepareFiring = async (args: {
   /** See `TriggerFiring.idempotencyKey`. */
   idempotencyKey?: string | null;
   /** Set for a manual fire; absent when nobody called the trigger. */
-  caller?: FiringCaller;
+  caller?: AuthUser;
 }): Promise<PreparedFiring> => {
   log('prepareFiring: trigger=%s source=%s', args.triggerPublicId, args.source);
 
@@ -328,10 +328,13 @@ export const prepareFiring = async (args: {
   });
   const projectPublicId = project?.publicId as string;
 
-  const { authHeader, actedAs } = await resolveFiringIdentity({
+  const { authority, actedAs } = await resolveFiringIdentity({
     trigger,
-    projectPublicId,
-    caller: args.caller,
+    authority: firingAuthority({
+      trigger,
+      projectPublicId,
+      caller: args.caller,
+    }),
   });
 
   const effectiveInput = mergeFiringInput({
@@ -352,6 +355,7 @@ export const prepareFiring = async (args: {
     source: args.source,
     input: effectiveInput,
     idempotencyKey: args.idempotencyKey,
+    authority,
   });
 
   return {
@@ -359,7 +363,7 @@ export const prepareFiring = async (args: {
     trigger,
     effectiveInput,
     effectiveToolContext,
-    authHeader,
+    authority,
     actedAs,
   };
 };
@@ -379,7 +383,7 @@ export const runFiringDispatch = async (
     trigger,
     effectiveInput,
     effectiveToolContext,
-    authHeader,
+    authority,
     actedAs,
   } = prepared;
 
@@ -398,7 +402,7 @@ export const runFiringDispatch = async (
       projectId: trigger.projectId as number,
       input: effectiveInput,
       toolContext: effectiveToolContext,
-      authHeader,
+      authority,
       triggerId: trigger.publicId as string,
     });
     await finalizeFiringCompleted({ firing, result });
@@ -432,8 +436,8 @@ export const runFiringDispatch = async (
  * process died. Both re-resolve the trigger and its credentials, because
  * neither survives a restart and both may have changed since.
  *
- * Nothing here is raised. A trigger switched off, a deleted creator, a revoked
- * permission — each is recorded on the row, which is the only place a caller
+ * Nothing here is raised. A trigger switched off, a firing with no stored
+ * authority, a revoked permission — each is recorded on the row, which is the only place a caller
  * that is no longer present can read it.
  */
 export const runReservedFiring = async (args: {
@@ -449,15 +453,15 @@ export const runReservedFiring = async (args: {
     });
     await assertProjectAcceptsWork({ projectId: trigger.projectId as number });
 
-    const { authHeader, actedAs, effectiveToolContext } =
-      await resolveDispatchCredentials({ trigger });
+    const { authority, actedAs, effectiveToolContext } =
+      await resolveDispatchCredentials({ trigger, stored: firing.authority });
 
     await runFiringDispatch({
       firing,
       trigger,
       effectiveInput: (firing.input as Record<string, unknown> | null) ?? {},
       effectiveToolContext,
-      authHeader,
+      authority,
       actedAs,
     });
   } catch (error) {
@@ -483,7 +487,7 @@ export const fireTriggerNow = async (args: {
   source: string;
   fireInput?: Record<string, unknown> | null;
   fireToolContext?: Record<string, string> | null;
-  caller?: FiringCaller;
+  caller?: AuthUser;
 }) => {
   const prepared = await prepareFiring(args);
   return runFiringDispatch(prepared);

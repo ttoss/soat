@@ -298,14 +298,14 @@ Runs execute in a **queue-backed durable worker**, detached from the starting re
 - `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`**. `submit-human-input` applies the payload, drives the run inline and returns the settled result; `resume-orchestration-run` carries no `node_id` or payload, so it re-drives from the last checkpoint and re-parks on the same node.
 - An **operator** parks a run with [`POST /api/v1/orchestration-runs/{orchestration_run_id}/pause`](/docs/api/orchestrations/pause-orchestration-run) ([Pausing a run](#pausing-a-run)).
 
-**Run identity.** Each run persists its starting principal (user or API key); every background drive re-mints a short-lived **run-as token** from it, confined to the run's project, so a [`builtin` tool](./tools.md#builtin) node can call the platform from a durable run.
+**Run identity.** Each run stores the authority it was started under, pinned to the run's project: the starter's grant and every cap on it (a key's `policy_ids`, an OAuth consent, an IAM token's bound), or a trigger's `policy_ids` for a firing nobody called. Every drive, inline, queued, woken, redriven or resumed, runs under it; whoever resumes the run lends it nothing. It is passed in-process as a value: no token is minted for a run's own calls, so none expires under long work.
 
-- **Identity only, not permissions.** Authorization is evaluated per call against current policies; revoking access affects a run in flight.
-- **Never wider than the starting credential.** A key-started run is bounded by the key's policies; revoking the key stops it, with no fallback to the owner's access: a drive already under way gets `403 FORBIDDEN` on every call.
-- **Attributed to the key, not its owner.** A key-started run names the key (`key_…`) in [task history](./workflows.md#transition-history), the [audit log](./audit-log.md), and the principal a later automation hop inherits.
-- **Trigger- and OAuth-started runs record no principal.** They execute inline with the original token (the trigger's attached policy, the consented scope); their platform self-calls are unauthenticated and fail with `TOOL_HTTP_ERROR` carrying the upstream 401.
+- **Authority, not a snapshot.** Each grant and cap is read at every call; revoking access affects a run in flight.
+- **Never wider than the starting credential.** A key-started run is bounded by the key's policies; revoking the key stops it, with no fallback to the owner's access: every later call is refused.
+- **Attributed to its principal.** A key-started run names the key (`key_…`), a firing nobody called names the trigger, in [task history](./workflows.md#transition-history), the [audit log](./audit-log.md), and what a later automation hop inherits.
+- **No authority, no calls.** A run that stores none (one written before runs stored their authority) sends no tool call: each is refused with `409 WORK_AUTHORITY_MISSING`.
 
-Nested `loop` / `sub_orchestration` children inherit the parent's identity; a [workflow](./workflows.md)-dispatched agent gets the same, keyed to the task.
+Nested `loop` / `sub_orchestration` children inherit the parent's authority; a [workflow](./workflows.md)-dispatched agent runs under the task's.
 
 **Queue driver.** `enqueue` / `claim` / `ack` / `extend_lease` / `retry`, selected with `ORCHESTRATION_QUEUE_DRIVER`. Both drivers are at-least-once with lease-based redelivery:
 
@@ -957,7 +957,6 @@ Listing orchestrations and runs stays project-scoped: [`GET /api/v1/orchestratio
 
 | Environment Variable | Required | Description |
 | --- | --- | --- |
-| `SOAT_RUN_TOKEN_TTL` | No | Lifetime of the run-as token minted for each background drive segment (default `1h`). It covers one drive, not the whole run, so a run sleeping for days never holds a long-lived credential. See [Run identity](#durable-background-execution). |
 | `MAX_ORCHESTRATION_RUN_DEPTH` | No | `loop` / `sub_orchestration` nesting levels a run tree may reach before the next child is refused (default `10`). A project's `max_orchestration_run_depth` can be stricter, never looser. See [Nesting depth](#nesting-depth). |
 | `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
 | `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |

@@ -6,9 +6,8 @@ import type { GenerationInputMessage } from './generationInputMessages';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { executeToolNode } from './orchestrationNodeExecutors';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
-import { buildRunAuthHeader } from './orchestrationRunToken';
 import type { MappedOrchestrationRun } from './orchestrations';
-import type { StartingPrincipal } from './principals';
+import { forWork, type WorkAuthority } from './workAuthority';
 import type { WorkflowDispatch } from './workflowsValidation';
 
 // Unlike a failed generation, a failed/cancelled/expired run resolves normally
@@ -112,34 +111,27 @@ const buildAgentMessages = (
  * Runs an `agent` dispatch and exposes the generation's output.
  *
  * An agent dispatch is as request-less as an orchestration one: nothing awaits
- * it and there is no inbound request to borrow a credential from. So it re-mints
- * the same run-as token, keyed to the task, or the agent's `soat` tools reach
- * the loopback unauthenticated and the model is handed a 401 in place of a tool
- * result. The header is `undefined` when the chain has no principal — a
- * trigger- or OAuth-started task deliberately records none, and the generation
- * then runs unauthenticated, self-calls included (see
- * `orchestrationRunToken.ts`).
+ * it, so it runs under the task's stored authority, driving the task. A task
+ * holding none runs no tool.
  */
 const runAgentDispatch = async (args: {
   agentId: string;
   projectId: number;
   taskPublicId: string;
   inputs: Record<string, unknown>;
-  principal?: StartingPrincipal;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   onDispatchStarted?: DispatchStarted;
 }): Promise<DispatchResult> => {
-  const authHeader = await buildRunAuthHeader({
-    principal: args.principal,
-    projectId: args.projectId,
-    workPublicId: args.taskPublicId,
-  });
+  const authority = args.authority
+    ? forWork({ authority: args.authority, work: args.taskPublicId })
+    : null;
 
   const gen = (await createGeneration({
     agentId: args.agentId,
     projectIds: [args.projectId],
     messages: buildAgentMessages(args.inputs),
-    authHeader,
+    authority,
     toolContext: args.toolContext,
     stream: false,
     onRecorded: args.onDispatchStarted
@@ -190,17 +182,15 @@ const runToolDispatch = async (args: {
   taskContext: Record<string, unknown>;
   projectId: number;
   taskPublicId: string;
-  principal?: StartingPrincipal;
+  authority: WorkAuthority | null;
   // A `tool` dispatch carries the same bag its `agent`/`orchestration` siblings
   // do; without it a tool naming a `{{context:}}` header or preset cannot be
   // dispatched from a workflow at all.
   toolContext?: Record<string, string>;
 }): Promise<DispatchResult> => {
-  const authHeader = await buildRunAuthHeader({
-    principal: args.principal,
-    projectId: args.projectId,
-    workPublicId: args.taskPublicId,
-  });
+  const authority = args.authority
+    ? forWork({ authority: args.authority, work: args.taskPublicId })
+    : null;
 
   const outcome = await executeToolNode({
     node: {
@@ -214,7 +204,7 @@ const runToolDispatch = async (args: {
     },
     state: args.taskContext,
     projectId: args.projectId,
-    authHeader,
+    authority,
     toolContext: args.toolContext,
   });
 
@@ -251,7 +241,7 @@ export const runDispatch = async (args: {
    */
   taskContext: Record<string, unknown>;
   // The identity the dispatch runs as, for every kind; see `dispatchOnEnter`.
-  principal?: StartingPrincipal;
+  authority: WorkAuthority | null;
   /**
    * The task's caller context, forwarded as `X-Soat-Context-*` headers on the
    * tool calls this dispatch makes. For an orchestration dispatch it is
@@ -270,7 +260,7 @@ export const runDispatch = async (args: {
       projectId: args.projectId,
       taskPublicId: args.taskPublicId,
       inputs: args.inputs,
-      principal: args.principal,
+      authority: args.authority,
       toolContext: args.toolContext,
       onDispatchStarted: args.onDispatchStarted,
     });
@@ -284,7 +274,7 @@ export const runDispatch = async (args: {
       taskContext: args.taskContext,
       projectId: args.projectId,
       taskPublicId: args.taskPublicId,
-      principal: args.principal,
+      authority: args.authority,
       toolContext: args.toolContext,
     });
   }
@@ -297,7 +287,7 @@ export const runDispatch = async (args: {
     orchestrationPublicId: args.dispatch.orchestrationId!,
     projectIds: [args.projectId],
     input: args.inputs,
-    principal: args.principal,
+    authority: args.authority,
     toolContext: args.toolContext,
     onRunCreated: args.onDispatchStarted
       ? ({ orchestrationRunId }) => {

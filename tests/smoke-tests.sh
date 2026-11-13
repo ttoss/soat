@@ -6730,7 +6730,7 @@ echo "Task automation_status filter: OK"
 # ── on_enter tool dispatch ──
 # A state whose work is a single tool call dispatches it directly, with no
 # orchestration in between. A `builtin` tool is used so the call exercises the
-# run-as token the dispatch mints for itself, with no external dependency.
+# task's stored authority, with no external dependency.
 WF_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-workflow-tool \
@@ -6940,8 +6940,8 @@ $SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
 #
 # A workflow state dispatches an orchestration, and that run moves the task on
 # through a `builtin` tool node. A task-dispatched run is always durable, so the
-# self-call has no request to borrow a header from — it authenticates with a
-# run-as token minted from the principal persisted on the run.
+# self-call has no request to borrow a header from — it runs under the
+# authority stored on the run.
 #
 # Four behaviours meet on this path with no live-stack coverage before it: the
 # run→task edge, the chain budget bounding it, the principal
@@ -7029,7 +7029,7 @@ fi
 echo "Run transitioned its own task: OK"
 
 # The run's move is a chain hop, not a person's. The budget can only see
-# that because the transition arrived carrying a run-as token — a depth of 0
+# that because the transition arrived under the run's stored authority — a depth of 0
 # here means the marker was lost somewhere on the path and the composed cycle
 # is no longer bounded.
 SELF_CHAIN_DEPTH=$(printf '%s\n' "$SELF_TASK_GET" | jq -r '.automation_chain_depth')

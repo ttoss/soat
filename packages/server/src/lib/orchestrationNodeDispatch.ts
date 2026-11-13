@@ -19,6 +19,7 @@ import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import { executePollNode } from './orchestrationPollNode';
 import type { OrchestrationNode } from './orchestrations';
 import { executeWebhookNode } from './orchestrationWebhookNode';
+import type { WorkAuthority } from './workAuthority';
 
 /**
  * Node type → executor. This module dispatches; it executes nothing itself.
@@ -51,7 +52,7 @@ type DispatchArgs = {
   // starts.
   toolContext?: Record<string, string>;
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
   pollAttempt?: number;
   // The node's own 1-based retry attempt (distinct from `pollAttempt`, which
@@ -98,7 +99,7 @@ const dispatchNestedRunNode = (
     state,
     projectIds,
     traceId,
-    authHeader,
+    authority,
     toolContext,
     runPublicId,
   } = args;
@@ -110,7 +111,7 @@ const dispatchNestedRunNode = (
     state,
     projectIds,
     traceId,
-    authHeader,
+    authority,
     toolContext,
     // The parent run, so each child it starts records where it came from.
     runPublicId,
@@ -133,7 +134,7 @@ const dispatchNodeExecution = async (
     triggerId,
     toolContext,
     traceId,
-    authHeader,
+    authority,
     pollAttempt,
     nodeAttempt,
     idempotencyKey,
@@ -157,7 +158,7 @@ const dispatchNodeExecution = async (
         projectIds,
         projectId,
         traceId,
-        authHeader,
+        authority,
         runPublicId,
         triggerId,
         nodeAttempt,
@@ -168,7 +169,7 @@ const dispatchNodeExecution = async (
         node: nodeDefn,
         state,
         projectId,
-        authHeader,
+        authority,
         idempotencyKey,
         orchestrationRunId: runPublicId,
         toolContext,
@@ -178,7 +179,7 @@ const dispatchNodeExecution = async (
         node: nodeDefn,
         state,
         projectIds,
-        authHeader,
+        authority,
         attempt: pollAttempt,
         orchestrationRunId: runPublicId,
         toolContext,
@@ -209,7 +210,7 @@ export const executeNodeById = async (args: {
   triggerId?: string;
   toolContext?: Record<string, string>;
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   pollAttempt?: number;
   nodeAttempt?: number;
   idempotencyKey?: string;
@@ -229,7 +230,7 @@ export const executeNodeById = async (args: {
     triggerId,
     toolContext,
     traceId,
-    authHeader,
+    authority,
     pollAttempt,
     nodeAttempt,
     idempotencyKey,
@@ -253,7 +254,7 @@ export const executeNodeById = async (args: {
     triggerId,
     toolContext,
     traceId,
-    authHeader,
+    authority,
     pollAttempt,
     nodeAttempt,
     idempotencyKey,

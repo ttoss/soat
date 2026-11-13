@@ -13,6 +13,7 @@ import { resolveSoatActionScope } from './soatActionScope';
 import { soatTools } from './soatTools';
 import { buildResourceTagContext } from './tags';
 import { callTool, tools } from './tools';
+import type { WorkAuthority } from './workAuthority';
 
 export type ToolOutputMessageContent = {
   type: 'tool_output';
@@ -307,7 +308,7 @@ const assertBuiltinActionAllowed = async (args: {
 const resolveToolOutputContent = async (args: {
   content: ToolOutputMessageContent;
   projectIds?: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   allowedToolIds?: string[];
   agentAuthority?: AgentAuthority;
@@ -348,7 +349,7 @@ const resolveToolOutputContent = async (args: {
     id: args.content.tool_id,
     action: args.content.action,
     input: args.content.input,
-    authHeader: args.authHeader,
+    authority: args.authority,
     caller: args.authUser,
     // The generation calling a tool on its own behalf, so it carries the same
     // bag the model's own tool calls resolve from.
@@ -377,7 +378,7 @@ const resolveToolOutputContent = async (args: {
 export const resolveMessageContent = async (args: {
   content: ResolvableMessageContent;
   projectIds?: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   allowedToolIds?: string[];
   agentAuthority?: AgentAuthority;
@@ -405,7 +406,7 @@ export const resolveMessageContent = async (args: {
   return resolveToolOutputContent({
     content: args.content,
     projectIds: args.projectIds,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     allowedToolIds: args.allowedToolIds,
     agentAuthority: args.agentAuthority,

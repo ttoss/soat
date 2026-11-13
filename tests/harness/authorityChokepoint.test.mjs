@@ -60,7 +60,7 @@ describe('effective authority chokepoint', () => {
       filesMatching(
         /\brole\s*[!=]==?\s*'admin'|'admin'\s*[!=]==?\s*\w*\.?role\b/
       ),
-      ['middleware/authScopedBoundary.ts']
+      ['middleware/authScopedBoundary.ts', 'middleware/authTerms.ts']
     );
   });
 
@@ -68,9 +68,10 @@ describe('effective authority chokepoint', () => {
     assert.deepEqual(
       filesMatching(/\b(holder:\s*'\w+'|kind:\s*'(key_policies|other)')( as const)?,/),
       [
+        'lib/workAuthority.ts',
         'middleware/auth.ts',
-        'middleware/authOnBehalfOf.ts',
         'middleware/authScopedBoundary.ts',
+        'middleware/authTerms.ts',
       ]
     );
   });

@@ -3,7 +3,6 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { callerDenied } from 'src/lib/authorizationDenial';
 import { readRetrievalMode } from 'src/lib/conversationRetrieval';
-import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
 import { pauseProject, resumeProject } from 'src/lib/projectPauseActions';
 import {
@@ -13,6 +12,7 @@ import {
   listProjects,
   updateProject,
 } from 'src/lib/projects';
+import { captureAuthority } from 'src/lib/workAuthority';
 
 import {
   assertGuardrailDetachAllowed,
@@ -269,8 +269,7 @@ projectsRouter.post('/projects/:project_id/resume', async (ctx: Context) => {
     id: projectPublicId,
     // A task's suppressed dispatch runs as whoever resumed: the resume is the
     // decision to spend again.
-    principal:
-      resolveStartingPrincipal({ authUser: ctx.authUser }) ?? undefined,
+    authority: captureAuthority({ authUser: ctx.authUser }),
   });
 });
 

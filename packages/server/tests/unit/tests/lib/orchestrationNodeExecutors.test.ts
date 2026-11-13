@@ -232,6 +232,7 @@ describe('a node executing after its project was deleted', () => {
         node: { id: 'n1', type: 'tool', toolId: 'tool_deletedmidrun' },
         state: {},
         projectId: goneProjectId,
+        authority: null,
       })
     ).rejects.toBeInstanceOf(DomainError);
   });

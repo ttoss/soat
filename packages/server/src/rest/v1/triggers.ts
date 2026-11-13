@@ -146,7 +146,6 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   });
   const trigger = await createTrigger({
     projectId: Number(targetProjectId),
-    createdByUserId: ctx.authUser!.id,
     policyIds: body.policy_ids,
     name: body.name,
     description: body.description,
@@ -267,8 +266,8 @@ triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
 triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
   requireAuth(ctx);
 
-  // No recursion: a trigger run-as credential cannot fire a trigger.
-  if (ctx.authUser.isTriggerToken) {
+  // No recursion: work a firing began cannot fire a trigger.
+  if (ctx.authUser.work?.trigger) {
     throw new DomainError(
       'TRIGGER_RECURSION_FORBIDDEN',
       'A trigger-scoped credential cannot fire a trigger.'
@@ -304,13 +303,7 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     // reserved identity keys are stripped here, where the caller's bytes
     // arrive, rather than trusted.
     fireToolContext: sanitizeCallerToolContext(toolContext),
-    caller: {
-      publicId: ctx.authUser.publicId,
-      role: ctx.authUser.role,
-      apiKeyPublicId: ctx.authUser.apiKeyPublicId,
-      oauthScope: ctx.authUser.oauthScope,
-      bound: ctx.authUser.bound,
-    },
+    caller: ctx.authUser,
   });
 
   ctx.status = 200;

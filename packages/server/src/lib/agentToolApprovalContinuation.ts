@@ -19,14 +19,15 @@ import {
 } from './approvals';
 import { expireChainIfSettled } from './generationChains';
 import type { PolicyDocument } from './iam';
-import {
-  buildRunAuthHeader,
-  readStoredStartingPrincipal,
-} from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
 import { callTool } from './tools';
+import {
+  forWork,
+  parseWorkAuthority,
+  type WorkAuthority,
+} from './workAuthority';
 
 const log = createDebug('soat:approvals');
 
@@ -35,40 +36,21 @@ const errorMessage = (error: unknown): string => {
 };
 
 /**
- * Re-mints the continuation's credential from the principal the generation that
- * proposed the approved call acted as: its submitter when a `tool-outputs`
- * resumption proposed it.
- *
- * The approval can sit pending for days, so identity comes from the row, not
- * the resolving request: the approver decided *whether* the action happens, not
- * *as whom*. `undefined` when the chain has no principal or it no longer
- * resolves; self-calls then go out unauthenticated.
+ * The continuation's authority: the one the generation that proposed the
+ * approved call stores. The approval can sit pending for days, so it comes
+ * from the row, not the resolving request: the approver decided *whether* the
+ * action happens, not *as whom*. Null when there is no proposing generation.
  */
-const resolveContinuationAuthHeader = async (args: {
+const resolveContinuationAuthority = async (args: {
   item: MappedApproval;
-  projectInternalId: number;
-}): Promise<string | undefined> => {
-  if (!args.item.generation_id) return undefined;
-
+}): Promise<WorkAuthority | null> => {
+  if (!args.item.generation_id) return null;
   const proposing = await db.Generation.findOne({
     where: { publicId: args.item.generation_id },
-    attributes: [
-      'actedAsPrincipalType',
-      'actedAsPrincipalId',
-      'actedAsPrincipalBound',
-    ],
+    attributes: ['authority'],
   });
-  if (!proposing) return undefined;
-
-  return buildRunAuthHeader({
-    principal: readStoredStartingPrincipal({
-      kind: proposing.actedAsPrincipalType,
-      id: proposing.actedAsPrincipalId,
-      bound: proposing.actedAsPrincipalBound,
-    }),
-    projectId: args.projectInternalId,
-    workPublicId: args.item.id,
-  });
+  const authority = parseWorkAuthority(proposing?.authority);
+  return authority ? forWork({ authority, work: args.item.id }) : null;
 };
 
 /** Refuses every action: what an agent that no longer resolves is bounded by. */
@@ -223,7 +205,7 @@ const executeApprovedNativeAction = async (args: {
 const executeApprovedAction = async (args: {
   item: MappedApproval;
   projectInternalId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
 }): Promise<object | null> => {
   const proposed = args.item.proposed_action;
@@ -267,7 +249,7 @@ const executeApprovedAction = async (args: {
     // The approved action runs as the chain's principal too, not just the
     // continuation that reports it — a proposed `soat` call is executed here,
     // and without the credential it reaches the loopback unauthenticated.
-    authHeader: args.authHeader,
+    authority: args.authority,
     toolContext: args.toolContext,
     attribution: { generationId: args.item.generation_id },
     signedOff: {
@@ -381,7 +363,7 @@ const fireContinuation = async (args: {
   item: MappedApproval;
   decision: DecisionOutput;
   projectInternalId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
 }): Promise<void> => {
   const { item } = args;
@@ -401,9 +383,8 @@ const fireContinuation = async (args: {
       agentId: agent.id as number,
       sessionId: item.session_id,
       message,
-      authHeader: args.authHeader,
-      // No request drives a continuation: the principal is read off the
-      // re-minted `authHeader`.
+      authority: args.authority,
+      // No request drives a continuation: it runs under `authority`.
       authUser: undefined,
       toolContext: args.toolContext,
       initiatorGenerationId: item.generation_id,
@@ -417,11 +398,9 @@ const fireContinuation = async (args: {
     projectIds: [args.projectInternalId],
     initiatorGenerationId: item.generation_id,
     messages: [{ role: 'user', content: message }],
-    // Carries the chain's identity into the continuation's own `soat` tools,
-    // and — because `createGeneration` reads the principal back off it — onto
-    // the continuation's generation row, so a further approval in the same
-    // chain re-mints from there in turn.
-    authHeader: args.authHeader,
+    // The chain's authority, which the continuation's generation stores, so a
+    // further approval in the same chain runs under it in turn.
+    authority: args.authority,
     toolContext: args.toolContext,
   });
 };
@@ -448,10 +427,7 @@ const runToolCallContinuation = async (args: {
     });
     const projectInternalId = project.id as number;
 
-    const authHeader = await resolveContinuationAuthHeader({
-      item,
-      projectInternalId,
-    });
+    const authority = await resolveContinuationAuthority({ item });
 
     let result: object | null = null;
     if (args.decision.decision === 'approved') {
@@ -461,7 +437,7 @@ const runToolCallContinuation = async (args: {
       const reHandedOff = await emitClientToolReHandoff({
         item,
         projectInternalId,
-        authHeader,
+        authority,
         toolContext: args.toolContext,
       });
       if (reHandedOff) return;
@@ -469,7 +445,7 @@ const runToolCallContinuation = async (args: {
       result = await executeApprovedAction({
         item,
         projectInternalId,
-        authHeader,
+        authority,
         toolContext: args.toolContext,
       }).catch((error: unknown) => {
         log('executeApprovedAction failed id=%s %o', item.id, error);
@@ -496,7 +472,7 @@ const runToolCallContinuation = async (args: {
       item,
       decision: { ...args.decision, result },
       projectInternalId,
-      authHeader,
+      authority,
       toolContext: args.toolContext,
     });
   } catch (error) {

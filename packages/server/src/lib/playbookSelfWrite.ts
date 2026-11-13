@@ -47,8 +47,8 @@ const casesOfWork = async (args: { work: string }): Promise<number[]> => {
 
 /**
  * Refuses a write into a case from the work it is running or from the work of
- * a case downstream of it: a run-as token minted for such a case, for one of
- * its executions in flight, or for the task or run one started; or a tool
+ * a case downstream of it: a call made under the stored authority of such a
+ * case, of one of its executions in flight, or of the task or run one started; or a tool
  * call such work or such a generation made, written back on a project key
  * with its `On-Behalf-Of`. An executor feeding its own case, or a case its case reads,
  * would re-trigger itself.

@@ -17,7 +17,7 @@ import {
 } from 'src/lib/conversations';
 import { mapGeneratedTurn } from 'src/lib/generatedTurn';
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
-import { replayedAuthHeader } from 'src/lib/replayedCredential';
+import { captureAuthority } from 'src/lib/workAuthority';
 
 import { requireConversationAccess } from './conversationHelpers';
 import {
@@ -241,7 +241,7 @@ conversationSubResourcesRouter.post(
       agentId: body.agent_id,
       model: body.model,
       toolContext: parseToolContextBody(body.tool_context),
-      authHeader: replayedAuthHeader({ ctx }),
+      authority: captureAuthority({ authUser: ctx.authUser }),
       authUser: ctx.authUser,
     };
 

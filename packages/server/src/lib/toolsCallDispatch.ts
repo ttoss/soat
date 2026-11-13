@@ -24,6 +24,7 @@ import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
 import type { CallableToolDefinition } from './toolsCall';
 import type { ToolExecutionMeter } from './usageToolRecording';
+import type { WorkAuthority } from './workAuthority';
 
 const noopLogToolCallingError = () => {};
 
@@ -43,9 +44,9 @@ export const callHttpTool = (
   call: {
     idempotencyKey?: string;
     toolContext?: Record<string, string>;
-    authHeader?: string;
+    authority: WorkAuthority | null;
     agentAuthority?: AgentAuthority;
-  } = {}
+  }
 ): Promise<unknown> => {
   const { idempotencyKey, toolContext } = call;
   const executeConfig = parseHttpExecuteConfig(
@@ -71,7 +72,7 @@ export const callHttpTool = (
       extraHeaders: idempotencyKey
         ? { 'Idempotency-Key': idempotencyKey }
         : undefined,
-      authHeader: call.authHeader,
+      authority: call.authority,
       agentAuthority: call.agentAuthority,
     },
     toolContext
@@ -88,12 +89,12 @@ export const callSoatTool = async (
     action?: string;
     mergedInput: Record<string, unknown>;
     meter: ToolExecutionMeter;
-    authHeader?: string;
+    authority: WorkAuthority | null;
     toolContext?: Record<string, string>;
     agentAuthority?: AgentAuthority;
   }
 ): Promise<unknown> => {
-  const { authHeader } = args;
+  const { authority } = args;
   // Support presetParameters.action as a fallback when no explicit action is given.
   const action =
     args.action ??
@@ -136,7 +137,7 @@ export const callSoatTool = async (
     def,
     rawArgs: mergedInput,
     meter: args.meter,
-    authHeader,
+    authority,
     agentAuthority: args.agentAuthority,
     toolContext: args.toolContext,
     contextKeys: tool.contextKeys,
@@ -333,7 +334,7 @@ export const dispatchDirectTool = async (args: {
   tool: CallableToolDefinition;
   action?: string;
   mergedInput: Record<string, unknown>;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
@@ -343,7 +344,7 @@ export const dispatchDirectTool = async (args: {
     return callHttpTool(args.tool, args.mergedInput, args.meter, {
       idempotencyKey: args.idempotencyKey,
       toolContext: args.toolContext,
-      authHeader: args.authHeader,
+      authority: args.authority,
       agentAuthority: args.agentAuthority,
     });
   }
@@ -352,7 +353,7 @@ export const dispatchDirectTool = async (args: {
       action: args.action,
       mergedInput: args.mergedInput,
       meter: args.meter,
-      authHeader: args.authHeader,
+      authority: args.authority,
       toolContext: args.toolContext,
       agentAuthority: args.agentAuthority,
     });

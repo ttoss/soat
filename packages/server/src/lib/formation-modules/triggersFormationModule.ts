@@ -139,12 +139,8 @@ export const triggersFormationModule = defineFormationModule({
   },
 
   create: async ({ properties, projectId, actor }) => {
-    // `createdByUserId` is the run-as identity a firing mints a token for, not
-    // attribution: the deploying caller, so a firing can never exceed whoever
-    // declared the trigger.
     return createTrigger({
       projectId,
-      createdByUserId: actor.userId,
       policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
       name: properties.name as string,
       description: toOptionalString(properties.description) ?? undefined,

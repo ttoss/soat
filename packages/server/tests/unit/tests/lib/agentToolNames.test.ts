@@ -19,6 +19,7 @@ const guardrail: ResolverGuardrailContext = {
   generationId: null,
   projectId: 1,
   projectPublicId: 'proj_test',
+  authority: null,
   callerContext: {},
   baseGuardrails: [],
 };

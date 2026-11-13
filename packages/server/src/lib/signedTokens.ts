@@ -19,8 +19,6 @@ const JWT_SECRET = requireJwtSecret();
 export const TOKEN_TYPES = [
   'login',
   'oauth',
-  'trigger',
-  'run',
   'iam',
   'file-download',
   'ingestion-callback',
@@ -32,8 +30,6 @@ export type TokenType = (typeof TOKEN_TYPES)[number];
 export const BEARER_TOKEN_TYPES = [
   'login',
   'oauth',
-  'trigger',
-  'run',
   'iam',
 ] as const satisfies readonly TokenType[];
 
@@ -42,15 +38,6 @@ export type BearerTokenType = (typeof BEARER_TOKEN_TYPES)[number];
 export type VerifiedToken<T extends TokenType> = JwtPayload & { typ: T };
 
 export type TokenTtl = NonNullable<SignOptions['expiresIn']>;
-
-/** A TTL read from an env var in `ms` notation (`1h`), else the fallback. */
-export const ttlFromEnv = (args: {
-  name: string;
-  fallback: TokenTtl;
-}): TokenTtl => {
-  const value = process.env[args.name];
-  return value ? (value as TokenTtl) : args.fallback;
-};
 
 /** `typ` is written last, so no claim can overwrite it. */
 export const signToken = (args: {

@@ -1,11 +1,16 @@
-import { signRunToken } from 'src/lib/orchestrationRunToken';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  clientFor,
+  testClient,
+  type TestCredential,
+  workAuthorityOf,
+} from '../../testClient';
 
 const UPGRADE_ACTIONS = [
   'playbooks:UpgradePlaybookCase',
@@ -97,9 +102,9 @@ describe('Playbook case upgrades', () => {
   const upgrade = (
     caseId: string,
     body: Record<string, unknown> = {},
-    token = userToken
+    credential: TestCredential = userToken
   ) => {
-    return authenticatedTestClient(token)
+    return clientFor(credential)
       .post(`/api/v1/playbook-cases/${caseId}/upgrade`)
       .send(body);
   };
@@ -442,14 +447,13 @@ describe('Playbook case upgrades', () => {
     test("returns 403 for an upgrade from the case's own work", async () => {
       const caseId = await newCase(await newPlaybook());
       const me = await asAdmin().get('/api/v1/users/me');
-      const token = await signRunToken({
-        publicId: me.body.id,
-        role: 'admin',
-        projectPublicId: projectId,
-        workPublicId: caseId,
+      const work = workAuthorityOf({
+        project: projectId,
+        user: me.body.id,
+        work: caseId,
       });
 
-      const res = await upgrade(caseId, {}, token);
+      const res = await upgrade(caseId, {}, work);
 
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('PLAYBOOK_SELF_WRITE');

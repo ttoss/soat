@@ -30,6 +30,7 @@ import {
 import { generations } from 'src/lib/generations';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
+import { captureAuthority } from 'src/lib/workAuthority';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -461,7 +462,7 @@ evaluationsRouter.delete('/evals/:eval_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs/post'
  */
 evaluationsRouter.post('/evals/:eval_id/runs', async (ctx: Context) => {
-  const { projectIds } = await evalAccess.authorizeWrite({
+  const { projectIds, projectPublicId } = await evalAccess.authorizeWrite({
     ctx,
     action: 'evaluations:RunEval',
   });
@@ -469,6 +470,7 @@ evaluationsRouter.post('/evals/:eval_id/runs', async (ctx: Context) => {
 
   ctx.status = 201;
   ctx.body = await startEvalRun({
+    authority: captureAuthority({ authUser: ctx.authUser, projectPublicId }),
     projectIds,
     evalId: ctx.params.eval_id,
     wait: body.wait,

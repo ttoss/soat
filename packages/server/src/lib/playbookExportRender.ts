@@ -7,13 +7,13 @@ import { systemPath } from './filePaths';
 import { upsertFileByPath } from './files';
 import { isPlainObject } from './plainObject';
 import { PLAYBOOK_EXPORT_FORMATS } from './playbookDefinition';
-import type { StartingPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
   type StoredError,
   toStoredError,
 } from './storedError';
 import { runDispatch } from './tasksDispatch';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:playbookExports');
 
@@ -52,7 +52,7 @@ const readToolFile = (result: unknown): ToolFile => {
 const renderFile = async (args: {
   exported: ExportRow;
   exportCase: ExportCase;
-  principal: StartingPrincipal;
+  authority: WorkAuthority;
 }): Promise<number> => {
   const { exported, exportCase } = args;
   const entry = await db.PlaybookEntry.findOne({
@@ -79,7 +79,7 @@ const renderFile = async (args: {
     taskPublicId: exported.publicId,
     inputs: context,
     taskContext: context,
-    principal: args.principal,
+    authority: args.authority,
   });
 
   const file = readToolFile(dispatched.result);
@@ -120,7 +120,7 @@ const renderFile = async (args: {
 export const renderPlaybookExport = async (args: {
   exportId: number;
   exportCase: ExportCase;
-  principal: StartingPrincipal;
+  authority: WorkAuthority;
 }): Promise<void> => {
   const exported = (await db.PlaybookExport.findByPk(args.exportId))!;
   log('renderPlaybookExport: %s', exported.publicId);

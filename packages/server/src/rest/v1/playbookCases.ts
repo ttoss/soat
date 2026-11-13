@@ -160,7 +160,7 @@ playbookCasesRouter.post(
       writes: parseInputWrites(body.inputs),
       createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
-      runWorkPublicId: ctx.authUser.runWorkPublicId,
+      runWorkPublicId: ctx.authUser.work?.work ?? undefined,
       wait: body.wait === true,
     });
   }
@@ -337,7 +337,7 @@ playbookCasesRouter.post(
       confirmation: parseConfirmation(body),
       createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
-      runWorkPublicId: ctx.authUser.runWorkPublicId,
+      runWorkPublicId: ctx.authUser.work?.work ?? undefined,
       wait: body.wait === true,
     });
   }
@@ -367,7 +367,7 @@ playbookCasesRouter.post(
       canReadCase: caseReadableBy(ctx),
       createdBy: requestPrincipalFromCtx(ctx),
       onBehalfOf: ctx.authUser.onBehalfOf ?? null,
-      runWorkPublicId: ctx.authUser.runWorkPublicId,
+      runWorkPublicId: ctx.authUser.work?.work ?? undefined,
       wait: body.wait === true,
     });
   }

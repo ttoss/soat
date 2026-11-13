@@ -9,6 +9,7 @@ import {
   resolveIngestionRule,
 } from './ingestionRules';
 import { extractPdfPages } from './pdf';
+import type { WorkAuthority } from './workAuthority';
 
 export const SUPPORTED_CONTENT_TYPES = [
   'application/pdf',
@@ -63,6 +64,8 @@ const convertWithRule = async (args: {
   documentId: string;
   attemptId: string;
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 }): Promise<ResolvedSourcePages> => {
   const outcome = await invokeConverter({
     file: args.file,
@@ -71,6 +74,7 @@ const convertWithRule = async (args: {
     documentId: args.documentId,
     attemptId: args.attemptId,
     endUser: args.endUser,
+    authority: args.authority,
   });
 
   if (outcome.status === 'pending') {
@@ -97,6 +101,8 @@ const resolveNativeSourcePages = async (
     documentId: string;
     attemptId: string;
     endUser: GenerationEndUser;
+    /** The ingest request's authority, which the converter runs under. */
+    authority: WorkAuthority | null;
   }
 ): Promise<ResolvedSourcePages> => {
   if (rule && rule.native_extraction === 'skip') {
@@ -124,6 +130,8 @@ export const resolveSourcePages = async (
     attemptId: string;
     /** Who the ingest runs for; a converter's spend is metered against them. */
     endUser: GenerationEndUser;
+    /** The ingest request's authority, which the converter runs under. */
+    authority: WorkAuthority | null;
   }
 ): Promise<ResolvedSourcePages> => {
   const contentType = file.contentType ?? '';

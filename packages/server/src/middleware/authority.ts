@@ -54,11 +54,16 @@ export type Cap = {
   bound: Bound;
 };
 
-/** A credential's authority, as each kind states it: grant ∩ caps, pinned. */
+/**
+ * A credential's authority, as each kind states it: grant ∩ caps, pinned.
+ * `replayed` marks stored work running it again, which mints no durable
+ * credential.
+ */
 export type AuthorityTerms = {
   pinned: string | null;
   grant: Grant;
   caps: Cap[];
+  replayed: boolean;
 };
 
 export type Authority = Pick<
@@ -108,12 +113,12 @@ const uncapped = (terms: AuthorityTerms): boolean => {
 
 /**
  * What narrows the grant: nothing, only the presenting key's own `policy_ids`,
- * or anything beyond them. A resource's grant in place of the user's, and a
- * cap of kind `other` whatever it allows (a token naming no key is still a
- * token), are beyond them.
+ * or anything beyond them. Replayed work, a resource's grant in place of the
+ * user's, and a cap of kind `other` whatever it allows, are beyond them.
  */
 const narrowingOf = (terms: AuthorityTerms): AuthUser['narrowing'] => {
   if (
+    terms.replayed ||
     terms.grant.holder !== 'user' ||
     terms.caps.some((cap) => {
       return cap.kind === 'other';

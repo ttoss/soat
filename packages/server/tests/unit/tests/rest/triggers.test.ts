@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 import { db } from 'src/db';
 import { SIGNATURE_TOLERANCE_SECONDS } from 'src/lib/hmacSignature';
-import { signTriggerToken } from 'src/lib/triggerToken';
+import { triggerAuthority } from 'src/lib/workAuthority';
 
 import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
@@ -10,7 +10,12 @@ import {
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  loginAs,
+  testClient,
+  workRequest,
+} from '../../testClient';
 
 describe('Triggers', () => {
   let adminToken: string;
@@ -2157,30 +2162,21 @@ describe('Triggers', () => {
       expect(res.status).toBe(404);
     });
 
-    test('recursion guard: a trigger run-as token cannot fire (403)', async () => {
-      // Mint a trigger run-as token for a real user so the auth middleware
-      // populates authUser and marks it as a trigger token.
-      const users = (
-        await authenticatedTestClient(adminToken).get('/api/v1/users')
-      ).body.data;
-      const myPublicId = users.find((u: { username: string; id: string }) => {
-        return u.username === 'triggersuser';
-      }).id;
-      const trgToken = signTriggerToken({
-        publicId: myPublicId,
-        role: 'user',
-        projectPublicId: projectId,
-        triggerId: orchTriggerId,
+    test('recursion guard: work a firing began cannot fire (403)', async () => {
+      const res = await workRequest({
+        authority: triggerAuthority({
+          triggerPublicId: orchTriggerId,
+          projectPublicId: projectId,
+        }),
+        method: 'post',
+        path: `/api/v1/triggers/${orchTriggerId}/fire`,
+        body: {},
       });
-
-      const res = await authenticatedTestClient(trgToken)
-        .post(`/api/v1/triggers/${orchTriggerId}/fire`)
-        .send({});
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('TRIGGER_RECURSION_FORBIDDEN');
     });
 
-    test('a trigger run-as token nobody called acts under policy_ids alone', async () => {
+    test('a firing nobody called acts under policy_ids alone', async () => {
       // Boundary policy that allows only listing triggers.
       const policy = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
@@ -2201,43 +2197,48 @@ describe('Triggers', () => {
           target_id: orchestrationId,
         });
 
-      const users = (
-        await authenticatedTestClient(adminToken).get('/api/v1/users')
-      ).body.data;
-      const myPublicId = users.find((u: { username: string; id: string }) => {
-        return u.username === 'triggersuser';
-      }).id;
-      const trgToken = signTriggerToken({
-        publicId: myPublicId,
-        role: 'user',
-        projectPublicId: projectId,
-        triggerId: boundTrigger.body.id,
-      });
+      const asFiring = (request: {
+        method: 'get' | 'post';
+        path: string;
+        body?: unknown;
+      }) => {
+        return workRequest({
+          authority: triggerAuthority({
+            triggerPublicId: boundTrigger.body.id,
+            projectPublicId: projectId,
+          }),
+          ...request,
+        });
+      };
 
-      // policy_ids allow ListTriggers → the run-as token can list.
-      const listRes = await authenticatedTestClient(trgToken).get(
-        `/api/v1/triggers?project_id=${projectId}`
-      );
+      // policy_ids allow ListTriggers → the firing's work can list.
+      const listRes = await asFiring({
+        method: 'get',
+        path: `/api/v1/triggers?project_id=${projectId}`,
+      });
       expect(listRes.status).toBe(200);
 
-      // A by-id refusal reads the token's policies for the project it names.
-      const getRes = await authenticatedTestClient(trgToken).get(
-        `/api/v1/triggers/${boundTrigger.body.id}`
-      );
+      // A by-id refusal reads the firing's policies for the project it names.
+      const getRes = await asFiring({
+        method: 'get',
+        path: `/api/v1/triggers/${boundTrigger.body.id}`,
+      });
       expect(getRes.status).toBe(403);
 
       // policy_ids do not allow creating triggers → the creator's own
-      // (broader) permissions do not reach the token.
-      const createRes = await authenticatedTestClient(trgToken)
-        .post('/api/v1/triggers')
-        .send({
+      // (broader) permissions do not reach the firing.
+      const createRes = await asFiring({
+        method: 'post',
+        path: '/api/v1/triggers',
+        body: {
           policy_ids: [triggerPolicyId],
           project_id: projectId,
           name: 'runas-should-fail',
           type: 'manual',
           target_type: 'orchestration',
           target_id: orchestrationId,
-        });
+        },
+      });
       expect(createRes.status).toBe(403);
     });
 
@@ -2545,6 +2546,52 @@ describe('Triggers', () => {
       expect(firing.source).toBe('webhook');
       expect(firing.status).toBe('completed');
       expect(firing.input).toEqual({ event: 'push', ref: 'main' });
+    });
+
+    // A firing nobody called runs under the trigger's own grant: the user who
+    // created it is not part of its authority.
+    test('a delivery fires after the trigger creator is deleted', async () => {
+      const username = `hookcreator${Math.random().toString(36).slice(2, 8)}`;
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username, password: 'hookcreatorpass' });
+      expect(created.status).toBe(201);
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${created.body.id}/policies`)
+        .send({ policy_ids: [triggerPolicyId] });
+      const creatorToken = await loginAs(username, 'hookcreatorpass');
+
+      const trigger = await authenticatedTestClient(creatorToken)
+        .post('/api/v1/triggers')
+        .send({
+          policy_ids: [triggerPolicyId],
+          project_id: projectId,
+          name: `orphan-hook-${username}`,
+          type: 'webhook',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+      expect(trigger.status).toBe(201);
+
+      const deleted = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/users/${created.body.id}`
+      );
+      expect(deleted.status).toBe(204);
+
+      const body = JSON.stringify({ event: 'orphaned' });
+      const res = await testClient
+        .post(`/hooks/triggers/${trigger.body.id}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(trigger.body.secret, body))
+        .send(body);
+      expect(res.status).toBe(202);
+
+      const firing = await pollFiring(res.body.firing_id);
+      expect(firing.status).toBe('completed');
+      expect(firing.acted_as).toEqual({
+        principal_type: 'trigger',
+        principal_id: trigger.body.id,
+      });
     });
 
     // Clears the window even when the request lands seconds after signing.

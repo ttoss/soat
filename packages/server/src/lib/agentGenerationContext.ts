@@ -32,6 +32,7 @@ import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
 import type { ToolSurface } from './toolSurfaceMeasure';
 import { measureToolSurface } from './toolSurfaceMeasure';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
 
@@ -42,7 +43,7 @@ export type GenerationContext = {
   /** The agent's `policy_ids` for this turn, and what they are. */
   agentAuthority: AgentAuthority;
   /** The credential {@link GenerationContext.resolvedTools} call with. */
-  toolsAuthHeader: string | undefined;
+  toolsAuthority: WorkAuthority | null;
   /**
    * What {@link GenerationContext.resolvedTools} costs to send, measured before
    * the provider sees it. Stamped on the generation record; a resumed turn
@@ -206,7 +207,7 @@ export type BuildGenerationContextArgs = {
   projectIds?: number[];
   runProjectId?: number;
   messages: GenerationInputMessage[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -285,7 +286,7 @@ export const buildGenerationContext = async (
   const resolvedMessages = await resolveGenerationInputMessages({
     projectIds: args.projectIds,
     messages: args.messages,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     allowedToolIds: splitToolBindings(readAgentToolBindings(typedAgent))
       .toolIds,
@@ -314,7 +315,7 @@ export const buildGenerationContext = async (
     projectIds: args.projectIds,
     typedAgent,
     agentAuthority,
-    authHeader: args.authHeader,
+    authority: args.authority,
     toolContext,
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
@@ -342,7 +343,7 @@ export const buildGenerationContext = async (
     model,
     resolvedTools,
     agentAuthority,
-    toolsAuthHeader: args.authHeader,
+    toolsAuthority: args.authority,
     toolSurface: await measureToolSurface({ tools: resolvedTools }),
     allMessages,
     retrieval,

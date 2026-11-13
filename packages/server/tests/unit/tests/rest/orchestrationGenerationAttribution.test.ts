@@ -4,7 +4,14 @@ import { createGenerationRecord } from 'src/lib/generations';
 import { executeAndRecordNode } from 'src/lib/orchestrationNodeRecorder';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  testClient,
+  workAuthorityOf,
+} from '../../testClient';
+
+/** No caller drives these runs: an orphan authority stands for any stored one. */
+const WORK_AUTHORITY = workAuthorityOf({ project: null, user: 'user_orphan' });
 
 /**
  * Reaching an agent node's generation from an orchestration run.
@@ -19,6 +26,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
  * 2. `list-generations` can be filtered by run and node, which is what turns
  *    those columns into a way back from a run to what its agents actually did.
  */
+
 describe('Orchestration → generation attribution', () => {
   let userToken: string;
   let adminToken: string;
@@ -137,6 +145,7 @@ describe('Orchestration → generation attribution', () => {
       const spy = stubGeneration();
 
       await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'ask',
         runRecord: run,
         nodes: [{ ...agentNodes[0], agentId }],
@@ -160,6 +169,7 @@ describe('Orchestration → generation attribution', () => {
       const spy = stubGeneration();
 
       await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'ask',
         runRecord: run,
         nodes: [{ ...agentNodes[0], agentId }],
@@ -188,6 +198,7 @@ describe('Orchestration → generation attribution', () => {
         nodeAttempt: number;
       }) => {
         await createGenerationRecord({
+          authority: null,
           actsAsAgent: null,
           publicId: `gen_attrfilter_${args.suffix}`,
           projectId: projectPk,

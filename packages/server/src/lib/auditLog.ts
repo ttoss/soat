@@ -26,7 +26,10 @@ const log = createDebug('soat:audit');
  */
 const AUDIT_ENTRY_CREATED_EVENT = 'audit_entries.created';
 
-export type AuditPrincipalType = Extract<PrincipalType, 'user' | 'api_key'>;
+export type AuditPrincipalType = Extract<
+  PrincipalType,
+  'user' | 'api_key' | 'trigger'
+>;
 
 /** One authorization decision recorded during a request. */
 export type AuditCheck = {

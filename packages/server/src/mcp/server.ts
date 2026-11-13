@@ -9,7 +9,7 @@ import {
 
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
-import { replayedAuthHeader } from '../lib/replayedCredential';
+import { onBehalfOfHeaderName } from '../lib/onBehalfOf';
 import { ISSUER } from '../lib/serverIssuer';
 import { BEARER_TOKEN_TYPES, verifyToken } from '../lib/signedTokens';
 import { buildSoatActionTarget, soatMcpTools } from '../lib/soatTools';
@@ -123,8 +123,17 @@ const mcpRouter = createMcpRouter(mcpServer, {
   getApiHeaders: (ctx) => {
     // Read back inside each tool handler through `getApiHeaders()`
     // (`dispatchMcpApiRequest`); the handlers receive only tool arguments.
-    const authorization = replayedAuthHeader({ ctx }) ?? '';
-    return { authorization };
+    // The caller's own credential, and the assertion capping it, re-verified
+    // by the in-process request exactly as on the wire.
+    const headers: Record<string, string> = {};
+    for (const name of [
+      'authorization',
+      onBehalfOfHeaderName().toLowerCase(),
+    ]) {
+      const value = ctx.headers?.[name];
+      if (typeof value === 'string') headers[name] = value;
+    }
+    return headers;
   },
   auth: {
     verifyToken: async (token) => {

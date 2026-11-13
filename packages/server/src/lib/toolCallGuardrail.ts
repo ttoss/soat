@@ -10,6 +10,7 @@ import { classifyGuardrailCall, governingResult } from './agentToolGuardrail';
 import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:guardrails');
 
@@ -118,7 +119,7 @@ export const runDirectToolGate = async (args: {
   input: Record<string, unknown>;
   presetParameters?: Record<string, unknown> | null;
   projectId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<DirectToolGateResult> => {
   const project = await readProjectScope(args.projectId);
 
@@ -137,7 +138,7 @@ export const runDirectToolGate = async (args: {
     projectId: args.projectId,
     projectPublicId: project.publicId,
     sessionId: null,
-    authHeader: args.authHeader,
+    authority: args.authority,
     callerContext: {},
     orchestrationRunId: null,
     run: { nodeAttempt: null },
@@ -195,7 +196,7 @@ export const assertToolCallAllowed = async (args: {
   input: Record<string, unknown>;
   presetParameters?: Record<string, unknown> | null;
   projectId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<{ input: Record<string, unknown>; guardrailIds: string[] }> => {
   const gate = await runDirectToolGate(args);
   if (gate.kind === 'execute') {

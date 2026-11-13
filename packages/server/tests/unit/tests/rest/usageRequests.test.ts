@@ -1,5 +1,4 @@
 import { db } from 'src/db';
-import { signRunToken } from 'src/lib/orchestrationRunToken';
 import * as usageEventWrite from 'src/lib/usageEventWrite';
 import {
   flushRequestCounters,
@@ -8,7 +7,12 @@ import {
 } from 'src/lib/usageRequests';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  testClient,
+  workAuthorityOf,
+  workRequest,
+} from '../../testClient';
 
 // No HTTP entry point of its own: the middleware counts in memory and a
 // scheduler flushes. Real requests are driven, then flushed directly (the
@@ -146,30 +150,28 @@ describe('Usage — API-request metering', () => {
   });
 
   /**
-   * A run-as token's auth context carries `apiKeyPublicId`, so attribution
-   * names the key that started the work. Request metering keys off that same
-   * field, so the exemption here is deliberate and must stay visible: a
-   * background drive is machinery continuing work the caller already paid a
-   * request for, not a new arrival. It rests on the explicit `isRunToken`
-   * check in `requestAttribution.ts`, not on that field happening to be unset —
-   * delete the check and this test is what goes red.
+   * Stored work's auth context carries `apiKeyPublicId`, so attribution names
+   * the key that started the work. Request metering keys off that same field,
+   * so the exemption here is deliberate and must stay visible: a background
+   * drive is machinery continuing work the caller already paid a request for,
+   * not a new arrival. It rests on the explicit `work` check in
+   * `requestAttribution.ts`, not on that field happening to be unset.
    */
-  test('run-as token requests are not counted against the key that started the work', async () => {
+  test('requests stored work makes are not counted against the key that started it', async () => {
     resetRequestCounters();
 
-    const runToken = signRunToken({
-      publicId: userPublicId,
-      role: 'user',
-      projectPublicId: projectId,
-      workPublicId: 'orun_metering',
-      apiKeyPublicId: scopedKeyId,
-    });
-
-    // Authorized through the key's policies as a boundary, so a 200 here also
+    // Authorized through the key's policies as a cap, so a 200 here also
     // proves the request reached the handler rather than being short-circuited.
-    const res = await authenticatedTestClient(runToken).get(
-      '/api/v1/usage/events?meter_type=api_request'
-    );
+    const res = await workRequest({
+      authority: workAuthorityOf({
+        project: projectId,
+        user: userPublicId,
+        key: scopedKeyId,
+        work: 'orun_metering',
+      }),
+      method: 'get',
+      path: '/api/v1/usage/events?meter_type=api_request',
+    });
     expect(res.status).toBe(200);
 
     const written = await flushRequestCounters({ now: new Date() });

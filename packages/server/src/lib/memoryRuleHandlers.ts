@@ -1,9 +1,11 @@
 import createDebug from 'debug';
 
+import { db } from '../db';
 import { createGeneration } from './agentGeneration';
 import { runBuiltInExtractor } from './memoryExtraction';
 import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
+import { parseWorkAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:memoryRules');
 
@@ -105,11 +107,23 @@ export type HandlerTurn = {
   projectId: number;
 };
 
+/** A handler runs under the authority of the turn it reads. */
+const turnAuthority = async (
+  turn: HandlerTurn
+): Promise<WorkAuthority | null> => {
+  const generation = await db.Generation.findOne({
+    where: { publicId: turn.generationPublicId },
+    attributes: ['authority'],
+  });
+  return parseWorkAuthority(generation?.authority);
+};
+
 const runAgentHandler = async (args: {
   handlerAgentId: string;
   turn: HandlerTurn;
 }): Promise<MemoryFact[]> => {
   const result = await createGeneration({
+    authority: await turnAuthority(args.turn),
     projectIds: [args.turn.projectId],
     agentId: args.handlerAgentId,
     messages: [
@@ -144,6 +158,7 @@ const runToolHandler = async (args: {
 }): Promise<MemoryFact[]> => {
   const raw = await callTool({
     guardrails: 'apply',
+    authority: await turnAuthority(args.turn),
     projectId: args.turn.projectId,
     reach: 'project',
     id: args.toolId,

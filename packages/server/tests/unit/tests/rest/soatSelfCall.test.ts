@@ -451,12 +451,10 @@ describe('SOAT self-call', () => {
     });
 
     /**
-     * The attribution half of the same path. Authorization was already
-     * correct — a key-started run is bounded by the key's policies (the next
-     * test) — but the run-as token is JWT-shaped, so `apiKeyPublicId` was unset
-     * and every downstream record named the *owning user* instead of the key
-     * that actually acted. That erased the distinction task history exists to
-     * record: two different keys held by one user were indistinguishable.
+     * The attribution half of the same path: a key-started run is bounded by
+     * the key's policies (the next test), and every downstream record names
+     * the key that acted, not its owning user, so two keys one user holds stay
+     * distinguishable in task history.
      */
     test('a task transitioned by a key-started run is attributed to the key, not its owning user', async () => {
       const policyRes = await authenticatedTestClient(adminToken)

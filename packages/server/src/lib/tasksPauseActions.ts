@@ -1,7 +1,6 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import type { StartingPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 import { emitTaskEvent } from './taskEvents';
 import {
@@ -16,6 +15,7 @@ import {
   type TaskPauseOrigin,
 } from './tasksPause';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tasks');
 
@@ -87,7 +87,7 @@ export const pauseTask = async (args: {
  */
 export const resumeTask = async (args: {
   id: string;
-  principal?: StartingPrincipal;
+  authority: WorkAuthority | null;
 }): Promise<ReturnType<typeof mapTask>> => {
   log('resumeTask: id=%s', args.id);
 
@@ -132,7 +132,7 @@ export const resumeTask = async (args: {
         taskPublicId: args.id,
         projectId: task.projectId as number,
         state,
-        principal: args.principal,
+        authority: args.authority,
       });
     }
   }

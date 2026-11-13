@@ -183,6 +183,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Re-read the case, decide each conflicting field against its current value, and retry with the revisions `meta.conflicts` names.',
   PLAYBOOK_EXECUTOR_FORBIDDEN:
     "Grant the author the start action `meta.action` names on the executor, or have someone who holds it write the playbook's definition, which makes them the author of the new version.",
+  WORK_AUTHORITY_MISSING:
+    'Start the work again with a credential that can run it; work runs only under the authority stored when it started.',
   PLAYBOOK_AUTHOR_UNAVAILABLE:
     "Write the playbook's definition again as a user or API key that can start its executors; cases created on that version run as them.",
   ON_BEHALF_OF_INVALID:

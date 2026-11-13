@@ -1,3 +1,6 @@
+import { db } from 'src/db';
+import { parseWorkAuthority } from 'src/lib/workAuthority';
+
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -141,6 +144,60 @@ describe('Agent run_as', () => {
       });
 
       expect(res.status).toBe(403);
+    });
+
+    test('work a builtin call starts stores the agent grant', async () => {
+      const workflow = await turn
+        .api()
+        .post('/api/v1/workflows')
+        .send({
+          project_id: turn.projectId,
+          name: `runas-${Math.random().toString(36).slice(2)}`,
+          states: [
+            { name: 'open', initial: true },
+            { name: 'done', terminal: true },
+          ],
+          transitions: [{ name: 'finish', from: ['open'], to: 'done' }],
+        });
+      expect(workflow.status).toBe(201);
+      const createTask = await turn.createTool({
+        type: 'builtin',
+        execute: undefined,
+        parameters: undefined,
+        actions: ['create-task'],
+      });
+      const createsTasks = await turn.createPolicy({
+        statement: [{ effect: 'Allow', action: ['tasks:CreateTask'] }],
+      });
+      const taskAgent = await turn.createAgent({
+        run_as: 'agent',
+        policy_ids: [createsTasks],
+        tool_bindings: [{ tool_id: createTask.id }],
+      });
+
+      const res = await generateAs({
+        token: runnerToken,
+        agentId: taskAgent,
+        body: {
+          messages: [
+            proposeCalls([
+              {
+                name: `${createTask.name}_create-task`,
+                args: { workflow_id: workflow.body.id, title: 'by the agent' },
+              },
+            ]),
+          ],
+        },
+      });
+
+      const [result] = JSON.parse(res.body.output?.content ?? '[]');
+      expect(result.error).toBeUndefined();
+      const task = await db.Task.findOne({ where: { publicId: result.id } });
+      expect(parseWorkAuthority(task!.authority)).toMatchObject({
+        project: turn.projectId,
+        grant: { holder: 'agent', agent: taskAgent },
+        caps: [],
+      });
     });
 
     test('the agent grant does not reach past its policies', async () => {

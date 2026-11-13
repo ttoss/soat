@@ -60,6 +60,7 @@ import {
   reportedModelOfSteps,
   sumStepUsage,
 } from './turnSpend';
+import type { WorkAuthority } from './workAuthority';
 
 // Bounds the auto-resume loop: a model re-proposing a blocked client tool every
 // turn would otherwise resume forever.
@@ -236,7 +237,7 @@ const settlePartition = async (args: {
       typedAgent: args.save.typedAgent,
       agentId: args.pending.agentId,
       resolvedTools: args.pending.resolvedTools,
-      toolsAuthHeader: args.pending.toolsAuthHeader,
+      toolsAuthority: args.pending.toolsAuthority,
       toolContext: args.pending.toolContext ?? null,
       remainingDepth: args.save.remainingDepth ?? null,
     });
@@ -259,7 +260,7 @@ const buildInitialResumePending = (args: {
   rootTraceId?: string | null;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
-  toolsAuthHeader: string | undefined;
+  toolsAuthority: WorkAuthority | null;
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
@@ -286,7 +287,7 @@ const buildInitialResumePending = (args: {
     }),
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: args.resolvedTools,
-    toolsAuthHeader: args.toolsAuthHeader,
+    toolsAuthority: args.toolsAuthority,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
     toolContext: args.toolContext ?? undefined,
@@ -312,7 +313,7 @@ export const settleInitialClientCalls = async (args: {
   rootTraceId?: string | null;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
-  toolsAuthHeader: string | undefined;
+  toolsAuthority: WorkAuthority | null;
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
@@ -334,7 +335,7 @@ export const settleInitialClientCalls = async (args: {
       rootTraceId: args.rootTraceId,
       allMessages: args.allMessages,
       resolvedTools: args.resolvedTools,
-      toolsAuthHeader: args.toolsAuthHeader,
+      toolsAuthority: args.toolsAuthority,
       model: args.model,
       typedAgent: args.typedAgent,
       agentId: args.agentId,
@@ -361,7 +362,7 @@ const resolveGenerationResult = async (args: {
   rootTraceId?: string | null;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
-  toolsAuthHeader: string | undefined;
+  toolsAuthority: WorkAuthority | null;
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
@@ -485,7 +486,7 @@ export const runNonStreamGeneration = async (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
-  toolsAuthHeader: string | undefined;
+  toolsAuthority: WorkAuthority | null;
   typedAgent: TypedAgent;
   toolChoice: TurnToolChoice;
   generationId: string;
