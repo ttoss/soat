@@ -41,7 +41,11 @@ import { resolveListScope } from './listScope';
 import { memoryPins } from './memoryPins';
 import { requireMemoryStore } from './memoryStoreAccess';
 import { compileReadPolicy } from './readPolicy';
-import { registerTagRoutes, type TagAccess } from './tagRoutes';
+import {
+  declareBodyTags,
+  registerTagRoutes,
+  type TagAccess,
+} from './tagRoutes';
 
 const memoryStoresRouter = new Router<Context>();
 
@@ -166,6 +170,7 @@ memoryStoresRouter.get(
 );
 
 memoryStoresRouter.post('/memory-stores', async (ctx: Context) => {
+  declareBodyTags(ctx);
   requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
@@ -209,6 +214,7 @@ memoryStoresRouter.post('/memory-stores', async (ctx: Context) => {
 memoryStoresRouter.put(
   '/memory-stores/:memory_store_id',
   async (ctx: Context) => {
+    declareBodyTags(ctx);
     requireAuth(ctx);
 
     await requireMemoryStore({

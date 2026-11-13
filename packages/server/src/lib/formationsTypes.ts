@@ -204,6 +204,14 @@ export type FormationAuthorizationRequest = {
   srnResourceType: string;
   /** The resource's physical id, or `*` for a create — nothing exists yet. */
   resourceId: string;
+  /**
+   * The tags the resource's declaration writes, as `iam:RequestTag/<key>`
+   * reads them. Only literal values: a computed one is known after resolution,
+   * which happens after this check, so its key is in
+   * `computedRequestTagKeys` instead.
+   */
+  requestTags?: Record<string, string>;
+  computedRequestTagKeys?: string[];
 };
 
 /**

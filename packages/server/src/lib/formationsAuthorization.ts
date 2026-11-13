@@ -28,6 +28,7 @@ import {
   type FormationResourceOperation,
   type FormationTemplate,
 } from './formationsTypes';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:formations');
 
@@ -68,6 +69,32 @@ const buildAuthorizationRequest = (args: {
     action,
     srnResourceType: authorization.srnResourceType,
     resourceId: args.physicalResourceId ?? NEW_RESOURCE_ID,
+  };
+};
+
+/** The tags `decl` writes: literal values, and the keys whose value is computed. */
+const declaredRequestTags = (
+  decl: FormationTemplate['resources'][string]
+): Pick<
+  FormationAuthorizationRequest,
+  'requestTags' | 'computedRequestTagKeys'
+> => {
+  const tags: unknown = decl.properties.tags;
+  if (!isPlainObject(tags)) return {};
+  const entries = Object.entries(tags);
+  return {
+    requestTags: Object.fromEntries(
+      entries.filter((entry): entry is [string, string] => {
+        return typeof entry[1] === 'string';
+      })
+    ),
+    computedRequestTagKeys: entries
+      .filter(([, value]) => {
+        return typeof value !== 'string';
+      })
+      .map(([key]) => {
+        return key;
+      }),
   };
 };
 
@@ -121,13 +148,14 @@ export const collectApplyAuthorizationRequests = (args: {
   for (const [logicalId, decl] of Object.entries(args.template.resources)) {
     const existing = existingMap.get(logicalId);
     const creating = isCreateChange(existing);
-    const request = buildAuthorizationRequest({
+    const built = buildAuthorizationRequest({
       logicalId,
       resourceType: decl.type,
       operation: creating ? 'create' : 'update',
       physicalResourceId: creating ? null : existing?.physicalResourceId,
     });
-    if (!request) continue;
+    if (!built) continue;
+    const request = { ...built, ...declaredRequestTags(decl) };
     requests.push(request, ...buildReferenceRequests({ request, decl }));
   }
 

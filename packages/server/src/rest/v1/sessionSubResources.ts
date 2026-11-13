@@ -20,7 +20,11 @@ import {
 } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
 import { checkSessionAccess } from './sessions';
-import { registerTagRoutes, type TagAccess } from './tagRoutes';
+import {
+  declareBodyTags,
+  registerTagRoutes,
+  type TagAccess,
+} from './tagRoutes';
 
 const sessionSubResourcesRouter = new Router<Context>();
 
@@ -187,6 +191,7 @@ sessionSubResourcesRouter.post(
 sessionSubResourcesRouter.post(
   '/sessions/:session_id/fork',
   async (ctx: Context) => {
+    declareBodyTags(ctx);
     // Forking reads a session's full history as well as creating one, so
     // `agents:CreateSession` alone would be a way to read history a principal
     // cannot fetch through `GET /sessions/{id}`. Both halves name the *parent*

@@ -6,6 +6,7 @@ import {
   type LabeledPolicySets,
   unlabelPolicySets,
 } from '../lib/permissions';
+import { buildRequestTagContext } from '../lib/tags';
 import { resolveReachableProjectIds } from './authProjectResolvers';
 
 /**
@@ -70,6 +71,7 @@ export type Authority = Pick<
   | 'unrestricted'
   | 'operator'
   | 'narrowing'
+  | 'declareRequestTags'
 >;
 
 const ADMIN_WILDCARD_POLICY: PolicyDocument = {
@@ -139,10 +141,23 @@ export const buildAuthority = (args: {
   const getSets = () => {
     return termsSets(terms);
   };
-  const isAllowed = createPolicySetsIsAllowed({
+  const checkPolicies = createPolicySetsIsAllowed({
     projectPublicId: terms.pinned ?? undefined,
     getSets,
   });
+  // The tags this request writes, as `iam:RequestTag/<key>`: one request per
+  // authority, so every check it makes reads them, the project probe of a
+  // create included.
+  const requestTagContext: Record<string, string> = {};
+  const isAllowed = Object.assign(
+    (check: Parameters<typeof checkPolicies>[0]) => {
+      return checkPolicies({
+        ...check,
+        context: { ...requestTagContext, ...check.context },
+      });
+    },
+    { refusedBy: checkPolicies.refusedBy }
+  );
   const getLabeledPolicies = async (
     projectPublicId: string
   ): Promise<LabeledPolicySets> => {
@@ -172,5 +187,8 @@ export const buildAuthority = (args: {
     unrestricted,
     operator,
     narrowing: narrowingOf(terms),
+    declareRequestTags: (tags) => {
+      Object.assign(requestTagContext, buildRequestTagContext(tags));
+    },
   };
 };

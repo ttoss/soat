@@ -1,5 +1,6 @@
 import {
   ACTOR_ID_VARIABLE,
+  REQUEST_TAG_KEY_PREFIX,
   RESOURCE_TAG_KEY_PREFIX,
   RESOURCE_TYPE_KEY,
 } from './iamConditionKeys';
@@ -50,18 +51,20 @@ const VALID_OPERATORS: ConditionOperator[] = [
  * The context keys the platform supplies to `evaluateCondition`, and the only
  * keys a condition may name.
  *
- * `iam:ResourceTag/<tag>` carries an arbitrary tag name after the slash — tag
- * keys are opaque (`.claude/rules/case-convention.md`), so only the prefix is
- * checked and the name must be non-empty.
+ * `iam:ResourceTag/<tag>` and `iam:RequestTag/<tag>` carry an arbitrary tag
+ * name after the slash — tag keys are opaque
+ * (`.claude/rules/case-convention.md`), so only the prefix is checked and the
+ * name must be non-empty.
  */
 const CONDITION_KEYS = new Set([RESOURCE_TYPE_KEY]);
 
+const TAG_KEY_PREFIXES = [RESOURCE_TAG_KEY_PREFIX, REQUEST_TAG_KEY_PREFIX];
+
 const isValidConditionKey = (key: string): boolean => {
   if (CONDITION_KEYS.has(key)) return true;
-  return (
-    key.startsWith(RESOURCE_TAG_KEY_PREFIX) &&
-    key.length > RESOURCE_TAG_KEY_PREFIX.length
-  );
+  return TAG_KEY_PREFIXES.some((prefix) => {
+    return key.startsWith(prefix) && key.length > prefix.length;
+  });
 };
 
 const isValidAction = (action: string): boolean => {
@@ -152,7 +155,10 @@ const validateConditionBlock = (args: {
       args.errors.push(
         `${args.prefix}.condition.${args.op}: key "${key}" is not a condition key — must be ${[
           ...CONDITION_KEYS,
-        ].join(', ')} or ${RESOURCE_TAG_KEY_PREFIX}<tag>`
+          ...TAG_KEY_PREFIXES.map((prefix) => {
+            return `${prefix}<tag>`;
+          }),
+        ].join(', ')}`
       );
     }
     const value = args.block[key];

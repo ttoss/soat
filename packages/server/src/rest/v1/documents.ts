@@ -45,7 +45,11 @@ import { resolveListScope } from './listScope';
 import { sendNdjson } from './ndjsonResponse';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
-import { registerTagRoutes, type TagAccess } from './tagRoutes';
+import {
+  declareBodyTags,
+  registerTagRoutes,
+  type TagAccess,
+} from './tagRoutes';
 
 const documentsRouter = new Router<Context>();
 
@@ -223,6 +227,7 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
 registerDocumentRelationRoutes({ documentsRouter });
 
 documentsRouter.post('/documents', async (ctx: Context) => {
+  declareBodyTags(ctx);
   requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
@@ -288,6 +293,7 @@ documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
 });
 
 documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
+  declareBodyTags(ctx);
   requireAuth(ctx);
 
   const doc = await getDocument({ id: ctx.params.document_id });
@@ -389,6 +395,7 @@ registerTagRoutes({
 });
 
 documentsRouter.post('/documents/ingest', async (ctx: Context) => {
+  declareBodyTags(ctx);
   requireAuth(ctx);
   const body = ctx.request.body as {
     file_id: string;

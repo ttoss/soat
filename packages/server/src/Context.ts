@@ -46,6 +46,12 @@ export type AuthUser = {
   /** `getPolicies`, each set labeled with the principal that holds it. */
   getLabeledPolicies: (projectPublicId: string) => Promise<LabeledPolicySets>;
   /**
+   * States the tags this request writes, so every later `isAllowed` of the
+   * request reads them as `iam:RequestTag/<key>`. Called by each route that
+   * writes caller tags, before it authorizes the write.
+   */
+  declareRequestTags: (tags: Record<string, string>) => void;
+  /**
    * The grant is unrestricted (`admin`), no cap narrows it and no project pins
    * it: what operator-only actions and an unfiltered read require.
    */

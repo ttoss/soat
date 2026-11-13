@@ -1,8 +1,11 @@
 import { Op, Sequelize } from '@ttoss/postgresdb';
 
 import type { PolicyDocument, PolicySets } from './iam';
-import { matchesPattern } from './iam';
-import { RESOURCE_TAG_KEY_PREFIX } from './iamConditionKeys';
+import { evaluateCondition, matchesPattern } from './iam';
+import {
+  REQUEST_TAG_KEY_PREFIX,
+  RESOURCE_TAG_KEY_PREFIX,
+} from './iamConditionKeys';
 import { jsonbFn } from './jsonbQuery';
 import { hasUnboundPolicyVariable } from './policyVariables';
 
@@ -355,6 +358,30 @@ const buildStatementFragments = (args: {
 };
 
 /**
+ * A compiled read writes no tag, so every `iam:RequestTag/<key>` the condition
+ * names is absent: decided here once per statement, as `evaluateCondition`
+ * would decide it, since no row can change the answer.
+ */
+const requestTagConditionsHold = (
+  condition: PolicyDocument['statement'][0]['condition']
+): boolean => {
+  if (!condition) return true;
+  const requestTagOnly = Object.fromEntries(
+    Object.entries(condition).map(([op, block]) => {
+      return [
+        op,
+        Object.fromEntries(
+          Object.entries(block ?? {}).filter(([key]) => {
+            return key.startsWith(REQUEST_TAG_KEY_PREFIX);
+          })
+        ),
+      ];
+    })
+  );
+  return evaluateCondition({ condition: requestTagOnly, context: {} });
+};
+
+/**
  * The statement names the action and binds every variable; one with an unbound
  * variable matches nothing, as `evaluateCondition` answers.
  */
@@ -369,7 +396,8 @@ const statementCanMatch = (args: {
     actionMatch &&
     !Object.values(args.statement.condition ?? {}).some((block) => {
       return Object.values(block ?? {}).some(hasUnboundPolicyVariable);
-    })
+    }) &&
+    requestTagConditionsHold(args.statement.condition)
   );
 };
 

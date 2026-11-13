@@ -19,8 +19,11 @@ import {
   updateFormation,
   validateFormationTemplateAsync,
 } from 'src/lib/formations';
+import type { FormationAuthorizationRequest } from 'src/lib/formationsTypes';
 import { buildSrn } from 'src/lib/iam';
+import { namesRequestTag } from 'src/lib/iamConditionKeys';
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
+import { buildRequestTagContext } from 'src/lib/tags';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
@@ -35,6 +38,24 @@ import { playbookAuthorOf } from './playbookAccess';
 import { requireAllowed } from './resourceAccess';
 
 export const formationsRouter = new Router<Context>();
+
+/**
+ * A tag whose value is computed is known only after this check, so a policy
+ * conditioning on that key cannot be evaluated: the write is refused rather
+ * than letting the condition read an absent key.
+ */
+const writesUnknownRequestTag = async (args: {
+  ctx: Context & { authUser: AuthUser };
+  projectPublicId: string;
+  request: FormationAuthorizationRequest;
+}): Promise<boolean> => {
+  const keys = args.request.computedRequestTagKeys ?? [];
+  if (keys.length === 0) return false;
+  return namesRequestTag({
+    sets: await args.ctx.authUser.getPolicies(args.projectPublicId),
+    keys,
+  });
+};
 
 /**
  * Answers the per-resource authorization questions the deploy path asks, for
@@ -57,11 +78,14 @@ const formationAuthorizer = (args: {
         resourceType: request.srnResourceType,
         resourceId: request.resourceId,
       });
-      const allowed = await args.ctx.authUser.isAllowed({
-        projectPublicId: args.projectPublicId,
-        action: request.action,
-        resource,
-      });
+      const allowed =
+        !(await writesUnknownRequestTag({ ...args, request })) &&
+        (await args.ctx.authUser.isAllowed({
+          projectPublicId: args.projectPublicId,
+          action: request.action,
+          resource,
+          context: buildRequestTagContext(request.requestTags ?? {}),
+        }));
 
       recordAuthorizationDecision(args.ctx, {
         action: request.action,
