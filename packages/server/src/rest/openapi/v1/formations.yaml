@@ -33,6 +33,7 @@ paths:
         JSON object or as a YAML/JSON string.
       operationId: validateFormation
       x-iam-action: formations:ValidateFormation
+      x-iam-resource-type: formation
       requestBody:
         required: true
         content:
@@ -86,6 +87,7 @@ paths:
         without making any changes. Returns the list of planned actions.
       operationId: planFormation
       x-iam-action: formations:PlanFormation
+      x-iam-resource-type: formation
       requestBody:
         required: true
         content:
@@ -160,6 +162,7 @@ paths:
       description: Returns all formation stacks for a project
       operationId: listFormations
       x-iam-action: formations:ListFormations
+      x-iam-resource-type: formation
       parameters:
         - name: project_id
           in: query
@@ -218,6 +221,7 @@ paths:
         non-zero on that body so `create-formation && …` does not lie.
       operationId: createFormation
       x-iam-action: formations:CreateFormation
+      x-iam-resource-type: formation
       requestBody:
         required: true
         content:
@@ -310,6 +314,7 @@ paths:
       description: Returns the formation stack including its current resources.
       operationId: getFormation
       x-iam-action: formations:GetFormation
+      x-iam-resource-type: formation
       parameters:
         - name: formation_id
           in: path
@@ -373,6 +378,7 @@ paths:
         next deploy retries the disposal.
       operationId: updateFormation
       x-iam-action: formations:UpdateFormation
+      x-iam-resource-type: formation
       parameters:
         - name: formation_id
           in: path
@@ -479,6 +485,7 @@ paths:
         happened.
       operationId: deleteFormation
       x-iam-action: formations:DeleteFormation
+      x-iam-resource-type: formation
       parameters:
         - name: formation_id
           in: path
@@ -548,6 +555,7 @@ paths:
         for the formation, ordered chronologically.
       operationId: listFormationEvents
       x-iam-action: formations:ListFormationEvents
+      x-iam-resource-type: formation
       parameters:
         - name: formation_id
           in: path

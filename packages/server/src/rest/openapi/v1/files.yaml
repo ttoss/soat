@@ -27,6 +27,7 @@ paths:
       description: Returns a list of all stored files
       operationId: listFiles
       x-iam-action: files:GetFile
+      x-iam-resource-type: file
       parameters:
         - name: project_id
           in: query
@@ -87,6 +88,7 @@ paths:
       description: Creates a new file record in the system
       operationId: createFile
       x-iam-action: files:CreateFile
+      x-iam-resource-type: file
       requestBody:
         required: true
         content:
@@ -159,6 +161,7 @@ paths:
       description: Uploads a file to the server and stores it in the configured storage directory
       operationId: uploadFile
       x-iam-action: files:UploadFile
+      x-iam-resource-type: file
       requestBody:
         required: true
         content:
@@ -236,6 +239,7 @@ paths:
       description: Uploads a file to the server using base64-encoded content
       operationId: uploadFileBase64
       x-iam-action: files:UploadFile
+      x-iam-resource-type: file
       requestBody:
         required: true
         content:
@@ -290,6 +294,7 @@ paths:
         it without knowing the server base URL in advance.
       operationId: createPresignedUrl
       x-iam-action: files:UploadFile
+      x-iam-resource-type: file
       requestBody:
         required: true
         content:
@@ -410,6 +415,7 @@ paths:
       description: Returns the data and metadata of a specific file
       operationId: getFile
       x-iam-action: files:GetFile
+      x-iam-resource-type: file
       parameters:
         - name: file_id
           in: path
@@ -452,6 +458,7 @@ paths:
       description: Removes a file from the system by ID
       operationId: deleteFile
       x-iam-action: files:DeleteFile
+      x-iam-resource-type: file
       parameters:
         - name: file_id
           in: path
@@ -498,6 +505,7 @@ paths:
       description: Streams the file content to the client
       operationId: downloadFile
       x-iam-action: files:DownloadFile
+      x-iam-resource-type: file
       # Not a tool: a tool result is a JSON value, and this route's is a stream
       # of raw bytes. Advertising it would offer callers — MCP clients and
       # agents alike — an action that can only ever fail, and spend a tool slot
@@ -552,6 +560,7 @@ paths:
       description: Updates the metadata field of a file
       operationId: updateFileMetadata
       x-iam-action: files:UpdateFileMetadata
+      x-iam-resource-type: file
       parameters:
         - name: file_id
           in: path
@@ -619,6 +628,7 @@ paths:
       description: Returns the file content encoded as base64
       operationId: downloadFileBase64
       x-iam-action: files:DownloadFile
+      x-iam-resource-type: file
       parameters:
         - name: file_id
           in: path
@@ -679,6 +689,7 @@ paths:
       description: Returns all tags attached to the file
       operationId: getFileTags
       x-iam-action: files:GetFile
+      x-iam-resource-type: file
       parameters:
         - name: file_id
           in: path
@@ -716,6 +727,7 @@ paths:
       description: Replaces all tags on the file with the provided tags
       operationId: replaceFileTags
       x-iam-action: files:UpdateFileMetadata
+      x-iam-resource-type: file
       parameters:
         - name: file_id
           in: path
@@ -761,6 +773,7 @@ paths:
       description: Merges provided tags into the file's existing tags (existing tags are preserved unless overridden)
       operationId: mergeFileTags
       x-iam-action: files:UpdateFileMetadata
+      x-iam-resource-type: file
       parameters:
         - name: file_id
           in: path

@@ -39,6 +39,7 @@ paths:
         namespaces — an out-of-catalog `runtime.*` key is rejected with 400.
       operationId: createGuardrail
       x-iam-action: guardrails:CreateGuardrail
+      x-iam-resource-type: guardrail
       requestBody:
         required: true
         content:
@@ -107,6 +108,7 @@ paths:
       description: Returns all guardrails in the project.
       operationId: listGuardrails
       x-iam-action: guardrails:ListGuardrails
+      x-iam-resource-type: guardrail
       parameters:
         - name: project_id
           in: query
@@ -156,6 +158,7 @@ paths:
       description: Returns a single guardrail by ID.
       operationId: getGuardrail
       x-iam-action: guardrails:GetGuardrail
+      x-iam-resource-type: guardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -208,6 +211,7 @@ paths:
         untouched.
       operationId: updateGuardrail
       x-iam-action: guardrails:UpdateGuardrail
+      x-iam-resource-type: guardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -270,6 +274,7 @@ paths:
       description: Deletes a guardrail and its archived versions by ID.
       operationId: deleteGuardrail
       x-iam-action: guardrails:DeleteGuardrail
+      x-iam-resource-type: guardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -327,6 +332,7 @@ paths:
         version. See [Versioning](/docs/modules/guardrails#versioning).
       operationId: listGuardrailVersions
       x-iam-action: guardrails:ListGuardrailVersions
+      x-iam-resource-type: guardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -388,6 +394,7 @@ paths:
         survives edits.
       operationId: getGuardrailVersion
       x-iam-action: guardrails:GetGuardrailVersion
+      x-iam-resource-type: guardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -456,6 +463,7 @@ paths:
         holds is a no-op and archives nothing.
       operationId: restoreGuardrailVersion
       x-iam-action: guardrails:RestoreGuardrailVersion
+      x-iam-resource-type: guardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id
@@ -533,6 +541,7 @@ paths:
         widely-attached one. Pass an optional `tool_id` to resolve `runtime.tools.*`.
       operationId: evaluateGuardrail
       x-iam-action: guardrails:EvaluateGuardrail
+      x-iam-resource-type: guardrail
       x-soat-resource:
         kind: guardrail
         from: guardrail_id

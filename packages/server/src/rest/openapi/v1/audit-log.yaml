@@ -35,6 +35,7 @@ paths:
         other filter is exact.
       operationId: listAuditEntries
       x-iam-action: audit:ListAuditEntries
+      x-iam-resource-type: audit
       parameters:
         - name: project_id
           in: query
@@ -143,6 +144,7 @@ paths:
         they do on the list endpoint.
       operationId: exportAuditEntries
       x-iam-action: audit:ExportAuditEntries
+      x-iam-resource-type: audit
       # Not a tool, for two independent reasons. The response is a stream, which
       # has no JSON projection; and an export is deliberately unbounded — it has
       # no `limit` — so the callable form of "read the audit log" is
@@ -233,6 +235,7 @@ paths:
       description: Returns a single audit-log entry, including its `detail` payload
       operationId: getAuditEntry
       x-iam-action: audit:GetAuditEntry
+      x-iam-resource-type: audit
       x-soat-resource:
         kind: audit
         from: entry_id

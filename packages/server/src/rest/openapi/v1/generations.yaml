@@ -44,6 +44,7 @@ paths:
         alongside the run's other attribution columns.
       operationId: listGenerations
       x-iam-action: generations:ListGenerations
+      x-iam-resource-type: generation
       parameters:
         - name: agent_id
           in: query
@@ -170,6 +171,7 @@ paths:
         upstream AI provider returned an error).
       operationId: getGeneration
       x-iam-action: generations:GetGeneration
+      x-iam-resource-type: generation
       x-soat-resource:
         kind: generation
         from: generation_id
@@ -226,6 +228,7 @@ paths:
         written from here.
       operationId: updateGeneration
       x-iam-action: generations:UpdateGeneration
+      x-iam-resource-type: generation
       x-soat-resource:
         kind: generation
         from: generation_id
@@ -315,6 +318,7 @@ paths:
         original `content_redacted_at` in place.
       operationId: purgeGenerationContent
       x-iam-action: generations:PurgeGenerationContent
+      x-iam-resource-type: generation
       x-soat-resource:
         kind: generation
         from: generation_id
@@ -369,6 +373,7 @@ paths:
         the generation (`generations:GetGeneration`).
       operationId: listGenerationMemoryAssertions
       x-iam-action: generations:GetGeneration
+      x-iam-resource-type: generation
       x-soat-resource:
         kind: generation
         from: generation_id
@@ -440,6 +445,7 @@ paths:
         an empty `steps`; `status` disambiguates the two.
       operationId: getGenerationTranscript
       x-iam-action: generations:GetGeneration
+      x-iam-resource-type: generation
       x-soat-resource:
         kind: generation
         from: generation_id

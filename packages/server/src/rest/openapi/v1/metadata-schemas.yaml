@@ -33,6 +33,7 @@ paths:
         narrows them to one governed resource.
       operationId: listMetadataSchemas
       x-iam-action: metadata-schemas:ListMetadataSchemas
+      x-iam-resource-type: metadata_schema
       parameters:
         - name: project_id
           in: query
@@ -100,6 +101,7 @@ paths:
         caller metadata.
       operationId: createMetadataSchema
       x-iam-action: metadata-schemas:CreateMetadataSchema
+      x-iam-resource-type: metadata_schema
       requestBody:
         required: true
         content:
@@ -199,6 +201,7 @@ paths:
         advisory and the writer who skips it is the one the rule exists for.
       operationId: validateMetadata
       x-iam-action: metadata-schemas:ListMetadataSchemas
+      x-iam-resource-type: metadata_schema
       requestBody:
         required: true
         content:
@@ -297,6 +300,7 @@ paths:
         kind: metadata_schema
         from: metadata_schema_id
       x-iam-action: metadata-schemas:GetMetadataSchema
+      x-iam-resource-type: metadata_schema
       parameters:
         - name: metadata_schema_id
           in: path
@@ -349,6 +353,7 @@ paths:
         kind: metadata_schema
         from: metadata_schema_id
       x-iam-action: metadata-schemas:UpdateMetadataSchema
+      x-iam-resource-type: metadata_schema
       parameters:
         - name: metadata_schema_id
           in: path
@@ -432,6 +437,7 @@ paths:
         kind: metadata_schema
         from: metadata_schema_id
       x-iam-action: metadata-schemas:DeleteMetadataSchema
+      x-iam-resource-type: metadata_schema
       parameters:
         - name: metadata_schema_id
           in: path

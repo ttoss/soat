@@ -41,6 +41,7 @@ paths:
         ones a budget stopped (`budget_exhausted`).
       operationId: listChains
       x-iam-action: chains:ListChains
+      x-iam-resource-type: chain
       parameters:
         - name: project_id
           in: query
@@ -114,6 +115,7 @@ paths:
         generations filtered by `chain_id`.
       operationId: getChain
       x-iam-action: chains:GetChain
+      x-iam-resource-type: chain
       x-soat-resource:
         kind: chain
         from: chain_id

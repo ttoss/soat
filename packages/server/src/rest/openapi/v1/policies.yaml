@@ -35,6 +35,7 @@ paths:
         to that user.
       operationId: listPolicies
       x-iam-action: policies:ListPolicies
+      x-iam-resource-type: policy
       parameters:
         - name: project_id
           in: query
@@ -95,6 +96,7 @@ paths:
         unrestricted admin may.
       operationId: createPolicy
       x-iam-action: policies:CreatePolicy
+      x-iam-resource-type: policy
       x-soat-agent-exclude: true
       requestBody:
         required: true
@@ -164,6 +166,7 @@ paths:
         project; a global one, the unrestricted admin.
       operationId: getPolicy
       x-iam-action: policies:GetPolicy
+      x-iam-resource-type: policy
       parameters:
         - name: policy_id
           in: path
@@ -213,6 +216,7 @@ paths:
         one, the unrestricted admin. The project never changes.
       operationId: updatePolicy
       x-iam-action: policies:UpdatePolicy
+      x-iam-resource-type: policy
       x-soat-agent-exclude: true
       parameters:
         - name: policy_id
@@ -288,6 +292,7 @@ paths:
         its `policy_ids`.
       operationId: deletePolicy
       x-iam-action: policies:DeletePolicy
+      x-iam-resource-type: policy
       x-soat-agent-exclude: true
       parameters:
         - name: policy_id

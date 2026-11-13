@@ -27,6 +27,7 @@ paths:
       description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. project keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
       operationId: listDocuments
       x-iam-action: documents:ListDocuments
+      x-iam-resource-type: document
       parameters:
         - name: project_id
           in: query
@@ -113,6 +114,7 @@ paths:
       description: Creates a new text document and generates an embedding vector for semantic search. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createDocument
       x-iam-action: documents:CreateDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
       requestBody:
@@ -231,6 +233,7 @@ paths:
         different path, upload a new copy of the file first.
       operationId: ingestDocument
       x-iam-action: documents:IngestDocument
+      x-iam-resource-type: document
       parameters:
         - name: wait
           in: query
@@ -349,6 +352,7 @@ paths:
         and withdrawn documents and the reserved `/.system/` root are left out.
       operationId: exportDocuments
       x-iam-action: documents:ExportDocuments
+      x-iam-resource-type: document
       # Not a tool: the response is a stream with no JSON projection, and an
       # export is deliberately unbounded, so the callable form of "read the
       # documents" is `listDocuments`, which is paged.
@@ -408,6 +412,7 @@ paths:
       description: Returns a document with its text content
       operationId: getDocument
       x-iam-action: documents:GetDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -455,6 +460,7 @@ paths:
       description: Deletes a document and its underlying file
       operationId: deleteDocument
       x-iam-action: documents:DeleteDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -498,6 +504,7 @@ paths:
       description: Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
       operationId: updateDocument
       x-iam-action: documents:UpdateDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -598,6 +605,7 @@ paths:
         claims something about it.
       operationId: listDocumentRelations
       x-iam-action: documents:GetDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -661,6 +669,7 @@ paths:
         without being able to make another report claim anything.
       operationId: createDocumentRelation
       x-iam-action: documents:UpdateDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -746,6 +755,7 @@ paths:
         are — retracting a claim is not a change to what it was about.
       operationId: deleteDocumentRelation
       x-iam-action: documents:UpdateDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -801,6 +811,7 @@ paths:
         transitioned to `failed` with `error=INGESTION_TIMEOUT` on read.
       operationId: getDocumentStatus
       x-iam-action: documents:GetDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -865,6 +876,7 @@ paths:
         a platform-written document keeps the owning module's lifecycle.
       operationId: withdrawDocument
       x-iam-action: documents:WithdrawDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -952,6 +964,7 @@ paths:
         carrying no content.
       operationId: listDocumentVersions
       x-iam-action: documents:ListDocumentVersions
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -1010,6 +1023,7 @@ paths:
         read.
       operationId: getDocumentVersion
       x-iam-action: documents:GetDocumentVersion
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -1081,6 +1095,7 @@ paths:
         `400 VALIDATION_FAILED`: restore the version before it instead.
       operationId: restoreDocumentVersion
       x-iam-action: documents:RestoreDocumentVersion
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -1173,6 +1188,7 @@ paths:
         `?wait=true` to run synchronously (`201`).
       operationId: reingestDocument
       x-iam-action: documents:IngestDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -1381,6 +1397,7 @@ paths:
       description: Returns all tags attached to the document
       operationId: getDocumentTags
       x-iam-action: documents:GetDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -1428,6 +1445,7 @@ paths:
       description: Replaces all tags on the document with the provided tags (not merged)
       operationId: replaceDocumentTags
       x-iam-action: documents:UpdateDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id
@@ -1483,6 +1501,7 @@ paths:
       description: Merges provided tags into the document's existing tags (existing tags are preserved unless overridden)
       operationId: mergeDocumentTags
       x-iam-action: documents:UpdateDocument
+      x-iam-resource-type: document
       parameters:
         - $ref: '#/components/parameters/PathPrefixPin'
         - name: document_id

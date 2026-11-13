@@ -33,6 +33,7 @@ paths:
       description: Creates a new chat resource bound to an AI provider.
       operationId: createChat
       x-iam-action: chats:CreateChat
+      x-iam-resource-type: chat
       requestBody:
         required: true
         content:
@@ -95,6 +96,7 @@ paths:
       description: Returns all chats in the project.
       operationId: listChats
       x-iam-action: chats:ListChats
+      x-iam-resource-type: chat
       parameters:
         - name: project_id
           in: query
@@ -144,6 +146,7 @@ paths:
       description: Returns a single chat by ID.
       operationId: getChat
       x-iam-action: chats:GetChat
+      x-iam-resource-type: chat
       parameters:
         - name: chat_id
           in: path
@@ -184,6 +187,7 @@ paths:
       description: Deletes a chat by ID.
       operationId: deleteChat
       x-iam-action: chats:DeleteChat
+      x-iam-resource-type: chat
       parameters:
         - name: chat_id
           in: path
@@ -244,6 +248,7 @@ paths:
         time.
       operationId: createChatCompletion
       x-iam-action: chats:CreateChatCompletion
+      x-iam-resource-type: chat
       requestBody:
         required: true
         content:

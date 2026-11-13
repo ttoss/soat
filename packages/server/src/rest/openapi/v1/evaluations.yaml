@@ -29,6 +29,7 @@ paths:
       description: Returns the datasets defined in a project
       operationId: listDatasets
       x-iam-action: evaluations:ListDatasets
+      x-iam-resource-type: dataset
       parameters:
         - name: project_id
           in: query
@@ -87,6 +88,7 @@ paths:
         silently stop a test suite from being runnable.
       operationId: createDataset
       x-iam-action: evaluations:CreateDataset
+      x-iam-resource-type: dataset
       requestBody:
         required: true
         content:
@@ -160,6 +162,7 @@ paths:
       description: Returns a specific dataset
       operationId: getDataset
       x-iam-action: evaluations:GetDataset
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -209,6 +212,7 @@ paths:
       description: Updates a dataset's name and/or description
       operationId: updateDataset
       x-iam-action: evaluations:CreateDataset
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -288,6 +292,7 @@ paths:
         input and expected output.
       operationId: deleteDataset
       x-iam-action: evaluations:DeleteDataset
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -334,6 +339,7 @@ paths:
       description: Returns the test cases in a dataset, oldest first
       operationId: listDatasetItems
       x-iam-action: evaluations:ListDatasets
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -393,6 +399,7 @@ paths:
         messages, so it must be a non-empty array of `{ role, content }`.
       operationId: createDatasetItem
       x-iam-action: evaluations:CreateDataset
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -507,6 +514,7 @@ paths:
         recording answer the same way.
       operationId: createDatasetItemFromGeneration
       x-iam-action: evaluations:CreateDataset
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -607,6 +615,7 @@ paths:
         result carries its own frozen copy of the input and expected output.
       operationId: updateDatasetItem
       x-iam-action: evaluations:CreateDataset
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -690,6 +699,7 @@ paths:
         readable; their `dataset_item_id` becomes null.
       operationId: deleteDatasetItem
       x-iam-action: evaluations:CreateDataset
+      x-iam-resource-type: dataset
       x-soat-resource:
         kind: dataset
         from: dataset_id
@@ -743,6 +753,7 @@ paths:
       description: Returns the evals defined in a project
       operationId: listEvals
       x-iam-action: evaluations:ListEvals
+      x-iam-resource-type: eval
       parameters:
         - name: project_id
           in: query
@@ -803,6 +814,7 @@ paths:
         drifting underneath it. Each scorer `type` may appear at most once.
       operationId: createEval
       x-iam-action: evaluations:CreateEval
+      x-iam-resource-type: eval
       requestBody:
         required: true
         content:
@@ -903,6 +915,7 @@ paths:
       description: Returns a specific eval
       operationId: getEval
       x-iam-action: evaluations:GetEval
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -955,6 +968,7 @@ paths:
         the old one may not be.
       operationId: updateEval
       x-iam-action: evaluations:CreateEval
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1049,6 +1063,7 @@ paths:
       description: Deletes an eval, its runs, and their results
       operationId: deleteEval
       x-iam-action: evaluations:DeleteEval
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1095,6 +1110,7 @@ paths:
       description: Returns an eval's runs, newest first
       operationId: listEvalRuns
       x-iam-action: evaluations:ListEvals
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1181,6 +1197,7 @@ paths:
         comparison.
       operationId: startEvalRun
       x-iam-action: evaluations:RunEval
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1336,6 +1353,7 @@ paths:
       description: Returns a run's status, counts, and aggregate scores
       operationId: getEvalRun
       x-iam-action: evaluations:GetEval
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1393,6 +1411,7 @@ paths:
       description: Returns the per-item results of a run, oldest first
       operationId: listEvalResults
       x-iam-action: evaluations:ListEvals
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id
@@ -1470,6 +1489,7 @@ paths:
         A run that has already finished is rejected with 400.
       operationId: cancelEvalRun
       x-iam-action: evaluations:RunEval
+      x-iam-resource-type: eval
       x-soat-resource:
         kind: eval
         from: eval_id

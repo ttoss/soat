@@ -27,6 +27,7 @@ paths:
       description: Returns the model routes defined in a project
       operationId: listModelRoutes
       x-iam-action: model-routes:ListModelRoutes
+      x-iam-resource-type: model_route
       parameters:
         - name: project_id
           in: query
@@ -84,6 +85,7 @@ paths:
         rejected with 409.
       operationId: createModelRoute
       x-iam-action: model-routes:CreateModelRoute
+      x-iam-resource-type: model_route
       requestBody:
         required: true
         content:
@@ -187,6 +189,7 @@ paths:
       description: Returns a specific model route
       operationId: getModelRoute
       x-iam-action: model-routes:GetModelRoute
+      x-iam-resource-type: model_route
       x-soat-resource:
         kind: model_route
         from: route_id
@@ -238,6 +241,7 @@ paths:
         configuration. Omitted fields are left unchanged.
       operationId: updateModelRoute
       x-iam-action: model-routes:UpdateModelRoute
+      x-iam-resource-type: model_route
       x-soat-resource:
         kind: model_route
         from: route_id
@@ -327,6 +331,7 @@ paths:
         must be repointed or the agent deleted first.
       operationId: deleteModelRoute
       x-iam-action: model-routes:DeleteModelRoute
+      x-iam-resource-type: model_route
       x-soat-resource:
         kind: model_route
         from: route_id

@@ -30,6 +30,7 @@ paths:
       description: Returns the ingestion rules for a project
       operationId: listIngestionRules
       x-iam-action: ingestion-rules:ListIngestionRules
+      x-iam-resource-type: ingestionRule
       parameters:
         - name: project_id
           in: query
@@ -83,6 +84,7 @@ paths:
         of tool_id or agent_id must be set.
       operationId: createIngestionRule
       x-iam-action: ingestion-rules:CreateIngestionRule
+      x-iam-resource-type: ingestionRule
       requestBody:
         required: true
         content:
@@ -198,6 +200,7 @@ paths:
       description: Returns a specific ingestion rule
       operationId: getIngestionRule
       x-iam-action: ingestion-rules:GetIngestionRule
+      x-iam-resource-type: ingestionRule
       x-soat-resource:
         kind: ingestionRule
         from: ingestion_rule_id
@@ -247,6 +250,7 @@ paths:
       description: Updates fields of an ingestion rule
       operationId: updateIngestionRule
       x-iam-action: ingestion-rules:UpdateIngestionRule
+      x-iam-resource-type: ingestionRule
       x-soat-resource:
         kind: ingestionRule
         from: ingestion_rule_id
@@ -354,6 +358,7 @@ paths:
       description: Deletes an ingestion rule
       operationId: deleteIngestionRule
       x-iam-action: ingestion-rules:DeleteIngestionRule
+      x-iam-resource-type: ingestionRule
       x-soat-resource:
         kind: ingestionRule
         from: ingestion_rule_id

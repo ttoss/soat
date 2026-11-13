@@ -27,6 +27,7 @@ paths:
       description: Searches across documents and memories using hybrid retrieval — a vector query and a full-text query per source, fused by reciprocal rank — or by file paths, document IDs, memory store IDs, or tags. At least one of `query`, `tags`, `document_paths`, `document_ids`, or `memory_store_ids` must be provided.
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
+      x-iam-resource-type: document
       requestBody:
         required: true
         content:

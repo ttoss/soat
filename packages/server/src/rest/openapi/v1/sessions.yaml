@@ -39,6 +39,7 @@ paths:
         they match no `actor`-scoped quota.
       operationId: createSession
       x-iam-action: agents:CreateSession
+      x-iam-resource-type: session
       requestBody:
         content:
           application/json:
@@ -89,6 +90,7 @@ paths:
       description: Returns sessions the caller can access, optionally filtered by agent, actor and status.
       operationId: listSessions
       x-iam-action: agents:ListSessions
+      x-iam-resource-type: session
       parameters:
         - name: project_id
           in: query
@@ -168,6 +170,7 @@ paths:
         aggregate with `session_id` / `actor_id` instead.
       operationId: getSession
       x-iam-action: agents:GetSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -199,6 +202,7 @@ paths:
       description: Updates the session name and/or status.
       operationId: updateSession
       x-iam-action: agents:UpdateSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -245,6 +249,7 @@ paths:
         session or conversation.
       operationId: deleteSession
       x-iam-action: agents:DeleteSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -279,6 +284,7 @@ paths:
         user message.
       operationId: addSessionMessage
       x-iam-action: agents:SendSessionMessage
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -356,6 +362,7 @@ paths:
         needs client tool outputs) in the response.
       operationId: generateSessionResponse
       x-iam-action: agents:SendSessionMessage
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -452,6 +459,7 @@ paths:
         and receives no outputs.
       operationId: submitSessionToolOutputs
       x-iam-action: agents:SubmitSessionToolOutputs
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -521,6 +529,7 @@ paths:
         `single_session_per_actor` agents allow one open session per actor.
       operationId: forkSession
       x-iam-action: agents:CreateSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -579,6 +588,7 @@ paths:
         lineage: a fork of a fork is listed under its own parent.
       operationId: listSessionForks
       x-iam-action: agents:GetSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -620,6 +630,7 @@ paths:
       description: Returns the session's tags object.
       operationId: getSessionTags
       x-iam-action: agents:GetSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -651,6 +662,7 @@ paths:
       description: Replaces all tags on the session.
       operationId: replaceSessionTags
       x-iam-action: agents:UpdateSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id
@@ -690,6 +702,7 @@ paths:
       description: Merges the provided tags into the session's existing tags.
       operationId: mergeSessionTags
       x-iam-action: agents:UpdateSession
+      x-iam-resource-type: session
       x-soat-resource:
         kind: session
         from: session_id

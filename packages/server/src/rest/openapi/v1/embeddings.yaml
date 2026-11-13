@@ -35,6 +35,7 @@ paths:
         none and is bound to none is `400 VALIDATION_FAILED`.
       operationId: createEmbeddings
       x-iam-action: embeddings:CreateEmbeddings
+      x-iam-resource-type: embedding
       requestBody:
         required: true
         content:
