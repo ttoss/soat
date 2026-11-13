@@ -62,6 +62,9 @@ export const resolveAttachedPolicySet = async (args: {
 export const resolveBoundSets = async (
   bound: PrincipalBound
 ): Promise<PolicySets> => {
+  if ('all' in bound) {
+    return (await Promise.all(bound.all.map(resolveBoundSets))).flat();
+  }
   if ('policySets' in bound) return bound.policySets;
   if ('policy' in bound) return [[bound.policy]];
   return [await resolveAttachedPolicySet({ policyIds: bound.policyIds })];

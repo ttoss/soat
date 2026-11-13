@@ -2,6 +2,7 @@ import type { DB } from './db';
 import type { RefusedBy } from './lib/authorizationDenial';
 import type { PolicySets } from './lib/iam';
 import type { OnBehalfOf } from './lib/onBehalfOf';
+import type { LabeledPolicySets } from './lib/permissions';
 import type { PrincipalBound } from './lib/principalBound';
 
 export type AuthUser = {
@@ -43,6 +44,8 @@ export type AuthUser = {
    * pinned elsewhere. The policy compiler turns them into SQL access filters.
    */
   getPolicies: (projectPublicId: string) => Promise<PolicySets>;
+  /** `getPolicies`, each set labeled with the principal that holds it. */
+  getLabeledPolicies?: (projectPublicId: string) => Promise<LabeledPolicySets>;
   /** Public string id (`key_...`) of the API key used to authenticate, if any. */
   apiKeyPublicId?: string;
   /** Internal numeric DB id of the project the API key is scoped to. */

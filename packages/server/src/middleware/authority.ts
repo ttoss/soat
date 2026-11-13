@@ -12,7 +12,7 @@ import {
 
 export type Authority = Pick<
   AuthUser,
-  'isAllowed' | 'getPolicies' | 'resolveProjectIds'
+  'isAllowed' | 'getPolicies' | 'getLabeledPolicies' | 'resolveProjectIds'
 >;
 
 /**
@@ -46,12 +46,16 @@ export const buildAuthority = (args: {
     projectPublicId: pinned,
     getSets,
   });
+  const getLabeledPolicies = async (
+    projectPublicId: string
+  ): Promise<LabeledPolicySets> => {
+    return pinned && projectPublicId !== pinned ? [] : getSets();
+  };
   return {
     isAllowed,
+    getLabeledPolicies,
     getPolicies: async (projectPublicId) => {
-      return pinned && projectPublicId !== pinned
-        ? []
-        : unlabelPolicySets(await getSets());
+      return unlabelPolicySets(await getLabeledPolicies(projectPublicId));
     },
     resolveProjectIds:
       reach.pinned !== null
@@ -71,8 +75,8 @@ export const buildAuthority = (args: {
 
 /**
  * `authority` pinned to `projectPublicId`, further bound by `bound`'s sets.
- * Never widens: the result holds every set the authority held, labeled
- * `principal`, ahead of the bound's.
+ * Never widens: the result holds every set the authority held, with its own
+ * labels or else labeled `principal`, ahead of the bound's.
  */
 export const narrowAuthority = (args: {
   authority: Authority;
@@ -86,9 +90,11 @@ export const narrowAuthority = (args: {
   return buildAuthority({
     reach: { pinned: projectPublicId },
     getSets: async () => {
-      const own = await authority.getPolicies(projectPublicId);
+      const own = authority.getLabeledPolicies
+        ? await authority.getLabeledPolicies(projectPublicId)
+        : [{ principal, sets: await authority.getPolicies(projectPublicId) }];
       bound ??= args.bound();
-      return [{ principal, sets: own }, ...(await bound)];
+      return [...own, ...(await bound)];
     },
     db: args.db,
   });
