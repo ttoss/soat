@@ -17,7 +17,7 @@ export const attachInProcessCredential = (args: {
 };
 
 export const inProcessCredentialOf = (
-  req: IncomingMessage | undefined
+  req: IncomingMessage
 ): ResolvedCredential | undefined => {
-  return req ? CREDENTIALS.get(req) : undefined;
+  return CREDENTIALS.get(req);
 };
