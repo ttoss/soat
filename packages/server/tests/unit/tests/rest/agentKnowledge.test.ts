@@ -965,6 +965,50 @@ describe('Agent knowledge', () => {
         ]);
       });
 
+      test('approving a held write the agent no longer has a store for writes nothing', async () => {
+        const { agentId, writeStoreId } = await signOffAgent({});
+        const { result } = await remember({
+          agentId,
+          content: 'A fact with nowhere to go.',
+        });
+        toolCalls = null;
+        const cleared = await asAdmin()
+          .put(`/api/v1/agents/${agentId}`)
+          .send({ knowledge_config: null });
+        expect(cleared.status).toBe(200);
+        const approvalId = JSON.parse(result).approval_id as string;
+
+        const approved = await asAdmin()
+          .post(`/api/v1/approvals/${approvalId}/approve`)
+          .send({});
+
+        expect(approved.status).toBe(200);
+        expect(await continuationFor(approvalId)).toContain(
+          'The agent no longer exists or names no write_memory store.'
+        );
+        expect(await contentsOf(writeStoreId)).toEqual([]);
+      });
+
+      test('an edit whose content is not a string writes nothing', async () => {
+        const { agentId, writeStoreId } = await signOffAgent({});
+        const { result } = await remember({
+          agentId,
+          content: 'A fact the approver mangles.',
+        });
+        toolCalls = null;
+        const approvalId = JSON.parse(result).approval_id as string;
+
+        const approved = await asAdmin()
+          .post(`/api/v1/approvals/${approvalId}/approve`)
+          .send({ arguments: { content: 42 } });
+
+        expect(approved.status).toBe(200);
+        expect(await continuationFor(approvalId)).toContain(
+          'write_memory needs a non-empty string `content`.'
+        );
+        expect(await contentsOf(writeStoreId)).toEqual([]);
+      });
+
       test("approving a held write still holds it to the agent's boundary", async () => {
         const { agentId, writeStoreId } = await signOffAgent({
           boundaryPolicy: {

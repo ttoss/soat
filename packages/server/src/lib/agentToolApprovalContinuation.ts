@@ -125,13 +125,9 @@ const executeApprovedWriteMemory = async (args: {
         reach: 'project',
       })
     : null;
-  if (!agent) {
-    return { error: 'The proposing agent no longer exists in this project.' };
-  }
   const actorId = await proposingActorId(args.item.generation_id);
   return runApprovedWriteMemory({
-    agentId: agent.publicId,
-    knowledgeConfig: agent.knowledgeConfig,
+    agent,
     generationId: args.item.generation_id ?? null,
     projectId: args.projectInternalId,
     boundaryPolicy: (

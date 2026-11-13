@@ -248,7 +248,7 @@ type WriteMemoryAsAgentArgs = {
   writeMemoryStoreId: string;
   agentId: string;
   /** The turn this call belongs to — the origin every agent-written assertion records. */
-  generationId: string;
+  generationId: string | null;
   /** The agent's own project, the only one whose store it writes to. */
   projectId: number;
   boundaryPolicy?: unknown;
@@ -343,8 +343,8 @@ const buildWriteMemoryTool = (args: WriteMemoryAsAgentArgs): Tool => {
  * where or past which cap.
  */
 export const runApprovedWriteMemory = async (args: {
-  agentId: string;
-  knowledgeConfig: unknown;
+  /** The proposing agent as it stands now; null once it is gone. */
+  agent: { publicId: string; knowledgeConfig: unknown } | null;
   generationId: string | null;
   projectId: number;
   boundaryPolicy: unknown;
@@ -352,23 +352,22 @@ export const runApprovedWriteMemory = async (args: {
   /** The frozen or edited arguments; an edit is not checked against a schema upstream. */
   input: Record<string, unknown>;
 }): Promise<Record<string, unknown>> => {
-  log('runApprovedWriteMemory: agentId=%s', args.agentId);
-  const writeMemoryStoreId = readKnowledgeConfig(
-    args.knowledgeConfig
-  )?.writeMemoryStoreId;
-  if (!writeMemoryStoreId) {
-    return { error: 'The agent no longer names a write_memory store.' };
+  log('runApprovedWriteMemory: agentId=%s', args.agent?.publicId);
+  const writeMemoryStoreId =
+    args.agent &&
+    readKnowledgeConfig(args.agent.knowledgeConfig)?.writeMemoryStoreId;
+  if (!args.agent || !writeMemoryStoreId) {
+    return {
+      error: 'The agent no longer exists or names no write_memory store.',
+    };
   }
   const { content } = args.input;
   if (typeof content !== 'string' || content.trim() === '') {
     return { error: 'write_memory needs a non-empty string `content`.' };
   }
-  if (!args.generationId) {
-    return { error: 'The approval names no proposing generation.' };
-  }
   return writeMemoryAsAgent({
     writeMemoryStoreId,
-    agentId: args.agentId,
+    agentId: args.agent.publicId,
     generationId: args.generationId,
     projectId: args.projectId,
     boundaryPolicy: args.boundaryPolicy,
