@@ -3,6 +3,7 @@ import { resolveOauthConnectionAccessToken } from './oauthConnectionTokens';
 import { signAwsSigV4 } from './toolAuthAwsSigV4';
 import { type HttpToolAuthConfig, toolAuthFailed } from './toolAuthConfig';
 import { getGcpAccessToken } from './toolAuthGcp';
+import type { WorkAuthority } from './workAuthority';
 
 export { signAwsSigV4 } from './toolAuthAwsSigV4';
 export {
@@ -19,7 +20,7 @@ export {
 export type HttpToolAuthIdentity = {
   projectId: number;
   actorId?: string;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   agentAuthority?: AgentAuthority;
 };
 

@@ -58,7 +58,7 @@ const startAgent = async (args: StartArgs): Promise<ExecutorOutcome> => {
     taskPublicId: args.executionPublicId,
     inputs: args.input,
     taskContext: args.values,
-    principal: args.runAs.principal,
+    authority: args.runAs.authority,
     // Named while the turn runs, so a write its tools make back through
     // another credential is still traced to this execution.
     onDispatchStarted: async ({ generationId }) => {
@@ -102,7 +102,7 @@ const startTool = async (args: StartArgs): Promise<ExecutorOutcome> => {
     taskPublicId: args.executionPublicId,
     inputs: args.input,
     taskContext: args.values,
-    principal: args.runAs.principal,
+    authority: args.runAs.authority,
   });
   return {
     kind: 'settled',
@@ -117,7 +117,7 @@ const startDecider = async (args: StartArgs): Promise<ExecutorOutcome> => {
     deciderId: args.executor.id,
     input: args.input,
     wait: true,
-    authHeader: args.runAs.authHeader,
+    authority: args.runAs.authority,
   });
   if (decision.status !== 'completed') {
     throw failed('The decision failed.', {
@@ -139,10 +139,10 @@ const startWorkflow = async (args: StartArgs): Promise<ExecutorOutcome> => {
     title: args.title,
     payload: args.input,
     principal: {
-      kind: args.runAs.principal.principalType,
-      id: args.runAs.principal.principalId,
+      kind: args.runAs.authority.principal.type,
+      id: args.runAs.authority.principal.id,
     },
-    startingPrincipal: args.runAs.principal,
+    authority: args.runAs.authority,
   });
   // A task created straight into a terminal state is settled by the read that
   // follows a pending outcome.
@@ -175,10 +175,9 @@ const startOrchestration = async (
       orchestrationPublicId: args.executor.id,
       projectIds: [args.projectId],
       input: args.input,
-      principal: args.runAs.principal,
-      // Driven inline with the case's run-as credential, so every call the run
-      // makes names the case as its work.
-      authHeader: args.runAs.authHeader,
+      // Driven inline under the case's authority, so every call the run makes
+      // names the case's execution as its work.
+      authority: args.runAs.authority,
       wait: true,
     })
   );

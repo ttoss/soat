@@ -15,12 +15,17 @@ import {
 import type { PlaybookNode } from './playbookDefinition';
 import { EXECUTION_LEASE_MS } from './playbookExecutionLease';
 import { settleFromRun } from './playbookExecutionSettle';
-import { executeClaimed, resolveRunAs } from './playbookExecutionWork';
+import {
+  caseAuthority,
+  executeClaimed,
+  resolveRunAs,
+} from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
 import type { PlaybookNodeView } from './playbookState';
 import { createdByColumns, type RequestPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
+import { storedAuthority } from './workAuthority';
 
 const log = createDebug('soat:playbookExecutions');
 
@@ -165,8 +170,14 @@ export const runPlaybookNode = async (args: {
   const definition = await caseDefinition({ row });
   const node = readCaseNode({ definition, node: args.node });
   await assertProjectAcceptsWork({ projectId: row.projectId });
+  const authority = await caseAuthority({ row });
   if (node.executor) {
-    await resolveRunAs({ row, node: node.id, executors: [node.executor] });
+    await resolveRunAs({
+      row,
+      node: node.id,
+      executors: [node.executor],
+      authority,
+    });
   }
 
   const execution = await withLockedCase({
@@ -198,6 +209,10 @@ export const runPlaybookNode = async (args: {
           }),
           ...createdByColumns(args.createdBy),
           onBehalfOf: args.onBehalfOf,
+          authority: await storedAuthority({
+            authority,
+            projectId: row.projectId,
+          }),
         },
         { transaction }
       );

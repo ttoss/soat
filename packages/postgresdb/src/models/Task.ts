@@ -140,6 +140,11 @@ export class Task extends Model {
   @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare toolContext: Record<string, string> | null;
 
+  // The authority the next dispatch runs under (`lib/workAuthority.ts`): the
+  // last move's, write-only like `toolContext`. Null dispatches nothing.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare authority: object | null;
+
   // Caller-owned labels (tenant, ticket, import batch), supplied at creation.
   // Separate from `payload`, which the engine writes into and guards
   // read; nothing in the engine touches this. Readable, unlike `toolContext` —

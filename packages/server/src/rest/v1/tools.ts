@@ -3,7 +3,6 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { pinCallerActorToolContext } from 'src/lib/generationAttribution';
 import { buildSrn } from 'src/lib/iam';
-import { replayedAuthHeader } from 'src/lib/replayedCredential';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { listToolActions } from 'src/lib/toolActions';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
@@ -17,6 +16,7 @@ import {
   updateTool,
 } from 'src/lib/tools';
 import { redactToolSecrets } from 'src/lib/toolSecretRedaction';
+import { captureAuthority } from 'src/lib/workAuthority';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -434,7 +434,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
       ? (input as Record<string, unknown>)
       : undefined;
 
-  const authHeader = replayedAuthHeader({ ctx });
+  const authority = captureAuthority({ authUser: ctx.authUser });
 
   const result = await startToolCall({
     guardrails: 'apply',
@@ -443,7 +443,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     id: ctx.params.tool_id,
     action: typeof action === 'string' ? action : undefined,
     input: parsedInput,
-    authHeader,
+    authority,
     caller: ctx.authUser,
     // No session here, so nothing downstream will overwrite a forged identity
     // key: the sanitize keeps a caller off the `X-Soat-Context-*` headers a

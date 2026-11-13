@@ -10,6 +10,7 @@ import {
 import { resolveMcpTools } from 'src/lib/agentToolResolverMcp';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -26,7 +27,7 @@ const UNMETERED = {
   toolId: null,
   workId: null,
   attribution: {},
-  sender: { authHeader: undefined },
+  sender: { authority: ORPHAN_AUTHORITY },
 };
 
 const MCP_HEADERS = {

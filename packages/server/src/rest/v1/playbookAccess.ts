@@ -1,7 +1,6 @@
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
-import type { PlaybookAuthor } from 'src/lib/playbookAuthor';
+import { authorOf, type PlaybookAuthor } from 'src/lib/playbookAuthor';
 import { findCasePinnedFields, playbookCases } from 'src/lib/playbookCases';
 import { playbooks } from 'src/lib/playbooks';
 
@@ -65,7 +64,7 @@ export const playbookCaseAccess = {
  */
 export const playbookAuthorOf = (ctx: Context): PlaybookAuthor => {
   return {
-    principal: resolveStartingPrincipal({ authUser: ctx.authUser }),
+    principal: authorOf(ctx.authUser!),
     isAllowed: ctx.authUser!.isAllowed,
     getPolicies: ctx.authUser!.getPolicies,
   };

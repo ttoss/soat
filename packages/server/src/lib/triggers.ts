@@ -46,7 +46,6 @@ const decryptTriggerSecret = (stored: string): string => {
 
 type TriggerInstance = InstanceType<(typeof db)['Trigger']> & {
   project?: InstanceType<(typeof db)['Project']>;
-  createdBy?: InstanceType<(typeof db)['User']> | null;
 };
 
 const mapTrigger = (
@@ -79,10 +78,7 @@ const mapTrigger = (
 };
 
 const triggerIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.User, as: 'createdBy' },
-  ];
+  return [{ model: db.Project, as: 'project' }];
 };
 
 const triggers = makeResourceAccessor<TriggerInstance>({
@@ -219,7 +215,6 @@ export const getTriggerSecret = async (args: { id: string }) => {
 
 type CreateTriggerArgs = EventFilterArgs & {
   projectId: number;
-  createdByUserId?: number | null;
   policyIds?: string[];
   name: string;
   description?: string | null;
@@ -269,7 +264,6 @@ const deriveCreateState = (args: {
 const buildCreateAttributes = (args: CreateTriggerArgs) => {
   return {
     projectId: args.projectId,
-    createdByUserId: args.createdByUserId ?? null,
     policyIds: args.policyIds ?? null,
     name: args.name,
     description: args.description ?? null,

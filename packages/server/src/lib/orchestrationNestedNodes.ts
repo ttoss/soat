@@ -25,6 +25,7 @@ import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { LoopItemErrorMode, OrchestrationNode } from './orchestrations';
 import { filterToolContext } from './toolContext';
+import type { WorkAuthority } from './workAuthority';
 
 const resolveLoopCollection = (args: {
   collectionPath: string;
@@ -137,7 +138,7 @@ const runLoopBatches = async (args: {
   onItemError: LoopItemErrorMode;
   orchestrationId: string;
   projectIds: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   parent: NestedRunParent;
 }): Promise<NestedRunResult[]> => {
   const {
@@ -147,7 +148,7 @@ const runLoopBatches = async (args: {
     onItemError,
     orchestrationId,
     projectIds,
-    authHeader,
+    authority,
     parent,
   } = args;
   const runs: NestedRunResult[] = [];
@@ -162,7 +163,7 @@ const runLoopBatches = async (args: {
           orchestrationPublicId: orchestrationId,
           projectIds,
           input: itemInput,
-          authHeader,
+          authority,
           // Narrowed by `contextKeys`, then overlaid by `itemToolContext`.
           toolContext: start.toolContext,
           // Every item's run is attributable to the node that fanned it out, so
@@ -190,13 +191,12 @@ export const executeLoopNode = async (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   runPublicId?: string;
   runDepth: number;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader, toolContext, runPublicId } =
-    args;
+  const { node, state, projectIds, authority, toolContext, runPublicId } = args;
   const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const collectionPath = node.collection ?? 'state.items';
@@ -227,7 +227,7 @@ export const executeLoopNode = async (args: {
     onItemError,
     orchestrationId,
     projectIds,
-    authHeader,
+    authority,
     parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
   });
 
@@ -239,13 +239,12 @@ export const executeSubOrchestrationNode = async (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   runPublicId?: string;
   runDepth: number;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader, toolContext, runPublicId } =
-    args;
+  const { node, state, projectIds, authority, toolContext, runPublicId } = args;
   const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const input = applyInputMapping(node.inputMapping, state);
@@ -253,7 +252,7 @@ export const executeSubOrchestrationNode = async (args: {
     orchestrationPublicId: orchestrationId,
     projectIds,
     input,
-    authHeader,
+    authority,
     // A child run is still this run's work, so it inherits the parent's context
     // rather than starting with none — narrowed to the node's
     // `contextKeys` when it sets one.

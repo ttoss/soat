@@ -29,7 +29,7 @@ import { readInputModalities } from './inputModalities';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
-import { type StartingPrincipal, turnPrincipalColumns } from './principals';
+import { type StartedWork, startedWorkColumns } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
@@ -65,20 +65,19 @@ const generationIncludes = () => {
  * invisible Trace that still blocks `deleteAgent`.
  */
 const commitGenerationWithTrace = async (helperArgs: {
-  args: GenerationAttribution & {
-    publicId: string;
-    projectId: number;
-    traceId: string;
-    parentTraceId?: string | null;
-    rootTraceId?: string | null;
-    rootGenerationId?: string | null;
-    startedBy?: StartingPrincipal | null;
-    actsAsAgent: string | null;
-    toolSurface?: Record<string, unknown> | null;
-    inputModalities: string[];
-    retrieval?: KnowledgeRetrieval;
-    idempotency?: GenerationIdempotency;
-  };
+  args: GenerationAttribution &
+    StartedWork & {
+      publicId: string;
+      projectId: number;
+      traceId: string;
+      parentTraceId?: string | null;
+      rootTraceId?: string | null;
+      rootGenerationId?: string | null;
+      toolSurface?: Record<string, unknown> | null;
+      inputModalities: string[];
+      retrieval?: KnowledgeRetrieval;
+      idempotency?: GenerationIdempotency;
+    };
   agentDbId: number;
   initiatorDbId: number | null;
   conversation: Awaited<ReturnType<typeof conversationColumns>>;
@@ -121,8 +120,11 @@ const commitGenerationWithTrace = async (helperArgs: {
         rootGenerationId: args.rootGenerationId ?? null,
         ...conversation,
         chainId,
-        // The first segment's tool calls run on the starting credential.
-        ...turnPrincipalColumns(args),
+        ...(await startedWorkColumns({
+          authority: args.authority,
+          projectId: args.projectId,
+          actsAsAgent: args.actsAsAgent,
+        })),
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
         status: 'running',
@@ -149,39 +151,37 @@ const commitGenerationWithTrace = async (helperArgs: {
 };
 
 const insertGenerationRecord = async (
-  args: GenerationAttribution & {
-    publicId: string;
-    projectId: number;
-    agentId: string;
-    traceId: string;
-    parentTraceId?: string | null;
-    rootTraceId?: string | null;
-    // The chain this generation belongs to, resolved by `generationChain.ts`,
-    // which is the only writer of the column.
-    rootGenerationId?: string | null;
-    initiatorGenerationId?: string | null;
-    startedBy?: StartingPrincipal | null;
-    // The agent, when the turn runs under its own grant (`run_as: agent`).
-    actsAsAgent: string | null;
-    // The conversation this generation serves, when it serves one: the edge
-    // the memory assertions walk up from a generation.
-    conversation?: GenerationConversation;
-    // Public id of the session this generation serves. The end-user actor is
-    // derived from it (see resolveGenerationEndUser).
-    sessionId?: string | null;
-    // Public id of an actor named with no session; ignored beside a session.
-    actorId?: string | null;
-    metadata?: Record<string, unknown> | null;
-    // The turn's resolved input messages, recorded so the generation can later
-    // be promoted into an eval dataset item. Content, so zero-retention refuses
-    // it exactly as it refuses `metadata`.
-    inputMessages?: unknown[] | null;
-    // Measured, never caller-supplied. Not content — see the column.
-    toolSurface?: Record<string, unknown> | null;
-    retrieval?: KnowledgeRetrieval;
-    // A unique violation on it is the caller's retry losing the race.
-    idempotency?: GenerationIdempotency;
-  }
+  args: GenerationAttribution &
+    StartedWork & {
+      publicId: string;
+      projectId: number;
+      agentId: string;
+      traceId: string;
+      parentTraceId?: string | null;
+      rootTraceId?: string | null;
+      // The chain this generation belongs to, resolved by `generationChain.ts`,
+      // which is the only writer of the column.
+      rootGenerationId?: string | null;
+      initiatorGenerationId?: string | null;
+      // The conversation this generation serves, when it serves one: the edge
+      // the memory assertions walk up from a generation.
+      conversation?: GenerationConversation;
+      // Public id of the session this generation serves. The end-user actor is
+      // derived from it (see resolveGenerationEndUser).
+      sessionId?: string | null;
+      // Public id of an actor named with no session; ignored beside a session.
+      actorId?: string | null;
+      metadata?: Record<string, unknown> | null;
+      // The turn's resolved input messages, recorded so the generation can later
+      // be promoted into an eval dataset item. Content, so zero-retention refuses
+      // it exactly as it refuses `metadata`.
+      inputMessages?: unknown[] | null;
+      // Measured, never caller-supplied. Not content — see the column.
+      toolSurface?: Record<string, unknown> | null;
+      retrieval?: KnowledgeRetrieval;
+      // A unique violation on it is the caller's retry losing the race.
+      idempotency?: GenerationIdempotency;
+    }
 ) => {
   const [agent, initiatorGeneration] = await Promise.all([
     // The agent that is running: the project's own, or one shared with it.

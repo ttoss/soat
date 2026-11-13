@@ -21,6 +21,7 @@ import type {
 } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 import { toolReferences } from './resourceReferences';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:guardrails');
 
@@ -210,7 +211,7 @@ export const runToolNodeGate = async (args: {
   node: OrchestrationNode;
   inputs: Record<string, unknown>;
   projectId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   orchestrationRunId?: string | null;
   nodeAttempt?: number | null;
 }): Promise<ToolNodeGateResult> => {
@@ -229,7 +230,7 @@ export const runToolNodeGate = async (args: {
     projectId: args.projectId,
     projectPublicId,
     sessionId: null,
-    authHeader: args.authHeader,
+    authority: args.authority,
     callerContext: {},
     orchestrationRunId: args.orchestrationRunId ?? null,
     run: { nodeAttempt: args.nodeAttempt ?? null },

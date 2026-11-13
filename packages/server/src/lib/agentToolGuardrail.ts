@@ -37,6 +37,7 @@ import {
 } from './guardrailEvaluationRecord';
 import { isPlainObject } from './plainObject';
 import { gatePresetsOf, mergePresetParameters } from './toolPresetParameters';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:guardrails');
 
@@ -61,7 +62,7 @@ export type ResolverGuardrailContext = {
   projectId: number;
   projectPublicId: string;
   sessionId?: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   callerContext: Record<string, unknown>;
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
@@ -82,7 +83,7 @@ export const buildResolverGuardrailContext = async (args: {
   projectGuardrailIds?: string[] | null;
   agentGuardrailIds?: string[] | null;
   sessionId?: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   guardrailContext?: Record<string, unknown> | null;
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
@@ -99,7 +100,7 @@ export const buildResolverGuardrailContext = async (args: {
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
     sessionId: args.sessionId ?? null,
-    authHeader: args.authHeader,
+    authority: args.authority,
     callerContext: isPlainObject(args.guardrailContext)
       ? args.guardrailContext
       : {},
@@ -161,7 +162,7 @@ const evaluateAll = async (args: {
         callerContext: args.context.callerContext,
         call,
         projectId: args.context.projectId,
-        authHeader: args.context.authHeader,
+        authority: args.context.authority,
       }
     );
     const evaluationContext = {

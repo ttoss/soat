@@ -1,13 +1,9 @@
 import { db } from 'src/db';
 import { dispatchApiRequest } from 'src/lib/inProcessApi';
-import {
-  buildRunAuthHeader,
-  readStoredStartingPrincipal,
-} from 'src/lib/orchestrationRunToken';
 import { callTool } from 'src/lib/tools';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, workAuthorityOf } from '../../testClient';
 
 /**
  * Pins the in-process dispatch path: a `soat` tool reaches the platform
@@ -291,7 +287,7 @@ describe('SOAT in-process dispatch', () => {
     }
   });
 
-  test('a run-as token keeps its chain-hop marker across the in-process hop', async () => {
+  test('stored work keeps its chain-hop marker across the in-process hop', async () => {
     const workflowRes = await authenticatedTestClient(userToken)
       .post('/api/v1/workflows')
       .send({
@@ -324,16 +320,6 @@ describe('SOAT in-process dispatch', () => {
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });
-    const authHeader = await buildRunAuthHeader({
-      principal: readStoredStartingPrincipal({
-        kind: 'user',
-        id: userId,
-        bound: null,
-      }),
-      projectId: project!.id as number,
-      workPublicId: taskRes.body.id,
-    });
-    expect(authHeader).toBeDefined();
 
     const result = await callTool({
       attribution: {},
@@ -343,20 +329,23 @@ describe('SOAT in-process dispatch', () => {
       id: toolRes.body.id,
       action: 'transition-task',
       input: { task_id: taskRes.body.id, transition: 'to_pong' },
-      authHeader,
+      authority: workAuthorityOf({
+        project: projectId,
+        user: userId,
+        work: taskRes.body.id,
+      }),
     });
 
-    // The cycle budget keys on `isRunToken`, which exists only because
-    // the auth middleware decoded the `orn` claim off this header. A seam
-    // passing a principal instead of a credential skips that middleware, so the
-    // hop counts as a person's move and the cycle becomes unbounded — while
-    // every chain-limit test still passes, since they drive the route directly.
+    // The cycle budget keys on `authUser.work`, which the auth middleware
+    // sets from the authority the in-process request carries. A seam that
+    // skipped that middleware would count the hop as a person's move and the
+    // cycle would be unbounded, while every chain-limit test still passed.
     expect(
       (result as { automation_chain_depth?: number }).automation_chain_depth
     ).toBe(1);
   });
 
-  test('an unauthenticated self-call is refused, not served', async () => {
+  test('a self-call with no stored authority is refused, not served', async () => {
     const toolRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
       .send({
@@ -367,9 +356,8 @@ describe('SOAT in-process dispatch', () => {
       });
     expect(toolRes.status).toBe(201);
 
-    // No `authHeader`: the dispatch runs the real auth middleware, so an
-    // uncredentialed self-call is rejected exactly as it was over the wire.
-    // Sharing the process must never imply sharing the caller's authority.
+    // Sharing the process must never imply sharing the caller's authority:
+    // work holding none sends nothing.
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });
@@ -382,10 +370,8 @@ describe('SOAT in-process dispatch', () => {
         id: toolRes.body.id,
         action: 'list-tools',
         input: {},
+        authority: null,
       })
-    ).rejects.toMatchObject({
-      code: 'TOOL_HTTP_ERROR',
-      meta: { tool_status_code: 401 },
-    });
+    ).rejects.toMatchObject({ code: 'WORK_AUTHORITY_MISSING' });
   });
 });

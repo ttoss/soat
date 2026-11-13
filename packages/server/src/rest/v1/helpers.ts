@@ -195,6 +195,22 @@ export const requireAuth: (
   }
 };
 
+/**
+ * The user the caller acts as, for `action` only a user can take: refused for
+ * work a trigger's own grant runs, which acts as no user.
+ */
+export const requireCallerUser = (
+  ctx: Context,
+  action: string
+): { id: number; publicId: string } => {
+  requireAuth(ctx);
+  const { id, publicId } = ctx.authUser;
+  if (id === undefined || publicId === undefined) {
+    throw callerDenied({ authUser: ctx.authUser, action, resource: null });
+  }
+  return { id, publicId };
+};
+
 /** The SRN a project-level check probes, or `null` when it names no project. */
 export const scopeSrn = (args: {
   projectPublicId?: string;

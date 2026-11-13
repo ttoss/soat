@@ -70,6 +70,7 @@ describe('resolveWriteProjectId', () => {
   test('throws FORBIDDEN when resolveProjectIds returns null', async () => {
     const ctx = makeCtx({
       apiKeyProjectPublicId: 'proj_apikey',
+      terms: { principal: { type: 'api_key', id: 'key_1' } },
       resolveProjectIds: jest.fn().mockResolvedValue(null),
     });
 
@@ -171,7 +172,10 @@ describe('requireAuth', () => {
 describe('resolveReadProjectIds', () => {
   test('throws FORBIDDEN when resolveProjectIds returns null', async () => {
     const ctx = {
-      authUser: { resolveProjectIds: jest.fn().mockResolvedValue(null) },
+      authUser: {
+        terms: { principal: { type: 'user', id: 'user_1' } },
+        resolveProjectIds: jest.fn().mockResolvedValue(null),
+      },
     } as never;
 
     const err = await rejection(
@@ -240,7 +244,10 @@ describe('resolveReadProjectIds', () => {
 describe('requireProjectAccess', () => {
   test('rejects an empty scope that resolveReadProjectIds allows', async () => {
     const ctx = {
-      authUser: { resolveProjectIds: jest.fn().mockResolvedValue([]) },
+      authUser: {
+        terms: { principal: { type: 'user', id: 'user_1' } },
+        resolveProjectIds: jest.fn().mockResolvedValue([]),
+      },
     } as never;
 
     const err = await rejection(

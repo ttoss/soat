@@ -24,6 +24,7 @@ import { assertProjectAcceptsWork } from './projectPause';
 import { quotaBreachError } from './quotaBreach';
 import { checkGenerationQuota } from './quotaEnforcement';
 import { type StoredError, toStoredError } from './storedError';
+import type { WorkAuthority } from './workAuthority';
 
 /**
  * The two backends a decision is answered by — a tool-less agent over the
@@ -94,6 +95,7 @@ const answerWithAgent = async (args: {
   agentVersion: number;
   questions: DeciderQuestions;
   input: unknown;
+  authority: WorkAuthority | null;
 }): Promise<DecisionOutcome> => {
   const { text, images } = parseDecisionInput(args.input);
   const frame = renderDeciderFrame({
@@ -103,6 +105,7 @@ const answerWithAgent = async (args: {
   const result = await createGeneration({
     projectIds: args.projectIds,
     agentId: args.agentPublicId,
+    authority: args.authority,
     messages: [
       {
         role: 'user',
@@ -143,7 +146,7 @@ export const admitDecisionBackend = async (args: {
   tool: DeciderToolRow | null;
   questions: DeciderQuestions;
   input: unknown;
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<DecisionEvaluation> => {
   const { agent, tool, questions, input } = args;
   parseDecisionInput(input);
@@ -159,7 +162,7 @@ export const admitDecisionBackend = async (args: {
             toolPublicId: tool.publicId,
             questions,
             input,
-            authHeader: args.authHeader,
+            authority: args.authority,
           }),
           generationId: null,
         };
@@ -186,6 +189,7 @@ export const admitDecisionBackend = async (args: {
         agentVersion: agent.version,
         questions,
         input,
+        authority: args.authority,
       });
     },
     opaqueFailure: GENERATION_FAILURE,

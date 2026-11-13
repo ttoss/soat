@@ -9,6 +9,7 @@ import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import { agentReferences } from './resourceReferences';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
 
@@ -102,7 +103,7 @@ const runAgentGeneration = async (args: {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   sessionId?: string;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser: AuthUser | undefined;
   initiatorGenerationId?: string | null;
 }): Promise<InternalGenerationResult> => {
@@ -120,7 +121,7 @@ const runAgentGeneration = async (args: {
       id: args.conversationId,
       snapshotPosition: args.snapshotPosition,
     },
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });
@@ -159,7 +160,7 @@ const runGenerationForAgent = async (args: {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   sessionId?: string;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser: AuthUser | undefined;
   initiatorGenerationId?: string | null;
 }): Promise<InternalGenerationResult> => {
@@ -172,7 +173,7 @@ const runGenerationForAgent = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });
@@ -429,9 +430,9 @@ export const generateConversationMessage = async (args: {
   // caller that knows the session behind the turn (the actor is derived from
   // it). Plain conversation generations leave it unset.
   sessionId?: string;
-  // The credential the turn's `builtin` calls run as: the driving request's, or
-  // one a request-less continuation re-mints.
-  authHeader?: string;
+  // The authority the turn's calls run under: the driving request's, or the
+  // one a request-less continuation stores.
+  authority: WorkAuthority | null;
   // The caller recorded as the generation's `acted_as`; required so every
   // entry point states it (`undefined` when no request drove the turn).
   authUser: AuthUser | undefined;
@@ -466,7 +467,7 @@ export const generateConversationMessage = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });

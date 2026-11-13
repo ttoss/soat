@@ -71,18 +71,16 @@ An API-key request records the **key itself** (`key_…`), so the generation nam
 acted rather than only the owning user; a JWT-authenticated request records the user
 (`user_…`).
 
-The pair is durable identity: work that resumes after the original request is gone
-re-mints a short-lived credential from it. That lets an
-[approval continuation](./approvals.md#continuation-identity), possibly days later,
-authenticate its `builtin` tools as the principal that started the chain, and it is why a
-generation started by a request-less drive (a [workflow dispatch](./workflows.md), an
-[orchestration node](./orchestrations.md#durable-background-execution)) records the
-drive's principal.
-
-Both fields are `null` when the chain has no re-mintable principal: a generation started
-by a [trigger](./triggers.md) or an [OAuth](./oauth.md) token. Each carries its authority
-in the token (the trigger's attached policy, the consented scope), so recording a
-principal would let a later re-mint act with the whole of the owning user's access.
+A generation also stores the authority it was started under (the starter's grant and
+every cap on it: a key's `policy_ids`, an OAuth consent, an IAM token's bound, a
+trigger's `policy_ids`, or a [`run_as: agent`](./agents.md#execution-identity) agent's
+`policy_ids` alone when one of its actions started it), never a token. Work that resumes after the request is gone (an
+[approval continuation](./approvals.md#continuation-identity), possibly days later) runs
+under it. A generation started by a [trigger](./triggers.md) names the trigger
+(`trigger`); one started by an [OAuth](./oauth.md) token names its user, held to the
+consented scope. Both fields are `null` only for a generation started with no authority
+(an ingestion converter or a memory rule handler), whose tool calls are refused with
+`409 WORK_AUTHORITY_MISSING`.
 
 ### Acting principal
 
@@ -90,7 +88,8 @@ principal would let a later re-mint act with the whole of the owning user's acce
 acts as its starter until a caller resumes it by
 [submitting tool outputs](#lifecycle): the resumed segment's tool calls run on that
 caller's credential, and `acted_as` names them while `started_by_principal_*` keeps the
-starter, through a [session](./sessions.md) too.
+starter, through a [session](./sessions.md) too. A segment of a
+[`run_as: agent`](./agents.md#execution-identity) agent's turn names the agent.
 
 An [approved tool call](./approvals.md#continuation-identity) runs as the `acted_as` of
 the generation that proposed it.

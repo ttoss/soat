@@ -32,6 +32,7 @@ import {
 import { scorerList } from './evaluationScorers';
 import { runAsJob } from './requestCorrelation';
 import { createScheduler } from './scheduler';
+import { parseWorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
 
@@ -206,6 +207,7 @@ const handleEvalItemTask = async (args: {
   );
 
   await executeAndRecordItem({
+    authority: parseWorkAuthority(run.authority),
     projectId: context.projectId,
     runDbId: run.id as number,
     agent,

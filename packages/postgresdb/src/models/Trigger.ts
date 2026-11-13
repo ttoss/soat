@@ -9,7 +9,6 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
-import { User } from './User';
 
 @Table({
   tableName: 'triggers',
@@ -48,22 +47,6 @@ export class Trigger extends Model {
     { onDelete: 'CASCADE' }
   )
   declare project: Project;
-
-  // The trigger creator, the user a firing's token names. A deleted creator
-  // keeps the trigger but makes firings fail closed.
-  @ForeignKey(() => {
-    return User;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare createdByUserId: number | null;
-
-  @BelongsTo(
-    () => {
-      return User;
-    },
-    { onDelete: 'SET NULL' }
-  )
-  declare createdBy: User | null;
 
   // Public ids of the policies a firing acts under; queried by policy.
   @Column({ type: DataType.JSONB, allowNull: true })

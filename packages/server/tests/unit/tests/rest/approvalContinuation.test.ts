@@ -6,9 +6,10 @@ import { db } from 'src/db';
 import { emitApproval } from 'src/lib/approvals';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import { storedAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, workAuthorityOf } from '../../testClient';
 
 /**
  * Resolving a `tool_call` approval resumes the agent that proposed the call:
@@ -432,14 +433,22 @@ describe('Tool-call approval continuation', () => {
       expect(continuation.started_by_principal_id).toBe(userId);
     });
 
-    test('the continuation runs as the principal the proposing segment acted as', async () => {
+    test('the continuation runs under the authority the proposing segment stores', async () => {
       const me =
         await authenticatedTestClient(adminToken).get('/api/v1/users/me');
       expect(me.status).toBe(200);
       const root = await rootGeneration(agentId);
       // The segment that proposed the call was resumed by another submitter.
       await db.Generation.update(
-        { actedAsPrincipalType: 'user', actedAsPrincipalId: me.body.id },
+        {
+          authority: await storedAuthority({
+            authority: workAuthorityOf({
+              project: projectId,
+              user: me.body.id,
+            }),
+            projectId: projectInternalId,
+          }),
+        },
         { where: { publicId: root } }
       );
       const item = await seed({
@@ -488,24 +497,37 @@ describe('Tool-call approval continuation', () => {
       expect(message).toContain('tool_aprcontmissing0000');
     });
 
-    test('a proposing generation that no longer exists still runs the action', async () => {
+    test('a proposing generation that stores no authority runs no action', async () => {
+      const root = await rootGeneration(agentId);
+      await db.Generation.update(
+        { authority: null },
+        { where: { publicId: root } }
+      );
       const item = await seed({
         toolId: refundToolId,
         amount: 28,
-        generationId: 'gen_aprcontmissing00000',
+        generationId: root,
       });
 
       const res = await approve(item.id);
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('approved');
-      expect(await toolRequestWith(28)).toEqual({ amount: 28 });
+      expect(await continuationMessageFor(item.id)).toContain(
+        'has no stored authority to run under'
+      );
+      expect(
+        toolRequests.some((body) => {
+          return body.amount === 28;
+        })
+      ).toBe(false);
     });
 
     test('a proposing agent that no longer exists still resolves the item', async () => {
       const item = await seed({
         toolId: refundToolId,
         amount: 29,
+        generationId: await rootGeneration(agentId),
         agentId: 'agent_aprcontdeleted000',
       });
 

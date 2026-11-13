@@ -154,6 +154,11 @@ export class EvalRun extends Model {
   @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare toolContext: Record<string, string> | null;
 
+  // The authority the work runs under (`lib/workAuthority.ts`); null when it
+  // has none, and such work is refused.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare authority: object | null;
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare startedAt: Date | null;
 

@@ -8,9 +8,6 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
-import { db } from '../db';
-import { resolveAgentGrantCredential } from '../middleware/auth';
-import type { ResolvedCredential } from '../middleware/authOnBehalfOf';
 import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import {
@@ -36,33 +33,21 @@ import {
   meterToolExecution,
   type ToolExecutionMeter,
 } from './usageToolRecording';
+import { agentWorkAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
 
 /**
- * Who a builtin call runs as: the agent's grant under `run_as: agent`, passed
- * as a value with the caller's identity, else the caller's own bearer.
+ * The authority a builtin call runs under: under `run_as: agent`, the agent's
+ * grant in place of the work's; else the work's own.
  */
-const soatCallIdentity = async (args: {
-  authHeader?: string;
+const soatCallAuthority = (args: {
+  authority: WorkAuthority | null;
   agentAuthority?: AgentAuthority;
-}): Promise<{
-  credential?: ResolvedCredential;
-  headers: Record<string, string>;
-}> => {
-  if (args.agentAuthority?.runAs === 'agent') {
-    return {
-      credential: await resolveAgentGrantCredential({
-        db,
-        authHeader: args.authHeader,
-        authority: args.agentAuthority,
-      }),
-      headers: {},
-    };
-  }
-  return {
-    headers: args.authHeader ? { Authorization: args.authHeader } : {},
-  };
+}): WorkAuthority | null => {
+  const { authority, agentAuthority } = args;
+  if (!authority || agentAuthority?.runAs !== 'agent') return authority;
+  return agentWorkAuthority({ authority, agent: agentAuthority });
 };
 
 /**
@@ -71,16 +56,17 @@ const soatCallIdentity = async (args: {
  * Served in-process via `dispatchApiRequest` rather than over loopback:
  * the app's real middleware chain still runs, so permission checks, validation,
  * audit, metering and the response contract are unchanged — only the socket is
- * gone. `authHeader` keeps its meaning; a call without one is refused by the
- * same middleware, since sharing a process never implies sharing authority.
+ * gone. The work's stored authority travels as a value, never a token; a
+ * call without one is refused, since sharing a process never implies sharing
+ * authority.
  */
 export const executeSoatTool = async (args: {
   toolName: string;
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
   meter: ToolExecutionMeter;
-  authHeader?: string;
-  /** Under `run_as: agent`, the call runs as the agent's grant, not `authHeader`. */
+  authority: WorkAuthority | null;
+  /** Under `run_as: agent`, the call runs under the agent's grant, not `authority`'s. */
   agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
@@ -111,7 +97,6 @@ export const executeSoatTool = async (args: {
     // parameters only, discarding every `in: query` parameter the action
     // advertises.
     path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
-    const identity = await soatCallIdentity(args);
     log('soat tool execute: %s %s %s', toolId, args.def.method, path);
     // The non-2xx rule is `dispatchApiRequestOrThrow`'s, shared with the MCP
     // surface; only the error type is this caller's — `HttpToolError` carries
@@ -124,9 +109,8 @@ export const executeSoatTool = async (args: {
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
-            credential: identity.credential,
+            authority: soatCallAuthority(args),
             headers: {
-              ...identity.headers,
               ...args.buildContextHeaders({
                 toolContext: args.toolContext,
                 contextKeys: args.contextKeys,
@@ -235,7 +219,7 @@ const buildSoatActionTool = (args: {
   presetParameters?: Record<string, unknown>;
   projectPublicId?: string;
   agentAuthority?: AgentAuthority;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
   traceId?: string;
@@ -286,7 +270,7 @@ const buildSoatActionTool = (args: {
         def: args.def,
         rawArgs,
         meter: args.meter,
-        authHeader: args.authHeader,
+        authority: args.authority,
         agentAuthority: args.agentAuthority,
         toolContext: args.toolContext,
         contextKeys: args.contextKeys,
@@ -310,7 +294,7 @@ export const resolveSoatTools = (args: {
   };
   meter: ToolExecutionMeter;
   agentAuthority?: AgentAuthority;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   /** The project the generation runs in; see `pinnedProjectParameters`. */
   projectPublicId?: string;
   toolContext?: Record<string, string>;
@@ -348,7 +332,7 @@ export const resolveSoatTools = (args: {
       presetParameters: args.typedTool.presetParameters ?? undefined,
       projectPublicId: args.projectPublicId,
       agentAuthority: args.agentAuthority,
-      authHeader: args.authHeader,
+      authority: args.authority,
       toolContext: args.toolContext,
       contextKeys: args.typedTool.contextKeys,
       traceId: args.traceId,

@@ -14,6 +14,7 @@ import {
   type DeciderScorerDecision,
 } from './evaluationDeciderScorerContract';
 import { isPlainObject } from './plainObject';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
 
@@ -82,8 +83,8 @@ export const pinDeciderVersions = async (args: {
 };
 
 /**
- * Requests the item's decision and waits for it. Runs with no credential, like
- * every scorer, so a `builtin` pipeline step behind the decider cannot act.
+ * Requests the item's decision and waits for it, under the run's stored
+ * authority like every scorer.
  */
 export const runDeciderScorerCall = async (args: {
   projectId: number;
@@ -91,11 +92,13 @@ export const runDeciderScorerCall = async (args: {
   input: unknown;
   scoring: DeciderScoring;
   datasetItemId: string;
+  authority: WorkAuthority | null;
 }): Promise<DeciderScorerDecision> => {
   const name = String(args.scorer.name);
   log('runDeciderScorerCall: scorer=%s run=%s', name, args.scoring.runId);
 
   const decision = await createDecision({
+    authority: args.authority,
     projectIds: [args.projectId],
     deciderId: String(args.scorer.decider_id),
     input: args.input,

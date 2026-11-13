@@ -62,43 +62,6 @@ export const keyBound = (args: { policyIds: string[] | null }): Bound => {
     : policiesBound({ policyIds: args.policyIds });
 };
 
-/** The presenting key's own `policy_ids`, capping its owner's grant. */
-export const keyPoliciesCap = (args: {
-  principal: DeniedPrincipal;
-  policyIds: string[];
-}): Cap => {
-  return {
-    principal: args.principal,
-    kind: 'key_policies',
-    bound: keyBound(args),
-  };
-};
-
-/**
- * The key a run or IAM token acts as, capping the token so it never reaches
- * further than that key. A token naming no key (a user started the work) is
- * not narrowed by one.
- */
-export const actingKeyCap = async (args: {
-  principal: DeniedPrincipal;
-  apiKeyPublicId: string | undefined;
-  db: Context['db'];
-}): Promise<Cap> => {
-  if (!args.apiKeyPublicId) {
-    return { principal: args.principal, kind: 'other', bound: EVERYTHING };
-  }
-  const apiKey = await args.db.ApiKey.findOne({
-    where: { publicId: args.apiKeyPublicId },
-  });
-  return {
-    principal: args.principal,
-    kind: 'other',
-    bound: keyBound({
-      policyIds: apiKey ? apiKey.policyIds : null,
-    }),
-  };
-};
-
 /** An OAuth token's consented scope, rebuilt from its `scope` claim. */
 export const oauthScopeCap = (args: {
   principal: DeniedPrincipal;

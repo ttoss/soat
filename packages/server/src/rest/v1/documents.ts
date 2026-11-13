@@ -28,6 +28,7 @@ import {
   readTagBag,
   readTagQuery,
 } from 'src/lib/tags';
+import { captureAuthority } from 'src/lib/workAuthority';
 
 import { assertDocumentFiling, assertDocumentReachable } from './documentPins';
 import { registerDocumentRelationRoutes } from './documentRelationRoutes';
@@ -412,6 +413,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     resourceType: 'document',
   });
   const result = await enqueueDocumentIngestion({
+    authority: captureAuthority({ authUser: ctx.authUser }),
     fileId: body.file_id,
     projectId: Number(targetProjectId),
     pathPrefix: body.path_prefix,
@@ -451,6 +453,7 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
   const wait = ctx.query['wait'] === 'true';
 
   const result = await reingestDocument({
+    authority: captureAuthority({ authUser: ctx.authUser }),
     id: ctx.params.document_id,
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,

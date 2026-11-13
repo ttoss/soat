@@ -6,10 +6,6 @@ import { DomainError } from 'src/errors';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import * as orchestrationEngineModule from 'src/lib/orchestrationEngine';
-import {
-  buildRunAuthHeader,
-  readStoredStartingPrincipal,
-} from 'src/lib/orchestrationRunToken';
 import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
@@ -22,7 +18,12 @@ import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  testClient,
+  workAuthorityOf,
+  workRequest,
+} from '../../testClient';
 
 const STATES = [
   { name: 'triage', initial: true },
@@ -4318,10 +4319,10 @@ describe('Tasks', () => {
     });
 
     // A budget keyed on `principal.kind` would miss this half entirely: a
-    // dispatch's `soat` tool calls `transition-task` with a run-as token
-    // authenticating as the user who started the chain, so on the wire the hop
-    // is indistinguishable from a person clicking a button but for the `orn`.
-    describe('a transition fired by a run-as token', () => {
+    // dispatch's `soat` tool calls `transition-task` under the stored authority
+    // of the user who started the chain, so the hop names that user like a
+    // person clicking a button but for the `work` it carries.
+    describe('a transition stored work makes', () => {
       /** Two states that bounce back and forth, with no automation of their own. */
       const pingPongWorkflow = async () => {
         return (
@@ -4361,32 +4362,29 @@ describe('Tasks', () => {
           .send({ transition: args.index % 2 === 0 ? 'to_pong' : 'to_ping' });
       };
 
+      const bounceAsWork = (args: { taskId: string; index: number }) => {
+        return workRequest({
+          authority: workAuthorityOf({
+            project: projectId,
+            user: userId,
+            work: args.taskId,
+          }),
+          method: 'post',
+          path: `/api/v1/tasks/${args.taskId}/transitions`,
+          body: { transition: args.index % 2 === 0 ? 'to_pong' : 'to_ping' },
+        });
+      };
+
       test('counts against the chain budget rather than resetting it', async () => {
         const taskId = await startPingPong();
-        const header = await buildRunAuthHeader({
-          principal: readStoredStartingPrincipal({
-            kind: 'user',
-            id: userId,
-            bound: null,
-          }),
-          projectId: (await db.Project.findOne({
-            where: { publicId: projectId },
-          }))!.id as number,
-          workPublicId: taskId,
-        });
-        const runToken = header!.slice('Bearer '.length);
 
         for (let i = 0; i < LIMIT; i += 1) {
-          const res = await bounce({ taskId, index: i, token: runToken });
+          const res = await bounceAsWork({ taskId, index: i });
           expect(res.status).toBe(200);
           expect(res.body.automation_chain_depth).toBe(i + 1);
         }
 
-        const refused = await bounce({
-          taskId,
-          index: LIMIT,
-          token: runToken,
-        });
+        const refused = await bounceAsWork({ taskId, index: LIMIT });
         expect(refused.status).toBe(409);
         expect(refused.body.error.code).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
       });

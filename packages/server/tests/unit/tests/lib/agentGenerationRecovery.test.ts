@@ -52,6 +52,7 @@ describe('recoverPendingFromDb', () => {
 
   test('returns undefined when the generation is out of the requested project scope', async () => {
     await createGenerationRecord({
+      authority: null,
       actsAsAgent: null,
       publicId: 'gen_scope_miss',
       projectId: projectDbId,
@@ -77,6 +78,7 @@ describe('recoverPendingFromDb', () => {
     const result = await recoverPendingFromDb({
       generationId: 'gen_scope_miss',
       agentId,
+      authority: null,
       projectIds: [projectDbId + 100000],
     });
 

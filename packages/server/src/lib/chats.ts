@@ -26,6 +26,7 @@ import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 import { makeResourceAccessor } from './resourceAccessor';
 import { openAiUsageFromReported, readReportedUsage } from './usageTotals';
+import { captureAuthority } from './workAuthority';
 
 /**
  * A completion message on the wire. `system` is deliberately absent: system
@@ -208,6 +209,7 @@ const resolveMessages = async (args: {
   const resolved = await Promise.all(
     args.messages.map(async (message) => {
       const resolvedContent = await resolveMessageContent({
+        authority: captureAuthority({ authUser: args.authUser }),
         content:
           'documentId' in message
             ? { type: 'document' as const, document_id: message.documentId }

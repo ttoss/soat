@@ -16,6 +16,7 @@ import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import { callTool } from './tools';
 import { serverSideToolProblem } from './toolsCallDispatch';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
 
@@ -182,6 +183,7 @@ export const runToolScorerCall = async (args: {
   projectId: number;
   scorer: Record<string, unknown>;
   context: Record<string, unknown>;
+  authority: WorkAuthority | null;
 }): Promise<ToolScorerVerdict> => {
   const toolId = String(args.scorer.tool_id);
   const presetParameters = isPlainObject(args.scorer.preset_parameters)
@@ -198,6 +200,7 @@ export const runToolScorerCall = async (args: {
   const raw = await callTool({
     // Grading with a tool still runs the tool.
     guardrails: 'apply',
+    authority: args.authority,
     projectId: args.projectId,
     reach: 'project',
     id: toolId,

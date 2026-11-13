@@ -36,6 +36,7 @@ import {
   validateToolUpdate,
 } from './toolWriteValidation';
 import type { ToolCallAttribution } from './usageToolRecording';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
 
@@ -367,7 +368,7 @@ export const callTool = async (args: {
   guardrails: ToolCallGuardrailMode;
   action?: string;
   input?: Record<string, unknown>;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   remainingDepth?: number;
   // Forwarded to an HTTP tool as the `Idempotency-Key` request header (D7),
   // so a redelivered orchestration node call can be deduped downstream.
@@ -406,7 +407,7 @@ export const callTool = async (args: {
     toolGuardrailIds: foundTool.guardrail_ids,
     action: args.action,
     input: args.input,
-    authHeader: args.authHeader,
+    authority: args.authority,
     remainingDepth: args.remainingDepth,
     idempotencyKey: args.idempotencyKey,
     toolContext: args.toolContext,

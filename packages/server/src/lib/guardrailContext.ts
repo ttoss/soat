@@ -11,6 +11,7 @@ import {
 } from './guardrailRuntimeMetrics';
 import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:guardrails');
 
@@ -233,7 +234,7 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
 
 /**
  * Calls a guardrail's `context_tool_id` at evaluation time under the calling
- * agent's credentials (the resolver's `authHeader`), returning its output object
+ * agent's credentials (the resolver's `authority`), returning its output object
  * for the `context.*` namespace. Called on every gated call, uncached: an answer
  * about one call's target is wrong for the next, and two identical writes must
  * each read the state the other leaves. Bounded by a per-call timeout.
@@ -246,7 +247,7 @@ const fetchContextTool = async (args: {
   guardrailId: string;
   contextToolId: string;
   call: GuardrailProposedCall;
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<Record<string, unknown> | null> => {
   try {
     const raw = await withTimeout(
@@ -260,7 +261,7 @@ const fetchContextTool = async (args: {
         // Nested, never flat: a `builtin` tool with no explicit action reads a
         // top-level `action` off its input as the operation to run.
         input: { call: args.call },
-        authHeader: args.authHeader,
+        authority: args.authority,
         attribution: {},
       }),
       contextToolTimeoutMs()
@@ -288,7 +289,7 @@ export const resolveEffectiveContext = async (args: {
   callerContext: Record<string, unknown>;
   call: GuardrailProposedCall;
   projectId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<{
   context: Record<string, unknown>;
   source: GuardrailContextSource;
@@ -307,7 +308,7 @@ export const resolveEffectiveContext = async (args: {
     guardrailId: args.guardrail.guardrailId,
     contextToolId: args.guardrail.contextToolId,
     call: args.call,
-    authHeader: args.authHeader,
+    authority: args.authority,
   });
 
   if (toolContext === null) {

@@ -163,13 +163,17 @@ Security invariants:
   its action and resource patterns, unconditioned or under the same
   condition, and no `Deny` of the caller's overlaps it. A grant on `*` reads
   as the trigger's project; one naming another project is ignored.
-- **No recursion.** Trigger-scoped credentials cannot call the fire endpoint
-  (`403`).
-- **Deleting the trigger stops its firings.** A run-as token whose trigger no
+- **A firing stores its authority.** The firing row, and every run or
+  generation it starts, stores the authority it acts under: the trigger's
+  `policy_ids` alone for a firing nobody called (it acts as the trigger, not as
+  whoever created it, so a firing survives its creator), or those ∩ the
+  caller's whole authority for a manual fire. Every later drive of that work
+  runs under it. A firing the sweep redelivers runs under the stored one.
+- **No recursion.** Work a firing began cannot call the fire endpoint (`403`).
+- **Deleting the trigger stops its firings.** Work under a trigger that no
   longer exists authorizes nothing: every call is `403 FORBIDDEN`.
-- **Fail closed.** The token a firing nobody called mints names the trigger's
-  creator; a deleted creator keeps the trigger but such a firing fails with
-  `409 TRIGGER_CREATOR_UNAVAILABLE`. A referenced policy cannot be deleted
+- **Fail closed.** A firing whose row stores no authority records
+  `409 WORK_AUTHORITY_MISSING`. A referenced policy cannot be deleted
   (`409 POLICY_HAS_DEPENDENTS`). A deleted target makes the firing record the
   error.
 - **Secret hygiene.** Webhook secrets are 32 random bytes (hex), never returned
@@ -354,8 +358,7 @@ catch-up firing on restart.
 | `TRIGGER_ACTION_NOT_ALLOWED`   | `400`  | An invalid field combination for `type`/`target_type` — e.g. `cron` on a non-`schedule` trigger, `events`, `event_resources` or `event_data` on a non-`event` trigger (or no `events` on an `event` trigger), `action` on a non-tool target, or a `client`-type tool as the target | Check the [Trigger Types](#trigger-types) and [Targets and Input](#targets-and-input) rules          |
 | `TRIGGER_INPUT_INVALID`        | `400`  | Fire-time input doesn't satisfy the target — empty agent input, or a field missing/mismatched against an orchestration's `input_schema` | Supply the required input fields for the target type                                                 |
 | `TRIGGER_NOT_ACTIVE`           | `409`  | The trigger's `active` field is `false`                                                                        | `PATCH` the trigger with `active: true` before firing                                                |
-| `TRIGGER_CREATOR_UNAVAILABLE`  | `409`  | The user who created the trigger no longer exists                                                              | The trigger cannot fire under a deleted user's identity — recreate it under a live user              |
-| `TRIGGER_RECURSION_FORBIDDEN`  | `403`  | A trigger-scoped run-as credential tried to call the fire endpoint                                             | Fire the trigger with a user/API-key credential; a trigger cannot fire another trigger               |
+| `TRIGGER_RECURSION_FORBIDDEN`  | `403`  | Work a firing began tried to call the fire endpoint                                                            | Fire the trigger with a user/API-key credential; a trigger cannot fire another trigger               |
 | `NAME_CONFLICT`                | `409`  | A trigger with that `name` already exists in the project                                                       | Choose a different name                                                                              |
 | `POLICY_GRANT_NOT_HELD`        | `403`  | The trigger, as the write leaves it, carries a policy granting a permission the caller does not hold in its project | Carry only policies inside your own grants (`meta.ungranted` lists the rest), or have a caller who holds them write it |
 | `ACTION_NOT_HELD`              | `403`  | The trigger, as the write leaves it, starts a target the caller may not start                                  | Point it at a target you may start (`meta.action` on `meta.resource`), or have a caller who may write it |
@@ -467,7 +470,6 @@ a tool is told, not what the firing is allowed to reach.
 | ------------------------------------ | -------- | ------------------------------------------------------------ |
 | `SOAT_TRIGGER_SCHEDULER_INTERVAL_MS` | No       | Scheduler poll interval in milliseconds (default `30000`)    |
 | `SOAT_TRIGGER_SCHEDULER_DISABLED`    | No       | Set to `true` to disable the schedule poller                 |
-| `SOAT_TRIGGER_TOKEN_TTL`             | No       | TTL of the minted run-as token (default `1h`)                |
 
 ## Examples
 

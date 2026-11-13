@@ -35,6 +35,7 @@ import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
 import { parseActiveRelease } from './releaseAssignment';
 import { acceptStoredToolContext } from './toolContextCarrier';
+import { storedAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
 
@@ -269,6 +270,7 @@ const executeSyncRun = async (args: {
   plan: RunPlan;
   run: InstanceType<(typeof db)['EvalRun']>;
   toolContext?: Record<string, string>;
+  authority: WorkAuthority | null;
 }): Promise<void> => {
   const { plan, run } = args;
   const projectId = plan.evaluation.projectId as number;
@@ -279,6 +281,7 @@ const executeSyncRun = async (args: {
     // that wants concurrency uses `wait: false`.
     for (const item of plan.items) {
       await executeAndRecordItem({
+        authority: args.authority,
         projectIds: args.projectIds,
         projectId,
         runDbId: run.id as number,
@@ -338,6 +341,8 @@ export const startEvalRun = async (args: {
    * since the worker driving a queued run has no request to read it from.
    */
   toolContext?: Record<string, string>;
+  /** Stored on the run: its generations and scorers run under it. */
+  authority: WorkAuthority | null;
 }): Promise<ReturnType<typeof mapEvalRun>> => {
   const wait = parseWait(args.wait);
   log('startEvalRun: evalId=%s wait=%s', args.evalId, wait);
@@ -365,6 +370,10 @@ export const startEvalRun = async (args: {
     triggerId: args.triggerId ?? null,
     metadata: args.metadata ?? null,
     toolContext: toolContext ?? null,
+    authority: await storedAuthority({
+      authority: args.authority,
+      projectId: plan.evaluation.projectId as number,
+    }),
     itemCount: plan.items.length,
     startedAt: wait ? new Date() : null,
   });
@@ -383,6 +392,7 @@ export const startEvalRun = async (args: {
       plan,
       run,
       toolContext,
+      authority: args.authority,
     });
   } else {
     await enqueueEvalItemTasks({

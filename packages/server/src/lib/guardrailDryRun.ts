@@ -17,6 +17,7 @@ import {
 } from './guardrailEvaluationRecord';
 import { loadGuardrailForEvaluation } from './guardrails';
 import { isPlainObject } from './plainObject';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:guardrails');
 
@@ -37,7 +38,7 @@ export const evaluateGuardrailDryRun = async (args: {
   args?: object;
   guardrailContext?: object;
   toolId?: string;
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<ReturnType<typeof mapGuardrailEvaluation>> => {
   log(
     'evaluateGuardrailDryRun: id=%s toolId=%s',
@@ -91,7 +92,7 @@ export const evaluateGuardrailDryRun = async (args: {
     callerContext,
     call: proposedCall({ identity, effectiveArgs: callArgs }),
     projectId,
-    authHeader: args.authHeader,
+    authority: args.authority,
   });
 
   const evaluationContext = {

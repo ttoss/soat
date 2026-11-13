@@ -19,6 +19,7 @@ import { emitResourceEvent } from './eventBus';
 import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:decisions');
 
@@ -245,7 +246,7 @@ export const createDecision = async (args: {
    * Borrowed, not stored: evaluation never outlives this process, since an
    * interrupted decision is failed rather than re-run.
    */
-  authHeader?: string;
+  authority: WorkAuthority | null;
   /** Answer under this archived question set rather than the live one. */
   version?: number;
 }): Promise<MappedDecision> => {
@@ -266,7 +267,7 @@ export const createDecision = async (args: {
     tool: decider.tool,
     questions: questionSet.questions,
     input: args.input,
-    authHeader: args.authHeader,
+    authority: args.authority,
   });
 
   return recordAndEvaluate({
@@ -293,7 +294,7 @@ export const createInlineDecision = async (args: {
   input: unknown;
   metadata?: Record<string, unknown>;
   wait: boolean;
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<MappedDecision> => {
   log('createInlineDecision: projectId=%d wait=%s', args.projectId, args.wait);
 
@@ -309,7 +310,7 @@ export const createInlineDecision = async (args: {
     ...backend,
     questions,
     input: args.input,
-    authHeader: args.authHeader,
+    authority: args.authority,
   });
 
   return recordAndEvaluate({

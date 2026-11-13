@@ -3,7 +3,6 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
-import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import { readStructuredQuery } from 'src/lib/structuredFilter';
 import {
   createTask,
@@ -25,6 +24,7 @@ import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
 import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
+import { captureAuthority } from 'src/lib/workAuthority';
 
 import {
   parseEnumListQuery,
@@ -212,7 +212,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
       ? { key: idempotencyKey, digest: createTaskRequestDigest(request) }
       : undefined,
     principal: principalFromCtx(ctx),
-    startingPrincipal: resolveStartingPrincipal({ authUser: ctx.authUser }),
+    authority: captureAuthority({ authUser: ctx.authUser }),
   });
 
   ctx.status = idempotent ? 200 : 201;
@@ -304,11 +304,11 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
       : undefined,
     payload: body.payload,
     principal: principalFromCtx(ctx),
-    startingPrincipal: resolveStartingPrincipal({ authUser: ctx.authUser }),
-    // A run-as token names a user or key like any other credential, so the
-    // principal above cannot distinguish a dispatch continuing its own chain
-    // from the person who started it. This can.
-    viaRunToken: ctx.authUser!.isRunToken === true,
+    authority: captureAuthority({ authUser: ctx.authUser }),
+    // Stored work names a user or key like any other caller, so the principal
+    // above cannot tell a dispatch continuing its own chain from the person
+    // who started it. This can.
+    viaWork: ctx.authUser!.work !== undefined,
   });
 });
 
@@ -401,8 +401,7 @@ tasksRouter.post('/tasks/:task_id/resume', async (ctx: Context) => {
     id: ctx.params.task_id,
     // The suppressed dispatch runs as whoever resumed: the resume is the
     // decision to spend, and the move that scheduled the work may be weeks old.
-    principal:
-      resolveStartingPrincipal({ authUser: ctx.authUser }) ?? undefined,
+    authority: captureAuthority({ authUser: ctx.authUser }),
   });
 });
 

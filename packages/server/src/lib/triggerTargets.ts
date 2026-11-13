@@ -3,6 +3,7 @@ import { startEvalRun } from './evaluationRuns';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { startToolCall } from './tools';
 import { buildAgentMessages } from './triggerDispatch';
+import type { WorkAuthority } from './workAuthority';
 
 /**
  * How a firing reaches each kind of target.
@@ -37,7 +38,7 @@ export type DispatchArgs = {
   projectId: number;
   input: Record<string, unknown>;
   toolContext?: Record<string, string>;
-  authHeader: string;
+  authority: WorkAuthority | null;
   triggerId: string;
 };
 
@@ -49,7 +50,7 @@ const dispatchToOrchestration = async (
     projectIds: [args.projectId],
     input: args.input,
     toolContext: args.toolContext,
-    authHeader: args.authHeader,
+    authority: args.authority,
     wait: true,
     triggerId: args.triggerId,
   });
@@ -70,7 +71,7 @@ const dispatchToAgent = async (
     messages: buildAgentMessages(args.input),
     stream: false,
     toolContext: args.toolContext,
-    authHeader: args.authHeader,
+    authority: args.authority,
     triggerId: args.triggerId,
   });
   // stream:false always resolves to a GenerationResult.
@@ -101,6 +102,7 @@ const dispatchToEval = async (
     baselineRunId: args.input.baseline_run_id,
     toolContext: args.toolContext,
     triggerId: args.triggerId,
+    authority: args.authority,
   });
   return {
     target_type: 'eval',
@@ -123,7 +125,7 @@ const dispatchToTool = async (
     action: args.action ?? undefined,
     input: args.input,
     toolContext: args.toolContext,
-    authHeader: args.authHeader,
+    authority: args.authority,
     attribution: { triggerId: args.triggerId },
   });
   return {

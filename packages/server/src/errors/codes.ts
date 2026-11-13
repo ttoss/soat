@@ -320,7 +320,7 @@ export const ERROR_CODES = {
   CREDENTIAL_NARROWED: {
     httpStatus: 403,
     description:
-      "The request is narrowed beyond its credential's own grant (an OAuth access token, a trigger run-as token, a run token, an IAM token, or an `On-Behalf-Of` assertion), and a credential it wrote would outlive that narrowing. Such a request never creates or updates an API key, directly or through an `api_key` formation resource; consenting to an OAuth client also needs a credential its own `policy_ids` do not narrow.",
+      "The request is narrowed beyond its credential's own grant (an OAuth access token, an IAM token, an `On-Behalf-Of` assertion, or a call durable work makes under its stored authority), and a credential it wrote would outlive that narrowing. Such a request never creates or updates an API key, directly or through an `api_key` formation resource; consenting to an OAuth client also needs a credential its own `policy_ids` do not narrow.",
   },
   API_KEY_PROJECT_SCOPE: {
     httpStatus: 403,
@@ -693,10 +693,10 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description: 'The trigger is inactive and cannot fire.',
   },
-  TRIGGER_CREATOR_UNAVAILABLE: {
+  WORK_AUTHORITY_MISSING: {
     httpStatus: 409,
     description:
-      'The trigger creator no longer exists, so the firing identity cannot be resolved.',
+      'The work holds no stored authority to run under: its starter, or the user an authority names, no longer exists, or it was written before work stored one.',
   },
   TRIGGER_RECURSION_FORBIDDEN: {
     httpStatus: 403,
@@ -819,7 +819,7 @@ export const ERROR_CODES = {
   PLAYBOOK_AUTHOR_UNAVAILABLE: {
     httpStatus: 409,
     description:
-      "The case's playbook version has no author a node can run as: the user or API key that wrote it no longer exists, or it was written with a trigger or OAuth token, which carry their boundary in the token.",
+      'A definition with executors or transformations was written with a trigger or OAuth token, which carry their boundary in the token: no node can run as them.',
   },
   PLAYBOOK_NODE_NOT_RUNNABLE: {
     httpStatus: 409,
@@ -848,7 +848,7 @@ export const ERROR_CODES = {
   PLAYBOOK_SELF_WRITE: {
     httpStatus: 403,
     description:
-      "A write into a case from the work it, or a case reading it as an upstream, is running: a run-as credential minted for such a case, for one of its executions in flight, or for the task or orchestration run one started, or a project key sending the `On-Behalf-Of` of a tool call such work or such an execution's generation made. An executor's output reaches its case only as the node's output.",
+      "A write into a case from the work it, or a case reading it as an upstream, is running: a call made under the stored authority of such a case, of one of its executions in flight, or of the task or orchestration run one started, or a project key sending the `On-Behalf-Of` of a tool call such work or such an execution's generation made. An executor's output reaches its case only as the node's output.",
   },
   PLAYBOOK_NODE_NOT_CONFIRMABLE: {
     httpStatus: 409,

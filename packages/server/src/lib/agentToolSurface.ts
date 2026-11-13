@@ -15,6 +15,7 @@ import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
 import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
+import type { WorkAuthority } from './workAuthority';
 
 /**
  * The tools the turn runs with, and the bindings that contributed none — the
@@ -65,7 +66,7 @@ export const resolveAgentToolSurface = async (args: {
    * Required, so no path offers tools uncapped by omission.
    */
   agentAuthority: AgentAuthority;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   traceId?: string;
   parentTraceId?: string | null;
@@ -109,7 +110,7 @@ export const resolveAgentToolSurface = async (args: {
     projectPublicId: args.typedAgent.project.publicId,
     projectIds: args.projectIds,
     agentAuthority: args.agentAuthority,
-    authHeader: args.authHeader,
+    authority: args.authority,
     toolContext: args.toolContext,
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
@@ -124,7 +125,7 @@ export const resolveAgentToolSurface = async (args: {
       projectGuardrailIds: args.typedAgent.project.guardrailIds,
       agentGuardrailIds: args.typedAgent.guardrailIds,
       sessionId: args.sessionId ?? null,
-      authHeader: args.authHeader,
+      authority: args.authority,
       guardrailContext: args.guardrailContext,
     }),
     // Attributes a successful tool call to this agent/generation on the activity

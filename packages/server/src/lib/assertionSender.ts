@@ -2,13 +2,14 @@ import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
 import { db } from '../db';
-import { resolveBearerAuthUser } from '../middleware/auth';
+import { authUserOfWork } from '../middleware/auth';
 import type { AssertionAuthority } from './assertionAuthority';
 import {
   type PolicyDocument,
   type PolicySets,
   validatePolicyDocument,
 } from './iam';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:assertionSender');
 
@@ -23,13 +24,14 @@ export type SenderCredential = Pick<
 /**
  * Whose authority a tool call carries in its assertion. `caller` is the
  * request's own resolved credential, narrowings included; without one the
- * credential the work replays (`authHeader`) is resolved. `agentPolicy` is
+ * authority the work stores is resolved. A sender with neither sends nothing
+ * (`meterToolExecution`). `agentPolicy` is
  * the calling agent's `policy_ids`, as every `builtin` call of the turn is
  * held to it.
  */
 export type AssertionSender = {
   caller?: SenderCredential;
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   agentPolicy?: unknown;
 };
 
@@ -38,6 +40,15 @@ const agentPolicySets = (agentPolicy: unknown): PolicySets => {
   return validatePolicyDocument(agentPolicy).valid
     ? [[agentPolicy as PolicyDocument]]
     : NOTHING;
+};
+
+const credentialOf = async (
+  sender: AssertionSender
+): Promise<SenderCredential | undefined> => {
+  if (sender.caller) return sender.caller;
+  return sender.authority
+    ? authUserOfWork({ db, authority: sender.authority })
+    : undefined;
 };
 
 /**
@@ -52,9 +63,7 @@ export const resolveSenderAuthority = async (args: {
   projectPublicId: string;
 }): Promise<AssertionAuthority> => {
   const { sender, projectPublicId } = args;
-  const credential =
-    sender.caller ??
-    (await resolveBearerAuthUser({ db, authHeader: sender.authHeader }));
+  const credential = await credentialOf(sender);
   const credentialSets = credential
     ? await credential.getPolicies(projectPublicId)
     : [];
