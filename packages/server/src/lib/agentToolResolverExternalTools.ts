@@ -8,6 +8,7 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
+import type { AgentBoundary } from './agentBoundary';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import {
   agentDenied,
@@ -145,9 +146,11 @@ type IsSoatActionAllowedByBoundary = (args: {
 export const soatActionBoundaryRefusal = async (args: {
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
-  boundaryPolicy: unknown;
+  boundary?: AgentBoundary;
   isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
 }): Promise<ReturnType<typeof denialToolResult> | null> => {
+  const { boundary } = args;
+  if (!boundary?.policy) return null;
   const iamAction = args.def.iamAction ?? args.def.name;
   // The SRN and tags of whatever this call names, so a boundary scoped to one
   // resource means what it says. `null` leaves the resource-less `*`, which
@@ -155,17 +158,21 @@ export const soatActionBoundaryRefusal = async (args: {
   const scope = await resolveSoatActionBoundaryScope({
     resourceRef: args.def.resource,
     toolArgs: args.rawArgs,
-    boundaryPolicy: args.boundaryPolicy,
+    boundaryPolicy: boundary.policy,
   });
   const allowed = args.isSoatActionAllowedByBoundary({
-    boundaryPolicy: args.boundaryPolicy,
+    boundaryPolicy: boundary.policy,
     iamAction,
     ...(scope ?? {}),
   });
   return allowed
     ? null
     : denialToolResult(
-        agentDenied({ action: iamAction, resource: scope?.resource ?? null })
+        agentDenied({
+          agentId: boundary.agentId,
+          action: iamAction,
+          resource: scope?.resource ?? null,
+        })
       );
 };
 
@@ -194,7 +201,7 @@ const buildSoatActionTool = (args: {
   meter: ToolExecutionMeter;
   presetParameters?: Record<string, unknown>;
   projectPublicId?: string;
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
   authHeader?: string;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
@@ -237,7 +244,7 @@ const buildSoatActionTool = (args: {
       const refusal = await soatActionBoundaryRefusal({
         def: args.def,
         rawArgs,
-        boundaryPolicy: args.boundaryPolicy,
+        boundary: args.boundary,
         isSoatActionAllowedByBoundary: args.isSoatActionAllowedByBoundary,
       });
       if (refusal) return refusal;
@@ -268,7 +275,7 @@ export const resolveSoatTools = (args: {
     contextKeys?: string[] | null;
   };
   meter: ToolExecutionMeter;
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
   authHeader?: string;
   /** The project the generation runs in; see `pinnedProjectParameters`. */
   projectPublicId?: string;
@@ -306,7 +313,7 @@ export const resolveSoatTools = (args: {
       meter: args.meter,
       presetParameters: args.typedTool.presetParameters ?? undefined,
       projectPublicId: args.projectPublicId,
-      boundaryPolicy: args.boundaryPolicy,
+      boundary: args.boundary,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
       contextKeys: args.typedTool.contextKeys,

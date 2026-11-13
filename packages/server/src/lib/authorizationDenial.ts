@@ -126,16 +126,14 @@ export const callerDenied = (args: {
   });
 };
 
-/**
- * A refusal by an agent's `policy_ids`, on every tool path that checks them.
- * The boundary reaches those paths without its agent's id.
- */
+/** A refusal by an agent's `policy_ids`, on every tool path that checks them. */
 export const agentDenied = (args: {
+  agentId: string | null;
   action: string;
   resource: string | null;
 }): DomainError => {
   return authorizationDenied({
-    principal: { type: 'agent', id: null },
+    principal: { type: 'agent', id: args.agentId },
     denied: [{ action: args.action, resource: args.resource }],
   });
 };

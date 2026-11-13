@@ -579,11 +579,11 @@ The tool result the model received:
 {
   "error": {
     "code": "FORBIDDEN",
-    "message": "Forbidden: the agent's policies deny documents:UpdateDocument on srn:…",
+    "message": "Forbidden: agent agent_…'s policies deny documents:UpdateDocument on srn:…",
     "meta": {
       "action": "documents:UpdateDocument",
       "resource": "srn:…",
-      "denied_by": { "type": "agent", "id": null }
+      "denied_by": { "type": "agent", "id": "agent_…" }
     }
   }
 }

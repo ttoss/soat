@@ -13,6 +13,7 @@
  */
 import type { Tool } from 'ai';
 
+import type { AgentBoundary } from './agentBoundary';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeBindings } from './agentKnowledge';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
@@ -21,7 +22,6 @@ import { mergeBindingTools } from './agentToolNames';
 import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
-import type { PolicyDocument } from './iam';
 
 /**
  * The tools the turn runs with, and the bindings that contributed none — the
@@ -39,10 +39,10 @@ export const resolveAgentToolSurface = async (args: {
   projectIds?: number[];
   typedAgent: TypedAgent;
   /**
-   * The agent's `policy_ids` resolved for this turn (`resolveAttachedPolicies`);
-   * `null` is no cap. Required, so no path offers tools uncapped by omission.
+   * The agent's `policy_ids` resolved for this turn (`resolveAgentBoundary`).
+   * Required, so no path offers tools uncapped by omission.
    */
-  boundaryPolicy: PolicyDocument | null;
+  boundary: AgentBoundary;
   authHeader?: string;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -86,7 +86,7 @@ export const resolveAgentToolSurface = async (args: {
     callerProjectId: projectId,
     projectPublicId: args.typedAgent.project.publicId,
     projectIds: args.projectIds,
-    boundaryPolicy: args.boundaryPolicy,
+    boundary: args.boundary,
     authHeader: args.authHeader,
     toolContext: args.toolContext,
     traceId: args.traceId,
@@ -126,7 +126,7 @@ export const resolveAgentToolSurface = async (args: {
           generationId: args.generationId,
           projectId,
           typedAgent: args.typedAgent,
-          boundaryPolicy: args.boundaryPolicy,
+          boundaryPolicy: args.boundary.policy,
           actorId: args.toolContext?.actor_id,
         })
       : [];

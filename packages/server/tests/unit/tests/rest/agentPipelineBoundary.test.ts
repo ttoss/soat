@@ -15,8 +15,6 @@ const ALLOW_GET_FILE = {
   statement: [{ effect: 'Allow', action: ['files:GetFile'], resource: ['*'] }],
 };
 
-const REFUSAL = agentRefusal({ action: 'files:GetFile' });
-
 describe("an agent's policy_ids bound the builtin steps of its pipeline tools", () => {
   let turn: AgentToolTurn;
 
@@ -60,7 +58,15 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
       agentId,
       calls: [{ name: args.tool.name, args: {} }],
     });
-    return results[0];
+    return { agentId, result: results[0] };
+  };
+
+  const expectRefused = async (tool: { id: string; name: string }) => {
+    const { agentId, result } = await callThroughAgent({
+      tool,
+      boundaryPolicy: DENY_GET_FILE,
+    });
+    expect(result).toEqual(agentRefusal({ agentId, action: 'files:GetFile' }));
   };
 
   test('a tool_id step is refused an action the boundary denies', async () => {
@@ -69,9 +75,7 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
       { id: 'list', tool_id: builtin.id, action: 'list-files', input: {} },
     ]);
 
-    await expect(
-      callThroughAgent({ tool: pipeline, boundaryPolicy: DENY_GET_FILE })
-    ).resolves.toEqual(REFUSAL);
+    await expectRefused(pipeline);
   });
 
   test('an inline builtin step is refused an action the boundary denies', async () => {
@@ -88,9 +92,7 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
       },
     ]);
 
-    await expect(
-      callThroughAgent({ tool: pipeline, boundaryPolicy: DENY_GET_FILE })
-    ).resolves.toEqual(REFUSAL);
+    await expectRefused(pipeline);
   });
 
   test('a step of a nested pipeline is refused an action the boundary denies', async () => {
@@ -102,9 +104,7 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
       { id: 'inner', tool_id: inner.id, input: {} },
     ]);
 
-    await expect(
-      callThroughAgent({ tool: outer, boundaryPolicy: DENY_GET_FILE })
-    ).resolves.toEqual(REFUSAL);
+    await expectRefused(outer);
   });
 
   test('a step runs an action the boundary allows', async () => {
@@ -113,7 +113,7 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
       { id: 'list', tool_id: builtin.id, action: 'list-files', input: {} },
     ]);
 
-    const result = await callThroughAgent({
+    const { result } = await callThroughAgent({
       tool: pipeline,
       boundaryPolicy: ALLOW_GET_FILE,
     });
@@ -127,7 +127,7 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
       { id: 'list', tool_id: builtin.id, action: 'list-files', input: {} },
     ]);
 
-    const result = await callThroughAgent({ tool: pipeline });
+    const { result } = await callThroughAgent({ tool: pipeline });
 
     expect(Array.isArray(result.data)).toBe(true);
   });

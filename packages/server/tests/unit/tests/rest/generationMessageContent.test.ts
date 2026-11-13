@@ -24,6 +24,20 @@ const toolResponses: Record<string, unknown> = {
   '/echo': { data: { ok: true } },
 };
 
+const expectAgentDenied = (
+  res: { status: number; body: { error: Record<string, unknown> } },
+  agentId: string
+) => {
+  expect(res.status).toBe(403);
+  expect(res.body.error).toMatchObject({
+    code: 'FORBIDDEN',
+    message: expect.stringMatching(
+      new RegExp(`^Forbidden: agent ${agentId}'s policies deny `)
+    ),
+    meta: { denied_by: { type: 'agent', id: agentId } },
+  });
+};
+
 const stubPromise = startChatCompletionStub({
   reply: () => {
     return { content: 'Done.' };
@@ -312,8 +326,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
         content: { type: 'document', document_id: documentId },
       });
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('FORBIDDEN');
+      expectAgentDenied(res, agentId);
     });
   });
 
@@ -406,8 +419,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
         content: toolOutput({ tool: 'audio' }),
       });
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('FORBIDDEN');
+      expectAgentDenied(res, agentId);
     });
 
     test('is refused to a caller who may not call tools', async () => {
@@ -455,8 +467,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
           content: toolOutput({ tool: 'listTools', action: 'list-tools' }),
         });
 
-        expect(res.status).toBe(403);
-        expect(res.body.error.code).toBe('FORBIDDEN');
+        expectAgentDenied(res, agentId);
       });
 
       // The caller-driven door reaches the same builtin actions the model

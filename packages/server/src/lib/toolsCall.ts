@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { AgentBoundary } from './agentBoundary';
 import type { SenderCredential } from './assertionSender';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import { readRunTokenWork } from './orchestrationRunToken';
@@ -202,7 +203,7 @@ type CallResolvedToolArgs = {
    * The `policy_ids` of the agent whose call this is. Every `builtin`
    * action the call reaches is held to it, a pipeline's steps included.
    */
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
   /** The request's resolved credential, when the call is made in one. */
   caller?: SenderCredential;
 };
@@ -228,7 +229,7 @@ const callPipelineStep = (args: {
     authHeader: pipeline.authHeader,
     remainingDepth: step.remainingDepth,
     toolContext: pipeline.toolContext,
-    boundaryPolicy: pipeline.boundaryPolicy,
+    boundary: pipeline.boundary,
     caller: pipeline.caller,
     attribution,
   };
@@ -321,7 +322,7 @@ const meterOf = (args: CallResolvedToolArgs): ToolExecutionMeter => {
     sender: {
       caller: args.caller,
       authHeader: args.authHeader,
-      boundaryPolicy: args.boundaryPolicy,
+      boundaryPolicy: args.boundary?.policy,
     },
   };
 };

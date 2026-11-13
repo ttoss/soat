@@ -225,7 +225,10 @@ describe("an approved builtin action is held to the agent's boundary", () => {
     const message = await approveGetMemoryStore(boundedAgentId);
 
     expect(message).toContain(
-      'Result: {"error":{"code":"FORBIDDEN","message":"Forbidden: the agent\'s policies deny memories:GetMemoryStore'
+      `Result: {"error":{"code":"FORBIDDEN","message":"Forbidden: agent ${boundedAgentId}'s policies deny memories:GetMemoryStore`
+    );
+    expect(message).toContain(
+      `"denied_by":{"type":"agent","id":"${boundedAgentId}"}`
     );
     expect(message).not.toContain(`"id":"${memoryStoreId}"`);
   });

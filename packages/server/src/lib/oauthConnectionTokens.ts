@@ -4,17 +4,13 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveBearerAuthUser } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
+import type { AgentBoundary } from './agentBoundary';
 import {
   agentDenied,
   authorizationDenied,
   callerPrincipal,
 } from './authorizationDenial';
-import {
-  buildSrn,
-  evaluatePolicies,
-  type PolicyDocument,
-  validatePolicyDocument,
-} from './iam';
+import { buildSrn, evaluatePolicies } from './iam';
 import { type OauthClientRow, resolveOauthClient } from './oauthClients';
 import { type OauthConnectionRow, tokenColumns } from './oauthConnections';
 import { requestTokens } from './oauthTokenEndpoint';
@@ -54,23 +50,22 @@ const assertUseAllowed = async (args: {
   projectPublicId: string;
   resource: string;
   authHeader?: string;
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
 }) => {
-  if (args.boundaryPolicy) {
-    const valid = validatePolicyDocument(args.boundaryPolicy).valid;
-    if (
-      !valid ||
-      !evaluatePolicies({
-        policies: [args.boundaryPolicy as PolicyDocument],
-        action: USE_OAUTH_CONNECTION_ACTION,
-        resource: args.resource,
-      })
-    ) {
-      throw agentDenied({
-        action: USE_OAUTH_CONNECTION_ACTION,
-        resource: args.resource,
-      });
-    }
+  const { boundary } = args;
+  if (
+    boundary?.policy &&
+    !evaluatePolicies({
+      policies: [boundary.policy],
+      action: USE_OAUTH_CONNECTION_ACTION,
+      resource: args.resource,
+    })
+  ) {
+    throw agentDenied({
+      agentId: boundary.agentId,
+      action: USE_OAUTH_CONNECTION_ACTION,
+      resource: args.resource,
+    });
   }
   const caller = await resolveBearerAuthUser({
     db,
@@ -232,7 +227,7 @@ export const resolveOauthConnectionAccessToken = async (args: {
   oauthClientId: string;
   actorId?: string;
   authHeader?: string;
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
   now?: Date;
 }): Promise<string> => {
   const now = args.now ?? new Date();
@@ -257,7 +252,7 @@ export const resolveOauthConnectionAccessToken = async (args: {
       resourceId: row?.publicId ?? '*',
     }),
     authHeader: args.authHeader,
-    boundaryPolicy: args.boundaryPolicy,
+    boundary: args.boundary,
   });
 
   const ids = {

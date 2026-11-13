@@ -323,7 +323,7 @@ describe('http tool auth oauth_connection', () => {
     const [result] = await callTool({ actorId, agent: bounded });
 
     expect(JSON.stringify(result)).toContain(
-      "Forbidden: the agent's policies deny oauth-connections:UseOauthConnection"
+      `Forbidden: agent ${bounded}'s policies deny oauth-connections:UseOauthConnection`
     );
     expect(provider.state.apiAuthorizations.length).toBe(before);
   });

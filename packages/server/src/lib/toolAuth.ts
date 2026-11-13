@@ -1,3 +1,4 @@
+import type { AgentBoundary } from './agentBoundary';
 import { resolveOauthConnectionAccessToken } from './oauthConnectionTokens';
 import { signAwsSigV4 } from './toolAuthAwsSigV4';
 import { type HttpToolAuthConfig, toolAuthFailed } from './toolAuthConfig';
@@ -19,7 +20,7 @@ export type HttpToolAuthIdentity = {
   projectId: number;
   actorId?: string;
   authHeader?: string;
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
 };
 
 /**

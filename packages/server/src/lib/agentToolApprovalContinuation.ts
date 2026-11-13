@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { reactsToExpiredApproval } from './agentApprovalExpiry';
+import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import {
@@ -10,7 +11,6 @@ import {
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
-import { resolveAttachedPolicies } from './attachedPolicies';
 import { expireChainIfSettled } from './generationChains';
 import type { PolicyDocument } from './iam';
 import {
@@ -66,7 +66,7 @@ const resolveContinuationAuthHeader = async (args: {
 };
 
 /** Refuses every action: what an agent that no longer resolves is bounded by. */
-const DENY_ALL_BOUNDARY: PolicyDocument = {
+const DENY_ALL_POLICY: PolicyDocument = {
   statement: [{ effect: 'Deny', action: ['*'], resource: ['*'] }],
 };
 
@@ -92,7 +92,7 @@ const proposingActorId = async (
 const proposingAgentBoundary = async (args: {
   item: MappedApproval;
   projectInternalId: number;
-}): Promise<PolicyDocument | null> => {
+}): Promise<AgentBoundary> => {
   const agent = args.item.agent_id
     ? await agentReferences.find({
         id: args.item.agent_id,
@@ -100,8 +100,11 @@ const proposingAgentBoundary = async (args: {
         reach: 'project',
       })
     : null;
-  if (!agent) return DENY_ALL_BOUNDARY;
-  return resolveAttachedPolicies({
+  if (!agent) {
+    return { agentId: args.item.agent_id ?? null, policy: DENY_ALL_POLICY };
+  }
+  return resolveAgentBoundary({
+    agentId: agent.publicId,
     policyIds: agent.policyIds,
     actorId: await proposingActorId(args.item.generation_id),
   });
@@ -160,7 +163,7 @@ const executeApprovedAction = async (args: {
         ? proposed.arguments
         : {},
     },
-    boundaryPolicy: await proposingAgentBoundary({
+    boundary: await proposingAgentBoundary({
       item: args.item,
       projectInternalId: args.projectInternalId,
     }),

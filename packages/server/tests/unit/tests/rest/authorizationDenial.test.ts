@@ -169,11 +169,11 @@ describe('authorization denials', () => {
     expect(results[0]).toEqual({
       error: {
         code: 'FORBIDDEN',
-        message: "Forbidden: the agent's policies deny files:GetFile",
+        message: `Forbidden: agent ${agentId}'s policies deny files:GetFile`,
         meta: {
           action: 'files:GetFile',
           resource: null,
-          denied_by: { type: 'agent', id: null },
+          denied_by: { type: 'agent', id: agentId },
         },
       },
     });

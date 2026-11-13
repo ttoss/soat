@@ -339,7 +339,7 @@ Every `403 FORBIDDEN` has one shape, whoever was refused: the caller's credentia
 }
 ```
 
-- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: `iam_token` for an [IAM token](#iam-tokens)'s bound (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the authority an `On-Behalf-Of` assertion carries, `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown, as for an agent's `policy_ids` on a tool call.
+- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: `iam_token` for an [IAM token](#iam-tokens)'s bound (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the authority an `On-Behalf-Of` assertion carries, `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown.
 - `resource` is `null` for a check that names none (an admin-only route, a resource-less boundary check). A refusal of several actions (a formation template, several secrets) names the first in `action`/`resource` and every one in the message.
 - The same body reaches an agent as a refused tool's result, the [MCP endpoint](../mcp/introduction.md) as an `isError` result whose text is this body, and an `mcp` or `http` tool's caller when the server it calls answers this body: that denial is relayed with the same code, action and message.
 

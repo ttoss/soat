@@ -45,7 +45,7 @@ const stubPromise = startChatCompletionStub({
   },
 });
 
-const BOUNDARY_DENIAL = /^Forbidden: the agent's policies deny /;
+const BOUNDARY_DENIAL = /^Forbidden: agent agent_\w+'s policies deny /;
 
 /** Every kind `resourceScopes.ts` resolves, in the order `kinds` lists them. */
 const KINDS = [
