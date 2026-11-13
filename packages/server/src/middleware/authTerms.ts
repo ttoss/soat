@@ -7,6 +7,7 @@ import type {
 } from '../lib/workAuthority';
 import { type AuthorityTerms, type Cap, NOTHING } from './authority';
 import {
+  agentGrant,
   keyBound,
   oauthScopeCap,
   principalBoundCap,
@@ -153,6 +154,11 @@ export const resolveTerms = async (args: {
       principal,
       role: roleOf(user.role),
       policyIds: user.policyIds,
+    });
+  } else if (terms.grant.holder === 'agent') {
+    grant = agentGrant({
+      agentId: terms.grant.agent,
+      policy: terms.grant.policy,
     });
   } else {
     grant = triggerGrant({

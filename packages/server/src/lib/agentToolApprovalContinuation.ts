@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { reactsToExpiredApproval } from './agentApprovalExpiry';
-import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
+import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import {
@@ -71,10 +71,10 @@ const proposingActorId = async (
  * The proposing agent's `policy_ids` as they stand now, the same cap the
  * agent's own calls are held to.
  */
-const proposingAgentBoundary = async (args: {
+const proposingAgentAuthority = async (args: {
   item: MappedApproval;
   projectInternalId: number;
-}): Promise<AgentBoundary> => {
+}): Promise<AgentAuthority> => {
   const agent = args.item.agent_id
     ? await agentReferences.find({
         id: args.item.agent_id,
@@ -83,12 +83,19 @@ const proposingAgentBoundary = async (args: {
       })
     : null;
   if (!agent) {
-    return { agentId: args.item.agent_id ?? null, policy: DENY_ALL_POLICY };
+    return {
+      runAs: 'caller',
+      agentId: args.item.agent_id ?? null,
+      policy: DENY_ALL_POLICY,
+    };
   }
-  return resolveAgentBoundary({
+  return resolveAgentAuthority({
     agentId: agent.publicId,
+    runAs: agent.runAs,
     policyIds: agent.policyIds,
     actorId: await proposingActorId(args.item.generation_id),
+    // An approval with no project row left pins the grant to no project.
+    projectPublicId: args.item.project_id ?? '',
   });
 };
 
@@ -145,7 +152,7 @@ const executeApprovedAction = async (args: {
         ? proposed.arguments
         : {},
     },
-    boundary: await proposingAgentBoundary({
+    agentAuthority: await proposingAgentAuthority({
       item: args.item,
       projectInternalId: args.projectInternalId,
     }),

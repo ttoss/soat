@@ -35,12 +35,17 @@ export const claimPausedGeneration = async (args: {
   publicId: string;
   projectId: number;
   authority: WorkAuthority | null;
+  /** The agent, when the resumed segment runs under its own grant. */
+  actsAsAgent: string | null;
 }): Promise<boolean> => {
   const [claimed] = await db.Generation.update(
     {
       status: 'running',
       lastActivityAt: new Date(),
-      ...actedAsPrincipalColumns(principalOfAuthority(args.authority)),
+      ...actedAsPrincipalColumns({
+        principal: principalOfAuthority(args.authority),
+        agentId: args.actsAsAgent,
+      }),
       authority: await storedAuthority({
         authority: args.authority,
         projectId: args.projectId,

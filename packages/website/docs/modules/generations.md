@@ -73,7 +73,8 @@ acted rather than only the owning user; a JWT-authenticated request records the 
 
 A generation also stores the authority it was started under (the starter's grant and
 every cap on it: a key's `policy_ids`, an OAuth consent, an IAM token's bound, a
-trigger's `policy_ids`), never a token. Work that resumes after the request is gone (an
+trigger's `policy_ids`, or a [`run_as: agent`](./agents.md#execution-identity) agent's
+`policy_ids` alone when one of its actions started it), never a token. Work that resumes after the request is gone (an
 [approval continuation](./approvals.md#continuation-identity), possibly days later) runs
 under it. A generation started by a [trigger](./triggers.md) names the trigger
 (`trigger`); one started by an [OAuth](./oauth.md) token names its user, held to the
@@ -87,7 +88,8 @@ consented scope. Both fields are `null` only for a generation started with no au
 acts as its starter until a caller resumes it by
 [submitting tool outputs](#lifecycle): the resumed segment's tool calls run on that
 caller's credential, and `acted_as` names them while `started_by_principal_*` keeps the
-starter, through a [session](./sessions.md) too.
+starter, through a [session](./sessions.md) too. A segment of a
+[`run_as: agent`](./agents.md#execution-identity) agent's turn names the agent.
 
 An [approved tool call](./approvals.md#continuation-identity) runs as the `acted_as` of
 the generation that proposed it.

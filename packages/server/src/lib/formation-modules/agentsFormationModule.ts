@@ -1,5 +1,6 @@
 import { deleteAgent, findAgentDeletionBlocker } from '../agentDelete';
 import { toStoredKnowledgeConfig } from '../agentKnowledgeConfig';
+import { parseAgentRunAs } from '../agentRunAs';
 import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import type { ValidationError } from '../formationsTypes';
@@ -111,6 +112,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     guardrailIds: toOptional(toNullableArray<string>(properties.guardrail_ids)),
     stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
     policyIds: toOptional(toNullableArray<string>(properties.policy_ids)),
+    runAs: parseAgentRunAs(properties.run_as),
     temperature: toOptional(toNullableNumber(properties.temperature)),
     maxOutputTokens: toOptional(toNullableNumber(properties.max_output_tokens)),
     reasoning: toOptional(toNullableObject(properties.reasoning)),
@@ -175,6 +177,7 @@ export const agentsFormationModule = defineFormationModule({
       guardrailIds: toNullableArray<string>(properties.guardrail_ids),
       stepRules: toNullableArray<object>(properties.step_rules),
       policyIds: toNullableArray<string>(properties.policy_ids),
+      runAs: parseAgentRunAs(properties.run_as),
       temperature: toNullableNumber(properties.temperature),
       maxOutputTokens: toNullableNumber(properties.max_output_tokens),
       reasoning: toNullableObject(properties.reasoning),
@@ -224,6 +227,7 @@ export const agentsFormationModule = defineFormationModule({
       guardrail_ids: agent.guardrail_ids,
       step_rules: agent.step_rules,
       policy_ids: agent.policy_ids,
+      run_as: agent.run_as,
       temperature: agent.temperature,
       max_output_tokens: agent.max_output_tokens,
       reasoning: agent.reasoning,

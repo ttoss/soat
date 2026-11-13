@@ -3,7 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import type { SenderCredential } from './assertionSender';
 import { assertGuardrailsExist } from './guardrails';
 import { validateHttpExecute } from './httpToolResponse';
@@ -385,7 +385,7 @@ export const callTool = async (args: {
   /** See {@link SignedOffCall}. */
   signedOff?: SignedOffCall;
   /** The calling agent's `policy_ids`, held over every `builtin` action. */
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   /** The request's resolved credential, when the call is made in one. */
   caller?: SenderCredential;
 }): Promise<unknown> => {
@@ -413,7 +413,7 @@ export const callTool = async (args: {
     toolContext: args.toolContext,
     attribution: args.attribution,
     signedOff: args.signedOff,
-    boundary: args.boundary,
+    agentAuthority: args.agentAuthority,
     caller: args.caller,
   });
 };

@@ -689,6 +689,7 @@ describe('Agent Generation Routes', () => {
       };
       await createGenerationRecord({
         authority: null,
+        actsAsAgent: null,
         publicId: 'gen_stub_pending',
         projectId: projectDbId,
         agentId,
@@ -873,6 +874,7 @@ describe('Agent Generation Routes', () => {
       // must fall back to rebuilding from the `pendingState` column.
       await createGenerationRecord({
         authority: null,
+        actsAsAgent: null,
         publicId: 'gen_recovered',
         projectId: projectDbId,
         agentId,
@@ -918,6 +920,7 @@ describe('Agent Generation Routes', () => {
     test('tool-outputs refuses an id the pause never opened', async () => {
       await createGenerationRecord({
         authority: null,
+        actsAsAgent: null,
         publicId: 'gen_unknown_id',
         projectId: projectDbId,
         agentId,
@@ -956,6 +959,7 @@ describe('Agent Generation Routes', () => {
     test('tool-outputs refuses a batch where any id was never opened', async () => {
       await createGenerationRecord({
         authority: null,
+        actsAsAgent: null,
         publicId: 'gen_mixed_ids',
         projectId: projectDbId,
         agentId,
@@ -1004,6 +1008,7 @@ describe('Agent Generation Routes', () => {
     test('tool-outputs continuation records usage — meters and receipt reflect it', async () => {
       await createGenerationRecord({
         authority: null,
+        actsAsAgent: null,
         publicId: 'gen_usage_metered',
         projectId: projectDbId,
         agentId,
@@ -1228,6 +1233,7 @@ describe('Agent Generation Routes', () => {
         };
         await createGenerationRecord({
           authority: null,
+          actsAsAgent: null,
           publicId: 'gen_text_encoded_continuation',
           projectId: projectDbId,
           agentId: pausingAgentId,

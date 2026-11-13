@@ -184,7 +184,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
 
   const boundedPolicyIds = await boundKeyPolicyIds({
     narrowed: ctx.authUser.narrowing === 'beyond_key',
-    boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
+    keyPolicyIds: ctx.authUser.apiKeyPolicyIds,
     requestedPolicyIds: await heldKeyPolicyIds({
       writer: ctx.authUser,
       policyIds,
@@ -287,7 +287,7 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
 
   const boundedPolicyIds = await boundKeyPolicyIds({
     narrowed: ctx.authUser.narrowing === 'beyond_key',
-    boundaryPolicyIds: ctx.authUser.apiKeyPolicyIds,
+    keyPolicyIds: ctx.authUser.apiKeyPolicyIds,
     requestedPolicyIds: await heldKeyPolicyIds({
       writer: ctx.authUser,
       policyIds,

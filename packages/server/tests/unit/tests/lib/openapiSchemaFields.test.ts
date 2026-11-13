@@ -87,7 +87,7 @@ describe('openapiSchemaFields', () => {
       expect(fields.allowedFields.has('project_id')).toBe(true);
       expect(fields.allowedFields.has('boundary_policy')).toBe(true);
       expect(fields.allowedFields.has('projectId')).toBe(false);
-      expect(fields.allowedFields.has('boundaryPolicy')).toBe(false);
+      expect(fields.allowedFields.has('agentPolicy')).toBe(false);
       expect([...fields.requiredFields]).toEqual(['project_id']);
       expect(fields.fieldSpecs.max_steps?.type).toBe('integer');
       expect(fields.fieldSpecs.maxSteps).toBeUndefined();

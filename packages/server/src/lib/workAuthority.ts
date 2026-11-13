@@ -1,7 +1,9 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { AgentAuthority } from './agentAuthority';
 import type { DeniedPrincipal } from './authorizationDenial';
+import { type PolicyDocument, validatePolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
 import {
   parseBound,
@@ -10,11 +12,14 @@ import {
 } from './principalBound';
 
 /**
- * Who holds an authority's grant: a user (a credential's owner), or a trigger
- * acting under its own `policy_ids`.
+ * Who holds an authority's grant: a user (a credential's owner), a trigger
+ * acting under its own `policy_ids`, or a `run_as: agent` agent under the
+ * `policy_ids` its turn resolved (`null` grants nothing).
  */
 export type AuthorityGrant =
-  { holder: 'user'; user: string } | { holder: 'trigger'; trigger: string };
+  | { holder: 'user'; user: string }
+  | { holder: 'trigger'; trigger: string }
+  | { holder: 'agent'; agent: string; policy: PolicyDocument | null };
 
 /**
  * What narrows the grant, each read live at every check: another user's grant
@@ -81,6 +86,16 @@ const str = (value: unknown): value is string => {
   return typeof value === 'string' && value.length > 0;
 };
 
+const parseAgentGrant = (args: {
+  agent: string;
+  policy: unknown;
+}): AuthorityGrant | null => {
+  const { agent, policy } = args;
+  if (policy === null) return { holder: 'agent', agent, policy };
+  if (!validatePolicyDocument(policy).valid) return null;
+  return { holder: 'agent', agent, policy: policy as PolicyDocument };
+};
+
 const parseGrant = (value: unknown): AuthorityGrant | null => {
   if (!isPlainObject(value)) return null;
   if (value.holder === 'user' && str(value.user)) {
@@ -88,6 +103,9 @@ const parseGrant = (value: unknown): AuthorityGrant | null => {
   }
   if (value.holder === 'trigger' && str(value.trigger)) {
     return { holder: 'trigger', trigger: value.trigger };
+  }
+  if (value.holder === 'agent' && str(value.agent)) {
+    return parseAgentGrant({ agent: value.agent, policy: value.policy });
   }
   return null;
 };
@@ -353,5 +371,23 @@ export const principalAuthority = (args: {
     trigger: null,
     work: null,
     actsFor: null,
+  };
+};
+
+/**
+ * The authority a `run_as: agent` turn's builtin calls run under: the agent's
+ * grant alone, pinned to the turn's project, in place of the work's grant and
+ * caps. The work's principal, chain and work id carry on.
+ */
+export const agentWorkAuthority = (args: {
+  authority: WorkAuthority;
+  agent: Extract<AgentAuthority, { runAs: 'agent' }>;
+}): WorkAuthority => {
+  const { agent } = args;
+  return {
+    ...args.authority,
+    project: agent.projectPublicId,
+    grant: { holder: 'agent', agent: agent.agentId, policy: agent.policy },
+    caps: [],
   };
 };

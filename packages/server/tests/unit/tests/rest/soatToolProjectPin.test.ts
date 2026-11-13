@@ -52,7 +52,7 @@ describe("a builtin tool acts on the generation's project", () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByBoundary: () => {
+      isSoatActionAllowedByAgentPolicy: () => {
         return true;
       },
       logToolCallingError: () => {},
@@ -165,7 +165,7 @@ describe("a builtin tool acts on the generation's project", () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByBoundary: () => {
+      isSoatActionAllowedByAgentPolicy: () => {
         return true;
       },
       logToolCallingError: () => {},

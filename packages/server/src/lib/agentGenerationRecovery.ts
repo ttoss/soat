@@ -3,7 +3,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents } from './agentAccessor';
-import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
+import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
 import {
   type ClientToolResult,
   type GenerationResult,
@@ -211,7 +211,7 @@ const buildPendingFromState = async (args: {
   projectIds?: number[];
   authority: WorkAuthority | null;
   typedAgent: TypedAgent;
-  boundary: AgentBoundary;
+  agentAuthority: AgentAuthority;
   traceId: string;
   pendingState: PendingStateDb;
 }): Promise<PendingGeneration | undefined> => {
@@ -226,7 +226,7 @@ const buildPendingFromState = async (args: {
     generationId: args.generationId,
     projectIds: args.projectIds,
     typedAgent: args.typedAgent,
-    boundary: args.boundary,
+    agentAuthority: args.agentAuthority,
     authority: args.authority,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
@@ -306,10 +306,12 @@ export const recoverPendingFromDb = async (args: {
     projectIds: args.projectIds,
     authority: args.authority,
     typedAgent,
-    boundary: await resolveAgentBoundary({
+    agentAuthority: await resolveAgentAuthority({
       agentId: args.agentId,
+      runAs: typedAgent.runAs,
       policyIds: typedAgent.policyIds,
       actorId: pendingState.toolContext?.actor_id,
+      projectPublicId: typedAgent.project.publicId,
     }),
     traceId: gen.trace.publicId,
     pendingState,

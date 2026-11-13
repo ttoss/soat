@@ -4,7 +4,11 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { authUserOfWork } from '../middleware/auth';
 import type { AssertionAuthority } from './assertionAuthority';
-import type { PolicyDocument, PolicySets } from './iam';
+import {
+  type PolicyDocument,
+  type PolicySets,
+  validatePolicyDocument,
+} from './iam';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:assertionSender');
@@ -21,14 +25,21 @@ export type SenderCredential = Pick<
  * Whose authority a tool call carries in its assertion. `caller` is the
  * request's own resolved credential, narrowings included; without one the
  * authority the work stores is resolved. A sender with neither sends nothing
- * (`meterToolExecution`). `boundaryPolicy` is
+ * (`meterToolExecution`). `agentPolicy` is
  * the calling agent's `policy_ids`, as every `builtin` call of the turn is
  * held to it.
  */
 export type AssertionSender = {
   caller?: SenderCredential;
   authority: WorkAuthority | null;
-  boundaryPolicy?: PolicyDocument | null;
+  agentPolicy?: unknown;
+};
+
+const agentPolicySets = (agentPolicy: unknown): PolicySets => {
+  if (!agentPolicy) return [];
+  return validatePolicyDocument(agentPolicy).valid
+    ? [[agentPolicy as PolicyDocument]]
+    : NOTHING;
 };
 
 const credentialOf = async (
@@ -66,7 +77,7 @@ export const resolveSenderAuthority = async (args: {
   return {
     sets: [
       ...(credentialSets.length > 0 ? credentialSets : NOTHING),
-      ...(sender.boundaryPolicy ? [[sender.boundaryPolicy]] : []),
+      ...agentPolicySets(sender.agentPolicy),
     ],
     ...(principal ? { principal } : {}),
   };

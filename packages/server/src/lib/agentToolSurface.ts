@@ -5,7 +5,7 @@
  */
 import type { Tool } from 'ai';
 
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeBindings } from './agentKnowledge';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
@@ -62,10 +62,10 @@ export const resolveAgentToolSurface = async (args: {
   projectIds?: number[];
   typedAgent: TypedAgent;
   /**
-   * The agent's `policy_ids` resolved for this turn (`resolveAgentBoundary`).
+   * The agent's `policy_ids` resolved for this turn (`resolveAgentAuthority`).
    * Required, so no path offers tools uncapped by omission.
    */
-  boundary: AgentBoundary;
+  agentAuthority: AgentAuthority;
   authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -109,7 +109,7 @@ export const resolveAgentToolSurface = async (args: {
     callerProjectId: projectId,
     projectPublicId: args.typedAgent.project.publicId,
     projectIds: args.projectIds,
-    boundary: args.boundary,
+    agentAuthority: args.agentAuthority,
     authority: args.authority,
     toolContext: args.toolContext,
     traceId: args.traceId,
@@ -149,7 +149,7 @@ export const resolveAgentToolSurface = async (args: {
           generationId: args.generationId,
           projectId,
           typedAgent: args.typedAgent,
-          boundaryPolicy: args.boundary.policy,
+          agentPolicy: args.agentAuthority.policy,
           actorId: args.toolContext?.actor_id,
         })
       : [];

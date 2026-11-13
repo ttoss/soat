@@ -10,6 +10,7 @@
  */
 import type { LanguageModel, LanguageModelUsage, Tool } from 'ai';
 
+import { type AgentRunAs, readAgentRunAs } from './agentRunAs';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -44,6 +45,8 @@ export type TypedAgent = {
   stepRules: unknown;
   /** Resolved per turn by `resolveAttachedPolicies`, never read raw. */
   policyIds: unknown;
+  /** Read through `readAgentRunAs`, never raw. */
+  runAs: unknown;
   temperature: unknown;
   maxOutputTokens: unknown;
   reasoning: unknown;
@@ -112,6 +115,11 @@ export type PendingAgentConfig = {
    * edited in between.
    */
   promptCaching: unknown;
+  /**
+   * The agent's `run_as` when the turn started: what the resumed segment's
+   * `acted_as` names. Absent on a turn paused before it existed: `caller`.
+   */
+  runAs?: AgentRunAs;
 };
 
 /** The AI SDK's default step budget, applied when the agent names none. */
@@ -137,6 +145,7 @@ export const toAgentConfig = (typedAgent: TypedAgent): PendingAgentConfig => {
     reasoning: typedAgent.reasoning,
     outputSchema: typedAgent.outputSchema,
     promptCaching: typedAgent.promptCaching,
+    runAs: readAgentRunAs(typedAgent.runAs),
   };
 };
 
@@ -156,6 +165,7 @@ export const fromAgentConfig = (pending: PendingGeneration): TypedAgent => {
     activeToolIds: pending.agentConfig.activeToolIds,
     stepRules: pending.agentConfig.stepRules,
     policyIds: null,
+    runAs: pending.agentConfig.runAs ?? null,
     temperature: pending.agentConfig.temperature,
     maxOutputTokens: pending.agentConfig.maxOutputTokens ?? null,
     reasoning: pending.agentConfig.reasoning ?? null,

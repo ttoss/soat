@@ -2036,6 +2036,7 @@ describe('MCP tools - happy path', () => {
       mcpGenerationId = `gen_mcp_${Date.now()}`;
       await createGenerationRecord({
         authority: null,
+        actsAsAgent: null,
         publicId: mcpGenerationId,
         projectId: internalProjectId,
         agentId: genAgentId,
@@ -3249,6 +3250,7 @@ describe('MCP tools - happy path', () => {
 
       await createGenerationRecord({
         authority: null,
+        actsAsAgent: null,
         publicId: generationPublicId,
         projectId: project!.id,
         agentId: evalAgentId,

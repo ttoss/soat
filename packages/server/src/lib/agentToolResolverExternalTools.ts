@@ -8,7 +8,7 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import {
   agentDenied,
@@ -21,7 +21,7 @@ import {
 } from './externalToolCall';
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
-import { resolveSoatActionBoundaryScope } from './soatActionBoundary';
+import { resolveSoatActionAgentScope } from './soatActionScope';
 import { withoutAgentExcludedActions } from './soatAgentActions';
 import { buildSoatActionTarget, soatTools } from './soatTools';
 import {
@@ -33,9 +33,22 @@ import {
   meterToolExecution,
   type ToolExecutionMeter,
 } from './usageToolRecording';
-import type { WorkAuthority } from './workAuthority';
+import { agentWorkAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
+
+/**
+ * The authority a builtin call runs under: under `run_as: agent`, the agent's
+ * grant in place of the work's; else the work's own.
+ */
+const soatCallAuthority = (args: {
+  authority: WorkAuthority | null;
+  agentAuthority?: AgentAuthority;
+}): WorkAuthority | null => {
+  const { authority, agentAuthority } = args;
+  if (!authority || agentAuthority?.runAs !== 'agent') return authority;
+  return agentWorkAuthority({ authority, agent: agentAuthority });
+};
 
 /**
  * Invokes a SOAT platform action on behalf of a `soat` tool.
@@ -53,6 +66,8 @@ export const executeSoatTool = async (args: {
   rawArgs: Record<string, unknown>;
   meter: ToolExecutionMeter;
   authority: WorkAuthority | null;
+  /** Under `run_as: agent`, the call runs under the agent's grant, not `authority`'s. */
+  agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
   traceId?: string;
@@ -94,7 +109,7 @@ export const executeSoatTool = async (args: {
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
-            authority: args.authority,
+            authority: soatCallAuthority(args),
             headers: {
               ...args.buildContextHeaders({
                 toolContext: args.toolContext,
@@ -133,8 +148,8 @@ export const executeSoatTool = async (args: {
   }
 };
 
-type IsSoatActionAllowedByBoundary = (args: {
-  boundaryPolicy: unknown;
+type IsSoatActionAllowedByAgentPolicy = (args: {
+  agentPolicy: unknown;
   iamAction: string;
   resource?: string;
   context?: Record<string, string>;
@@ -145,25 +160,25 @@ type IsSoatActionAllowedByBoundary = (args: {
  * when it admits it. Every path that runs a builtin action for an agent asks
  * here, with the arguments the call will carry.
  */
-export const soatActionBoundaryRefusal = async (args: {
+export const soatActionAgentRefusal = async (args: {
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
-  boundary?: AgentBoundary;
-  isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
+  agentAuthority?: AgentAuthority;
+  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
 }): Promise<ReturnType<typeof denialToolResult> | null> => {
-  const { boundary } = args;
-  if (!boundary?.policy) return null;
+  const { agentAuthority } = args;
+  if (!agentAuthority?.policy) return null;
   const iamAction = args.def.iamAction ?? args.def.name;
   // The SRN and tags of whatever this call names, so a boundary scoped to one
   // resource means what it says. `null` leaves the resource-less `*`, which
   // matches no scoped statement, so the unresolved case refuses.
-  const scope = await resolveSoatActionBoundaryScope({
+  const scope = await resolveSoatActionAgentScope({
     resourceRef: args.def.resource,
     toolArgs: args.rawArgs,
-    boundaryPolicy: boundary.policy,
+    agentPolicy: agentAuthority.policy,
   });
-  const allowed = args.isSoatActionAllowedByBoundary({
-    boundaryPolicy: boundary.policy,
+  const allowed = args.isSoatActionAllowedByAgentPolicy({
+    agentPolicy: agentAuthority.policy,
     iamAction,
     ...(scope ?? {}),
   });
@@ -171,7 +186,7 @@ export const soatActionBoundaryRefusal = async (args: {
     ? null
     : denialToolResult(
         agentDenied({
-          agentId: boundary.agentId,
+          agentId: agentAuthority.agentId,
           action: iamAction,
           resource: scope?.resource ?? null,
         })
@@ -203,7 +218,7 @@ const buildSoatActionTool = (args: {
   meter: ToolExecutionMeter;
   presetParameters?: Record<string, unknown>;
   projectPublicId?: string;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
@@ -215,7 +230,7 @@ const buildSoatActionTool = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
+  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
   const pinned = pinnedProjectParameters(args.projectPublicId);
@@ -243,11 +258,11 @@ const buildSoatActionTool = (args: {
         },
         input: toolArgs,
       });
-      const refusal = await soatActionBoundaryRefusal({
+      const refusal = await soatActionAgentRefusal({
         def: args.def,
         rawArgs,
-        boundary: args.boundary,
-        isSoatActionAllowedByBoundary: args.isSoatActionAllowedByBoundary,
+        agentAuthority: args.agentAuthority,
+        isSoatActionAllowedByAgentPolicy: args.isSoatActionAllowedByAgentPolicy,
       });
       if (refusal) return refusal;
       return executeSoatTool({
@@ -256,6 +271,7 @@ const buildSoatActionTool = (args: {
         rawArgs,
         meter: args.meter,
         authority: args.authority,
+        agentAuthority: args.agentAuthority,
         toolContext: args.toolContext,
         contextKeys: args.contextKeys,
         traceId: args.traceId,
@@ -277,7 +293,7 @@ export const resolveSoatTools = (args: {
     contextKeys?: string[] | null;
   };
   meter: ToolExecutionMeter;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   authority: WorkAuthority | null;
   /** The project the generation runs in; see `pinnedProjectParameters`. */
   projectPublicId?: string;
@@ -291,7 +307,7 @@ export const resolveSoatTools = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByBoundary: IsSoatActionAllowedByBoundary;
+  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
   logToolCallingError: LogToolCallingError;
 }): Record<string, Tool> => {
   const result: Record<string, Tool> = {};
@@ -315,7 +331,7 @@ export const resolveSoatTools = (args: {
       meter: args.meter,
       presetParameters: args.typedTool.presetParameters ?? undefined,
       projectPublicId: args.projectPublicId,
-      boundary: args.boundary,
+      agentAuthority: args.agentAuthority,
       authority: args.authority,
       toolContext: args.toolContext,
       contextKeys: args.typedTool.contextKeys,
@@ -324,7 +340,7 @@ export const resolveSoatTools = (args: {
       rootTraceId: args.rootTraceId,
       remainingDepth: args.remainingDepth,
       buildContextHeaders: args.buildContextHeaders,
-      isSoatActionAllowedByBoundary: args.isSoatActionAllowedByBoundary,
+      isSoatActionAllowedByAgentPolicy: args.isSoatActionAllowedByAgentPolicy,
       logToolCallingError: args.logToolCallingError,
     });
   }

@@ -28,6 +28,7 @@ describe('an embedding whose generation record is never written', () => {
   const createRecord = (generationId: string) => {
     return createGenerationRecord({
       authority: null,
+      actsAsAgent: null,
       publicId: generationId,
       projectId,
       agentId: MISSING_AGENT,

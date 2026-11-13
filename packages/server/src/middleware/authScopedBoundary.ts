@@ -5,6 +5,7 @@ import {
   resolveBoundSets,
 } from '../lib/attachedPolicies';
 import type { DeniedPrincipal } from '../lib/authorizationDenial';
+import type { PolicyDocument } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
 import type { PrincipalBound } from '../lib/principalBound';
 import {
@@ -121,5 +122,20 @@ export const triggerGrant = (args: {
         ];
       },
     },
+  };
+};
+
+/**
+ * A `run_as: agent` turn's grant: the agent's resolved `policy_ids`. None
+ * resolving grants nothing.
+ */
+export const agentGrant = (args: {
+  agentId: string;
+  policy: PolicyDocument | null;
+}): Grant => {
+  return {
+    principal: { type: 'agent', id: args.agentId },
+    holder: 'resource',
+    bound: docsBound(args.policy ? [args.policy] : []),
   };
 };

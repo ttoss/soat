@@ -282,7 +282,11 @@ const resolveWork = async (args: {
             id: user.id as number,
             publicId: user.publicId as string,
             username: user.username as string,
-            role: user.role as 'admin' | 'user',
+            // Under an agent's grant, the user names who started the work only.
+            role:
+              authority.grant.holder === 'agent'
+                ? 'user'
+                : (user.role as 'admin' | 'user'),
           }
         : {}),
       ...(principal.type === 'api_key' ? { apiKeyPublicId: principal.id } : {}),

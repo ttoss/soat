@@ -2,6 +2,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
 
+import { actingAgentOf } from './agentAuthority';
 import {
   buildGenerationContext,
   type GenerationContext,
@@ -153,6 +154,7 @@ const resolveContextAndRecord = async (
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     // Stored: work resuming after the request is gone runs under it.
     authority: args.authority,
+    actsAsAgent: actingAgentOf(ctx.agentAuthority),
     // Typed FK columns, not metadata keys: this is identity the platform
     // enforces and caps spend on, so it must not live in a caller-writable bag.
     sessionId: args.sessionId ?? null,
