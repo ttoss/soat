@@ -1,5 +1,9 @@
 import { jsonSchema, type Tool, tool } from 'ai';
-import { mergeBindingTools } from 'src/lib/agentToolNames';
+import {
+  type BindingTools,
+  type GatedTools,
+  mergeBindingTools,
+} from 'src/lib/agentToolNames';
 
 // The entry-point case (two bindings, one action) is pinned in
 // `rest/agentExternalTools.test.ts`; these are the naming edges.
@@ -11,13 +15,21 @@ const stub = (): Tool => {
   });
 };
 
+// Naming is independent of gating, so these bindings stand in for gated ones.
+const binding = (
+  bindingName: string,
+  tools: Record<string, Tool>
+): BindingTools => {
+  return { bindingName, tools: tools as GatedTools };
+};
+
 describe('mergeBindingTools', () => {
   test('a key one binding resolves keeps its name', () => {
     const only = stub();
 
     expect(
       mergeBindingTools({
-        bindings: [{ bindingName: 'a', tools: { x: only } }],
+        bindings: [binding('a', { x: only })],
       })
     ).toEqual({ x: only });
   });
@@ -27,10 +39,7 @@ describe('mergeBindingTools', () => {
     const fromB = stub();
 
     const merged = mergeBindingTools({
-      bindings: [
-        { bindingName: 'a', tools: { x: fromA } },
-        { bindingName: 'b', tools: { x: fromB } },
-      ],
+      bindings: [binding('a', { x: fromA }), binding('b', { x: fromB })],
     });
 
     expect(merged).toEqual({ a_x: fromA, b_x: fromB });
@@ -43,9 +52,9 @@ describe('mergeBindingTools', () => {
 
     const merged = mergeBindingTools({
       bindings: [
-        { bindingName: 'other', tools: { a_x: plain } },
-        { bindingName: 'a', tools: { x: fromA } },
-        { bindingName: 'a', tools: { x: fromSameName } },
+        binding('other', { a_x: plain }),
+        binding('a', { x: fromA }),
+        binding('a', { x: fromSameName }),
       ],
     });
 

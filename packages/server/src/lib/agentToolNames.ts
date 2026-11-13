@@ -1,9 +1,18 @@
 import type { Tool } from 'ai';
 
+declare const GATED: unique symbol;
+
+/**
+ * A binding's tools after the guardrail gate. Only `agentToolGuardrail.ts`
+ * mints it, so a tool built anywhere else cannot reach the model ungated
+ * (`tests/harness/toolSurfaceGate.test.mjs`).
+ */
+export type GatedTools = Record<string, Tool> & { readonly [GATED]: true };
+
 /** What one binding contributed to the turn, keyed as it resolved them. */
 export type BindingTools = {
   bindingName: string;
-  tools: Record<string, Tool>;
+  tools: GatedTools;
 };
 
 const freeName = (args: { candidate: string; taken: Set<string> }): string => {

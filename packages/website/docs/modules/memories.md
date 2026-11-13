@@ -407,6 +407,8 @@ Set `write_memory_store_id` in the agent's `knowledge_config` to inject a `write
 
 The agent's [`policy_ids`](./agents.md#execution-identity) gate the tool: it must allow `memories:CreateMemory` **and** `memories:UpdateMemory` (a write may supersede) on the target store's SRN, `srn:<project_id>:memory_store:<memory_store_id>`, with the store's tags as condition inputs. A boundary scoped to one store therefore holds even if `write_memory_store_id` is later pointed elsewhere.
 
+Project- and agent-scope [guardrails](./guardrails.md#attachment) gate every `write_memory` call like any other tool call, so a fact read from a document or tool output persists only past them. A held call files an [approval](./approvals.md) whose `proposed_action` is `{ "tool_id": "native:write_memory", "action": "write_memory", "arguments": { "content": "…" } }`. Approving it writes the fact as the agent, under the proposing generation and actor, to the store `write_memory_store_id` names at decision time, held to the agent's `policy_ids` at decision time; the write's output, or the denial, is the decision's `result`. Edited `arguments` must carry a non-empty string `content`.
+
 Memories written by the tool carry `source_type: "manual"`: `source_id` is a pointer a client supplies on a hand-written fact, and the tool has none to give. The turn behind the write is on its [assertion](#assertions), with `mechanism: "tool"` and the agent as principal.
 
 ```json

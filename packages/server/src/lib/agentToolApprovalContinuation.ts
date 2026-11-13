@@ -5,6 +5,8 @@ import { reactsToExpiredApproval } from './agentApprovalExpiry';
 import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
+import { runApprovedWriteMemory, WRITE_MEMORY_TOOL_ID } from './agentKnowledge';
+import { isInlineProposal } from './agentToolApproval';
 import {
   type ApprovalResumeHandler,
   type DecisionOutput,
@@ -110,12 +112,45 @@ const proposingAgentBoundary = async (args: {
   });
 };
 
+/** The approved `write_memory` call, run as the agent that proposed it. */
+const executeApprovedWriteMemory = async (args: {
+  item: MappedApproval;
+  projectInternalId: number;
+  input: Record<string, unknown>;
+}): Promise<object> => {
+  const agent = args.item.agent_id
+    ? await agentReferences.find({
+        id: args.item.agent_id,
+        projectId: args.projectInternalId,
+        reach: 'project',
+      })
+    : null;
+  if (!agent) {
+    return { error: 'The proposing agent no longer exists in this project.' };
+  }
+  const actorId = await proposingActorId(args.item.generation_id);
+  return runApprovedWriteMemory({
+    agentId: agent.publicId,
+    knowledgeConfig: agent.knowledgeConfig,
+    generationId: args.item.generation_id ?? null,
+    projectId: args.projectInternalId,
+    boundaryPolicy: (
+      await proposingAgentBoundary({
+        item: args.item,
+        projectInternalId: args.projectInternalId,
+      })
+    ).policy,
+    actorId: actorId ?? undefined,
+    input: args.input,
+  });
+};
+
 /**
  * Executes the frozen (or edited) proposed action at resolution time and returns
- * its output as the decision `result`. Runs through the normal persisted-tool
- * path (`callTool`), which re-applies preset parameters and output mapping.
- * Inline-tool proposals have no persisted id to execute against, so they carry a
- * structured note instead of a result.
+ * its output as the decision `result`. A persisted tool runs through
+ * `callTool`, which re-applies preset parameters and output mapping; the native
+ * `write_memory` runs through its own write path. An inline tool has nothing to
+ * execute against, so it carries a structured note instead of a result.
  */
 const executeApprovedAction = async (args: {
   item: MappedApproval;
@@ -124,7 +159,7 @@ const executeApprovedAction = async (args: {
   toolContext?: Record<string, string>;
 }): Promise<object | null> => {
   const proposed = args.item.proposed_action;
-  if (!proposed?.tool_id) {
+  if (!proposed?.tool_id || isInlineProposal(proposed.tool_id)) {
     return {
       error:
         'The approved action targets an inline tool and cannot be executed at resolution time.',
@@ -133,6 +168,14 @@ const executeApprovedAction = async (args: {
   const input = (args.item.edited_arguments ??
     proposed.arguments ??
     {}) as Record<string, unknown>;
+
+  if (proposed.tool_id === WRITE_MEMORY_TOOL_ID) {
+    return executeApprovedWriteMemory({
+      item: args.item,
+      projectInternalId: args.projectInternalId,
+      input,
+    });
+  }
 
   log(
     'executeApprovedAction: id=%s toolId=%s action=%s',

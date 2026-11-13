@@ -142,6 +142,13 @@ A denied action does not run; its result is the
 `error.message` `Forbidden: agent <agent_id>'s policies deny <action>`. An agent that no
 longer exists bounds nothing in, so its approved `builtin` actions are refused.
 
+Two proposals name no stored tool. An approved
+[`write_memory`](./memories.md#write_memory-tool) call (`tool_id`
+`native:write_memory`) runs the agent's write path, held to the same
+`policy_ids`. An approved [inline tool](./agents.md#inline-ephemeral-tool-definitions) call
+(`tool_id` `inline:<name>`) has nothing to execute; its `result` is
+`{ "error": "The approved action targets an inline tool and cannot be executed at resolution time." }`.
+
 ### Duplicate proposals (dedup)
 
 Tool-call items carry a `dedup_key` derived from agent, tool, action and

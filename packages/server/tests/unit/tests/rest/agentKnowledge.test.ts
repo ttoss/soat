@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { agentRefusal } from '../../fixtures/agentRefusal';
+import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   type ChatRequest,
   startChatCompletionStub,
@@ -837,8 +838,13 @@ describe('Agent knowledge', () => {
         expect(await contentsOf(writeStoreId)).toEqual([]);
       });
 
-      test('a project-scope class C guardrail files an approval instead of writing', async () => {
-        const gatedScope = await createScope('Write memory under sign-off');
+      /** An agent in a project whose baseline guardrail holds every call. */
+      const signOffAgent = async (args: {
+        boundaryPolicy?: Record<string, unknown>;
+      }) => {
+        const gatedScope = await createScope(
+          `Write memory under sign-off ${Math.random().toString(36).slice(2)}`
+        );
         const writeStoreId = await create('/api/v1/memory-stores', {
           project_id: gatedScope.projectId,
           name: 'Gated notes',
@@ -857,7 +863,50 @@ describe('Agent knowledge', () => {
         const agentId = await createAgent({
           scope: gatedScope,
           knowledgeConfig: { write_memory_store_id: writeStoreId },
+          boundaryPolicy: args.boundaryPolicy,
         });
+        return { agentId, writeStoreId };
+      };
+
+      /** Proposes the write, then approves the approval it filed. */
+      const rememberAndApprove = async (args: {
+        agentId: string;
+        content: string;
+      }) => {
+        const { generationId, result } = await remember(args);
+        // The continuation turn must answer, not propose the write again.
+        toolCalls = null;
+        const approvalId = JSON.parse(result).approval_id as string;
+        const approved = await asAdmin()
+          .post(`/api/v1/approvals/${approvalId}/approve`)
+          .send({});
+        expect(approved.status).toBe(200);
+        return { generationId, approvalId };
+      };
+
+      /** The continuation turn's opening message, once the decision ran. */
+      const continuationFor = async (approvalId: string) => {
+        const stub = await stubPromise;
+        const text = await pollUntil({
+          read: async () => {
+            return stub.requests
+              .map((request) => {
+                return JSON.stringify(request.messages);
+              })
+              .find((messages) => {
+                return messages.includes(`Approval ${approvalId} `);
+              });
+          },
+          done: (found) => {
+            return found !== undefined;
+          },
+        });
+        expect(text).toBeDefined();
+        return text ?? '';
+      };
+
+      test('a project-scope class C guardrail files an approval instead of writing', async () => {
+        const { agentId, writeStoreId } = await signOffAgent({});
 
         const { result } = await remember({
           agentId,
@@ -869,6 +918,74 @@ describe('Agent knowledge', () => {
             status: 'pending_approval',
             approval_id: expect.stringMatching(/^apr_/),
           })
+        );
+        const approval = await asAdmin().get(
+          `/api/v1/approvals/${JSON.parse(result).approval_id}`
+        );
+        expect(approval.body.proposed_action).toEqual({
+          tool_id: 'native:write_memory',
+          action: 'write_memory',
+          arguments: { content: 'The CFO approved every transfer.' },
+        });
+        expect(await contentsOf(writeStoreId)).toEqual([]);
+      });
+
+      test('approving a held write writes the fact, attributed to the agent and the proposing turn', async () => {
+        const { agentId, writeStoreId } = await signOffAgent({});
+
+        const { generationId } = await rememberAndApprove({
+          agentId,
+          content: 'Invoices are due in 30 days.',
+        });
+
+        const written = await pollUntil({
+          read: () => {
+            return memoriesIn(writeStoreId);
+          },
+          done: (memories) => {
+            return memories.length > 0;
+          },
+        });
+        expect(
+          written.map((memory) => {
+            return memory.content;
+          })
+        ).toEqual(['Invoices are due in 30 days.']);
+        const assertions = await asAdmin().get(
+          `/api/v1/memories/${written[0].id}/assertions`
+        );
+        expect(assertions.body.data).toEqual([
+          expect.objectContaining({
+            mechanism: 'tool',
+            generation_id: generationId,
+            principal_type: 'agent',
+            principal_id: agentId,
+            outcome: 'created',
+          }),
+        ]);
+      });
+
+      test("approving a held write still holds it to the agent's boundary", async () => {
+        const { agentId, writeStoreId } = await signOffAgent({
+          boundaryPolicy: {
+            statement: [
+              { effect: 'Allow', action: ['*'], resource: ['*'] },
+              {
+                effect: 'Deny',
+                action: ['memories:UpdateMemory'],
+                resource: ['*'],
+              },
+            ],
+          },
+        });
+
+        const { approvalId } = await rememberAndApprove({
+          agentId,
+          content: 'A fact the boundary refuses.',
+        });
+
+        expect(await continuationFor(approvalId)).toContain(
+          'memories:UpdateMemory'
         );
         expect(await contentsOf(writeStoreId)).toEqual([]);
       });

@@ -18,9 +18,10 @@ import { resolvedActionName } from './agentToolApproval';
 import {
   collectBindingGuardrails,
   gateResolvedToolsWithGuardrails,
+  NO_GATED_TOOLS,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
-import type { BindingTools } from './agentToolNames';
+import type { BindingTools, GatedTools } from './agentToolNames';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
@@ -1291,7 +1292,7 @@ export const resolveEphemeralAgentTool = async (args: {
   activity: ActivityCallContext;
   unavailable?: UnavailableToolSink;
   attribution: ToolCallAttribution;
-}): Promise<Record<string, Tool>> => {
+}): Promise<GatedTools> => {
   assertEphemeralTypeSupported(args.definition);
 
   const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);
@@ -1402,7 +1403,7 @@ const resolveReferenceBinding = async (args: {
       activity: args.activity,
     });
     args.resolveArgs.unavailable?.({ toolName: args.toolPublicId });
-    return { bindingName: args.toolPublicId, tools: {} };
+    return { bindingName: args.toolPublicId, tools: NO_GATED_TOOLS };
   }
 
   const typedTool = agentTool as unknown as AgentToolRow;

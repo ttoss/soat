@@ -6,9 +6,11 @@ import {
   computeToolCallDedupKey,
   DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS,
   injectApprovalJustificationSchema,
+  inlineProposalToolId,
   resolvedActionName,
   stripApprovalJustification,
 } from './agentToolApproval';
+import type { GatedTools } from './agentToolNames';
 import { emitApproval } from './approvals';
 import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import type { CollectedGuardrail } from './guardrailCollection';
@@ -282,14 +284,13 @@ const routeToApproval = async (args: {
 }): Promise<Record<string, unknown>> => {
   const { gate } = args;
   const governing = governingResult(args.evaluated, 'route_to_approval');
-  // Inline-tool proposals have no persisted id to re-execute at resolution; use
-  // a synthetic marker so the dedup key and item still form.
-  const proposalToolId = gate.toolId ?? `inline:${gate.toolName}`;
+  const proposalToolId =
+    gate.toolId ?? inlineProposalToolId({ toolName: gate.toolName });
   const item = await emitApproval({
     projectId: gate.context.projectId,
     origin: 'tool_call',
     proposedAction: {
-      toolId: gate.toolId ?? proposalToolId,
+      toolId: proposalToolId,
       action: gate.action,
       arguments: args.effectiveArgs,
     },
@@ -622,9 +623,9 @@ export const gateResolvedToolsWithGuardrails = (args: {
   presetParameters?: Record<string, unknown> | null;
   rawParameters?: Record<string, unknown>;
   context: ResolverGuardrailContext;
-}): Record<string, Tool> => {
+}): GatedTools => {
   const applicable = args.guardrails;
-  if (applicable.length === 0) return args.tools;
+  if (applicable.length === 0) return args.tools as GatedTools;
 
   // The schema the justification fields are injected into, when this gate can
   // file an approval and the tool owns a local schema to carry them.
@@ -687,5 +688,8 @@ export const gateResolvedToolsWithGuardrails = (args: {
     };
   }
 
-  return gated;
+  return gated as GatedTools;
 };
+
+/** A binding that resolved to nothing has nothing to gate. */
+export const NO_GATED_TOOLS = Object.freeze({}) as GatedTools;

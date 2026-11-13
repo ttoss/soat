@@ -95,6 +95,20 @@ export const resolveAgentToolSurface = async (args: {
   // this covers "no tools at all".
   const bound = splitToolBindings(readAgentToolBindings(args.typedAgent));
 
+  // Guardrails are the single tool-call gating mechanism: every binding below,
+  // bound or knowledge-derived, passes this one context's gate.
+  const guardrail = await buildResolverGuardrailContext({
+    agentId: args.agentId,
+    generationId: args.generationId,
+    projectId,
+    projectPublicId: args.typedAgent.project.publicId,
+    projectGuardrailIds: args.typedAgent.project.guardrailIds,
+    agentGuardrailIds: args.typedAgent.guardrailIds,
+    sessionId: args.sessionId ?? null,
+    authHeader: args.authHeader,
+    guardrailContext: args.guardrailContext,
+  });
+
   const bindings = await resolveAgentToolBindings({
     // `active_tool_ids` narrows the bound set before resolution — filtering ids
     // here rather than resolved tools afterwards avoids needing an id→name map
@@ -115,18 +129,7 @@ export const resolveAgentToolSurface = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
-    // Guardrails are the single tool-call gating mechanism.
-    guardrail: await buildResolverGuardrailContext({
-      agentId: args.agentId,
-      generationId: args.generationId,
-      projectId,
-      projectPublicId: args.typedAgent.project.publicId,
-      projectGuardrailIds: args.typedAgent.project.guardrailIds,
-      agentGuardrailIds: args.typedAgent.guardrailIds,
-      sessionId: args.sessionId ?? null,
-      authHeader: args.authHeader,
-      guardrailContext: args.guardrailContext,
-    }),
+    guardrail,
     // Attributes a successful tool call to this agent/generation on the activity
     // feed (approvals PRD Phase 4). A resumed generation's tool calls are as
     // autonomous as a fresh one's, so they record under the same identity.
@@ -143,13 +146,14 @@ export const resolveAgentToolSurface = async (args: {
   // written into it.
   const knowledgeBindings =
     ownerId === projectId
-      ? buildKnowledgeBindings({
+      ? await buildKnowledgeBindings({
           agentId: args.agentId,
           generationId: args.generationId,
           projectId,
           typedAgent: args.typedAgent,
           boundaryPolicy: args.boundary.policy,
           actorId: args.toolContext?.actor_id,
+          guardrail,
         })
       : [];
 
