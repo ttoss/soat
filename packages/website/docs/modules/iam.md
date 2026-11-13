@@ -62,6 +62,7 @@ It answers `201 { "token", "expires_at" }`.
 - Only an API key scoped to a project issues one. A user login, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 API_KEY_SCOPED_TOKEN`).
 - Records name the issuing key as the principal; `principal` is opaque, grants nothing, and is recorded with the token's `jti` under `detail.iam_token` on every [audit log](./audit-log.md) entry the token makes.
 - An `mcp` tool called on the token carries the bound and `principal` encrypted in its [assertion](./tools.md#tool-assertions); a tool server calling back with that assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) is capped by them, and its audit entries record `principal` under `detail.on_behalf_of_principal`.
+- A request on the token may itself carry [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a call made in the token's project: it is held to the token's bound ∩ the assertion's authority, and so is work it starts.
 
 ## Policy Documents
 

@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
 import {
   type AssertionAuthority,
@@ -41,14 +42,28 @@ export type AssertedCall = {
 };
 
 /**
+ * The project of the key a caller acts as: a project-scoped API key's, or for
+ * an IAM token, the project of the key that issued it.
+ */
+export const issuingKeyProject = (
+  authUser: Pick<
+    AuthUser,
+    'apiKeyProjectPublicId' | 'iamToken' | 'oauthProjectPublicId'
+  >
+): string | undefined => {
+  if (authUser.apiKeyProjectPublicId) return authUser.apiKeyProjectPublicId;
+  return authUser.iamToken ? authUser.oauthProjectPublicId : undefined;
+};
+
+/**
  * Reads a tool assertion this deployment signed, sent back by a key scoped to
- * the assertion's project. Anything else is refused rather than dropped, so a
+ * the assertion's project, or an IAM token that key issued. Anything else is refused rather than dropped, so a
  * write never lands attributed to the key when its caller asked otherwise, and
  * never runs uncapped when its authority cannot be read.
  */
 const readOnBehalfOf = (args: {
   token: string;
-  apiKeyProjectPublicId: string | undefined;
+  keyProjectPublicId: string | undefined;
 }): AssertedCall => {
   const claims = verifyOwnToolAssertion(args.token.trim());
   if (!claims) {
@@ -59,12 +74,12 @@ const readOnBehalfOf = (args: {
     );
   }
   if (
-    !args.apiKeyProjectPublicId ||
-    claims.project_id !== args.apiKeyProjectPublicId
+    !args.keyProjectPublicId ||
+    claims.project_id !== args.keyProjectPublicId
   ) {
     throw new DomainError(
       'ON_BEHALF_OF_INVALID',
-      `${onBehalfOfHeaderName()} is accepted only from an API key scoped to the assertion's project.`,
+      `${onBehalfOfHeaderName()} is accepted only from an API key scoped to the assertion's project, or an IAM token that key issued.`,
       { reason: 'project' }
     );
   }
@@ -95,7 +110,7 @@ const readOnBehalfOf = (args: {
  */
 export const requestOnBehalfOf = (args: {
   headers: Record<string, string | string[] | undefined>;
-  apiKeyProjectPublicId: string | undefined;
+  keyProjectPublicId: string | undefined;
 }): AssertedCall | undefined => {
   const named = Object.keys(args.headers).some((name) => {
     return name.toLowerCase().endsWith('on-behalf-of');
@@ -105,6 +120,6 @@ export const requestOnBehalfOf = (args: {
   if (typeof token !== 'string') return undefined;
   return readOnBehalfOf({
     token,
-    apiKeyProjectPublicId: args.apiKeyProjectPublicId,
+    keyProjectPublicId: args.keyProjectPublicId,
   });
 };

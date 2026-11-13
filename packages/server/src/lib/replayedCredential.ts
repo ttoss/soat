@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
 import { signIamToken } from './iamTokens';
+import { issuingKeyProject } from './onBehalfOf';
 
 const log = createDebug('soat:replayedCredential');
 
@@ -22,16 +23,17 @@ export const replayedAuthHeader = (args: {
 }): string | undefined => {
   const { authUser } = args.ctx;
   if (authUser?.onBehalfOf) {
-    const { apiKeyPublicId, apiKeyProjectPublicId, bound } = authUser;
+    const { apiKeyPublicId, bound } = authUser;
+    const projectPublicId = issuingKeyProject(authUser);
     // Fails closed: work with no credential is refused at its first call.
-    if (!apiKeyPublicId || !apiKeyProjectPublicId || !bound) return undefined;
+    if (!apiKeyPublicId || !projectPublicId || !bound) return undefined;
     log('replayedAuthHeader: capped key=%s', apiKeyPublicId);
     const { token } = signIamToken({
       issuer: {
         publicId: authUser.publicId,
         role: authUser.role,
         apiKeyPublicId,
-        projectPublicId: apiKeyProjectPublicId,
+        projectPublicId,
       },
       bound,
       principal: authUser.onBehalfOfPrincipal,

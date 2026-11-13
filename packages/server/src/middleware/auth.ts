@@ -8,7 +8,7 @@ import {
   callerPrincipal,
   type DeniedPrincipal,
 } from '../lib/authorizationDenial';
-import { requestOnBehalfOf } from '../lib/onBehalfOf';
+import { issuingKeyProject, requestOnBehalfOf } from '../lib/onBehalfOf';
 import { type LabeledPolicySets, resolvePolicySets } from '../lib/permissions';
 import { parseBound } from '../lib/principalBound';
 import {
@@ -438,12 +438,11 @@ const applyOnBehalfOf = (args: {
   authUser: AuthUser;
 }): AuthUser => {
   const { authUser } = args;
-  const projectPublicId = authUser.apiKeyProjectPublicId;
+  const projectPublicId = issuingKeyProject(authUser);
   const asserted = requestOnBehalfOf({
     headers: args.ctx.headers ?? {},
-    apiKeyProjectPublicId: projectPublicId,
+    keyProjectPublicId: projectPublicId,
   });
-  // An assertion is admitted only from a key scoped to its project.
   if (!asserted || !projectPublicId) return authUser;
   return narrowToOnBehalfOf({
     authUser,
