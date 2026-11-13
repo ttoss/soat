@@ -1,5 +1,8 @@
-import type { PrincipalBound } from './principalBound';
-import { serializeBound } from './principalBound';
+import {
+  type ActingPrincipal,
+  storedAuthority,
+  type WorkAuthority,
+} from './workAuthority';
 
 /**
  * Every kind of principal a record can name, `PrincipalType` in
@@ -18,67 +21,47 @@ export const PRINCIPAL_TYPES = [
 export type PrincipalType = (typeof PRINCIPAL_TYPES)[number];
 
 /**
- * The principal to credit for an action: `user` names the acting user, and
- * `api_key` names the key itself (`key_…`) so a record says *which* key acted.
- *
- * It lives in `lib` rather than beside `requestPrincipalFromCtx` (the REST
- * helper that derives one from an auth context) because a principal now
- * outlives a request: an orchestration run persists the principal that started
- * it and re-establishes it when a background worker drives the run later.
+ * The principal to credit for an action: `user` names the acting user,
+ * `api_key` the key itself (`key_…`) so a record says *which* key acted, and
+ * `trigger` a trigger acting under its own grant.
  */
 export type RequestPrincipal = {
-  principalType: 'user' | 'api_key';
+  principalType: ActingPrincipal['type'];
   principalId: string;
 };
 
-declare const startingPrincipalBrand: unique symbol;
-
 /**
- * The principal durable work records as having started it, which a later drive
- * re-mints a run token from. Only `orchestrationRunToken.ts` produces one, so
- * every writer of a starting principal is held to `resolveStartingPrincipal`.
- */
-export type StartingPrincipal = RequestPrincipal & {
-  /** The IAM token bound the principal acted under, kept with it. */
-  bound?: PrincipalBound;
-  readonly [startingPrincipalBrand]: true;
-};
-
-const boundColumn = (principal: StartingPrincipal | null): object | null => {
-  return principal?.bound ? serializeBound(principal.bound) : null;
-};
-
-/**
- * The one derivation of "who is acting" from an authenticated caller.
- *
- * `apiKeyPublicId` decides the kind, and it is set for every credential shape
- * through which a key acts: a raw `sk_` key (scoped or unscoped) and a run-as
- * token carrying a `key` claim. So a record names *which* key acted
- * rather than merely that a key did — including when the actor is a background
- * drive that re-minted the key's identity.
- *
- * Every record naming who acted derives it here, never from `authUser.id`,
- * which is a key's owner. Hand-synced copies, each with its own paraphrase of
- * the rule, drift: one goes quietly wrong while every test still passes.
+ * The one derivation of "who is acting" from an authenticated caller: the
+ * principal its terms state. Every record naming who acted derives it here,
+ * never from `authUser.id`, which is a key's owner.
  */
 export const principalFromAuthUser = (authUser: {
-  publicId: string;
-  apiKeyPublicId?: string;
+  terms: { principal: ActingPrincipal };
 }): RequestPrincipal => {
-  if (authUser.apiKeyPublicId) {
-    return { principalType: 'api_key', principalId: authUser.apiKeyPublicId };
-  }
-  return { principalType: 'user', principalId: authUser.publicId };
+  return {
+    principalType: authUser.terms.principal.type,
+    principalId: authUser.terms.principal.id,
+  };
+};
+
+/** The principal stored work acts as, or null for work that holds none. */
+export const principalOfAuthority = (
+  authority: WorkAuthority | null
+): RequestPrincipal | null => {
+  return authority
+    ? {
+        principalType: authority.principal.type,
+        principalId: authority.principal.id,
+      }
+    : null;
 };
 
 /**
  * The `startedByPrincipal*` column pair for a principal, or nulls when the work
- * records none. Every writer of those two columns spells the mapping the same
- * way, and each new one is a spread rather than two more `?? null` branches in
- * an already-long record literal.
+ * records none.
  */
 export const startedByPrincipalColumns = (
-  principal: StartingPrincipal | null
+  principal: RequestPrincipal | null
 ): {
   startedByPrincipalType: string | null;
   startedByPrincipalId: string | null;
@@ -91,34 +74,14 @@ export const startedByPrincipalColumns = (
 
 /** The `actedAsPrincipal*` column pair, the same mapping as `startedBy`. */
 export const actedAsPrincipalColumns = (
-  principal: StartingPrincipal | null
+  principal: RequestPrincipal | null
 ): {
   actedAsPrincipalType: string | null;
   actedAsPrincipalId: string | null;
-  actedAsPrincipalBound: object | null;
 } => {
   return {
     actedAsPrincipalType: principal?.principalType ?? null,
     actedAsPrincipalId: principal?.principalId ?? null,
-    actedAsPrincipalBound: boundColumn(principal),
-  };
-};
-
-/**
- * The `principal*` columns of work a background drive re-mints a credential
- * from (an orchestration run, a playbook version's author).
- */
-export const runPrincipalColumns = (
-  principal: StartingPrincipal | null
-): {
-  principalKind: string | null;
-  principalId: string | null;
-  principalBound: object | null;
-} => {
-  return {
-    principalKind: principal?.principalType ?? null,
-    principalId: principal?.principalId ?? null,
-    principalBound: boundColumn(principal),
   };
 };
 
@@ -132,5 +95,21 @@ export const createdByColumns = (
   return {
     createdByPrincipalType: principal?.principalType ?? null,
     createdByPrincipalId: principal?.principalId ?? null,
+  };
+};
+
+/**
+ * The columns of a generation its authority starts: who started it, who its
+ * first segment's tool calls act as, and the authority itself.
+ */
+export const startedWorkColumns = async (args: {
+  authority: WorkAuthority | null;
+  projectId: number;
+}) => {
+  const principal = principalOfAuthority(args.authority);
+  return {
+    ...startedByPrincipalColumns(principal),
+    ...actedAsPrincipalColumns(principal),
+    authority: await storedAuthority(args),
   };
 };

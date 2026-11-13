@@ -19,8 +19,6 @@ const JWT_SECRET = requireJwtSecret();
 export const TOKEN_TYPES = [
   'login',
   'oauth',
-  'trigger',
-  'run',
   'iam',
   'file-download',
   'ingestion-callback',
@@ -32,8 +30,6 @@ export type TokenType = (typeof TOKEN_TYPES)[number];
 export const BEARER_TOKEN_TYPES = [
   'login',
   'oauth',
-  'trigger',
-  'run',
   'iam',
 ] as const satisfies readonly TokenType[];
 

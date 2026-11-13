@@ -15,10 +15,11 @@ import {
   PARKED_RECHECK_MS,
 } from './playbookExecutionLease';
 import { settleExecution, settleFromRun } from './playbookExecutionSettle';
-import { executeClaimed } from './playbookExecutionWork';
+import { caseAuthority, executeClaimed } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { recoverPlaybookExports } from './playbookExportRender';
 import { createScheduler, createSweep } from './scheduler';
+import { storedAuthority } from './workAuthority';
 
 const log = createDebug('soat:playbookCascade');
 
@@ -143,6 +144,10 @@ export const advancePlaybookCase = async (args: {
       transaction,
     });
 
+    const authority = await storedAuthority({
+      authority: await caseAuthority({ row }),
+      projectId: row.projectId,
+    });
     let count = 0;
     for (const node of definition.nodes) {
       const view = views.get(node.id)!;
@@ -155,6 +160,7 @@ export const advancePlaybookCase = async (args: {
           executorType: node.executor?.type ?? null,
           executorId: node.executor?.id ?? null,
           status: 'queued',
+          authority,
           basis: view.basis,
           input: executorInput({
             executor: node.executor,

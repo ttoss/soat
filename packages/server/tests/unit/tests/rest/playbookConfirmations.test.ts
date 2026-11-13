@@ -1,4 +1,3 @@
-import { signRunToken } from 'src/lib/orchestrationRunToken';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -6,7 +5,13 @@ import {
   type ChatCompletionsStub,
   startChatCompletionsStub,
 } from '../../fixtures/chatCompletionsStub';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  clientFor,
+  testClient,
+  type TestCredential,
+  workAuthorityOf,
+} from '../../testClient';
 
 const CASE_ACTIONS = [
   'playbooks:CreatePlaybookCase',
@@ -121,10 +126,10 @@ describe('Playbook confirmations', () => {
   const confirm = async (
     caseId: string,
     body: Record<string, unknown>,
-    token = userToken
+    credential: TestCredential = userToken
   ) => {
     const approve = await nodeOf(caseId, 'approve');
-    const res = await authenticatedTestClient(token)
+    const res = await clientFor(credential)
       .post(`/api/v1/playbook-cases/${caseId}/nodes/approve/confirmation`)
       .send({
         expected_revisions: { amount: approve.inputs[0].revision },
@@ -382,19 +387,14 @@ describe('Playbook confirmations', () => {
   });
 
   describe("writes from a case's own work", () => {
-    /** A run-as token, as the work named `work` would carry. */
+    /** The stored authority the work named `work` would hold. */
     const runTokenFor = async (work: string) => {
       const me = await asAdmin().get('/api/v1/users/me');
-      return signRunToken({
-        publicId: me.body.id,
-        role: 'admin',
-        projectPublicId: projectId,
-        workPublicId: work,
-      });
+      return workAuthorityOf({ project: projectId, user: me.body.id, work });
     };
 
-    const writeAs = (caseId: string, token: string) => {
-      return authenticatedTestClient(token)
+    const writeAs = (caseId: string, credential: TestCredential) => {
+      return clientFor(credential)
         .post(`/api/v1/playbook-cases/${caseId}/inputs`)
         .send({
           inputs: [

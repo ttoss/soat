@@ -43,7 +43,10 @@ export const assertIamTokenIssuer = (args: {
 }): Issuer => {
   const { authUser } = args;
   const { apiKeyPublicId, apiKeyProjectId, apiKeyProjectPublicId } = authUser;
+  const { publicId, role } = authUser;
   if (
+    !publicId ||
+    !role ||
     !apiKeyPublicId ||
     apiKeyProjectId === undefined ||
     !apiKeyProjectPublicId ||
@@ -58,8 +61,8 @@ export const assertIamTokenIssuer = (args: {
     );
   }
   return {
-    publicId: authUser.publicId,
-    role: authUser.role,
+    publicId,
+    role,
     apiKeyPublicId,
     projectId: apiKeyProjectId,
     projectPublicId: apiKeyProjectPublicId,

@@ -235,10 +235,10 @@ export class Generation extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare actedAsPrincipalId: string | null;
 
-  // The IAM token bound `acted_as` was held to, so work outliving the token
-  // stays inside it. Null when the principal acted unbounded.
+  // The authority the work runs under (`lib/workAuthority.ts`); null when it
+  // has none, and such work is refused.
   @Column({ type: DataType.JSON, allowNull: true })
-  declare actedAsPrincipalBound: object | null;
+  declare authority: object | null;
 
   @Column({
     type: DataType.STRING(32),

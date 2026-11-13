@@ -14,6 +14,8 @@ import {
   buildContextHeaders,
 } from 'src/lib/toolContext';
 
+import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
+
 // Pure helpers of the tool resolver, each a table of inputs read through its
 // return value. What a resolved tool offers and sends is pinned at the entry
 // points: `rest/agentToolResolution.test.ts`, `rest/agentExternalTools.test.ts`
@@ -737,12 +739,13 @@ describe('buildSoatRequestBody - trace field injection scoping', () => {
 describe('resolveSoatTools', () => {
   test('skips a stored action the registry no longer knows', () => {
     const result = resolveSoatTools({
+      authority: null,
       meter: {
         projectId: 0,
         toolId: null,
         workId: null,
         attribution: {},
-        sender: { authHeader: undefined },
+        sender: { authority: ORPHAN_AUTHORITY },
       },
       typedTool: {
         name: 'myTool',

@@ -1,24 +1,28 @@
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import { flushAuditQueue } from 'src/lib/auditQueue';
-import { evaluatePolicies, type PolicyDocument } from 'src/lib/iam';
-import { resolveGenerationIdentitySets } from 'src/lib/onBehalfOfIdentity';
-import {
-  buildRunAuthHeader,
-  readStoredRunPrincipal,
-  readStoredStartingPrincipal,
-  signRunToken,
-} from 'src/lib/orchestrationRunToken';
+import type { PolicyDocument } from 'src/lib/iam';
 import type { PrincipalBound } from 'src/lib/principalBound';
 import { signToken } from 'src/lib/signedTokens';
-import { signTriggerToken } from 'src/lib/triggerToken';
-import { resolveJwtAuthUser } from 'src/middleware/auth';
+import {
+  parseWorkAuthority,
+  triggerAuthority,
+  type WorkAuthority,
+} from 'src/lib/workAuthority';
+import { authUserOfWork } from 'src/middleware/auth';
 
 import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  clientFor,
+  testClient,
+  type TestCredential,
+  workAuthorityOf,
+  workRequest,
+} from '../../testClient';
 
 /**
  * An IAM token is its issuing key held to a bound: every request is checked
@@ -42,10 +46,8 @@ describe('IAM tokens', () => {
   let builtinTool: { id: string; name: string };
   let builtinAgentId: string;
 
-  const mint = (credential: string, body: Record<string, unknown>) => {
-    return authenticatedTestClient(credential)
-      .post('/api/v1/iam/tokens')
-      .send(body);
+  const mint = (credential: TestCredential, body: Record<string, unknown>) => {
+    return clientFor(credential).post('/api/v1/iam/tokens').send(body);
   };
 
   const mintToken = async (body: Record<string, unknown>, from = key) => {
@@ -181,7 +183,7 @@ describe('IAM tokens', () => {
     });
 
     describe('403 IAM_TOKEN_ISSUER_NOT_ALLOWED', () => {
-      const issuers: Array<[string, () => Promise<string>]> = [
+      const issuers: Array<[string, () => Promise<TestCredential>]> = [
         [
           'a user login',
           async () => {
@@ -210,33 +212,26 @@ describe('IAM tokens', () => {
           },
         ],
         [
-          'a run token',
+          'stored work a key started',
           async () => {
             const owner = await db.ApiKey.findOne({
               where: { publicId: keyId },
               include: [{ model: db.User }],
             });
-            return signRunToken({
-              publicId: owner!.user!.publicId as string,
-              role: owner!.user!.role as string,
-              projectPublicId: turn.projectId,
-              workPublicId: 'orn_iamtok',
-              apiKeyPublicId: keyId,
+            return workAuthorityOf({
+              project: turn.projectId,
+              user: owner!.user!.publicId as string,
+              key: keyId,
+              work: 'orn_iamtok',
             });
           },
         ],
         [
-          'a trigger token',
+          'a firing',
           async () => {
-            const owner = await db.ApiKey.findOne({
-              where: { publicId: keyId },
-              include: [{ model: db.User }],
-            });
-            return signTriggerToken({
-              publicId: owner!.user!.publicId as string,
-              role: owner!.user!.role as string,
+            return triggerAuthority({
+              triggerPublicId: 'trg_iamtok',
               projectPublicId: turn.projectId,
-              triggerId: 'trg_iamtok',
             });
           },
         ],
@@ -469,7 +464,7 @@ describe('IAM tokens', () => {
       });
     });
 
-    test('a generation stores the bound, and its re-minted credential cannot read a document after the token expires', async () => {
+    test('a generation stores the bound, and its work cannot read a document after the token expires', async () => {
       const token = await mintToken({ policy: GENERATE_ONLY, ttl_seconds: 30 });
       const res = await generate(token);
       expect(res.status).toBe(200);
@@ -478,33 +473,27 @@ describe('IAM tokens', () => {
         where: { publicId: res.body.id },
       });
       expect(gen!.actedAsPrincipalId).toBe(keyId);
-      expect(gen!.actedAsPrincipalBound).toEqual({ policy: GENERATE_ONLY });
+      const authority = parseWorkAuthority(gen!.authority)!;
+      expect(authority.caps).toContainEqual(
+        expect.objectContaining({
+          kind: 'bound',
+          bound: { policy: GENERATE_ONLY },
+        })
+      );
 
-      const header = await buildRunAuthHeader({
-        principal: readStoredStartingPrincipal({
-          kind: gen!.actedAsPrincipalType,
-          id: gen!.actedAsPrincipalId,
-          bound: gen!.actedAsPrincipalBound,
-        }),
-        projectId: gen!.projectId as number,
-        workPublicId: res.body.id,
-      });
-      const background = header!.slice('Bearer '.length);
-      expect((await readDocument(background)).status).toBe(403);
-      expect((await generate(background)).status).toBe(200);
-
-      const identity = await resolveGenerationIdentitySets({
-        generationPublicId: res.body.id,
-        projectPublicId: turn.projectId,
-      });
-      const readsDocument = identity.every((policies) => {
-        return evaluatePolicies({
-          policies,
-          action: 'documents:GetDocument',
-          resource: `srn:${turn.projectId}:document:${documentId}`,
-        });
-      });
-      expect(readsDocument).toBe(false);
+      const asWork = (method: 'get' | 'post', path: string, body?: unknown) => {
+        return workRequest({ authority, method, path, body });
+      };
+      expect(
+        (await asWork('get', `/api/v1/documents/${documentId}`)).status
+      ).toBe(403);
+      expect(
+        (
+          await asWork('post', `/api/v1/agents/${agentId}/generate?wait=true`, {
+            messages: [{ role: 'user', content: '[]' }],
+          })
+        ).status
+      ).toBe(200);
     });
 
     test("a trigger fired on a token acts inside the token's bound", async () => {
@@ -526,14 +515,27 @@ describe('IAM tokens', () => {
         });
       expect(trigger.status).toBe(201);
       const readsDocument = async (bound?: PrincipalBound) => {
-        const token = signTriggerToken({
-          publicId: owner!.user!.publicId as string,
-          role: owner!.user!.role as string,
-          projectPublicId: turn.projectId,
-          triggerId: trigger.body.id,
-          caller: { apiKeyPublicId: keyId, ...(bound ? { bound } : {}) },
-        });
-        const authUser = await resolveJwtAuthUser({ db, token });
+        const authority: WorkAuthority = {
+          ...triggerAuthority({
+            triggerPublicId: trigger.body.id,
+            projectPublicId: turn.projectId,
+          }),
+          caps: [
+            { kind: 'user', user: owner!.user!.publicId as string },
+            { kind: 'key', key: keyId },
+            ...(bound
+              ? [
+                  {
+                    kind: 'bound' as const,
+                    bound,
+                    by: { type: 'iam_token' as const, id: null },
+                  },
+                ]
+              : []),
+          ],
+          principal: { type: 'api_key', id: keyId },
+        };
+        const authUser = await authUserOfWork({ db, authority });
         return authUser!.isAllowed({
           projectPublicId: turn.projectId,
           action: 'documents:GetDocument',
@@ -555,19 +557,31 @@ describe('IAM tokens', () => {
       const run = await db.OrchestrationRun.findOne({
         where: { publicId: res.body.id },
       });
-      expect(readStoredRunPrincipal(run)).toEqual({
-        principalType: 'api_key',
-        principalId: keyId,
-        bound: { policyIds: [keyPolicyId] },
+      expect(parseWorkAuthority(run!.authority)).toMatchObject({
+        principal: { type: 'api_key', id: keyId },
+        caps: [
+          { kind: 'key', key: keyId },
+          { kind: 'bound', bound: { policyIds: [keyPolicyId] } },
+        ],
       });
     });
 
-    test('a stored bound that no longer parses yields no principal', () => {
+    test('a stored bound that no longer parses yields no authority', () => {
       expect(
-        readStoredStartingPrincipal({
-          kind: 'api_key',
-          id: keyId,
-          bound: { policy: { statement: 'nope' } },
+        parseWorkAuthority({
+          project: turn.projectId,
+          grant: { holder: 'user', user: 'user_x' },
+          caps: [
+            {
+              kind: 'bound',
+              bound: { policy: { statement: 'nope' } },
+              by: { type: 'iam_token', id: null },
+            },
+          ],
+          principal: { type: 'api_key', id: keyId },
+          trigger: null,
+          work: null,
+          acts_for: null,
         })
       ).toBeNull();
     });

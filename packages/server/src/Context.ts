@@ -3,13 +3,19 @@ import type { RefusedBy } from './lib/authorizationDenial';
 import type { PolicySets } from './lib/iam';
 import type { OnBehalfOf } from './lib/onBehalfOf';
 import type { LabeledPolicySets } from './lib/permissions';
-import type { PrincipalBound } from './lib/principalBound';
+import type { CredentialTerms } from './lib/workAuthority';
 
 export type AuthUser = {
-  id: number;
-  publicId: string;
-  username: string;
-  role: 'admin' | 'user';
+  /**
+   * The user the credential belongs to: absent only for work a trigger's own
+   * grant runs, which acts as no user.
+   */
+  id?: number;
+  publicId?: string;
+  username?: string;
+  role?: 'admin' | 'user';
+  /** What the credential states; work the request starts stores it. */
+  terms: CredentialTerms;
   isAllowed: ((args: {
     projectPublicId: string;
     action: string;
@@ -75,35 +81,10 @@ export type AuthUser = {
   /** An OAuth token's consented scope claim, which narrows what it may do. */
   oauthScope?: string;
   /**
-   * True when the caller authenticated with a trigger token (`typ:
-   * 'trigger'`). Used by the fire endpoint to reject trigger→trigger recursion.
+   * Set when stored work makes the request in-process: the trigger whose
+   * firing began its chain, and the work it drives.
    */
-  isTriggerToken?: boolean;
-  /**
-   * True when the caller authenticated with a run token (`typ: 'run'`) — the
-   * short-lived credential durable, request-less work re-mints for its own
-   * platform self-calls (`orchestrationRunToken.ts`).
-   *
-   * It marks *how* the request arrived, never what it may do: the `orn` value
-   * is not an authorization input, and the boundary a run token carries is
-   * stated separately, as a cap (`actingKeyCap`). The one thing it tells
-   * a handler is that the caller is machinery continuing a chain rather than a
-   * person starting one — which is what lets the task engine bound a composed
-   * dispatch→transition→dispatch cycle that otherwise looks like a series of
-   * ordinary user moves.
-   */
-  isRunToken?: boolean;
-  /**
-   * The work a run token acts for (its `orn`). Read only to refuse a write
-   * back into the work that minted it, so it can narrow and never grant.
-   */
-  runWorkPublicId?: string;
-  /**
-   * The IAM token bound the credential carries beyond its key: an IAM token's
-   * own, or the one a run token re-mints for work an IAM token started. Work
-   * the request starts stores it with its principal.
-   */
-  bound?: PrincipalBound;
+  work?: { trigger: string | null; work: string | null };
   /** Set for an IAM token (`POST /iam/tokens`): what the audit log records. */
   iamToken?: { jti: string; principal?: { type: string; id: string } };
   /**

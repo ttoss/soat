@@ -8,7 +8,6 @@ import {
   storeResumedConversationTurn,
 } from './conversationGeneration';
 import { mapGeneratedTurn } from './generatedTurn';
-import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import { emitGenerationStarted } from './sessionGenerationHelpers';
@@ -17,6 +16,7 @@ import {
   assertSessionMessageInput,
 } from './sessionMessageHelpers';
 import { stableDigest } from './stableDigest';
+import type { WorkAuthority } from './workAuthority';
 
 const GENERATING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -125,11 +125,10 @@ export const generateSessionResponse = async (args: {
   sessionId: string;
   model?: string;
   toolContext?: Record<string, string>;
-  // The credential the turn's `builtin` calls run as: the driving request's, or
-  // one a request-less continuation re-mints. Required so every caller states it.
-  authHeader: string | undefined;
-  // The caller recorded as the turn's `acted_as`; `undefined` when no request
-  // drove it, and the principal is read off a re-minted `authHeader`.
+  // The authority the turn's calls run under: the driving request's, or the
+  // one a request-less continuation stores. Required so every caller states it.
+  authority: WorkAuthority | null;
+  // The caller, when a request drove the turn; `undefined` for a continuation.
   authUser: AuthUser | undefined;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
@@ -194,7 +193,7 @@ export const generateSessionResponse = async (args: {
       // `mergedToolContext` — that bag is caller-overridable, so trusting it
       // would let a caller bill another actor.
       sessionId: session.publicId,
-      authHeader: args.authHeader,
+      authority: args.authority,
       authUser: args.authUser,
       initiatorGenerationId: args.initiatorGenerationId,
       maxContextMessages: session.maxContextMessages,
@@ -248,7 +247,7 @@ export const addSessionMessage = async (args: {
   idempotencyKey?: string;
   // Forwarded to the auto-generation this message may trigger; see
   // `generateSessionResponse`.
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -311,7 +310,7 @@ export const addSessionMessage = async (args: {
     savedContent,
     savedDocumentId,
     toolContext: args.toolContext,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     generateFn: generateSessionResponse,
     initiatorGenerationId: args.initiatorGenerationId,
@@ -328,7 +327,7 @@ export const sendSessionMessage = async (args: {
   // See `generateSessionResponse`. Threaded through both the auto-generation
   // `addSessionMessage` may trigger and the explicit turn below, so the
   // credential reaches whichever of the two actually runs.
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
@@ -340,7 +339,7 @@ export const sendSessionMessage = async (args: {
     message: args.message,
     toolContext: args.toolContext,
     authUser: args.authUser,
-    authHeader: args.authHeader,
+    authority: args.authority,
     initiatorGenerationId: args.initiatorGenerationId,
   });
 
@@ -349,7 +348,7 @@ export const sendSessionMessage = async (args: {
     sessionId: args.sessionId,
     model: args.model,
     toolContext: args.toolContext,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
   });
@@ -383,7 +382,7 @@ export const submitSessionToolOutputs = async (args: {
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
   // See `generateSessionResponse`.
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   // Who the resumed segment's tool calls are recorded as acting as.
   authUser: AuthUser | undefined;
 }) => {
@@ -402,11 +401,7 @@ export const submitSessionToolOutputs = async (args: {
     agentId: args.agentPublicId,
     generationId: args.generationId,
     toolOutputs: args.toolOutputs,
-    authHeader: args.authHeader,
-    actedAs: resolveStartingPrincipal({
-      authUser: args.authUser,
-      authHeader: args.authHeader,
-    }),
+    authority: args.authority,
   });
 
   const turn = await storeResumedConversationTurn({

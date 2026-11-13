@@ -18,6 +18,7 @@ import {
   assertCredentialProjectScope,
   parsePagination,
   requireAuth,
+  requireCallerUser,
   requireOwnerOrAdmin,
 } from './helpers';
 
@@ -199,7 +200,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   });
 
   const apiKey = await createApiKey({
-    userId: ctx.authUser.id,
+    userId: requireCallerUser(ctx, 'api-keys:CreateApiKey').id,
     name,
     projectId: projectResult.id,
     policyIds: boundedPolicyIds,

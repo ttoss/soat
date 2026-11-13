@@ -14,7 +14,12 @@ import {
 } from 'src/lib/generations';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  loginAs,
+  testClient,
+  workAuthorityOfToken,
+} from '../../testClient';
 
 const sleep = (ms: number) => {
   return new Promise((resolve) => {
@@ -677,9 +682,13 @@ describe('Agent Generation Routes', () => {
           promptCaching: null,
         },
         resolvedTools: {},
-        toolsAuthHeader: `Bearer ${userToken}`,
+        toolsAuthority: await workAuthorityOfToken({
+          token: userToken,
+          project: null,
+        }),
       };
       await createGenerationRecord({
+        authority: null,
         publicId: 'gen_stub_pending',
         projectId: projectDbId,
         agentId,
@@ -842,7 +851,7 @@ describe('Agent Generation Routes', () => {
           promptCaching: null,
         },
         resolvedTools: {},
-        toolsAuthHeader: `Bearer ${scopedKeyRes.body.key}`,
+        toolsAuthority: null,
       });
 
       const response = await authenticatedTestClient(scopedKeyRes.body.key)
@@ -863,6 +872,7 @@ describe('Agent Generation Routes', () => {
       // Simulates a restart: with no pending-map entry, `submitToolOutputs`
       // must fall back to rebuilding from the `pendingState` column.
       await createGenerationRecord({
+        authority: null,
         publicId: 'gen_recovered',
         projectId: projectDbId,
         agentId,
@@ -907,6 +917,7 @@ describe('Agent Generation Routes', () => {
      */
     test('tool-outputs refuses an id the pause never opened', async () => {
       await createGenerationRecord({
+        authority: null,
         publicId: 'gen_unknown_id',
         projectId: projectDbId,
         agentId,
@@ -944,6 +955,7 @@ describe('Agent Generation Routes', () => {
     // caller only partly answered.
     test('tool-outputs refuses a batch where any id was never opened', async () => {
       await createGenerationRecord({
+        authority: null,
         publicId: 'gen_mixed_ids',
         projectId: projectDbId,
         agentId,
@@ -991,6 +1003,7 @@ describe('Agent Generation Routes', () => {
     // paused for a client tool never gets a usage event.
     test('tool-outputs continuation records usage — meters and receipt reflect it', async () => {
       await createGenerationRecord({
+        authority: null,
         publicId: 'gen_usage_metered',
         projectId: projectDbId,
         agentId,
@@ -1208,9 +1221,13 @@ describe('Agent Generation Routes', () => {
               }),
             }),
           },
-          toolsAuthHeader: `Bearer ${userToken}`,
+          toolsAuthority: await workAuthorityOfToken({
+            token: userToken,
+            project: null,
+          }),
         };
         await createGenerationRecord({
+          authority: null,
           publicId: 'gen_text_encoded_continuation',
           projectId: projectDbId,
           agentId: pausingAgentId,

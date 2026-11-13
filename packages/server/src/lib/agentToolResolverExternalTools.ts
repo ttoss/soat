@@ -33,6 +33,7 @@ import {
   meterToolExecution,
   type ToolExecutionMeter,
 } from './usageToolRecording';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
 
@@ -42,15 +43,16 @@ const log = createDebug('soat:tools');
  * Served in-process via `dispatchApiRequest` rather than over loopback:
  * the app's real middleware chain still runs, so permission checks, validation,
  * audit, metering and the response contract are unchanged — only the socket is
- * gone. `authHeader` keeps its meaning; a call without one is refused by the
- * same middleware, since sharing a process never implies sharing authority.
+ * gone. The work's stored authority travels as a value, never a token; a
+ * call without one is refused, since sharing a process never implies sharing
+ * authority.
  */
 export const executeSoatTool = async (args: {
   toolName: string;
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
   meter: ToolExecutionMeter;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
   traceId?: string;
@@ -92,8 +94,8 @@ export const executeSoatTool = async (args: {
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
+            authority: args.authority,
             headers: {
-              ...(args.authHeader ? { Authorization: args.authHeader } : {}),
               ...args.buildContextHeaders({
                 toolContext: args.toolContext,
                 contextKeys: args.contextKeys,
@@ -202,7 +204,7 @@ const buildSoatActionTool = (args: {
   presetParameters?: Record<string, unknown>;
   projectPublicId?: string;
   boundary?: AgentBoundary;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
   traceId?: string;
@@ -253,7 +255,7 @@ const buildSoatActionTool = (args: {
         def: args.def,
         rawArgs,
         meter: args.meter,
-        authHeader: args.authHeader,
+        authority: args.authority,
         toolContext: args.toolContext,
         contextKeys: args.contextKeys,
         traceId: args.traceId,
@@ -276,7 +278,7 @@ export const resolveSoatTools = (args: {
   };
   meter: ToolExecutionMeter;
   boundary?: AgentBoundary;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   /** The project the generation runs in; see `pinnedProjectParameters`. */
   projectPublicId?: string;
   toolContext?: Record<string, string>;
@@ -314,7 +316,7 @@ export const resolveSoatTools = (args: {
       presetParameters: args.typedTool.presetParameters ?? undefined,
       projectPublicId: args.projectPublicId,
       boundary: args.boundary,
-      authHeader: args.authHeader,
+      authority: args.authority,
       toolContext: args.toolContext,
       contextKeys: args.typedTool.contextKeys,
       traceId: args.traceId,

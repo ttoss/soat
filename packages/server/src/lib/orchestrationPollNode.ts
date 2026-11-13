@@ -5,6 +5,7 @@ import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
+import type { WorkAuthority } from './workAuthority';
 
 // No wall-clock ceiling: each attempt runs in its own scheduled resumption
 // rather than a single held-open request, so the attempt cap is the only bound
@@ -48,14 +49,14 @@ export const executePollNode = async (args: {
   node: OrchestrationNode;
   state: Record<string, unknown>;
   projectIds: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   attempt?: number;
   orchestrationRunId?: string | null;
   // The run's `tool_context` — a poll node is the run calling a tool on its own
   // behalf, so it carries the run's context like a `tool` node does.
   toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader, toolContext } = args;
+  const { node, state, projectIds, authority, toolContext } = args;
   const { toolId, interval } = assertPollNode(node);
 
   const { maxIterations = DEFAULT_POLL_ATTEMPTS } = node;
@@ -74,7 +75,7 @@ export const executePollNode = async (args: {
     id: toolId,
     action: node.operationId,
     input: inputs,
-    authHeader,
+    authority,
     toolContext,
     attribution: {
       orchestrationRunId: args.orchestrationRunId,

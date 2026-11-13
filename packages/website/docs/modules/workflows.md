@@ -194,7 +194,7 @@ A state, a transition and everything under `on_enter` take the fields named here
 
 Entering a state cancels any dispatch still running from the state left, an in-flight orchestration run included: task state is the source of truth.
 
-A dispatch runs as the user or API key that moved the task into the state; an `automation` hop inherits it. A move made with a trigger or OAuth token records none, so its dispatch's platform self-calls are unauthenticated, as for [an orchestration run](./orchestrations.md#durable-background-execution).
+A task stores the authority its dispatches run under: the one of the user, API key, OAuth token or firing that last moved it (an OAuth token's consent and a trigger's `policy_ids` included); an `automation` hop carries on the authority of the run that routed it; an approval resolution keeps the stored one. A task holding none runs no tool (`409 WORK_AUTHORITY_MISSING`), as for [an orchestration run](./orchestrations.md#durable-background-execution).
 
 #### Tool dispatch
 
@@ -448,10 +448,10 @@ A cycle turning on its own (dispatch, outcome routes back, dispatch again) is bo
 | The move | Effect |
 | --- | --- |
 | A dispatch outcome routed through `on_complete` / `on_failure` (the `automation` principal) | increments |
-| A `transition-task` call from a dispatched run or agent, made with its run-as token | increments |
+| A `transition-task` call a dispatched run or agent makes under its stored authority | increments |
 | A person, a plain API key, or an approval resolution | resets to `0` |
 
-When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the transition is refused with `TASK_AUTOMATION_CHAIN_LIMIT` **before** the state change, so the next `on_enter` never fires; the task parks `automation_status: unrouted` and `tasks.automation_rejected` fires. A dispatched run or agent is recognized by its [run-as token](./orchestrations.md#durable-background-execution), not its principal. Any human touch restarts the budget.
+When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the transition is refused with `TASK_AUTOMATION_CHAIN_LIMIT` **before** the state change, so the next `on_enter` never fires; the task parks `automation_status: unrouted` and `tasks.automation_rejected` fires. A dispatched run or agent is recognized by the [stored authority](./orchestrations.md#durable-background-execution) its call carries, not its principal. Any human touch restarts the budget.
 
 ### Deploying as a formation
 

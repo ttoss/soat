@@ -9,6 +9,8 @@ import {
   MAX_EVENT_FIRING_ATTEMPTS,
   sweepDueEventFirings,
 } from 'src/lib/triggerEventFirings';
+import { triggerAuthorityIn } from 'src/lib/triggerFirings';
+import { storedAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
@@ -74,6 +76,14 @@ describe('Durable event firings', () => {
     leaseExpiresAt?: Date;
   }): Promise<string> => {
     const firing = await db.TriggerFiring.create({
+      // What the writer stores: the trigger's own authority.
+      authority: await storedAuthority({
+        authority: await triggerAuthorityIn({
+          triggerPublicId: args.trigger.publicId as string,
+          projectId: args.trigger.projectId as number,
+        }),
+        projectId: args.trigger.projectId as number,
+      }),
       triggerId: args.trigger.id as number,
       projectId: args.trigger.projectId as number,
       source: args.source ?? 'event',

@@ -10,11 +10,11 @@ import {
 } from './orchestrationRunActions';
 import { clearRunPause, PAUSABLE_RUN_STATUSES } from './orchestrationRunPause';
 import { kickPlaybookWorker } from './playbookCascade';
-import type { StartingPrincipal } from './principals';
 import { readPauseReason } from './projectPause';
 import { getProjectOrThrow, mapProject } from './projects';
 import { pauseTask, resumeTask } from './tasksPauseActions';
 import { computeNextFireAt } from './triggerValidation';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:projects');
 
@@ -227,7 +227,7 @@ const reanchorSchedules = async (args: {
  */
 export const resumeProject = async (args: {
   id: string;
-  principal?: StartingPrincipal;
+  authority: WorkAuthority | null;
 }): Promise<MappedProject> => {
   log('resumeProject: id=%s', args.id);
   const project = await getProjectOrThrow(args.id);
@@ -255,7 +255,7 @@ export const resumeProject = async (args: {
     rows: tasks,
     label: 'resumeProject',
     step: (task) => {
-      return resumeTask({ id: task.publicId, principal: args.principal });
+      return resumeTask({ id: task.publicId, authority: args.authority });
     },
   });
 

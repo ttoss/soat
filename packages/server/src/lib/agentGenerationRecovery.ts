@@ -21,6 +21,7 @@ import {
 import { generations, updateGenerationRecord } from './generations';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
+import type { WorkAuthority } from './workAuthority';
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
 
@@ -208,7 +209,7 @@ const buildPendingFromState = async (args: {
   generationId: string;
   agentId: string;
   projectIds?: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   typedAgent: TypedAgent;
   boundary: AgentBoundary;
   traceId: string;
@@ -226,7 +227,7 @@ const buildPendingFromState = async (args: {
     projectIds: args.projectIds,
     typedAgent: args.typedAgent,
     boundary: args.boundary,
-    authHeader: args.authHeader,
+    authority: args.authority,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
     // Trusted: `pendingState.toolContext` is persisted after the chokepoint
@@ -263,7 +264,7 @@ const buildPendingFromState = async (args: {
     aiProviderId: args.typedAgent.aiProvider?.publicId ?? null,
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: tools,
-    toolsAuthHeader: args.authHeader,
+    toolsAuthority: args.authority,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
   };
@@ -273,7 +274,7 @@ export const recoverPendingFromDb = async (args: {
   generationId: string;
   agentId: string;
   projectIds?: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<PendingGeneration | undefined> => {
   const [gen, storedState] = await Promise.all([
     generations.findByPublicId({
@@ -303,7 +304,7 @@ export const recoverPendingFromDb = async (args: {
     generationId: args.generationId,
     agentId: args.agentId,
     projectIds: args.projectIds,
-    authHeader: args.authHeader,
+    authority: args.authority,
     typedAgent,
     boundary: await resolveAgentBoundary({
       agentId: args.agentId,

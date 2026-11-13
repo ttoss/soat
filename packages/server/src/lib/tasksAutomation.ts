@@ -2,7 +2,6 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
-import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
 import { mapTask, transitionTask } from './tasks';
@@ -19,6 +18,7 @@ import {
   isTaskPaused,
   markDispatchPaused,
 } from './tasksPause';
+import type { WorkAuthority } from './workAuthority';
 import type { OnEnter, WorkflowDispatch } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
@@ -405,7 +405,7 @@ export const runStateAutomation = async (args: {
   projectId: number;
   stateName: string;
   onEnter: OnEnter;
-  principal?: StartingPrincipal;
+  authority: WorkAuthority | null;
 }): Promise<void> => {
   const dispatch = args.onEnter.dispatch;
   const dispatchKind = dispatchKindOf(dispatch.kind);
@@ -436,7 +436,7 @@ export const runStateAutomation = async (args: {
     inputs,
     taskContext: context,
     retry,
-    principal: args.principal,
+    authority: args.authority,
     toolContext: task.toolContext ?? undefined,
   });
 

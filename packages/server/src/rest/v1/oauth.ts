@@ -8,7 +8,7 @@ import { getPermissionCatalog } from 'src/lib/permissionCatalog';
 import { getProject, listProjects } from 'src/lib/projects';
 import { PROJECT_SCOPE_PREFIX, saveConsentGrant } from 'src/oauth/server';
 
-import { requireAuth } from './helpers';
+import { requireAuth, requireCallerUser } from './helpers';
 
 const oauthRouter = new Router<Context>();
 
@@ -172,7 +172,7 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
     await saveConsentGrant({
       codeChallenge,
       clientId,
-      subject: ctx.authUser.publicId,
+      subject: requireCallerUser(ctx, 'oauth:Consent').publicId,
       scopes,
     });
     result.authorize_url = `/authorize?${body.authorize_query}`;

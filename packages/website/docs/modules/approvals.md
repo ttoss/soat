@@ -107,19 +107,16 @@ the approver sees.
 
 ### Continuation identity
 
-A continuation runs **as the principal the proposing generation acted as**,
-never as the approver. The platform reads
-[`acted_as`](./generations.md#acting-principal) off the proposing generation —
-its starter, or the caller who resumed it with tool outputs — and re-mints a short-lived run-as token; the continuation's
-[`builtin` tools](./tools.md#builtin) and the approved action execute with it.
-The token asserts identity only; authorization is evaluated per request, so a
-chain started by a scoped API key never exceeds that key's policies, and
-revoking the key stops the chain mid-flight.
+A continuation runs **under the authority the proposing generation stores**,
+never the approver's: its starter's, or that of the caller who resumed it with
+tool outputs. The continuation's [`builtin` tools](./tools.md#builtin) and the
+approved action execute under it. Authorization is evaluated per request
+against current policies, so a chain started by a scoped API key never exceeds
+that key's policies, and revoking the key stops the chain mid-flight.
 
-The continuation records that principal as its own starter and `acted_as`, so
-later approvals in the chain re-mint from there. A chain with no recorded principal
-(started by a trigger or an OAuth token) gets no credential; its self-calls
-stay unauthenticated.
+The continuation stores that authority as its own, so later approvals in the
+chain run under it too. A proposing generation with no stored authority leaves
+the continuation none: its calls are refused with `409 WORK_AUTHORITY_MISSING`.
 
 The proposing turn's [`tool_context`](./agents.md#tool-context) is not stored
 on the item. A tool that authorizes through a context header gets its value

@@ -2,18 +2,19 @@ import { db } from 'src/db';
 import { flushProjectResumes } from 'src/lib/projectPauseActions';
 import { signToken } from 'src/lib/signedTokens';
 import { type ActiveDispatch, flushTaskAutomations } from 'src/lib/tasks';
+import { parseWorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * Durable work started by an OAuth token records no principal, as
- * `resolveStartingPrincipal` rules: a later drive re-mints its credential from
- * the recorded principal, and a plain run token for the token's user would
- * drop the consented scope and act with the user's whole access.
+ * Durable work started by an OAuth token stores the token's user held to the
+ * consented scope: a later drive acts as that user and never beyond the
+ * scope, where the user's whole access would otherwise reach.
  *
- * Every case pairs the OAuth caller with the user's own login, which does
- * record the user, so a run that records nothing for every caller cannot pass.
+ * Every case pairs the OAuth caller with the user's own login, which stores
+ * the user unscoped, so a run that stores one shape for every caller cannot
+ * pass.
  */
 
 let userToken: string;
@@ -25,7 +26,15 @@ let orchestrationId: string;
 const principalOf = async (where: Record<string, unknown>) => {
   const run = await db.OrchestrationRun.findOne({ where });
   expect(run).not.toBeNull();
-  return { kind: run!.principalKind ?? null, id: run!.principalId ?? null };
+  const authority = parseWorkAuthority(run!.authority);
+  return {
+    kind: authority?.principal.type ?? null,
+    id: authority?.principal.id ?? null,
+    scoped:
+      authority?.caps.some((cap) => {
+        return cap.kind === 'scope';
+      }) ?? false,
+  };
 };
 
 beforeAll(async () => {
@@ -87,12 +96,20 @@ describe('POST /orchestration-runs', () => {
     return principalOf({ publicId: res.body.id });
   };
 
-  test('a user login records the user', async () => {
-    expect(await start(userToken)).toEqual({ kind: 'user', id: userId });
+  test('a user login stores the user', async () => {
+    expect(await start(userToken)).toEqual({
+      kind: 'user',
+      id: userId,
+      scoped: false,
+    });
   });
 
-  test('an OAuth token records no principal', async () => {
-    expect(await start(oauthToken)).toEqual({ kind: null, id: null });
+  test('an OAuth token stores the user held to its scope', async () => {
+    expect(await start(oauthToken)).toEqual({
+      kind: 'user',
+      id: userId,
+      scoped: true,
+    });
   });
 });
 
@@ -162,7 +179,7 @@ describe('a task dispatch', () => {
         return userToken;
       },
       () => {
-        return { kind: 'user', id: userId };
+        return { kind: 'user', id: userId, scoped: false };
       },
     ],
     [
@@ -171,7 +188,7 @@ describe('a task dispatch', () => {
         return oauthToken;
       },
       () => {
-        return { kind: null, id: null };
+        return { kind: 'user', id: userId, scoped: true };
       },
     ],
   ])('started by %s', (_label, tokenOf, expected) => {

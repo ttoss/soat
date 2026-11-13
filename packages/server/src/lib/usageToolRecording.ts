@@ -14,6 +14,7 @@ import {
   type SentToolCall,
   type ToolCallRecord,
 } from './usageResourcePricing';
+import { workAuthorityMissing } from './workAuthority';
 
 const log = createDebug('soat:usage');
 
@@ -66,8 +67,8 @@ export type ToolExecutionMeter = {
   // Public id; null for an inline (unpersisted) definition.
   toolId: string | null;
   /**
-   * The run-as work making the call (`readRunTokenWork`), signed as the
-   * assertion's `work_id`; null for a call no run-as token makes.
+   * The durable work making the call (`WorkAuthority.work`), signed as the
+   * assertion's `work_id`; null for a call no work makes.
    */
   workId: string | null;
   attribution: ToolCallAttribution;
@@ -307,6 +308,12 @@ export const meterToolExecution = async <T>(args: {
   send: (markSent: (sent?: SentToolCall) => void) => Promise<T>;
 }): Promise<T> => {
   log('meterToolExecution: tool=%s', args.meter.toolId);
+  const { sender } = args.meter;
+  if (!sender.caller && !sender.authority) {
+    throw workAuthorityMissing({
+      work: `The call to tool '${args.meter.toolId ?? 'inline'}'`,
+    });
+  }
   const startedAt = Date.now();
   const sent: { call?: SentToolCall } = {};
   let outcome: ToolExecutionOutcome = 'ok';

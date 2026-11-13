@@ -6,7 +6,6 @@ import {
   parseOrchestrationGraph,
   parseOutputMapping,
 } from 'src/lib/orchestrationGraphWire';
-import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 import {
   cancelOrchestrationRun,
   createOrchestration,
@@ -24,7 +23,7 @@ import {
   updateOrchestration,
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
-import { replayedAuthHeader } from 'src/lib/replayedCredential';
+import { captureAuthority } from 'src/lib/workAuthority';
 
 import {
   parseEnumListQuery,
@@ -279,7 +278,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   // before it executes, so a bag the caller cannot be told about later has to
   // fail while the caller is still listening.
   const metadata = parseMetadataBag(body.metadata);
-  const authHeader = replayedAuthHeader({ ctx });
+  const authority = captureAuthority({ authUser: ctx.authUser });
 
   const result = await startOrchestrationRun({
     orchestrationPublicId: orchestrationId,
@@ -291,10 +290,8 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     // The caller's own label for this run. Stored beside `input`, never merged
     // into run state.
     metadata,
-    authHeader,
-    // Persisted on the run so a worker driving it later can act as the same
-    // principal; the request's own header only reaches `wait` mode.
-    principal: resolveStartingPrincipal({ authUser: ctx.authUser }),
+    // Stored on the run: every later drive of it runs under this authority.
+    authority,
     wait: body.wait === true,
     idempotencyKey,
   });

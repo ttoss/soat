@@ -29,16 +29,13 @@ import { readInputModalities } from './inputModalities';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
-import {
-  actedAsPrincipalColumns,
-  startedByPrincipalColumns,
-  type StartingPrincipal,
-} from './principals';
+import { startedWorkColumns } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 import { rollUpUsageTotals } from './usageAggregate';
 import { withGenerationEmbeddingUsage } from './usageEmbeddingRecording';
+import type { WorkAuthority } from './workAuthority';
 
 // The row → wire mapper lives in its own module; re-exported so the many
 // existing `from './generations'` imports of the type keep working.
@@ -76,7 +73,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     parentTraceId?: string | null;
     rootTraceId?: string | null;
     rootGenerationId?: string | null;
-    startedBy?: StartingPrincipal | null;
+    authority: WorkAuthority | null;
     toolSurface?: Record<string, unknown> | null;
     inputModalities: string[];
     retrieval?: KnowledgeRetrieval;
@@ -124,9 +121,10 @@ const commitGenerationWithTrace = async (helperArgs: {
         rootGenerationId: args.rootGenerationId ?? null,
         ...conversation,
         chainId,
-        ...startedByPrincipalColumns(args.startedBy ?? null),
-        // The first segment's tool calls run on the starting credential.
-        ...actedAsPrincipalColumns(args.startedBy ?? null),
+        ...(await startedWorkColumns({
+          authority: args.authority,
+          projectId: args.projectId,
+        })),
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
         status: 'running',
@@ -164,7 +162,7 @@ const insertGenerationRecord = async (
     // which is the only writer of the column.
     rootGenerationId?: string | null;
     initiatorGenerationId?: string | null;
-    startedBy?: StartingPrincipal | null;
+    authority: WorkAuthority | null;
     // The conversation this generation serves, when it serves one: the edge
     // the memory assertions walk up from a generation.
     conversation?: GenerationConversation;

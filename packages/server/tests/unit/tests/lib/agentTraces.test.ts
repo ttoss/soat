@@ -31,6 +31,7 @@ describe('saveTrace', () => {
 
   const generate = async (args: { traceId: string; generationId: string }) => {
     await createGenerationRecord({
+      authority: null,
       publicId: args.generationId,
       projectId,
       agentId: agentPublicId,

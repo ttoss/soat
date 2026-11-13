@@ -4,6 +4,7 @@ import {
   type ResolvableMessageContent,
   resolveMessageContent,
 } from './messageContent';
+import type { WorkAuthority } from './workAuthority';
 
 export type GenerationInputMessage = {
   role: string;
@@ -25,7 +26,7 @@ export type GenerationInputMessage = {
 export const resolveGenerationInputMessages = async (args: {
   projectIds?: number[];
   messages: GenerationInputMessage[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   allowedToolIds?: string[];
   agentBoundary?: AgentBoundary;
@@ -44,7 +45,7 @@ export const resolveGenerationInputMessages = async (args: {
       const resolvedContent = await resolveMessageContent({
         content: message.content as ResolvableMessageContent,
         projectIds: args.projectIds,
-        authHeader: args.authHeader,
+        authority: args.authority,
         authUser: args.authUser,
         allowedToolIds: args.allowedToolIds,
         agentBoundary: args.agentBoundary,

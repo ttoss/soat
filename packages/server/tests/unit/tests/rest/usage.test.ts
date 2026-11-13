@@ -966,7 +966,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'from trigger' }],
         stream: false,
-        authHeader: `Bearer ${userToken}`,
+        authority: null,
         triggerId: triggerPublicId,
       })) as { id: string };
 
@@ -3342,7 +3342,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'replayed node' }],
         stream: false,
-        authHeader: `Bearer ${userToken}`,
+        authority: null,
         orchestrationRunId,
         nodeId,
       });
@@ -3375,7 +3375,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'retried node' }],
         stream: false,
-        authHeader: `Bearer ${userToken}`,
+        authority: null,
         orchestrationRunId,
         nodeId,
         nodeAttempt: 2,
@@ -3412,7 +3412,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'redelivered retry' }],
         stream: false,
-        authHeader: `Bearer ${userToken}`,
+        authority: null,
         orchestrationRunId,
         nodeId,
         nodeAttempt: 2,
@@ -3444,7 +3444,7 @@ describe('Usage', () => {
         orchestrationPublicId: createRes.body.id,
         projectIds: [project?.id as number],
         input: {},
-        authHeader: `Bearer ${userToken}`,
+        authority: null,
         wait: true,
         triggerId: triggerPublicId,
       });

@@ -147,7 +147,7 @@ const deployerAssertion = async (args: {
   return {
     projectPublicId: args.projectPublicId,
     authority: await resolveSenderAuthority({
-      sender: { caller: args.actor, authHeader: undefined },
+      sender: { caller: args.actor, authority: null },
       projectPublicId: args.projectPublicId,
     }),
   };

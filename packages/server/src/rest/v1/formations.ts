@@ -27,6 +27,7 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
+  requireCallerUser,
   resolveWriteProjectId,
   resolveWriteProjectPublicId,
 } from './helpers';
@@ -78,7 +79,7 @@ const formationActorOf = (
   ctx: Context & { authUser: AuthUser }
 ): FormationActor => {
   return {
-    userId: ctx.authUser.id,
+    userId: requireCallerUser(ctx, 'formations:CreateFormation').id,
     author: requestPrincipalFromCtx(ctx),
     ...playbookAuthorOf(ctx),
     getPolicies: ctx.authUser.getPolicies,

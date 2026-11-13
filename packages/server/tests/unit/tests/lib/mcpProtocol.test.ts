@@ -2,6 +2,8 @@ import { asSchema } from 'ai';
 import { resolveMcpTools } from 'src/lib/agentToolResolverMcp';
 import { McpToolError } from 'src/lib/mcpProtocol';
 
+import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
+
 // A protocol test reads the call, not its meter: no project, so the
 // recorder's write is refused and swallowed.
 const UNMETERED = {
@@ -9,7 +11,7 @@ const UNMETERED = {
   toolId: null,
   workId: null,
   attribution: {},
-  sender: { authHeader: undefined },
+  sender: { authority: ORPHAN_AUTHORITY },
 };
 
 /**

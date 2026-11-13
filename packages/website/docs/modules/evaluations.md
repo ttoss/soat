@@ -360,9 +360,9 @@ levels) to read it as 0–1:
 - **One decision per item attempt**, requested as the run with `metadata` `{ eval_id,
   eval_run_id, dataset_item_id }` and read back through `decision_id`. Its spend is the
   decision's own (`source: decider` in [usage](./usage.md)).
-- **No credential.** Like every scorer, the decision is requested with none, so a
-  `builtin` step in a pipeline behind the decider fails the decision; `http` tools,
-  pipelines of them and a tool-less agent answer.
+- **The run's authority.** Like every scorer and every item's generation, the decision
+  runs under the authority the run stores: its starter's, or its trigger's for a
+  scheduled run.
 - **Errors are not zeros.** A failed decision, or a `score` that is not a number in 0–1,
   errors the item with the decision's id and code in `error`.
 
@@ -579,6 +579,10 @@ curl -X POST "https://api.example.com/api/v1/evals/$EVAL_ID/runs" \
 </Tabs>
 
 Filtering runs by a metadata key is not supported — fetch and filter client-side.
+
+### Run authority
+
+A run stores the authority it was started under: its starter's, or its trigger's `policy_ids` for a scheduled run. Every item's generation and every scorer run under it, however long after the request the worker drives them.
 
 ### Run tool context
 

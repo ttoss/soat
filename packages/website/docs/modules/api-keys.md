@@ -125,7 +125,7 @@ Key management is self-service, so the boundary also guards the key being writte
 
 ### A project-scoped token writes no key
 
-An OAuth access token, a trigger run-as token, a run token, an [IAM token](./iam.md#iam-tokens) and an `On-Behalf-Of` assertion narrow a request beyond its credential's own grant (the consented scope, the trigger's policy, the starting key's policies, the token's bound, the work the assertion serves), and a key cannot carry that narrowing. Under any of them, [`POST /api-keys`](/docs/api/api-keys/create-api-key), [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) and an `api_key` [formation](./formations.md) resource return `403 CREDENTIAL_NARROWED`. Create and update keys with a user token or an API key; reading, listing and deleting keys are unaffected.
+An OAuth access token, an [IAM token](./iam.md#iam-tokens), an `On-Behalf-Of` assertion and every call durable work makes under its stored authority narrow a request beyond its credential's own grant (the consented scope, the token's bound, the work the assertion serves, the trigger's policy or the starting key's policies), and a key cannot carry that narrowing. Under any of them, [`POST /api-keys`](/docs/api/api-keys/create-api-key), [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) and an `api_key` [formation](./formations.md) resource return `403 CREDENTIAL_NARROWED`. Create and update keys with a user token or an API key; reading, listing and deleting keys are unaffected.
 
 ### Revoking a Key
 

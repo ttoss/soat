@@ -21,6 +21,7 @@ import type {
   OrchestrationEdge,
   OrchestrationNode,
 } from './orchestrations';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:orchestrations');
 
@@ -111,7 +112,7 @@ const executeActiveNodes = (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   pollAttempts: Map<string, number>;
   retryAttempts: Map<string, number>;
 }) => {
@@ -124,7 +125,7 @@ const executeActiveNodes = (args: {
         state: args.state,
         projectIds: args.projectIds,
         traceId: args.traceId,
-        authHeader: args.authHeader,
+        authority: args.authority,
         pollAttempt: args.pollAttempts.get(nodeId),
         retryAttempt: args.retryAttempts.get(nodeId),
       });
@@ -141,7 +142,7 @@ const executeRunBatch = async (args: {
   artifacts: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   completedNodes: Set<string>;
   conditionLabels: Map<string, string>;
   activatedNodes: Set<string>;
@@ -313,7 +314,7 @@ export const executeRunLoop = async (args: {
   artifacts: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   completedNodes?: Set<string>;
   conditionLabels?: Map<string, string>;
   activatedNodes?: Set<string>;
@@ -350,7 +351,7 @@ export const executeRunLoop = async (args: {
         artifacts,
         projectIds,
         traceId,
-        authHeader: args.authHeader,
+        authority: args.authority,
         completedNodes,
         conditionLabels,
         activatedNodes,

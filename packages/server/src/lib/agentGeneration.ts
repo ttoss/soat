@@ -23,13 +23,13 @@ import {
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
-import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { assertGenerationProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 import { admitSharedCall } from './shareCaps';
 import { assertValidToolContext } from './toolContext';
 import { isUniqueViolation } from './uniqueViolation';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
 
@@ -52,7 +52,7 @@ const dispatchGeneration = (args: {
       model: args.ctx.model,
       allMessages: args.ctx.allMessages,
       resolvedTools: args.ctx.resolvedTools,
-      toolsAuthHeader: args.ctx.toolsAuthHeader,
+      toolsAuthority: args.ctx.toolsAuthority,
       typedAgent: args.ctx.typedAgent,
       toolChoice: args.ctx.toolChoice,
       generationId: args.ctx.generationId,
@@ -68,7 +68,7 @@ const dispatchGeneration = (args: {
     model: args.ctx.model,
     allMessages: args.ctx.allMessages,
     resolvedTools: args.ctx.resolvedTools,
-    toolsAuthHeader: args.ctx.toolsAuthHeader,
+    toolsAuthority: args.ctx.toolsAuthority,
     typedAgent: args.ctx.typedAgent,
     toolChoice: args.ctx.toolChoice,
     generationId: args.ctx.generationId,
@@ -88,7 +88,7 @@ type ResolveContextArgs = {
   projectIds?: number[];
   runProjectId?: number;
   messages: GenerationInputMessage[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   toolContext?: Record<string, string>;
   traceId: string;
@@ -122,7 +122,7 @@ const resolveContextAndRecord = async (
     projectIds: args.projectIds,
     runProjectId: args.runProjectId,
     messages: args.messages,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     toolContext: args.toolContext,
     traceId: args.traceId,
@@ -140,14 +140,6 @@ const resolveContextAndRecord = async (
     outputSchemaOverride: args.outputSchemaOverride,
   });
 
-  // Persisted rather than left to the request: work resuming after the request
-  // is gone — an approved tool call's continuation days later — re-mints its
-  // credential from this pair.
-  const principal = resolveStartingPrincipal({
-    authUser: args.authUser,
-    authHeader: args.authHeader,
-  });
-
   // Awaited so the record reliably exists before the generation runs and a
   // failure can be persisted on it. Creation failures are non-fatal.
   await createGenerationRecord({
@@ -159,7 +151,8 @@ const resolveContextAndRecord = async (
     rootTraceId: args.rootTraceId,
     rootGenerationId: args.rootGenerationId,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
-    startedBy: principal,
+    // Stored: work resuming after the request is gone runs under it.
+    authority: args.authority,
     // Typed FK columns, not metadata keys: this is identity the platform
     // enforces and caps spend on, so it must not live in a caller-writable bag.
     sessionId: args.sessionId ?? null,
@@ -218,7 +211,7 @@ export type CreateGenerationArgs = {
   rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
@@ -350,7 +343,7 @@ const prepareGeneration = async (
     projectIds: args.projectIds,
     runProjectId: args.runProjectId,
     messages: args.messages,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     toolContext: args.toolContext,
     traceId,

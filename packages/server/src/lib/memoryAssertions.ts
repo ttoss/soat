@@ -33,7 +33,10 @@ export type MemoryAssertionSource = {
   ruleId?: number | null;
   /** The generation's **public** id; resolved to the row here. */
   generationId?: string | null;
-  principalType: Extract<PrincipalType, 'user' | 'api_key' | 'agent'>;
+  principalType: Extract<
+    PrincipalType,
+    'user' | 'api_key' | 'agent' | 'trigger'
+  >;
   principalId: string;
 };
 

@@ -59,6 +59,7 @@ import { iamConditionKeys } from './2026-11-11-iamConditionKeys';
 import { memoryActor } from './2026-11-12-memoryActor';
 import { principalBound } from './2026-11-12-principalBound';
 import { policyIdsPublic } from './2026-11-13-policyIdsPublic';
+import { workAuthority } from './2026-11-13-workAuthority';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -139,4 +140,5 @@ export const MIGRATIONS: Migration[] = [
   principalBound,
   memoryActor,
   policyIdsPublic,
+  workAuthority,
 ];

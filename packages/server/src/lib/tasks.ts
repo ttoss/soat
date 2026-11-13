@@ -5,7 +5,6 @@ import { DomainError } from '../errors';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
-import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
 import { runStateAutomation } from './tasksAutomation';
@@ -16,6 +15,7 @@ import {
 } from './tasksCreateIdempotency';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContext } from './toolContextCarrier';
+import { storedAuthority, type WorkAuthority } from './workAuthority';
 import {
   initialStateOf,
   validatePayload,
@@ -33,7 +33,8 @@ const log = createDebug('soat:tasks');
  * API Keys, never from the Actors module. `automation` and `approval` are the
  * engine's own system principals.
  */
-export type TaskPrincipalKind = 'user' | 'api_key' | 'automation' | 'approval';
+export type TaskPrincipalKind =
+  'user' | 'api_key' | 'trigger' | 'automation' | 'approval';
 
 export type TaskPrincipal = {
   kind: TaskPrincipalKind;
@@ -169,9 +170,8 @@ export const dispatchOnEnter = (args: {
   taskPublicId: string;
   projectId: number;
   state: WorkflowState;
-  // A task dispatch is request-less, so without this its `soat` tool nodes and
-  // tools have no credential.
-  principal?: StartingPrincipal;
+  // A task dispatch is request-less: it runs under the task's stored authority.
+  authority: WorkAuthority | null;
 }): void => {
   if (!args.state.onEnter || args.state.kind === 'human') return;
   const promise = runStateAutomation({
@@ -179,7 +179,7 @@ export const dispatchOnEnter = (args: {
     projectId: args.projectId,
     stateName: args.state.name,
     onEnter: args.state.onEnter,
-    principal: args.principal,
+    authority: args.authority,
   })
     .catch((error: unknown) => {
       log(
@@ -224,7 +224,7 @@ const finalizeCreatedTask = async (args: {
   projectId: number;
   entryState: WorkflowState;
   closed: boolean;
-  startingPrincipal: StartingPrincipal | null;
+  authority: WorkAuthority | null;
 }) => {
   const created = await findTaskInstance({ id: args.taskPublicId });
   const mapped = mapTask(created!);
@@ -245,9 +245,9 @@ const finalizeCreatedTask = async (args: {
     taskPublicId: args.taskPublicId,
     projectId: args.projectId,
     state: args.entryState,
-    // The creator is the identity the entry state's automation acts as; every
-    // later hop inherits it (see `resolveDispatchPrincipal`).
-    principal: args.startingPrincipal ?? undefined,
+    // The creator's authority, which the task stores; every later hop
+    // inherits it (see `resolveDispatchAuthority`).
+    authority: args.authority,
   });
 
   return mapped;
@@ -287,10 +287,10 @@ export type CreateTaskArgs = {
   idempotency?: TaskCreateIdempotency;
   principal: TaskPrincipal;
   /**
-   * The identity the entry state's dispatch runs as, by
-   * `resolveStartingPrincipal`'s rule; `principal` is only who is credited.
+   * The authority the task stores and its dispatches run under; `principal`
+   * is only who is credited.
    */
-  startingPrincipal: StartingPrincipal | null;
+  authority: WorkAuthority | null;
 };
 
 const insertTask = async (args: CreateTaskArgs) => {
@@ -346,6 +346,12 @@ const insertTask = async (args: CreateTaskArgs) => {
     // A task created straight into a terminal state dispatches nothing and can
     // never be moved again, so it never holds a credential at rest.
     toolContext: closed ? null : toolContext,
+    authority: closed
+      ? null
+      : await storedAuthority({
+          authority: args.authority,
+          projectId: args.projectId,
+        }),
     activeDispatch: null,
     automationStatus: null,
     pendingTransition: null,
@@ -376,7 +382,7 @@ const insertTask = async (args: CreateTaskArgs) => {
     projectId: args.projectId,
     entryState,
     closed,
-    startingPrincipal: args.startingPrincipal,
+    authority: args.authority,
   });
 };
 

@@ -36,12 +36,20 @@ import {
 import { checkWorkerHealth } from 'src/lib/orchestrationWorkerHealth';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  testClient,
+  workAuthorityOf,
+} from '../../testClient';
+
+/** No caller drives these runs: an orphan authority stands for any stored one. */
+const WORK_AUTHORITY = workAuthorityOf({ project: null, user: 'user_orphan' });
 
 // The Postgres queue driver + run-scoped idempotency keys (orchestration-queue
 // P1). The in-process worker kick is disabled here so tasks are claimed/driven
 // explicitly — the auto-drain behaviour is covered by the durable-execution
 // tests in orchestrations.test.ts.
+
 describe('Orchestration queue (Postgres driver) + idempotency', () => {
   let userToken: string;
   let adminToken: string;
@@ -175,6 +183,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       });
 
       const run = await startOrchestrationRun({
+        authority: WORK_AUTHORITY,
         orchestrationPublicId: orchId,
         projectIds: [projectPk],
         input: {},
@@ -253,6 +262,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       });
 
       const started = await startOrchestrationRun({
+        authority: WORK_AUTHORITY,
         orchestrationPublicId: orchId,
         projectIds: [projectPk],
         input: {},
@@ -309,6 +319,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const nodes = [{ id: 'call', type: 'tool' as const, toolId }];
 
       const first = await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'call',
         runRecord: run,
         nodes,
@@ -322,6 +333,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       // Re-running the same (run, node, attempt) finds the completed key and
       // reuses the stored output — the executor is not invoked again.
       const second = await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'call',
         runRecord: run,
         nodes,
@@ -353,6 +365,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const nodes = [{ id: 'call', type: 'tool' as const, toolId }];
 
       await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'call',
         runRecord: run,
         nodes,
@@ -364,6 +377,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       // Attempt 2 → a new key `…:2`, so the executor runs for real again.
       await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'call',
         runRecord: run,
         nodes,
@@ -401,6 +415,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const run = await createRunRow(orchPk);
 
       await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'call',
         runRecord: run,
         nodes: [{ id: 'call', type: 'tool' as const, toolId }],
@@ -446,6 +461,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       // insert → reuse the row) and re-executes, since the side effect never
       // completed. This is the honest at-least-once boundary.
       const outcome = await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'call',
         runRecord: run,
         nodes: [{ id: 'call', type: 'tool' as const, toolId }],
@@ -480,6 +496,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const run = await createRunRow(orchPk);
 
       await executeAndRecordNode({
+        authority: WORK_AUTHORITY,
         nodeId: 'call',
         runRecord: run,
         nodes: [{ id: 'call', type: 'tool' as const, toolId }],
@@ -592,6 +609,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       });
 
       const started = await startOrchestrationRun({
+        authority: WORK_AUTHORITY,
         orchestrationPublicId: orchId,
         projectIds: [projectPk],
         input: {},
@@ -620,6 +638,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
   describe('a drive that outlives its lease', () => {
     test('the lease is heartbeaten while the drive runs, so the task is not redelivered', async () => {
       const started = await startOrchestrationRun({
+        authority: WORK_AUTHORITY,
         orchestrationPublicId: await createOrchestration({
           name: 'Lease Heartbeat',
           nodes: [{ id: 'start', type: 'transform', expression: 'done' }],
@@ -1087,6 +1106,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       // Seed a 5-task backlog of independent queued runs.
       for (let i = 0; i < 5; i += 1) {
         await startOrchestrationRun({
+          authority: WORK_AUTHORITY,
           orchestrationPublicId: orchId,
           projectIds: [projectPk],
           input: {},

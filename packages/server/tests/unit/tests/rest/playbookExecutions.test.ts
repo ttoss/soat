@@ -599,11 +599,11 @@ describe('Playbook executions', () => {
       await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
       expect((await executionsOf(caseId))[0].error.code).toBe(
-        'PLAYBOOK_AUTHOR_UNAVAILABLE'
+        'WORK_AUTHORITY_MISSING'
       );
       const res = await run(caseId, 'pricing', { wait: true }, adminToken);
       expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe('PLAYBOOK_AUTHOR_UNAVAILABLE');
+      expect(res.body.error.code).toBe('WORK_AUTHORITY_MISSING');
     });
   });
 

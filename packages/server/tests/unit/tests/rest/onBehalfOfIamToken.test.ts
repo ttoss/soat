@@ -2,17 +2,14 @@ import crypto from 'node:crypto';
 
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
-import {
-  buildRunAuthHeader,
-  readStoredStartingPrincipal,
-} from 'src/lib/orchestrationRunToken';
 import { signToken } from 'src/lib/signedTokens';
+import { parseWorkAuthority } from 'src/lib/workAuthority';
 
 import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, workRequest } from '../../testClient';
 
 /**
  * An IAM token carries `On-Behalf-Of` when the key that issued it is scoped to
@@ -165,7 +162,7 @@ describe('On-Behalf-Of on an IAM token', () => {
   });
 
   describe('work the token starts', () => {
-    /** A run credential re-minted for a generation `token` starts. */
+    /** Reads the document as the work a generation `token` starts. */
     const remintedFor = async (args: { token: string; assertion: string }) => {
       const res = await authenticatedTestClient(args.token)
         .post(`/api/v1/agents/${agentId}/generate?wait=true`)
@@ -176,16 +173,11 @@ describe('On-Behalf-Of on an IAM token', () => {
         where: { publicId: res.body.id },
       });
       expect(gen!.actedAsPrincipalId).toBe(projectKeyId);
-      const header = await buildRunAuthHeader({
-        principal: readStoredStartingPrincipal({
-          kind: gen!.actedAsPrincipalType,
-          id: gen!.actedAsPrincipalId,
-          bound: gen!.actedAsPrincipalBound,
-        }),
-        projectId: gen!.projectId as number,
-        workPublicId: res.body.id,
+      return workRequest({
+        authority: parseWorkAuthority(gen!.authority)!,
+        method: 'get',
+        path: `/api/v1/documents/${documentId}`,
       });
-      return header!.slice('Bearer '.length);
     };
 
     test('is held to the bound and the assertion together', async () => {
@@ -208,9 +200,9 @@ describe('On-Behalf-Of on an IAM token', () => {
         assertion: narrow,
       });
 
-      expect((await readDocument(both)).status).toBe(200);
-      expect((await readDocument(boundDenies)).status).toBe(403);
-      expect((await readDocument(assertionDenies)).status).toBe(403);
+      expect(both.status).toBe(200);
+      expect(boundDenies.status).toBe(403);
+      expect(assertionDenies.status).toBe(403);
     });
   });
 

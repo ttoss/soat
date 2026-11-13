@@ -111,7 +111,7 @@ export type ToolAssertionIdentity = {
   /** Public ids of the agent and generation whose turn made the call. */
   agentId?: string | null;
   generationId?: string | null;
-  /** Public id of the run-as work making the call (`readRunTokenWork`). */
+  /** Public id of the durable work making the call (`WorkAuthority.work`). */
   workId?: string | null;
   context?: Record<string, string>;
   /** The sender's authority, sealed (`assertionAuthority.ts`): the `ath` claim. */

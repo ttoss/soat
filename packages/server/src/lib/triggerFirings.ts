@@ -4,6 +4,11 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import { paginatedList } from './pagination';
 import type { StoredError } from './storedError';
+import {
+  storedAuthority,
+  triggerAuthority,
+  type WorkAuthority,
+} from './workAuthority';
 
 const log = createDebug('soat:triggers');
 
@@ -65,8 +70,14 @@ export const createFiringRecord = async (args: {
    * pick the same row up for a second, parallel run.
    */
   leaseExpiresAt?: Date | null;
+  /** What the firing runs under; null records a firing refused before it had one. */
+  authority: WorkAuthority | null;
 }): Promise<InstanceType<(typeof db)['TriggerFiring']>> => {
   const firing = await db.TriggerFiring.create({
+    authority: await storedAuthority({
+      authority: args.authority,
+      projectId: args.projectId,
+    }),
     triggerId: args.triggerId,
     projectId: args.projectId,
     source: args.source,
@@ -180,4 +191,20 @@ export const getTriggerFiring = async (args: { id: string }) => {
     );
   }
   return mapTriggerFiring(firing);
+};
+
+/** {@link triggerAuthority} for a trigger named by its project's internal id. */
+export const triggerAuthorityIn = async (args: {
+  triggerPublicId: string;
+  projectId: number;
+}): Promise<WorkAuthority | null> => {
+  const project = await db.Project.findByPk(args.projectId, {
+    attributes: ['publicId'],
+  });
+  return project
+    ? triggerAuthority({
+        triggerPublicId: args.triggerPublicId,
+        projectPublicId: project.publicId as string,
+      })
+    : null;
 };

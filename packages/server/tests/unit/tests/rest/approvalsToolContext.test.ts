@@ -2,11 +2,13 @@ import type http from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { emitApproval } from 'src/lib/approvals';
+import { createGenerationRecord } from 'src/lib/generations';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, workAuthorityOf } from '../../testClient';
 
 /**
  * `tool_context` on `POST /approvals/:id/approve`.
@@ -28,6 +30,8 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
   let agentId: string;
   let httpToolId: string;
   let presetToolId: string;
+  /** The proposing generation, whose stored authority the approved action runs under. */
+  let proposingGenerationId: string;
 
   let toolServer: http.Server;
   let modelServer: http.Server;
@@ -191,6 +195,19 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
     agentId = agentRes.body.id as string;
   });
 
+  beforeAll(async () => {
+    const me =
+      await authenticatedTestClient(adminToken).get('/api/v1/users/me');
+    proposingGenerationId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
+    await createGenerationRecord({
+      authority: workAuthorityOf({ project: projectId, user: me.body.id }),
+      publicId: proposingGenerationId,
+      projectId: projectInternalId,
+      agentId,
+      traceId: generatePublicId(PUBLIC_ID_PREFIXES.trace),
+    });
+  });
+
   afterAll(async () => {
     await close(toolServer);
     await close(modelServer);
@@ -208,6 +225,7 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
       proposedAction: { toolId: httpToolId, arguments: { amount: 5 } },
       expiresInSeconds: 3600,
       agentId,
+      generationId: proposingGenerationId,
     });
   };
 
@@ -313,6 +331,7 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
         },
         expiresInSeconds: 3600,
         agentId,
+        generationId: proposingGenerationId,
       });
     };
 

@@ -1,16 +1,21 @@
 import type { Tool } from 'ai';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import { HttpToolError } from 'src/lib/httpToolError';
+import type { WorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
+import {
+  authenticatedTestClient,
+  workAuthorityOfToken,
+} from '../../testClient';
 
 const UNMETERED = {
   projectId: 0,
   toolId: null,
   workId: null,
   attribution: {},
-  sender: { authHeader: undefined },
+  sender: { authority: ORPHAN_AUTHORITY },
 };
 
 /**
@@ -20,6 +25,7 @@ const UNMETERED = {
  */
 describe('a builtin tool presetting path_prefix on create-document', () => {
   let adminToken: string;
+  let adminAuthority: WorkAuthority;
   let projectId: string;
 
   const PIN = '/people/alice/';
@@ -33,7 +39,7 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
         actions: [action],
         presetParameters: { path_prefix: PIN },
       },
-      authHeader: `Bearer ${adminToken}`,
+      authority: adminAuthority,
       projectPublicId: projectId,
       buildContextHeaders: () => {
         return {};
@@ -83,6 +89,10 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
       ],
     });
     adminToken = setup.adminToken;
+    adminAuthority = await workAuthorityOfToken({
+      token: adminToken,
+      project: null,
+    });
     projectId = setup.projectId;
   });
 

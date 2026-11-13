@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { resolveBearerAuthUser } from '../middleware/auth';
+import { authUserOfWork } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
 import type { AgentBoundary } from './agentBoundary';
 import {
@@ -16,6 +16,7 @@ import { type OauthConnectionRow, tokenColumns } from './oauthConnections';
 import { requestTokens } from './oauthTokenEndpoint';
 import { decryptValue } from './secrets';
 import { toolAuthFailed } from './toolAuthConfig';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:oauth-connections');
 
@@ -49,7 +50,7 @@ const reconnect = (args: {
 const assertUseAllowed = async (args: {
   projectPublicId: string;
   resource: string;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   boundary?: AgentBoundary;
 }) => {
   const { boundary } = args;
@@ -67,10 +68,9 @@ const assertUseAllowed = async (args: {
       resource: args.resource,
     });
   }
-  const caller = await resolveBearerAuthUser({
-    db,
-    authHeader: args.authHeader,
-  });
+  const caller = args.authority
+    ? await authUserOfWork({ db, authority: args.authority })
+    : undefined;
   const allowed = await caller?.isAllowed({
     projectPublicId: args.projectPublicId,
     action: USE_OAUTH_CONNECTION_ACTION,
@@ -226,7 +226,7 @@ export const resolveOauthConnectionAccessToken = async (args: {
   projectId: number;
   oauthClientId: string;
   actorId?: string;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   boundary?: AgentBoundary;
   now?: Date;
 }): Promise<string> => {
@@ -251,7 +251,7 @@ export const resolveOauthConnectionAccessToken = async (args: {
       resourceType: 'oauth_connection',
       resourceId: row?.publicId ?? '*',
     }),
-    authHeader: args.authHeader,
+    authority: args.authority,
     boundary: args.boundary,
   });
 

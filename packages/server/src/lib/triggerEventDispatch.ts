@@ -112,6 +112,7 @@ const recordRefusedFiring = async (args: {
     projectId: args.trigger.projectId as number,
     source: 'event',
     input: args.input,
+    authority: null,
   });
   await finalizeFiringFailed({
     firing,

@@ -458,6 +458,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     });
     const inProgressId = `gen_tsip_${Date.now()}`;
     await createGenerationRecord({
+      authority: null,
       publicId: inProgressId,
       projectId: project?.id as number,
       agentId,

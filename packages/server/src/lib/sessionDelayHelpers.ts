@@ -4,6 +4,7 @@ import {
   type GenerateSessionResponseFn,
   triggerOrReturnMessage,
 } from './sessionMessageHelpers';
+import type { WorkAuthority } from './workAuthority';
 
 // One pending timer per session, keyed `${agentId}#${sessionId}`. Debounce:
 // each new message cancels the previous timer, so the LLM is called only after
@@ -24,7 +25,7 @@ export const scheduleDelayedGeneration = (args: {
   sessionId: string;
   delayMs: number;
   toolContext?: Record<string, string>;
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   authUser: AuthUser | undefined;
   generateFn: GenerateSessionResponseFn;
   // The generation this turn continues, when a resumption drove it (an
@@ -40,7 +41,7 @@ export const scheduleDelayedGeneration = (args: {
         agentId: args.agentId,
         sessionId: args.sessionId,
         toolContext: args.toolContext,
-        authHeader: args.authHeader,
+        authority: args.authority,
         authUser: args.authUser,
         initiatorGenerationId: args.initiatorGenerationId,
       })
@@ -59,7 +60,7 @@ export const triggerOrScheduleGeneration = (args: {
   savedContent: string | null;
   savedDocumentId: string | undefined;
   toolContext?: Record<string, string>;
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   authUser: AuthUser | undefined;
   generateFn: GenerateSessionResponseFn;
   // The generation this turn continues, when a resumption drove it (an
@@ -77,7 +78,7 @@ export const triggerOrScheduleGeneration = (args: {
       sessionId: args.sessionId,
       delayMs,
       toolContext: args.toolContext,
-      authHeader: args.authHeader,
+      authority: args.authority,
       authUser: args.authUser,
       generateFn: args.generateFn,
       initiatorGenerationId: args.initiatorGenerationId,
@@ -94,7 +95,7 @@ export const triggerOrScheduleGeneration = (args: {
     agentId: args.agentId,
     sessionId: args.sessionId,
     toolContext: args.toolContext,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     savedContent: args.savedContent,
     savedDocumentId: args.savedDocumentId,

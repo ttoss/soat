@@ -5,6 +5,7 @@ import {
   assertExecutorStartable,
   type PlaybookRunAs,
   resolvePlaybookRunAs,
+  versionAuthority,
 } from './playbookAuthor';
 import {
   caseDefinition,
@@ -17,24 +18,43 @@ import { settleExecution, settleFromOutcome } from './playbookExecutionSettle';
 import { startExecutor } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
 import { samePlaybookBasis } from './playbookState';
+import { parseWorkAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:playbookExecutions');
 
-/** The case's author, checked against what a node starts before it runs. */
-export const resolveRunAs = async (args: {
+/** The authority a case's executions store: its pinned version's author's. */
+export const caseAuthority = async (args: {
   row: PlaybookCaseRow;
-  node: string;
-  executors: PlaybookExecutor[];
-}): Promise<PlaybookRunAs> => {
+}): Promise<WorkAuthority | null> => {
   const { row } = args;
   const version = await db.PlaybookVersion.findOne({
     where: { playbookId: row.playbookId, version: row.playbookVersion },
     attributes: ['principalKind', 'principalId', 'principalBound'],
   });
+  return versionAuthority({
+    version,
+    projectPublicId: row.project.publicId,
+  });
+};
+
+/**
+ * Work's authority (the case's when none is given), checked against what a
+ * node starts before it runs.
+ */
+export const resolveRunAs = async (args: {
+  row: PlaybookCaseRow;
+  node: string;
+  executors: PlaybookExecutor[];
+  authority?: WorkAuthority | null;
+  workPublicId?: string;
+}): Promise<PlaybookRunAs> => {
+  const { row } = args;
   const runAs = await resolvePlaybookRunAs({
-    version: version!,
-    projectId: row.projectId,
-    workPublicId: row.publicId,
+    authority:
+      args.authority === undefined
+        ? await caseAuthority({ row })
+        : args.authority,
+    workPublicId: args.workPublicId ?? row.publicId,
   });
   for (const executor of args.executors) {
     await assertExecutorStartable({
@@ -105,6 +125,8 @@ export const executeClaimed = async (args: {
           row,
           node: node.id,
           executors: [executor],
+          authority: parseWorkAuthority(execution.authority),
+          workPublicId: execution.publicId,
         }),
       });
     },

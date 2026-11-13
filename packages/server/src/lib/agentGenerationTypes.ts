@@ -10,6 +10,8 @@
  */
 import type { LanguageModel, LanguageModelUsage, Tool } from 'ai';
 
+import type { WorkAuthority } from './workAuthority';
+
 /**
  * A client tool call the model proposed but the server did not execute — either
  * still pending, or released to the client by the guardrail gate. `input` is the
@@ -203,7 +205,7 @@ export type PendingGeneration = {
    * The credential `resolvedTools` call with. A submitter presenting any other
    * rebuilds them on its own, so a continuation never borrows the starter's.
    */
-  toolsAuthHeader: string | undefined;
+  toolsAuthority: WorkAuthority | null;
   toolContext?: Record<string, string>;
 };
 

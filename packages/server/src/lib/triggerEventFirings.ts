@@ -4,7 +4,9 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { runWithCausationChain } from './eventCausation';
 import { createSweep } from './scheduler';
+import { triggerAuthorityIn } from './triggerFirings';
 import { isUniqueViolation } from './uniqueViolation';
+import { storedAuthority } from './workAuthority';
 
 const log = createDebug('soat:triggers');
 
@@ -88,8 +90,16 @@ export const reserveEventFiring = async (args: {
     triggerPublicId: args.triggerPublicId,
   });
 
+  const authority = await triggerAuthorityIn({
+    triggerPublicId: args.triggerPublicId,
+    projectId: args.projectId,
+  });
   try {
     const firing = await db.TriggerFiring.create({
+      authority: await storedAuthority({
+        authority,
+        projectId: args.projectId,
+      }),
       triggerId: args.triggerDbId,
       projectId: args.projectId,
       source: 'event',

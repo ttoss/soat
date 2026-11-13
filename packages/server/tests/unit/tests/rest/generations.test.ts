@@ -283,6 +283,7 @@ describe('Generations', () => {
       });
       const seed = async (publicId: string, status?: string) => {
         await createGenerationRecord({
+          authority: null,
           publicId,
           projectId: project!.id as number,
           agentId,
@@ -362,6 +363,7 @@ describe('Generations', () => {
         where: { publicId: projectId },
       });
       await createGenerationRecord({
+        authority: null,
         publicId: 'gen_conv_edge',
         projectId: project!.id as number,
         agentId,
@@ -391,6 +393,7 @@ describe('Generations', () => {
         where: { publicId: projectId },
       });
       await createGenerationRecord({
+        authority: null,
         publicId: 'gen_eval_source',
         projectId: project!.id as number,
         agentId,
