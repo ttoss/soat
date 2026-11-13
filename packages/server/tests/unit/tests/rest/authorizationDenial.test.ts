@@ -179,7 +179,7 @@ describe('authorization denials', () => {
     });
   });
 
-  test('an mcp tool relays the denial its server answers', async () => {
+  const createDenyingMcpTool = async (denial: Record<string, unknown>) => {
     const name = turn.unique('mcp');
     const tool = await turn.createTool({
       type: 'mcp',
@@ -187,16 +187,6 @@ describe('authorization denials', () => {
       parameters: undefined,
       mcp: { url: `${turn.target.baseUrl}/${name}` },
     });
-    const denial = {
-      code: 'FORBIDDEN',
-      message:
-        "Forbidden: agent agt_remote1234's policies deny memories:CreateMemory on srn:proj_remote:memory_store:*",
-      meta: {
-        action: 'memories:CreateMemory',
-        resource: 'srn:proj_remote:memory_store:*',
-        denied_by: { type: 'agent', id: 'agt_remote1234' },
-      },
-    };
     turn.target.reply(`/${name}`, (body) => {
       if (body.method === 'tools/list') {
         return {
@@ -220,6 +210,41 @@ describe('authorization denials', () => {
         },
       };
     });
+    return { tool, url: `${turn.target.baseUrl}/${name}` };
+  };
+
+  const remoteDenial = {
+    code: 'FORBIDDEN',
+    message:
+      "Forbidden: agent agt_remote1234's policies deny memories:CreateMemory on srn:proj_remote:memory_store:*",
+    meta: {
+      action: 'memories:CreateMemory',
+      resource: 'srn:proj_remote:memory_store:*',
+      denied_by: { type: 'agent', id: 'agt_remote1234' },
+    },
+  };
+
+  test("an agent's mcp tool result carries the denial its server answers", async () => {
+    const { tool, url } = await createDenyingMcpTool(remoteDenial);
+    const agentId = await turn.createAgent({
+      tool_bindings: [{ tool_id: tool.id }],
+    });
+
+    const { results } = await turn.generate({
+      agentId,
+      calls: [{ name: 'create_memory', args: {} }],
+    });
+
+    expect(results[0]).toEqual({
+      error: {
+        ...remoteDenial,
+        meta: { ...remoteDenial.meta, mcp_tool: 'create_memory', mcp_url: url },
+      },
+    });
+  });
+
+  test('an mcp tool relays the denial its server answers', async () => {
+    const { tool, url } = await createDenyingMcpTool(remoteDenial);
 
     const res = await turn
       .api()
@@ -228,8 +253,8 @@ describe('authorization denials', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toMatchObject({
-      ...denial,
-      meta: { ...denial.meta, mcp_tool: 'create_memory' },
+      ...remoteDenial,
+      meta: { ...remoteDenial.meta, mcp_tool: 'create_memory', mcp_url: url },
     });
   });
 });

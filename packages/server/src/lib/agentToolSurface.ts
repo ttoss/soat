@@ -1,15 +1,7 @@
 /**
  * The tool surface a generation runs with — resolved once, for both the fresh
- * turn and the resumed one.
- *
- * These were two functions, `resolveGenerationTools` (`agentGenerationContext`)
- * and `resolveRecoveryTools` (`agentGenerationRecovery`), running the same
- * six-step sequence down to a verbatim-copied comment. They had already
- * diverged: the recovery copy never built the knowledge-derived tools, so an
- * agent with a `knowledge_config.write_memory_store_id` kept `write_memory` when its
- * paused generation resumed from the in-memory map and silently lost it when
- * the same generation resumed from the DB after a restart. Resolving the
- * surface in one place is what makes that difference unrepresentable.
+ * turn and the resumed one, so a resumed generation is offered exactly the
+ * tools (knowledge-derived ones included) its fresh turn was.
  */
 import type { Tool } from 'ai';
 
@@ -22,6 +14,7 @@ import { mergeBindingTools } from './agentToolNames';
 import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
+import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
 
 /**
  * The tools the turn runs with, and the bindings that contributed none — the
@@ -31,6 +24,35 @@ import { collectUnavailableTools } from './agentToolUnavailable';
 export type ResolvedToolSurface = {
   tools: Record<string, Tool>;
   unavailableToolNames: string[];
+};
+
+/**
+ * A denial thrown inside any tool reaches the model as the tool result a
+ * refusal answers, with its `code` and `meta`, not the AI SDK's error string.
+ */
+const relayDenialsAsResults = (args: {
+  tools: Record<string, Tool>;
+}): Record<string, Tool> => {
+  return Object.fromEntries(
+    Object.entries(args.tools).map(([name, resolved]) => {
+      const { execute } = resolved;
+      if (!execute) return [name, resolved];
+      return [
+        name,
+        {
+          ...resolved,
+          execute: async (...executeArgs: Parameters<typeof execute>) => {
+            try {
+              return await execute(...executeArgs);
+            } catch (error) {
+              if (isAuthorizationDenial(error)) return denialToolResult(error);
+              throw error;
+            }
+          },
+        },
+      ];
+    })
+  );
 };
 
 export const resolveAgentToolSurface = async (args: {
@@ -132,7 +154,11 @@ export const resolveAgentToolSurface = async (args: {
       : [];
 
   return {
-    tools: mergeBindingTools({ bindings: [...bindings, ...knowledgeBindings] }),
+    tools: relayDenialsAsResults({
+      tools: mergeBindingTools({
+        bindings: [...bindings, ...knowledgeBindings],
+      }),
+    }),
     unavailableToolNames: unavailable.names,
   };
 };
