@@ -65,6 +65,13 @@ describe('effective authority chokepoint', () => {
     );
   });
 
+  test('an observer wraps the authorizer keeping who refused', () => {
+    assert.deepEqual(
+      filesMatching(/\.isAllowed\s*=(?!\s*wrapIsAllowed\()/),
+      []
+    );
+  });
+
   test('the credential resolver hands every kind to the chokepoint', () => {
     const auth = code(path.join(srcDir, 'middleware/auth.ts'));
     assert.doesNotMatch(auth, /\bisAllowed\s*:/);

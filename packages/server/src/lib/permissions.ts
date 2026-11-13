@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { DB } from '../db';
+import type { DeniedPrincipal, RefusedBy } from './authorizationDenial';
 import {
   evaluatePolicies,
   evaluatePoliciesMultiResource,
@@ -112,22 +113,44 @@ export const resolvePolicySets = async (args: {
   return boundaryDocs === null ? [userDocs] : [userDocs, boundaryDocs];
 };
 
+/** Policy sets grouped by the principal they belong to, so a refusal names it. */
+export type LabeledPolicySets = {
+  principal: DeniedPrincipal;
+  sets: PolicySets;
+}[];
+
+export const unlabelPolicySets = (labeled: LabeledPolicySets): PolicySets => {
+  return labeled.flatMap(({ sets }) => {
+    return sets;
+  });
+};
+
+const refusalKey = (action: string, resource?: string): string => {
+  return resource === undefined ? action : `${action}\n${resource}`;
+};
+
+type PolicySetsCheck = {
+  projectPublicId: string;
+  action: string;
+  resource?: string;
+  resources?: string[];
+  context?: Record<string, string>;
+};
+
 /**
  * Authorizer over policy sets that must each allow the request, confined to
  * one project. `getSets` is read per check, so a revoked policy takes effect
- * on the next one.
+ * on the next one. `refusedBy` names the first group whose set refused a
+ * check; a refusal by the project guards names none.
  */
 export const createPolicySetsIsAllowed = (args: {
   projectPublicId?: string;
-  getSets: () => Promise<PolicySets>;
-}) => {
-  return async (reqArgs: {
-    projectPublicId: string;
-    action: string;
-    resource?: string;
-    resources?: string[];
-    context?: Record<string, string>;
-  }): Promise<boolean> => {
+  getSets: () => Promise<LabeledPolicySets>;
+}): ((reqArgs: PolicySetsCheck) => Promise<boolean>) & {
+  refusedBy: RefusedBy;
+} => {
+  const refusals = new Map<string, DeniedPrincipal>();
+  const check = async (reqArgs: PolicySetsCheck): Promise<boolean> => {
     if (
       !hasProjectPublicId({
         projectPublicId: reqArgs.projectPublicId,
@@ -145,15 +168,57 @@ export const createPolicySetsIsAllowed = (args: {
       return false;
     }
 
-    const sets = await args.getSets();
-    return sets.every((policies) => {
-      return evalDocs({
-        policies,
-        action: reqArgs.action,
-        resource: reqArgs.resource,
-        resources: reqArgs.resources,
-        context: reqArgs.context,
+    const refusing = (await args.getSets()).find(({ sets }) => {
+      return !sets.every((policies) => {
+        return evalDocs({
+          policies,
+          action: reqArgs.action,
+          resource: reqArgs.resource,
+          resources: reqArgs.resources,
+          context: reqArgs.context,
+        });
       });
     });
+    if (!refusing) return true;
+    const resources = [
+      ...(reqArgs.resource === undefined ? [] : [reqArgs.resource]),
+      ...(reqArgs.resources ?? []),
+    ];
+    for (const key of [
+      refusalKey(reqArgs.action),
+      ...resources.map((resource) => {
+        return refusalKey(reqArgs.action, resource);
+      }),
+    ]) {
+      refusals.set(key, refusing.principal);
+    }
+    return false;
   };
+  return Object.assign(check, {
+    refusedBy: ({
+      action,
+      resource,
+    }: {
+      action: string;
+      resource: string | null;
+    }) => {
+      return (
+        (resource === null
+          ? undefined
+          : refusals.get(refusalKey(action, resource))) ??
+        refusals.get(refusalKey(action))
+      );
+    },
+  });
+};
+
+/**
+ * `around` in place of `isAllowed`, still naming what `isAllowed` refused:
+ * every wrapper of a request's authorizer goes through it.
+ */
+export const wrapIsAllowed = <Check>(args: {
+  isAllowed: ((check: Check) => Promise<boolean>) & { refusedBy?: RefusedBy };
+  around: (check: Check) => Promise<boolean>;
+}): ((check: Check) => Promise<boolean>) & { refusedBy?: RefusedBy } => {
+  return Object.assign(args.around, { refusedBy: args.isAllowed.refusedBy });
 };

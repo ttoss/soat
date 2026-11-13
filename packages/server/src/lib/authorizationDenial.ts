@@ -4,14 +4,33 @@ import { principalFromAuthUser } from './principals';
 
 /**
  * Whose policies refused: the request's credential (`user`, `api_key`, or
- * `caller` where the site holds its policies but not its id), or a resource
- * acting under its own `policy_ids` (`agent`, `trigger`). `id` is `null` where
- * the refusing site holds the policy but not its owner's id.
+ * `caller` where the site holds its policies but not its id), what narrows it
+ * (an `iam_token` bound, an `on_behalf_of` assertion's cap, a `generation`'s
+ * execution identity), or a resource acting under its own `policy_ids`
+ * (`agent`, `trigger`). `id` is `null` where the refusing site holds the policy
+ * but not its owner's id.
  */
 export type DeniedPrincipal = {
-  type: 'user' | 'api_key' | 'caller' | 'agent' | 'trigger';
+  type:
+    | 'user'
+    | 'api_key'
+    | 'caller'
+    | 'iam_token'
+    | 'on_behalf_of'
+    | 'generation'
+    | 'agent'
+    | 'trigger';
   id: string | null;
 };
+
+/**
+ * Whose set refused the last denied check of `action` (on `resource`), as the
+ * authorizer that ran it recorded; `undefined` when none did.
+ */
+export type RefusedBy = (args: {
+  action: string;
+  resource: string | null;
+}) => DeniedPrincipal | undefined;
 
 export type DeniedAction = { action: string; resource: string | null };
 
@@ -19,6 +38,9 @@ const PRINCIPAL_LABELS: Record<DeniedPrincipal['type'], string> = {
   user: 'user',
   api_key: 'API key',
   caller: 'caller',
+  iam_token: 'IAM token',
+  on_behalf_of: 'On-Behalf-Of assertion',
+  generation: 'generation',
   agent: 'agent',
   trigger: 'trigger',
 };
@@ -79,15 +101,26 @@ export const callerPrincipal = (authUser: {
   return { type: principalType, id: principalId };
 };
 
-/** A refusal of the request's own credential. */
+/**
+ * A refusal of the request's authority: the set its authorizer recorded as
+ * refusing, else the credential.
+ */
 export const callerDenied = (args: {
-  authUser: { publicId: string; apiKeyPublicId?: string };
+  authUser: {
+    publicId: string;
+    apiKeyPublicId?: string;
+    isAllowed?: { refusedBy?: RefusedBy };
+  };
   action: string;
   resource: string | null;
   extra?: Record<string, unknown>;
 }): DomainError => {
+  const refusing = args.authUser.isAllowed?.refusedBy?.({
+    action: args.action,
+    resource: args.resource,
+  });
   return authorizationDenied({
-    principal: callerPrincipal(args.authUser),
+    principal: refusing ?? callerPrincipal(args.authUser),
     denied: [{ action: args.action, resource: args.resource }],
     extra: args.extra,
   });

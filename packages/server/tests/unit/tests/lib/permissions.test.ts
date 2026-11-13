@@ -33,7 +33,7 @@ describe('project authorizer rejects a check that names no project', () => {
     const isAllowed = createPolicySetsIsAllowed({
       projectPublicId: pinned,
       getSets: async () => {
-        return [ADMIN];
+        return [{ principal: { type: 'user', id: 'usr_any' }, sets: [ADMIN] }];
       },
     });
 
@@ -51,5 +51,54 @@ describe('project authorizer rejects a check that names no project', () => {
         })
       ).resolves.toBe(true);
     });
+  });
+});
+
+describe('project authorizer names the set that refused', () => {
+  const allow = (action: string): PolicyDocument[] => {
+    return [{ statement: [{ effect: 'Allow', action: [action] }] }];
+  };
+  const key = { type: 'api_key', id: 'key_any' } as const;
+  const bound = { type: 'iam_token', id: 'jti_any' } as const;
+  const isAllowed = createPolicySetsIsAllowed({
+    projectPublicId: 'prj_any',
+    getSets: async () => {
+      return [
+        { principal: key, sets: [allow('documents:*')] },
+        { principal: bound, sets: [allow('documents:GetDocument')] },
+      ];
+    },
+  });
+  const resource = 'srn:prj_any:document:doc_any';
+
+  test('names the bound where only the bound refuses', async () => {
+    await isAllowed({
+      projectPublicId: 'prj_any',
+      action: 'documents:DeleteDocument',
+      resource,
+    });
+
+    expect(
+      isAllowed.refusedBy({ action: 'documents:DeleteDocument', resource })
+    ).toEqual(bound);
+  });
+
+  test('names the first refusing set where both refuse', async () => {
+    await isAllowed({ projectPublicId: 'prj_any', action: 'tools:GetTool' });
+
+    expect(
+      isAllowed.refusedBy({ action: 'tools:GetTool', resource: null })
+    ).toEqual(key);
+  });
+
+  test('names none for a refusal by the project scope', async () => {
+    await isAllowed({
+      projectPublicId: 'prj_other',
+      action: 'agents:GetAgent',
+    });
+
+    expect(
+      isAllowed.refusedBy({ action: 'agents:GetAgent', resource: null })
+    ).toBeUndefined();
   });
 });

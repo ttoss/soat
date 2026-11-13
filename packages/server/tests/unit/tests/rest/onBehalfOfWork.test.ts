@@ -168,7 +168,7 @@ describe('work a capped callback starts', () => {
 
       expect(JSON.parse(full.output)[0].id).toBe(documentId);
       expect(JSON.parse(capped.output)[0]).toMatch(
-        /^DomainError: Forbidden: API key \S+'s policies deny documents:GetDocument on /
+        /^DomainError: Forbidden: IAM token \S+'s policies deny documents:GetDocument on /
       );
     });
 

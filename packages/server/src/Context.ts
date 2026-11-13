@@ -1,4 +1,5 @@
 import type { DB } from './db';
+import type { RefusedBy } from './lib/authorizationDenial';
 import type { PolicySets } from './lib/iam';
 import type { OnBehalfOf } from './lib/onBehalfOf';
 import type { PrincipalBound } from './lib/principalBound';
@@ -8,14 +9,14 @@ export type AuthUser = {
   publicId: string;
   username: string;
   role: 'admin' | 'user';
-  isAllowed: (args: {
+  isAllowed: ((args: {
     projectPublicId: string;
     action: string;
     resource?: string;
     /** Check against multiple SRNs — any Allow wins, any Deny loses. Used for path-based SRN fallback. */
     resources?: string[];
     context?: Record<string, string>;
-  }) => Promise<boolean>;
+  }) => Promise<boolean>) & { refusedBy?: RefusedBy };
   /**
    * Resolves the internal project IDs the caller may access for the given action.
    * - Explicit projectPublicId: verifies permission and returns [id], or null if forbidden/not found.

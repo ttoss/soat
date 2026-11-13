@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import type { AuditPrincipalType } from '../lib/auditLog';
 import { peekReadAuditEnabled } from '../lib/auditLog';
 import { enqueueAuditWrite } from '../lib/auditQueue';
+import { wrapIsAllowed } from '../lib/permissions';
 import { principalFromAuthUser } from '../lib/principals';
 
 const log = createDebug('soat:audit');
@@ -105,16 +106,19 @@ const instrumentAuthUser = (
   method: string
 ): void => {
   const originalIsAllowed = authUser.isAllowed;
-  authUser.isAllowed = async (reqArgs) => {
-    const allowed = await originalIsAllowed(reqArgs);
-    checks.push({
-      action: reqArgs.action,
-      resource: reqArgs.resource ?? null,
-      projectPublicId: reqArgs.projectPublicId,
-      allowed,
-    });
-    return allowed;
-  };
+  authUser.isAllowed = wrapIsAllowed({
+    isAllowed: originalIsAllowed,
+    around: async (reqArgs) => {
+      const allowed = await originalIsAllowed(reqArgs);
+      checks.push({
+        action: reqArgs.action,
+        resource: reqArgs.resource ?? null,
+        projectPublicId: reqArgs.projectPublicId,
+        allowed,
+      });
+      return allowed;
+    },
+  });
 
   const originalResolveProjectIds = authUser.resolveProjectIds;
   authUser.resolveProjectIds = async (reqArgs) => {

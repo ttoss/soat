@@ -4,8 +4,12 @@ import bcrypt from 'bcryptjs';
 import type { AuthUser, Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
 import { resolveBoundSets } from '../lib/attachedPolicies';
+import {
+  callerPrincipal,
+  type DeniedPrincipal,
+} from '../lib/authorizationDenial';
 import { requestOnBehalfOf } from '../lib/onBehalfOf';
-import { resolvePolicySets } from '../lib/permissions';
+import { type LabeledPolicySets, resolvePolicySets } from '../lib/permissions';
 import { parseBound } from '../lib/principalBound';
 import {
   BEARER_TOKEN_TYPES,
@@ -55,6 +59,7 @@ type Next = () => Promise<void>;
  * to the key's project when it has one.
  */
 const apiKeyAuthority = (args: {
+  apiKeyPublicId: string;
   projectPublicId: string | undefined;
   role: 'admin' | 'user';
   userPolicyIds: number[];
@@ -70,13 +75,18 @@ const apiKeyAuthority = (args: {
           everyProject: role === 'admin' && apiKeyPolicyIds.length === 0,
           candidatePolicyIds: 'all',
         },
-    getSets: () => {
-      return resolvePolicySets({
-        userRole: role,
-        userPolicyIds,
-        apiKeyPolicyIds,
-        db,
-      });
+    getSets: async () => {
+      return [
+        {
+          principal: { type: 'api_key', id: args.apiKeyPublicId },
+          sets: await resolvePolicySets({
+            userRole: role,
+            userPolicyIds,
+            apiKeyPolicyIds,
+            db,
+          }),
+        },
+      ];
     },
     db,
   });
@@ -122,6 +132,7 @@ const resolveApiKeyAuthUser = async (args: {
     isControlPlaneKey:
       role === 'admin' && rawProjectId == null && apiKeyPolicyIds.length === 0,
     ...apiKeyAuthority({
+      apiKeyPublicId: row.publicId as string,
       projectPublicId: apiKeyProjectPublicId,
       role,
       userPolicyIds,
@@ -222,17 +233,36 @@ const verifyJwtClaims = (token: string): JwtClaims | null => {
 };
 
 /**
+ * An IAM token's bound, or the one a run token carries for work a token
+ * started: one more set, read per check, so it only narrows. Only an IAM
+ * token's own claims carry the id that names it.
+ */
+const boundSets = async (payload: JwtClaims): Promise<LabeledPolicySets> => {
+  const bound = parseBound(payload.bnd);
+  if (!bound) return [];
+  const id = payload.typ === 'iam' ? (payload.jti ?? null) : null;
+  return [
+    {
+      principal: { type: 'iam_token', id },
+      sets: await resolveBoundSets(bound),
+    },
+  ];
+};
+
+/**
  * What a JWT may do. A project-scoped credential is pinned to its project and
  * intersects the owning user's policies with its boundary; a trigger token
- * instead acts under the trigger's own policy sets.
+ * instead acts under the trigger's own policy sets. Every set but an IAM token
+ * bound is the `credential`'s.
  */
 const resolveJwtAuthority = async (args: {
   payload: JwtClaims;
+  credential: DeniedPrincipal;
   role: 'admin' | 'user';
   userPolicyIds: number[];
   db: Context['db'];
 }): Promise<Authority> => {
-  const { payload, role, userPolicyIds, db } = args;
+  const { payload, credential, role, userPolicyIds, db } = args;
   if (payload.typ === 'login') {
     return buildAuthority({
       reach: {
@@ -240,13 +270,18 @@ const resolveJwtAuthority = async (args: {
         everyProject: role === 'admin',
         candidatePolicyIds: userPolicyIds,
       },
-      getSets: () => {
-        return resolvePolicySets({
-          userRole: role,
-          userPolicyIds,
-          apiKeyPolicyIds: [],
-          db,
-        });
+      getSets: async () => {
+        return [
+          {
+            principal: credential,
+            sets: await resolvePolicySets({
+              userRole: role,
+              userPolicyIds,
+              apiKeyPolicyIds: [],
+              db,
+            }),
+          },
+        ];
       },
       db,
     });
@@ -256,8 +291,8 @@ const resolveJwtAuthority = async (args: {
     const triggerPublicId = payload.trg;
     return buildAuthority({
       reach: { pinned: scoped },
-      getSets: () => {
-        return resolveTriggerPolicySets({
+      getSets: async () => {
+        const sets = await resolveTriggerPolicySets({
           triggerPublicId,
           projectPublicId: scoped,
           caller: payload.clr
@@ -271,6 +306,7 @@ const resolveJwtAuthority = async (args: {
             : undefined,
           db,
         });
+        return [{ principal: credential, sets }];
       },
       db,
     });
@@ -283,9 +319,6 @@ const resolveJwtAuthority = async (args: {
         : { typ: payload.typ, apiKeyPublicId: actingKeyOf(payload) },
     db,
   });
-  // An IAM token's bound, or the one a run token carries for work a token
-  // started: one more set, read per check, so it only narrows.
-  const bound = parseBound(payload.bnd) ?? undefined;
   return buildAuthority({
     reach: { pinned: scoped },
     getSets: async () => {
@@ -296,7 +329,7 @@ const resolveJwtAuthority = async (args: {
         boundaryPolicyDocs,
         db,
       });
-      return bound ? [...sets, ...(await resolveBoundSets(bound))] : sets;
+      return [{ principal: credential, sets }, ...(await boundSets(payload))];
     },
     db,
   });
@@ -331,6 +364,10 @@ export const resolveJwtAuthUser = async (args: {
 
   const authority = await resolveJwtAuthority({
     payload,
+    credential: callerPrincipal({
+      publicId: user.publicId as string,
+      apiKeyPublicId: runApiKeyPublicId,
+    }),
     role,
     userPolicyIds,
     db,

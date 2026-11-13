@@ -218,7 +218,12 @@ export const mayReadEventResource = (args: {
   const isAllowed = createPolicySetsIsAllowed({
     projectPublicId: event.projectPublicId,
     getSets: async () => {
-      return [await resolveAttachedPolicySet({ policyIds: args.policyIds })];
+      return [
+        {
+          principal: { type: 'caller', id: null },
+          sets: [await resolveAttachedPolicySet({ policyIds: args.policyIds })],
+        },
+      ];
     },
   });
   return isAllowed({
