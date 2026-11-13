@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
 
 import { DomainError } from '../errors';
+import { resolveAgentBoundary } from './agentBoundary';
 import { buildAllMessages } from './agentGenerationHelpers';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
@@ -19,7 +20,6 @@ import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
-import { resolveAttachedPolicies } from './attachedPolicies';
 import { resolveServerToolContextIdentity } from './generationAttribution';
 import {
   type GenerationInputMessage,
@@ -264,7 +264,8 @@ export const buildGenerationContext = async (
     outputSchema: args.outputSchemaOverride,
   });
 
-  const boundaryPolicy = await resolveAttachedPolicies({
+  const boundary = await resolveAgentBoundary({
+    agentId: args.agentId,
     policyIds: typedAgent.policyIds,
     actorId: toolContext?.actor_id,
   });
@@ -276,7 +277,7 @@ export const buildGenerationContext = async (
     authUser: args.authUser,
     allowedToolIds: splitToolBindings(readAgentToolBindings(typedAgent))
       .toolIds,
-    agentBoundaryPolicy: boundaryPolicy,
+    agentBoundary: boundary,
     toolContext, // identity-pinned, not the raw caller bag
   });
   const { model } = await resolveGenerationModel({
@@ -300,7 +301,7 @@ export const buildGenerationContext = async (
     generationId,
     projectIds: args.projectIds,
     typedAgent,
-    boundaryPolicy,
+    boundary,
     authHeader: args.authHeader,
     toolContext,
     traceId: args.traceId,
@@ -319,7 +320,7 @@ export const buildGenerationContext = async (
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
     authUser: args.authUser,
-    boundaryPolicy,
+    boundaryPolicy: boundary.policy,
     unavailableToolNames: toolSurface.unavailableToolNames,
     actorId: toolContext?.actor_id,
   });

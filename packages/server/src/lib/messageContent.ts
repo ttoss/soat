@@ -1,5 +1,6 @@
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
+import type { AgentBoundary } from './agentBoundary';
 import { agentDenied, callerDenied } from './authorizationDenial';
 import { getDocument } from './documents';
 import {
@@ -7,7 +8,6 @@ import {
   evaluatePolicies,
   evaluatePoliciesMultiResource,
   type PolicyDocument,
-  validatePolicyDocument,
 } from './iam';
 import { resolveSoatActionScope } from './soatActionBoundary';
 import { soatTools } from './soatTools';
@@ -126,22 +126,17 @@ const buildDocumentPermissionResources = (args: {
 };
 
 const isBoundaryAllowed = (args: {
-  boundaryPolicy?: unknown;
+  policy: PolicyDocument | null;
   action: string;
   resource?: string;
   resources?: string[];
   context?: Record<string, string>;
 }): boolean => {
-  if (!args.boundaryPolicy) {
+  if (!args.policy) {
     return true;
   }
 
-  const validation = validatePolicyDocument(args.boundaryPolicy);
-  if (!validation.valid) {
-    return false;
-  }
-
-  const policies = [args.boundaryPolicy as PolicyDocument];
+  const policies = [args.policy];
 
   if (args.resources && args.resources.length > 0) {
     return evaluatePoliciesMultiResource({
@@ -161,15 +156,16 @@ const isBoundaryAllowed = (args: {
 };
 
 const assertBoundaryAllowed = (args: {
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
   action: string;
   resource?: string;
   resources?: string[];
   context?: Record<string, string>;
 }) => {
   if (
+    args.boundary &&
     !isBoundaryAllowed({
-      boundaryPolicy: args.boundaryPolicy,
+      policy: args.boundary.policy,
       action: args.action,
       resource: args.resource,
       resources: args.resources,
@@ -177,6 +173,7 @@ const assertBoundaryAllowed = (args: {
     })
   ) {
     throw agentDenied({
+      agentId: args.boundary.agentId,
       action: args.action,
       resource: args.resource ?? args.resources?.[0] ?? null,
     });
@@ -211,10 +208,15 @@ const assertCallerAllowed = async (args: {
 
 const assertToolAllowedForAgent = (args: {
   allowedToolIds?: string[];
+  agentId: string | null;
   toolId: string;
 }) => {
   if (!args.allowedToolIds?.includes(args.toolId)) {
-    throw agentDenied({ action: 'tools:CallTool', resource: null });
+    throw agentDenied({
+      agentId: args.agentId,
+      action: 'tools:CallTool',
+      resource: null,
+    });
   }
 };
 
@@ -231,7 +233,7 @@ const resolveSoatIamAction = (action: string): string => {
 const resolveDocumentContent = async (args: {
   content: DocumentMessageContent;
   authUser?: AuthUser;
-  agentBoundaryPolicy?: unknown;
+  agentBoundary?: AgentBoundary;
 }): Promise<{ content: string; documentId: string }> => {
   const document = await getDocument({ id: args.content.document_id });
 
@@ -257,7 +259,7 @@ const resolveDocumentContent = async (args: {
     context,
   });
   assertBoundaryAllowed({
-    boundaryPolicy: args.agentBoundaryPolicy,
+    boundary: args.agentBoundary,
     action: 'documents:GetDocument',
     resources,
     context,
@@ -280,7 +282,7 @@ const assertBuiltinActionAllowed = async (args: {
   input?: Record<string, unknown>;
   projectPublicId: string;
   authUser?: AuthUser;
-  agentBoundaryPolicy?: unknown;
+  agentBoundary?: AgentBoundary;
 }) => {
   const action = resolveSoatIamAction(args.action);
   const scope = await resolveSoatActionScope({
@@ -288,7 +290,7 @@ const assertBuiltinActionAllowed = async (args: {
     toolArgs: args.input,
   });
   assertBoundaryAllowed({
-    boundaryPolicy: args.agentBoundaryPolicy,
+    boundary: args.agentBoundary,
     action,
     resource: scope?.resource ?? '*',
     context: scope?.context,
@@ -308,11 +310,12 @@ const resolveToolOutputContent = async (args: {
   authHeader?: string;
   authUser?: AuthUser;
   allowedToolIds?: string[];
-  agentBoundaryPolicy?: unknown;
+  agentBoundary?: AgentBoundary;
   toolContext?: Record<string, string>;
 }): Promise<{ content: string }> => {
   assertToolAllowedForAgent({
     allowedToolIds: args.allowedToolIds,
+    agentId: args.agentBoundary?.agentId ?? null,
     toolId: args.content.tool_id,
   });
 
@@ -334,7 +337,7 @@ const resolveToolOutputContent = async (args: {
       input: args.content.input,
       projectPublicId: tool.project_id,
       authUser: args.authUser,
-      agentBoundaryPolicy: args.agentBoundaryPolicy,
+      agentBoundary: args.agentBoundary,
     });
   }
 
@@ -377,7 +380,7 @@ export const resolveMessageContent = async (args: {
   authHeader?: string;
   authUser?: AuthUser;
   allowedToolIds?: string[];
-  agentBoundaryPolicy?: unknown;
+  agentBoundary?: AgentBoundary;
   toolContext?: Record<string, string>;
 }): Promise<{ content: string; documentId?: string }> => {
   if (typeof args.content === 'string') {
@@ -388,7 +391,7 @@ export const resolveMessageContent = async (args: {
     return resolveDocumentContent({
       content: args.content,
       authUser: args.authUser,
-      agentBoundaryPolicy: args.agentBoundaryPolicy,
+      agentBoundary: args.agentBoundary,
     });
   }
 
@@ -405,7 +408,7 @@ export const resolveMessageContent = async (args: {
     authHeader: args.authHeader,
     authUser: args.authUser,
     allowedToolIds: args.allowedToolIds,
-    agentBoundaryPolicy: args.agentBoundaryPolicy,
+    agentBoundary: args.agentBoundary,
     toolContext: args.toolContext,
   });
 };

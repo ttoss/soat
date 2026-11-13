@@ -1,6 +1,7 @@
 import type { Tool } from 'ai';
 import { isSoatActionAllowedByBoundary } from 'src/lib/agentToolResolver';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
+import type { PolicyDocument } from 'src/lib/iam';
 
 import { agentRefusal } from '../../fixtures/agentRefusal';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -8,6 +9,8 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
 
 // A protocol test reads the call, not its meter: no project, so the
 // recorder's write is refused and swallowed.
+const AGENT_ID = 'agent_boundscope0001';
+
 const UNMETERED = {
   projectId: 0,
   toolId: null,
@@ -33,7 +36,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
   let allowedStoreId: string;
   let otherStoreId: string;
 
-  const resolveGetMemoryStore = (boundaryPolicy: unknown): Tool => {
+  const resolveGetMemoryStore = (policy: PolicyDocument): Tool => {
     const tools = resolveSoatTools({
       meter: UNMETERED,
       typedTool: {
@@ -43,7 +46,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       },
       authHeader: `Bearer ${adminToken}`,
       projectPublicId: projectId,
-      boundaryPolicy,
+      boundary: { agentId: AGENT_ID, policy },
       buildContextHeaders: () => {
         return {};
       },
@@ -63,7 +66,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
     )) as { id?: string; error?: string };
   };
 
-  const allowMemoriesOn = (resource: string) => {
+  const allowMemoriesOn = (resource: string): PolicyDocument => {
     return {
       statement: [
         { effect: 'Allow', action: ['memories:*'], resource: [resource] },
@@ -113,11 +116,13 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
 
     const result = await callWith({ tool, memoryStoreId: otherStoreId });
 
-    expect(result).toEqual(agentRefusal({ action: 'memories:GetMemoryStore' }));
+    expect(result).toEqual(
+      agentRefusal({ agentId: AGENT_ID, action: 'memories:GetMemoryStore' })
+    );
   });
 
   test('a resource-tag condition reads the target resource tags', async () => {
-    const boundaryPolicy = {
+    const boundaryPolicy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -139,7 +144,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       memoryStoreId: otherStoreId,
     });
     expect(untagged).toEqual(
-      agentRefusal({ action: 'memories:GetMemoryStore' })
+      agentRefusal({ agentId: AGENT_ID, action: 'memories:GetMemoryStore' })
     );
   });
 
@@ -157,9 +162,12 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       },
       authHeader: `Bearer ${adminToken}`,
       projectPublicId: projectId,
-      boundaryPolicy: allowMemoriesOn(
-        `srn:${projectId}:memory_store:${allowedStoreId}`
-      ),
+      boundary: {
+        agentId: AGENT_ID,
+        policy: allowMemoriesOn(
+          `srn:${projectId}:memory_store:${allowedStoreId}`
+        ),
+      },
       buildContextHeaders: () => {
         return {};
       },

@@ -1,4 +1,5 @@
 import type { AuthUser } from '../Context';
+import type { AgentBoundary } from './agentBoundary';
 import {
   type ResolvableMessageContent,
   resolveMessageContent,
@@ -27,7 +28,7 @@ export const resolveGenerationInputMessages = async (args: {
   authHeader?: string;
   authUser?: AuthUser;
   allowedToolIds?: string[];
-  agentBoundaryPolicy?: unknown;
+  agentBoundary?: AgentBoundary;
   // The generation's identity-pinned `tool_context`, so a `tool_output` block
   // resolves its tool's `{{context:}}` headers and presets from the same bag
   // the model's own tool calls use.
@@ -46,7 +47,7 @@ export const resolveGenerationInputMessages = async (args: {
         authHeader: args.authHeader,
         authUser: args.authUser,
         allowedToolIds: args.allowedToolIds,
-        agentBoundaryPolicy: args.agentBoundaryPolicy,
+        agentBoundary: args.agentBoundary,
         toolContext: args.toolContext,
       });
 

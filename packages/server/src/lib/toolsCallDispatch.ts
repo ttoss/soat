@@ -4,6 +4,7 @@
  * protocol primitive it reaches.
  */
 import { DomainError } from '../errors';
+import type { AgentBoundary } from './agentBoundary';
 import {
   buildHttpToolExecute,
   isSoatActionAllowedByBoundary,
@@ -43,7 +44,7 @@ export const callHttpTool = (
     idempotencyKey?: string;
     toolContext?: Record<string, string>;
     authHeader?: string;
-    boundaryPolicy?: unknown;
+    boundary?: AgentBoundary;
   } = {}
 ): Promise<unknown> => {
   const { idempotencyKey, toolContext } = call;
@@ -71,7 +72,7 @@ export const callHttpTool = (
         ? { 'Idempotency-Key': idempotencyKey }
         : undefined,
       authHeader: call.authHeader,
-      boundaryPolicy: call.boundaryPolicy,
+      boundary: call.boundary,
     },
     toolContext
     // Presets were already merged into `mergedInput` by `callResolvedTool`, so
@@ -89,7 +90,7 @@ export const callSoatTool = async (
     meter: ToolExecutionMeter;
     authHeader?: string;
     toolContext?: Record<string, string>;
-    boundaryPolicy?: unknown;
+    boundary?: AgentBoundary;
   }
 ): Promise<unknown> => {
   const { authHeader } = args;
@@ -123,15 +124,13 @@ export const callSoatTool = async (
       `action "${action}" is not a known SOAT action.`
     );
   }
-  if (args.boundaryPolicy) {
-    const refusal = await soatActionBoundaryRefusal({
-      def,
-      rawArgs: mergedInput,
-      boundaryPolicy: args.boundaryPolicy,
-      isSoatActionAllowedByBoundary,
-    });
-    if (refusal) return refusal;
-  }
+  const refusal = await soatActionBoundaryRefusal({
+    def,
+    rawArgs: mergedInput,
+    boundary: args.boundary,
+    isSoatActionAllowedByBoundary,
+  });
+  if (refusal) return refusal;
   return executeSoatTool({
     toolName: tool.name,
     def,
@@ -337,14 +336,14 @@ export const dispatchDirectTool = async (args: {
   meter: ToolExecutionMeter;
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
-  boundaryPolicy?: unknown;
+  boundary?: AgentBoundary;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(args.tool, args.mergedInput, args.meter, {
       idempotencyKey: args.idempotencyKey,
       toolContext: args.toolContext,
       authHeader: args.authHeader,
-      boundaryPolicy: args.boundaryPolicy,
+      boundary: args.boundary,
     });
   }
   if (args.type === 'builtin') {
@@ -354,7 +353,7 @@ export const dispatchDirectTool = async (args: {
       meter: args.meter,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
-      boundaryPolicy: args.boundaryPolicy,
+      boundary: args.boundary,
     });
   }
   throw new DomainError(

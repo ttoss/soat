@@ -682,7 +682,7 @@ describe('Agent knowledge', () => {
         });
 
         expect(JSON.parse(result)).toEqual(
-          agentRefusal({ action: 'memories:CreateMemory' })
+          agentRefusal({ agentId, action: 'memories:CreateMemory' })
         );
         expect(
           (await memoriesIn(storeId)).map((memory) => {
@@ -709,7 +709,7 @@ describe('Agent knowledge', () => {
         const { result } = await remember({ agentId, content: 'A fact.' });
 
         expect(JSON.parse(result)).toEqual(
-          agentRefusal({ action: 'memories:UpdateMemory' })
+          agentRefusal({ agentId, action: 'memories:UpdateMemory' })
         );
       });
 
@@ -731,7 +731,7 @@ describe('Agent knowledge', () => {
         });
 
         expect(JSON.parse(result)).toEqual(
-          agentRefusal({ action: 'memories:CreateMemory' })
+          agentRefusal({ agentId, action: 'memories:CreateMemory' })
         );
       });
 
@@ -784,7 +784,7 @@ describe('Agent knowledge', () => {
         expect(JSON.parse(result)).toEqual(
           outcome === 'created'
             ? expect.objectContaining({ action: 'created' })
-            : agentRefusal({ action: 'memories:CreateMemory' })
+            : agentRefusal({ agentId, action: 'memories:CreateMemory' })
         );
       });
     });

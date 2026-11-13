@@ -107,7 +107,10 @@ describe('agent policy_ids bind ${iam:ActorId} to the generation actor', () => {
 
   test("another actor's store is refused", async () => {
     expect(await writeAsActor(otherStoreAgentId)).toEqual(
-      agentRefusal({ action: 'memories:CreateMemory' })
+      agentRefusal({
+        agentId: otherStoreAgentId,
+        action: 'memories:CreateMemory',
+      })
     );
   });
 
@@ -118,7 +121,10 @@ describe('agent policy_ids bind ${iam:ActorId} to the generation actor', () => {
     });
 
     expect(results).toEqual([
-      agentRefusal({ action: 'memories:CreateMemory' }),
+      agentRefusal({
+        agentId: ownStoreAgentId,
+        action: 'memories:CreateMemory',
+      }),
     ]);
   });
 });

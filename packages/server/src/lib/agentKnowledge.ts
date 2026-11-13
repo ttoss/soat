@@ -274,7 +274,11 @@ export const buildWriteMemoryTool = (args: {
       if (deniedAction) {
         log('write_memory: denied %s', deniedAction);
         return denialToolResult(
-          agentDenied({ action: deniedAction, resource })
+          agentDenied({
+            agentId: args.agentId,
+            action: deniedAction,
+            resource,
+          })
         );
       }
       const result = await writeMemory({

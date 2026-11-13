@@ -3,6 +3,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents } from './agentAccessor';
+import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
 import {
   type ClientToolResult,
   type GenerationResult,
@@ -13,13 +14,11 @@ import {
 import { resolveAgentModel } from './agentModelResolution';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
-import { resolveAttachedPolicies } from './attachedPolicies';
 import {
   getGenerationPendingState,
   notAwaitingToolOutputs,
 } from './generationPendingState';
 import { generations, updateGenerationRecord } from './generations';
-import type { PolicyDocument } from './iam';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
 
@@ -211,7 +210,7 @@ const buildPendingFromState = async (args: {
   projectIds?: number[];
   authHeader?: string;
   typedAgent: TypedAgent;
-  boundaryPolicy: PolicyDocument | null;
+  boundary: AgentBoundary;
   traceId: string;
   pendingState: PendingStateDb;
 }): Promise<PendingGeneration | undefined> => {
@@ -226,7 +225,7 @@ const buildPendingFromState = async (args: {
     generationId: args.generationId,
     projectIds: args.projectIds,
     typedAgent: args.typedAgent,
-    boundaryPolicy: args.boundaryPolicy,
+    boundary: args.boundary,
     authHeader: args.authHeader,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
@@ -306,7 +305,8 @@ export const recoverPendingFromDb = async (args: {
     projectIds: args.projectIds,
     authHeader: args.authHeader,
     typedAgent,
-    boundaryPolicy: await resolveAttachedPolicies({
+    boundary: await resolveAgentBoundary({
+      agentId: args.agentId,
       policyIds: typedAgent.policyIds,
       actorId: pendingState.toolContext?.actor_id,
     }),
