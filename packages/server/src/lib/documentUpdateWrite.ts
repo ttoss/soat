@@ -65,9 +65,12 @@ export const writeDocumentUpdate = async (a: {
 };
 
 /**
- * The bag an update writes: the one it sets, or, when it changes text an agent
- * can read without setting the bag, the stored one minus the project's
- * content-bound keys (`lib/contentBoundTags.ts`). `undefined` leaves it.
+ * The bag an update writes (`lib/contentBoundTags.ts`):
+ * - the one the caller sets, as sent: its keys are the ones that write stated;
+ * - else, when the update changes text an agent can read, the archived bag a
+ *   restore brings back, or the stored one, minus the project's content-bound
+ *   keys: a verdict nobody restated in this write;
+ * - else the archived bag, or `undefined` to leave the stored one.
  */
 export const tagsAfterUpdate = (args: {
   doc: LoadedDoc;
@@ -77,6 +80,8 @@ export const tagsAfterUpdate = (args: {
     path?: string | null;
     metadata?: Record<string, unknown> | null;
     tags?: Record<string, string> | null;
+    /** A restore's archived bag: written, but not stated by the caller. */
+    archivedTags?: Record<string, string> | null;
     revivesWithdrawn?: boolean;
   };
   currentContent: string | null;
@@ -96,9 +101,9 @@ export const tagsAfterUpdate = (args: {
       ],
       [update.metadata, doc.metadata],
     ]);
-  if (!changed) return undefined;
+  if (!changed) return update.archivedTags;
   return withoutContentBoundTags({
     keys: doc.file?.project?.contentBoundTagKeys ?? [],
-    tags: doc.tags,
+    tags: update.archivedTags !== undefined ? update.archivedTags : doc.tags,
   });
 };

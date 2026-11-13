@@ -1,5 +1,10 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
+import {
+  emitDocumentLifecycleEvent,
+  fetchDocumentByIdWithContext,
+} from 'src/lib/documentLoaders';
+import { mapDocument } from 'src/lib/documentMapper';
 import { stableDigest } from 'src/lib/stableDigest';
 import { isSystemTagKey, TAG_BAG_LIMITS } from 'src/lib/tags';
 
@@ -97,4 +102,32 @@ export const withoutContentBoundTags = (args: {
       return !removed.includes(key);
     })
   );
+};
+
+/**
+ * A document's `path` is its backing file's, so moving or renaming the file
+ * changes text an agent reads the document by, and removes the document's
+ * content-bound keys as a `path` update does.
+ */
+export const releaseContentBoundTagsOfMovedFile = async (args: {
+  fileId: number;
+}): Promise<void> => {
+  const row = await db.Document.findOne({
+    where: { fileId: args.fileId },
+    attributes: ['id'],
+  });
+  if (!row) return;
+  const doc = await fetchDocumentByIdWithContext(row.id as number);
+  if (!doc) return;
+  const tags = withoutContentBoundTags({
+    keys: doc.file?.project?.contentBoundTagKeys ?? [],
+    tags: doc.tags,
+  });
+  if (tags === doc.tags) return;
+  await doc.update({ tags });
+  emitDocumentLifecycleEvent({
+    type: 'documents.updated',
+    doc,
+    data: mapDocument(doc),
+  });
 };

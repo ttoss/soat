@@ -2,12 +2,15 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const ACTIONS = [
+  'files:UpdateFileMetadata',
   'projects:GetProject',
   'projects:UpdateProject',
   'documents:CreateDocument',
   'documents:GetDocument',
   'documents:UpdateDocument',
   'documents:IngestDocument',
+  'documents:WithdrawDocument',
+  'documents:RestoreDocumentVersion',
   'memories:CreateMemoryStore',
   'memories:CreateMemory',
   'memories:GetMemory',
@@ -90,6 +93,13 @@ describe('Content-bound tag keys', () => {
       ['a non-string entry', [1]],
       ['an empty key', ['']],
       ['a reserved system key', ['system.verdict']],
+      ['a key over 128 characters', ['k'.repeat(129)]],
+      [
+        'more than 50 keys',
+        Array.from({ length: 51 }, (_v, i) => {
+          return `k${i}`;
+        }),
+      ],
     ])('400 for %s', async (_label, value) => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/projects/${projectId}`)
@@ -166,6 +176,61 @@ describe('Content-bound tag keys', () => {
         `/api/v1/documents/${id}`
       );
       expect(read.body.tags).toEqual({ team: 'ops' });
+    });
+
+    const readTags = async (id: string) => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}`
+      );
+      expect(response.status).toBe(200);
+      return response.body.tags as Record<string, string>;
+    };
+
+    test('restoring a version with other text removes the key it archived', async () => {
+      const id = await createDocument();
+      await patchDocument({ id, body: { content: 'The office is in Porto' } });
+      const restored = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/versions/1/restore`)
+        .send({});
+      expect(restored.status).toBe(200);
+      expect(await readTags(id)).toEqual({ team: 'ops' });
+    });
+
+    test('reviving a withdrawn document removes the key', async () => {
+      const id = await createDocument();
+      const withdrawn = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/withdraw`)
+        .send({});
+      expect(withdrawn.status).toBe(200);
+      const restored = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${id}/versions/1/restore`)
+        .send({});
+      expect(restored.status).toBe(200);
+      expect(await readTags(id)).toEqual({ team: 'ops' });
+    });
+
+    test('moving the backing file removes the key from the document', async () => {
+      const id = await createDocument();
+      const doc = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}`
+      );
+      const moved = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/files/${doc.body.file_id}/metadata`)
+        .send({ filename: `${crypto.randomUUID()}.md` });
+      expect(moved.status).toBe(200);
+      expect(await readTags(id)).toEqual({ team: 'ops' });
+    });
+
+    test('a file metadata write that moves nothing keeps the key', async () => {
+      const id = await createDocument();
+      const doc = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${id}`
+      );
+      const written = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/files/${doc.body.file_id}/metadata`)
+        .send({ metadata: { source: 'crawler' } });
+      expect(written.status).toBe(200);
+      expect(await readTags(id)).toEqual({ screened: 'clean', team: 'ops' });
     });
 
     test('a project that names no key keeps tags on a content update', async () => {

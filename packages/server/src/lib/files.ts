@@ -4,6 +4,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { releaseContentBoundTagsOfMovedFile } from './contentBoundTags';
 import { resolveProjectPublicId, type SoatEventTypeFor } from './eventBus';
 import { rethrowAsPathConflict } from './filePathConflict';
 import {
@@ -348,10 +349,14 @@ export const updateFileMetadata = async (args: {
     updates.filename = rebuilt.filename;
   }
 
+  const movedFrom = file.path;
   try {
     await file.update(updates);
   } catch (error) {
     throw rethrowAsPathConflict(error);
+  }
+  if (file.path !== movedFrom) {
+    await releaseContentBoundTagsOfMovedFile({ fileId: file.id as number });
   }
   const mapped = mapFile(file);
 
