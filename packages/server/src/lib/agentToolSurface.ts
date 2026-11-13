@@ -10,7 +10,7 @@ import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeBindings } from './agentKnowledge';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
-import { mergeBindingTools } from './agentToolNames';
+import { gateAndMergeBindings } from './agentToolNames';
 import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
@@ -96,7 +96,7 @@ export const resolveAgentToolSurface = async (args: {
   const bound = splitToolBindings(readAgentToolBindings(args.typedAgent));
 
   // Guardrails are the single tool-call gating mechanism: every binding below,
-  // bound or knowledge-derived, passes this one context's gate.
+  // bound or knowledge-derived, passes this one context's gate at the merge.
   const guardrail = await buildResolverGuardrailContext({
     agentId: args.agentId,
     generationId: args.generationId,
@@ -146,21 +146,21 @@ export const resolveAgentToolSurface = async (args: {
   // written into it.
   const knowledgeBindings =
     ownerId === projectId
-      ? await buildKnowledgeBindings({
+      ? buildKnowledgeBindings({
           agentId: args.agentId,
           generationId: args.generationId,
           projectId,
           typedAgent: args.typedAgent,
           boundaryPolicy: args.boundary.policy,
           actorId: args.toolContext?.actor_id,
-          guardrail,
         })
       : [];
 
   return {
     tools: relayDenialsAsResults({
-      tools: mergeBindingTools({
+      tools: gateAndMergeBindings({
         bindings: [...bindings, ...knowledgeBindings],
+        guardrail,
       }),
     }),
     unavailableToolNames: unavailable.names,
