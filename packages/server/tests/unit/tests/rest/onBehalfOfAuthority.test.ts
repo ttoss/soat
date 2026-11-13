@@ -175,6 +175,21 @@ describe('On-Behalf-Of authority', () => {
       expect(await generationCount()).toBe(before);
     });
 
+    test('a denial by the cap names the assertion, not the key', async () => {
+      const assertion = await directCallAssertion(
+        await mintToken(['tools:CallTool'])
+      );
+      const resource = `srn:${turn.projectId}:document:${documentId}`;
+
+      const res = await readDocument(assertion);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatchObject({
+        message: `Forbidden: the On-Behalf-Of assertion's policies deny documents:GetDocument on ${resource}`,
+        meta: { denied_by: { type: 'on_behalf_of', id: null } },
+      });
+    });
+
     test('a callback naming a builtin action the token cannot run is 403', async () => {
       const builtin = await turn.createTool({
         type: 'builtin',

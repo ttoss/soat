@@ -255,6 +255,10 @@ describe('On-Behalf-Of execution identity', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(res.body.error.meta.denied_by).toEqual({
+        type: 'generation',
+        id: deniedGeneration,
+      });
     });
 
     test('a tag-conditioned policy allows a matching item', async () => {
@@ -291,6 +295,10 @@ describe('On-Behalf-Of execution identity', () => {
       });
 
       expect(res.status).toBe(403);
+      expect(res.body.error.meta.denied_by).toEqual({
+        type: 'generation',
+        id: narrowCallerGeneration,
+      });
     });
 
     test("binds ${iam:ActorId} to the generation's actor", async () => {

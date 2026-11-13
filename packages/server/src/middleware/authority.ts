@@ -1,6 +1,10 @@
 import type { AuthUser, Context } from '../Context';
-import type { PolicySets } from '../lib/iam';
-import { createPolicySetsIsAllowed } from '../lib/permissions';
+import type { DeniedPrincipal } from '../lib/authorizationDenial';
+import {
+  createPolicySetsIsAllowed,
+  type LabeledPolicySets,
+  unlabelPolicySets,
+} from '../lib/permissions';
 import {
   createPinnedResolveProjectIds,
   createUnpinnedResolveProjectIds,
@@ -28,11 +32,12 @@ export type Reach =
 /**
  * A request's effective authority: every set must allow it, inside the pinned
  * project. Each credential kind and each narrowing states its reach and sets
- * here, so checks, list filters and project resolution share one answer.
+ * here, each set labeled with its principal so a refusal names the one that
+ * refused, and checks, list filters and project resolution share one answer.
  */
 export const buildAuthority = (args: {
   reach: Reach;
-  getSets: () => Promise<PolicySets>;
+  getSets: () => Promise<LabeledPolicySets>;
   db: Context['db'];
 }): Authority => {
   const { reach, getSets, db } = args;
@@ -44,7 +49,9 @@ export const buildAuthority = (args: {
   return {
     isAllowed,
     getPolicies: async (projectPublicId) => {
-      return pinned && projectPublicId !== pinned ? [] : getSets();
+      return pinned && projectPublicId !== pinned
+        ? []
+        : unlabelPolicySets(await getSets());
     },
     resolveProjectIds:
       reach.pinned !== null
@@ -64,22 +71,24 @@ export const buildAuthority = (args: {
 
 /**
  * `authority` pinned to `projectPublicId`, further bound by `bound`'s sets.
- * Never widens: the result holds every set the authority held.
+ * Never widens: the result holds every set the authority held, labeled
+ * `principal`, ahead of the bound's.
  */
 export const narrowAuthority = (args: {
   authority: Authority;
+  principal: DeniedPrincipal;
   projectPublicId: string;
-  bound: () => Promise<PolicySets>;
+  bound: () => Promise<LabeledPolicySets>;
   db: Context['db'];
 }): Authority => {
-  const { authority, projectPublicId } = args;
-  let bound: Promise<PolicySets> | undefined;
+  const { authority, principal, projectPublicId } = args;
+  let bound: Promise<LabeledPolicySets> | undefined;
   return buildAuthority({
     reach: { pinned: projectPublicId },
     getSets: async () => {
       const own = await authority.getPolicies(projectPublicId);
       bound ??= args.bound();
-      return [...own, ...(await bound)];
+      return [{ principal, sets: own }, ...(await bound)];
     },
     db: args.db,
   });

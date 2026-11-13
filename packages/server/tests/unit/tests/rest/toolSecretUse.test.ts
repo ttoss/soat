@@ -1,3 +1,5 @@
+import jwt from 'jsonwebtoken';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -116,6 +118,10 @@ describe('Tool secret use', () => {
       expect(res.body.error.meta).toMatchObject({
         action: 'secrets:UseSecret',
         secret_ids: [secretId],
+        denied_by: {
+          type: 'user',
+          id: jwt.decode(toolsOnlyToken, { json: true })?.publicId,
+        },
       });
     });
 

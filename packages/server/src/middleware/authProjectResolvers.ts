@@ -1,12 +1,13 @@
 import type { Context } from '../Context';
+import type { RefusedBy } from '../lib/authorizationDenial';
 import type { PolicyDocument } from '../lib/iam';
 import { extractProjectIdsFromPolicies } from '../lib/iam';
 
-export type IsAllowedFn = (args: {
+export type IsAllowedFn = ((args: {
   projectPublicId: string;
   action: string;
   resource?: string;
-}) => Promise<boolean>;
+}) => Promise<boolean>) & { refusedBy?: RefusedBy };
 
 /**
  * SRN used to probe project accessibility for a list/scoping check. When a

@@ -301,6 +301,35 @@ describe('IAM tokens', () => {
       expect((await generate(token)).status).toBe(200);
     });
 
+    test('a denial by the bound names the token, not the key', async () => {
+      const token = await mintToken({ policy: GENERATE_ONLY });
+      const { jti } = jwt.decode(token, { json: true }) ?? {};
+      const resource = `srn:${turn.projectId}:document:${documentId}`;
+
+      const read = await readDocument(token);
+
+      expect(read.body.error).toMatchObject({
+        message: `Forbidden: IAM token ${jti}'s policies deny documents:GetDocument on ${resource}`,
+        meta: { denied_by: { type: 'iam_token', id: jti } },
+      });
+    });
+
+    test("a denial by the key's own policies names the key", async () => {
+      const token = await mintToken({
+        policy: { statement: [{ effect: 'Allow', action: ['*'] }] },
+      });
+
+      const res = await authenticatedTestClient(token).get(
+        `/api/v1/tools?project_id=${turn.projectId}`
+      );
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.meta.denied_by).toEqual({
+        type: 'api_key',
+        id: keyId,
+      });
+    });
+
     test('a policy_ids bound is read by id', async () => {
       const token = await mintToken({ policy_ids: [docsPolicyId] });
 
@@ -427,7 +456,7 @@ describe('IAM tokens', () => {
 
       expect((await readThroughTurn(key)).id).toBe(documentId);
       expect(await readThroughTurn(token)).toMatch(
-        /^DomainError: Forbidden: API key \S+'s policies deny documents:GetDocument on srn:/
+        /^DomainError: Forbidden: IAM token \S+'s policies deny documents:GetDocument on srn:/
       );
     });
 

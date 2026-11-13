@@ -1,7 +1,8 @@
 import type { AuthUser, Context } from '../Context';
-import type { PolicySets } from '../lib/iam';
+import { callerPrincipal } from '../lib/authorizationDenial';
 import type { AssertedCall } from '../lib/onBehalfOf';
 import { resolveGenerationIdentitySets } from '../lib/onBehalfOfIdentity';
+import type { LabeledPolicySets } from '../lib/permissions';
 import { narrowAuthority } from './authority';
 
 /**
@@ -27,15 +28,23 @@ export const narrowToOnBehalfOf = (args: {
     ...(principal ? { onBehalfOfPrincipal: principal } : {}),
     ...narrowAuthority({
       authority: authUser,
+      principal: callerPrincipal(authUser),
       projectPublicId,
-      bound: async (): Promise<PolicySets> => {
-        if (!generationPublicId) return sets;
+      bound: async (): Promise<LabeledPolicySets> => {
+        const cap = {
+          principal: { type: 'on_behalf_of' as const, id: null },
+          sets,
+        };
+        if (!generationPublicId) return [cap];
         return [
-          ...sets,
-          ...(await resolveGenerationIdentitySets({
-            generationPublicId,
-            projectPublicId,
-          })),
+          cap,
+          {
+            principal: { type: 'generation', id: generationPublicId },
+            sets: await resolveGenerationIdentitySets({
+              generationPublicId,
+              projectPublicId,
+            }),
+          },
         ];
       },
       db: args.db,

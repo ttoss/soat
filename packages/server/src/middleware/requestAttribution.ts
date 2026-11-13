@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { AuthUser, Context } from '../Context';
+import { wrapIsAllowed } from '../lib/permissions';
 import {
   evaluateRequestQuotas,
   quotaBreachError,
@@ -135,11 +136,14 @@ const deferAttributionUntilAuthorized = (args: {
   };
 
   const originalIsAllowed = authUser.isAllowed;
-  authUser.isAllowed = async (reqArgs) => {
-    const allowed = await originalIsAllowed(reqArgs);
-    if (allowed) await attributeByProjectPublicId(reqArgs.projectPublicId);
-    return allowed;
-  };
+  authUser.isAllowed = wrapIsAllowed({
+    isAllowed: originalIsAllowed,
+    around: async (reqArgs) => {
+      const allowed = await originalIsAllowed(reqArgs);
+      if (allowed) await attributeByProjectPublicId(reqArgs.projectPublicId);
+      return allowed;
+    },
+  });
 
   const originalResolveProjectIds = authUser.resolveProjectIds;
   authUser.resolveProjectIds = async (reqArgs) => {
