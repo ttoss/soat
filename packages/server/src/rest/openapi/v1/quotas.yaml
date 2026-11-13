@@ -27,6 +27,7 @@ paths:
       description: Returns the quotas defined in a project
       operationId: listQuotas
       x-iam-action: quotas:ListQuotas
+      x-iam-resource-type: quota
       parameters:
         - name: project_id
           in: query
@@ -96,6 +97,7 @@ paths:
         no window reset clears a footprint.
       operationId: createQuota
       x-iam-action: quotas:CreateQuota
+      x-iam-resource-type: quota
       requestBody:
         required: true
         content:
@@ -247,6 +249,7 @@ paths:
       description: Returns a specific quota, including current window usage
       operationId: getQuota
       x-iam-action: quotas:GetQuota
+      x-iam-resource-type: quota
       x-soat-resource:
         kind: quota
         from: quota_id
@@ -296,6 +299,7 @@ paths:
       description: Updates a quota's limit and/or mode. Other fields are immutable.
       operationId: updateQuota
       x-iam-action: quotas:UpdateQuota
+      x-iam-resource-type: quota
       x-soat-resource:
         kind: quota
         from: quota_id
@@ -375,6 +379,7 @@ paths:
       description: Deletes a quota and drops its window counters
       operationId: deleteQuota
       x-iam-action: quotas:DeleteQuota
+      x-iam-resource-type: quota
       x-soat-resource:
         kind: quota
         from: quota_id

@@ -203,7 +203,7 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 
 - The answer is `200 { "allowed": true | false }`, never `403`: the caller's own policies (owner, key or OAuth boundary, project scope), evaluated as for a built-in route.
 - `action` must be a registered `module:Operation` or a built-in action (`agents:DeleteAgent`); an unknown action or a wildcard is `400 VALIDATION_FAILED`.
-- The SRN's type must be one the action's module registered, or for a built-in action one its module's routes check it on (`agent` or `session` for `agents:*`); any other type is `400 VALIDATION_FAILED`. `projects:*` and `users:*` are checked on no typed SRN, so they are always `400`. `<id>` may be `*` for a create or a list. The project and resource are not looked up.
+- The SRN's type must be one the action's module registered, or for a built-in action one its module's routes check it on (`agent` or `session` for `agents:*`); any other type is `400 VALIDATION_FAILED`. Each operation's spec names the type its route checks its action on in `x-iam-resource-type` (`agents:SendSessionMessage` → `session`), beside `x-iam-action`. `projects:*` and `users:*` are checked on no typed SRN, so they are always `400`. `<id>` may be `*` for a create or a list. The project and resource are not looked up.
 - `context.tags` feeds `iam:ResourceTag/<key>` conditions, and `iam:ResourceType` is the SRN's type.
 - A check is not an action, so it writes no [audit log](./audit-log.md) entry.
 

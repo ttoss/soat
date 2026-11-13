@@ -27,6 +27,7 @@ paths:
       summary: List triggers
       operationId: listTriggers
       x-iam-action: triggers:ListTriggers
+      x-iam-resource-type: trigger
       parameters:
         - name: project_id
           in: query
@@ -93,6 +94,7 @@ paths:
       summary: Create a trigger
       operationId: createTrigger
       x-iam-action: triggers:CreateTrigger
+      x-iam-resource-type: trigger
       requestBody:
         required: true
         content:
@@ -146,6 +148,7 @@ paths:
       summary: Count triggers
       operationId: countTriggers
       x-iam-action: triggers:ListTriggers
+      x-iam-resource-type: trigger
       parameters:
         - name: project_id
           in: query
@@ -215,6 +218,7 @@ paths:
       summary: Get a trigger
       operationId: getTrigger
       x-iam-action: triggers:GetTrigger
+      x-iam-resource-type: trigger
       parameters:
         - name: trigger_id
           in: path
@@ -269,6 +273,7 @@ paths:
       summary: Update a trigger
       operationId: updateTrigger
       x-iam-action: triggers:UpdateTrigger
+      x-iam-resource-type: trigger
       parameters:
         - name: trigger_id
           in: path
@@ -325,6 +330,7 @@ paths:
       summary: Delete a trigger
       operationId: deleteTrigger
       x-iam-action: triggers:DeleteTrigger
+      x-iam-resource-type: trigger
       parameters:
         - name: trigger_id
           in: path
@@ -372,6 +378,7 @@ paths:
       summary: Fire a trigger
       operationId: fireTrigger
       x-iam-action: triggers:FireTrigger
+      x-iam-resource-type: trigger
       parameters:
         - name: trigger_id
           in: path
@@ -436,6 +443,7 @@ paths:
       summary: Get trigger secret
       operationId: getTriggerSecret
       x-iam-action: triggers:GetTriggerSecret
+      x-iam-resource-type: trigger
       x-soat-agent-exclude: true
       parameters:
         - name: trigger_id
@@ -487,6 +495,7 @@ paths:
       summary: Rotate trigger secret
       operationId: rotateTriggerSecret
       x-iam-action: triggers:RotateTriggerSecret
+      x-iam-resource-type: trigger
       x-soat-agent-exclude: true
       parameters:
         - name: trigger_id
@@ -538,6 +547,7 @@ paths:
       summary: List trigger firings
       operationId: listTriggerFirings
       x-iam-action: triggers:ListTriggerFirings
+      x-iam-resource-type: trigger
       parameters:
         - name: trigger_id
           in: query
@@ -587,6 +597,7 @@ paths:
       summary: Get a trigger firing
       operationId: getTriggerFiring
       x-iam-action: triggers:GetTriggerFiring
+      x-iam-resource-type: triggerFiring
       parameters:
         - name: firing_id
           in: path

@@ -30,6 +30,7 @@ paths:
       description: Returns the OAuth clients of a project.
       operationId: listOauthClients
       x-iam-action: oauth-clients:ListOauthClients
+      x-iam-resource-type: oauth_client
       parameters:
         - name: project_id
           in: query
@@ -72,6 +73,7 @@ paths:
         `secrets:UseSecret` on it.
       operationId: createOauthClient
       x-iam-action: oauth-clients:CreateOauthClient
+      x-iam-resource-type: oauth_client
       requestBody:
         required: true
         content:
@@ -148,6 +150,7 @@ paths:
         kind: oauth_client
         from: oauth_client_id
       x-iam-action: oauth-clients:GetOauthClient
+      x-iam-resource-type: oauth_client
       responses:
         '200':
           description: The OAuth client
@@ -175,6 +178,7 @@ paths:
         kind: oauth_client
         from: oauth_client_id
       x-iam-action: oauth-clients:UpdateOauthClient
+      x-iam-resource-type: oauth_client
       requestBody:
         required: true
         content:
@@ -237,6 +241,7 @@ paths:
         kind: oauth_client
         from: oauth_client_id
       x-iam-action: oauth-clients:DeleteOauthClient
+      x-iam-resource-type: oauth_client
       responses:
         '204':
           description: Deleted

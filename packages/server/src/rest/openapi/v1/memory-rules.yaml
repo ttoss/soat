@@ -34,6 +34,7 @@ paths:
         it answers "what feeds this store?" in one call.
       operationId: listMemoryRules
       x-iam-action: memories:ListMemoryRules
+      x-iam-resource-type: memory_store
       parameters:
         - name: memory_store_id
           in: query
@@ -103,6 +104,7 @@ paths:
         kind: memory_store
         from: memory_store_id
       x-iam-action: memories:CreateMemoryRule
+      x-iam-resource-type: memory_store
       requestBody:
         required: true
         content:
@@ -227,6 +229,7 @@ paths:
         kind: memory_rule
         from: memory_rule_id
       x-iam-action: memories:GetMemoryRule
+      x-iam-resource-type: memory_store
       parameters:
         - name: memory_rule_id
           in: path
@@ -279,6 +282,7 @@ paths:
         kind: memory_rule
         from: memory_rule_id
       x-iam-action: memories:UpdateMemoryRule
+      x-iam-resource-type: memory_store
       parameters:
         - name: memory_rule_id
           in: path
@@ -378,6 +382,7 @@ paths:
         kind: memory_rule
         from: memory_rule_id
       x-iam-action: memories:DeleteMemoryRule
+      x-iam-resource-type: memory_store
       parameters:
         - name: memory_rule_id
           in: path

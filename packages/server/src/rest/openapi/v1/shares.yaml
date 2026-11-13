@@ -34,6 +34,7 @@ paths:
         `SHARES_ALLOW_PUBLIC=true`.
       operationId: createShare
       x-iam-action: shares:CreateShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       requestBody:
         required: true
@@ -129,6 +130,7 @@ paths:
         share the project never accepted is not listed.
       operationId: listShares
       x-iam-action: shares:ListShares
+      x-iam-resource-type: share
       parameters:
         - name: project_id
           in: query
@@ -200,6 +202,7 @@ paths:
         addressed to it or a public one, with its own `acceptance`.
       operationId: getShare
       x-iam-action: shares:GetShare
+      x-iam-resource-type: share
       parameters:
         - $ref: '#/components/parameters/share_id'
         - name: project_id
@@ -251,6 +254,7 @@ paths:
         share reads the new cap; a changed `window` starts a fresh count.
       operationId: updateShare
       x-iam-action: shares:UpdateShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -316,6 +320,7 @@ paths:
         acceptance was active gets a `share_revoked` activity entry.
       operationId: deleteShare
       x-iam-action: shares:DeleteShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -359,6 +364,7 @@ paths:
         suspended share can be accepted and grants nothing until resumed.
       operationId: acceptShare
       x-iam-action: shares:AcceptShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -427,6 +433,7 @@ paths:
         active acceptance gets a `share_suspended` activity entry. Idempotent.
       operationId: suspendShare
       x-iam-action: shares:SuspendShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -471,6 +478,7 @@ paths:
         `share_resumed` activity entry. Idempotent.
       operationId: resumeShare
       x-iam-action: shares:SuspendShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -521,6 +529,7 @@ paths:
         revoke is never refused on that account. Idempotent.
       operationId: revokeShare
       x-iam-action: shares:RevokeShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -613,6 +622,7 @@ paths:
         these and is answered `400`.
       operationId: listShareReferences
       x-iam-action: shares:GetShare
+      x-iam-resource-type: share
       parameters:
         - $ref: '#/components/parameters/share_id'
         - name: project_id
@@ -666,6 +676,7 @@ paths:
       description: The projects that accepted the share, for its publisher.
       operationId: listShareAcceptances
       x-iam-action: shares:ListShares
+      x-iam-resource-type: share
       parameters:
         - $ref: '#/components/parameters/share_id'
         - name: status
@@ -728,6 +739,7 @@ paths:
         `share_revoked` activity entry if the acceptance was active.
       operationId: revokeShareAcceptance
       x-iam-action: shares:RevokeShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'
@@ -774,6 +786,7 @@ paths:
         if the acceptance was active.
       operationId: deleteShareAcceptance
       x-iam-action: shares:DeleteShare
+      x-iam-resource-type: share
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/share_id'

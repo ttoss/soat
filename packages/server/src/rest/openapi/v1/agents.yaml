@@ -35,6 +35,7 @@ paths:
       description: Creates a new agent bound to an AI provider. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: createAgent
       x-iam-action: agents:CreateAgent
+      x-iam-resource-type: agent
       requestBody:
         required: true
         content:
@@ -101,6 +102,7 @@ paths:
       description: Returns all agents in the project.
       operationId: listAgents
       x-iam-action: agents:ListAgents
+      x-iam-resource-type: agent
       parameters:
         - name: project_id
           in: query
@@ -153,6 +155,7 @@ paths:
         `name` only.
       operationId: getAgent
       x-iam-action: agents:GetAgent
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -196,6 +199,7 @@ paths:
       description: Updates an existing agent. Identical to PATCH — both perform partial updates. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: updateAgent
       x-iam-action: agents:UpdateAgent
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -250,6 +254,7 @@ paths:
       description: Partially updates an existing agent. Identical to PUT — both perform partial updates. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: patchAgent
       x-iam-action: agents:UpdateAgent
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -309,6 +314,7 @@ paths:
         Every share of the agent is revoked when it is deleted.
       operationId: deleteAgent
       x-iam-action: agents:DeleteAgent
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -385,6 +391,7 @@ paths:
         configuration, recorded, metered and governed in the grantee project.
       operationId: createAgentGeneration
       x-iam-action: agents:CreateAgentGeneration
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -554,6 +561,7 @@ paths:
         Provide tool outputs for each pending tool call.
       operationId: submitAgentToolOutputs
       x-iam-action: agents:CreateAgentGeneration
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -637,6 +645,7 @@ paths:
         [Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
       operationId: listAgentVersions
       x-iam-action: agents:ListAgentVersions
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -692,6 +701,7 @@ paths:
         generation can be traced back to the config that produced it.
       operationId: getAgentVersion
       x-iam-action: agents:GetAgentVersion
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -752,6 +762,7 @@ paths:
         taken fails the request instead of writing a broken agent.
       operationId: restoreAgentVersion
       x-iam-action: agents:RestoreAgentVersion
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -825,6 +836,7 @@ paths:
         running split. End the rollout with `promote` or `abort`.
       operationId: setAgentRelease
       x-iam-action: agents:SetAgentRelease
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -893,6 +905,7 @@ paths:
         recorded as `eval_run_id` on the version that goes live.
       operationId: promoteAgentRelease
       x-iam-action: agents:SetAgentRelease
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id
@@ -951,6 +964,7 @@ paths:
         happened to hold.
       operationId: abortAgentRelease
       x-iam-action: agents:SetAgentRelease
+      x-iam-resource-type: agent
       x-soat-resource:
         kind: agent
         from: agent_id

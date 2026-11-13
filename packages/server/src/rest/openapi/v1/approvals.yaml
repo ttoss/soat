@@ -32,6 +32,7 @@ paths:
       description: Returns approval items for a project, filterable by status, origin, and expiry.
       operationId: listApprovals
       x-iam-action: approvals:ListApprovals
+      x-iam-resource-type: approval
       parameters:
         - name: project_id
           in: query
@@ -127,6 +128,7 @@ paths:
         guardrail `deny`. Exact-key grouping only; no cluster state is stored.
       operationId: listApprovalRecurrences
       x-iam-action: approvals:ListApprovalRecurrences
+      x-iam-resource-type: approval
       parameters:
         - name: project_id
           in: query
@@ -205,6 +207,7 @@ paths:
       description: Returns a single approval item with its full evidence.
       operationId: getApproval
       x-iam-action: approvals:GetApproval
+      x-iam-resource-type: approval
       parameters:
         - $ref: '#/components/parameters/approval_id'
       responses:
@@ -250,6 +253,7 @@ paths:
         be approved.
       operationId: approveApproval
       x-iam-action: approvals:ResolveApproval
+      x-iam-resource-type: approval
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/approval_id'
@@ -340,6 +344,7 @@ paths:
       description: Rejects the item. A reason is required and preserved on the item.
       operationId: rejectApproval
       x-iam-action: approvals:ResolveApproval
+      x-iam-resource-type: approval
       x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/approval_id'

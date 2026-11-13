@@ -32,6 +32,7 @@ paths:
       description: Creates a new tool in the project. A `{{secret:...}}` reference in `execute`, `mcp` or a pipeline step also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: createTool
       x-iam-action: tools:CreateTool
+      x-iam-resource-type: tool
       requestBody:
         required: true
         content:
@@ -228,6 +229,7 @@ paths:
       description: Returns all tools in the project.
       operationId: listTools
       x-iam-action: tools:ListTools
+      x-iam-resource-type: tool
       parameters:
         - name: project_id
           in: query
@@ -280,6 +282,7 @@ paths:
         `description` and `parameters` only.
       operationId: getTool
       x-iam-action: tools:GetTool
+      x-iam-resource-type: tool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -327,6 +330,7 @@ paths:
       description: Updates an existing tool. A `{{secret:...}}` reference in `execute`, `mcp` or a pipeline step also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: updateTool
       x-iam-action: tools:UpdateTool
+      x-iam-resource-type: tool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -388,6 +392,7 @@ paths:
         it matches with `CONVERTER_FAILED` until repointed.
       operationId: deleteTool
       x-iam-action: tools:DeleteTool
+      x-iam-resource-type: tool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -487,6 +492,7 @@ paths:
         through their OAuth connection.
       operationId: callTool
       x-iam-action: tools:CallTool
+      x-iam-resource-type: tool
       x-soat-resource:
         kind: tool
         from: tool_id
@@ -631,6 +637,7 @@ paths:
         tool's server with its credential.
       operationId: listToolActions
       x-iam-action: tools:CallTool
+      x-iam-resource-type: tool
       x-soat-resource:
         kind: tool
         from: tool_id

@@ -35,6 +35,7 @@ paths:
       description: Returns a paginated list of execution traces for the project.
       operationId: listTraces
       x-iam-action: traces:ListTraces
+      x-iam-resource-type: trace
       parameters:
         - name: project_id
           in: query
@@ -93,6 +94,7 @@ paths:
       description: Returns a single trace by ID.
       operationId: getTrace
       x-iam-action: traces:GetTrace
+      x-iam-resource-type: trace
       x-soat-resource:
         kind: trace
         from: trace_id
@@ -149,6 +151,7 @@ paths:
         page by `GET /api/v1/traces?parent_trace_id=`.
       operationId: getTraceTree
       x-iam-action: traces:GetTraceTree
+      x-iam-resource-type: trace
       x-soat-resource:
         kind: trace
         from: trace_id
@@ -215,6 +218,7 @@ paths:
         original `content_redacted_at` in place.
       operationId: purgeTraceContent
       x-iam-action: traces:PurgeTraceContent
+      x-iam-resource-type: trace
       x-soat-resource:
         kind: trace
         from: trace_id

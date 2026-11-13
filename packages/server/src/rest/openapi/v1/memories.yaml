@@ -27,6 +27,7 @@ paths:
       description: Returns all memories in a memory store
       operationId: listMemories
       x-iam-action: memories:ListMemories
+      x-iam-resource-type: memory
       parameters:
         - name: memory_store_id
           in: query
@@ -120,6 +121,7 @@ paths:
         kind: memory_store
         from: memory_store_id
       x-iam-action: memories:CreateMemory
+      x-iam-resource-type: memory_store
       requestBody:
         required: true
         content:
@@ -289,6 +291,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:GetMemory
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -343,6 +346,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:UpdateMemory
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -436,6 +440,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:DeleteMemory
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -502,6 +507,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:RetractMemory
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -586,6 +592,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:ListMemoryAssertions
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -649,6 +656,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:GetMemory
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -700,6 +708,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:UpdateMemory
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -763,6 +772,7 @@ paths:
         kind: memory
         from: memory_id
       x-iam-action: memories:UpdateMemory
+      x-iam-resource-type: memory_store
       parameters:
         - $ref: '#/components/parameters/MemoryStorePin'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'

@@ -30,6 +30,7 @@ paths:
       description: Returns the playbooks defined in a project, newest first.
       operationId: listPlaybooks
       x-iam-action: playbooks:ListPlaybooks
+      x-iam-resource-type: playbook
       parameters:
         - name: project_id
           in: query
@@ -97,6 +98,7 @@ paths:
         so no run can act as them.
       operationId: createPlaybook
       x-iam-action: playbooks:CreatePlaybook
+      x-iam-resource-type: playbook
       requestBody:
         required: true
         content:
@@ -163,6 +165,7 @@ paths:
         definition's own graph is checked.
       operationId: validatePlaybook
       x-iam-action: playbooks:ValidatePlaybook
+      x-iam-resource-type: playbook
       requestBody:
         required: true
         content:
@@ -217,6 +220,7 @@ paths:
       description: Returns a playbook with its current definition and version.
       operationId: getPlaybook
       x-iam-action: playbooks:GetPlaybook
+      x-iam-resource-type: playbook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -270,6 +274,7 @@ paths:
         PLAYBOOK_AUTHOR_UNAVAILABLE` for a trigger or OAuth token.
       operationId: updatePlaybook
       x-iam-action: playbooks:UpdatePlaybook
+      x-iam-resource-type: playbook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -332,6 +337,7 @@ paths:
         `409 PLAYBOOK_HAS_DEPENDENTS`.
       operationId: deletePlaybook
       x-iam-action: playbooks:DeletePlaybook
+      x-iam-resource-type: playbook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -381,6 +387,7 @@ paths:
         written on create and on every write that changes `definition`.
       operationId: listPlaybookVersions
       x-iam-action: playbooks:ListPlaybookVersions
+      x-iam-resource-type: playbook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -430,6 +437,7 @@ paths:
         evaluated against.
       operationId: getPlaybookVersion
       x-iam-action: playbooks:GetPlaybookVersion
+      x-iam-resource-type: playbook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -478,6 +486,7 @@ paths:
         caller authors the new version, checked as on create.
       operationId: restorePlaybookVersion
       x-iam-action: playbooks:RestorePlaybookVersion
+      x-iam-resource-type: playbook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -545,6 +554,7 @@ paths:
         life of the case.
       operationId: createPlaybookCase
       x-iam-action: playbooks:CreatePlaybookCase
+      x-iam-resource-type: playbook
       x-soat-resource:
         kind: playbook
         from: playbook_id
@@ -604,6 +614,7 @@ paths:
         case for those.
       operationId: listPlaybookCases
       x-iam-action: playbooks:ListPlaybookCases
+      x-iam-resource-type: playbook_case
       parameters:
         - name: project_id
           in: query
@@ -694,6 +705,7 @@ paths:
         each read and never stored.
       operationId: getPlaybookCase
       x-iam-action: playbooks:GetPlaybookCase
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -737,6 +749,7 @@ paths:
         `409 PLAYBOOK_CASE_HAS_DEPENDENTS`.
       operationId: deletePlaybookCase
       x-iam-action: playbooks:DeletePlaybookCase
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -800,6 +813,7 @@ paths:
         any depth, is `403 PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
       x-iam-action: playbooks:WritePlaybookCaseInputs
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -871,6 +885,7 @@ paths:
         ask and each answer is written to its own case.
       operationId: getPlaybookCaseMissing
       x-iam-action: playbooks:GetPlaybookCaseMissing
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -924,6 +939,7 @@ paths:
         rewritten, so this is the case's full history.
       operationId: listPlaybookCaseEntries
       x-iam-action: playbooks:ListPlaybookCaseEntries
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1011,6 +1027,7 @@ paths:
         ends.
       operationId: runPlaybookCaseNode
       x-iam-action: playbooks:RunPlaybookCaseNode
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1076,6 +1093,7 @@ paths:
       description: Returns every run of the case's nodes, newest first.
       operationId: listPlaybookCaseExecutions
       x-iam-action: playbooks:ListPlaybookCaseExecutions
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1130,6 +1148,7 @@ paths:
       description: Returns one run of a case's node.
       operationId: getPlaybookCaseExecution
       x-iam-action: playbooks:GetPlaybookCaseExecution
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1191,6 +1210,7 @@ paths:
         error.
       operationId: exportPlaybookCaseNode
       x-iam-action: playbooks:ExportPlaybookCaseNode
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1268,6 +1288,7 @@ paths:
       description: Returns every file rendered from the case's final nodes, newest first.
       operationId: listPlaybookCaseExports
       x-iam-action: playbooks:ListPlaybookCaseExports
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1328,6 +1349,7 @@ paths:
       description: Returns one file rendered from a case's final node.
       operationId: getPlaybookCaseExport
       x-iam-action: playbooks:GetPlaybookCaseExport
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1393,6 +1415,7 @@ paths:
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: upgradePlaybookCase
       x-iam-action: playbooks:UpgradePlaybookCase
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1461,6 +1484,7 @@ paths:
       description: Returns every version change of the case, newest first.
       operationId: listPlaybookCaseUpgrades
       x-iam-action: playbooks:ListPlaybookCaseUpgrades
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1513,6 +1537,7 @@ paths:
         first pause.
       operationId: pausePlaybookCase
       x-iam-action: playbooks:PausePlaybookCase
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1563,6 +1588,7 @@ paths:
         the project resumes.
       operationId: resumePlaybookCase
       x-iam-action: playbooks:ResumePlaybookCase
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id
@@ -1633,6 +1659,7 @@ paths:
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: confirmPlaybookCaseNode
       x-iam-action: playbooks:ConfirmPlaybookCaseNode
+      x-iam-resource-type: playbook_case
       x-soat-resource:
         kind: playbook_case
         from: case_id

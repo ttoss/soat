@@ -30,6 +30,7 @@ paths:
       description: Returns a project's OAuth connections, without tokens.
       operationId: listOauthConnections
       x-iam-action: oauth-connections:ListOauthConnections
+      x-iam-resource-type: oauth_connection
       parameters:
         - name: project_id
           in: query
@@ -88,6 +89,7 @@ paths:
         connects their account to that actor.
       operationId: createOauthConnection
       x-iam-action: oauth-connections:CreateOauthConnection
+      x-iam-resource-type: oauth_connection
       requestBody:
         required: true
         content:
@@ -223,6 +225,7 @@ paths:
         kind: oauth_connection
         from: oauth_connection_id
       x-iam-action: oauth-connections:GetOauthConnection
+      x-iam-resource-type: oauth_connection
       responses:
         '200':
           description: The OAuth connection
@@ -253,6 +256,7 @@ paths:
         kind: oauth_connection
         from: oauth_connection_id
       x-iam-action: oauth-connections:DeleteOauthConnection
+      x-iam-resource-type: oauth_connection
       responses:
         '204':
           description: Deleted

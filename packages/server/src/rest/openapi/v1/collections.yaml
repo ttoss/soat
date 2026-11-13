@@ -30,6 +30,7 @@ paths:
       description: Returns the collections in scope, oldest first.
       operationId: listCollections
       x-iam-action: collections:ListCollections
+      x-iam-resource-type: collection
       parameters:
         - name: project_id
           in: query
@@ -73,6 +74,7 @@ paths:
         so one JSON Schema cannot parse is refused rather than stored.
       operationId: createCollection
       x-iam-action: collections:CreateCollection
+      x-iam-resource-type: collection
       requestBody:
         required: true
         content:
@@ -132,6 +134,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:GetCollection
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
       responses:
@@ -165,6 +168,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:UpdateCollection
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
       requestBody:
@@ -218,6 +222,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:DeleteCollection
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
       responses:
@@ -249,6 +254,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:ListCollectionItems
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: './structured-filters.yaml#/components/parameters/DataQuery'
@@ -297,6 +303,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:GetCollectionItem
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -335,6 +342,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:PutCollectionItem
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -409,6 +417,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:UpdateCollectionItem
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -474,6 +483,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:DeleteCollectionItem
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -503,6 +513,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:GetCollectionItem
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -535,6 +546,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:UpdateCollectionItem
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -587,6 +599,7 @@ paths:
         kind: collection
         from: collection_id
       x-iam-action: collections:UpdateCollectionItem
+      x-iam-resource-type: collection
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'

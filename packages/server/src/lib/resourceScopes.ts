@@ -313,6 +313,16 @@ export const listResourceKinds = (): string[] => {
   return Object.keys(RESOURCE_KINDS);
 };
 
+/** The SRN type a kind's id authorizes on, through its parent when it has one. */
+export const resourceTypeOfKind = (args: {
+  kind: string;
+}): string | undefined => {
+  const entry = RESOURCE_KINDS[args.kind];
+  if (!entry) return undefined;
+  if ('via' in entry) return resourceTypeOfKind({ kind: entry.via });
+  return entry.resourceType;
+};
+
 /**
  * `null` when the kind has no entry or the id names nothing — a caller then
  * has no SRN to evaluate, which leaves the resource-less `*`. That is the

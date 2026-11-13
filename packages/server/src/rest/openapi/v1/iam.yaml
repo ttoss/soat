@@ -83,6 +83,7 @@ paths:
         `detail.iam_token` on every entry the token makes.
       operationId: createIamToken
       x-iam-action: iam:CreateToken
+      x-iam-resource-type: iam_token
       x-soat-agent-exclude: true
       requestBody:
         required: true

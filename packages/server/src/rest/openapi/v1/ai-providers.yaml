@@ -27,6 +27,7 @@ paths:
       description: Returns a list of AI provider configurations for a project
       operationId: listAiProviders
       x-iam-action: ai-providers:ListAiProviders
+      x-iam-resource-type: aiProvider
       parameters:
         - name: project_id
           in: query
@@ -134,6 +135,7 @@ paths:
         `400 VALIDATION_FAILED` unless the deployment allows it.
       operationId: createAiProvider
       x-iam-action: ai-providers:CreateAiProvider
+      x-iam-resource-type: aiProvider
       requestBody:
         required: true
         content:
@@ -249,6 +251,7 @@ paths:
       description: Returns a specific AI provider configuration
       operationId: getAiProvider
       x-iam-action: ai-providers:GetAiProvider
+      x-iam-resource-type: aiProvider
       parameters:
         - name: ai_provider_id
           in: path
@@ -322,6 +325,7 @@ paths:
       description: Updates an AI provider configuration. Setting `base_url` or `secret_id` so the record holds both also needs `secrets:UseSecret` on the secret, else `403`.
       operationId: updateAiProvider
       x-iam-action: ai-providers:UpdateAiProvider
+      x-iam-resource-type: aiProvider
       parameters:
         - name: ai_provider_id
           in: path
@@ -422,6 +426,7 @@ paths:
         is `true` when a `force=true` retry would succeed.
       operationId: deleteAiProvider
       x-iam-action: ai-providers:DeleteAiProvider
+      x-iam-resource-type: aiProvider
       parameters:
         - name: ai_provider_id
           in: path
@@ -524,6 +529,7 @@ paths:
         gets the first 50 models.
       operationId: listAiProviderModels
       x-iam-action: ai-providers:ListAiProviderModels
+      x-iam-resource-type: aiProvider
       parameters:
         - name: ai_provider_id
           in: path
@@ -601,6 +607,7 @@ paths:
         unlike the global price book, a project's own overrides are visible here.
       operationId: getAiProviderPrices
       x-iam-action: ai-providers:GetAiProviderPrices
+      x-iam-resource-type: aiProvider
       parameters:
         - name: ai_provider_id
           in: path
@@ -656,6 +663,7 @@ paths:
         unpriced.
       operationId: updateAiProviderPrices
       x-iam-action: ai-providers:ManageAiProviderPrices
+      x-iam-resource-type: aiProvider
       x-soat-agent-exclude: true
       parameters:
         - name: ai_provider_id

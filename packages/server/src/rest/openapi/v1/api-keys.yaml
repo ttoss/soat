@@ -35,6 +35,7 @@ paths:
           policies.
       operationId: listApiKeys
       x-iam-action: api-keys:ListApiKeys
+      x-iam-resource-type: apiKey
       security:
         - bearerAuth: []
       parameters:
@@ -79,6 +80,7 @@ paths:
         - When the request is authenticated with an **API key narrowed by `policy_ids`**, the new key stays inside that boundary: omitting `policy_ids` inherits the caller's own, a non-empty subset of them is accepted, and an empty list or any other policy returns `403 API_KEY_POLICY_BOUNDARY`.
       operationId: createApiKey
       x-iam-action: api-keys:CreateApiKey
+      x-iam-resource-type: apiKey
       x-soat-agent-exclude: true
       requestBody:
         required: true
@@ -146,6 +148,7 @@ paths:
       description: Returns details of an API key. Only the owner or an admin can access it, and a project-scoped credential can only reach keys in its own project.
       operationId: getApiKey
       x-iam-action: api-keys:GetApiKey
+      x-iam-resource-type: apiKey
       x-soat-agent-exclude: true
       parameters:
         - name: api_key_id
@@ -193,6 +196,7 @@ paths:
       description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise). A project-scoped token (OAuth, trigger, run or IAM) never updates a key (`403 API_KEY_SCOPED_TOKEN`).
       operationId: updateApiKey
       x-iam-action: api-keys:UpdateApiKey
+      x-iam-resource-type: apiKey
       x-soat-agent-exclude: true
       parameters:
         - name: api_key_id
@@ -270,6 +274,7 @@ paths:
       description: Deletes an API key. Only the owner or an admin can delete it, and a project-scoped credential can only delete keys in its own project.
       operationId: deleteApiKey
       x-iam-action: api-keys:DeleteApiKey
+      x-iam-resource-type: apiKey
       x-soat-agent-exclude: true
       parameters:
         - name: api_key_id

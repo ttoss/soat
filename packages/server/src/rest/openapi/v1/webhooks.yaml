@@ -27,6 +27,7 @@ paths:
       summary: List webhooks
       operationId: listWebhooks
       x-iam-action: webhooks:ListWebhooks
+      x-iam-resource-type: webhook
       parameters:
         - name: project_id
           in: query
@@ -73,6 +74,7 @@ paths:
       summary: Create a webhook
       operationId: createWebhook
       x-iam-action: webhooks:CreateWebhook
+      x-iam-resource-type: webhook
       requestBody:
         required: true
         content:
@@ -119,6 +121,7 @@ paths:
       summary: Get a webhook
       operationId: getWebhook
       x-iam-action: webhooks:GetWebhook
+      x-iam-resource-type: webhook
       parameters:
         - name: webhook_id
           in: path
@@ -163,6 +166,7 @@ paths:
       summary: Update a webhook
       operationId: updateWebhook
       x-iam-action: webhooks:UpdateWebhook
+      x-iam-resource-type: webhook
       parameters:
         - name: webhook_id
           in: path
@@ -219,6 +223,7 @@ paths:
       summary: Delete a webhook
       operationId: deleteWebhook
       x-iam-action: webhooks:DeleteWebhook
+      x-iam-resource-type: webhook
       parameters:
         - name: webhook_id
           in: path
@@ -261,6 +266,7 @@ paths:
       summary: List webhook deliveries
       operationId: listWebhookDeliveries
       x-iam-action: webhooks:ListWebhookDeliveries
+      x-iam-resource-type: webhook
       parameters:
         - name: webhook_id
           in: query
@@ -310,6 +316,7 @@ paths:
       summary: Get a delivery
       operationId: getWebhookDelivery
       x-iam-action: webhooks:GetWebhookDelivery
+      x-iam-resource-type: webhook
       parameters:
         - name: delivery_id
           in: path
@@ -361,6 +368,7 @@ paths:
       summary: Redeliver a webhook delivery
       operationId: redeliverWebhookDelivery
       x-iam-action: webhooks:RedeliverWebhookDelivery
+      x-iam-resource-type: webhook
       parameters:
         - name: delivery_id
           in: path
@@ -408,6 +416,7 @@ paths:
       summary: Get webhook secret
       operationId: getWebhookSecret
       x-iam-action: webhooks:GetWebhookSecret
+      x-iam-resource-type: webhook
       x-soat-agent-exclude: true
       parameters:
         - name: webhook_id
@@ -455,6 +464,7 @@ paths:
       summary: Rotate webhook secret
       operationId: rotateWebhookSecret
       x-iam-action: webhooks:RotateWebhookSecret
+      x-iam-resource-type: webhook
       x-soat-agent-exclude: true
       parameters:
         - name: webhook_id

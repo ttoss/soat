@@ -50,6 +50,7 @@ paths:
         was asked for.
       operationId: listUsageEvents
       x-iam-action: usage:ListEvents
+      x-iam-resource-type: usage
       parameters:
         - name: agent_id
           in: query
@@ -256,6 +257,7 @@ paths:
         while `groups` is empty.
       operationId: getUsageAggregate
       x-iam-action: usage:GetAggregate
+      x-iam-resource-type: usage
       parameters:
         - name: project_id
           in: query
@@ -512,6 +514,7 @@ paths:
         value.
       operationId: listUsageThresholds
       x-iam-action: usage:ListThresholds
+      x-iam-resource-type: usage
       parameters:
         - name: project_id
           in: query
@@ -562,6 +565,7 @@ paths:
         resets its fire state).
       operationId: createUsageThreshold
       x-iam-action: usage:ManageThresholds
+      x-iam-resource-type: usage
       requestBody:
         required: true
         content:
@@ -610,6 +614,7 @@ paths:
         threshold starts its once-per-window / hysteresis state fresh.
       operationId: deleteUsageThreshold
       x-iam-action: usage:ManageThresholds
+      x-iam-resource-type: usage
       x-soat-resource:
         kind: usage
         from: threshold_id
@@ -662,6 +667,7 @@ paths:
         be supplied.
       operationId: getUsageReceipt
       x-iam-action: usage:GetReceipt
+      x-iam-resource-type: usage
       parameters:
         - name: generation_id
           in: query
@@ -721,6 +727,7 @@ paths:
         authenticated user.
       operationId: getPriceBook
       x-iam-action: usage:GetPriceBook
+      x-iam-resource-type: usage
       responses:
         '200':
           description: The current price book
@@ -753,6 +760,7 @@ paths:
         be dated now or earlier.
       operationId: upsertPriceBook
       x-iam-action: usage:ManagePriceBook
+      x-iam-resource-type: usage
       requestBody:
         required: true
         content:
