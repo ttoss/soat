@@ -264,6 +264,18 @@ The write claims the memory's `version`, so it takes `expected_version` or `If-M
 [any other write](#concurrent-writes). A memory that is already invalidated — retracted, or
 superseded by a later write — answers `409 MEMORY_ALREADY_INVALIDATED`.
 
+### Write events
+
+Every door that stores or changes a memory emits an event with the memory as `data`, so a [trigger](./triggers.md#event-triggers) reacts to a memory whichever door wrote it:
+
+| Event | Fires when |
+| --- | --- |
+| `memories.created` | A memory is stored: the API, the [`write_memory` tool](#write_memory-tool), a [memory rule](#memory-rules), a formation. A supersede announces its replacement |
+| `memories.updated` | A memory's content, metadata or tags change |
+| `memories.retracted` | A memory is [retracted](#retraction) |
+
+A deduplicated write (`skipped`) stores nothing and emits nothing. Payloads: [Webhook events](../webhook-events.md).
+
 ### Concurrent writes
 
 [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) may name the version it is

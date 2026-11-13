@@ -5,6 +5,7 @@ import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
+import { emitMemoryEvent } from 'src/lib/memoryEvents';
 import { mapMemory, memories, memoryIncludes } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
 import { paginatedList } from 'src/lib/pagination';
@@ -148,7 +149,13 @@ export const createMemory = async (args: {
     source: args.assertion,
   });
 
-  return mapMemory(await memories.reload(entry));
+  const mapped = mapMemory(await memories.reload(entry));
+  await emitMemoryEvent({
+    type: 'memories.created',
+    memoryStoreId: args.memoryStoreId,
+    memory: mapped,
+  });
+  return mapped;
 };
 
 export const listMemories = async (args: {
@@ -298,7 +305,13 @@ export const updateMemory = async (args: {
     });
   }
 
-  return mapMemory(await memories.reload(entry));
+  const mapped = mapMemory(await memories.reload(entry));
+  await emitMemoryEvent({
+    type: 'memories.updated',
+    memoryStoreId: entry.memoryStoreId,
+    memory: mapped,
+  });
+  return mapped;
 };
 
 export const deleteMemory = async (args: {
