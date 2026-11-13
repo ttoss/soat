@@ -40,9 +40,9 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   FORBIDDEN:
     'The credential authenticated but is not allowed this action. Attach an IAM policy granting the action to the caller, or use a credential that has it.',
   API_KEY_POLICY_BOUNDARY:
-    "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `boundary_policy_ids`; a wider key requires a credential that carries that permission.",
-  API_KEY_SCOPED_TOKEN:
-    'Create or update the key with a user token or an API key; a project-scoped token (OAuth, trigger, run or IAM) cannot write API keys.',
+    "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `key_policy_ids`; a wider key requires a credential that carries that permission.",
+  CREDENTIAL_NARROWED:
+    'Write the key, or consent, with a user token or an API key and no `On-Behalf-Of` header; to consent, use a key with no `policy_ids` of its own.',
   IAM_TOKEN_POLICY_INVALID:
     "Send `policy` as a valid policy document naming known actions, or `policy_ids` naming policies of the key's project or global ones.",
   IAM_TOKEN_ISSUER_NOT_ALLOWED:
@@ -69,12 +69,14 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.',
   ACTION_NOT_HELD:
     'Name a target or action you may perform yourself (`meta.action` on `meta.resource`), or have a caller who holds it make the change.',
+  AGENT_RUN_AS_REQUIRES_POLICIES:
+    'Give the agent the policies it acts under in `policy_ids`, or set `run_as: caller` so the agent runs as its caller.',
   POLICY_GRANT_NOT_HELD:
     'Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.',
   POLICY_OUTSIDE_PROJECT:
     "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
   POLICY_HAS_DEPENDENTS:
-    'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}`), the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}`) and the webhooks `meta.webhook_sample` lists (`PUT /api/v1/webhooks/{webhook_id}`), or delete them, then delete the policy.',
+    'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}`), the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}`) the webhooks `meta.webhook_sample` lists (`PUT /api/v1/webhooks/{webhook_id}`), the users `meta.user_sample` lists (`PUT /api/v1/users/{user_id}/policies`) and the API keys `meta.api_key_sample` lists (`PUT /api/v1/api-keys/{api_key_id}`), or delete them, then delete the policy.',
   SHARE_CAP_EXCEEDED:
     "Wait `retry_after` seconds for the share's window to reset, or ask the publisher to raise its cap.",
   SHARE_IN_USE:

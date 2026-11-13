@@ -64,7 +64,7 @@ describe('Agent knowledge', () => {
   const createAgent = async (args: {
     scope: Scope;
     knowledgeConfig?: Record<string, unknown> | null;
-    boundaryPolicy?: Record<string, unknown>;
+    agentPolicy?: Record<string, unknown>;
     toolBindings?: Array<Record<string, unknown>>;
     guardrailIds?: string[];
   }): Promise<string> => {
@@ -77,11 +77,11 @@ describe('Agent knowledge', () => {
       ...(args.knowledgeConfig === undefined
         ? {}
         : { knowledge_config: args.knowledgeConfig }),
-      ...(args.boundaryPolicy
+      ...(args.agentPolicy
         ? {
             policy_ids: [
               await create('/api/v1/policies', {
-                document: args.boundaryPolicy,
+                document: args.agentPolicy,
               }),
             ],
           }
@@ -508,7 +508,7 @@ describe('Agent knowledge', () => {
       return createAgent({
         scope,
         knowledgeConfig: { write_memory_store_id: args.writeStoreId },
-        boundaryPolicy: { statement: args.statement },
+        agentPolicy: { statement: args.statement },
       });
     };
 
@@ -840,7 +840,7 @@ describe('Agent knowledge', () => {
 
       /** An agent in a project whose baseline guardrail holds every call. */
       const signOffAgent = async (args: {
-        boundaryPolicy?: Record<string, unknown>;
+        agentPolicy?: Record<string, unknown>;
       }) => {
         const gatedScope = await createScope(
           `Write memory under sign-off ${Math.random().toString(36).slice(2)}`
@@ -863,7 +863,7 @@ describe('Agent knowledge', () => {
         const agentId = await createAgent({
           scope: gatedScope,
           knowledgeConfig: { write_memory_store_id: writeStoreId },
-          boundaryPolicy: args.boundaryPolicy,
+          agentPolicy: args.agentPolicy,
         });
         return { agentId, writeStoreId };
       };
@@ -1011,7 +1011,7 @@ describe('Agent knowledge', () => {
 
       test("approving a held write still holds it to the agent's boundary", async () => {
         const { agentId, writeStoreId } = await signOffAgent({
-          boundaryPolicy: {
+          agentPolicy: {
             statement: [
               { effect: 'Allow', action: ['*'], resource: ['*'] },
               {

@@ -46,12 +46,12 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
 
   const callThroughAgent = async (args: {
     tool: { id: string; name: string };
-    boundaryPolicy?: object;
+    agentPolicy?: object;
   }) => {
     const agentId = await turn.createAgent({
       tool_bindings: [{ tool_id: args.tool.id }],
-      ...(args.boundaryPolicy
-        ? { policy_ids: [await turn.createPolicy(args.boundaryPolicy)] }
+      ...(args.agentPolicy
+        ? { policy_ids: [await turn.createPolicy(args.agentPolicy)] }
         : {}),
     });
     const { results } = await turn.generate({
@@ -64,7 +64,7 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
   const expectRefused = async (tool: { id: string; name: string }) => {
     const { agentId, result } = await callThroughAgent({
       tool,
-      boundaryPolicy: DENY_GET_FILE,
+      agentPolicy: DENY_GET_FILE,
     });
     expect(result).toEqual(agentRefusal({ agentId, action: 'files:GetFile' }));
   };
@@ -115,7 +115,7 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
 
     const { result } = await callThroughAgent({
       tool: pipeline,
-      boundaryPolicy: ALLOW_GET_FILE,
+      agentPolicy: ALLOW_GET_FILE,
     });
 
     expect(Array.isArray(result.data)).toBe(true);

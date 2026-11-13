@@ -108,6 +108,14 @@ export class Agent extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare policyIds: string[] | null;
 
+  // `caller`: `policyIds` cap the caller. `agent`: they are the agent's grant.
+  @Column({
+    type: DataType.STRING(16),
+    allowNull: false,
+    defaultValue: 'caller',
+  })
+  declare runAs: string;
+
   @Column({ type: DataType.FLOAT, allowNull: true })
   declare temperature: number | null;
 

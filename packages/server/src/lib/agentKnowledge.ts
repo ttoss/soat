@@ -12,7 +12,7 @@ import {
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import { NATIVE_PROPOSAL_PREFIX } from './agentToolApproval';
 import type { ToolBinding } from './agentToolNames';
-import { isSoatActionAllowedByBoundary } from './agentToolResolver';
+import { isSoatActionAllowedByAgentPolicy } from './agentToolResolver';
 import { agentDenied, denialToolResult } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
 import { buildSrn, type PolicyDocument } from './iam';
@@ -201,15 +201,15 @@ const MEMORY_WRITE_ACTIONS = [
   'memories:UpdateMemory',
 ] as const;
 
-const findBoundaryDeniedMemoryWriteAction = (args: {
-  boundaryPolicy: unknown;
+const findAgentDeniedMemoryWriteAction = (args: {
+  agentPolicy: unknown;
   resource: string;
   context: Record<string, string>;
 }): string | null => {
   for (const iamAction of MEMORY_WRITE_ACTIONS) {
     if (
-      !isSoatActionAllowedByBoundary({
-        boundaryPolicy: args.boundaryPolicy,
+      !isSoatActionAllowedByAgentPolicy({
+        agentPolicy: args.agentPolicy,
         iamAction,
         resource: args.resource,
         context: args.context,
@@ -248,7 +248,7 @@ type WriteMemoryAsAgentArgs = {
   generationId: string | null;
   /** The agent's own project, the only one whose store it writes to. */
   projectId: number;
-  boundaryPolicy?: unknown;
+  agentPolicy?: unknown;
   /** The turn's end user, whose memory every write is. */
   actorId?: string;
 };
@@ -275,8 +275,8 @@ const writeMemoryAsAgent = async (
     resourceType: 'memory_store',
     resourceId: args.writeMemoryStoreId,
   });
-  const deniedAction = findBoundaryDeniedMemoryWriteAction({
-    boundaryPolicy: args.boundaryPolicy,
+  const deniedAction = findAgentDeniedMemoryWriteAction({
+    agentPolicy: args.agentPolicy,
     resource,
     context: buildResourceTagContext({
       resourceType: 'memory_store',
@@ -344,7 +344,7 @@ export const runApprovedWriteMemory = async (args: {
   agent: { publicId: string; knowledgeConfig: unknown } | null;
   generationId: string | null;
   projectId: number;
-  boundaryPolicy: unknown;
+  agentPolicy: unknown;
   actorId?: string;
   /** The frozen or edited arguments; an edit is not checked against a schema upstream. */
   input: Record<string, unknown>;
@@ -367,7 +367,7 @@ export const runApprovedWriteMemory = async (args: {
     agentId: args.agent.publicId,
     generationId: args.generationId,
     projectId: args.projectId,
-    boundaryPolicy: args.boundaryPolicy,
+    agentPolicy: args.agentPolicy,
     actorId: args.actorId,
     content,
   });
@@ -433,7 +433,7 @@ export const buildKnowledgeBindings = (args: {
   generationId: string;
   projectId: number;
   typedAgent: TypedAgent;
-  boundaryPolicy: PolicyDocument | null;
+  agentPolicy: PolicyDocument | null;
   actorId?: string;
 }): ToolBinding[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
@@ -447,7 +447,7 @@ export const buildKnowledgeBindings = (args: {
           agentId: args.agentId,
           generationId: args.generationId,
           projectId: args.projectId,
-          boundaryPolicy: args.boundaryPolicy,
+          agentPolicy: args.agentPolicy,
           actorId: args.actorId,
         }),
       },

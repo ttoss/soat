@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.109.0](https://github.com/ttoss/soat/compare/v0.108.0...v0.109.0) (2026-11-13)
+
+* feat(iam)!: authority is grant ∩ caps, each absent value stated (#1908) ([93a8a91](https://github.com/ttoss/soat/commit/93a8a9142cdc39b8828bc070c3e0342eca100a5e)), closes [#1908](https://github.com/ttoss/soat/issues/1908)
+
+### BREAKING CHANGES
+
+* API_KEY_SCOPED_TOKEN is CREDENTIAL_NARROWED and also refuses
+  a key write under On-Behalf-Of and an OAuth consent from a narrowed
+  credential; an admin's pinned or capped key is held to its pin and policies;
+  a policy a user or key names cannot be deleted.
+
 # [0.108.0](https://github.com/ttoss/soat/compare/v0.107.0...v0.108.0) (2026-11-12)
 
 ### Features

@@ -1,6 +1,8 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { boundSets } from '../middleware/authority';
+import { keyBound, userBound } from '../middleware/authScopedBoundary';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import { resolveServedAgentVersion } from './agentServedVersion';
 import {
@@ -9,7 +11,6 @@ import {
   resolveBoundSets,
 } from './attachedPolicies';
 import type { PolicySets } from './iam';
-import { resolvePolicySets } from './permissions';
 import { parseBound } from './principalBound';
 
 const log = createDebug('soat:onBehalfOfIdentity');
@@ -20,7 +21,7 @@ const NOTHING: PolicySets = [[]];
 const userSets = async (args: {
   userId?: number;
   publicId?: string;
-  apiKeyPolicyIds: number[];
+  apiKeyPolicyIds: string[];
 }): Promise<PolicySets> => {
   const user = await db.User.findOne({
     where:
@@ -30,12 +31,16 @@ const userSets = async (args: {
     attributes: ['role', 'policyIds'],
   });
   if (!user) return NOTHING;
-  return resolvePolicySets({
-    userRole: user.role as 'admin' | 'user',
-    userPolicyIds: (user.policyIds as number[] | null) ?? [],
-    apiKeyPolicyIds: args.apiKeyPolicyIds,
-    db,
-  });
+  const [grant, cap] = await Promise.all([
+    boundSets(
+      userBound({
+        role: user.role as 'admin' | 'user',
+        policyIds: user.policyIds,
+      })
+    ),
+    boundSets(keyBound({ policyIds: args.apiKeyPolicyIds })),
+  ]);
+  return [...grant, ...cap];
 };
 
 const principalSets = async (args: {
@@ -53,7 +58,7 @@ const principalSets = async (args: {
   if (!key) return NOTHING;
   return userSets({
     userId: key.userId as number,
-    apiKeyPolicyIds: (key.policyIds as number[] | null) ?? [],
+    apiKeyPolicyIds: key.policyIds,
   });
 };
 
@@ -71,12 +76,14 @@ const actedAsSets = async (args: {
 
 /**
  * The caller half: its `acted_as` principal and, when fired, the trigger's.
- * A turn that records neither (a session or conversation turn) has none, so
- * the agent half alone narrows the key.
+ * A turn that records neither (a session or conversation turn), or one that
+ * acted as its agent (`run_as: agent`), has none, so the agent half alone
+ * narrows the key.
  */
 const callerSets = async (
   gen: InstanceType<(typeof db)['Generation']>
 ): Promise<PolicySets> => {
+  if (gen.actedAsPrincipalType === 'agent') return [];
   const sets: PolicySets = [];
   if (gen.actedAsPrincipalType && gen.actedAsPrincipalId) {
     sets.push(
@@ -122,7 +129,7 @@ const agentSets = async (
 /**
  * The policy sets a generation's execution identity must each satisfy: its
  * caller's and its agent's `policy_ids`, the same pair a `builtin` call is
- * held to. A generation outside `projectPublicId` allows nothing.
+ * held to; under `run_as: agent`, the agent's alone. A generation outside `projectPublicId` allows nothing.
  */
 export const resolveGenerationIdentitySets = async (args: {
   generationPublicId: string;
@@ -143,5 +150,7 @@ export const resolveGenerationIdentitySets = async (args: {
     return NOTHING;
   }
   const [caller, agent] = await Promise.all([callerSets(gen), agentSets(gen)]);
-  return [...caller, ...agent];
+  const sets = [...caller, ...agent];
+  // Neither a caller nor an agent cap: the generation states no grant, so nothing.
+  return sets.length === 0 ? NOTHING : sets;
 };

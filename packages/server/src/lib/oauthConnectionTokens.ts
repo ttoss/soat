@@ -4,7 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveBearerAuthUser } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import {
   agentDenied,
   authorizationDenied,
@@ -50,19 +50,19 @@ const assertUseAllowed = async (args: {
   projectPublicId: string;
   resource: string;
   authHeader?: string;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
 }) => {
-  const { boundary } = args;
+  const { agentAuthority } = args;
   if (
-    boundary?.policy &&
+    agentAuthority?.policy &&
     !evaluatePolicies({
-      policies: [boundary.policy],
+      policies: [agentAuthority.policy],
       action: USE_OAUTH_CONNECTION_ACTION,
       resource: args.resource,
     })
   ) {
     throw agentDenied({
-      agentId: boundary.agentId,
+      agentId: agentAuthority.agentId,
       action: USE_OAUTH_CONNECTION_ACTION,
       resource: args.resource,
     });
@@ -227,7 +227,7 @@ export const resolveOauthConnectionAccessToken = async (args: {
   oauthClientId: string;
   actorId?: string;
   authHeader?: string;
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   now?: Date;
 }): Promise<string> => {
   const now = args.now ?? new Date();
@@ -252,7 +252,7 @@ export const resolveOauthConnectionAccessToken = async (args: {
       resourceId: row?.publicId ?? '*',
     }),
     authHeader: args.authHeader,
-    boundary: args.boundary,
+    agentAuthority: args.agentAuthority,
   });
 
   const ids = {

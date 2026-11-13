@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { deleteAgent } from 'src/lib/agentDelete';
 import { toStoredKnowledgeConfig } from 'src/lib/agentKnowledgeConfig';
+import { parseAgentRunAs } from 'src/lib/agentRunAs';
 import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
@@ -47,6 +48,7 @@ type CreateAgentBody = {
   active_tool_ids?: unknown;
   step_rules?: unknown;
   policy_ids?: unknown;
+  run_as?: unknown;
   temperature?: unknown;
   max_output_tokens?: unknown;
   reasoning?: unknown;
@@ -91,6 +93,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     activeToolIds: parseOptional<string[] | null>(body.active_tool_ids),
     stepRules: parseOptional<object[] | null>(body.step_rules),
     policyIds: parseOptional<string[] | null>(body.policy_ids),
+    runAs: parseAgentRunAs(body.run_as),
     temperature: parseOptional<number | null>(body.temperature),
     // Forwarded unvalidated: the lib owns both shapes, so a bad value is a 400.
     maxOutputTokens: parseOptional<number | null>(body.max_output_tokens),
@@ -186,6 +189,7 @@ const buildCreateAgentArgs = (args: {
       : undefined,
     stepRules: Array.isArray(body.step_rules) ? body.step_rules : undefined,
     policyIds: parseOptional<string[] | null>(body.policy_ids),
+    runAs: parseAgentRunAs(body.run_as),
     temperature: parseNumber(body.temperature),
     maxOutputTokens: parseOptional<number>(body.max_output_tokens),
     reasoning: parseOptional<object>(body.reasoning),

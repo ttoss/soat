@@ -29,11 +29,7 @@ import { readInputModalities } from './inputModalities';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
-import {
-  actedAsPrincipalColumns,
-  startedByPrincipalColumns,
-  type StartingPrincipal,
-} from './principals';
+import { type StartingPrincipal, turnPrincipalColumns } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
@@ -77,6 +73,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     rootTraceId?: string | null;
     rootGenerationId?: string | null;
     startedBy?: StartingPrincipal | null;
+    actsAsAgent: string | null;
     toolSurface?: Record<string, unknown> | null;
     inputModalities: string[];
     retrieval?: KnowledgeRetrieval;
@@ -124,9 +121,8 @@ const commitGenerationWithTrace = async (helperArgs: {
         rootGenerationId: args.rootGenerationId ?? null,
         ...conversation,
         chainId,
-        ...startedByPrincipalColumns(args.startedBy ?? null),
         // The first segment's tool calls run on the starting credential.
-        ...actedAsPrincipalColumns(args.startedBy ?? null),
+        ...turnPrincipalColumns(args),
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
         status: 'running',
@@ -165,6 +161,8 @@ const insertGenerationRecord = async (
     rootGenerationId?: string | null;
     initiatorGenerationId?: string | null;
     startedBy?: StartingPrincipal | null;
+    // The agent, when the turn runs under its own grant (`run_as: agent`).
+    actsAsAgent: string | null;
     // The conversation this generation serves, when it serves one: the edge
     // the memory assertions walk up from a generation.
     conversation?: GenerationConversation;

@@ -195,20 +195,6 @@ export const requireAuth: (
   }
 };
 
-/**
- * An admin acting through a credential that carries no boundary of its own: a
- * login token, or a key bound to no project and narrowed by no policy. Every
- * project-scoped JWT (OAuth, trigger, run token) carries `prj`, which sets
- * `oauthProjectPublicId`.
- */
-export const isUnrestrictedAdmin = (authUser: AuthUser): boolean => {
-  if (authUser.role !== 'admin') return false;
-  if (authUser.apiKeyPublicId !== undefined) {
-    return authUser.isControlPlaneKey === true;
-  }
-  return authUser.oauthProjectPublicId === undefined;
-};
-
 /** The SRN a project-level check probes, or `null` when it names no project. */
 export const scopeSrn = (args: {
   projectPublicId?: string;
@@ -220,7 +206,7 @@ export const scopeSrn = (args: {
 
 /**
  * Gates a global (non-project-scoped) admin operation — users, policies,
- * project creation, the price book — on {@link isUnrestrictedAdmin}: no policy
+ * project creation, the price book — on an `unrestricted` authority: no policy
  * can grant it, and a credential narrowed by project, policies or consent
  * cannot reach it even when its user is an admin. Throws
  * `UNAUTHORIZED`/`FORBIDDEN`.
@@ -233,7 +219,7 @@ export const scopeSrn = (args: {
 export const requireAdmin = (ctx: Context, action: string): void => {
   requireAuth(ctx);
 
-  const allowed = isUnrestrictedAdmin(ctx.authUser);
+  const allowed = ctx.authUser.unrestricted;
   recordAuthorizationDecision(ctx, { action, allowed });
 
   if (!allowed) {
@@ -242,7 +228,7 @@ export const requireAdmin = (ctx: Context, action: string): void => {
 };
 
 /**
- * Gates an admin operation on one project: the caller's role is `admin`, its
+ * Gates an admin operation on one project: the caller's grant is unrestricted, its
  * credential is bound to this project or to none, and its own boundary
  * (key policies, OAuth consent) allows the action there. Throws
  * `UNAUTHORIZED`/`API_KEY_PROJECT_SCOPE`/`FORBIDDEN`.
@@ -261,7 +247,7 @@ export const requireProjectAdmin = async (args: {
   });
 
   const allowed =
-    ctx.authUser.role === 'admin' &&
+    ctx.authUser.operator &&
     (await ctx.authUser.isAllowed({
       projectPublicId,
       action,
@@ -279,15 +265,13 @@ export const requireProjectAdmin = async (args: {
 };
 
 /**
- * Gates a route on the caller either owning the resource or being an admin —
- * the API-key rule, where a user administers their own keys and an admin
- * administers everyone's. Unlike {@link requireAdmin} this is not a pure role
- * gate, so it needs the owner to compare against.
+ * Gates a route on the caller either owning the resource or holding an
+ * `unrestricted` authority — the API-key rule, where a user administers their
+ * own keys and the operator administers everyone's. An admin's credential
+ * pinned or capped is not the operator.
  *
- * Shared for the same reason `requireAdmin` is: the comparison bypasses
- * `isAllowed`/`resolveProjectIds`, so the decision is invisible to the audit log
- * unless it is recorded explicitly. `apiKeys.ts` open-coded this three times and
- * two of the three remembered the record — the read did not.
+ * Records the decision: the comparison bypasses `isAllowed`, so it is
+ * otherwise invisible to the audit log.
  *
  * Throws `UNAUTHORIZED`/`FORBIDDEN`.
  */
@@ -298,8 +282,7 @@ export const requireOwnerOrAdmin = (
   requireAuth(ctx);
 
   const allowed =
-    args.ownerPublicId === ctx.authUser.publicId ||
-    ctx.authUser.role === 'admin';
+    args.ownerPublicId === ctx.authUser.publicId || ctx.authUser.unrestricted;
   recordAuthorizationDecision(ctx, { action: args.action, allowed });
 
   if (!allowed) {

@@ -68,7 +68,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
 
   const createAgent = async (args: {
     toolIds: string[];
-    boundaryPolicy?: Record<string, unknown>;
+    agentPolicy?: Record<string, unknown>;
   }): Promise<string> => {
     return create('/api/v1/agents', {
       project_id: projectId,
@@ -77,11 +77,11 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
       tool_bindings: args.toolIds.map((toolId) => {
         return { tool_id: toolId };
       }),
-      ...(args.boundaryPolicy
+      ...(args.agentPolicy
         ? {
             policy_ids: [
               await create('/api/v1/policies', {
-                document: args.boundaryPolicy,
+                document: args.agentPolicy,
               }),
             ],
           }
@@ -314,7 +314,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
     test("is refused when the agent's boundary does not allow reading it", async () => {
       const agentId = await createAgent({
         toolIds: [],
-        boundaryPolicy: {
+        agentPolicy: {
           statement: [
             { effect: 'Allow', action: ['tools:CallTool'], resource: ['*'] },
           ],
@@ -451,7 +451,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
       test("is refused when the agent's boundary does not allow the action", async () => {
         const agentId = await createAgent({
           toolIds: [toolIds.listTools],
-          boundaryPolicy: {
+          agentPolicy: {
             statement: [
               {
                 effect: 'Allow',
@@ -475,7 +475,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
       test('is refused when aimed at a resource outside the boundary', async () => {
         const agentId = await createAgent({
           toolIds: [toolIds.getStore],
-          boundaryPolicy: storeBoundary(),
+          agentPolicy: storeBoundary(),
         });
 
         const res = await generate({
@@ -494,7 +494,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
       test('reaches the resource the boundary names', async () => {
         const agentId = await createAgent({
           toolIds: [toolIds.getStore],
-          boundaryPolicy: storeBoundary(),
+          agentPolicy: storeBoundary(),
         });
 
         const res = await generate({

@@ -4,8 +4,10 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { hashApiKey } from './apiKeyVerifier';
+import { credentialNarrowed } from './authorizationDenial';
 import { paginatedList } from './pagination';
 import { generateSecretValue } from './secrets';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const log = createDebug('soat:apiKeys');
 
@@ -24,115 +26,92 @@ const mapApiKey = (apiKey: InstanceType<(typeof db)['ApiKey']>) => {
   };
 };
 
-const mapApiKeyWithAssociations = async (
-  apiKey: ApiKeyWithAssociations
-): Promise<{
-  id: string;
-  name: string;
-  key_prefix: string;
-  created_at: Date;
-  updated_at: Date;
-  user_id: string | null;
-  project_id: string | null;
-  policy_ids: string[];
-}> => {
+const mapApiKeyWithAssociations = (apiKey: ApiKeyWithAssociations) => {
   /* projectId is null for unscoped keys, and the association is also null if the
    * project row was removed; expose null as project_id in both cases. */
-  const policyPublicIds: string[] = [];
-  const storedPolicyIds = apiKey.policyIds as number[];
-  if (storedPolicyIds && storedPolicyIds.length > 0) {
-    const policies = await db.Policy.findAll({
-      where: { id: storedPolicyIds },
-    });
-    policyPublicIds.push(
-      ...policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-        return p.publicId as string;
-      })
-    );
-  }
-
   return {
     ...mapApiKey(apiKey),
     user_id: apiKey.user?.publicId ?? null,
     project_id: apiKey.project?.publicId ?? null,
-    policy_ids: policyPublicIds,
+    policy_ids: apiKey.policyIds,
   };
 };
 
 /**
- * The `policy_ids` a key write may store when the caller is itself an API key
- * narrowed by `boundaryPolicyIds`: a non-empty subset of that boundary, so a
- * narrowed key never writes a key wider than itself. An omitted list inherits
- * the boundary when `inheritWhenOmitted` (create) and stays unchanged
- * otherwise (update).
+ * Whether a key write may store `requestedPolicyIds` when the caller is itself
+ * an API key narrowed by `keyPolicyIds`: only a non-empty subset of that
+ * boundary, so a narrowed key never writes a key wider than itself. An omitted
+ * list inherits the boundary when `inheritWhenOmitted` (create) and stays
+ * unchanged otherwise (update).
  */
-const resolveKeyPolicyBoundary = async (args: {
-  boundaryPolicyIds: number[] | undefined;
-  requestedPolicyIds: number[] | undefined;
+const resolveKeyPolicyBoundary = (args: {
+  keyPolicyIds: string[] | undefined;
+  requestedPolicyIds: string[] | undefined;
   inheritWhenOmitted: boolean;
-}): Promise<
-  | { allowed: true; policyIds: number[] | undefined }
-  | { allowed: false; boundaryPolicyPublicIds: string[] }
-> => {
-  const { boundaryPolicyIds, requestedPolicyIds } = args;
-  if (!boundaryPolicyIds || boundaryPolicyIds.length === 0) {
+}): { allowed: boolean; policyIds: string[] | undefined } => {
+  const { keyPolicyIds, requestedPolicyIds } = args;
+  if (!keyPolicyIds || keyPolicyIds.length === 0) {
     return { allowed: true, policyIds: requestedPolicyIds };
   }
   if (requestedPolicyIds === undefined) {
     return {
       allowed: true,
-      policyIds: args.inheritWhenOmitted ? boundaryPolicyIds : undefined,
+      policyIds: args.inheritWhenOmitted ? keyPolicyIds : undefined,
     };
   }
-  const withinBoundary =
+  const allowed =
     requestedPolicyIds.length > 0 &&
     requestedPolicyIds.every((id) => {
-      return boundaryPolicyIds.includes(id);
+      return keyPolicyIds.includes(id);
     });
-  if (withinBoundary) {
-    return { allowed: true, policyIds: requestedPolicyIds };
-  }
-  log('resolveKeyPolicyBoundary: refused requested=%o', requestedPolicyIds);
-  const boundaryPolicies = await db.Policy.findAll({
-    where: { id: boundaryPolicyIds },
-    order: [['id', 'ASC']],
+  log(
+    'resolveKeyPolicyBoundary: allowed=%s requested=%o',
+    allowed,
+    requestedPolicyIds
+  );
+  return { allowed, policyIds: requestedPolicyIds };
+};
+
+/**
+ * `policyIds` once the writer is shown to hold them; `undefined` when the
+ * write omits them.
+ */
+export const heldKeyPolicyIds = async (args: {
+  policyIds: string[] | undefined;
+  writer: Writer;
+  projectId: number | null;
+}): Promise<string[] | undefined> => {
+  if (args.policyIds === undefined) return undefined;
+  await assertWriterHolds({
+    carrier: 'apiKeys',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: { policyIds: args.policyIds },
   });
-  return {
-    allowed: false,
-    boundaryPolicyPublicIds: boundaryPolicies.map(
-      (p: InstanceType<(typeof db)['Policy']>) => {
-        return p.publicId as string;
-      }
-    ),
-  };
+  return args.policyIds;
 };
 
 /**
  * The one boundary check every key write runs — `POST`/`PUT /api-keys` and the
- * `api_key` formation module. Returns the `policy_ids` to store. A project-scoped
- * token is refused outright (`API_KEY_SCOPED_TOKEN`): its boundary is inline in
- * the token, and a key without it would carry the owner's full permissions.
- * `onRefused` runs first: the refusal precedes any `isAllowed` call, so the
- * audit wrapper would otherwise never see it.
+ * `api_key` formation module. Returns the `policy_ids` to store. A request
+ * narrowed beyond its key's own `policy_ids` is refused outright
+ * (`CREDENTIAL_NARROWED`): a key cannot carry that narrowing, so it would
+ * outlive it. `onRefused` runs first: the refusal precedes any `isAllowed`
+ * call, so the audit wrapper would otherwise never see it.
  */
-export const boundKeyPolicyIds = async (args: {
-  scopedToken: boolean;
-  boundaryPolicyIds: number[] | undefined;
-  requestedPolicyIds: number[] | undefined;
-  requestedPolicyPublicIds: string[] | undefined;
+export const boundKeyPolicyIds = (args: {
+  narrowed: boolean;
+  keyPolicyIds: string[] | undefined;
+  requestedPolicyIds: string[] | undefined;
   inheritWhenOmitted: boolean;
   onRefused: () => void;
-}): Promise<number[] | undefined> => {
-  if (args.scopedToken) {
+}): string[] | undefined => {
+  if (args.narrowed) {
     args.onRefused();
-    throw new DomainError(
-      'API_KEY_SCOPED_TOKEN',
-      'A project-scoped token (OAuth, trigger, run or IAM) cannot create or ' +
-        'update an API key.'
-    );
+    throw credentialNarrowed({ writing: 'an API key' });
   }
 
-  const boundary = await resolveKeyPolicyBoundary(args);
+  const boundary = resolveKeyPolicyBoundary(args);
   if (boundary.allowed) return boundary.policyIds;
 
   args.onRefused();
@@ -142,8 +121,8 @@ export const boundKeyPolicyIds = async (args: {
     'This API key is narrowed by policy_ids and cannot write a key outside ' +
       'that boundary. Name a non-empty subset of its policy_ids.',
     {
-      boundary_policy_ids: boundary.boundaryPolicyPublicIds,
-      requested_policy_ids: args.requestedPolicyPublicIds ?? [],
+      key_policy_ids: args.keyPolicyIds ?? [],
+      requested_policy_ids: args.requestedPolicyIds ?? [],
     }
   );
 };
@@ -153,7 +132,7 @@ export const createApiKey = async (args: {
   name: string;
   /** Omit or pass null to create an unscoped key that spans projects. */
   projectId?: number | null;
-  policyIds?: number[];
+  policyIds?: string[];
 }) => {
   const random = generateSecretValue();
   const key = `${API_KEY_RAW_PREFIX}${random}`;
@@ -182,7 +161,7 @@ export const createApiKey = async (args: {
   });
 
   return {
-    ...(await mapApiKeyWithAssociations(apiKey as ApiKeyWithAssociations)),
+    ...mapApiKeyWithAssociations(apiKey as ApiKeyWithAssociations),
     key, // Return the full key only once at creation
   };
 };
@@ -211,7 +190,7 @@ export const updateApiKey = async (args: {
    * number re-scopes the key to that project.
    */
   projectId?: number | null;
-  policyIds?: number[];
+  policyIds?: string[];
 }) => {
   const apiKey = await db.ApiKey.findOne({
     where: { publicId: args.id },

@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { TypedAgent } from './agentGenerationTypes';
+import { readAgentRunAs } from './agentRunAs';
 import { configToolBindings } from './agentVersionSnapshot';
 import {
   type GenerationEndUser,
@@ -66,6 +67,7 @@ const buildTypedAgentFromConfig = (args: {
     activeToolIds: configArray<string>(config.active_tool_ids),
     stepRules: configArray<object>(config.step_rules),
     policyIds: configArray<string>(config.policy_ids),
+    runAs: readAgentRunAs(config.run_as),
     temperature: configNumber(config.temperature),
     maxOutputTokens: configNumber(config.max_output_tokens),
     reasoning: configObject(config.reasoning),
@@ -108,6 +110,7 @@ export const withOutputSchema = (args: {
     activeToolIds: typedAgent.activeToolIds,
     stepRules: typedAgent.stepRules,
     policyIds: typedAgent.policyIds,
+    runAs: typedAgent.runAs,
     temperature: typedAgent.temperature,
     maxOutputTokens: typedAgent.maxOutputTokens,
     reasoning: typedAgent.reasoning,

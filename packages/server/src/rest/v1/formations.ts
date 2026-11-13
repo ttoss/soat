@@ -85,7 +85,7 @@ const formationActorOf = (
     iamToken: ctx.authUser.iamToken,
     onBehalfOfPrincipal: ctx.authUser.onBehalfOfPrincipal,
     keyPolicyBoundary: ctx.authUser.apiKeyPolicyIds,
-    scopedToken: ctx.authUser.oauthProjectPublicId !== undefined,
+    narrowed: ctx.authUser.narrowing === 'beyond_key',
     recordRefusal: (action) => {
       recordAuthorizationDecision(ctx, { action, allowed: false });
     },

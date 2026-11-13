@@ -606,7 +606,7 @@ Two steps: the call that proposed `read_local_file`, and the resumed call that p
 ## Where to go next
 
 - Gate the tool call with a [guardrail](/docs/modules/guardrails) or an [approvals](/docs/modules/approvals) queue: [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
-- Cap the agent itself with [`policy_ids`](/docs/tutorials/agent-boundary-policy).
+- Cap the agent itself with [`policy_ids`](/docs/tutorials/agent-policies).
 - Bound spend with [quotas](/docs/modules/quotas): [Metering and Budgets](/docs/tutorials/metering-and-budgets).
 - Run the same loop in long-lived [sessions](/docs/modules/sessions).
 - Ship provider, tool, agent and policies as one [formation](/docs/modules/formations): [Formations](/docs/tutorials/formations).

@@ -9,6 +9,7 @@ import {
   resolvePromotionGate,
   validatePromotionGateInput,
 } from './agentPromotionGate';
+import { readAgentRunAs } from './agentRunAs';
 import { assertAgentWriterHolds, getAgent, updateAgent } from './agents';
 import {
   type AgentConfigSnapshot,
@@ -139,6 +140,7 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
     activeToolIds: configArray<string>(config.active_tool_ids),
     stepRules: configArray<object>(config.step_rules),
     policyIds: configArray<string>(config.policy_ids),
+    runAs: readAgentRunAs(config.run_as),
     temperature: configNumber(config.temperature),
     maxOutputTokens: configNumber(config.max_output_tokens),
     reasoning: configObject(config.reasoning),
@@ -237,6 +239,7 @@ const assertWriterHoldsVersion = async (args: {
   await assertAgentWriterHolds({
     writer: args.writer,
     projectId: args.agent.projectId as number,
+    runAs: config.runAs,
     policyIds: config.policyIds,
     toolBindings: config.toolBindings,
   });

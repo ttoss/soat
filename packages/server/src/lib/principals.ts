@@ -89,18 +89,41 @@ export const startedByPrincipalColumns = (
   };
 };
 
-/** The `actedAsPrincipal*` column pair, the same mapping as `startedBy`. */
-export const actedAsPrincipalColumns = (
-  principal: StartingPrincipal | null
-): {
+/**
+ * The `actedAsPrincipal*` columns: the agent when its turn runs under its own
+ * grant (`run_as: agent`, `agentId` set), else the same mapping as `startedBy`.
+ */
+export const actedAsPrincipalColumns = (args: {
+  principal: StartingPrincipal | null;
+  agentId: string | null;
+}): {
   actedAsPrincipalType: string | null;
   actedAsPrincipalId: string | null;
   actedAsPrincipalBound: object | null;
 } => {
+  if (args.agentId) {
+    return {
+      actedAsPrincipalType: 'agent',
+      actedAsPrincipalId: args.agentId,
+      actedAsPrincipalBound: null,
+    };
+  }
   return {
-    actedAsPrincipalType: principal?.principalType ?? null,
-    actedAsPrincipalId: principal?.principalId ?? null,
-    actedAsPrincipalBound: boundColumn(principal),
+    actedAsPrincipalType: args.principal?.principalType ?? null,
+    actedAsPrincipalId: args.principal?.principalId ?? null,
+    actedAsPrincipalBound: boundColumn(args.principal),
+  };
+};
+
+/** A fresh turn's `startedByPrincipal*` and `actedAsPrincipal*` columns. */
+export const turnPrincipalColumns = (args: {
+  startedBy?: StartingPrincipal | null;
+  actsAsAgent: string | null;
+}) => {
+  const principal = args.startedBy ?? null;
+  return {
+    ...startedByPrincipalColumns(principal),
+    ...actedAsPrincipalColumns({ principal, agentId: args.actsAsAgent }),
   };
 };
 
