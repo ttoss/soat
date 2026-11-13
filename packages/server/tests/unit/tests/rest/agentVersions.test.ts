@@ -147,6 +147,7 @@ describe('Agent versions', () => {
           // what the provider was billed for, so a restore has to bring it back.
           'prompt_caching',
           'reasoning',
+          'run_as',
           'single_session_per_actor',
           'step_rules',
           'stop_conditions',

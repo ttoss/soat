@@ -3,6 +3,11 @@ export const ERROR_CODES = {
     httpStatus: 404,
     description: 'The requested resource does not exist or is not accessible.',
   },
+  AGENT_RUN_AS_REQUIRES_POLICIES: {
+    httpStatus: 400,
+    description:
+      'An agent with `run_as: agent` acts under its `policy_ids` alone, so it needs at least one. Returned by a create, an edit or a version restore that would leave a `run_as: agent` agent with `policy_ids` absent, `null` or empty.',
+  },
   AGENT_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced agent does not exist.',
@@ -290,7 +295,7 @@ export const ERROR_CODES = {
   API_KEY_POLICY_BOUNDARY: {
     httpStatus: 403,
     description:
-      'The credential is an API key narrowed by `policy_ids`, and the request would write an API key outside that boundary: no `policy_ids`, an empty list, or a policy the credential does not carry. A narrowed key may only mint or update keys whose `policy_ids` are a non-empty subset of its own. The error meta reports `boundary_policy_ids` and `requested_policy_ids`.',
+      'The credential is an API key narrowed by `policy_ids`, and the request would write an API key outside that boundary: no `policy_ids`, an empty list, or a policy the credential does not carry. A narrowed key may only mint or update keys whose `policy_ids` are a non-empty subset of its own. The error meta reports `key_policy_ids` and `requested_policy_ids`.',
   },
   POLICY_GRANT_NOT_HELD: {
     httpStatus: 403,

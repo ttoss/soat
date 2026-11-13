@@ -2,6 +2,7 @@ import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import bcrypt from 'bcryptjs';
 
 import type { AuthUser, Context } from '../Context';
+import type { AgentAuthority } from '../lib/agentAuthority';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
 import {
   callerPrincipal,
@@ -25,6 +26,7 @@ import { type ResolvedCredential, withOnBehalfOf } from './authOnBehalfOf';
 import { type AuthorityTerms, buildAuthority, type Cap } from './authority';
 import {
   actingKeyCap,
+  agentGrant,
   keyPoliciesCap,
   oauthScopeCap,
   principalBoundCap,
@@ -32,6 +34,7 @@ import {
   userBound,
   userGrant,
 } from './authScopedBoundary';
+import { inProcessCredentialOf } from './inProcessCredential';
 
 export const BCRYPT_SALT_ROUNDS = 12;
 
@@ -393,6 +396,38 @@ export const resolveBearerAuthUser = async (args: {
 };
 
 /**
+ * The credential a `run_as: agent` turn's in-process calls run with: the
+ * agent's grant alone, pinned to the turn's project, under the identity
+ * `authHeader` names for attribution; undefined when it names none. Only the
+ * caller's markers that narrow carry over, never its grant, caps or bound.
+ */
+export const resolveAgentGrantCredential = async (args: {
+  db: Context['db'];
+  authHeader: string | undefined;
+  authority: Extract<AgentAuthority, { runAs: 'agent' }>;
+}): Promise<ResolvedCredential | undefined> => {
+  const caller = await resolveBearer(args);
+  if (!caller) return undefined;
+  const { id, publicId, username, isRunToken, runWorkPublicId } =
+    caller.authUser;
+  return {
+    authUser: {
+      id,
+      publicId,
+      username,
+      role: 'user',
+      ...(isRunToken ? { isRunToken } : {}),
+      ...(runWorkPublicId ? { runWorkPublicId } : {}),
+    },
+    terms: {
+      pinned: args.authority.projectPublicId,
+      grant: agentGrant(args.authority),
+      caps: [],
+    },
+  };
+};
+
+/**
  * Admits a raw `sk_` key to the MCP endpoint's `verifyToken` gate, or null when
  * it is not a live key. Per-request authorization still runs in
  * `resolveApiKey` when the tool handler forwards the same bearer to REST.
@@ -409,6 +444,12 @@ export const verifyApiKeyToken = async (
 };
 
 export const authMiddleware = async (ctx: Context, next: Next) => {
+  const inProcess = inProcessCredentialOf(ctx.req);
+  if (inProcess) {
+    ctx.authUser = withAuthority({ resolved: inProcess, db: ctx.db });
+    await next();
+    return;
+  }
   const resolved = await resolveBearer({
     db: ctx.db,
     authHeader: ctx.headers?.authorization,

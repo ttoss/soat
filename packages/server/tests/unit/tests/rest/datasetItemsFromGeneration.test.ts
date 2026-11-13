@@ -304,6 +304,7 @@ describe('POST /api/v1/datasets/:dataset_id/items/from-generation', () => {
     const input = [{ role: 'user', content: 'Where did my steps go?' }];
 
     await createGenerationRecord({
+      actsAsAgent: null,
       publicId: generationPublicId,
       projectId: project?.id as number,
       agentId,

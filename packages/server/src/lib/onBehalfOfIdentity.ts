@@ -76,12 +76,14 @@ const actedAsSets = async (args: {
 
 /**
  * The caller half: its `acted_as` principal and, when fired, the trigger's.
- * A turn that records neither (a session or conversation turn) has none, so
- * the agent half alone narrows the key.
+ * A turn that records neither (a session or conversation turn), or one that
+ * acted as its agent (`run_as: agent`), has none, so the agent half alone
+ * narrows the key.
  */
 const callerSets = async (
   gen: InstanceType<(typeof db)['Generation']>
 ): Promise<PolicySets> => {
+  if (gen.actedAsPrincipalType === 'agent') return [];
   const sets: PolicySets = [];
   if (gen.actedAsPrincipalType && gen.actedAsPrincipalId) {
     sets.push(
@@ -127,7 +129,7 @@ const agentSets = async (
 /**
  * The policy sets a generation's execution identity must each satisfy: its
  * caller's and its agent's `policy_ids`, the same pair a `builtin` call is
- * held to. A generation outside `projectPublicId` allows nothing.
+ * held to; under `run_as: agent`, the agent's alone. A generation outside `projectPublicId` allows nothing.
  */
 export const resolveGenerationIdentitySets = async (args: {
   generationPublicId: string;

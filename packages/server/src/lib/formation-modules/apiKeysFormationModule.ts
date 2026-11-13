@@ -40,7 +40,7 @@ export const apiKeysFormationModule = defineFormationModule({
     const policyPublicIds = readPolicyPublicIds(properties);
     const policyIds = await boundKeyPolicyIds({
       narrowed: actor.narrowed,
-      boundaryPolicyIds: actor.keyPolicyBoundary,
+      keyPolicyIds: actor.keyPolicyBoundary,
       requestedPolicyIds: await heldKeyPolicyIds({
         policyIds: policyPublicIds,
         writer: actor,
@@ -64,7 +64,7 @@ export const apiKeysFormationModule = defineFormationModule({
     const policyPublicIds = readPolicyPublicIds(properties);
     const policyIds = await boundKeyPolicyIds({
       narrowed: actor.narrowed,
-      boundaryPolicyIds: actor.keyPolicyBoundary,
+      keyPolicyIds: actor.keyPolicyBoundary,
       requestedPolicyIds: await heldKeyPolicyIds({
         policyIds: policyPublicIds,
         writer: actor,

@@ -317,6 +317,7 @@ describe('a policy scoped to one resource does not reach its siblings', () => {
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
       await createGenerationRecord({
+        actsAsAgent: null,
         publicId: generationId,
         projectId: internalProjectId,
         agentId: agentPublicId,

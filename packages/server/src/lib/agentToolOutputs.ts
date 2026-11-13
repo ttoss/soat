@@ -12,6 +12,7 @@ import {
   resolveToolOutputsResult,
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
+import { readAgentRunAs } from './agentRunAs';
 import {
   claimPausedGeneration,
   notAwaitingToolOutputs,
@@ -133,6 +134,10 @@ export const submitToolOutputs = async (args: {
     !(await claimPausedGeneration({
       publicId: args.generationId,
       actedAs: args.actedAs,
+      actsAsAgent:
+        readAgentRunAs(pending.agentConfig.runAs) === 'agent'
+          ? pending.agentId
+          : null,
     }))
   ) {
     throw notAwaitingToolOutputs(args.generationId);

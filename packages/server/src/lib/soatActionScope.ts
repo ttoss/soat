@@ -13,9 +13,9 @@ import { resolveResourceScope } from './resourceScopes';
 import type { SoatResourceRef } from './soatToolsResource';
 import { buildResourceTagContext } from './tags';
 
-const log = createDebug('soat:toolBoundary');
+const log = createDebug('soat:toolAgentScope');
 
-export type SoatActionBoundaryScope = {
+export type SoatActionScope = {
   resource: string;
   context: Record<string, string>;
 };
@@ -30,11 +30,11 @@ export type SoatActionBoundaryScope = {
  * the scope, so the cost is a wasted read, never a check made against `*` that
  * should have been made against an SRN.
  */
-const boundaryNeedsResourceScope = (boundaryPolicy: unknown): boolean => {
-  if (!boundaryPolicy) return false;
-  const validation = validatePolicyDocument(boundaryPolicy);
+const policyNeedsResourceScope = (agentPolicy: unknown): boolean => {
+  if (!agentPolicy) return false;
+  const validation = validatePolicyDocument(agentPolicy);
   if (!validation.valid) return false;
-  return (boundaryPolicy as PolicyDocument).statement.some((statement) => {
+  return (agentPolicy as PolicyDocument).statement.some((statement) => {
     if (statement.condition) return true;
     const resources = statement.resource ?? ['*'];
     return resources.some((resource) => {
@@ -56,7 +56,7 @@ const readResourceId = (args: {
 export const resolveSoatActionScope = async (args: {
   resourceRef?: SoatResourceRef;
   toolArgs: unknown;
-}): Promise<SoatActionBoundaryScope | null> => {
+}): Promise<SoatActionScope | null> => {
   if (!args.resourceRef) return null;
 
   const publicId = readResourceId({
@@ -95,13 +95,13 @@ export const resolveSoatActionScope = async (args: {
  * `null` leaves the caller with today's resource-less check. That happens when
  * the operation names no resource, when the argument naming it is absent, or
  * when the id resolves to nothing — each of which is fail-closed against a
- * scoped boundary, since `*` matches no statement that names an SRN.
+ * scoped policy, since `*` matches no statement that names an SRN.
  */
-export const resolveSoatActionBoundaryScope = async (args: {
+export const resolveSoatActionAgentScope = async (args: {
   resourceRef?: SoatResourceRef;
   toolArgs: unknown;
-  boundaryPolicy: unknown;
-}): Promise<SoatActionBoundaryScope | null> => {
-  if (!boundaryNeedsResourceScope(args.boundaryPolicy)) return null;
+  agentPolicy: unknown;
+}): Promise<SoatActionScope | null> => {
+  if (!policyNeedsResourceScope(args.agentPolicy)) return null;
   return resolveSoatActionScope(args);
 };

@@ -2035,6 +2035,7 @@ describe('MCP tools - happy path', () => {
 
       mcpGenerationId = `gen_mcp_${Date.now()}`;
       await createGenerationRecord({
+        actsAsAgent: null,
         publicId: mcpGenerationId,
         projectId: internalProjectId,
         agentId: genAgentId,
@@ -3247,6 +3248,7 @@ describe('MCP tools - happy path', () => {
       const input = [{ role: 'user', content: 'When is my invoice issued?' }];
 
       await createGenerationRecord({
+        actsAsAgent: null,
         publicId: generationPublicId,
         projectId: project!.id,
         agentId: evalAgentId,

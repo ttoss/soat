@@ -40,7 +40,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   FORBIDDEN:
     'The credential authenticated but is not allowed this action. Attach an IAM policy granting the action to the caller, or use a credential that has it.',
   API_KEY_POLICY_BOUNDARY:
-    "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `boundary_policy_ids`; a wider key requires a credential that carries that permission.",
+    "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `key_policy_ids`; a wider key requires a credential that carries that permission.",
   CREDENTIAL_NARROWED:
     'Write the key, or consent, with a user token or an API key and no `On-Behalf-Of` header; to consent, use a key with no `policy_ids` of its own.',
   IAM_TOKEN_POLICY_INVALID:
@@ -69,6 +69,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.',
   ACTION_NOT_HELD:
     'Name a target or action you may perform yourself (`meta.action` on `meta.resource`), or have a caller who holds it make the change.',
+  AGENT_RUN_AS_REQUIRES_POLICIES:
+    'Give the agent the policies it acts under in `policy_ids`, or set `run_as: caller` so the agent runs as its caller.',
   POLICY_GRANT_NOT_HELD:
     'Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.',
   POLICY_OUTSIDE_PROJECT:

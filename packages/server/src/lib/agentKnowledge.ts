@@ -11,7 +11,7 @@ import {
 } from './agentKnowledgeConfig';
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import type { BindingTools } from './agentToolNames';
-import { isSoatActionAllowedByBoundary } from './agentToolResolver';
+import { isSoatActionAllowedByAgentPolicy } from './agentToolResolver';
 import { agentDenied, denialToolResult } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
 import { buildSrn, type PolicyDocument } from './iam';
@@ -199,15 +199,15 @@ const MEMORY_WRITE_ACTIONS = [
   'memories:UpdateMemory',
 ] as const;
 
-const findBoundaryDeniedMemoryWriteAction = (args: {
-  boundaryPolicy: unknown;
+const findAgentDeniedMemoryWriteAction = (args: {
+  agentPolicy: unknown;
   resource: string;
   context: Record<string, string>;
 }): string | null => {
   for (const iamAction of MEMORY_WRITE_ACTIONS) {
     if (
-      !isSoatActionAllowedByBoundary({
-        boundaryPolicy: args.boundaryPolicy,
+      !isSoatActionAllowedByAgentPolicy({
+        agentPolicy: args.agentPolicy,
         iamAction,
         resource: args.resource,
         context: args.context,
@@ -230,7 +230,7 @@ export const buildWriteMemoryTool = (args: {
   generationId: string;
   /** The agent's own project, the only one whose store it writes to. */
   projectId: number;
-  boundaryPolicy?: unknown;
+  agentPolicy?: unknown;
   /** The turn's end user, whose memory every write is. */
   actorId?: string;
 }): Tool => {
@@ -263,8 +263,8 @@ export const buildWriteMemoryTool = (args: {
         resourceType: 'memory_store',
         resourceId: args.writeMemoryStoreId,
       });
-      const deniedAction = findBoundaryDeniedMemoryWriteAction({
-        boundaryPolicy: args.boundaryPolicy,
+      const deniedAction = findAgentDeniedMemoryWriteAction({
+        agentPolicy: args.agentPolicy,
         resource,
         context: buildResourceTagContext({
           resourceType: 'memory_store',
@@ -324,7 +324,7 @@ export const buildKnowledgeBindings = (args: {
   generationId: string;
   projectId: number;
   typedAgent: TypedAgent;
-  boundaryPolicy: PolicyDocument | null;
+  agentPolicy: PolicyDocument | null;
   actorId?: string;
 }): BindingTools[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
@@ -338,7 +338,7 @@ export const buildKnowledgeBindings = (args: {
           agentId: args.agentId,
           generationId: args.generationId,
           projectId: args.projectId,
-          boundaryPolicy: args.boundaryPolicy,
+          agentPolicy: args.agentPolicy,
           actorId: args.actorId,
         }),
       },

@@ -32,12 +32,17 @@ export const getGenerationPendingState = async (args: {
 export const claimPausedGeneration = async (args: {
   publicId: string;
   actedAs: StartingPrincipal | null;
+  /** The agent, when the resumed segment runs under its own grant. */
+  actsAsAgent: string | null;
 }): Promise<boolean> => {
   const [claimed] = await db.Generation.update(
     {
       status: 'running',
       lastActivityAt: new Date(),
-      ...actedAsPrincipalColumns(args.actedAs),
+      ...actedAsPrincipalColumns({
+        principal: args.actedAs,
+        agentId: args.actsAsAgent,
+      }),
     },
     { where: { publicId: args.publicId, status: 'requires_action' } }
   );

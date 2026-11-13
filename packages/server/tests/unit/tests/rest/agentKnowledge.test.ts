@@ -63,7 +63,7 @@ describe('Agent knowledge', () => {
   const createAgent = async (args: {
     scope: Scope;
     knowledgeConfig?: Record<string, unknown> | null;
-    boundaryPolicy?: Record<string, unknown>;
+    agentPolicy?: Record<string, unknown>;
     toolBindings?: Array<Record<string, unknown>>;
   }): Promise<string> => {
     return create('/api/v1/agents', {
@@ -75,11 +75,11 @@ describe('Agent knowledge', () => {
       ...(args.knowledgeConfig === undefined
         ? {}
         : { knowledge_config: args.knowledgeConfig }),
-      ...(args.boundaryPolicy
+      ...(args.agentPolicy
         ? {
             policy_ids: [
               await create('/api/v1/policies', {
-                document: args.boundaryPolicy,
+                document: args.agentPolicy,
               }),
             ],
           }
@@ -505,7 +505,7 @@ describe('Agent knowledge', () => {
       return createAgent({
         scope,
         knowledgeConfig: { write_memory_store_id: args.writeStoreId },
-        boundaryPolicy: { statement: args.statement },
+        agentPolicy: { statement: args.statement },
       });
     };
 

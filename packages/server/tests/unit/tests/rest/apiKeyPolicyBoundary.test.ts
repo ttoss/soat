@@ -123,7 +123,7 @@ describe('API key policy boundary', () => {
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('API_KEY_POLICY_BOUNDARY');
       expect(res.body.error.meta).toEqual({
-        boundary_policy_ids: [readPolicyId],
+        key_policy_ids: [readPolicyId],
         requested_policy_ids: [otherPolicyId],
       });
     });

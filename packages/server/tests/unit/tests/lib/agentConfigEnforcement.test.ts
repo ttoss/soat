@@ -157,6 +157,15 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
     enforces:
       'Resolved into the cap every builtin action of the turn, its resumption and an approved call is evaluated under.',
   },
+  runAs: {
+    modules: [
+      'agentGenerationContext.ts',
+      'agentGenerationRecovery.ts',
+      'agentToolApprovalContinuation.ts',
+    ],
+    enforces:
+      "Decides whether the turn's builtin actions run as the caller capped by `policy_ids` or as the agent's own grant.",
+  },
   temperature: {
     modules: ['agentModelSettings.ts'],
     enforces: 'Sent to the provider on every step of the generation call.',
