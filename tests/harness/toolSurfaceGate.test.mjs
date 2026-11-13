@@ -34,25 +34,33 @@ const filesMatching = (pattern) => {
 };
 
 /**
- * Every tool an agent's model is offered passes the guardrail gate. The turn's
- * tool set is assembled in one place, `mergeBindingTools`, which accepts only
- * `GatedTools`; only the gate mints that type, so a tool built anywhere else
- * cannot reach the model without passing it.
+ * Every tool an agent's model is offered passes the guardrail gate. A binding
+ * declares its gate (`ToolBinding.gate`, required) and never applies it; the
+ * one merge that turns bindings into the turn's tool set gates each of them
+ * under the project and agent guardrails, so no binding can skip or narrow it.
  */
 describe('tool surface gate', () => {
-  test('only the gate mints GatedTools', () => {
-    assert.deepEqual(filesMatching(/\bas\s+GatedTools\b/), [
-      'lib/agentToolGuardrail.ts',
+  test('only the merge applies the gate', () => {
+    assert.deepEqual(filesMatching(/\bgateResolvedToolsWithGuardrails\s*\(/), [
+      'lib/agentToolNames.ts',
     ]);
   });
 
-  test('a binding carries GatedTools, never a bare tool record', () => {
+  test('a binding must declare its gate', () => {
     const names = code(path.join(srcDir, 'lib/agentToolNames.ts'));
-    assert.match(names, /tools:\s*GatedTools;/);
+    assert.match(names, /\bgate:\s*BindingGate;/);
+  });
+
+  test('the merge adds the project and agent guardrails to every binding', () => {
+    const names = code(path.join(srcDir, 'lib/agentToolNames.ts'));
+    assert.match(
+      names,
+      /guardrails:\s*\[\s*\.\.\.args\.guardrail\.baseGuardrails,\s*\.\.\.gate\.toolGuardrails,?\s*\]/
+    );
   });
 
   test('the turn is assembled only by the tool surface', () => {
-    assert.deepEqual(filesMatching(/\bmergeBindingTools\s*\(/), [
+    assert.deepEqual(filesMatching(/\bgateAndMergeBindings\s*\(/), [
       'lib/agentToolSurface.ts',
     ]);
   });

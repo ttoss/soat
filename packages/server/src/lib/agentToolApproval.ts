@@ -111,6 +111,13 @@ export const isInlineProposal = (toolId: string): boolean => {
   return toolId.startsWith(INLINE_PROPOSAL_PREFIX);
 };
 
+/** The `tool_id` prefix of a proposal from a native tool, one with no row. */
+export const NATIVE_PROPOSAL_PREFIX = 'native:';
+
+export const isNativeProposal = (toolId: string): boolean => {
+  return toolId.startsWith(NATIVE_PROPOSAL_PREFIX);
+};
+
 // ── Dedup ───────────────────────────────────────────────────────────────────
 
 /**

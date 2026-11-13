@@ -1,9 +1,6 @@
 import { jsonSchema, type Tool, tool } from 'ai';
-import {
-  type BindingTools,
-  type GatedTools,
-  mergeBindingTools,
-} from 'src/lib/agentToolNames';
+import type { ResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
+import { gateAndMergeBindings, type ToolBinding } from 'src/lib/agentToolNames';
 
 // The entry-point case (two bindings, one action) is pinned in
 // `rest/agentExternalTools.test.ts`; these are the naming edges.
@@ -15,15 +12,38 @@ const stub = (): Tool => {
   });
 };
 
-// Naming is independent of gating, so these bindings stand in for gated ones.
+// No guardrail applies, so the gate passes each tool through and only naming
+// is under test.
+const guardrail: ResolverGuardrailContext = {
+  agentId: null,
+  generationId: null,
+  projectId: 1,
+  projectPublicId: 'proj_test',
+  callerContext: {},
+  baseGuardrails: [],
+};
+
 const binding = (
   bindingName: string,
   tools: Record<string, Tool>
-): BindingTools => {
-  return { bindingName, tools: tools as GatedTools };
+): ToolBinding => {
+  return {
+    bindingName,
+    tools,
+    gate: {
+      toolId: null,
+      toolType: 'http',
+      toolName: bindingName,
+      toolGuardrails: [],
+    },
+  };
 };
 
-describe('mergeBindingTools', () => {
+const mergeBindingTools = (args: { bindings: ToolBinding[] }) => {
+  return gateAndMergeBindings({ bindings: args.bindings, guardrail });
+};
+
+describe('gateAndMergeBindings naming', () => {
   test('a key one binding resolves keeps its name', () => {
     const only = stub();
 
