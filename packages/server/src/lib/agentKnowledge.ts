@@ -28,6 +28,7 @@ import {
 import type { KnowledgeSearchPolicy } from './knowledgeSearchPolicy';
 import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
+import { agentReferences } from './resourceReferences';
 import { buildResourceTagContext } from './tags';
 
 const log = createDebug('soat:knowledge');
@@ -373,6 +374,54 @@ export const runApprovedWriteMemory = async (args: {
     boundaryPolicy: args.boundaryPolicy,
     actorId: args.actorId,
     content,
+  });
+};
+
+/**
+ * What an approver must hold to edit a held `write_memory` call: an edit
+ * authors the fact the agent writes, so it needs both memory-write actions on
+ * the store the agent writes to now, with that store's tags as condition
+ * inputs. With no store to name, only a project-wide grant covers the edit.
+ */
+export const writeMemoryEditChecks = async (args: {
+  agentId: string | null;
+  projectId: number;
+  projectPublicId: string;
+}): Promise<
+  Array<{ action: string; resource: string; context: Record<string, string> }>
+> => {
+  const agent = args.agentId
+    ? await agentReferences.find({
+        id: args.agentId,
+        projectId: args.projectId,
+        reach: 'project',
+      })
+    : null;
+  const writeMemoryStoreId =
+    agent && readKnowledgeConfig(agent.knowledgeConfig)?.writeMemoryStoreId;
+  const memoryStore = writeMemoryStoreId
+    ? await findMemoryStoreIamScope({
+        id: writeMemoryStoreId,
+        projectId: args.projectId,
+      })
+    : null;
+  log(
+    'writeMemoryEditChecks: store=%s',
+    memoryStore ? writeMemoryStoreId : '*'
+  );
+  const resource = buildSrn({
+    projectPublicId: args.projectPublicId,
+    resourceType: 'memory_store',
+    resourceId: memoryStore && writeMemoryStoreId ? writeMemoryStoreId : '*',
+  });
+  const context = memoryStore
+    ? buildResourceTagContext({
+        resourceType: 'memory_store',
+        tags: memoryStore.tags,
+      })
+    : {};
+  return MEMORY_WRITE_ACTIONS.map((action) => {
+    return { action, resource, context };
   });
 };
 

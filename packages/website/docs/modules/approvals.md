@@ -247,8 +247,9 @@ requires what making the call would require:
 | ---------------- | ------------------------------------------------------------- |
 | any tool         | `tools:CallTool` on that tool                                 |
 | a `builtin` tool | the proposed action's own IAM action, anywhere in the project |
+| [`write_memory`](./memories.md#write_memory-tool) (`native:write_memory`) | `memories:CreateMemory` **and** `memories:UpdateMemory` on the store the agent's `write_memory_store_id` names, with its tags as condition inputs; anywhere in the project when it names none |
 
-A builtin action is dispatched in-process against the proposer's credential, so nothing else checks the approver. An edit failing either check answers `403 FORBIDDEN`; approving as proposed is unaffected.
+A builtin action is dispatched in-process against the proposer's credential, and a `write_memory` call writes in-process under the agent's `policy_ids`, so nothing else checks the approver. An edit failing any check answers `403 FORBIDDEN`; approving as proposed is unaffected.
 
 ## Examples
 
