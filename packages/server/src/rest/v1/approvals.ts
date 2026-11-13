@@ -2,10 +2,8 @@ import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import {
-  WRITE_MEMORY_TOOL_ID,
-  writeMemoryEditChecks,
-} from 'src/lib/agentKnowledge';
+import { isNativeProposal } from 'src/lib/agentToolApproval';
+import { nativeProposalEditChecks } from 'src/lib/agentToolApprovalContinuation';
 import { APPROVAL_STATUSES } from 'src/lib/approvalFilters';
 import {
   approveApproval,
@@ -75,7 +73,7 @@ const proposedBuiltinIamAction = async (args: {
 
 /**
  * What the proposed call performs in-process, beyond calling the tool: a
- * `builtin` action, or the memory writes of a held `write_memory` call.
+ * `builtin` action, or a native tool's work (`nativeProposalEditChecks`).
  */
 const underlyingEditChecks = async (args: {
   projectPublicId: string;
@@ -90,8 +88,9 @@ const underlyingEditChecks = async (args: {
   });
   if (!project) return [];
 
-  if (args.proposed.tool_id === WRITE_MEMORY_TOOL_ID) {
-    return writeMemoryEditChecks({
+  if (isNativeProposal(args.proposed.tool_id)) {
+    return nativeProposalEditChecks({
+      toolId: args.proposed.tool_id,
       agentId: args.agentId,
       projectId: project.id as number,
       projectPublicId: args.projectPublicId,

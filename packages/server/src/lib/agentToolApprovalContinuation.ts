@@ -5,7 +5,11 @@ import { reactsToExpiredApproval } from './agentApprovalExpiry';
 import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
-import { runApprovedWriteMemory, WRITE_MEMORY_TOOL_ID } from './agentKnowledge';
+import {
+  runApprovedWriteMemory,
+  WRITE_MEMORY_TOOL_ID,
+  writeMemoryEditChecks,
+} from './agentKnowledge';
 import { isInlineProposal, isNativeProposal } from './agentToolApproval';
 import {
   type ApprovalResumeHandler,
@@ -141,15 +145,46 @@ const executeApprovedWriteMemory = async (args: {
   });
 };
 
+type EditCheck = {
+  action: string;
+  resource: string;
+  context?: Record<string, string>;
+};
+
+/** Everything resolution needs to know about one native tool, a tool with no row. */
+type NativeTool = {
+  /** How an approved call runs. */
+  execute: typeof executeApprovedWriteMemory;
+  /**
+   * What an approver must hold, beyond `tools:CallTool`, to edit a held call:
+   * the work the call performs in-process, which nothing else checks against
+   * the approver.
+   */
+  editChecks: (args: {
+    agentId: string | null;
+    projectId: number;
+    projectPublicId: string;
+  }) => Promise<EditCheck[]>;
+};
+
 /**
- * How an approved call to each native tool runs, by `tool_id`. A native tool
- * missing here is refused at resolution rather than looked up as a stored one.
+ * Every native tool, by `tool_id`. One missing here is refused at resolution
+ * rather than looked up as a stored tool, so an edit of it adds nothing.
  */
-const NATIVE_TOOL_EXECUTORS: Record<
-  string,
-  typeof executeApprovedWriteMemory | undefined
-> = {
-  [WRITE_MEMORY_TOOL_ID]: executeApprovedWriteMemory,
+const NATIVE_TOOLS: Record<string, NativeTool | undefined> = {
+  [WRITE_MEMORY_TOOL_ID]: {
+    execute: executeApprovedWriteMemory,
+    editChecks: writeMemoryEditChecks,
+  },
+};
+
+export const nativeProposalEditChecks = async (args: {
+  toolId: string;
+  agentId: string | null;
+  projectId: number;
+  projectPublicId: string;
+}): Promise<EditCheck[]> => {
+  return (await NATIVE_TOOLS[args.toolId]?.editChecks(args)) ?? [];
 };
 
 const executeApprovedNativeAction = async (args: {
@@ -158,13 +193,13 @@ const executeApprovedNativeAction = async (args: {
   projectInternalId: number;
   input: Record<string, unknown>;
 }): Promise<object> => {
-  const executeNative = NATIVE_TOOL_EXECUTORS[args.toolId];
-  if (!executeNative) {
+  const nativeTool = NATIVE_TOOLS[args.toolId];
+  if (!nativeTool) {
     return {
       error: `The approved action targets ${args.toolId}, which cannot be executed at resolution time.`,
     };
   }
-  return executeNative({
+  return nativeTool.execute({
     item: args.item,
     projectInternalId: args.projectInternalId,
     input: args.input,
@@ -175,7 +210,7 @@ const executeApprovedNativeAction = async (args: {
  * Executes the frozen (or edited) proposed action at resolution time and returns
  * its output as the decision `result`. A persisted tool runs through
  * `callTool`, which re-applies preset parameters and output mapping; a native
- * tool runs through its {@link NATIVE_TOOL_EXECUTORS} entry. An inline tool has nothing to
+ * tool runs through its {@link NATIVE_TOOLS} entry. An inline tool has nothing to
  * execute against, so it carries a structured note instead of a result.
  */
 const executeApprovedAction = async (args: {
