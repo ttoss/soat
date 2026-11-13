@@ -72,8 +72,11 @@ describe('stored work authority', () => {
   });
 
   describe('a trigger-started orchestration run resumed by an admin', () => {
-    /** Fires a webhook trigger at an `ask` → list-tools run, parked on `ask`. */
-    const fireParkedRun = async (triggerActions: string[]) => {
+    /** Fires a trigger at an `ask` → list-tools run, parked on `ask`. */
+    const fireParkedRun = async (
+      triggerActions: string[],
+      type: 'webhook' | 'manual' = 'webhook'
+    ) => {
       const name = `workauthority-${Math.random().toString(36).slice(2, 8)}`;
       const orchestration = await authenticatedTestClient(adminToken)
         .post('/api/v1/orchestrations')
@@ -100,12 +103,23 @@ describe('stored work authority', () => {
           policy_ids: [await policyAllowing(name, triggerActions)],
           project_id: projectId,
           name,
-          type: 'webhook',
+          type,
           target_type: 'orchestration',
           target_id: orchestration.body.id,
         });
       expect(trigger.status).toBe(201);
 
+      if (type === 'manual') {
+        const fired = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/triggers/${trigger.body.id}/fire`)
+          .send({});
+        expect(fired.status).toBe(200);
+        expect(fired.body.result.status).toBe('awaiting_input');
+        return {
+          runId: fired.body.result.result_id as string,
+          trigger: trigger.body,
+        };
+      }
       const body = JSON.stringify({});
       const fired = await testClient
         .post(`/hooks/triggers/${trigger.body.id}`)
@@ -152,6 +166,27 @@ describe('stored work authority', () => {
       const res = await resumeAsAdmin(runId);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('completed');
+    });
+
+    test('holds a manual fire to its caller as well as the trigger grant', async () => {
+      const { runId, trigger } = await fireParkedRun(
+        ['orchestrations:StartRun', 'tools:CallTool', 'tools:ListTools'],
+        'manual'
+      );
+      const me =
+        await authenticatedTestClient(adminToken).get('/api/v1/users/me');
+
+      const res = await resumeAsAdmin(runId);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      const run = await db.OrchestrationRun.findOne({
+        where: { publicId: runId },
+      });
+      expect(parseWorkAuthority(run!.authority)).toMatchObject({
+        grant: { holder: 'trigger', trigger: trigger.id },
+        caps: [{ kind: 'user', user: me.body.id }],
+      });
     });
 
     test('does not borrow the resuming admin authority', async () => {

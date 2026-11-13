@@ -17,7 +17,7 @@ export const attachWorkAuthority = (args: {
 };
 
 export const attachedWorkAuthority = (
-  req: IncomingMessage | undefined
+  req: IncomingMessage
 ): WorkAuthority | undefined => {
-  return req ? AUTHORITIES.get(req) : undefined;
+  return AUTHORITIES.get(req);
 };

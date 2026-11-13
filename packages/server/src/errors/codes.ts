@@ -814,7 +814,7 @@ export const ERROR_CODES = {
   PLAYBOOK_AUTHOR_UNAVAILABLE: {
     httpStatus: 409,
     description:
-      "The case's playbook version has no author a node can run as: the user or API key that wrote it no longer exists, or it was written with a trigger or OAuth token, which carry their boundary in the token.",
+      'A definition with executors or transformations was written with a trigger or OAuth token, which carry their boundary in the token: no node can run as them.',
   },
   PLAYBOOK_NODE_NOT_RUNNABLE: {
     httpStatus: 409,

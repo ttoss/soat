@@ -322,6 +322,29 @@ describe('On-Behalf-Of authority', () => {
       expect(alone.status).toBe(200);
     });
 
+    test("a generation's callback is capped by its agent's policy_ids", async () => {
+      const callbackOf = async (actions: string[]) => {
+        const agentId = await turn.createAgent({
+          tool_bindings: [{ tool_id: toolId }],
+          policy_ids: [
+            await turn.createPolicy({
+              statement: [{ effect: 'Allow', action: actions }],
+            }),
+          ],
+        });
+        await turn.generate({ agentId, calls: [{ name: 'echo', args: {} }] });
+        return lastAssertion();
+      };
+
+      const denied = await readDocument(await callbackOf(['tools:*']));
+      const allowed = await readDocument(
+        await callbackOf(['tools:*', 'documents:GetDocument'])
+      );
+
+      expect(denied.status).toBe(403);
+      expect(allowed.status).toBe(200);
+    });
+
     test('a generation an OAuth token started caps its callback by the consent', async () => {
       const agentId = await turn.createAgent({
         tool_bindings: [{ tool_id: toolId }],

@@ -4,11 +4,7 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { authUserOfWork } from '../middleware/auth';
 import type { AssertionAuthority } from './assertionAuthority';
-import {
-  type PolicyDocument,
-  type PolicySets,
-  validatePolicyDocument,
-} from './iam';
+import type { PolicyDocument, PolicySets } from './iam';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:assertionSender');
@@ -32,14 +28,16 @@ export type SenderCredential = Pick<
 export type AssertionSender = {
   caller?: SenderCredential;
   authority: WorkAuthority | null;
-  boundaryPolicy?: unknown;
+  boundaryPolicy?: PolicyDocument | null;
 };
 
-const boundarySets = (boundaryPolicy: unknown): PolicySets => {
-  if (!boundaryPolicy) return [];
-  return validatePolicyDocument(boundaryPolicy).valid
-    ? [[boundaryPolicy as PolicyDocument]]
-    : NOTHING;
+const credentialOf = async (
+  sender: AssertionSender
+): Promise<SenderCredential | undefined> => {
+  if (sender.caller) return sender.caller;
+  return sender.authority
+    ? authUserOfWork({ db, authority: sender.authority })
+    : undefined;
 };
 
 /**
@@ -54,11 +52,7 @@ export const resolveSenderAuthority = async (args: {
   projectPublicId: string;
 }): Promise<AssertionAuthority> => {
   const { sender, projectPublicId } = args;
-  const credential =
-    sender.caller ??
-    (sender.authority
-      ? await authUserOfWork({ db, authority: sender.authority })
-      : undefined);
+  const credential = await credentialOf(sender);
   const credentialSets = credential
     ? await credential.getPolicies(projectPublicId)
     : [];
@@ -72,7 +66,7 @@ export const resolveSenderAuthority = async (args: {
   return {
     sets: [
       ...(credentialSets.length > 0 ? credentialSets : NOTHING),
-      ...boundarySets(sender.boundaryPolicy),
+      ...(sender.boundaryPolicy ? [[sender.boundaryPolicy]] : []),
     ],
     ...(principal ? { principal } : {}),
   };

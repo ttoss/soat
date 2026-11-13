@@ -1002,7 +1002,7 @@ paths:
         executor's `input`. The executor runs as the
         author of the case's playbook version, whose permission to start it is
         checked again here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`); an author that
-        no longer exists is `409 PLAYBOOK_AUTHOR_UNAVAILABLE`. Only a `ready`,
+        no longer exists is `409 WORK_AUTHORITY_MISSING`. Only a `ready`,
         `stale`, `failed` or `done` node with every required input set runs;
         anything else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
         PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
