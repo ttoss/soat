@@ -105,6 +105,31 @@ export const withoutContentBoundTags = (args: {
 };
 
 /**
+ * A restore's bag (`tagsAfterUpdate`): the archived tags, never an archived
+ * content-bound value. Over unchanged text the verdict standing now stays;
+ * over changed text there is none, as on any other write.
+ */
+export const restoredTags = (args: {
+  keys: readonly string[];
+  archived: Record<string, string> | null;
+  current: Record<string, string> | null;
+  textChanged: boolean;
+}): Record<string, string> | null => {
+  const restored = withoutContentBoundTags({
+    keys: args.keys,
+    tags: args.archived,
+  });
+  if (args.textChanged) return restored;
+  const standing = Object.fromEntries(
+    Object.entries(args.current ?? {}).filter(([key]) => {
+      return args.keys.includes(key);
+    })
+  );
+  if (Object.keys(standing).length === 0) return restored;
+  return { ...restored, ...standing };
+};
+
+/**
  * A document's `path` is its backing file's, so moving or renaming the file
  * changes text an agent reads the document by, and removes the document's
  * content-bound keys as a `path` update does.
