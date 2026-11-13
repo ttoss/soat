@@ -61,15 +61,16 @@ export const assertItemAllowed = async (args: {
     `Item '${args.key}' not found.`
   );
   const bags = args.tagBags.length > 0 ? args.tagBags : [null];
+  const resource = buildSrn({
+    projectPublicId: args.projectPublicId,
+    resourceType: 'collection_item',
+    resourceId: args.key,
+  });
   for (const tags of bags) {
     const allowed = await args.ctx.authUser.isAllowed({
       projectPublicId: args.projectPublicId,
       action: args.action,
-      resource: buildSrn({
-        projectPublicId: args.projectPublicId,
-        resourceType: 'collection_item',
-        resourceId: args.key,
-      }),
+      resource,
       context: buildResourceTagContext({
         resourceType: 'collection_item',
         tags,
@@ -81,6 +82,8 @@ export const assertItemAllowed = async (args: {
       ctx: args.ctx,
       projectPublicId: args.projectPublicId,
       notFound,
+      action: args.action,
+      resource,
     });
   }
 };

@@ -4,7 +4,7 @@ import { buildSrn } from 'src/lib/iam';
 import { getMemoryStore } from 'src/lib/memoryStores';
 import { buildResourceTagContext } from 'src/lib/tags';
 
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 export type LoadedMemoryStore = NonNullable<
   Awaited<ReturnType<typeof getMemoryStore>>
@@ -30,26 +30,23 @@ export const requireMemoryStore = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found');
   }
 
-  const allowed = await args.ctx.authUser!.isAllowed({
-    projectPublicId: memoryStore.project_id!,
-    action: args.action,
-    resource: buildSrn({
+  await requireAllowed({
+    ctx: args.ctx,
+    check: {
       projectPublicId: memoryStore.project_id!,
-      resourceType: 'memory_store',
-      resourceId: memoryStore.id,
-    }),
-    context: buildResourceTagContext({
-      resourceType: 'memory_store',
-      tags: memoryStore.tags,
-    }),
+      action: args.action,
+      resource: buildSrn({
+        projectPublicId: memoryStore.project_id!,
+        resourceType: 'memory_store',
+        resourceId: memoryStore.id,
+      }),
+      context: buildResourceTagContext({
+        resourceType: 'memory_store',
+        tags: memoryStore.tags,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx: args.ctx,
-      projectPublicId: memoryStore.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found'),
-    });
-  }
 
   return memoryStore;
 };

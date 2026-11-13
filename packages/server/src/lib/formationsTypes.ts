@@ -1,6 +1,7 @@
 import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { SenderCredential } from './assertionSender';
+import type { DeniedPrincipal } from './authorizationDenial';
 import type { RequestPrincipal, StartingPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
@@ -212,15 +213,21 @@ export type FormationAuthorizationRequest = {
  * which the lib layer has no access to, and threading the whole context through
  * the deploy engine would make every module principal-aware for no gain.
  */
-export type FormationAuthorizer = (
-  request: FormationAuthorizationRequest
-) => Promise<boolean>;
+export type FormationAuthorizer = {
+  /** Whose policies a refusal names. */
+  principal: DeniedPrincipal;
+  check: (
+    request: FormationAuthorizationRequest
+  ) => Promise<{ allowed: boolean; resource: string }>;
+};
 
 /** A refused per-resource action, as reported to the caller. */
 export type FormationAuthorizationDenial = {
   logicalId: string;
   resourceType: string;
   action: string;
+  /** The SRN the action was refused on. */
+  resource: string;
 };
 
 export type FormationAuthorizationDenialWire = {

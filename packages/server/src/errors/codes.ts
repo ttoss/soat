@@ -285,7 +285,7 @@ export const ERROR_CODES = {
   FORBIDDEN: {
     httpStatus: 403,
     description:
-      'The authenticated user does not have permission to perform this action.',
+      "The action is refused by someone's policies: the caller's credential, an agent's or a trigger's `policy_ids`, or a formation's deployer. `meta.action` and `meta.resource` name what was denied and `meta.denied_by` (`type`, `id`) whose policies denied it; the message names all three.",
   },
   API_KEY_POLICY_BOUNDARY: {
     httpStatus: 403,

@@ -23,6 +23,7 @@ import type { BindingTools } from './agentToolNames';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
+import { readForwardedDenial } from './authorizationDenial';
 import { HttpToolError, toToolUnreachableError } from './httpToolError';
 import {
   parseResponseMode,
@@ -346,6 +347,12 @@ export const toHttpToolDomainError = (error: unknown): DomainError | null => {
   if (!(error instanceof HttpToolError)) {
     return null;
   }
+
+  const denial = readForwardedDenial({
+    body: error.body,
+    extra: { tool_url: error.url, tool_method: error.method },
+  });
+  if (denial) return denial;
 
   // Meta keys are
   // written in snake_case to match the external REST contract.

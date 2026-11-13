@@ -13,6 +13,7 @@
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import {
   EMBEDDING_SPEND,
   firstProjectByPublicId,
@@ -208,6 +209,15 @@ export const isUnrestrictedAdmin = (authUser: AuthUser): boolean => {
   return authUser.oauthProjectPublicId === undefined;
 };
 
+/** The SRN a project-level check probes, or `null` when it names no project. */
+export const scopeSrn = (args: {
+  projectPublicId?: string;
+  resourceType?: string;
+}): string | null => {
+  if (!args.projectPublicId) return null;
+  return `srn:${args.projectPublicId}:${args.resourceType ?? '*'}:*`;
+};
+
 /**
  * Gates a global (non-project-scoped) admin operation — users, policies,
  * project creation, the price book — on {@link isUnrestrictedAdmin}: no policy
@@ -227,7 +237,7 @@ export const requireAdmin = (ctx: Context, action: string): void => {
   recordAuthorizationDecision(ctx, { action, allowed });
 
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({ authUser: ctx.authUser, action, resource: null });
   }
 };
 
@@ -260,7 +270,11 @@ export const requireProjectAdmin = async (args: {
   recordAuthorizationDecision(ctx, { action, allowed });
 
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action,
+      resource: `srn:${projectPublicId}:*:*`,
+    });
   }
 };
 
@@ -289,7 +303,11 @@ export const requireOwnerOrAdmin = (
   recordAuthorizationDecision(ctx, { action: args.action, allowed });
 
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: args.action,
+      resource: null,
+    });
   }
 };
 
@@ -332,7 +350,11 @@ export const resolveReadProjectIds = async (args: {
   });
 
   if (projectIds === null) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: args.action,
+      resource: scopeSrn(args),
+    });
   }
 
   return projectIds;
@@ -361,7 +383,12 @@ export const requireProjectAccess = async (args: {
   const projectIds = await resolveReadProjectIds(args);
 
   if (Array.isArray(projectIds) && projectIds.length === 0) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    requireAuth(args.ctx);
+    throw callerDenied({
+      authUser: args.ctx.authUser,
+      action: args.action,
+      resource: scopeSrn(args),
+    });
   }
 
   return projectIds;
@@ -442,7 +469,11 @@ export const resolveWriteProjectId = async (args: {
   });
 
   if (projectIds === null) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action,
+      resource: scopeSrn({ projectPublicId, resourceType: args.resourceType }),
+    });
   }
 
   return projectIds![0];
@@ -470,10 +501,11 @@ export const resolveEmbeddingSpendProjectId = async (args: {
           return spendable?.includes(id) ?? false;
         });
   if (candidates.length === 0) {
-    throw new DomainError(
-      'FORBIDDEN',
-      `Embedding the query is billed to a project, and the caller holds ${EMBEDDING_SPEND.action} on none in scope.`
-    );
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: EMBEDDING_SPEND.action,
+      resource: null,
+    });
   }
   return firstProjectByPublicId({ projectIds: candidates });
 };

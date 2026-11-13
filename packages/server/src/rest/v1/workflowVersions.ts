@@ -14,7 +14,7 @@ import {
   requestPrincipalFromCtx,
   requireAuth,
 } from './helpers';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 /**
  * Workflow state-machine version history.
@@ -55,25 +55,22 @@ const authorizeWorkflow = async (
   const workflowId = ctx.params['workflow_id'] as string;
   const workflow = await getWorkflow({ id: workflowId });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: workflow.project_id!,
-    action,
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: workflow.project_id!,
-      resourceType: 'workflow',
-      resourceId: workflow.id,
-    }),
+      action,
+      resource: buildSrn({
+        projectPublicId: workflow.project_id!,
+        resourceType: 'workflow',
+        resourceId: workflow.id,
+      }),
+    },
+    notFound: new DomainError(
+      'WORKFLOW_NOT_FOUND',
+      `Workflow '${workflowId}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: workflow.project_id!,
-      notFound: new DomainError(
-        'WORKFLOW_NOT_FOUND',
-        `Workflow '${workflowId}' not found.`
-      ),
-    });
-  }
   return workflowId;
 };
 

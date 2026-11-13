@@ -1,5 +1,4 @@
 import { db } from 'src/db';
-import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
 import { createGenerationRecord } from 'src/lib/generations';
 import { saveTrace } from 'src/lib/traces';
 
@@ -46,7 +45,7 @@ const stubPromise = startChatCompletionStub({
   },
 });
 
-const BOUNDARY_DENIAL = new RegExp(`^${agentPolicyDenial({ action: '' })}`);
+const BOUNDARY_DENIAL = /^Forbidden: the agent's policies deny /;
 
 /** Every kind `resourceScopes.ts` resolves, in the order `kinds` lists them. */
 const KINDS = [
@@ -84,7 +83,10 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
   let projectId: string;
   let internalProjectId: number;
   let kinds: KindCall[];
-  let results: Map<string, { id?: string; error?: string } | null>;
+  let results: Map<
+    string,
+    { id?: string; error?: { message?: string } } | null
+  >;
 
   const asAdmin = () => {
     return authenticatedTestClient(adminToken);
@@ -576,6 +578,8 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       return candidate.kind === kind;
     })!;
 
-    expect(resultOf(entry, entry.absentId)?.error).toMatch(BOUNDARY_DENIAL);
+    expect(resultOf(entry, entry.absentId)?.error?.message).toMatch(
+      BOUNDARY_DENIAL
+    );
   });
 });

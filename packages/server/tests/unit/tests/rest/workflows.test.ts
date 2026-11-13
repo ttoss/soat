@@ -178,6 +178,15 @@ describe('Workflows', () => {
       });
     });
 
+    test('non-array states and transitions read as an empty definition', async () => {
+      const res = await createWorkflow(userToken, {
+        states: 'triage',
+        transitions: 'to_draft',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
+    });
+
     test('rejects a transition referencing an unknown state', async () => {
       const res = await createWorkflow(userToken, {
         states: [{ name: 'a', initial: true }],

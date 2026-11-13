@@ -19,14 +19,13 @@ import { mapGeneratedTurn } from 'src/lib/generatedTurn';
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
 import { replayedAuthHeader } from 'src/lib/replayedCredential';
 
-import { checkConversationAccess } from './conversationHelpers';
+import { requireConversationAccess } from './conversationHelpers';
 import {
   type AuthenticatedContext,
   parsePagination,
   parseToolContextBody,
   requireAuth,
 } from './helpers';
-import { resourceRefusal } from './resourceAccess';
 import { assertNotSystemRole } from './systemMessageGuard';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -45,22 +44,12 @@ conversationSubResourcesRouter.get(
       throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:GetConversation'
-      ))
-    ) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: conversation.project_id!,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          'Conversation not found'
-        ),
-      });
-    }
+    await requireConversationAccess({
+      ctx,
+      conversation,
+      action: 'conversations:GetConversation',
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found'),
+    });
 
     const { limit, cursor } = parsePagination(ctx);
     const { order } = ctx.query;
@@ -110,22 +99,15 @@ conversationSubResourcesRouter.post(
       throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found.');
     }
 
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:UpdateConversation'
-      ))
-    ) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: conversation.project_id!,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          'Conversation not found.'
-        ),
-      });
-    }
+    await requireConversationAccess({
+      ctx,
+      conversation,
+      action: 'conversations:UpdateConversation',
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        'Conversation not found.'
+      ),
+    });
 
     const message = await addConversationMessage({
       conversationId: ctx.params.conversation_id,
@@ -161,22 +143,15 @@ conversationSubResourcesRouter.delete(
       throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found.');
     }
 
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:UpdateConversation'
-      ))
-    ) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: conversation.project_id!,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          'Conversation not found.'
-        ),
-      });
-    }
+    await requireConversationAccess({
+      ctx,
+      conversation,
+      action: 'conversations:UpdateConversation',
+      notFound: new DomainError(
+        'RESOURCE_NOT_FOUND',
+        'Conversation not found.'
+      ),
+    });
 
     const result = await removeConversationMessage({
       conversationId: ctx.params.conversation_id,
@@ -203,21 +178,15 @@ const resolveConversation = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
   }
 
-  if (
-    !(await checkConversationAccess(
-      args.ctx.authUser,
-      conversation,
+  await requireConversationAccess({
+    ctx: args.ctx,
+    conversation,
+    action:
       args.access === 'read'
         ? 'conversations:GetConversation'
-        : 'conversations:UpdateConversation'
-    ))
-  ) {
-    throw await resourceRefusal({
-      ctx: args.ctx,
-      projectPublicId: conversation.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found'),
-    });
-  }
+        : 'conversations:UpdateConversation',
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found'),
+  });
 
   return conversation;
 };
@@ -260,22 +229,12 @@ conversationSubResourcesRouter.post(
       throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:GenerateConversationMessage'
-      ))
-    ) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: conversation.project_id!,
-        notFound: new DomainError(
-          'RESOURCE_NOT_FOUND',
-          'Conversation not found'
-        ),
-      });
-    }
+    await requireConversationAccess({
+      ctx,
+      conversation,
+      action: 'conversations:GenerateConversationMessage',
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found'),
+    });
 
     const turn = {
       conversationId: ctx.params.conversation_id,

@@ -1,5 +1,5 @@
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, loginAs } from '../../testClient';
 
 /**
  * `iam:ResourceTag/<key>` conditions on session routes.
@@ -178,5 +178,78 @@ describe('Session tag policies', () => {
     );
 
     expect(response.status).toBe(403);
+  });
+
+  // `iam:ResourceType` is no tag, so the compiled list reads this Deny as
+  // denying every row, while the type probe (`srn:<project>:session:*`) passes.
+  describe('a Deny the list cannot narrow to rows', () => {
+    let deniedUserId: string;
+    let deniedToken: string;
+
+    beforeAll(async () => {
+      const user = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'sesstagpoldeny', password: 'sesstagpoldenypass' });
+      expect(user.status).toBe(201);
+      deniedUserId = user.body.id;
+
+      const policy = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'Session List Unnarrowable Deny',
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['agents:ListSessions'],
+                resource: [`srn:${projectId}:*:*`],
+              },
+              {
+                effect: 'Deny',
+                action: ['agents:ListSessions'],
+                resource: ['*'],
+                condition: { StringEquals: { 'iam:ResourceType': 'agent' } },
+              },
+            ],
+          },
+        });
+      expect(policy.status).toBe(201);
+
+      const attach = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${deniedUserId}/policies`)
+        .send({ policy_ids: [policy.body.id] });
+      expect(attach.status).toBe(204);
+      deniedToken = await loginAs('sesstagpoldeny', 'sesstagpoldenypass');
+    });
+
+    test('a list naming the project is refused on its session type', async () => {
+      const response = await authenticatedTestClient(deniedToken).get(
+        `/api/v1/sessions?project_id=${projectId}`
+      );
+
+      const resource = `srn:${projectId}:session:*`;
+      expect(response.status).toBe(403);
+      expect(response.body.error).toMatchObject({
+        code: 'FORBIDDEN',
+        message: `Forbidden: user ${deniedUserId}'s policies deny agents:ListSessions on ${resource}`,
+        meta: {
+          action: 'agents:ListSessions',
+          resource,
+          denied_by: { type: 'user', id: deniedUserId },
+        },
+      });
+    });
+
+    test('a list spanning projects is refused on no resource', async () => {
+      const response =
+        await authenticatedTestClient(deniedToken).get('/api/v1/sessions');
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toMatchObject({
+        code: 'FORBIDDEN',
+        message: `Forbidden: user ${deniedUserId}'s policies deny agents:ListSessions`,
+        meta: { action: 'agents:ListSessions', resource: null },
+      });
+    });
   });
 });

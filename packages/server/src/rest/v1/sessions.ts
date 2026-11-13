@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { agents } from 'src/lib/agentAccessor';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
 import { readMaxContextMessages } from 'src/lib/sessionContextWindow';
 import {
@@ -27,10 +28,11 @@ import {
   parsePagination,
   requireAuth,
   requireProjectAccess,
+  scopeSrn,
 } from './helpers';
 import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 import { sessionSubResourcesRouter } from './sessionSubResources';
 import { authorizeSharedUse } from './sharedAccess';
 
@@ -69,26 +71,23 @@ export const checkSessionAccess = async (
     throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: access.projectPublicId,
-    action,
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: access.projectPublicId,
-      resourceType: 'session',
-      resourceId: ctx.params.session_id,
-    }),
-    context: buildResourceTagContext({
-      resourceType: 'session',
-      tags: access.tags,
-    }),
+      action,
+      resource: buildSrn({
+        projectPublicId: access.projectPublicId,
+        resourceType: 'session',
+        resourceId: ctx.params.session_id,
+      }),
+      context: buildResourceTagContext({
+        resourceType: 'session',
+        tags: access.tags,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Session not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: access.projectPublicId,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Session not found'),
-    });
-  }
 
   return access;
 };
@@ -186,7 +185,11 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     resourceType: 'session',
   });
   if (!compiled.hasAccess) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: 'agents:ListSessions',
+      resource: scopeSrn({ projectPublicId, resourceType: 'session' }),
+    });
   }
   const policyWhere = compiled.where;
 

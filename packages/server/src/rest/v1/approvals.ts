@@ -11,6 +11,7 @@ import {
   rejectApproval,
   type WireProposedAction,
 } from 'src/lib/approvals';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
 import { toolReferences } from 'src/lib/resourceReferences';
 import { soatTools } from 'src/lib/soatTools';
@@ -25,7 +26,7 @@ import {
   requireAuth,
 } from './helpers';
 import { resolveListScope } from './listScope';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 const approvalsRouter = new Router<Context>();
 
@@ -104,15 +105,17 @@ const assertMayEditProposedAction = async (args: {
   const projectPublicId = args.approval.project_id;
   if (!proposed?.tool_id || !projectPublicId) return;
 
-  const refuse = () => {
-    throw new DomainError(
-      'FORBIDDEN',
-      'Editing the proposed arguments requires permission to make the call yourself; approving it as proposed does not.'
-    );
+  // Editing the proposed arguments needs permission to make the call
+  // yourself; approving it as proposed does not.
+  const requireAllowedCall = async (check: {
+    action: string;
+    resource: string;
+  }) => {
+    if (await args.authUser.isAllowed({ projectPublicId, ...check })) return;
+    throw callerDenied({ authUser: args.authUser, ...check });
   };
 
-  const mayCall = await args.authUser.isAllowed({
-    projectPublicId,
+  await requireAllowedCall({
     action: 'tools:CallTool',
     resource: buildSrn({
       projectPublicId,
@@ -120,7 +123,6 @@ const assertMayEditProposedAction = async (args: {
       resourceId: proposed.tool_id,
     }),
   });
-  if (!mayCall) refuse();
 
   const iamAction = await proposedBuiltinIamAction({
     projectPublicId,
@@ -128,8 +130,7 @@ const assertMayEditProposedAction = async (args: {
   });
   if (!iamAction) return;
 
-  const mayAct = await args.authUser.isAllowed({
-    projectPublicId,
+  await requireAllowedCall({
     action: iamAction,
     // The edit names its own target inside the arguments, so what is asked is
     // whether the approver may perform this action anywhere in the project. A
@@ -141,7 +142,6 @@ const assertMayEditProposedAction = async (args: {
       resourceId: '*',
     }),
   });
-  if (!mayAct) refuse();
 };
 
 const parseApprovalStatuses = (ctx: Context) => {
@@ -201,21 +201,18 @@ approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
 
   const approval = await getApproval({ id: ctx.params.approval_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: approval.project_id!,
-    action: 'approvals:GetApproval',
-    resource: approvalSrn(approval),
-  });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: approval.project_id!,
-      notFound: new DomainError(
-        'APPROVAL_NOT_FOUND',
-        `Approval '${ctx.params.approval_id}' not found.`
-      ),
-    });
-  }
+      action: 'approvals:GetApproval',
+      resource: approvalSrn(approval),
+    },
+    notFound: new DomainError(
+      'APPROVAL_NOT_FOUND',
+      `Approval '${ctx.params.approval_id}' not found.`
+    ),
+  });
 
   ctx.body = approval;
 });
@@ -227,21 +224,18 @@ approvalsRouter.post(
 
     const approval = await getApproval({ id: ctx.params.approval_id });
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: approval.project_id!,
-      action: 'approvals:ResolveApproval',
-      resource: approvalSrn(approval),
-    });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: approval.project_id!,
-        notFound: new DomainError(
-          'APPROVAL_NOT_FOUND',
-          `Approval '${ctx.params.approval_id}' not found.`
-        ),
-      });
-    }
+        action: 'approvals:ResolveApproval',
+        resource: approvalSrn(approval),
+      },
+      notFound: new DomainError(
+        'APPROVAL_NOT_FOUND',
+        `Approval '${ctx.params.approval_id}' not found.`
+      ),
+    });
 
     const body = ctx.request.body as {
       arguments?: object;
@@ -271,21 +265,18 @@ approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
 
   const approval = await getApproval({ id: ctx.params.approval_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: approval.project_id!,
-    action: 'approvals:ResolveApproval',
-    resource: approvalSrn(approval),
-  });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: approval.project_id!,
-      notFound: new DomainError(
-        'APPROVAL_NOT_FOUND',
-        `Approval '${ctx.params.approval_id}' not found.`
-      ),
-    });
-  }
+      action: 'approvals:ResolveApproval',
+      resource: approvalSrn(approval),
+    },
+    notFound: new DomainError(
+      'APPROVAL_NOT_FOUND',
+      `Approval '${ctx.params.approval_id}' not found.`
+    ),
+  });
 
   // `reason` is guaranteed present by the strict-field middleware (required in
   // the OpenAPI request schema); the lib re-checks for a non-empty value.

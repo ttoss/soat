@@ -145,7 +145,9 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     const toolResult = await submitAsUser(generationId);
 
     expect(toolResult).not.toContain('credListTools');
-    expect(toolResult).toContain("'list-tools' failed");
+    expect(toolResult).toContain(
+      `user ${userId}'s policies deny tools:ListTools`
+    );
   });
 
   test('a pause rebuilt from the database runs its tools as the submitter', async () => {
@@ -155,7 +157,9 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     const toolResult = await submitAsUser(generationId);
 
     expect(toolResult).not.toContain('credListTools');
-    expect(toolResult).toContain("'list-tools' failed");
+    expect(toolResult).toContain(
+      `user ${userId}'s policies deny tools:ListTools`
+    );
   });
 
   const getGeneration = async (generationId: string) => {

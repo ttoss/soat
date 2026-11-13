@@ -3,10 +3,11 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { resolveJwtAuthUser } from '../middleware/auth';
+import { authorizationDenied } from './authorizationDenial';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { principalFromAuthUser } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
-import { mayStart } from './startActions';
+import { mayStart, startCheck } from './startActions';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { resolveStoredToolContext } from './toolContextCarrier';
 import {
@@ -170,10 +171,16 @@ const resolveFiringIdentity = async (args: {
       id: trigger.targetId as string,
     }));
   if (!canStart) {
-    throw new DomainError(
-      'FORBIDDEN',
-      "The trigger's policy_ids do not allow starting this target."
-    );
+    throw authorizationDenied({
+      principal: { type: 'trigger', id: trigger.publicId as string },
+      denied: [
+        startCheck({
+          projectPublicId,
+          type: readTargetType(trigger.targetType as string),
+          id: trigger.targetId as string,
+        }),
+      ],
+    });
   }
   return {
     authHeader: `Bearer ${token}`,

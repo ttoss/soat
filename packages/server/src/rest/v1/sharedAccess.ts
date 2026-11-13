@@ -1,5 +1,5 @@
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
 import { findSharedUse } from 'src/lib/resourceReferences';
 
@@ -43,15 +43,22 @@ export const authorizeSharedUse = async (args: {
   });
   if (!shared) return null;
 
+  const resource = buildSrn({
+    projectPublicId,
+    resourceType: args.resourceType,
+    resourceId: args.resourceId,
+  });
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId,
     action: args.action,
-    resource: buildSrn({
-      projectPublicId,
-      resourceType: args.resourceType,
-      resourceId: args.resourceId,
-    }),
+    resource,
   });
-  if (!allowed) throw new DomainError('FORBIDDEN', 'Forbidden');
+  if (!allowed) {
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: args.action,
+      resource,
+    });
+  }
   return shared;
 };

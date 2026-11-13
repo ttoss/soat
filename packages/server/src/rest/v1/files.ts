@@ -3,6 +3,7 @@ import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
@@ -197,17 +198,22 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     content_type?: string;
   };
 
+  const resource = buildSrn({
+    projectPublicId: body.project_id,
+    resourceType: 'file',
+    resourceId: '*',
+  });
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: body.project_id,
     action: 'files:UploadFile',
-    resource: buildSrn({
-      projectPublicId: body.project_id,
-      resourceType: 'file',
-      resourceId: '*',
-    }),
+    resource,
   });
   if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: ctx.authUser,
+      action: 'files:UploadFile',
+      resource,
+    });
   }
 
   const project = await db.Project.findOne({

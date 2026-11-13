@@ -1,8 +1,9 @@
 import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
-import { mayStart } from 'src/lib/startActions';
+import { mayStart, startCheck } from 'src/lib/startActions';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import { fireTriggerNow } from 'src/lib/triggerDispatch';
 import { getTriggerFiring, listTriggerFirings } from 'src/lib/triggerFirings';
@@ -31,7 +32,7 @@ import {
   resolveWriteProjectId,
 } from './helpers';
 import { resolveListScope } from './listScope';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 const triggersRouter = new Router<Context>();
 
@@ -88,25 +89,22 @@ const authorizeTrigger = async (args: {
   action: string;
 }): Promise<void> => {
   const projectPublicId = args.trigger.project_id!;
-  const allowed = await args.ctx.authUser.isAllowed({
-    projectPublicId,
-    action: args.action,
-    resource: buildSrn({
+  await requireAllowed({
+    ctx: args.ctx,
+    check: {
       projectPublicId,
-      resourceType: 'trigger',
-      resourceId: args.trigger.id,
-    }),
+      action: args.action,
+      resource: buildSrn({
+        projectPublicId,
+        resourceType: 'trigger',
+        resourceId: args.trigger.id,
+      }),
+    },
+    notFound: new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Trigger '${args.trigger.id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx: args.ctx,
-      projectPublicId,
-      notFound: new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Trigger '${args.trigger.id}' not found.`
-      ),
-    });
-  }
 };
 
 triggersRouter.get('/triggers/:trigger_id', async (ctx: Context) => {
@@ -194,7 +192,14 @@ const assertCallerMayStart = async (args: {
     id: args.targetId,
   });
   if (!canStartTarget) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: args.authUser,
+      ...startCheck({
+        projectPublicId: args.projectPublicId,
+        type: readTargetType(args.targetType),
+        id: args.targetId,
+      }),
+    });
   }
 };
 
@@ -341,25 +346,22 @@ triggersRouter.get('/trigger-firings/:firing_id', async (ctx: Context) => {
 
   const firing = await getTriggerFiring({ id: ctx.params.firing_id });
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: firing.project_id!,
-    action: 'triggers:GetTriggerFiring',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: firing.project_id!,
-      resourceType: 'triggerFiring',
-      resourceId: firing.id,
-    }),
+      action: 'triggers:GetTriggerFiring',
+      resource: buildSrn({
+        projectPublicId: firing.project_id!,
+        resourceType: 'triggerFiring',
+        resourceId: firing.id,
+      }),
+    },
+    notFound: new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Trigger firing '${ctx.params.firing_id}' not found.`
+    ),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: firing.project_id!,
-      notFound: new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Trigger firing '${ctx.params.firing_id}' not found.`
-      ),
-    });
-  }
 
   ctx.body = firing;
 });

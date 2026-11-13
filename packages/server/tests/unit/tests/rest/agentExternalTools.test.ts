@@ -1,5 +1,4 @@
-import { agentPolicyDenial } from 'src/lib/agentPolicyDenial';
-
+import { agentRefusal } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   pollUntil,
@@ -427,9 +426,7 @@ describe('POST /api/v1/agents/:agent_id/generate — mcp and builtin tools', () 
         calls: [{ name: `${tool.name}_list-files`, args: {} }],
       });
 
-      expect(results).toEqual([
-        { error: agentPolicyDenial({ action: 'files:GetFile' }) },
-      ]);
+      expect(results).toEqual([agentRefusal({ action: 'files:GetFile' })]);
     });
 
     test("the agent's policy_ids lets an allowed action run", async () => {

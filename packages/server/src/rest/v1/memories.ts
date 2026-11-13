@@ -45,7 +45,7 @@ import {
 import { memoryPins } from './memoryPins';
 import { sendNdjson } from './ndjsonResponse';
 import { compileReadPolicy } from './readPolicy';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed, resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoriesRouter = new Router<Context>();
@@ -108,26 +108,23 @@ const resolveMemoryStoreForAction = async (
   if (!memoryStore) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found');
   }
-  const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: memoryStore.project_id!,
-    action,
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: memoryStore.project_id!,
-      resourceType: 'memory_store',
-      resourceId: memoryStore.id,
-    }),
-    context: buildResourceTagContext({
-      resourceType: 'memory_store',
-      tags: memoryStore.tags,
-    }),
+      action,
+      resource: buildSrn({
+        projectPublicId: memoryStore.project_id!,
+        resourceType: 'memory_store',
+        resourceId: memoryStore.id,
+      }),
+      context: buildResourceTagContext({
+        resourceType: 'memory_store',
+        tags: memoryStore.tags,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: memoryStore.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found'),
-    });
-  }
   const memoryStoreRow = await db.MemoryStore.findOne({
     where: { publicId: memoryStorePublicId },
   });
@@ -198,6 +195,8 @@ const resolveEntryForAction = async (
         ctx,
         projectPublicId: memoryStore.project_id!,
         notFound: new DomainError('RESOURCE_NOT_FOUND', 'Memory not found'),
+        action,
+        resource: resources[0],
       });
     }
   }

@@ -32,13 +32,21 @@ const filesMatching = (pattern) => {
 };
 
 /**
- * Every refusal by an agent's `policy_ids` is worded by
- * `lib/agentPolicyDenial.ts`, so a new tool path cannot word it its own way.
+ * Every `FORBIDDEN` is built by `lib/authorizationDenial.ts`, which names the
+ * action, the resource and whose policies denied it, so no site words its own
+ * refusal or answers a bare `Forbidden`.
  */
-describe('agent policy denial chokepoint', () => {
-  test('is the only place the refusal is worded', () => {
-    assert.deepEqual(filesMatching(/policies deny|boundary policy/), [
-      'lib/agentPolicyDenial.ts',
+describe('authorization denial chokepoint', () => {
+  test('is the only place a FORBIDDEN is raised', () => {
+    assert.deepEqual(filesMatching(/['"]FORBIDDEN['"]/), [
+      'lib/authorizationDenial.ts',
     ]);
+  });
+
+  test('is the only place the refusal is worded', () => {
+    assert.deepEqual(
+      filesMatching(/policies deny|boundary policy|policy denies/),
+      ['lib/authorizationDenial.ts']
+    );
   });
 });

@@ -18,7 +18,7 @@ import {
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
 import { resolveListScope } from './listScope';
-import { resourceRefusal } from './resourceAccess';
+import { requireAllowed } from './resourceAccess';
 
 const webhooksRouter = new Router<Context>();
 
@@ -85,22 +85,19 @@ webhooksRouter.get('/webhooks/:webhook_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.project_id!,
-    action: 'webhooks:GetWebhook',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: webhook.project_id!,
-      resourceType: 'webhook',
-      resourceId: webhook.id,
-    }),
+      action: 'webhooks:GetWebhook',
+      resource: buildSrn({
+        projectPublicId: webhook.project_id!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: webhook.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
-    });
-  }
 
   ctx.body = webhook;
 });
@@ -113,22 +110,19 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.project_id!,
-    action: 'webhooks:UpdateWebhook',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: webhook.project_id!,
-      resourceType: 'webhook',
-      resourceId: webhook.id,
-    }),
+      action: 'webhooks:UpdateWebhook',
+      resource: buildSrn({
+        projectPublicId: webhook.project_id!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: webhook.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
-    });
-  }
 
   const body = ctx.request.body as {
     name?: string;
@@ -165,22 +159,19 @@ webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.project_id!,
-    action: 'webhooks:DeleteWebhook',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: webhook.project_id!,
-      resourceType: 'webhook',
-      resourceId: webhook.id,
-    }),
+      action: 'webhooks:DeleteWebhook',
+      resource: buildSrn({
+        projectPublicId: webhook.project_id!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: webhook.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
-    });
-  }
 
   await deleteWebhook({ id: ctx.params.webhook_id });
   ctx.status = 204;
@@ -202,22 +193,19 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.project_id!,
-    action: 'webhooks:ListWebhookDeliveries',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: webhook.project_id!,
-      resourceType: 'webhook',
-      resourceId: webhook.id,
-    }),
+      action: 'webhooks:ListWebhookDeliveries',
+      resource: buildSrn({
+        projectPublicId: webhook.project_id!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: webhook.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
-    });
-  }
 
   const webhookRecord = await db.Webhook.findOne({
     where: { publicId: webhookPublicId },
@@ -242,22 +230,19 @@ webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.project_id!,
-    action: 'webhooks:GetWebhookDelivery',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: webhook.project_id!,
-      resourceType: 'webhook',
-      resourceId: webhook.id,
-    }),
+      action: 'webhooks:GetWebhookDelivery',
+      resource: buildSrn({
+        projectPublicId: webhook.project_id!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: webhook.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found'),
-    });
-  }
 
   ctx.body = delivery;
 });
@@ -279,22 +264,19 @@ webhooksRouter.post(
       throw new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found');
     }
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: webhook.project_id!,
-      action: 'webhooks:RedeliverWebhookDelivery',
-      resource: buildSrn({
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: webhook.project_id!,
-        resourceType: 'webhook',
-        resourceId: webhook.id,
-      }),
+        action: 'webhooks:RedeliverWebhookDelivery',
+        resource: buildSrn({
+          projectPublicId: webhook.project_id!,
+          resourceType: 'webhook',
+          resourceId: webhook.id,
+        }),
+      },
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found'),
     });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: webhook.project_id!,
-        notFound: new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found'),
-      });
-    }
 
     ctx.status = 202;
     ctx.body = await redeliverWebhookDelivery({ id: ctx.params.delivery_id });
@@ -309,22 +291,19 @@ webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.project_id!,
-    action: 'webhooks:GetWebhookSecret',
-    resource: buildSrn({
+  await requireAllowed({
+    ctx,
+    check: {
       projectPublicId: webhook.project_id!,
-      resourceType: 'webhook',
-      resourceId: webhook.id,
-    }),
+      action: 'webhooks:GetWebhookSecret',
+      resource: buildSrn({
+        projectPublicId: webhook.project_id!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
+    },
+    notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
   });
-  if (!allowed) {
-    throw await resourceRefusal({
-      ctx,
-      projectPublicId: webhook.project_id!,
-      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
-    });
-  }
 
   const secretData = await findWebhookSecret({ id: ctx.params.webhook_id });
   if (!secretData) {
@@ -343,22 +322,19 @@ webhooksRouter.post(
       throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
     }
 
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: webhook.project_id!,
-      action: 'webhooks:RotateWebhookSecret',
-      resource: buildSrn({
+    await requireAllowed({
+      ctx,
+      check: {
         projectPublicId: webhook.project_id!,
-        resourceType: 'webhook',
-        resourceId: webhook.id,
-      }),
+        action: 'webhooks:RotateWebhookSecret',
+        resource: buildSrn({
+          projectPublicId: webhook.project_id!,
+          resourceType: 'webhook',
+          resourceId: webhook.id,
+        }),
+      },
+      notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
     });
-    if (!allowed) {
-      throw await resourceRefusal({
-        ctx,
-        projectPublicId: webhook.project_id!,
-        notFound: new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found'),
-      });
-    }
 
     const rotated = await rotateWebhookSecret({
       id: ctx.params.webhook_id,

@@ -14,7 +14,7 @@ import { ISSUER } from '../lib/serverIssuer';
 import { BEARER_TOKEN_TYPES, verifyToken } from '../lib/signedTokens';
 import { buildSoatActionTarget, soatMcpTools } from '../lib/soatTools';
 import { verifyApiKeyToken } from '../middleware/auth';
-import { dispatchMcpApiRequest } from './dispatchApi';
+import { dispatchMcpApiRequest, mcpDenialResult } from './dispatchApi';
 import { toMcpText } from './toMcpText';
 
 const mcpServer = new McpServer({
@@ -47,12 +47,18 @@ export const mcpOperationTools: Tool[] = soatMcpTools.map((tool) => {
     validateArguments: true,
     handler: async (args: Record<string, unknown>) => {
       const url = buildSoatActionTarget({ def: tool, args });
-      const data = await dispatchMcpApiRequest({
-        method: tool.method,
-        url,
-        body: tool.body ? tool.body(args) : undefined,
-      });
-      return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
+      try {
+        const data = await dispatchMcpApiRequest({
+          method: tool.method,
+          url,
+          body: tool.body ? tool.body(args) : undefined,
+        });
+        return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
+      } catch (error) {
+        const denial = mcpDenialResult(error);
+        if (denial) return denial;
+        throw error;
+      }
     },
   };
 });

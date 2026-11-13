@@ -126,7 +126,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
 const resolveAgentProjectId = async (
   ctx: Context,
   projectPublicId: string | undefined
-): Promise<number | 403 | 400> => {
+): Promise<number | 400> => {
   const authUser = ctx.authUser!;
   const projectIds = await requireProjectAccess({
     ctx,
@@ -134,7 +134,6 @@ const resolveAgentProjectId = async (
     action: 'agents:CreateAgent',
     resourceType: 'agent',
   });
-  if (projectIds === null) return 403;
   let targetProjectId = projectIds?.[0];
   /* istanbul ignore next */
   if (!targetProjectId && authUser.apiKeyProjectId) {
@@ -245,10 +244,6 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   const reqBody = ctx.request.body as CreateAgentBody;
 
   const targetProjectId = await resolveAgentProjectId(ctx, reqBody.project_id);
-
-  if (targetProjectId === 403) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   /* istanbul ignore next */
   if (targetProjectId === 400) {

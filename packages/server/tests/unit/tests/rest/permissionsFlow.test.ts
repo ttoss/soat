@@ -75,7 +75,9 @@ describe('Group 15: JWT — policy scoped to a single resource SRN is enforced p
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.body.error.message).toMatch(
+      /^Forbidden: (user|API key) \S+'s policies deny /
+    );
   });
 });
 
@@ -256,7 +258,9 @@ describe('Group 2: JWT Permissions - User can read but not delete file', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.body.error.message).toMatch(
+      /^Forbidden: (user|API key) \S+'s policies deny /
+    );
   });
 });
 
@@ -382,7 +386,9 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.body.error.message).toMatch(
+      /^Forbidden: (user|API key) \S+'s policies deny /
+    );
   });
 });
 
@@ -472,7 +478,9 @@ describe('Group 4: Two users in the same project with different policies', () =>
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.body.error.message).toMatch(
+      /^Forbidden: (user|API key) \S+'s policies deny /
+    );
   });
 
   test('editor user can read the file', async () => {
@@ -603,7 +611,9 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.body.error.message).toMatch(
+      /^Forbidden: (user|API key) \S+'s policies deny /
+    );
   });
 
   test('delete-only API key cannot read the file', async () => {
@@ -613,7 +623,9 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.body.error.message).toMatch(
+      /^Forbidden: (user|API key) \S+'s policies deny /
+    );
   });
 
   test('delete-only API key can delete the file', async () => {
@@ -932,7 +944,9 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
-    expect(response.body.error.message).toBe('Forbidden');
+    expect(response.body.error.message).toMatch(
+      /^Forbidden: (user|API key) \S+'s policies deny /
+    );
   });
 });
 

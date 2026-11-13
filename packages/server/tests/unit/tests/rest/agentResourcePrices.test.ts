@@ -226,7 +226,7 @@ describe('Agent resource prices', () => {
   });
 
   describe('PUT /api/v1/projects/:project_id/prices', () => {
-    test("another project naming the owner's agent is 403", async () => {
+    test("another project naming the owner's agent is 400", async () => {
       const agentId = await pricedSharedAgent({});
 
       const response = await admin()
@@ -244,8 +244,8 @@ describe('Agent resource prices', () => {
           ],
         });
 
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('FORBIDDEN');
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('an agent row prices llm_tokens only', async () => {

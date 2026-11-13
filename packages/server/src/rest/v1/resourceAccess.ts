@@ -35,8 +35,9 @@
  * A resource outside the caller's credential is `404` under every shape, for
  * the reason {@link beyondReach} gives.
  */
-import type { Context } from 'src/Context';
+import type { AuthUser, Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn, policySetsConcernProject } from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { findSharedUse } from 'src/lib/resourceReferences';
@@ -164,6 +165,8 @@ export const resourceRefusal = async (args: {
   ctx: Context;
   projectPublicId: string;
   notFound: DomainError;
+  action: string;
+  resource: string;
 }): Promise<DomainError> => {
   const { ctx, projectPublicId } = args;
   requireAuth(ctx);
@@ -173,7 +176,32 @@ export const resourceRefusal = async (args: {
   ) {
     return args.notFound;
   }
-  return new DomainError('FORBIDDEN', 'Forbidden');
+  return callerDenied({
+    authUser: ctx.authUser,
+    action: args.action,
+    resource: args.resource,
+  });
+};
+
+/**
+ * One by-id check: returns when the caller may perform it, else throws
+ * {@link resourceRefusal}'s answer for it.
+ */
+export const requireAllowed = async (args: {
+  ctx: Context;
+  check: Parameters<AuthUser['isAllowed']>[0] & { resource: string };
+  notFound: DomainError;
+}): Promise<void> => {
+  const { ctx, check } = args;
+  requireAuth(ctx);
+  if (await ctx.authUser.isAllowed(check)) return;
+  throw await resourceRefusal({
+    ctx,
+    projectPublicId: check.projectPublicId,
+    notFound: args.notFound,
+    action: check.action,
+    resource: check.resource,
+  });
 };
 
 export const authorizeResource = async (args: {
@@ -243,14 +271,15 @@ export const authorizeResource = async (args: {
     throw notFound;
   }
 
+  const resource = buildSrn({
+    projectPublicId: args.scope.projectPublicId,
+    resourceType: args.resourceType,
+    resourceId: args.resourceId,
+  });
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: args.scope.projectPublicId,
     action: args.action,
-    resource: buildSrn({
-      projectPublicId: args.scope.projectPublicId,
-      resourceType: args.resourceType,
-      resourceId: args.resourceId,
-    }),
+    resource,
     // The tags come off the same row the SRN names — `scope`, not a second
     // lookup — so a `iam:ResourceTag/<key>` condition can never be evaluated
     // against one resource while the SRN names another.
@@ -266,6 +295,8 @@ export const authorizeResource = async (args: {
       ctx,
       projectPublicId: args.scope.projectPublicId,
       notFound,
+      action: args.action,
+      resource,
     });
   }
 

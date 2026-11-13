@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { getAiProvider } from 'src/lib/aiProviders';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import type { ChatMessageInput, MappedChat } from 'src/lib/chats';
 import {
   createChat,
@@ -60,6 +61,8 @@ const checkChatPermission = async (
         'RESOURCE_NOT_FOUND',
         `Chat '${chat.id}' not found.`
       ),
+      action,
+      resource,
     });
   }
   return allowed;
@@ -198,7 +201,11 @@ const requireStatelessCompletionAccess = async (args: {
   // back to the caller's entire scope — a silent widening, where it would be
   // least visible.
   if (!provider.project_id) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    throw callerDenied({
+      authUser: args.ctx.authUser!,
+      action: 'chats:CreateChatCompletion',
+      resource: null,
+    });
   }
 
   await requireProjectAccess({

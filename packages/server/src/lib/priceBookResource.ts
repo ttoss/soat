@@ -94,7 +94,7 @@ const assertPriceable = async (args: {
     projectPublicId !== args.ownerProjectPublicId
   ) {
     throw new DomainError(
-      'FORBIDDEN',
+      'VALIDATION_FAILED',
       `A project prices only its own resources; '${args.resource}' belongs to another project.`
     );
   }
