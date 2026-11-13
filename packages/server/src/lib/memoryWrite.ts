@@ -2,6 +2,10 @@ import type { MemorySource } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import {
+  contentBoundTagKeysOfStore,
+  withoutContentBoundTags,
+} from 'src/lib/contentBoundTags';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
@@ -260,16 +264,22 @@ const inheritBags = (args: {
   retired: MemoryRow;
   tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
+  /** Judged the retired text, not the replacement's (`contentBoundTags.ts`). */
+  contentBoundKeys: readonly string[];
 }) => {
+  const inherited = withoutContentBoundTags({
+    keys: args.contentBoundKeys,
+    tags: args.retired.tags,
+  });
   return {
     tags:
       args.tags && Object.keys(args.tags).length > 0
         ? mergeTags({
-            current: args.retired.tags,
+            current: inherited,
             incoming: args.tags,
             merge: true,
           })
-        : args.retired.tags,
+        : inherited,
     metadata:
       args.metadata || args.retired.metadata
         ? { ...(args.retired.metadata ?? {}), ...(args.metadata ?? {}) }
@@ -329,6 +339,9 @@ const supersedeMemory = async (args: {
       retired: args.match,
       tags: args.tags,
       metadata: args.metadata,
+      contentBoundKeys: await contentBoundTagKeysOfStore({
+        memoryStoreId: args.memoryStoreId,
+      }),
     }),
   });
 

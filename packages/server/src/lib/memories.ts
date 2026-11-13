@@ -1,6 +1,11 @@
 import type { MemorySource } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { ownerActorWhere, resolveOwnerActorDbId } from 'src/lib/actorOwnership';
+import {
+  changesReadableText,
+  contentBoundTagKeysOfStore,
+  withoutContentBoundTags,
+} from 'src/lib/contentBoundTags';
 import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
@@ -280,6 +285,19 @@ export const updateMemory = async (args: {
 
   if (args.tags !== undefined) {
     updates.tags = args.tags;
+  } else if (
+    changesReadableText([
+      // One content row per text in a store, so a new id is new text.
+      [updates.contentId, entry.contentId],
+      [args.metadata, entry.metadata],
+    ])
+  ) {
+    updates.tags = withoutContentBoundTags({
+      keys: await contentBoundTagKeysOfStore({
+        memoryStoreId: entry.memoryStoreId,
+      }),
+      tags: entry.tags,
+    });
   }
 
   if (args.metadata !== undefined) {

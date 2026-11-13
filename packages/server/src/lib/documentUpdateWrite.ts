@@ -1,4 +1,8 @@
 import type { ChunkStrategy } from './chunking';
+import {
+  changesReadableText,
+  withoutContentBoundTags,
+} from './contentBoundTags';
 import type { Transaction } from './dbTransaction';
 import {
   commitDocumentChunkChanges,
@@ -58,4 +62,43 @@ export const writeDocumentUpdate = async (a: {
       transaction,
     });
   }
+};
+
+/**
+ * The bag an update writes: the one it sets, or, when it changes text an agent
+ * can read without setting the bag, the stored one minus the project's
+ * content-bound keys (`lib/contentBoundTags.ts`). `undefined` leaves it.
+ */
+export const tagsAfterUpdate = (args: {
+  doc: LoadedDoc;
+  update: {
+    content?: string;
+    title?: string | null;
+    path?: string | null;
+    metadata?: Record<string, unknown> | null;
+    tags?: Record<string, string> | null;
+    revivesWithdrawn?: boolean;
+  };
+  currentContent: string | null;
+}): Record<string, string> | null | undefined => {
+  const { doc, update } = args;
+  if (update.tags !== undefined) return update.tags;
+  const changed =
+    update.revivesWithdrawn === true ||
+    changesReadableText([
+      [update.content, args.currentContent],
+      [update.title, doc.title],
+      [
+        update.path === undefined
+          ? undefined
+          : normalizeStatedPath(update.path),
+        doc.file?.path,
+      ],
+      [update.metadata, doc.metadata],
+    ]);
+  if (!changed) return undefined;
+  return withoutContentBoundTags({
+    keys: doc.file?.project?.contentBoundTagKeys ?? [],
+    tags: doc.tags,
+  });
 };

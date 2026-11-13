@@ -130,7 +130,7 @@ Every write to a memory store — REST, the agent tool, a post-turn rule, a form
 
 Every call records exactly one [assertion](#assertions), whatever the outcome.
 
-On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merged onto the replacement (incoming keys win), so a replacement stays inside every tag-scoped search and policy the original satisfied. [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
+On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merged onto the replacement (incoming keys win), so a replacement stays inside every tag-scoped search and policy the original satisfied. The project's [content-bound tag keys](./projects.md#content-bound-tag-keys) are the exception: they judged the retired text, so the replacement carries them only when the write sets them, and a `content` or `metadata` change through [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) removes them the same way. [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
 
 Below `supersede_threshold`, cosine covers both "same fact, changed" and "related but distinct" (*prefers email* vs *prefers Portuguese*), and embeddings sit close on negations. `created` is the outcome there because a near-duplicate stays searchable while a wrongly retired fact does not.
 

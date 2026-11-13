@@ -137,6 +137,7 @@ const ROLES = {
     'PlaybookVersion.config',
     'Policy.document',
     'PriceBook.quantity',
+    'Project.contentBoundTagKeys',
     'Project.guardrailIds',
     'Session.toolContext',
     'Share.actions',

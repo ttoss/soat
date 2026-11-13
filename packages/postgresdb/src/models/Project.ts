@@ -36,6 +36,11 @@ export class Project extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare guardrailIds: string[] | null;
 
+  // Tag keys that state a judgment about what an agent can read: a write that
+  // changes such a field on a document or memory removes them.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare contentBoundTagKeys: string[] | null;
+
   // Concurrently-driven runs allowed, `null` for unlimited. Enforced at queue
   // claim time; parked (`sleeping`/`awaiting_input`) runs occupy no slot.
   @Column({ type: DataType.INTEGER, allowNull: true })

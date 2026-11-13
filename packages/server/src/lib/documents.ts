@@ -18,7 +18,7 @@ import {
   fetchDocumentWithContext,
 } from './documentLoaders';
 import { mapDocument } from './documentMapper';
-import { writeDocumentUpdate } from './documentUpdateWrite';
+import { tagsAfterUpdate, writeDocumentUpdate } from './documentUpdateWrite';
 import {
   buildDocumentConfigSnapshot,
   buildWithdrawnConfigSnapshot,
@@ -351,14 +351,19 @@ export const updateDocument = async (
     expectedVersion: args.expectedVersion,
   });
 
+  const currentContent = await readFileContent(doc.file);
   // Compared against the tombstone, not the content it hid: restoring the
   // version just before a withdrawal changes no content yet is a new state.
   const before = args.revivesWithdrawn
     ? buildWithdrawnConfigSnapshot()
     : buildDocumentConfigSnapshot({
         document: mapDocument(doc),
-        content: await readFileContent(doc.file),
+        content: currentContent,
       });
+  const writeArgs = {
+    ...args,
+    tags: tagsAfterUpdate({ doc, update: args, currentContent }),
+  };
 
   // Embedding calls out, so it runs before the transaction; every write runs
   // inside it, after the version is locked (`commitConfigChange`).
@@ -378,7 +383,12 @@ export const updateDocument = async (
     label: args.versionLabel,
     createdBy: args.createdBy,
     applyWrite: async ({ transaction }) => {
-      await writeDocumentUpdate({ doc, args, chunkChange, transaction });
+      await writeDocumentUpdate({
+        doc,
+        args: writeArgs,
+        chunkChange,
+        transaction,
+      });
 
       refreshed = (await fetchDocumentByIdWithContext(
         doc.id as number,

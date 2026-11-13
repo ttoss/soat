@@ -29,6 +29,7 @@ Access is policy-based, with no membership table: the [policies](./policies.md) 
 | `id`         | string | Public identifier prefixed with `proj_` |
 | `name`       | string | Human-readable project name             |
 | `guardrail_ids` | array | Guardrails attached at the project scope — the baseline governing every tool call by every agent in the project. See [Guardrails — Attachment](./guardrails.md#attachment) |
+| `content_bound_tag_keys` | array | Tag keys that state a judgment about what an agent can read; removed by a write that changes that text. `[]` (default) names none. See [Content-bound tag keys](#content-bound-tag-keys) |
 | `default_model_route_id` | string \| null | [Model route](./model-routes.md#project-default-route) inherited by consumers in this project that bind neither `model_route_id` nor `ai_provider_id`. `null` (default) means no default, so every consumer must bind explicitly. Settable/clearable via `update-project`. |
 | `max_concurrent_runs` | integer \| null | Maximum [orchestration runs](./orchestrations.md#concurrency-limits) of this project driven at once. `null` (default) means unlimited; otherwise an integer ≥ 1. Settable/clearable via `update-project`. |
 | `max_chain_generations` | integer \| null | Generations one [continuation chain](./chains.md#bounding-a-chain) in this project may hold before the platform stops resuming it. `null` (default) means no project ceiling, leaving the deployment-wide one; otherwise an integer ≥ 1. The effective budget is the smallest of the deployment's ceiling, this one, and the agent's own `maxChainGenerations`. Settable/clearable via `update-project`. |
@@ -232,6 +233,51 @@ Pausing is idempotent and keeps the first reason. [`POST /api/v1/projects/{proje
 The resume hands back only what the pause held. A run or task an operator paused before the project was paused keeps its own pause; resuming one run or task on its own while the project is paused is `409 PROJECT_PAUSED`.
 
 Both transitions emit a [webhook event](./webhooks.md): `projects.paused` and `projects.resumed`, each carrying the project as its `data`.
+
+### Content-bound tag keys
+
+`content_bound_tag_keys` names tag keys that state a judgment about what an agent can read, such as a screening verdict (`screened: clean`). The judgment must not outlive the text it judged, so a write that changes that text removes the keys from the resource's tags:
+
+| Resource | Writes that remove the keys |
+| --- | --- |
+| [Document](./documents.md) | A change to the content, `title`, `path` or `metadata`; a re-ingest; reviving a withdrawn document |
+| [Memory](./memories.md) | A change to `content` or `metadata`. A superseding memory does not inherit them |
+
+- A write that sets a key itself keeps it.
+- Tag-only writes, and writes that re-send the stored value, keep them.
+- Removing a key from the list does not restore tags already removed.
+- Each key is a non-empty tag key outside the reserved `system.` prefix; `null` or `[]` names none. Anything else is `400 VALIDATION_FAILED`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-project --project-id proj_V1StGXR8Z5jdHi6B --content-bound-tag-keys screened
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_V1StGXR8Z5jdHi6B' },
+  body: { content_bound_tag_keys: ['screened'] },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_V1StGXR8Z5jdHi6B \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "content_bound_tag_keys": ["screened"] }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Deletion
 
