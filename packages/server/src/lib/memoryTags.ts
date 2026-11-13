@@ -1,4 +1,6 @@
 import { db } from 'src/db';
+import { emitMemoryEvent } from 'src/lib/memoryEvents';
+import { mapMemory, memories } from 'src/lib/memoryMapper';
 import { mergeTags } from 'src/lib/tags';
 
 // Only ever called by the memory tag routes, which resolve the entry and
@@ -26,6 +28,12 @@ export const updateMemoryTags = async (args: {
     merge: args.merge,
   });
   await entry.update({ tags: newTags });
+
+  await emitMemoryEvent({
+    type: 'memories.updated',
+    memoryStoreId: entry.memoryStoreId,
+    memory: mapMemory(await memories.reload(entry)),
+  });
 
   // The tag routes' contract is the tag map itself, not the entry.
   return newTags;

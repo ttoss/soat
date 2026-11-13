@@ -1,9 +1,9 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import { emitResourceEvent } from 'src/lib/eventBus';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
+import { emitMemoryEvent } from 'src/lib/memoryEvents';
 import { mapMemory, memories } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
 import { versionConflict } from 'src/lib/writePrecondition';
@@ -86,16 +86,10 @@ export const retractMemory = async (args: {
 
   const mapped = mapMemory(await memories.reload(entry));
 
-  const memoryStore = await db.MemoryStore.findByPk(entry.memoryStoreId, {
-    attributes: ['projectId'],
-  });
-
-  emitResourceEvent({
+  await emitMemoryEvent({
     type: 'memories.retracted',
-    projectId: memoryStore!.projectId,
-    resourceType: 'memory',
-    resourceId: entry.publicId,
-    data: mapped,
+    memoryStoreId: entry.memoryStoreId,
+    memory: mapped,
   });
 
   return mapped;
