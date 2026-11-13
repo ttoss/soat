@@ -240,7 +240,7 @@ Both transitions emit a [webhook event](./webhooks.md): `projects.paused` and `p
 
 | Resource | Writes that remove the keys |
 | --- | --- |
-| [Document](./documents.md) | A change to the content, `title`, `path` or `metadata`; a re-ingest; reviving a withdrawn document |
+| [Document](./documents.md) | A change to the content, `title`, `path` or `metadata`, moving or renaming its backing [file](./files.md) included; a re-ingest; a version restore that changes them, reviving a withdrawn document included. A restore brings back the archived tags, but not the content-bound keys among them |
 | [Memory](./memories.md) | A change to `content` or `metadata`. A superseding memory does not inherit them |
 
 - A write that sets a key itself keeps it.

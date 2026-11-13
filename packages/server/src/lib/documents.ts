@@ -333,6 +333,8 @@ export const updateDocument = async (
     path?: string | null;
     metadata?: Record<string, unknown> | null;
     tags?: Record<string, string> | null;
+    /** A restore's archived bag; see `tagsAfterUpdate`. */
+    archivedTags?: Record<string, string> | null;
     chunkStrategy?: ChunkStrategy;
     chunkSize?: number;
     chunkOverlap?: number;
