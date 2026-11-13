@@ -119,6 +119,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Read the message for the cause, fix the file or its ingestion rule, and ingest the document again.',
   INGESTION_TIMEOUT:
     'Ingest the document again. A large file or a busy worker can outlast the window; raise `INGESTION_STALL_TIMEOUT_MS` when it does so repeatedly.',
+  INGESTION_CALLBACK_INVALID_TOKEN:
+    "This endpoint reads no `Authorization` header. Post to `callback.url` from the converter's latest input as given: it carries `callback.token` as the `token` query parameter. A re-ingest issues a new token, and one older than `CONVERSION_STALL_TIMEOUT_MS` is refused.",
   CONVERSION_TIMEOUT:
     "Check that the converter calls back to the document's callback URL, then ingest the document again. Raise `CONVERSION_STALL_TIMEOUT_MS` for a converter that legitimately takes longer.",
   EVAL_SCORING_FAILED:

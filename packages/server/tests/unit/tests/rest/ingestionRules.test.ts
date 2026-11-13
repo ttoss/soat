@@ -1057,6 +1057,11 @@ describe('IngestionRules', () => {
           .send({ text: 'x' });
         expect(res.status).toBe(401);
         expect(res.body.error.code).toBe('INGESTION_CALLBACK_INVALID_TOKEN');
+        expect(res.body.error.hint).toMatch(/`callback\.token`/);
+        expect(res.body.error.hint).toMatch(/`token` query parameter/);
+        expect(res.body.error.hint).not.toMatch(
+          /send .*`Authorization` header/i
+        );
       });
 
       test('a callback that itself defers with { status: "pending" } is rejected', async () => {
