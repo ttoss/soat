@@ -215,6 +215,17 @@ paths:
                   items:
                     type: string
                   description: Guardrails attached at the project scope.
+                content_bound_tag_keys:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  example: [screened]
+                  description: >-
+                    Tag keys removed from a document or memory by a write that
+                    changes what an agent can read. Replaces the stored list;
+                    `null` or `[]` names none. Each key is a non-empty tag key
+                    outside the reserved `system.` prefix.
                 max_concurrent_runs:
                   type: integer
                   nullable: true
@@ -715,6 +726,18 @@ components:
             Guardrails attached at the project scope — the baseline governing
             every tool call by every agent in the project.
           example: []
+        content_bound_tag_keys:
+          type: array
+          items:
+            type: string
+          description: >-
+            Tag keys that state a judgment about what an agent can read, such
+            as a screening verdict. A write that changes a document's content,
+            title, path or metadata, re-ingests it, or changes a memory's
+            content or metadata, removes these keys from its tags unless the
+            same write sets them; a superseding memory does not inherit them.
+            Empty when the project names none.
+          example: [screened]
         max_concurrent_runs:
           type: integer
           nullable: true

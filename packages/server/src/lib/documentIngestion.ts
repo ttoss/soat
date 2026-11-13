@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { ChunkStrategy } from './chunking';
+import { withoutContentBoundTags } from './contentBoundTags';
 import { assertCorpusWriteQuotas } from './corpusWriteQuotas';
 import { DOCUMENT_FAILURES, ingestionFailure } from './documentFailures';
 import {
@@ -426,6 +427,12 @@ export const reingestDocument = async (args: {
     totalPages: null,
     totalChunks: null,
     indexedChunks: null,
+    // The text is about to be read again from the source, so a judgment about
+    // the text it replaces no longer holds.
+    tags: withoutContentBoundTags({
+      keys: doc.file?.project?.contentBoundTagKeys ?? [],
+      tags: doc.tags,
+    }),
   });
 
   const docPath = file.path ?? `/${file.filename ?? 'document'}`;
