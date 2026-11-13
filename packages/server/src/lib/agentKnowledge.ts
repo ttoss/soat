@@ -10,12 +10,8 @@ import {
   readKnowledgeConfig,
 } from './agentKnowledgeConfig';
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
-import {
-  collectBindingGuardrails,
-  gateResolvedToolsWithGuardrails,
-  type ResolverGuardrailContext,
-} from './agentToolGuardrail';
-import type { BindingTools } from './agentToolNames';
+import { NATIVE_PROPOSAL_PREFIX } from './agentToolApproval';
+import type { ToolBinding } from './agentToolNames';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import { agentDenied, denialToolResult } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
@@ -229,7 +225,7 @@ const findBoundaryDeniedMemoryWriteAction = (args: {
  * row, so resolution recognises the call by this id and runs
  * {@link runApprovedWriteMemory} instead of `callTool`.
  */
-export const WRITE_MEMORY_TOOL_ID = 'native:write_memory';
+export const WRITE_MEMORY_TOOL_ID = `${NATIVE_PROPOSAL_PREFIX}write_memory`;
 
 const WRITE_MEMORY_TOOL_NAME = 'write_memory';
 
@@ -380,45 +376,39 @@ const KNOWLEDGE_BINDING_NAME = 'knowledge';
 
 /**
  * The `write_memory` binding when the agent's knowledge config names a write
- * target. It passes the same guardrail gate as every bound tool, and merges
- * with them like any other binding, so a bound tool resolving to
- * `write_memory` is offered beside it, never replaced.
+ * target. It merges with the bound tools like any other binding, so a bound
+ * tool resolving to `write_memory` is offered beside it, never replaced.
  */
-export const buildKnowledgeBindings = async (args: {
+export const buildKnowledgeBindings = (args: {
   agentId: string;
   generationId: string;
   projectId: number;
   typedAgent: TypedAgent;
   boundaryPolicy: PolicyDocument | null;
   actorId?: string;
-  guardrail: ResolverGuardrailContext;
-}): Promise<BindingTools[]> => {
+}): ToolBinding[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
   if (!knowledgeConfig?.writeMemoryStoreId) return [];
   return [
     {
       bindingName: KNOWLEDGE_BINDING_NAME,
-      tools: gateResolvedToolsWithGuardrails({
-        tools: {
-          [WRITE_MEMORY_TOOL_NAME]: buildWriteMemoryTool({
-            writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
-            agentId: args.agentId,
-            generationId: args.generationId,
-            projectId: args.projectId,
-            boundaryPolicy: args.boundaryPolicy,
-            actorId: args.actorId,
-          }),
-        },
+      tools: {
+        [WRITE_MEMORY_TOOL_NAME]: buildWriteMemoryTool({
+          writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
+          agentId: args.agentId,
+          generationId: args.generationId,
+          projectId: args.projectId,
+          boundaryPolicy: args.boundaryPolicy,
+          actorId: args.actorId,
+        }),
+      },
+      gate: {
         toolId: WRITE_MEMORY_TOOL_ID,
         toolType: 'native',
         toolName: WRITE_MEMORY_TOOL_NAME,
-        guardrails: await collectBindingGuardrails({
-          context: args.guardrail,
-          toolGuardrailIds: null,
-        }),
+        toolGuardrails: [],
         rawParameters: WRITE_MEMORY_PARAMETERS,
-        context: args.guardrail,
-      }),
+      },
     },
   ];
 };

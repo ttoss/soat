@@ -10,7 +10,6 @@ import {
   resolvedActionName,
   stripApprovalJustification,
 } from './agentToolApproval';
-import type { GatedTools } from './agentToolNames';
 import { emitApproval } from './approvals';
 import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import type { CollectedGuardrail } from './guardrailCollection';
@@ -585,21 +584,17 @@ const buildClientToolGate = (args: {
   };
 };
 
-/**
- * Every guardrail governing one tool binding: the generation's project/agent
- * base plus the tool's own scope.
- */
-export const collectBindingGuardrails = async (args: {
-  context: ResolverGuardrailContext;
+/** A binding's own tool-scope guardrails; the project/agent base is the gate's. */
+export const collectToolScopedGuardrails = async (args: {
+  projectId: number;
   toolGuardrailIds: string[] | null;
 }): Promise<CollectedGuardrail[]> => {
-  const toolScoped = args.toolGuardrailIds?.length
-    ? await collectApplicableGuardrails({
-        projectId: args.context.projectId,
+  return args.toolGuardrailIds?.length
+    ? collectApplicableGuardrails({
+        projectId: args.projectId,
         toolGuardrailIds: args.toolGuardrailIds,
       })
     : [];
-  return [...args.context.baseGuardrails, ...toolScoped];
 };
 
 /**
@@ -617,15 +612,13 @@ export const gateResolvedToolsWithGuardrails = (args: {
   toolId: string | null;
   toolType: string;
   toolName: string;
-  // From `collectBindingGuardrails`, collected before the binding resolved so
-  // its executions are metered under the guardrails that release them.
   guardrails: CollectedGuardrail[];
   presetParameters?: Record<string, unknown> | null;
   rawParameters?: Record<string, unknown>;
   context: ResolverGuardrailContext;
-}): GatedTools => {
+}): Record<string, Tool> => {
   const applicable = args.guardrails;
-  if (applicable.length === 0) return args.tools as GatedTools;
+  if (applicable.length === 0) return args.tools;
 
   // The schema the justification fields are injected into, when this gate can
   // file an approval and the tool owns a local schema to carry them.
@@ -688,8 +681,5 @@ export const gateResolvedToolsWithGuardrails = (args: {
     };
   }
 
-  return gated as GatedTools;
+  return gated;
 };
-
-/** A binding that resolved to nothing has nothing to gate. */
-export const NO_GATED_TOOLS = Object.freeze({}) as GatedTools;

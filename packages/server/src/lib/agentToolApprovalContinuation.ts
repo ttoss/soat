@@ -6,7 +6,7 @@ import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import { runApprovedWriteMemory, WRITE_MEMORY_TOOL_ID } from './agentKnowledge';
-import { isInlineProposal } from './agentToolApproval';
+import { isInlineProposal, isNativeProposal } from './agentToolApproval';
 import {
   type ApprovalResumeHandler,
   type DecisionOutput,
@@ -142,10 +142,40 @@ const executeApprovedWriteMemory = async (args: {
 };
 
 /**
+ * How an approved call to each native tool runs, by `tool_id`. A native tool
+ * missing here is refused at resolution rather than looked up as a stored one.
+ */
+const NATIVE_TOOL_EXECUTORS: Record<
+  string,
+  typeof executeApprovedWriteMemory | undefined
+> = {
+  [WRITE_MEMORY_TOOL_ID]: executeApprovedWriteMemory,
+};
+
+const executeApprovedNativeAction = async (args: {
+  toolId: string;
+  item: MappedApproval;
+  projectInternalId: number;
+  input: Record<string, unknown>;
+}): Promise<object> => {
+  const executeNative = NATIVE_TOOL_EXECUTORS[args.toolId];
+  if (!executeNative) {
+    return {
+      error: `The approved action targets ${args.toolId}, which cannot be executed at resolution time.`,
+    };
+  }
+  return executeNative({
+    item: args.item,
+    projectInternalId: args.projectInternalId,
+    input: args.input,
+  });
+};
+
+/**
  * Executes the frozen (or edited) proposed action at resolution time and returns
  * its output as the decision `result`. A persisted tool runs through
- * `callTool`, which re-applies preset parameters and output mapping; the native
- * `write_memory` runs through its own write path. An inline tool has nothing to
+ * `callTool`, which re-applies preset parameters and output mapping; a native
+ * tool runs through its {@link NATIVE_TOOL_EXECUTORS} entry. An inline tool has nothing to
  * execute against, so it carries a structured note instead of a result.
  */
 const executeApprovedAction = async (args: {
@@ -165,8 +195,9 @@ const executeApprovedAction = async (args: {
     proposed.arguments ??
     {}) as Record<string, unknown>;
 
-  if (proposed.tool_id === WRITE_MEMORY_TOOL_ID) {
-    return executeApprovedWriteMemory({
+  if (isNativeProposal(proposed.tool_id)) {
+    return executeApprovedNativeAction({
+      toolId: proposed.tool_id,
       item: args.item,
       projectInternalId: args.projectInternalId,
       input,
