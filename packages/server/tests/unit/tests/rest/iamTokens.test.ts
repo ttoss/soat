@@ -455,9 +455,18 @@ describe('IAM tokens', () => {
       const token = await mintToken({ policy: GENERATE_ONLY });
 
       expect((await readThroughTurn(key)).id).toBe(documentId);
-      expect(await readThroughTurn(token)).toMatch(
-        /^DomainError: Forbidden: IAM token \S+'s policies deny documents:GetDocument on srn:/
-      );
+      expect(await readThroughTurn(token)).toEqual({
+        error: {
+          code: 'FORBIDDEN',
+          message: expect.stringMatching(
+            /^Forbidden: IAM token \S+'s policies deny documents:GetDocument on srn:/
+          ),
+          meta: expect.objectContaining({
+            action: 'documents:GetDocument',
+            denied_by: expect.objectContaining({ type: 'iam_token' }),
+          }),
+        },
+      });
     });
 
     test('a generation stores the bound, and its re-minted credential cannot read a document after the token expires', async () => {

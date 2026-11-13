@@ -167,9 +167,18 @@ describe('work a capped callback starts', () => {
       const capped = await readThroughTurn(await cappedAssertion());
 
       expect(JSON.parse(full.output)[0].id).toBe(documentId);
-      expect(JSON.parse(capped.output)[0]).toMatch(
-        /^DomainError: Forbidden: IAM token \S+'s policies deny documents:GetDocument on /
-      );
+      expect(JSON.parse(capped.output)[0]).toEqual({
+        error: {
+          code: 'FORBIDDEN',
+          message: expect.stringMatching(
+            /^Forbidden: IAM token \S+'s policies deny documents:GetDocument on /
+          ),
+          meta: expect.objectContaining({
+            action: 'documents:GetDocument',
+            denied_by: expect.objectContaining({ type: 'iam_token' }),
+          }),
+        },
+      });
     });
 
     test("caps the callback of the turn's mcp call", async () => {

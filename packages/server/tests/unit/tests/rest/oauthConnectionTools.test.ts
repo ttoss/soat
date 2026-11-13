@@ -310,7 +310,7 @@ describe('http tool auth oauth_connection', () => {
 
   test("the agent's policy_ids must allow UseOauthConnection", async () => {
     const actorId = await createActor();
-    await connect(actorId);
+    const connectionId = await connect(actorId);
     const policyId = await turn.createPolicy({
       statement: [{ effect: 'Allow', action: ['tools:*'] }],
     });
@@ -322,15 +322,24 @@ describe('http tool auth oauth_connection', () => {
 
     const [result] = await callTool({ actorId, agent: bounded });
 
-    expect(JSON.stringify(result)).toContain(
-      `Forbidden: agent ${bounded}'s policies deny oauth-connections:UseOauthConnection`
-    );
+    const resource = `srn:${turn.projectId}:oauth_connection:${connectionId}`;
+    expect(result).toEqual({
+      error: {
+        code: 'FORBIDDEN',
+        message: `Forbidden: agent ${bounded}'s policies deny oauth-connections:UseOauthConnection on ${resource}`,
+        meta: {
+          action: 'oauth-connections:UseOauthConnection',
+          resource,
+          denied_by: { type: 'agent', id: bounded },
+        },
+      },
+    });
     expect(provider.state.apiAuthorizations.length).toBe(before);
   });
 
   test('the caller must be allowed UseOauthConnection', async () => {
     const actorId = await createActor();
-    await connect(actorId);
+    const connectionId = await connect(actorId);
     const callerToken = await createScopedPrincipal({
       adminToken: turn.adminToken,
       projectId: turn.projectId,
@@ -339,11 +348,23 @@ describe('http tool auth oauth_connection', () => {
     });
     const before = provider.state.apiAuthorizations.length;
 
+    const caller =
+      await authenticatedTestClient(callerToken).get('/api/v1/users/me');
+
     const [result] = await callTool({ actorId, token: callerToken });
 
-    expect(JSON.stringify(result)).toContain(
-      'oauth-connections:UseOauthConnection'
-    );
+    const resource = `srn:${turn.projectId}:oauth_connection:${connectionId}`;
+    expect(result).toEqual({
+      error: {
+        code: 'FORBIDDEN',
+        message: `Forbidden: user ${caller.body.id}'s policies deny oauth-connections:UseOauthConnection on ${resource}`,
+        meta: {
+          action: 'oauth-connections:UseOauthConnection',
+          resource,
+          denied_by: { type: 'user', id: caller.body.id },
+        },
+      },
+    });
     expect(provider.state.apiAuthorizations.length).toBe(before);
   });
 });
