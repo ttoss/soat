@@ -104,7 +104,7 @@ A **tool** converter is called via the normal server-side tool path with a fixed
     "download_url": "https://…/files/file_01/download?token=…" // when file_delivery = download_url
   },
   "callback": {                            // lets long-running tools defer their result
-    "url": "https://…/api/v1/documents/doc_01/ingestion-callback",
+    "url": "https://…/api/v1/documents/doc_01/ingestion-callback?token=…",
     "token": "…"
   }
   // preset_parameters are merged in at the top level
@@ -136,7 +136,7 @@ A tool returning text (or `{ pages }`) is **synchronous**: chunking and embeddin
 
 A tool returning `{ status: "pending" }` is **asynchronous**, only under default async ingestion ([`POST /documents/ingest`](/docs/api/documents/ingest-document) without `?wait=true`). The document stays in `processing` until the tool (or its service) posts the result to the ingestion-callback endpoint; see [Deliver an async converter result](/docs/api/documents/complete-ingestion-callback) for path, query token and schema. Document ID and token come from the `callback` block in the tool input ([Converter Tool Contract](#converter-tool-contract)); the body uses the synchronous output contract adapted for JSON (a single page is `{ "text": "..." }`, not a bare string).
 
-The callback is authorized by a single-use signed token scoped to the document and ingestion attempt, not an IAM action. Accepted (`204`) only while that attempt is `processing`; a replay, a superseded attempt (after re-ingest), or arrival after the stall timeout is rejected with `409 INGESTION_CALLBACK_CONFLICT`; a bad token, or one older than `CONVERSION_STALL_TIMEOUT_MS`, with `401 INGESTION_CALLBACK_INVALID_TOKEN`. A valid result runs the chunk + embed tail and marks the document `ready`.
+The callback is authorized by a single-use signed token scoped to the document and ingestion attempt, not an IAM action: post to `callback.url` as given, which carries `callback.token` as the `token` query parameter; no `Authorization` header is read. Accepted (`204`) only while that attempt is `processing`; a replay, a superseded attempt (after re-ingest), or arrival after the stall timeout is rejected with `409 INGESTION_CALLBACK_CONFLICT`; a bad token, or one older than `CONVERSION_STALL_TIMEOUT_MS`, with `401 INGESTION_CALLBACK_INVALID_TOKEN`. A valid result runs the chunk + embed tail and marks the document `ready`.
 
 `?wait=true` requests and agent converters fail immediately with `CONVERTER_FAILED` on `{ status: "pending" }`; a tool should defer only under async ingestion.
 
