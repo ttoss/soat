@@ -1,6 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { isNativeProposal } from './agentToolApproval';
 import { enforceableCostUsd } from './costEnforceability';
 import type {
   RuntimeMetric,
@@ -30,7 +31,8 @@ export type RuntimeEntities = {
   projectId: number;
   guardrailId: () => string | null;
   agentId: () => Promise<number | null>;
-  toolId: () => Promise<number | null>;
+  /** The tool's events: a stored tool's by its row, a native tool's by its id. */
+  toolScope: () => Promise<EventWhere | null>;
   orchestrationRunId: () => Promise<number | null>;
 };
 
@@ -67,14 +69,18 @@ export const runtimeEntities = (args: {
         })
       );
     }),
-    toolId: memoize(async () => {
+    toolScope: memoize(async () => {
       if (!args.toolId) return null;
-      return idOf(
+      if (isNativeProposal(args.toolId)) {
+        return { projectId: args.projectId, toolPublicId: args.toolId };
+      }
+      const toolId = idOf(
         await db.Tool.findOne({
           where: { publicId: args.toolId, projectId: args.projectId },
           attributes: ['id'],
         })
       );
+      return toolId === null ? null : { toolId };
     }),
     orchestrationRunId: memoize(async () => {
       if (!args.orchestrationRunId) return null;
@@ -114,10 +120,8 @@ const moduleScope = async (args: {
       const agentId = await entities.agentId();
       return agentId === null ? null : { agentId };
     }
-    case 'tools': {
-      const toolId = await entities.toolId();
-      return toolId === null ? null : { toolId };
-    }
+    case 'tools':
+      return entities.toolScope();
     case 'orchestrations': {
       const orchestrationRunId = await entities.orchestrationRunId();
       return orchestrationRunId === null ? null : { orchestrationRunId };

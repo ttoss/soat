@@ -154,6 +154,7 @@ export const resolveAgentToolSurface = async (args: {
           typedAgent: args.typedAgent,
           agentPolicy: args.agentAuthority.policy,
           actorId: args.toolContext?.actor_id,
+          baseGuardrails: guardrail.baseGuardrails,
         })
       : [];
 

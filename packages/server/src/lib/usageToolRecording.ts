@@ -120,7 +120,6 @@ const isTimeoutError = (error: unknown): boolean => {
 };
 
 type ResolvedAttribution = {
-  toolId: number | null;
   agentId: number | null;
   generationId: number | null;
   generationPublicId: string | null;
@@ -151,22 +150,21 @@ const internalId = async (args: {
 };
 
 /** The project an event belongs to: the caller's, which pays for the call. */
-const eventProjectId = (meter: ToolExecutionMeter): number => {
+const eventProjectId = (meter: CallerMeter): number => {
   return meter.callerProjectId ?? meter.projectId;
 };
 
+type CallerMeter = Pick<
+  ToolExecutionMeter,
+  'projectId' | 'callerProjectId' | 'attribution'
+>;
+
+// The caller's turn, agent and run, in the caller's project.
 const resolveAttribution = async (
-  meter: ToolExecutionMeter
+  meter: CallerMeter
 ): Promise<ResolvedAttribution> => {
   const { attribution } = meter;
   const projectId = eventProjectId(meter);
-  // The tool lives in its own project; the caller's turn, agent and run in the
-  // caller's.
-  const toolId = await internalId({
-    model: 'Tool',
-    projectId: meter.projectId,
-    publicId: meter.toolId,
-  });
 
   const generation = attribution.generationId
     ? await db.Generation.findOne({
@@ -176,7 +174,6 @@ const resolveAttribution = async (
 
   if (generation) {
     return {
-      toolId,
       agentId: generation.agentId,
       generationId: generation.id,
       generationPublicId: generation.publicId,
@@ -196,7 +193,6 @@ const resolveAttribution = async (
   }
 
   return {
-    toolId,
     agentId: await internalId({
       model: 'Agent',
       projectId,
@@ -222,19 +218,24 @@ const resolveAttribution = async (
   };
 };
 
-const persistToolExecution = async (args: {
-  meter: ToolExecutionMeter;
-  call: ToolCallRecord;
+type EventComponent = {
+  component: string;
+  quantity: string | number;
+  unit: string;
+  unitPrice: string | null;
+  costUsd: string | null;
+  priceId: number | null;
+};
+
+/** The one write of a `tool_execution` event, for outbound and native calls alike. */
+const writeToolExecutionEvent = async (args: {
+  meter: CallerMeter;
+  // A stored tool by its row; a native tool, which has none, by its public id.
+  tool: { toolId: number | null } | { toolPublicId: string };
+  outcome: ToolExecutionOutcome;
+  components: EventComponent[];
 }): Promise<void> => {
   const resolved = await resolveAttribution(args.meter);
-  const { toolId } = args.meter;
-  const priced = toolId
-    ? await priceToolResource({
-        toolId,
-        ownerProjectId: args.meter.projectId,
-        call: args.call,
-      })
-    : { components: [], invalid: [] };
   const guardrailIds = args.meter.attribution.guardrailIds ?? [];
   // A tool call has no replay identity: a retry is a second call on the wire
   // and meters as one, so the key is unique per execution.
@@ -248,14 +249,15 @@ const persistToolExecution = async (args: {
         publisherProjectId:
           projectId === args.meter.projectId ? null : args.meter.projectId,
         ...resolved,
+        ...args.tool,
         aiProviderId: null,
-        outcome: args.call.outcome as ToolExecutionOutcome,
+        outcome: args.outcome,
         guardrailIds: guardrailIds.length > 0 ? [...guardrailIds] : null,
         meterType: TOOL_EXECUTION_METER_TYPE,
         provider: TOOL_PROVIDER,
         model: TOOL_MODEL,
         costUsd: sumComponentCostUsd(
-          priced.components.map((component) => {
+          args.components.map((component) => {
             return component.costUsd;
           })
         ),
@@ -263,20 +265,10 @@ const persistToolExecution = async (args: {
       },
       transaction,
     });
-    if (!created) return;
+    if (!created || args.components.length === 0) return;
 
     await db.UsageComponent.bulkCreate(
-      [
-        {
-          component: TOOL_COMPONENT,
-          quantity: '1',
-          unit: TOOL_COMPONENT,
-          unitPrice: null,
-          costUsd: null,
-          priceId: null,
-        },
-        ...priced.components,
-      ].map((component) => {
+      args.components.map((component) => {
         return {
           ...component,
           publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
@@ -286,6 +278,43 @@ const persistToolExecution = async (args: {
       }),
       { transaction }
     );
+  });
+};
+
+const persistToolExecution = async (args: {
+  meter: ToolExecutionMeter;
+  call: ToolCallRecord;
+}): Promise<void> => {
+  const { toolId } = args.meter;
+  const priced = toolId
+    ? await priceToolResource({
+        toolId,
+        ownerProjectId: args.meter.projectId,
+        call: args.call,
+      })
+    : { components: [], invalid: [] };
+  await writeToolExecutionEvent({
+    meter: args.meter,
+    // The tool lives in its own project, not the caller's.
+    tool: {
+      toolId: await internalId({
+        model: 'Tool',
+        projectId: args.meter.projectId,
+        publicId: toolId,
+      }),
+    },
+    outcome: args.call.outcome as ToolExecutionOutcome,
+    components: [
+      {
+        component: TOOL_COMPONENT,
+        quantity: '1',
+        unit: TOOL_COMPONENT,
+        unitPrice: null,
+        costUsd: null,
+        priceId: null,
+      },
+      ...priced.components,
+    ],
   });
   await reportInvalidQuantities({
     projectId: eventProjectId(args.meter),
@@ -342,6 +371,54 @@ export const meterToolExecution = async <T>(args: {
       } catch (error) {
         reportLostUsageEvent({
           recorder: 'meterToolExecution',
+          detail: `tool=${args.meter.toolId}`,
+          error,
+        });
+      }
+    }
+  }
+};
+
+/** A native tool's meter: the tool has no row and is never another project's. */
+export type NativeToolExecutionMeter = {
+  projectId: number;
+  /** `native:<name>`, the id its proposals and guardrail context carry. */
+  toolId: string;
+  attribution: ToolCallAttribution;
+};
+
+/**
+ * Runs one native (in-process) tool call and writes its `tool_execution`
+ * event, unpriced. `run` calls `markExecuted` when the side effect starts: a
+ * call refused before that writes nothing, as an outbound call refused before
+ * it is sent.
+ */
+export const meterNativeToolExecution = async <T>(args: {
+  meter: NativeToolExecutionMeter;
+  run: (markExecuted: () => void) => Promise<T>;
+}): Promise<T> => {
+  log('meterNativeToolExecution: tool=%s', args.meter.toolId);
+  let executed = false;
+  let outcome: ToolExecutionOutcome = 'ok';
+  try {
+    return await args.run(() => {
+      executed = true;
+    });
+  } catch (error) {
+    outcome = isTimeoutError(error) ? 'timeout' : 'error';
+    throw error;
+  } finally {
+    if (executed) {
+      try {
+        await writeToolExecutionEvent({
+          meter: args.meter,
+          tool: { toolPublicId: args.meter.toolId },
+          outcome,
+          components: [],
+        });
+      } catch (error) {
+        reportLostUsageEvent({
+          recorder: 'meterNativeToolExecution',
           detail: `tool=${args.meter.toolId}`,
           error,
         });
