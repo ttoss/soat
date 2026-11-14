@@ -133,6 +133,7 @@ const assertToolAllowedForAgent = (args: {
 const resolveDocumentContent = async (args: {
   content: DocumentMessageContent;
   authority: WorkAuthority | null;
+  authUser?: AuthUser;
   agentAuthority?: AgentAuthority;
 }): Promise<{ content: string; documentId: string }> => {
   const document = await getDocument({ id: args.content.document_id });
@@ -146,6 +147,7 @@ const resolveDocumentContent = async (args: {
 
   await assertAllowedUnder({
     authority: callerNamedAuthority(args),
+    caller: args.authUser,
     checks: [
       {
         projectPublicId: document.project_id,
@@ -239,6 +241,7 @@ export const resolveMessageContent = async (args: {
     return resolveDocumentContent({
       content: args.content,
       authority: args.authority,
+      authUser: args.authUser,
       agentAuthority: args.agentAuthority,
     });
   }

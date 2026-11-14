@@ -1,3 +1,4 @@
+import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { buildSrn } from './iam';
@@ -163,6 +164,7 @@ export const pinCallerActorToolContext = async (args: {
   projectId: number;
   /** The caller, who must be able to read the actor it names. */
   authority: WorkAuthority | null;
+  caller?: AuthUser;
 }): Promise<Record<string, string> | undefined> => {
   if (args.actorId === undefined) return args.toolContext;
   if (typeof args.actorId !== 'string') {
@@ -186,6 +188,7 @@ export const pinCallerActorToolContext = async (args: {
   const projectPublicId = (project?.publicId as string | undefined) ?? '';
   await assertAllowedUnder({
     authority: args.authority,
+    caller: args.caller,
     checks: [
       {
         projectPublicId,

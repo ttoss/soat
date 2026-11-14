@@ -705,13 +705,14 @@ A mis-named action is rejected when the policy is written, so a typo'd `Deny` ca
 
 ## What the agent's policies do and do not cover
 
-|                                    | Governed by `policy_ids`                                               |
-| ---------------------------------- | ---------------------------------------------------------------------- |
-| `builtin` tools (platform actions) | **Yes** — every action is checked before dispatch                      |
-| The built-in `write_memory` tool   | **Yes** — fails closed when the policies deny the memory write actions |
-| `http`, `mcp`, `client` tools      | **No** — these execute outside the platform                            |
+|                                    | Governed by `policy_ids`                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| `builtin` tools (platform actions) | **Yes** — every action is checked at its route                                 |
+| The built-in `write_memory` tool   | **Yes** — fails closed when the policies deny the memory write actions         |
+| `http`, `mcp`, `pipeline` tools    | **Whether** the agent may call it (`tools:CallTool`), not what the server does |
+| `client` tools                     | **No** — the client runs them                                                  |
 
-For tool types the agent's policies cannot reach, use [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) or [Approvals](/docs/tutorials/approval-gate).
+For what a tool's own server does, use [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) or [Approvals](/docs/tutorials/approval-gate).
 
 The cap applies per hop: a sub-agent called through `create-agent-generation` resolves its tools under its own `policy_ids`; the orchestrator's permissions do not widen it.
 

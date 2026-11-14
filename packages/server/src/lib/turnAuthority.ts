@@ -5,7 +5,9 @@ import type { AgentAuthority } from './agentAuthority';
 import { authorizationDenied, callerDenied } from './authorizationDenial';
 import {
   agentHeldGrant,
+  captureAuthority,
   narrowAuthority,
+  sameWorkAuthority,
   type WorkAuthority,
 } from './workAuthority';
 
@@ -67,26 +69,48 @@ export type GateCheck = {
   context?: Record<string, string>;
 };
 
-/**
- * The one check every agent tool call and content read crosses: each of
- * `checks` must be allowed under `authority`, else the denial names the set
- * that refused. No authority allows nothing.
- */
-export const assertAllowedUnder = async (args: {
-  authority: WorkAuthority | null;
+const assertEach = async (args: {
+  authUser: AuthUser | undefined;
   checks: GateCheck[];
 }): Promise<void> => {
-  const authUser = await authUserUnder(args.authority);
   for (const check of args.checks) {
     const resource = check.resource ?? check.resources?.[0] ?? null;
-    if (!authUser) {
+    if (!args.authUser) {
       throw authorizationDenied({
         principal: { type: 'caller', id: null },
         denied: [{ action: check.action, resource }],
       });
     }
-    if (!(await authUser.isAllowed(check))) {
-      throw callerDenied({ authUser, action: check.action, resource });
+    if (!(await args.authUser.isAllowed(check))) {
+      throw callerDenied({
+        authUser: args.authUser,
+        action: check.action,
+        resource,
+      });
     }
   }
+};
+
+/**
+ * The one check every agent tool call and content read crosses: each of
+ * `checks` must be allowed under `authority`, else the denial names the set
+ * that refused. No authority allows nothing. With `caller`, the request whose
+ * authority `authority` is or narrows, its own audited authorizer checks
+ * first, and `authority` only when it narrows the caller.
+ */
+export const assertAllowedUnder = async (args: {
+  authority: WorkAuthority | null;
+  checks: GateCheck[];
+  caller?: AuthUser;
+}): Promise<void> => {
+  const { caller } = args;
+  if (caller) {
+    await assertEach({ authUser: caller, checks: args.checks });
+    const own = captureAuthority({ authUser: caller });
+    if (sameWorkAuthority({ a: args.authority, b: own })) return;
+  }
+  await assertEach({
+    authUser: await authUserUnder(args.authority),
+    checks: args.checks,
+  });
 };

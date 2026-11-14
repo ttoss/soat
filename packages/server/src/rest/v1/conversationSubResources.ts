@@ -256,6 +256,7 @@ conversationSubResourcesRouter.post(
     const projectPublicId = conversation.project_id as string;
     await assertAllowedUnder({
       authority: turn.authority,
+      caller: ctx.authUser,
       checks: [
         {
           projectPublicId,

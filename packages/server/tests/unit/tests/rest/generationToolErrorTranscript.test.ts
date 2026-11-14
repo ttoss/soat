@@ -37,6 +37,7 @@ describe('GET /api/v1/generations/:generation_id/transcript — failed tool call
         'generations:GetGeneration',
         'traces:GetTrace',
         'tools:CreateTool',
+        'tools:CallTool',
       ],
     });
     userToken = setup.userToken;

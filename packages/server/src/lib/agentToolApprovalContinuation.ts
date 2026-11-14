@@ -17,6 +17,7 @@ import {
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
+import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
 import { expireChainIfSettled } from './generationChains';
 import type { PolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
@@ -452,7 +453,10 @@ const runToolCallContinuation = async (args: {
         toolContext: args.toolContext,
       }).catch((error: unknown) => {
         log('executeApprovedAction failed id=%s %o', item.id, error);
-        return { error: errorMessage(error) };
+        // A refusal keeps the code, action and principal a model reads elsewhere.
+        return isAuthorizationDenial(error)
+          ? denialToolResult(error)
+          : { error: errorMessage(error) };
       });
     }
 

@@ -20,6 +20,7 @@ describe('Concurrent writes to one conversation', () => {
         'conversations:GetConversation',
         'conversations:UpdateConversation',
         'conversations:GenerateConversationMessage',
+        'agents:CreateAgentGeneration',
       ],
       createNoPermUser: false,
     });

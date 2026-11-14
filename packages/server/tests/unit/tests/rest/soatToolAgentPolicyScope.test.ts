@@ -1,5 +1,9 @@
 import type { Tool } from 'ai';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
+import {
+  denialToolResult,
+  isAuthorizationDenial,
+} from 'src/lib/authorizationDenial';
 import type { PolicyDocument } from 'src/lib/iam';
 import type { WorkAuthority } from 'src/lib/workAuthority';
 
@@ -25,15 +29,10 @@ const UNMETERED = {
 };
 
 /**
- * A builtin action carries the caller's bearer, so the route checks the
- * caller's policy against the target's SRN. The agent's `policy_ids` are
- * the second half of that intersection, and it is evaluated here — before the
- * request — against the same SRN and tags, so an operator can confine an agent
- * to named resources whoever invoked it.
- *
- * Executed against the real in-process dispatch with the real boundary check:
- * a resolver that reads the wrong argument, or loses the tags, shows up as a
- * call that should have been refused going through.
+ * A builtin action dispatches under the turn's authority, the caller held to
+ * the agent's `policy_ids`, so the route checks both against the target's SRN
+ * and tags: an operator can confine an agent to named resources whoever
+ * invoked it. Executed against the real in-process dispatch.
  */
 describe('a builtin tool is bounded by the resource its arguments name', () => {
   let adminToken: string;
@@ -64,11 +63,17 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
   const callWith = async (args: {
     tool: Tool;
     memoryStoreId: string;
-  }): Promise<{ id?: string; error?: string }> => {
-    return (await args.tool.execute?.(
-      { memory_store_id: args.memoryStoreId },
-      { messages: [], toolCallId: 'call_1', context: undefined }
-    )) as { id?: string; error?: string };
+  }): Promise<{ id?: string; error?: unknown }> => {
+    // A refusal is thrown and relayed as the tool result a turn reads.
+    try {
+      return (await args.tool.execute?.(
+        { memory_store_id: args.memoryStoreId },
+        { messages: [], toolCallId: 'call_1', context: undefined }
+      )) as { id?: string };
+    } catch (error) {
+      if (!isAuthorizationDenial(error)) throw error;
+      return denialToolResult(error);
+    }
   };
 
   const allowMemoriesOn = (resource: string): PolicyDocument => {
