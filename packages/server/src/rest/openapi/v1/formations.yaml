@@ -1157,6 +1157,9 @@ components:
               type: object
               nullable: true
               description: Headers included in every MCP request
+            pin_definitions:
+              type: boolean
+              description: Pin each action's definition on the first listing and withhold an action whose definition drifts. Re-applying an unchanged `mcp` keeps the pins; a new `url` clears them.
         actions:
           type: array
           nullable: true

@@ -196,6 +196,7 @@ const ROLES = {
     'Playbook.policyIds',
     'Session.tags',
     'Task.metadata',
+    'Tool.mcpPins',
     'Trigger.policyIds',
     'UsageEvent.guardrailIds',
     'Webhook.policyIds',

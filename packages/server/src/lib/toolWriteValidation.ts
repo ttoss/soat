@@ -37,6 +37,8 @@ export type ToolUpdateArgs = {
   parameters?: object | null;
   execute?: object | null;
   mcp?: object | null;
+  /** Only `null`, which clears the pins. */
+  mcpPins?: null;
   actions?: string[] | null;
   deniedActions?: string[] | null;
   contextKeys?: string[] | null;

@@ -13,10 +13,12 @@ import { DomainError } from '../errors';
 import type { LogToolCallingError } from './externalToolCall';
 import { toToolUnreachableError } from './httpToolError';
 import {
+  type DeferredProxy,
   describeDeferredTools,
   findDeferredProxy,
   innerToolName,
 } from './mcpDeferredProxy';
+import type { McpDefinitionGate } from './mcpDefinitionPins';
 import { parseJsonRpcBody, readMcpCallResult } from './mcpProtocol';
 import { fetchMcpToolListing, type McpToolListing } from './mcpToolListing';
 import { type McpTransport, postMcp } from './mcpTransport';
@@ -55,6 +57,25 @@ const toolsCallBody = (args: {
   });
 };
 
+/**
+ * A deferred server's `call` target, held to the binding (refused) and to the
+ * pins (answered with the unavailable note instead of reaching the server).
+ */
+const proxyCallRefusal = (args: {
+  callArgs: unknown;
+  allowInner?: (name: string) => boolean;
+  refuseInner?: McpDefinitionGate['refuseCall'];
+}): string | null => {
+  const inner = innerToolName(args.callArgs);
+  if (args.allowInner && (inner === undefined || !args.allowInner(inner))) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `action "${inner ?? ''}" is not available on this tool.`
+    );
+  }
+  return inner === undefined ? null : (args.refuseInner?.(inner) ?? null);
+};
+
 export const buildMcpToolExecute = (args: {
   transport: McpTransport;
   mcpToolName: string;
@@ -75,7 +96,41 @@ export const buildMcpToolExecute = (args: {
    * it targets — the name `allowInner` holds to the binding.
    */
   proxyCall?: boolean;
+  /** On a deferred server's own `call`: the note answered instead, if any. */
+  refuseInner?: McpDefinitionGate['refuseCall'];
+  /** On a deferred server's own `describe`: the result as the model gets it. */
+  reviewResult?: McpDefinitionGate['reviewDescribed'];
 }) => {
+  const send = (sendArgs: { callArgs: unknown; inner?: string }) => {
+    return meterToolExecution({
+      meter: args.meter,
+      send: async (markSent) => {
+        const callResponse = await postMcp({
+          transport: args.transport,
+          body: toolsCallBody({
+            viaCall: args.viaCall,
+            toolName: args.mcpToolName,
+            callArgs: sendArgs.callArgs,
+          }),
+          onRequest: () => {
+            markSent({
+              input: sendArgs.callArgs,
+              action: args.proxyCall ? sendArgs.inner : args.mcpToolName,
+            });
+          },
+        });
+        return readMcpCallResult({
+          body: await parseJsonRpcBody({
+            response: callResponse,
+            url: args.transport.url,
+          }),
+          toolName: args.mcpToolName,
+          url: args.transport.url,
+        });
+      },
+    });
+  };
+
   return async (toolArgs: unknown) => {
     const presetParameters = resolvePresetParametersForCall({
       presetParameters: args.presetParameters,
@@ -86,41 +141,11 @@ export const buildMcpToolExecute = (args: {
     const callArgs = presetParameters
       ? mergePresetParameters({ presetParameters, input: toolArgs })
       : toolArgs;
-    const inner = innerToolName(callArgs);
-    if (args.allowInner && (inner === undefined || !args.allowInner(inner))) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        `action "${inner ?? ''}" is not available on this tool.`
-      );
-    }
+    const refusal = proxyCallRefusal({ ...args, callArgs });
+    if (refusal !== null) return refusal;
     try {
-      return await meterToolExecution({
-        meter: args.meter,
-        send: async (markSent) => {
-          const callResponse = await postMcp({
-            transport: args.transport,
-            body: toolsCallBody({
-              viaCall: args.viaCall,
-              toolName: args.mcpToolName,
-              callArgs,
-            }),
-            onRequest: () => {
-              markSent({
-                input: callArgs,
-                action: args.proxyCall ? inner : args.mcpToolName,
-              });
-            },
-          });
-          return readMcpCallResult({
-            body: await parseJsonRpcBody({
-              response: callResponse,
-              url: args.transport.url,
-            }),
-            toolName: args.mcpToolName,
-            url: args.transport.url,
-          });
-        },
-      });
+      const result = await send({ callArgs, inner: innerToolName(callArgs) });
+      return args.reviewResult ? await args.reviewResult(result) : result;
     } catch (error) {
       args.logToolCallingError({
         toolName: args.mcpToolName,
@@ -199,6 +224,8 @@ const buildMcpToolEntry = (args: {
   viaCall?: string;
   allowInner?: (name: string) => boolean;
   proxyCall?: boolean;
+  refuseInner?: McpDefinitionGate['refuseCall'];
+  reviewResult?: McpDefinitionGate['reviewDescribed'];
 }): ToolWithGatePresets => {
   const { mcpTool } = args;
   const { presetParameters, inputSchema } = exposedMcpInputSchema(args);
@@ -218,6 +245,8 @@ const buildMcpToolEntry = (args: {
       viaCall: args.viaCall,
       allowInner: args.allowInner,
       proxyCall: args.proxyCall,
+      refuseInner: args.refuseInner,
+      reviewResult: args.reviewResult,
     }),
   };
 
@@ -297,6 +326,44 @@ export const boundMcpTools = async (args: {
   ];
 };
 
+/**
+ * How a tool on a deferred server dispatches: through the proxy's `call` when
+ * it was described rather than listed; as the proxy itself, held to the binding
+ * and to the pins.
+ */
+const proxyRole = (args: {
+  proxy: DeferredProxy;
+  listing: McpToolListing[];
+  mcpTool: McpToolListing;
+  isBound: (name: string) => boolean;
+  definitions?: McpDefinitionGate | null;
+}) => {
+  const { proxy, mcpTool, definitions } = args;
+  if (!args.listing.includes(mcpTool)) return { viaCall: proxy.callName };
+  if (mcpTool.name === proxy.callName) {
+    return {
+      allowInner: args.isBound,
+      proxyCall: true,
+      refuseInner: definitions?.refuseCall,
+    };
+  }
+  if (mcpTool.name === proxy.describeName) {
+    return { reviewResult: definitions?.reviewDescribed };
+  }
+  return {};
+};
+
+const emptySurfaceReason = (args: {
+  listing: McpToolListing[];
+  withheld: Set<string>;
+}): string => {
+  if (args.listing.length === 0) return 'tools/list returned no tools';
+  if (args.withheld.size > 0) {
+    return 'every action was withheld: its definition differs from its pin';
+  }
+  return `every tool tools/list returned was excluded by the binding's actions/denied_actions`;
+};
+
 export const resolveMcpTools = async (args: {
   transport: McpTransport;
   typedTool: {
@@ -324,6 +391,8 @@ export const resolveMcpTools = async (args: {
    * indistinguishable from one that had none to begin with.
    */
   reportResolutionFailure?: (args: { reason: string }) => void;
+  /** Withholds actions whose definition drifted from its pin; null: no pins. */
+  definitions?: McpDefinitionGate | null;
 }): Promise<Record<string, Tool>> => {
   const result: Record<string, Tool> = {};
   const isBound = buildActionFilter(args.typedTool);
@@ -344,19 +413,26 @@ export const resolveMcpTools = async (args: {
     logToolCallingError: args.logToolCallingError,
   };
   const proxy = findDeferredProxy(listing);
-  for (const mcpTool of await boundMcpTools({
+  const bound = await boundMcpTools({
     listing,
     typedTool: args.typedTool,
     transport,
-  })) {
+  });
+  const withheld =
+    (await args.definitions?.checkListing(bound)) ?? new Set<string>();
+  for (const mcpTool of bound) {
+    if (withheld.has(mcpTool.name)) continue;
     result[mcpTool.name] = buildMcpToolEntry({
       ...shared,
       mcpTool,
-      ...(proxy && !listing.includes(mcpTool)
-        ? { viaCall: proxy.callName }
-        : {}),
-      ...(proxy && mcpTool.name === proxy.callName
-        ? { allowInner: isBound, proxyCall: true }
+      ...(proxy
+        ? proxyRole({
+            proxy,
+            listing,
+            mcpTool,
+            isBound,
+            definitions: args.definitions,
+          })
         : {}),
     });
   }
@@ -366,10 +442,7 @@ export const resolveMcpTools = async (args: {
   // to have — the one outcome that must never be silent.
   if (Object.keys(result).length === 0) {
     args.reportResolutionFailure?.({
-      reason:
-        listing.length === 0
-          ? 'tools/list returned no tools'
-          : `every tool tools/list returned was excluded by the binding's actions/denied_actions`,
+      reason: emptySurfaceReason({ listing, withheld }),
     });
   }
 
