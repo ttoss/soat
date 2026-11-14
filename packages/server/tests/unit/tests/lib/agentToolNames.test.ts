@@ -1,15 +1,24 @@
 import { jsonSchema, type Tool, tool } from 'ai';
 import type { ResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
-import { gateAndMergeBindings, type ToolBinding } from 'src/lib/agentToolNames';
+import {
+  gateAndMergeBindings,
+  RESULT_PROVENANCE,
+  type ToolBinding,
+} from 'src/lib/agentToolNames';
 
 // The entry-point case (two bindings, one action) is pinned in
 // `rest/agentExternalTools.test.ts`; these are the naming edges.
 
-const stub = (): Tool => {
+const stub = (description: string): Tool => {
   return tool({
-    description: 'stub',
+    description,
     inputSchema: jsonSchema({ type: 'object' }),
   });
+};
+
+// Every merged tool carries the counter its results feed.
+const merged = (resolved: Tool) => {
+  return { ...resolved, [RESULT_PROVENANCE]: 'untrusted_tool_results' };
 };
 
 // No guardrail applies, so the gate passes each tool through and only naming
@@ -22,6 +31,7 @@ const guardrail: ResolverGuardrailContext = {
   authority: null,
   callerContext: {},
   baseGuardrails: [],
+  provenance: null,
 };
 
 const binding = (
@@ -36,6 +46,7 @@ const binding = (
       toolType: 'http',
       toolName: bindingName,
       toolGuardrails: [],
+      trustedOutput: false,
     },
   };
 };
@@ -46,32 +57,32 @@ const mergeBindingTools = (args: { bindings: ToolBinding[] }) => {
 
 describe('gateAndMergeBindings naming', () => {
   test('a key one binding resolves keeps its name', () => {
-    const only = stub();
+    const only = stub('only');
 
     expect(
       mergeBindingTools({
         bindings: [binding('a', { x: only })],
       })
-    ).toEqual({ x: only });
+    ).toEqual({ x: merged(only) });
   });
 
   test('a shared key is offered once per binding under its binding name', () => {
-    const fromA = stub();
-    const fromB = stub();
+    const fromA = stub('fromA');
+    const fromB = stub('fromB');
 
-    const merged = mergeBindingTools({
+    const tools = mergeBindingTools({
       bindings: [binding('a', { x: fromA }), binding('b', { x: fromB })],
     });
 
-    expect(merged).toEqual({ a_x: fromA, b_x: fromB });
+    expect(tools).toEqual({ a_x: merged(fromA), b_x: merged(fromB) });
   });
 
   test('a namespaced name that is already taken gets an ordinal', () => {
-    const plain = stub();
-    const fromA = stub();
-    const fromSameName = stub();
+    const plain = stub('plain');
+    const fromA = stub('fromA');
+    const fromSameName = stub('fromSameName');
 
-    const merged = mergeBindingTools({
+    const tools = mergeBindingTools({
       bindings: [
         binding('other', { a_x: plain }),
         binding('a', { x: fromA }),
@@ -79,6 +90,10 @@ describe('gateAndMergeBindings naming', () => {
       ],
     });
 
-    expect(merged).toEqual({ a_x: plain, a_x_2: fromA, a_x_3: fromSameName });
+    expect(tools).toEqual({
+      a_x: merged(plain),
+      a_x_2: merged(fromA),
+      a_x_3: merged(fromSameName),
+    });
   });
 });
