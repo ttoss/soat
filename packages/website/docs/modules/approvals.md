@@ -148,9 +148,12 @@ Two proposals name no stored tool. An approved
 
 ### Duplicate proposals (dedup)
 
-Tool-call items carry a `dedup_key` derived from agent, tool, action and
-resolved arguments. While a matching item is `pending`, a duplicate emit
-returns the existing item (its `approval_id` in the tool result). Once it
+Tool-call items carry a `dedup_key` derived from agent, tool, action,
+resolved arguments and the identity the call runs as: the proposing
+generation's actor and stored authority (its principal and acted-for
+principal; see [Continuation identity](#continuation-identity)). Two end users
+proposing the same call get an item each. While a matching item is
+`pending`, a duplicate emit returns the existing item (its `approval_id` in the tool result). Once it
 resolves, the same proposal files a fresh item; after a **rejected** one, the
 fresh item's `previous_item_id` links back to it. Node-produced items are not
 deduplicated; each run pauses once per `approval` node.

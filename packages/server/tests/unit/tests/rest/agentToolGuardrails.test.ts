@@ -317,6 +317,118 @@ describe('POST /api/v1/agents/:agent_id/generate — tool guardrail gate', () =>
       expect(second.results[0].approval_id).toBe(first.results[0].approval_id);
     });
 
+    describe('identical proposals from different actors', () => {
+      const createActor = async (name: string): Promise<string> => {
+        const res = await turn
+          .api()
+          .post('/api/v1/actors')
+          .send({ project_id: turn.projectId, name: turn.unique(name) });
+        expect(res.status).toBe(201);
+        return res.body.id;
+      };
+
+      /** A turn in a session of `actorId` whose model proposes `call`. */
+      const proposeAs = async (args: {
+        agentId: string;
+        call: { name: string; args: Record<string, unknown> };
+        actorId: string;
+      }) => {
+        const session = await turn
+          .api()
+          .post('/api/v1/sessions')
+          .send({ agent_id: args.agentId, actor_id: args.actorId });
+        expect(session.status).toBe(201);
+        const message = await turn
+          .api()
+          .post(`/api/v1/sessions/${session.body.id}/messages`)
+          .send({ message: JSON.stringify({ calls: [args.call] }) });
+        expect(message.status).toBe(201);
+        const res = await turn
+          .api()
+          .post(`/api/v1/sessions/${session.body.id}/generate?wait=true`);
+        expect(res.status).toBe(200);
+        const [result] = JSON.parse(res.body.content);
+        return {
+          generationId: res.body.generation_id,
+          approvalId: result.approval_id,
+        };
+      };
+
+      test('each actor gets its own approval, held for its own turn', async () => {
+        const tool = await turn.gatedTool({ documents: [{ class: 'C' }] });
+        const call = { name: tool.name, args: { amount: 5 } };
+
+        const a = await proposeAs({
+          agentId: tool.agentId,
+          call,
+          actorId: await createActor('actor-a'),
+        });
+        const b = await proposeAs({
+          agentId: tool.agentId,
+          call,
+          actorId: await createActor('actor-b'),
+        });
+
+        expect(b.approvalId).not.toBe(a.approvalId);
+        expect((await getApproval(a.approvalId as string)).generation_id).toBe(
+          a.generationId
+        );
+        expect((await getApproval(b.approvalId as string)).generation_id).toBe(
+          b.generationId
+        );
+      });
+
+      test('approving each runs each call', async () => {
+        const tool = await turn.gatedTool({ documents: [{ class: 'C' }] });
+        const call = { name: tool.name, args: { amount: 5 } };
+        const proposals = [
+          await proposeAs({
+            agentId: tool.agentId,
+            call,
+            actorId: await createActor('actor-a'),
+          }),
+          await proposeAs({
+            agentId: tool.agentId,
+            call,
+            actorId: await createActor('actor-b'),
+          }),
+        ];
+
+        for (const { approvalId } of proposals) {
+          const res = await turn
+            .api()
+            .post(`/api/v1/approvals/${approvalId}/approve`)
+            .send({});
+          expect(res.status).toBe(200);
+        }
+
+        const bodies = await pollUntil({
+          read: async () => {
+            return turn.target.bodiesAt(`/${tool.name}`);
+          },
+          done: (received) => {
+            return received.length >= 2;
+          },
+        });
+        expect(bodies).toEqual([{ amount: 5 }, { amount: 5 }]);
+      });
+
+      test('one actor proposing twice still shares one approval', async () => {
+        const tool = await turn.gatedTool({ documents: [{ class: 'C' }] });
+        const call = { name: tool.name, args: { amount: 5 } };
+        const actorId = await createActor('actor-a');
+
+        const first = await proposeAs({ agentId: tool.agentId, call, actorId });
+        const second = await proposeAs({
+          agentId: tool.agentId,
+          call,
+          actorId,
+        });
+
+        expect(second.approvalId).toBe(first.approvalId);
+      });
+    });
+
     test('a guard reads windowed runtime.projects.* at evaluation time', async () => {
       const tool = await turn.gatedTool({
         documents: [

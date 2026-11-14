@@ -26,6 +26,7 @@ import { expireChainIfSettled } from './generationChains';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
+import { toolCallRunsAs } from './toolCallRunsAs';
 import { callTool } from './tools';
 import { meterNativeToolExecution } from './usageToolRecording';
 import {
@@ -62,15 +63,7 @@ const resolveContinuationAuthority = async (args: {
 const proposingActorId = async (
   generationId: string | null | undefined
 ): Promise<string | null> => {
-  if (!generationId) return null;
-  const proposing = await db.Generation.findOne({
-    where: { publicId: generationId },
-    attributes: ['startedByActorId'],
-    include: [
-      { model: db.Actor, as: 'startedByActor', attributes: ['publicId'] },
-    ],
-  });
-  return proposing?.startedByActor?.publicId ?? null;
+  return (await toolCallRunsAs(generationId)).actorId;
 };
 
 /**
