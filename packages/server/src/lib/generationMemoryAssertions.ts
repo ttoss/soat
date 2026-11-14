@@ -12,11 +12,10 @@ export const getGenerationMemoryAssertions = async (args: {
   limit?: number;
   cursor?: string;
 }) => {
-  const gen = await generations.findByPublicId({
+  const gen = await generations.getByPublicId({
     id: args.publicId,
     projectIds: args.projectIds,
   });
-  if (!gen) return null;
   return listGenerationMemoryAssertions({
     generationDbId: gen.id as number,
     limit: args.limit,

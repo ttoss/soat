@@ -223,6 +223,19 @@ export const addGenerationProvenance = async (args: {
   });
 };
 
+/** Adds a stored tool's result to the generation it entered, if any. */
+export const countStoredToolResult = async (args: {
+  generationId: string | null | undefined;
+  toolId: string;
+  action: string | null | undefined;
+}): Promise<void> => {
+  if (!args.generationId) return;
+  await addGenerationProvenance({
+    generationId: args.generationId,
+    counts: countOf(await storedToolResultProvenance(args)),
+  });
+};
+
 /** Stores what a running turn read since its row was last written. */
 export const persistGenerationProvenance = (args: {
   generationId: string;

@@ -287,6 +287,15 @@ const resolveTurnAgent = async (
   };
 };
 
+/** A continuation's context is its chain's: it starts from what its initiator had read. */
+const chainProvenance = async (
+  initiatorGenerationId: string | null | undefined
+): Promise<GenerationProvenance> => {
+  return createGenerationProvenance(
+    await readGenerationProvenance(initiatorGenerationId)
+  );
+};
+
 export const buildGenerationContext = async (
   args: BuildGenerationContextArgs
 ): Promise<GenerationContext> => {
@@ -294,11 +303,7 @@ export const buildGenerationContext = async (
 
   const { typedAgent, agentVersion } = await resolveTurnAgent(args);
 
-  // A continuation's context is its chain's: it starts from what its
-  // initiator had read.
-  const provenance = createGenerationProvenance(
-    await readGenerationProvenance(args.initiatorGenerationId)
-  );
+  const provenance = await chainProvenance(args.initiatorGenerationId);
 
   const agentAuthority = await resolveAgentAuthority({
     agentId: args.agentId,

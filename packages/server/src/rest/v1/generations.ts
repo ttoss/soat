@@ -148,14 +148,10 @@ generationsRouter.get(
       action: 'generations:GetGeneration',
     });
 
-    ctx.body = requireFound({
-      label: 'Generation',
-      id: ctx.params.generation_id,
-      value: await getGenerationMemoryAssertions({
-        publicId: ctx.params.generation_id,
-        projectIds,
-        ...parsePagination(ctx),
-      }),
+    ctx.body = await getGenerationMemoryAssertions({
+      publicId: ctx.params.generation_id,
+      projectIds,
+      ...parsePagination(ctx),
     });
   }
 );

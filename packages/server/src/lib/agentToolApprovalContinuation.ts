@@ -23,11 +23,7 @@ import {
   registerApprovalResumeHandler,
 } from './approvals';
 import { expireChainIfSettled } from './generationChains';
-import {
-  addGenerationProvenance,
-  countOf,
-  storedToolResultProvenance,
-} from './generationProvenance';
+import { countStoredToolResult } from './generationProvenance';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
@@ -231,25 +227,6 @@ const executeApprovedNativeAction = async (args: {
 };
 
 /**
- * Counts an executed approved call's result on the generation that proposed
- * it: the result enters its continuation, which starts from that row.
- */
-const countApprovedResult = async (args: {
-  item: MappedApproval;
-  toolId: string;
-}): Promise<void> => {
-  if (!args.item.generation_id) return;
-  const metric = await storedToolResultProvenance({
-    toolId: args.toolId,
-    action: args.item.proposed_action?.action,
-  });
-  await addGenerationProvenance({
-    generationId: args.item.generation_id,
-    counts: countOf(metric),
-  });
-};
-
-/**
  * Executes the frozen (or edited) proposed action at resolution time and returns
  * its output as the decision `result`. A persisted tool runs through
  * `callTool`, which re-applies preset parameters and output mapping; a native
@@ -317,7 +294,12 @@ const executeApprovedAction = async (args: {
     }),
   });
 
-  await countApprovedResult({ item: args.item, toolId: proposed.tool_id });
+  // The result enters the continuation, which starts from the proposing row.
+  await countStoredToolResult({
+    generationId: args.item.generation_id,
+    toolId: proposed.tool_id,
+    action: proposed.action,
+  });
 
   return isPlainObject(rawResult) ? rawResult : { output: rawResult };
 };
