@@ -19,6 +19,10 @@ import * as fs from 'node:fs';
 
 import createDebug from 'debug';
 
+import {
+  type FormationTypeWriter,
+  parseFormationTypeWriter,
+} from './formationResourceTypeWriter';
 import type { SchemaFields, SchemaWithProperties } from './openapiSchemaFields';
 import {
   deriveSchemaFields,
@@ -80,6 +84,8 @@ export type FormationResourceTypeRegistration = {
    * Properties the engine must never persist. See {@link parseWriteOnlyProperties}.
    */
   writeOnlyProperties: ReadonlySet<string>;
+  /** What a write to it performs, asserted for the deployer before the handler is called. */
+  writer: FormationTypeWriter;
   /** The declared property schema, kept for the docs/plan surfaces. */
   schema: SchemaWithProperties;
   /** The field sets template validation is driven from. */
@@ -345,6 +351,13 @@ const parseEntry = (args: {
       schemaFields,
       source,
       at,
+    }),
+    writer: parseFormationTypeWriter({
+      value: entry.writer,
+      properties: schemaFields.allowedFields,
+      fail: (message) => {
+        return fail({ source, message: `${at}${message}` });
+      },
     }),
     schema,
     schemaFields,

@@ -2,7 +2,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { AgentAuthority } from './agentAuthority';
 import type { SenderCredential } from './assertionSender';
 import { assertGuardrailsExist } from './guardrails';
@@ -22,6 +21,7 @@ import { assertSecretRefsExist } from './secrets';
 import { assertToolSecretUseAllowed } from './secretUse';
 import { validateSoatActions } from './soatActionValidation';
 import type { ToolCallGuardrailMode } from './toolCallGuardrail';
+import { carriedActionsOfTool } from './toolCarriedActions';
 import { assertValidToolContextAllowlist } from './toolContext';
 import {
   type CallableToolDefinition,
@@ -38,6 +38,7 @@ import {
 } from './toolWriteValidation';
 import type { ToolCallAttribution } from './usageToolRecording';
 import type { WorkAuthority } from './workAuthority';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const log = createDebug('soat:tools');
 
@@ -215,14 +216,27 @@ export const validateToolDefinition = async (args: {
 };
 
 export const createTool = async (
-  args: CreateToolArgs & { isAllowed: IsAllowedFn }
+  args: CreateToolArgs & { writer: Writer }
 ): Promise<MappedTool> => {
   await assertToolSecretUseAllowed({
     tool: args,
     projectId: args.projectId,
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
   await validateToolDefinition({ definition: args, projectId: args.projectId });
+  await assertWriterHolds({
+    carrier: 'tools',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      actions: carriedActionsOfTool({
+        type: args.type ?? 'http',
+        mcp: args.mcp,
+        actions: args.actions,
+        pipeline: args.pipeline,
+      }),
+    },
+  });
   await assertGuardrailsExist({
     guardrailIds: args.guardrailIds,
     projectId: args.projectId,
@@ -326,17 +340,31 @@ const clearsMcpPins = (args: {
 };
 
 export const updateTool = async (
-  args: ToolUpdateArgs & { isAllowed: IsAllowedFn }
+  args: ToolUpdateArgs & { writer: Writer }
 ): Promise<MappedTool> => {
   const tool = await tools.getByPublicId(args);
 
   await assertToolSecretUseAllowed({
     tool: args,
     projectId: tool.projectId,
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
 
   await validateToolUpdate({ args, tool });
+  // The tool as it stands after the write, so an edit to any of its fields is checked.
+  await assertWriterHolds({
+    carrier: 'tools',
+    writer: args.writer,
+    projectId: tool.projectId,
+    carried: {
+      actions: carriedActionsOfTool({
+        type: args.type ?? tool.type,
+        mcp: args.mcp === undefined ? tool.mcp : args.mcp,
+        actions: args.actions === undefined ? tool.actions : args.actions,
+        pipeline: args.pipeline === undefined ? tool.pipeline : args.pipeline,
+      }),
+    },
+  });
   await assertGuardrailsExist({
     guardrailIds: args.guardrailIds,
     projectId: tool.projectId,

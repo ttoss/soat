@@ -1,0 +1,22 @@
+{
+  "modules": [
+    {
+      "module": "smoke-channels",
+      "resource_types": ["smoke_channel"],
+      "actions": [
+        {
+          "action": "smoke-channels:CreateSmokeChannel",
+          "description": "Create a smoke channel."
+        },
+        {
+          "action": "smoke-channels:UpdateSmokeChannel",
+          "description": "Update a smoke channel."
+        },
+        {
+          "action": "smoke-channels:DeleteSmokeChannel",
+          "description": "Delete a smoke channel."
+        }
+      ]
+    }
+  ]
+}

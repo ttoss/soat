@@ -132,6 +132,7 @@ services:
         --enable-source-maps packages/server/dist/server.mjs
     volumes:
       - ./mocks/formationResourceTypes.json:/formation-resource-types.json:ro
+      - ./mocks/iamRegistrations.json:/iam-registrations.json:ro
     depends_on:
       database:
         condition: service_healthy
@@ -176,6 +177,8 @@ services:
       # a malformed file would fail this container's start, which is the point.
       FORMATION_RESOURCE_TYPES_CONFIG: /formation-resource-types.json
       FORMATION_HANDLER_SECRET: smoke-formation-handler-secret
+      # Declares the actions `smoke_channel`'s `writer` names.
+      IAM_REGISTRATIONS_CONFIG: /iam-registrations.json
     healthcheck:
       test:
         - CMD

@@ -164,7 +164,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
 
   requireAuth(ctx);
   const result = await createTool({
-    isAllowed: ctx.authUser.isAllowed,
+    writer: ctx.authUser,
     projectId: Number(targetProjectId),
     name,
     type: parseStringOrUndefined(type),
@@ -304,7 +304,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
 
   requireAuth(ctx);
   const result = await updateTool({
-    isAllowed: ctx.authUser.isAllowed,
+    writer: ctx.authUser,
     projectIds,
     id: ctx.params.tool_id,
     name: parseStringOrUndefined(name),

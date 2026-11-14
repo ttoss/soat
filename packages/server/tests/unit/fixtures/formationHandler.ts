@@ -11,8 +11,19 @@ import { createServer, type RequestListener } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import type { FormationResourceTypeRegistration } from 'src/lib/formationResourceTypeConfig';
+import {
+  registerIamModules,
+  unregisterIamModules,
+} from 'src/lib/iamRegistrations';
 
 export const HANDLER_SECRET = 'handler-signing-secret';
+
+/** The IAM module the `test_channel` type's `writer` declares its actions in. */
+export const TEST_CHANNEL_ACTIONS = [
+  'test-channels:CreateTestChannel',
+  'test-channels:UpdateTestChannel',
+  'test-channels:DeleteTestChannel',
+];
 
 export type Recorded = {
   headers: Record<string, string | string[] | undefined>;
@@ -75,6 +86,21 @@ const buildRegistration = (args: {
     },
     capabilities: new Set(args.capabilities ?? []),
     writeOnlyProperties: new Set(args.writeOnlyProperties ?? []),
+    writer: {
+      resourceType: 'test_channel',
+      actions: {
+        create: 'test-channels:CreateTestChannel',
+        update: 'test-channels:UpdateTestChannel',
+        delete: 'test-channels:DeleteTestChannel',
+      },
+      carries: [
+        {
+          property: 'agent_id',
+          action: 'agents:CreateAgentGeneration',
+          resourceType: 'agent',
+        },
+      ],
+    },
     schema,
     schemaFields: {
       allowedFields: new Set(['name', 'kind', 'agent_id', 'config']),
@@ -150,7 +176,21 @@ export const startFakeFormationHandler =
 
     const { port } = server.address() as AddressInfo;
     handler.baseUrl = `http://127.0.0.1:${String(port)}`;
+    registerIamModules({
+      registrations: [
+        {
+          module: 'test-channels',
+          resourceTypes: new Set(['test_channel']),
+          actions: new Map(
+            TEST_CHANNEL_ACTIONS.map((action) => {
+              return [action, ''];
+            })
+          ),
+        },
+      ],
+    });
     handler.close = async () => {
+      unregisterIamModules({ modules: ['test-channels'] });
       await new Promise<void>((resolve) => {
         server.close(() => {
           return resolve();

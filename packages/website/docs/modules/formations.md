@@ -593,6 +593,16 @@ A registration declares:
 - **`capabilities`** — the **optional** operations the handler implements (below). `create`, `update` and `delete` are always required and never listed.
 - **`schema`** — JSON Schema for `properties`; the sole allowlist. An undeclared field is `VALIDATION_FAILED` naming the field; a missing `required` field fails a create.
 - **`write_only_properties`** — properties whose values are never stored. See [Credentials](#credentials-and-write-only-properties).
+- **`writer`** — required: what a write performs, asserted for the deployer before the handler is called. See [What a write performs](#what-a-write-performs).
+
+#### What a write performs
+
+The runtime authorizes a registered type's writes; the handler authorizes nothing. `writer` declares:
+
+- **`resource_type`**, and the **`create`**, **`update`** and **`delete`** actions: each request takes its action, on `srn:<project_id>:<resource_type>:*` for a create and on the resource's physical id otherwise.
+- **`carries`**: for each property naming a resource, the action it carries on it (`{ "property": "default.agent_id", "action": "agents:CreateAgentGeneration", "resource_type": "agent" }`). `[]` descends into a list (`tools[]`). Checked on the values after resolution, as sent to the handler; a value that is not an id is `VALIDATION_FAILED`.
+
+The deployer must hold all of them, else the resource fails with `ACTION_NOT_HELD` and the handler is never called. Every declared action must be one [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission) answers on its type (a built-in one, or one a [registered IAM module](./iam.md#deployment-registered-actions) declares), or the boot fails; a deployment's own routes ask `iam/check` the same actions from the same declaration.
 
 #### The handler protocol
 
@@ -692,6 +702,19 @@ The un-deleted id stays on the record as pending cleanup; the next deploy and th
       },
       "capabilities": ["validate", "read"],
       "write_only_properties": ["access_token"],
+      "writer": {
+        "resource_type": "channel",
+        "create": "channels:CreateChannel",
+        "update": "channels:UpdateChannel",
+        "delete": "channels:DeleteChannel",
+        "carries": [
+          {
+            "property": "agent_id",
+            "action": "agents:CreateAgentGeneration",
+            "resource_type": "agent"
+          }
+        ]
+      },
       "schema": {
         "type": "object",
         "properties": {
@@ -709,7 +732,7 @@ The un-deleted id stays on the record as pending cleanup; the next deploy and th
 
 The secret is referenced by variable **name**, never inlined, so the file carries nothing confidential. It is read **once, at boot**; changes take effect on the next restart.
 
-Every problem with the file is a **hard boot failure** naming the file and the offending entry: a built-in name without `overrides_builtin: true`, an `overrides_builtin` on a name that is not a built-in or that is not a boolean, a name that repeats within the file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that is unset or empty, a non-positive timeout, an unknown capability, a `write_only_properties` entry the schema does not declare, or a `schema` that is not an object schema.
+Every problem with the file is a **hard boot failure** naming the file and the offending entry: a built-in name without `overrides_builtin: true`, an `overrides_builtin` on a name that is not a built-in or that is not a boolean, a name that repeats within the file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that is unset or empty, a non-positive timeout, an unknown capability, a `write_only_properties` entry the schema does not declare, a missing or malformed `writer`, a `carries` property whose root the schema does not declare, a `writer` action `iam/check` does not answer on its type (IAM registrations load first), or a `schema` that is not an object schema.
 
 ## Examples
 

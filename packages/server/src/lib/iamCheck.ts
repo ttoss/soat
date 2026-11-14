@@ -35,6 +35,32 @@ const checkableResourceTypes = (
   };
 };
 
+/** Whether `iam/check` answers `action` on `resourceType`. */
+export const isCheckableOn = (args: {
+  action: string;
+  resourceType: string;
+}): boolean => {
+  return (
+    checkableResourceTypes(args.action)?.types.has(args.resourceType) ?? false
+  );
+};
+
+/**
+ * Throws naming the first declared action `iam/check` would not answer on its
+ * type: a declaration nothing can be granted would refuse every write.
+ */
+export const assertDeclaredActionsCheckable = (args: {
+  owner: string;
+  actions: ReadonlyArray<{ action: string; resourceType: string }>;
+}): void => {
+  for (const { action, resourceType } of args.actions) {
+    if (isCheckableOn({ action, resourceType })) continue;
+    throw new Error(
+      `${args.owner} declares ${action} on '${resourceType}', which is neither a built-in action on that type nor one a registered IAM module declares on it`
+    );
+  }
+};
+
 /**
  * Whether the caller's own policies allow a deployment-registered or built-in
  * action on an SRN, through the same `isAllowed` the
