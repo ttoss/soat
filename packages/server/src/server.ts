@@ -21,6 +21,7 @@ import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startPlaybookScheduler } from './lib/playbookCascade';
+import { applyServerTimeouts } from './lib/serverTimeouts';
 import { startTasksScheduler } from './lib/tasksScheduler';
 import { startTriggerScheduler } from './lib/triggerScheduler';
 import { backfillUsageRenames } from './lib/usageRenameBackfill';
@@ -160,9 +161,7 @@ const startServer = async () => {
     );
   });
 
-  // Disable the default 5-minute requestTimeout so long-running LLM
-  // generations (which can take many minutes) are not forcibly terminated.
-  server.requestTimeout = 0;
+  applyServerTimeouts({ server });
 };
 
 startServer();
