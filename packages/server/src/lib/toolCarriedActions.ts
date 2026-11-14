@@ -1,19 +1,22 @@
 /**
  * What a tool performs when called, as the writer rule asks it of whoever
  * writes the tool: a `builtin` tool its runtime actions; an `mcp` tool on a
- * registered MCP server what that server declares for each of its `actions`.
+ * registered MCP server what that server declares for each of its `actions`;
+ * a `pipeline` what each of its steps does.
  */
 import { DomainError } from '../errors';
 import { BUILT_IN_ACTION_RESOURCE_TYPES } from './iamActionResourceTypes';
 import { findMcpToolRegistration } from './mcpToolRegistrations';
+import { validatePipelineConfig } from './pipelineTools';
 import { resourceTypeOfKind } from './resourceScopes';
 import { soatTools } from './soatTools';
-import type { CarriedAction } from './writerRule';
+import { type CarriedAction, startOf } from './writerRule';
 
 export type CarriedTool = {
   type: string;
   mcp: object | null | undefined;
   actions: string[] | null | undefined;
+  pipeline?: object | null;
 };
 
 const builtinActions = (actions: string[]): CarriedAction[] => {
@@ -62,8 +65,28 @@ const registeredMcpActions = (args: {
   });
 };
 
+/** A pipeline performs what each step does: its inline tool's actions, or calling the tool it names. */
+const pipelineActions = (
+  pipeline: object | null | undefined,
+  carriedOf: (tool: CarriedTool) => CarriedAction[]
+): CarriedAction[] => {
+  return validatePipelineConfig(pipeline).steps.flatMap((step) => {
+    if (step.tool) {
+      return carriedOf({
+        type: step.tool.type ?? 'http',
+        mcp: step.tool.mcp,
+        actions: step.tool.actions,
+        pipeline: step.tool.pipeline,
+      });
+    }
+    return step.toolId ? [startOf({ type: 'tool', id: step.toolId })] : [];
+  });
+};
+
 export const carriedActionsOfTool = (tool: CarriedTool): CarriedAction[] => {
   if (tool.type === 'builtin') return builtinActions(tool.actions ?? []);
+  if (tool.type === 'pipeline')
+    return pipelineActions(tool.pipeline, carriedActionsOfTool);
   if (tool.type !== 'mcp') return [];
   const url = mcpUrlOf(tool.mcp);
   return url ? registeredMcpActions({ url, actions: tool.actions }) : [];

@@ -123,6 +123,8 @@ describe('Evaluations', () => {
         'agents:UpdateAgent',
         'generations:PurgeGenerationContent',
         'tools:CreateTool',
+        // The `builtin` tool a tool scorer calls.
+        'knowledge:SearchKnowledge',
         'tools:DeleteTool',
       ],
       createOtherProject: true,

@@ -26,6 +26,8 @@ const ACTIONS = [
   'tools:UpdateTool',
   'tools:DeleteTool',
   'tools:CallTool',
+  // The `builtin` tools the cases write.
+  'tools:ListTools',
   'agents:CreateAgentGeneration',
   'usage:ListEvents',
 ];

@@ -119,6 +119,34 @@ describe('a builtin tool', () => {
   });
 });
 
+describe('a pipeline tool', () => {
+  const pipeline = (actions: string[]) => {
+    return {
+      type: 'pipeline',
+      pipeline: {
+        steps: [
+          {
+            id: 'read',
+            tool: { name: 'inline', type: 'builtin', actions },
+            action: actions[0],
+            input: {},
+          },
+        ],
+      },
+    };
+  };
+
+  test("is written by a caller holding each step's actions", async () => {
+    const res = await createTool(pipeline(['list-agents']));
+    expect(res.status).toBe(201);
+  });
+
+  test("is refused to a caller missing an inline step's action", async () => {
+    const res = await createTool(pipeline(['list-secrets']));
+    expectNotHeld(res, 'secrets:ListSecrets');
+  });
+});
+
 describe('an mcp tool on a registered server', () => {
   test('is written by a caller holding what each of its actions declares', async () => {
     const res = await createTool(serviceTool(['list-agents']));

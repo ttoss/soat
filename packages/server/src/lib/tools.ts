@@ -233,6 +233,7 @@ export const createTool = async (
         type: args.type ?? 'http',
         mcp: args.mcp,
         actions: args.actions,
+        pipeline: args.pipeline,
       }),
     },
   });
@@ -360,6 +361,7 @@ export const updateTool = async (
         type: args.type ?? tool.type,
         mcp: args.mcp === undefined ? tool.mcp : args.mcp,
         actions: args.actions === undefined ? tool.actions : args.actions,
+        pipeline: args.pipeline === undefined ? tool.pipeline : args.pipeline,
       }),
     },
   });

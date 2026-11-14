@@ -422,6 +422,7 @@ Whoever creates or edits a tool holds what calling it performs ([the writer rule
 
 - **`builtin`**: each action in `actions`, on its whole resource type (`list-agents` → `agents:ListAgents` on `srn:<project_id>:agent:*`).
 - **`mcp`** on a [registered MCP server](./iam.md#registered-mcp-servers): what the server declares for each of `actions`, which is required and may name only tools it declares (`400 VALIDATION_FAILED` otherwise).
+- **`pipeline`**: what each step does: its inline tool's, by these rules, or `tools:CallTool` on the tool a `tool_id` step names.
 - Any other tool performs no runtime action.
 
 A missing action is `403 ACTION_NOT_HELD` with `meta.action` and `meta.resource`.
