@@ -16,6 +16,7 @@ import { authenticatedTestClient } from '../../testClient';
  */
 describe('every metadata ingress refuses a non-object bag', () => {
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let conversationId: string;
   let documentId: string;
@@ -45,6 +46,7 @@ describe('every metadata ingress refuses a non-object bag', () => {
       ],
     });
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
 
     const conversation = await client()
@@ -70,12 +72,15 @@ describe('every metadata ingress refuses a non-object bag', () => {
       });
     toolId = tool.body.id;
 
-    const rule = await client().post('/api/v1/ingestion-rules').send({
-      project_id: projectId,
-      content_type_glob: 'text/*',
-      tool_id: toolId,
-      action: 'list-tools',
-    });
+    const rule = await client()
+      .post('/api/v1/ingestion-rules')
+      .send({
+        policy_ids: [userPolicyId],
+        project_id: projectId,
+        content_type_glob: 'text/*',
+        tool_id: toolId,
+        action: 'list-tools',
+      });
     ingestionRuleId = rule.body.id;
 
     const formation = await client()
@@ -145,6 +150,7 @@ describe('every metadata ingress refuses a non-object bag', () => {
       return client()
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           content_type_glob:
             typeof metadata === 'string'

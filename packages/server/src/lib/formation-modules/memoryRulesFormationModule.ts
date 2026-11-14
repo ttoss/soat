@@ -10,6 +10,7 @@ import {
   validateMemoryRule,
 } from '../memoryRules';
 import {
+  toNullableArray,
   toNullableObject,
   toNullableString,
 } from '../resource-inputs/normalizers';
@@ -66,6 +67,7 @@ const writeArgs = (properties: Record<string, unknown>) => {
     model: toNullableString(properties.model),
     enabled:
       typeof properties.enabled === 'boolean' ? properties.enabled : undefined,
+    policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
   };
 };
 

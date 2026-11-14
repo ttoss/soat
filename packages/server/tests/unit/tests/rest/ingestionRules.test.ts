@@ -9,6 +9,7 @@ import {
 import * as pdfModule from 'src/lib/pdf';
 import * as toolsModule from 'src/lib/tools';
 
+import { testGrant } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { storageDir } from '../../setupTests';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -86,6 +87,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/png',
           tool_id: httpToolId,
@@ -106,6 +108,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/jpeg',
           agent_id: agentId,
@@ -120,6 +123,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'audio/wav',
           tool_id: httpToolId,
@@ -145,6 +149,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/gif',
           tool_id: httpToolId,
@@ -158,7 +163,11 @@ describe('IngestionRules', () => {
     test('rejects a rule with neither tool_id nor agent_id (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
-        .send({ project_id: projectId, content_type_glob: 'image/bmp' });
+        .send({
+          policy_ids: await testGrant({ token: adminToken }),
+          project_id: projectId,
+          content_type_glob: 'image/bmp',
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
@@ -168,6 +177,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/tiff',
           tool_id: httpToolId,
@@ -182,7 +192,11 @@ describe('IngestionRules', () => {
     test('rejects a create body missing content_type_glob (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
-        .send({ project_id: projectId, tool_id: httpToolId });
+        .send({
+          policy_ids: await testGrant({ token: adminToken }),
+          project_id: projectId,
+          tool_id: httpToolId,
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -195,6 +209,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/webp',
           tool_id: httpToolId,
@@ -209,6 +224,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/avif',
           tool_id: httpToolId,
@@ -223,6 +239,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/heic',
           tool_id: httpToolId,
@@ -237,6 +254,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/webp',
           tool_id: 'tol_does_not_exist',
@@ -250,6 +268,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/png',
           tool_id: httpToolId,
@@ -272,6 +291,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(noPermToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'audio/wav',
           tool_id: httpToolId,
@@ -287,6 +307,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'application/pdf',
           agent_id: agentId,
@@ -361,6 +382,7 @@ describe('IngestionRules', () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'text/x-switch-converter',
           tool_id: httpToolId,
@@ -442,6 +464,7 @@ describe('IngestionRules', () => {
       await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'audio/*',
           tool_id: httpToolId,
@@ -453,6 +476,7 @@ describe('IngestionRules', () => {
       await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/*',
           agent_id: agentId,
@@ -461,6 +485,7 @@ describe('IngestionRules', () => {
       const pdfRule = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'application/pdf',
           agent_id: agentId,
@@ -1143,6 +1168,7 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'text/x-auth',
           tool_id: httpToolId,
@@ -1311,6 +1337,7 @@ describe('IngestionRules', () => {
       const ruleRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'text/x-cross-project',
           tool_id: httpToolId,

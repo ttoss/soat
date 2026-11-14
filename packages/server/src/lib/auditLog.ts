@@ -11,7 +11,7 @@ import { emitResourceEvent } from './eventBus';
 import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
 import type { OnBehalfOf } from './onBehalfOf';
 import { type Page, type PageBounds, paginatedList } from './pagination';
-import type { PrincipalType } from './principals';
+import type { ActingPrincipalType } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { timeRangeWhere } from './timeRange';
@@ -26,10 +26,7 @@ const log = createDebug('soat:audit');
  */
 const AUDIT_ENTRY_CREATED_EVENT = 'audit_entries.created';
 
-export type AuditPrincipalType = Extract<
-  PrincipalType,
-  'user' | 'api_key' | 'trigger'
->;
+export type AuditPrincipalType = ActingPrincipalType;
 
 /** One authorization decision recorded during a request. */
 export type AuditCheck = {

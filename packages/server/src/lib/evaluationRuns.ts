@@ -28,12 +28,16 @@ import {
   TERMINAL_EVAL_RUN_STATUSES,
 } from './evaluationRunReads';
 import { getEvalRow } from './evaluations';
-import { validateScorerReferences } from './evaluationScorerReferences';
+import {
+  evalStarts,
+  validateScorerReferences,
+} from './evaluationScorerReferences';
 import { scorerList, validateScorers } from './evaluationScorers';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
 import { parseActiveRelease } from './releaseAssignment';
+import { resourceWorkAuthority } from './resourceWork';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import { storedAuthority, type WorkAuthority } from './workAuthority';
 
@@ -341,7 +345,10 @@ export const startEvalRun = async (args: {
    * since the worker driving a queued run has no request to read it from.
    */
   toolContext?: Record<string, string>;
-  /** Stored on the run: its generations and scorers run under it. */
+  /**
+   * Who started the run. Stored on the run held to the eval's `policy_ids`:
+   * its generations and scorers run under that.
+   */
   authority: WorkAuthority | null;
 }): Promise<ReturnType<typeof mapEvalRun>> => {
   const wait = parseWait(args.wait);
@@ -358,6 +365,16 @@ export const startEvalRun = async (args: {
   await assertProjectAcceptsWork({
     projectId: plan.evaluation.projectId as number,
   });
+  const authority = await resourceWorkAuthority({
+    carrier: 'evals',
+    id: plan.evaluation.publicId as string,
+    projectId: plan.evaluation.projectId as number,
+    startedBy: args.authority,
+    starts: evalStarts({
+      agentId: plan.agent.publicId as string,
+      scorers: plan.evaluation.scorers,
+    }),
+  });
 
   const run = await db.EvalRun.create({
     evalId: plan.evaluation.id as number,
@@ -371,7 +388,7 @@ export const startEvalRun = async (args: {
     metadata: args.metadata ?? null,
     toolContext: toolContext ?? null,
     authority: await storedAuthority({
-      authority: args.authority,
+      authority,
       projectId: plan.evaluation.projectId as number,
     }),
     itemCount: plan.items.length,
@@ -392,7 +409,7 @@ export const startEvalRun = async (args: {
       plan,
       run,
       toolContext,
-      authority: args.authority,
+      authority,
     });
   } else {
     await enqueueEvalItemTasks({

@@ -26,7 +26,7 @@ const START_ACTIONS = [
  */
 test('only startActions.ts maps a delegated start to its action', () => {
   const modules = [
-    'lib/playbookAuthor.ts',
+    'lib/playbookStarts.ts',
     'lib/triggerValidation.ts',
     'lib/triggerDispatch.ts',
     'rest/v1/triggers.ts',

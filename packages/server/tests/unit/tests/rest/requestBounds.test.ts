@@ -5,7 +5,7 @@ import {
   MAX_EMBEDDINGS_INPUTS,
 } from 'src/lib/requestBounds';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Request bounds', () => {
@@ -105,6 +105,7 @@ describe('Request bounds', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: `application/${'*a'.repeat(12)}`,
           tool_id: toolId,

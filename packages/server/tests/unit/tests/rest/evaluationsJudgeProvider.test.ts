@@ -1,6 +1,6 @@
 import { db } from 'src/db';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import {
   startStubChatProvider,
   type StubChatProvider,
@@ -115,6 +115,7 @@ describe('POST /api/v1/evals/:eval_id/runs — llm_judge provider resolution', (
     const evalRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/evals')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: projectId,
         name: `judge-eval-${Date.now()}`,
         agent_id: agentId,

@@ -826,8 +826,13 @@ paths:
                 - agent_id
                 - dataset_id
                 - scorers
+                - policy_ids
               additionalProperties: false
               properties:
+                policy_ids:
+                  description: The policies every run of the eval acts under.
+                  allOf:
+                    - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
                 project_id:
                   x-soat-ref: projects
                   type: string
@@ -988,6 +993,10 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                policy_ids:
+                  description: Replaces the policies every run of the eval acts under.
+                  allOf:
+                    - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
                 name:
                   type: string
                   example: billing-regression-suite
@@ -1925,6 +1934,16 @@ components:
     Eval:
       type: object
       properties:
+        policy_ids:
+          description: >-
+            The policies every run of the eval acts under. Empty for
+            one written without any, which does not run until a
+            write gives it one.
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6B']
         id:
           type: string
           example: eval_V1StGXR8Z5jdHi6B

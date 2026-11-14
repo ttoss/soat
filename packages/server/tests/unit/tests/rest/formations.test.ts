@@ -4955,6 +4955,7 @@ resources:
           Regression: {
             type: 'eval',
             properties: {
+              policy_ids: [userPolicyId],
               name: `formation-eval-${passThreshold}`,
               agent_id: evalAgentId,
               dataset_id: { ref: 'Suite' },
@@ -5090,6 +5091,7 @@ resources:
               Regression: {
                 type: 'eval',
                 properties: {
+                  policy_ids: [userPolicyId],
                   name: 'formation-eval-0.8',
                   agent_id: evalAgentId,
                   dataset_id: { ref: 'Suite' },

@@ -554,6 +554,16 @@ describe('Policies', () => {
         api_key_sample: [],
         users: 0,
         user_sample: [],
+        evals: 0,
+        eval_sample: [],
+        deciders: 0,
+        decider_sample: [],
+        ingestion_rules: 0,
+        ingestion_rule_sample: [],
+        memory_rules: 0,
+        memory_rule_sample: [],
+        playbooks: 0,
+        playbook_sample: [],
       });
 
       const other = await client.post('/api/v1/policies').send(sendDoc());

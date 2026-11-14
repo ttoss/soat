@@ -41,6 +41,7 @@ const sourceFiles = (dir: string): string[] => {
 describe('validation problems contract', () => {
   let token: string;
   let projectId: string;
+  let policyId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -54,6 +55,7 @@ describe('validation problems contract', () => {
     });
     token = setup.userToken;
     projectId = setup.projectId;
+    policyId = setup.policyId;
   });
 
   describe('POST /api/v1/orchestrations', () => {
@@ -146,6 +148,7 @@ describe('validation problems contract', () => {
       const res = await authenticatedTestClient(token)
         .post('/api/v1/playbooks')
         .send({
+          policy_ids: [policyId],
           project_id: projectId,
           name: 'two problems',
           definition: {

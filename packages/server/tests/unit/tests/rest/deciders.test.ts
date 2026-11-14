@@ -1,4 +1,4 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const DECIDER_ACTIONS = [
@@ -59,6 +59,8 @@ const TWO_LEVELS = [
 
 describe('Deciders', () => {
   let adminToken: string;
+  let adminGrant: string[];
+  let userPolicyId: string;
   let userToken: string;
   let projectId: string;
   let otherProjectId: string;
@@ -91,6 +93,7 @@ describe('Deciders', () => {
     return authenticatedTestClient(token)
       .post('/api/v1/deciders')
       .send({
+        policy_ids: token === userToken ? [userPolicyId] : adminGrant,
         project_id: project,
         name: unique('triage'),
         agent_id: agentId,
@@ -135,6 +138,8 @@ describe('Deciders', () => {
       createNoPermUser: true,
     });
     adminToken = setup.adminToken;
+    adminGrant = await testGrant({ token: adminToken });
+    userPolicyId = setup.policyId;
     userToken = setup.userToken;
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId!;

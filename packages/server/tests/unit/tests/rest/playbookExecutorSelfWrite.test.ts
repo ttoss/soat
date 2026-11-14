@@ -7,6 +7,7 @@ import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -247,6 +248,7 @@ describe("Playbook writes from a case's own tool and orchestration executors", (
       const res = await admin()
         .post('/api/v1/playbooks')
         .send({
+          policy_ids: await testGrant({ token: turn.adminToken }),
           project_id: turn.projectId,
           name: turn.unique('playbook'),
           definition: definition(executor),

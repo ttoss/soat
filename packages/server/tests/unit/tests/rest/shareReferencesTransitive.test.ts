@@ -1,4 +1,4 @@
-import { createAllowAllPolicy } from '../../fixtures/bootstrap';
+import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -154,6 +154,7 @@ describe('Share references through local resources', () => {
       ],
     });
     const playbook = await createIn(granteeId, '/api/v1/playbooks', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'runs-the-orchestration',
       definition: {
         nodes: [
@@ -172,12 +173,14 @@ describe('Share references through local resources', () => {
       name: 'reach-dataset',
     });
     const evaluation = await createIn(granteeId, '/api/v1/evals', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'evaluates-the-agent',
       agent_id: agent,
       dataset_id: dataset,
       scorers: [{ type: 'exact_match' }],
     });
     const decider = await createIn(granteeId, '/api/v1/deciders', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'calls-the-wrapper',
       tool_id: pipeline,
       questions: [
@@ -202,6 +205,7 @@ describe('Share references through local resources', () => {
 
   test('lists a playbook naming a shared agent', async () => {
     const playbook = await createIn(granteeId, '/api/v1/playbooks', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'asks-the-shared-agent',
       definition: {
         nodes: [

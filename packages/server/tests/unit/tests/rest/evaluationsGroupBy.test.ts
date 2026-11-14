@@ -1,4 +1,4 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -13,6 +13,8 @@ type Message = { role: string; content: string };
 
 describe('Evaluations — group_by', () => {
   let adminToken: string;
+  let adminGrant: string[];
+  let userPolicyId: string;
   let userToken: string;
   let noPermToken: string;
   let projectId: string;
@@ -38,6 +40,7 @@ describe('Evaluations — group_by', () => {
     return authenticatedTestClient(token)
       .post('/api/v1/evals')
       .send({
+        policy_ids: token === userToken ? [userPolicyId] : adminGrant,
         project_id: projectId,
         name: unique('grouped-eval'),
         agent_id: agentId,
@@ -114,6 +117,8 @@ describe('Evaluations — group_by', () => {
       ],
     });
     adminToken = setup.adminToken;
+    adminGrant = await testGrant({ token: adminToken });
+    userPolicyId = setup.policyId;
     userToken = setup.userToken;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;

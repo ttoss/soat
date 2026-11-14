@@ -455,13 +455,20 @@ No item carries an `expected_output`: every scorer here grades the object, not a
 
 An item passes only when all three pass ([Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics)). The `tool` scorer's own `passed` decides its verdict, so it needs no `pass_threshold`. `group_by: kind` rolls every run up per `metadata.kind` too ([Evaluations — Grouped aggregates](/docs/modules/evaluations#grouped-aggregates)).
 
+Each run starts the agent and calls the scorer tool under the eval's `policy_ids` ([Evaluations — Run authority](/docs/modules/evaluations#run-authority)); the policy below allows those two actions.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+POLICY_ID=$(soat create-policy \
+  --name "refund-triage-run" \
+  --document '{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration","tools:CallTool"]}]}' | jq -r '.id')
+
 EVAL_ID=$(soat create-eval \
   --project-id "$PROJECT_ID" \
   --name "refund-triage" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
   --scorers '[{"type":"output_schema","schema":{"type":"object","properties":{"refund_amount":{"type":"number","minimum":0}}}},{"type":"json_logic","expression":{"==":[{"var":"object.category"},{"var":"item.metadata.expected_category"}]}},{"type":"tool","name":"refund-policy","tool_id":"'"$SCORER_TOOL_ID"'"}]' \
@@ -475,10 +482,20 @@ soat get-eval --eval-id "$EVAL_ID" | jq '{scorers: .scorers | map(.name // .type
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: policy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'refund-triage-run',
+    document: {
+      statement: [{ effect: 'Allow', action: ['agents:CreateAgentGeneration', 'tools:CallTool'] }],
+    },
+  },
+});
+
 const { data: evaluation } = await adminSoat.evaluations.createEval({
   body: {
     project_id: project.id,
     name: 'refund-triage',
+    policy_ids: [policy.id],
     agent_id: agent.id,
     dataset_id: dataset.id,
     scorers: [
@@ -507,9 +524,13 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
 <TabItem value="curl" label="curl">
 
 ```bash
+POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"refund-triage-run","document":{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration","tools:CallTool"]}]}}' | jq -r '.id')
+
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"refund-triage\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"output_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"refund_amount\":{\"type\":\"number\",\"minimum\":0}}}},{\"type\":\"json_logic\",\"expression\":{\"==\":[{\"var\":\"object.category\"},{\"var\":\"item.metadata.expected_category\"}]}},{\"type\":\"tool\",\"name\":\"refund-policy\",\"tool_id\":\"$SCORER_TOOL_ID\"}],\"pass_threshold\":0.75,\"group_by\":\"kind\"}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"refund-triage\",\"policy_ids\":[\"$POLICY_ID\"],\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"output_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"refund_amount\":{\"type\":\"number\",\"minimum\":0}}}},{\"type\":\"json_logic\",\"expression\":{\"==\":[{\"var\":\"object.category\"},{\"var\":\"item.metadata.expected_category\"}]}},{\"type\":\"tool\",\"name\":\"refund-policy\",\"tool_id\":\"$SCORER_TOOL_ID\"}],\"pass_threshold\":0.75,\"group_by\":\"kind\"}" | jq -r '.id')
 ```
 
 </TabItem>

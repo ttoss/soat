@@ -54,6 +54,7 @@ type FormationResource = {
 describe('Formations — decider resources', () => {
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let providerId: string;
   let seq = 0;
@@ -86,6 +87,7 @@ describe('Formations — decider resources', () => {
     return {
       type: 'decider',
       properties: {
+        policy_ids: [userPolicyId],
         name: unique('triage'),
         questions: QUESTIONS,
         ...backend,
@@ -135,6 +137,7 @@ describe('Formations — decider resources', () => {
     });
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
 
     const providerRes = await authenticatedTestClient(adminToken)
@@ -196,7 +199,11 @@ describe('Formations — decider resources', () => {
         Judge: agentResource(),
         Triage: {
           type: 'decider',
-          properties: { name: 'triage', agent_id: { ref: 'Judge' } },
+          properties: {
+            policy_ids: [userPolicyId],
+            name: 'triage',
+            agent_id: { ref: 'Judge' },
+          },
         },
       });
 
@@ -215,6 +222,7 @@ describe('Formations — decider resources', () => {
         Triage: {
           type: 'decider',
           properties: {
+            policy_ids: [userPolicyId],
             name: 'triage',
             agent_id: { ref: 'Judge' },
             questions: [{ ...ROUTE, weight: 2 }],
@@ -232,6 +240,7 @@ describe('Formations — decider resources', () => {
         Triage: {
           type: 'decider',
           properties: {
+            policy_ids: [userPolicyId],
             name: 'triage',
             agent_id: { ref: 'Judge' },
             questions: [
@@ -259,6 +268,7 @@ describe('Formations — decider resources', () => {
         Triage: {
           type: 'decider',
           properties: {
+            policy_ids: [userPolicyId],
             name: 'triage',
             agent_id: { ref: 'Judge' },
             questions: { route: ROUTE },
@@ -426,6 +436,7 @@ describe('Formations — decider resources', () => {
               Triage: {
                 type: 'decider',
                 properties: {
+                  policy_ids: [userPolicyId],
                   name: triage.properties.name,
                   questions: QUESTIONS,
                   tool_id: { ref: 'Engine' },
@@ -481,6 +492,7 @@ describe('Formations — decider resources', () => {
         const outside = await authenticatedTestClient(userToken)
           .post('/api/v1/deciders')
           .send({
+            policy_ids: [userPolicyId],
             project_id: projectId,
             name: unique('outside'),
             questions: QUESTIONS,

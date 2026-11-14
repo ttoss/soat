@@ -814,14 +814,21 @@ An empty list means the model did not call the tool; Step 11 removes that depend
 The `write_memory` tool is a *capability grant*: the agent may write, if it decides to. What the
 store **accepts** from a finished turn is the store's own policy — a
 [memory rule](/docs/modules/memories#memory-rules). Create one on the store, selecting this
-agent's turns, with no handler so the built-in extractor runs:
+agent's turns, with no handler so the built-in extractor runs. Every rule carries `policy_ids`,
+the grant a [handler](/docs/modules/memories#handlers) runs under; this one allows writing
+memories and nothing else:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+RULE_POLICY_ID=$(soat create-policy \
+  --name "memory-rule-grant" \
+  --document '{"statement":[{"effect":"Allow","action":["memories:CreateMemory"]}]}' | jq -r '.id')
+
 MEMORY_RULE_ID=$(soat create-memory-rule \
   --memory-store-id "$MEMORY_STORE_ID" \
+  --policy-ids '["'"$RULE_POLICY_ID"'"]' \
   --on generations.completed \
   --source-agent-ids '["'"$AGENT_ID"'"]' \
   | jq -r '.id')
@@ -832,9 +839,19 @@ echo "$MEMORY_RULE_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: rulePolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'memory-rule-grant',
+    document: {
+      statement: [{ effect: 'Allow', action: ['memories:CreateMemory'] }],
+    },
+  },
+});
+
 const { data: rule } = await adminSoat.memoryRules.createMemoryRule({
   body: {
     memory_store_id: MEMORY_STORE_ID,
+    policy_ids: [rulePolicy.id],
     on: 'generations.completed',
     source_agent_ids: [AGENT_ID],
   },
@@ -846,10 +863,15 @@ const MEMORY_RULE_ID = rule.id;
 <TabItem value="curl" label="curl">
 
 ```bash
+RULE_POLICY_ID=$(curl -s -X POST "$SOAT_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"memory-rule-grant","document":{"statement":[{"effect":"Allow","action":["memories:CreateMemory"]}]}}' | jq -r '.id')
+
 MEMORY_RULE_ID=$(curl -s -X POST "$SOAT_URL/api/v1/memory-rules" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"memory_store_id\":\"$MEMORY_STORE_ID\",\"on\":\"generations.completed\",\"source_agent_ids\":[\"$AGENT_ID\"]}" \
+  -d "{\"memory_store_id\":\"$MEMORY_STORE_ID\",\"policy_ids\":[\"$RULE_POLICY_ID\"],\"on\":\"generations.completed\",\"source_agent_ids\":[\"$AGENT_ID\"]}" \
   | jq -r '.id')
 echo "$MEMORY_RULE_ID"
 ```

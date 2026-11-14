@@ -2,8 +2,10 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
+  createProjectPolicy,
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
@@ -119,16 +121,18 @@ describe('Playbook executions', () => {
     return res.body.id as string;
   };
 
-  /** A case on a fresh playbook, written by `token` (the author). */
+  /** A case on a fresh playbook, written by `token` under `policyIds`. */
   const newCase = async (args: {
     definition: object;
     token?: string;
+    policyIds?: string[];
   }): Promise<string> => {
     seq += 1;
     const token = args.token ?? adminToken;
     const playbook = await authenticatedTestClient(token)
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: args.policyIds ?? (await testGrant({ token })),
         project_id: projectId,
         name: `exec-${seq}`,
         definition: args.definition,
@@ -278,6 +282,7 @@ describe('Playbook executions', () => {
       name: 'exec-agent',
     });
     deciderId = await create('/api/v1/deciders', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'exec-decider',
       tool_id: await httpTool('/decide'),
       questions: [
@@ -308,6 +313,7 @@ describe('Playbook executions', () => {
       edges: [],
     });
     misdeciderId = await create('/api/v1/deciders', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'exec-misdecider',
       tool_id: await httpTool('/misdecide'),
       questions: [
@@ -551,22 +557,44 @@ describe('Playbook executions', () => {
       });
     });
 
-    test('runs as the author, and fails once the author may no longer start it', async () => {
-      const authorToken = await createScopedPrincipal({
+    test('keeps running under the version grant after its writer is deleted', async () => {
+      const writerToken = await createScopedPrincipal({
         adminToken,
         projectId,
-        username: 'pbkauthorrevoked',
+        username: 'pbkwritergone',
         actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
+      });
+      const grantId = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['tools:CallTool'],
       });
       const caseId = await newCase({
         definition: runsOnAmount({ type: 'tool', id: constantToolId }),
-        token: authorToken,
+        token: writerToken,
+        policyIds: [grantId],
       });
       const me =
-        await authenticatedTestClient(authorToken).get('/api/v1/users/me');
-      await asAdmin()
-        .put(`/api/v1/users/${me.body.id}/policies`)
-        .send({ policy_ids: [] });
+        await authenticatedTestClient(writerToken).get('/api/v1/users/me');
+      expect(
+        (await asAdmin().delete(`/api/v1/users/${me.body.id}`)).status
+      ).toBe(204);
+
+      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
+
+      expect((await executionsOf(caseId))[0].status).toBe('completed');
+    });
+
+    test('cannot start an executor its version grant does not allow', async () => {
+      const grantId = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['playbooks:GetPlaybook'],
+      });
+      const caseId = await newCase({
+        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
+        policyIds: [grantId],
+      });
 
       await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
@@ -577,33 +605,6 @@ describe('Playbook executions', () => {
       const res = await run(caseId, 'pricing', { wait: true }, adminToken);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
-    });
-
-    test('fails when the author no longer exists', async () => {
-      const authorToken = await createScopedPrincipal({
-        adminToken,
-        projectId,
-        username: 'pbkauthorgone',
-        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
-      });
-      const caseId = await newCase({
-        definition: runsOnAmount({ type: 'tool', id: constantToolId }),
-        token: authorToken,
-      });
-      const me =
-        await authenticatedTestClient(authorToken).get('/api/v1/users/me');
-      expect(
-        (await asAdmin().delete(`/api/v1/users/${me.body.id}`)).status
-      ).toBe(204);
-
-      await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
-
-      expect((await executionsOf(caseId))[0].error.code).toBe(
-        'WORK_AUTHORITY_MISSING'
-      );
-      const res = await run(caseId, 'pricing', { wait: true }, adminToken);
-      expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe('WORK_AUTHORITY_MISSING');
     });
   });
 

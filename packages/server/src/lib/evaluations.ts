@@ -52,6 +52,7 @@ export const mapEval = (evaluation: EvalRow) => {
         ? null
         : Number(evaluation.passThreshold),
     group_by: evaluation.groupBy,
+    policy_ids: evaluation.policyIds ?? [],
     created_at: evaluation.createdAt,
     updated_at: evaluation.updatedAt,
   };
@@ -143,6 +144,7 @@ export const createEval = async (args: {
   scorers: unknown;
   passThreshold?: unknown;
   groupBy?: unknown;
+  policyIds: string[] | null | undefined;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   const name = requireName(args.name);
@@ -179,6 +181,7 @@ export const createEval = async (args: {
     writer: args.writer,
     projectId: args.projectId,
     carried: {
+      policyIds: args.policyIds,
       actions: evalStarts({ agentId: agentPublicId, scorers: args.scorers }),
     },
   });
@@ -198,6 +201,7 @@ export const createEval = async (args: {
           ? null
           : String(args.passThreshold),
       groupBy: args.groupBy ?? null,
+      policyIds: args.policyIds,
     });
   } catch (error) {
     throw rethrowAsConflict(
@@ -293,6 +297,7 @@ const assertWriterStartsUpdatedEval = (args: {
   writer: Writer;
   agentId?: unknown;
   scorers?: unknown;
+  policyIds?: string[] | null;
 }): Promise<unknown> => {
   const { evaluation } = args;
   return assertWriterHolds({
@@ -300,6 +305,8 @@ const assertWriterStartsUpdatedEval = (args: {
     writer: args.writer,
     projectId: evaluation.projectId as number,
     carried: {
+      policyIds:
+        args.policyIds === undefined ? evaluation.policyIds : args.policyIds,
       actions: evalStarts({
         agentId:
           args.agentId === undefined
@@ -320,6 +327,7 @@ export const updateEval = async (args: {
   scorers?: unknown;
   passThreshold?: unknown;
   groupBy?: unknown;
+  policyIds?: string[] | null;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   log('updateEval: id=%s', args.id);
@@ -358,6 +366,7 @@ export const updateEval = async (args: {
   }
 
   await assertWriterStartsUpdatedEval({ ...args, evaluation });
+  if (args.policyIds !== undefined) updates.policyIds = args.policyIds;
 
   if (args.passThreshold !== undefined) {
     assertValid(validatePassThreshold(args.passThreshold));

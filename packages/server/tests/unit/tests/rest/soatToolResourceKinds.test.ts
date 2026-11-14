@@ -2,6 +2,7 @@ import { db } from 'src/db';
 import { createGenerationRecord } from 'src/lib/generations';
 import { saveTrace } from 'src/lib/traces';
 
+import { testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatRequest,
   startChatCompletionStub,
@@ -150,6 +151,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       name: 'kinds-dataset',
     });
     const deciderId = await create('/api/v1/deciders', {
+      policy_ids: await testGrant({ token: adminToken }),
       project_id: projectId,
       name: 'kinds-decider',
       agent_id: agentId,
@@ -158,6 +160,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       ],
     });
     const playbookId = await create('/api/v1/playbooks', {
+      policy_ids: await testGrant({ token: adminToken }),
       project_id: projectId,
       name: 'kinds-playbook',
       definition: {
@@ -221,6 +224,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       content: 'A fact the kinds test reads back.',
     });
     const ruleId = await create('/api/v1/memory-rules', {
+      policy_ids: await testGrant({ token: adminToken }),
       memory_store_id: storeId,
       on: 'generations.completed',
     });
@@ -316,6 +320,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
         action: 'get-eval',
         from: 'eval_id',
         realId: await create('/api/v1/evals', {
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           name: 'kinds-eval',
           agent_id: agentId,
@@ -347,6 +352,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
         action: 'get-ingestion-rule',
         from: 'ingestion_rule_id',
         realId: await create('/api/v1/ingestion-rules', {
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: 'image/png',
           tool_id: toolId,

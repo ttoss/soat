@@ -1,12 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import {
-  assertExecutorStartable,
-  type PlaybookRunAs,
-  resolvePlaybookRunAs,
-  versionAuthority,
-} from './playbookAuthor';
+import { authUserOfWork } from '../middleware/auth';
 import {
   caseDefinition,
   caseNodeStates,
@@ -15,31 +10,48 @@ import {
 } from './playbookCases';
 import type { PlaybookExecutor } from './playbookDefinition';
 import { settleExecution, settleFromOutcome } from './playbookExecutionSettle';
-import { startExecutor } from './playbookExecutors';
+import { type ExecutorRunAs, startExecutor } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
+import { assertExecutorStartable } from './playbookStarts';
 import { samePlaybookBasis } from './playbookState';
-import { parseWorkAuthority, type WorkAuthority } from './workAuthority';
+import { resourceWorkAuthority } from './resourceWork';
+import {
+  forWork,
+  parseWorkAuthority,
+  requireWorkAuthority,
+  type WorkAuthority,
+  workAuthorityMissing,
+} from './workAuthority';
 
 const log = createDebug('soat:playbookExecutions');
 
-/** The authority a case's executions store: its pinned version's author's. */
+/**
+ * The authority a case's executions run under: its pinned version's grant,
+ * so they act as the version whoever wrote it.
+ */
 export const caseAuthority = async (args: {
   row: PlaybookCaseRow;
-}): Promise<WorkAuthority | null> => {
+}): Promise<WorkAuthority> => {
   const { row } = args;
   const version = await db.PlaybookVersion.findOne({
     where: { playbookId: row.playbookId, version: row.playbookVersion },
-    attributes: ['principalKind', 'principalId', 'principalBound'],
+    attributes: ['publicId'],
+    rejectOnEmpty: true,
   });
-  return versionAuthority({
-    version,
-    projectPublicId: row.project.publicId,
+  // Each node's starts are checked as it runs, by `resolveRunAs`.
+  return resourceWorkAuthority({
+    carrier: 'playbookVersions',
+    id: version.publicId as string,
+    projectId: row.projectId,
+    startedBy: null,
+    starts: [],
   });
 };
 
 /**
- * Work's authority (the case's when none is given), checked against what a
- * node starts before it runs.
+ * Work's authority (the case's when none is given), resolved as a request
+ * would be and checked against what a node starts before it runs. Work
+ * holding none, or whose authority no longer resolves, is refused.
  */
 export const resolveRunAs = async (args: {
   row: PlaybookCaseRow;
@@ -47,15 +59,25 @@ export const resolveRunAs = async (args: {
   executors: PlaybookExecutor[];
   authority?: WorkAuthority | null;
   workPublicId?: string;
-}): Promise<PlaybookRunAs> => {
+}): Promise<ExecutorRunAs> => {
   const { row } = args;
-  const runAs = await resolvePlaybookRunAs({
+  const work = args.workPublicId ?? row.publicId;
+  const authority = requireWorkAuthority({
     authority:
       args.authority === undefined
         ? await caseAuthority({ row })
         : args.authority,
-    workPublicId: args.workPublicId ?? row.publicId,
+    work,
   });
+  const authUser = await authUserOfWork({ db, authority });
+  if (!authUser) {
+    log('resolveRunAs: unresolved for %s', work);
+    throw workAuthorityMissing({ work });
+  }
+  const runAs = {
+    authority: forWork({ authority, work }),
+    isAllowed: authUser.isAllowed,
+  };
   for (const executor of args.executors) {
     await assertExecutorStartable({
       node: args.node,

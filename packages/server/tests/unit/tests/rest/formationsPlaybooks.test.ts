@@ -49,6 +49,7 @@ const definitionCalling = (tool: unknown) => {
 describe('Formations — playbook resources', () => {
   let stub: ChatCompletionsStub;
   let adminToken: string;
+  let grant: string[];
   let userToken: string;
   let projectId: string;
   let seq = 0;
@@ -73,6 +74,7 @@ describe('Formations — playbook resources', () => {
       Pricing: {
         type: 'playbook',
         properties: {
+          policy_ids: grant,
           name: unique('pricing'),
           description: 'Prices a client',
           definition: definitionCalling({ ref: 'Quote' }),
@@ -117,6 +119,7 @@ describe('Formations — playbook resources', () => {
       createNoPermUser: false,
     });
     adminToken = setup.adminToken;
+    grant = [setup.policyId];
     userToken = setup.userToken;
     projectId = setup.projectId;
   });
@@ -146,7 +149,10 @@ describe('Formations — playbook resources', () => {
               ...declared,
               Pricing: {
                 type: 'playbook',
-                properties: { ...declared.Pricing.properties, version: 3 },
+                properties: {
+                  ...declared.Pricing.properties,
+                  version: 3,
+                },
               },
             },
           },
@@ -179,6 +185,7 @@ describe('Formations — playbook resources', () => {
           Monthly: {
             type: 'playbook',
             properties: {
+              policy_ids: grant,
               name: unique('monthly'),
               definition: {
                 upstreams: [
@@ -208,7 +215,7 @@ describe('Formations — playbook resources', () => {
       ]);
     });
 
-    test('its nodes run as the credential that deployed it', async () => {
+    test('its nodes run under the playbook policy_ids', async () => {
       const formation = await deploy(userToken, { resources: resources() });
       const playbookId = physicalId(formation.body, 'Pricing');
       const created = await authenticatedTestClient(userToken)
@@ -241,7 +248,7 @@ describe('Formations — playbook resources', () => {
       expect(node.output.value).toEqual({ price: 42 });
     });
 
-    test('an API key deploys within its own boundary, not its owner’s', async () => {
+    test('an API key cannot attach a grant beyond its own boundary', async () => {
       const policy = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
@@ -269,8 +276,7 @@ describe('Formations — playbook resources', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
-      expect(res.body.error.meta.action).toBe('tools:CallTool');
+      expect(res.body.error.code).toBe('POLICY_GRANT_NOT_HELD');
     });
 
     test('returns 403 naming the action the deployer lacks', async () => {

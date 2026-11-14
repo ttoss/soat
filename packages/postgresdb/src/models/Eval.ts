@@ -114,6 +114,10 @@ export class Eval extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare groupBy: string | null;
 
+  // Public ids of the policies its work runs under; queried by policy.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare policyIds: string[] | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

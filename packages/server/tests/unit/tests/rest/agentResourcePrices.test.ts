@@ -2,6 +2,7 @@ import type { Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 type Component = {
@@ -146,11 +147,14 @@ describe('Agent resource prices', () => {
   /** A converter turn on `contentType` through the shared agent `agentId`. */
   const convert = async (args: { agentId: string; contentType: string }) => {
     const glob = args.contentType;
-    await admin().post('/api/v1/ingestion-rules').send({
-      project_id: granteeId,
-      content_type_glob: glob,
-      agent_id: args.agentId,
-    });
+    await admin()
+      .post('/api/v1/ingestion-rules')
+      .send({
+        policy_ids: await testGrant({ token: adminToken }),
+        project_id: granteeId,
+        content_type_glob: glob,
+        agent_id: args.agentId,
+      });
     const file = await admin()
       .post('/api/v1/files/upload')
       .attach('file', Buffer.from(`input as ${args.contentType}`), {

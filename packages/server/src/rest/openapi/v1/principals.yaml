@@ -24,6 +24,11 @@ components:
         - approval
         - trigger
         - system
+        - eval
+        - decider
+        - ingestion_rule
+        - memory_rule
+        - playbook_version
       description: >-
         What kind of principal acted. `user` and `api_key` are authenticated
         callers, and the id is the user's (`user_…`) or the key's own
@@ -33,5 +38,8 @@ components:
         `approval` an approval resolution; neither carries an id. `trigger` is
         a trigger firing under its own `policy_ids` (`trg_…`). `system` is
         the platform itself, with an id naming the mechanism
-        (`retention_sweep`, `zero_retention`).
+        (`retention_sweep`, `zero_retention`). `eval`, `decider`,
+        `ingestion_rule`, `memory_rule` and `playbook_version` are that
+        resource's work running under its own `policy_ids` when nobody
+        started it, the id its own.
       example: user

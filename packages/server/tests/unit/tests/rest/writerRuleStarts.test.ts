@@ -9,6 +9,7 @@ import { authenticatedTestClient } from '../../testClient';
 describe('Writer rule: what a resource starts', () => {
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let heldAgentId: string;
   let otherAgentId: string;
@@ -96,6 +97,7 @@ describe('Writer rule: what a resource starts', () => {
     });
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
 
     const providerId = await createdId(
@@ -161,6 +163,7 @@ describe('Writer rule: what a resource starts', () => {
     ];
     const body = (backend: Record<string, string>) => {
       return {
+        policy_ids: [userPolicyId],
         project_id: projectId,
         name: unique('wrs-decider'),
         questions: QUESTIONS,
@@ -217,6 +220,7 @@ describe('Writer rule: what a resource starts', () => {
               Decider: {
                 type: 'decider',
                 properties: {
+                  policy_ids: [userPolicyId],
                   name: unique('wrs-formation-decider'),
                   tool_id: otherToolId,
                   questions: QUESTIONS,
@@ -233,6 +237,7 @@ describe('Writer rule: what a resource starts', () => {
   describe('evals', () => {
     const body = (fields: Record<string, unknown>) => {
       return {
+        policy_ids: [userPolicyId],
         project_id: projectId,
         name: unique('wrs-eval'),
         dataset_id: datasetId,
@@ -333,6 +338,7 @@ describe('Writer rule: what a resource starts', () => {
   describe('ingestion rules', () => {
     const body = (toolId: string) => {
       return {
+        policy_ids: [userPolicyId],
         project_id: projectId,
         content_type_glob: `image/${unique('x')}`,
         tool_id: toolId,
@@ -368,6 +374,7 @@ describe('Writer rule: what a resource starts', () => {
   describe('memory rules', () => {
     const body = (handler: Record<string, string>) => {
       return {
+        policy_ids: [userPolicyId],
         memory_store_id: memoryStoreId,
         on: 'generations.completed',
         ...handler,

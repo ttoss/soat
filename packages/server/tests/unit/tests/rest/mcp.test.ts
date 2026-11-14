@@ -10,7 +10,7 @@ import * as pdfModule from 'src/lib/pdf';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { saveTrace } from 'src/lib/traces';
 
-import { createAllowAllPolicy } from '../../fixtures/bootstrap';
+import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -37,6 +37,7 @@ const STANDALONE_TOOLS = new Set([
  */
 describe('MCP tools - happy path', () => {
   let adminToken: string;
+  let grant: string[];
   let projectId: string;
   let setupActorId: string;
   let chatAiProviderId: string;
@@ -52,6 +53,7 @@ describe('MCP tools - happy path', () => {
       .post('/api/v1/users/bootstrap')
       .send({ username: 'mcphappy', password: 'mcphappypass' });
     adminToken = await loginAs('mcphappy', 'mcphappypass');
+    grant = await testGrant({ token: adminToken });
 
     const projRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
@@ -1141,6 +1143,7 @@ describe('MCP tools - happy path', () => {
 
     const rule = parseResult(
       await mcpCall('create-memory-rule', {
+        policy_ids: grant,
         memory_store_id: store.id,
         on: 'generations.completed',
         prompt: 'Only deployment facts',
@@ -1191,6 +1194,7 @@ describe('MCP tools - happy path', () => {
     );
 
     const res = await mcpCall('create-memory-rule', {
+      policy_ids: grant,
       memory_store_id: store.id,
       on: 'conversation_messages.generated',
     });
@@ -2988,6 +2992,7 @@ describe('MCP tools - happy path', () => {
       ruleToolId = parseResult(toolRes).id;
 
       const res = await mcpCall('create-ingestion-rule', {
+        policy_ids: grant,
         project_id: projectId,
         content_type_glob: 'image/*',
         tool_id: ruleToolId,
@@ -3292,6 +3297,7 @@ describe('MCP tools - happy path', () => {
 
     test('create-eval binds an agent, a dataset, and scorers', async () => {
       const res = await mcpCall('create-eval', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'MCP Eval',
         agent_id: evalAgentId,
@@ -3311,6 +3317,7 @@ describe('MCP tools - happy path', () => {
 
     test('create-eval accepts a group_by key', async () => {
       const res = await mcpCall('create-eval', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'MCP Grouped Eval',
         agent_id: evalAgentId,
@@ -3441,6 +3448,7 @@ describe('MCP tools - happy path', () => {
       expect(agentRes.status).toBe(200);
 
       const deciderRes = await mcpCall('create-decider', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-triage',
         agent_id: parseResult(agentRes).id,
@@ -3470,6 +3478,7 @@ describe('MCP tools - happy path', () => {
       expect(toolRes.status).toBe(200);
 
       const res = await mcpCall('create-decider', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-tool-triage',
         tool_id: parseResult(toolRes).id,
@@ -3549,6 +3558,7 @@ describe('MCP tools - happy path', () => {
     test('create-decision always waits, returning the settled decision', async () => {
       const engineId = await createRuleEngine({ name: 'mcp-decider-rules' });
       const ruleDeciderRes = await mcpCall('create-decider', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-rule-triage',
         tool_id: engineId,
@@ -3677,6 +3687,7 @@ describe('MCP tools - happy path', () => {
       downToolId = parseResult(toolRes).id;
 
       const playbookRes = await mcpCall('create-playbook', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-pricing',
         definition,
@@ -3694,6 +3705,7 @@ describe('MCP tools - happy path', () => {
 
     test('create-playbook-case binds a case of a declared upstream', async () => {
       const dependent = await mcpCall('create-playbook', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-pricing-monthly',
         definition: {
@@ -3799,6 +3811,7 @@ describe('MCP tools - happy path', () => {
       // Its own playbook, so the shared one keeps the single case the tests
       // below count and delete. Its tool never answers, so the node fails.
       const runPlaybook = await mcpCall('create-playbook', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-runs',
         definition: {
@@ -3864,6 +3877,7 @@ describe('MCP tools - happy path', () => {
     test('export-playbook-case-node waits for the file and the exports read it back', async () => {
       // Its tool never answers, so the export settles failed.
       const exportPlaybook = await mcpCall('create-playbook', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-exports',
         definition: {
@@ -3939,6 +3953,7 @@ describe('MCP tools - happy path', () => {
         return { id: key, title: key, kind: 'collect', inputs: [] };
       };
       const upgradePlaybook = await mcpCall('create-playbook', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-upgrades',
         definition: { nodes: [node('first')] },
@@ -3973,6 +3988,7 @@ describe('MCP tools - happy path', () => {
 
     test('confirm-playbook-case-node approves a confirm node', async () => {
       const confirmed = await mcpCall('create-playbook', {
+        policy_ids: grant,
         project_id: projectId,
         name: 'mcp-confirmed',
         definition: {

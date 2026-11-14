@@ -168,6 +168,10 @@ export class MemoryRule extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: true })
   declare enabled: boolean;
 
+  // Public ids of the policies its work runs under; queried by policy.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare policyIds: string[] | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

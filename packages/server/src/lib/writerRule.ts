@@ -54,12 +54,32 @@ export const WRITER_RULE_CARRIERS = {
   users: { policies: 'users' },
   orchestrations: { models: ['Orchestration'] },
   shares: { models: ['Share'] },
-  deciders: { models: ['Decider'] },
-  evals: { models: ['Eval'] },
+  deciders: {
+    policies: 'deciders',
+    policiesRequired:
+      'policy_ids must name at least one policy: the grant every decision it makes acts under.',
+  },
+  evals: {
+    policies: 'evals',
+    policiesRequired:
+      'policy_ids must name at least one policy: the grant every run of the eval acts under.',
+  },
   guardrails: { models: ['Guardrail'] },
-  ingestionRules: { models: ['IngestionRule'] },
-  memoryRules: { models: ['MemoryRule'] },
-  playbookVersions: { models: ['PlaybookVersion'] },
+  ingestionRules: {
+    policies: 'ingestionRules',
+    policiesRequired:
+      'policy_ids must name at least one policy: the grant every conversion the rule starts acts under.',
+  },
+  memoryRules: {
+    policies: 'memoryRules',
+    policiesRequired:
+      'policy_ids must name at least one policy: the grant every handler the rule starts acts under.',
+  },
+  playbookVersions: {
+    policies: 'playbookVersions',
+    policiesRequired:
+      'policy_ids must name at least one policy: the grant every execution of the version acts under.',
+  },
 } satisfies Record<string, WriterRuleCarrier>;
 
 export type WriterRuleCarrierName = keyof typeof WRITER_RULE_CARRIERS;

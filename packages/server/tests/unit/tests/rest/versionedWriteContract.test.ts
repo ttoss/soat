@@ -30,6 +30,7 @@ type Driver = {
 
 describe('versioned write contract', () => {
   let userToken: string;
+  let userPolicyId: string;
   let userId: string;
   let key: { id: string; raw: string };
   // Every driver writes as this credential; one test swaps in the API key.
@@ -96,6 +97,7 @@ describe('versioned write contract', () => {
           name: unique('contract-judge'),
         });
         return createIn('/api/v1/deciders', {
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: unique('contract-decider'),
           agent_id: agentId,
@@ -188,6 +190,7 @@ describe('versioned write contract', () => {
       archived: true,
       create: () => {
         return createIn('/api/v1/playbooks', {
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: unique('contract-playbook'),
           definition: {
@@ -374,6 +377,7 @@ describe('versioned write contract', () => {
       ],
     });
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     actingToken = userToken;
     userId = setup.userId;
     projectId = setup.projectId;

@@ -2,7 +2,7 @@ import { db } from 'src/db';
 import { createGenerationRecord } from 'src/lib/generations';
 import { saveTrace } from 'src/lib/traces';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs } from '../../testClient';
 
 /**
@@ -96,6 +96,7 @@ describe('a policy scoped to one resource does not reach its siblings', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           content_type_glob: glob,
           tool_id: converterToolId,

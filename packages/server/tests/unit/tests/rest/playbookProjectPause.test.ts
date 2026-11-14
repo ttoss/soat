@@ -1,7 +1,7 @@
 import { db } from 'src/db';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { createPlaybookTool } from '../../fixtures/playbookExecutors';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -102,6 +102,7 @@ describe('Playbook cases under a project pause', () => {
     const res = await asAdmin()
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: projectId,
         name: 'paused-project',
         definition: definitionOf(toolId),

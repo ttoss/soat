@@ -1,5 +1,5 @@
 import { authenticatedTestClient } from '../testClient';
-import { setupProjectWithUsers } from './bootstrap';
+import { setupProjectWithUsers, testGrant } from './bootstrap';
 
 /**
  * The resources a formation module's declarations point at, created once per
@@ -19,6 +19,8 @@ export type FormationModuleFixtures = {
   datasetId: string;
 };
 
+let grant: string[] = [];
+
 export const setupFormationModuleFixtures = async (args: {
   prefix: string;
 }): Promise<FormationModuleFixtures> => {
@@ -29,6 +31,7 @@ export const setupFormationModuleFixtures = async (args: {
   });
   const client = authenticatedTestClient(setup.adminToken);
   const projectId = setup.projectId;
+  grant = await testGrant({ token: setup.adminToken });
 
   const created = async (path: string, body: object): Promise<string> => {
     const res = await client.post(`/api/v1/${path}`).send(body);
@@ -107,11 +110,25 @@ export const nextSeed = (): string => {
   return `s${String(counter)}`;
 };
 
+/** Formation types whose declaration carries `policy_ids` as its grant. */
+export const GRANT_CARRIER_TYPES = [
+  'decider',
+  'eval',
+  'ingestion_rule',
+  'memory_rule',
+  'playbook',
+];
+
+/** One resource; a grant carrier without `policy_ids` gets the fixture's. */
 export const templateOf = (
   type: string,
   properties: Record<string, unknown>
 ) => {
-  return { resources: { Res: { type, properties } } };
+  const declared =
+    GRANT_CARRIER_TYPES.includes(type) && !('policy_ids' in properties)
+      ? { policy_ids: grant, ...properties }
+      : properties;
+  return { resources: { Res: { type, properties: declared } } };
 };
 
 /** The single change a plan of a one-resource template reports. */

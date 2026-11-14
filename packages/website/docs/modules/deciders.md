@@ -41,6 +41,7 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 | `tool_id`     | string  | The [tool](#the-tool-backend) that answers, or null                         |
 | `version`     | integer | The question set's version; see [Versions](#versions)                       |
 | `questions`   | array   | 1 to 20 [questions](#questions), in the order the model is shown them       |
+| `policy_ids`  | string[] | Required on create. The policies every decision acts under; see [Decision authority](#decision-authority) |
 | `created_at`  | string  | ISO 8601 creation timestamp                                                 |
 | `updated_at`  | string  | ISO 8601 last-updated timestamp                                             |
 
@@ -97,6 +98,7 @@ A `name` is unique within the set, starts with a letter or underscore and holds 
 soat create-decider \
   --project-id proj_… \
   --name support-triage \
+  --policy-ids '["pol_…"]' \
   --agent-id agent_… \
   --questions '[
     {
@@ -134,6 +136,7 @@ const { data, error } = await soat.deciders.createDecider({
   body: {
     project_id: 'proj_…',
     name: 'support-triage',
+    policy_ids: ['pol_…'],
     agent_id: 'agent_…',
     questions: [
       {
@@ -176,6 +179,7 @@ curl -X POST https://api.example.com/api/v1/deciders \
   -d '{
     "project_id": "proj_…",
     "name": "support-triage",
+    "policy_ids": ["pol_…"],
     "agent_id": "agent_…",
     "questions": [
       {
@@ -384,6 +388,12 @@ The output names each answer field, which is what leaves the engine's own extras
 
 [`PATCH /api/v1/deciders/{decider_id}`](/docs/api/deciders/update-decider) takes `expected_version` (or `If-Match`) and answers `409 VERSION_CONFLICT` on a stale one. [`POST /api/v1/deciders/{decider_id}/versions/{version}/restore`](/docs/api/deciders/restore-decider-version) writes an archived question set back as a new version.
 
+### Decision authority
+
+A decision's backend runs under the decider's `policy_ids`, capped by the caller who requests it: a decision whose backend the decider's grant may not start (`agents:CreateAgentGeneration` or `tools:CallTool`) is refused `403 ACTION_NOT_HELD` before it is recorded, even when the caller may start it. The caller needs only `deciders:CreateDecision`; every nested action stays capped by both. `policy_ids` are not part of the question set: changing them leaves `version` alone, and the next decision reads them. A decider with empty `policy_ids` is allowed nothing, so its decisions fail until a write gives it some. An [inline decision](#inline-questions) has no decider and runs as its caller.
+
+Every create, update, restore and formation apply needs the backend's start action (`agents:CreateAgentGeneration` or `tools:CallTool`): the [writer rule](./iam.md#the-writer-rule). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
+
 ### Requesting a decision
 
 [`POST /api/v1/deciders/{decider_id}/decisions`](/docs/api/deciders/create-decision) takes `input`, optional `metadata` and `wait`. The decision is a run: with `wait` omitted it is `201` in `status: queued`, and with `wait: true` it is `201` settled. Poll [`GET /api/v1/decisions/{decision_id}`](/docs/api/deciders/get-decision) or subscribe to the events below; see [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md#two-combinations-that-are-resolved-for-you) for the contract, including how a [`builtin` tool](./tools.md#data-model) or MCP call waits.
@@ -585,7 +595,7 @@ Both carry the decision, inline or not, with `answers` and `answers_by_name`. Se
 
 ### Formations
 
-A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) takes `name`, `description`, `questions` (the array of [Questions](#questions)) and exactly one of `agent_id` and `tool_id`, each of which may be a `{ "ref": "ResourceName" }` to an `agent` or `tool` resource in the same template. The questions are validated as on [`POST /api/v1/deciders`](/docs/api/deciders/create-decider), and a template update that changes them archives a new version. Tearing a stack down deletes a decider before the agent or tool it names; a decider outside the stack still keeps that agent or tool, and the teardown is refused before anything is deleted.
+A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) takes `name`, `description`, `policy_ids`, `questions` (the array of [Questions](#questions)) and exactly one of `agent_id` and `tool_id`; `agent_id` and `tool_id` may be a `{ "ref": "ResourceName" }` to an `agent` or `tool` resource in the same template, and each `policy_ids` entry one to a `policy`. The questions are validated as on [`POST /api/v1/deciders`](/docs/api/deciders/create-decider), and a template update that changes them archives a new version. Tearing a stack down deletes a decider before the agent or tool it names; a decider outside the stack still keeps that agent or tool, and the teardown is refused before anything is deleted.
 
 ```json
 {
@@ -594,10 +604,25 @@ A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) 
       "type": "agent",
       "properties": { "ai_provider_id": "aip_…", "name": "triage-judge" }
     },
+    "TriageGrant": {
+      "type": "policy",
+      "properties": {
+        "document": {
+          "statement": [
+            {
+              "effect": "Allow",
+              "action": ["agents:CreateAgentGeneration"],
+              "resource": ["srn:proj_V1StGXR8Z5jdHi6B:*:*"]
+            }
+          ]
+        }
+      }
+    },
     "Triage": {
       "type": "decider",
       "properties": {
         "name": "support-triage",
+        "policy_ids": [{ "ref": "TriageGrant" }],
         "agent_id": { "ref": "Judge" },
         "questions": [
           {

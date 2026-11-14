@@ -156,6 +156,7 @@ describe('validateRequestBody', () => {
             name: 'eval',
             dataset_id: 'dst_1',
             agent_id: 'agent_1',
+            policy_ids: ['pol_1'],
             scorers: [{ type: 'exact_match', bogus: true }],
           },
         });

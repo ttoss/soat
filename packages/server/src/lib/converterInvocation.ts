@@ -8,8 +8,10 @@ import { readFileBuffer } from './fileStorage';
 import type { GenerationEndUser } from './generationAttribution';
 import { buildIngestionCallbackBlock } from './ingestionCallbackToken';
 import type { MappedIngestionRule } from './ingestionRules';
+import { resourceWorkAuthority } from './resourceWork';
 import { callTool } from './tools';
 import type { WorkAuthority } from './workAuthority';
+import { startOf } from './writerRule';
 
 const log = createDebug('soat:ingestionConverter');
 
@@ -289,7 +291,7 @@ export const invokeConverter = async (args: {
   attemptId: string;
   /** Who the ingest runs for, validated by its route. */
   endUser: GenerationEndUser;
-  /** The ingest request's authority, which the converter runs under. */
+  /** The ingest's authority, held to the rule's `policy_ids` for the converter. */
   authority: WorkAuthority | null;
 }): Promise<InvokeConverterResult> => {
   log(
@@ -301,8 +303,22 @@ export const invokeConverter = async (args: {
     args.rule.file_delivery
   );
 
+  const converter = {
+    ...args,
+    authority: await resourceWorkAuthority({
+      carrier: 'ingestionRules',
+      id: args.rule.id,
+      projectId: args.projectId,
+      startedBy: args.authority,
+      starts: [
+        args.rule.agent_id
+          ? startOf({ type: 'agent', id: args.rule.agent_id })
+          : startOf({ type: 'tool', id: args.rule.tool_id! }),
+      ],
+    }),
+  };
   if (args.rule.agent_id) {
-    return invokeAgentConverter(args);
+    return invokeAgentConverter(converter);
   }
-  return invokeToolConverter(args);
+  return invokeToolConverter(converter);
 };

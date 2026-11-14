@@ -37,6 +37,7 @@ export type MappedIngestionRule = {
   chunk_size: number | null;
   chunk_overlap: number | null;
   metadata?: object;
+  policy_ids: string[];
   created_at: Date;
   updated_at: Date;
 };
@@ -80,6 +81,7 @@ const mapIngestionRule = (rule: IngestionRuleRow): MappedIngestionRule => {
     chunk_size: rule.chunkSize,
     chunk_overlap: rule.chunkOverlap,
     metadata: rule.metadata ?? undefined,
+    policy_ids: rule.policyIds ?? [],
     created_at: rule.createdAt,
     updated_at: rule.updatedAt,
   };
@@ -170,10 +172,12 @@ const buildIngestionRuleCreateValues = (args: {
   chunkSize?: number | null;
   chunkOverlap?: number | null;
   metadata?: object | null;
+  policyIds?: string[] | null;
 }) => {
   return {
     projectId: args.projectId,
     contentTypeGlob: args.contentTypeGlob,
+    policyIds: args.policyIds ?? null,
     ...buildConverterCreateFields(args),
     ...buildIngestionBehaviorCreateFields(args),
   };
@@ -194,6 +198,7 @@ export const createIngestionRule = async (args: {
   chunkSize?: number | null;
   chunkOverlap?: number | null;
   metadata?: object | null;
+  policyIds: string[] | null | undefined;
   writer: Writer;
 }): Promise<MappedIngestionRule> => {
   log(
@@ -225,7 +230,10 @@ export const createIngestionRule = async (args: {
     carrier: 'ingestionRules',
     writer: args.writer,
     projectId: args.projectId,
-    carried: { actions: await startsOfRow(args) },
+    carried: {
+      policyIds: args.policyIds,
+      actions: await startsOfRow(args),
+    },
   });
 
   const rule = await createIngestionRuleRow(
@@ -292,6 +300,7 @@ const buildIngestionRuleUpdates = (args: {
   chunkSize?: number | null;
   chunkOverlap?: number | null;
   metadata?: object | null;
+  policyIds?: string[] | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const fields = [
@@ -306,6 +315,7 @@ const buildIngestionRuleUpdates = (args: {
     'chunkSize',
     'chunkOverlap',
     'metadata',
+    'policyIds',
   ] as const;
   for (const field of fields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -327,6 +337,7 @@ export const updateIngestionRule = async (args: {
   chunkSize?: number | null;
   chunkOverlap?: number | null;
   metadata?: object | null;
+  policyIds?: string[] | null;
   writer: Writer;
 }): Promise<MappedIngestionRule> => {
   log('updateIngestionRule: id=%s', args.id);
@@ -374,6 +385,7 @@ export const updateIngestionRule = async (args: {
     writer: args.writer,
     projectId: rule.projectId,
     carried: {
+      policyIds: args.policyIds === undefined ? rule.policyIds : args.policyIds,
       actions: await startsOfRow({
         toolId: finalToolId,
         agentId: finalAgentId,

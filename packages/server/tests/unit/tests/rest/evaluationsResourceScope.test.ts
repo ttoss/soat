@@ -18,6 +18,7 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  */
 describe('a policy scoped to one dataset or eval does not reach another', () => {
   let adminToken: string;
+  let evalGrantId: string;
   let projectId: string;
   let scopedToken: string;
   let allowedDatasetId: string;
@@ -68,6 +69,7 @@ describe('a policy scoped to one dataset or eval does not reach another', () => 
     const response = await authenticatedTestClient(adminToken)
       .post('/api/v1/evals')
       .send({
+        policy_ids: [evalGrantId],
         project_id: projectId,
         name: args.name,
         agent_id: args.agentId,
@@ -106,6 +108,22 @@ describe('a policy scoped to one dataset or eval does not reach another', () => 
     otherDatasetId = await createDataset('Other Dataset');
     allowedItemId = await addItem(allowedDatasetId);
     otherItemId = await addItem(otherDatasetId);
+
+    // The scoped writer holds this grant, so its edits keep the eval's.
+    const evalGrant = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['agents:CreateAgentGeneration'],
+              resource: [`srn:${projectId}:agent:*`],
+            },
+          ],
+        },
+      });
+    evalGrantId = evalGrant.body.id;
 
     allowedEvalId = await createEval({
       name: 'scoped-eval',

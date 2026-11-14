@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import {
   startStubChatProvider,
   type StubChatProvider,
@@ -121,12 +121,15 @@ describe('Document ingestion — end-user attribution', () => {
     expect(agent.status).toBe(201);
     agentId = agent.body.id;
 
-    const rule = await asAdmin().post('/api/v1/ingestion-rules').send({
-      project_id: projectId,
-      content_type_glob: 'image/*',
-      agent_id: agentId,
-      chunk_strategy: 'whole',
-    });
+    const rule = await asAdmin()
+      .post('/api/v1/ingestion-rules')
+      .send({
+        policy_ids: await testGrant({ token: adminToken }),
+        project_id: projectId,
+        content_type_glob: 'image/*',
+        agent_id: agentId,
+        chunk_strategy: 'whole',
+      });
     expect(rule.status).toBe(201);
   });
 

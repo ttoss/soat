@@ -1,6 +1,6 @@
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
   startChatCompletionsStub,
@@ -85,6 +85,7 @@ describe('Playbook case automation while an agent node runs', () => {
       name: 'agent-auto-agent',
     });
     playbookId = await create('/api/v1/playbooks', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'agent-auto',
       definition: {
         nodes: [

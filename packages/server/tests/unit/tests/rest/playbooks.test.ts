@@ -1,6 +1,10 @@
+import { db } from 'src/db';
+
 import {
+  createProjectPolicy,
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import {
   createPlaybookDecider,
@@ -93,6 +97,8 @@ describe('Playbooks', () => {
   let DEFINITION: ReturnType<typeof definitionOf>;
   let deciderId: string;
   let adminToken: string;
+  let adminGrant: string[];
+  let userPolicyId: string;
   let userToken: string;
   let projectId: string;
   let noPermToken: string;
@@ -110,6 +116,7 @@ describe('Playbooks', () => {
     return authenticatedTestClient(token)
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: token === userToken ? [userPolicyId] : adminGrant,
         project_id: projectId,
         name: unique('pricing'),
         definition: DEFINITION,
@@ -118,7 +125,10 @@ describe('Playbooks', () => {
   };
 
   const newPlaybook = async (body: Record<string, unknown> = {}) => {
-    const res = await createPlaybook(adminToken, body);
+    const res = await createPlaybook(adminToken, {
+      policy_ids: [userPolicyId],
+      ...body,
+    });
     expect(res.status).toBe(201);
     return res.body as { id: string; version: number };
   };
@@ -137,6 +147,8 @@ describe('Playbooks', () => {
       policyActions: PLAYBOOK_ACTIONS,
     });
     adminToken = setup.adminToken;
+    adminGrant = await testGrant({ token: adminToken });
+    userPolicyId = setup.policyId;
     userToken = setup.userToken;
     projectId = setup.projectId;
     noPermToken = setup.noPermToken!;
@@ -260,7 +272,12 @@ describe('Playbooks', () => {
         username: 'pbkwriternostart',
         actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
       });
-      const res = await createPlaybook(token);
+      const held = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
+      });
+      const res = await createPlaybook(token, { policy_ids: [held] });
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ACTION_NOT_HELD');
       expect(res.body.error.meta).toEqual({
@@ -556,6 +573,36 @@ describe('Playbooks', () => {
       expect(restored.status).toBe(200);
       expect(restored.body.version).toBe(3);
       expect(restored.body.definition.nodes).toHaveLength(3);
+    });
+
+    test('a version archived without policy_ids restores under the playbook grant', async () => {
+      const playbook = await newPlaybook();
+      const laterGrant = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['playbooks:GetPlaybook'],
+      });
+      await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/playbooks/${playbook.id}`)
+        .send({ policy_ids: [laterGrant] });
+      const owner = await db.Playbook.findOne({
+        where: { publicId: playbook.id },
+      });
+      const row = await db.PlaybookVersion.findOne({
+        where: { playbookId: owner!.id, version: 1 },
+      });
+      const { policy_ids: _dropped, ...config } = row!.config as Record<
+        string,
+        unknown
+      >;
+      await row!.update({ config });
+
+      const restored = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/playbooks/${playbook.id}/versions/1/restore`)
+        .send({});
+
+      expect(restored.status).toBe(200);
+      expect(restored.body.policy_ids).toEqual([laterGrant]);
     });
 
     test('returns 400 for a version that is not a positive integer', async () => {

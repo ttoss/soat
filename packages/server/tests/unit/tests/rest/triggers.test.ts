@@ -8,6 +8,7 @@ import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import {
@@ -171,6 +172,7 @@ describe('Triggers', () => {
       await authenticatedTestClient(adminToken)
         .post('/api/v1/evals')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           name: 'triggers-eval',
           agent_id: agentId,

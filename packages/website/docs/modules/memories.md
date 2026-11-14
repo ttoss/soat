@@ -435,7 +435,7 @@ That makes it the opposite half of the [`write_memory` tool](#write_memory-tool)
 
 Because a rule belongs to its store, one store can have several (a cheap general one, a strict one for billing turns), one agent can feed two stores under different rules, and "what feeds this store?" is one listing instead of a sweep over every agent in the project.
 
-A rule starts its handler on every event it reads, under the authority the turn it reads stores: a tool handler's call, and every tool call an agent handler's turn makes, is authorized as that turn's starter. Every create, update and formation apply of a rule with a handler needs its start action (`agents:CreateAgentGeneration` on the agent, `tools:CallTool` on the tool), even when the write leaves the handler as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+A rule starts its handler on every event it reads, under the rule's own `policy_ids`: a tool handler's call, and every tool call an agent handler's turn makes, is authorized by that grant alone and acts as the rule (`principal_type: memory_rule`), whoever started the turn it reads. A handler the grant may not start (`tools:CallTool` or `agents:CreateAgentGeneration`) is never called. A rule with empty `policy_ids` is allowed nothing, so its handler contributes nothing until a write gives it some. Every create, update and formation apply of a rule with a handler needs its start action (`agents:CreateAgentGeneration` on the agent, `tools:CallTool` on the tool), even when the write leaves the handler as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
 
 #### The rule
 
@@ -454,6 +454,7 @@ A rule starts its handler on every event it reads, under the authority the turn 
 | `ai_provider_id` | `string \| null` | Provider override for the built-in extractor |
 | `model` | `string \| null` | Model override for the built-in extractor |
 | `enabled` | `boolean` | A disabled rule is kept and never fires |
+| `policy_ids` | `array` | Required on create. The policies the handler acts under |
 | `created_at` | `string` | ISO 8601 creation timestamp |
 | `updated_at` | `string` | ISO 8601 last-updated timestamp |
 
@@ -514,13 +515,29 @@ Two rules on one store, different handlers, different selectors — unexpressibl
   "resources": {
     "SupportFacts": { "type": "memory_store", "properties": { "name": "Support facts" } },
 
+    "ExtractionGrant": {
+      "type": "policy",
+      "properties": {
+        "document": {
+          "statement": [
+            {
+              "effect": "Allow",
+              "action": ["agents:CreateAgentGeneration"],
+              "resource": ["srn:proj_V1StGXR8Z5jdHi6B:*:*"]
+            }
+          ]
+        }
+      }
+    },
+
     "GeneralExtraction": {
       "type": "memory_rule",
       "properties": {
         "memory_store_id": { "ref": "SupportFacts" },
         "on": "generations.completed",
         "source_agent_ids": [{ "ref": "SupportAgent" }],
-        "model": "<cheap-model>"
+        "model": "<cheap-model>",
+        "policy_ids": [{ "ref": "ExtractionGrant" }]
       }
     },
 
@@ -530,7 +547,8 @@ Two rules on one store, different handlers, different selectors — unexpressibl
         "memory_store_id": { "ref": "SupportFacts" },
         "on": "generations.completed",
         "source_agent_ids": [{ "ref": "BillingAgent" }],
-        "agent_id": { "ref": "StrictBillingExtractor" }
+        "agent_id": { "ref": "StrictBillingExtractor" },
+        "policy_ids": [{ "ref": "ExtractionGrant" }]
       }
     }
   }

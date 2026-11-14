@@ -1,4 +1,4 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { createPlaybookTool } from '../../fixtures/playbookExecutors';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -142,6 +142,7 @@ describe('Playbook cases', () => {
     const playbook = await authenticatedTestClient(adminToken)
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: projectId,
         name: 'client-pricing',
         definition: DEFINITION,

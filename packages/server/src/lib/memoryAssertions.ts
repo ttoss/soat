@@ -12,7 +12,7 @@ import {
   type Page,
   paginatedList,
 } from 'src/lib/pagination';
-import type { PrincipalType } from 'src/lib/principals';
+import type { ActingPrincipalType } from 'src/lib/principals';
 import { timeRangeWhere } from 'src/lib/timeRange';
 
 const log = createDebug('soat:memories');
@@ -33,10 +33,7 @@ export type MemoryAssertionSource = {
   ruleId?: number | null;
   /** The generation's **public** id; resolved to the row here. */
   generationId?: string | null;
-  principalType: Extract<
-    PrincipalType,
-    'user' | 'api_key' | 'agent' | 'trigger'
-  >;
+  principalType: ActingPrincipalType | 'agent';
   principalId: string;
 };
 

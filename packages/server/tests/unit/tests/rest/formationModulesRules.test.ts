@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
+import { GRANT_CARRIER_TYPES } from '../../fixtures/formationModules';
 import { authenticatedTestClient } from '../../testClient';
 
 // The rules each built-in formation module adds on top of its schema: what a
@@ -8,6 +9,7 @@ import { authenticatedTestClient } from '../../testClient';
 // missing out of band reads back.
 
 let adminToken: string;
+let grant: string[];
 let projectId: string;
 let aiProviderId: string;
 let agentId: string;
@@ -15,6 +17,19 @@ let triggerPolicyId: string;
 let converterToolId: string;
 let datasetId: string;
 let counter = 0;
+
+/** A carrier's declaration with the file's grant, unless it states its own. */
+const granted = (type: string, properties: unknown) => {
+  if (
+    !GRANT_CARRIER_TYPES.includes(type) ||
+    typeof properties !== 'object' ||
+    properties === null ||
+    'policy_ids' in properties
+  ) {
+    return properties;
+  }
+  return { policy_ids: grant, ...properties };
+};
 
 const client = () => {
   return authenticatedTestClient(adminToken);
@@ -26,7 +41,9 @@ const seed = (): string => {
 };
 
 const one = (type: string, properties: unknown) => {
-  return { resources: { Res: { type, properties } } };
+  return {
+    resources: { Res: { type, properties: granted(type, properties) } },
+  };
 };
 
 const validate = async (template: unknown) => {
@@ -94,6 +111,7 @@ beforeAll(async () => {
     createNoPermUser: false,
   });
   adminToken = setup.adminToken;
+  grant = await testGrant({ token: adminToken });
   triggerPolicyId = setup.policyId;
   projectId = setup.projectId;
 
@@ -1026,6 +1044,7 @@ describe('POST /api/v1/formations/validate — declarations resolved only at app
         Res: {
           type: 'ingestion_rule',
           properties: {
+            policy_ids: grant,
             content_type_glob: { param: 'Glob' },
             agent_id: agentId,
           },

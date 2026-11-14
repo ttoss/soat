@@ -2,8 +2,10 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
+  createProjectPolicy,
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
@@ -67,12 +69,13 @@ describe('Playbook exports', () => {
 
   const newCase = async (args: {
     transformations?: Transformation[];
-    token?: string;
+    policyIds?: string[];
   }): Promise<string> => {
     seq += 1;
-    const playbook = await authenticatedTestClient(args.token ?? adminToken)
+    const playbook = await asAdmin()
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: args.policyIds ?? (await testGrant({ token: adminToken })),
         project_id: projectId,
         name: `export-${seq}`,
         definition: finalNode(
@@ -481,20 +484,16 @@ describe('Playbook exports', () => {
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_PAUSED');
     });
 
-    test('returns 403 once the author may no longer call the tool', async () => {
-      const authorToken = await createScopedPrincipal({
-        adminToken,
-        projectId,
-        username: 'pbkexportauthor',
-        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
-      });
-      const caseId = await newCase({ token: authorToken });
+    test("returns 403 when the version's grant does not allow the tool", async () => {
+      const grant = await asAdmin()
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['playbooks:GetPlaybook'] }],
+          },
+        });
+      const caseId = await newCase({ policyIds: [grant.body.id] });
       await writeAmount(caseId, 1);
-      const me =
-        await authenticatedTestClient(authorToken).get('/api/v1/users/me');
-      await asAdmin()
-        .put(`/api/v1/users/${me.body.id}/policies`)
-        .send({ policy_ids: [] });
 
       const res = await exportNode(caseId);
 
@@ -541,10 +540,16 @@ describe('Playbook exports', () => {
         username: 'pbkexportwriter',
         actions: ['playbooks:CreatePlaybook'],
       });
+      const heldGrant = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['playbooks:CreatePlaybook'],
+      });
 
       const res = await authenticatedTestClient(token)
         .post('/api/v1/playbooks')
         .send({
+          policy_ids: [heldGrant],
           project_id: projectId,
           name: 'export-forbidden',
           definition: finalNode([
@@ -564,6 +569,7 @@ describe('Playbook exports', () => {
       const res = await asAdmin()
         .post('/api/v1/playbooks')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           name: 'export-unknown-format',
           definition: finalNode([

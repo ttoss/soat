@@ -306,15 +306,22 @@ echo "OCR_AGENT_ID: $OCR_AGENT_ID"
 
 An [Ingestion Rule](/docs/modules/ingestion-rules#examples) maps `image/*` to the agent
 via `agent_id`. Agent converters take the file directly: no `file_delivery`, no request
-shape.
+shape. Every conversion runs under the rule's `policy_ids`
+([Ingestion Rules — Who may write a converter](/docs/modules/ingestion-rules#who-may-write-a-converter)):
+the policy below lets it start the agent and nothing else.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+OCR_POLICY_ID=$(soat create-policy \
+  --name "ocr-converter" \
+  --document '{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration"]}]}' | jq -r '.id')
+
 soat create-ingestion-rule \
   --project-id "$PROJECT_ID" \
   --content-type-glob "image/*" \
+  --policy-ids '["'"$OCR_POLICY_ID"'"]' \
   --agent-id "$OCR_AGENT_ID" \
   --chunk-strategy "whole" | jq '{id: .id, content_type_glob: .content_type_glob}'
 ```
@@ -323,10 +330,22 @@ soat create-ingestion-rule \
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: ocrPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'ocr-converter',
+    document: {
+      statement: [{ effect: 'Allow', action: ['agents:CreateAgentGeneration'] }],
+    },
+  },
+});
+
+const OCR_POLICY_ID = ocrPolicy!.id;
+
 await adminSoat.ingestionRules.createIngestionRule({
   body: {
     project_id: PROJECT_ID,
     content_type_glob: 'image/*',
+    policy_ids: [OCR_POLICY_ID],
     agent_id: OCR_AGENT_ID,
     chunk_strategy: 'whole',
   },
@@ -337,10 +356,15 @@ await adminSoat.ingestionRules.createIngestionRule({
 <TabItem value="curl" label="curl">
 
 ```bash
+OCR_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"ocr-converter","document":{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration"]}]}}' | jq -r '.id')
+
 curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"image/*\",\"agent_id\":\"$OCR_AGENT_ID\",\"chunk_strategy\":\"whole\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"image/*\",\"policy_ids\":[\"$OCR_POLICY_ID\"],\"agent_id\":\"$OCR_AGENT_ID\",\"chunk_strategy\":\"whole\"}" \
   | jq '{id: .id, content_type_glob: .content_type_glob}'
 ```
 
@@ -364,6 +388,7 @@ converter. `native_extraction: skip` on the rule OCRs every PDF.
 soat create-ingestion-rule \
   --project-id "$PROJECT_ID" \
   --content-type-glob "application/pdf" \
+  --policy-ids '["'"$OCR_POLICY_ID"'"]' \
   --agent-id "$OCR_AGENT_ID" \
   --chunk-strategy "whole" | jq '{id: .id, content_type_glob: .content_type_glob}'
 ```
@@ -376,6 +401,7 @@ await adminSoat.ingestionRules.createIngestionRule({
   body: {
     project_id: PROJECT_ID,
     content_type_glob: 'application/pdf',
+    policy_ids: [OCR_POLICY_ID],
     agent_id: OCR_AGENT_ID,
     chunk_strategy: 'whole',
   },
@@ -389,7 +415,7 @@ await adminSoat.ingestionRules.createIngestionRule({
 curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"application/pdf\",\"agent_id\":\"$OCR_AGENT_ID\",\"chunk_strategy\":\"whole\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"application/pdf\",\"policy_ids\":[\"$OCR_POLICY_ID\"],\"agent_id\":\"$OCR_AGENT_ID\",\"chunk_strategy\":\"whole\"}" \
   | jq '{id: .id, content_type_glob: .content_type_glob}'
 ```
 
@@ -682,15 +708,21 @@ echo "STT_CONVERTER_ID: $STT_CONVERTER_ID"
 Map `audio/*` to the pipeline tool with `tool_id`. A transcript is one long block, so
 chunk it with the `size` strategy
 ([Documents — File Ingestion and Chunking](/docs/modules/documents#file-ingestion-and-chunking)).
-`preset_parameters` merges a fixed `language` into every call.
+`preset_parameters` merges a fixed `language` into every call. The rule's policy lets each
+conversion call the pipeline, and the pipeline its step, and nothing else.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+STT_POLICY_ID=$(soat create-policy \
+  --name "stt-converter" \
+  --document '{"statement":[{"effect":"Allow","action":["tools:CallTool"]}]}' | jq -r '.id')
+
 soat create-ingestion-rule \
   --project-id "$PROJECT_ID" \
   --content-type-glob "audio/*" \
+  --policy-ids '["'"$STT_POLICY_ID"'"]' \
   --tool-id "$STT_CONVERTER_ID" \
   --file-delivery base64 \
   --preset-parameters '{"language":"en"}' \
@@ -703,10 +735,20 @@ soat create-ingestion-rule \
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: sttPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'stt-converter',
+    document: {
+      statement: [{ effect: 'Allow', action: ['tools:CallTool'] }],
+    },
+  },
+});
+
 await adminSoat.ingestionRules.createIngestionRule({
   body: {
     project_id: PROJECT_ID,
     content_type_glob: 'audio/*',
+    policy_ids: [sttPolicy!.id],
     tool_id: STT_CONVERTER_ID,
     file_delivery: 'base64',
     preset_parameters: { language: 'en' },
@@ -721,10 +763,15 @@ await adminSoat.ingestionRules.createIngestionRule({
 <TabItem value="curl" label="curl">
 
 ```bash
+STT_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"stt-converter","document":{"statement":[{"effect":"Allow","action":["tools:CallTool"]}]}}' | jq -r '.id')
+
 curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"audio/*\",\"tool_id\":\"$STT_CONVERTER_ID\",\"file_delivery\":\"base64\",\"preset_parameters\":{\"language\":\"en\"},\"chunk_strategy\":\"size\",\"chunk_size\":1000,\"chunk_overlap\":200}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"audio/*\",\"policy_ids\":[\"$STT_POLICY_ID\"],\"tool_id\":\"$STT_CONVERTER_ID\",\"file_delivery\":\"base64\",\"preset_parameters\":{\"language\":\"en\"},\"chunk_strategy\":\"size\",\"chunk_size\":1000,\"chunk_overlap\":200}" \
   | jq '{id: .id, content_type_glob: .content_type_glob}'
 ```
 

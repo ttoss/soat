@@ -96,18 +96,13 @@ export const setupProjectWithUsers = async (args: {
  * which authorize with no `resource` (defaulting to `*`, which an SRN-scoped
  * Allow cannot match). Returns a login token for the scoped user.
  */
-export const createScopedPrincipal = async (args: {
+/** A policy allowing `actions` on every resource of the project. */
+export const createProjectPolicy = async (args: {
   adminToken: string;
   projectId: string;
-  username: string;
   actions: string[];
 }): Promise<string> => {
-  const password = `${args.username}pass`;
-  const createUserRes = await authenticatedTestClient(args.adminToken)
-    .post('/api/v1/users')
-    .send({ username: args.username, password });
-
-  const policyRes = await authenticatedTestClient(args.adminToken)
+  const res = await authenticatedTestClient(args.adminToken)
     .post('/api/v1/policies')
     .send({
       document: {
@@ -120,10 +115,28 @@ export const createScopedPrincipal = async (args: {
         ],
       },
     });
+  if (res.status !== 201) {
+    throw new Error(`createProjectPolicy: ${res.status}`);
+  }
+  return res.body.id as string;
+};
+
+export const createScopedPrincipal = async (args: {
+  adminToken: string;
+  projectId: string;
+  username: string;
+  actions: string[];
+}): Promise<string> => {
+  const password = `${args.username}pass`;
+  const createUserRes = await authenticatedTestClient(args.adminToken)
+    .post('/api/v1/users')
+    .send({ username: args.username, password });
+
+  const policyId = await createProjectPolicy(args);
 
   await authenticatedTestClient(args.adminToken)
     .put(`/api/v1/users/${createUserRes.body.id}/policies`)
-    .send({ policy_ids: [policyRes.body.id] });
+    .send({ policy_ids: [policyId] });
 
   return loginAs(args.username, password);
 };
@@ -142,4 +155,21 @@ export const createAllowAllPolicy = async (args: {
     throw new Error(`createAllowAllPolicy: ${res.status}`);
   }
   return res.body.id as string;
+};
+
+const allowAllGrants = new Map<string, Promise<string[]>>();
+
+/**
+ * `policy_ids` allowing every action, written by admin `token`: the grant of
+ * an eval, decider, ingestion rule, memory rule or playbook in a test that is
+ * not about what its work may do. One policy per token per test file.
+ */
+export const testGrant = (args: { token: string }): Promise<string[]> => {
+  const cached = allowAllGrants.get(args.token);
+  if (cached) return cached;
+  const grant = createAllowAllPolicy({ adminToken: args.token }).then((id) => {
+    return [id];
+  });
+  allowAllGrants.set(args.token, grant);
+  return grant;
 };

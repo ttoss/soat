@@ -1,9 +1,21 @@
 import { defineMigration } from '@ttoss/postgresdb';
 
 const COLUMNS = [
-  { table: 'generations', column: 'acted_as_principal_bound' },
-  { table: 'orchestration_runs', column: 'principal_bound' },
-  { table: 'playbook_versions', column: 'principal_bound' },
+  {
+    table: 'generations',
+    column: 'acted_as_principal_bound',
+    principal: 'acted_as_principal_id',
+  },
+  {
+    table: 'orchestration_runs',
+    column: 'principal_bound',
+    principal: 'principal_id',
+  },
+  {
+    table: 'playbook_versions',
+    column: 'principal_bound',
+    principal: 'principal_id',
+  },
 ];
 
 /**
@@ -16,11 +28,13 @@ export const principalBound = defineMigration({
   description:
     'generations.acted_as_principal_bound, orchestration_runs.principal_bound and playbook_versions.principal_bound.',
   isApplied: async (context) => {
-    for (const { table, column } of COLUMNS) {
+    for (const { table, column, principal } of COLUMNS) {
       if (!(await context.tableExists({ table }))) continue;
       if (await context.columnExists({ table, column })) continue;
-      // `2026-11-13-work-authority` drops the column for `authority`.
-      if (!(await context.columnExists({ table, column: 'authority' }))) {
+      // Later migrations drop the column: `2026-11-13-work-authority` for
+      // `authority`, `2026-11-14-resource-grants` with the principal it sat beside.
+      if (await context.columnExists({ table, column: 'authority' })) continue;
+      if (await context.columnExists({ table, column: principal })) {
         return false;
       }
     }

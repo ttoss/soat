@@ -1,4 +1,5 @@
 import { authenticatedTestClient } from '../testClient';
+import { testGrant } from './bootstrap';
 
 const created = (res: { status: number; body: { id?: string } }): string => {
   if (res.status !== 201 || typeof res.body.id !== 'string') {
@@ -45,6 +46,7 @@ export const createPlaybookDecider = async (args: {
     await authenticatedTestClient(args.token)
       .post('/api/v1/deciders')
       .send({
+        policy_ids: await testGrant({ token: args.token }),
         project_id: args.projectId,
         name: args.name,
         tool_id: args.toolId,

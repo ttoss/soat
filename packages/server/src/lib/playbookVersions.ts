@@ -1,6 +1,5 @@
 import createDebug from 'debug';
 
-import type { PlaybookAuthor } from './playbookAuthor';
 import { type MappedPlaybook, playbooks, updatePlaybook } from './playbooks';
 import { playbookVersionStore } from './playbookVersionSnapshot';
 import type { RequestPrincipal } from './principals';
@@ -20,6 +19,11 @@ const log = createDebug('soat:playbooks');
  * archived definition, so it is validated and versioned like any other.
  */
 
+/** A version archived without a grant restores under the playbook's own. */
+const archivedPolicyIds = (value: unknown): string[] | undefined => {
+  return Array.isArray(value) ? value.map(String) : undefined;
+};
+
 export const mapPlaybookVersion = (
   version: ArchivedVersionRow,
   playbookPublicId: string
@@ -30,8 +34,7 @@ export const mapPlaybookVersion = (
   };
 };
 
-/** The archive, with the author a restore writes the new version as. */
-const playbookVersionArchive = (author?: PlaybookAuthor) => {
+const playbookVersionArchive = () => {
   return makeVersionArchive({
     store: playbookVersionStore,
     loadResource: async (args) => {
@@ -43,9 +46,10 @@ const playbookVersionArchive = (author?: PlaybookAuthor) => {
         projectIds: args.projectIds,
         id: args.id,
         definition: args.config.definition,
+        policyIds: archivedPolicyIds(args.config.policy_ids),
         versionLabel: args.label,
         createdBy: args.createdBy,
-        author: author!,
+        writer: args.writer,
       });
     },
   });
@@ -87,14 +91,13 @@ export const restorePlaybookVersion = async (args: {
   label?: string | null;
   createdBy: RequestPrincipal | null;
   writer: Writer;
-  author: PlaybookAuthor;
 }): Promise<MappedPlaybook> => {
   log(
     'restorePlaybookVersion: id=%s version=%d',
     args.playbookId,
     args.version
   );
-  return playbookVersionArchive(args.author).restoreVersion({
+  return playbookVersionArchive().restoreVersion({
     projectIds: args.projectIds,
     resourceId: args.playbookId,
     version: args.version,

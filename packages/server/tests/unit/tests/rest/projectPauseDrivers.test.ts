@@ -10,6 +10,7 @@ import { fireDueTriggers } from 'src/lib/triggerScheduler';
 import {
   createAllowAllPolicy,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient } from '../../testClient';
@@ -493,6 +494,7 @@ describe('Project pause — work in motion', () => {
       const evaluation = await asAdmin()
         .post('/api/v1/evals')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           name: 'drivers-eval',
           agent_id: agentId,

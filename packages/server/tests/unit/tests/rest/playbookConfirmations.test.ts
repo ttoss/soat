@@ -1,6 +1,6 @@
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
   startChatCompletionsStub,
@@ -169,6 +169,7 @@ describe('Playbook confirmations', () => {
     const playbook = await asAdmin()
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: projectId,
         name: 'confirmed-pricing',
         definition: definitionWith(tool.body.id),
@@ -190,6 +191,7 @@ describe('Playbook confirmations', () => {
     const workflowPlaybook = await asAdmin()
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: projectId,
         name: 'reviewed',
         definition: {

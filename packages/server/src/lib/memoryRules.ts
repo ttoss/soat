@@ -31,6 +31,7 @@ export type MappedMemoryRule = {
   ai_provider_id: string | null;
   model: string | null;
   enabled: boolean;
+  policy_ids: string[];
   created_at: Date;
   updated_at: Date;
 };
@@ -88,6 +89,7 @@ export const mapMemoryRule = (rule: MemoryRuleRow): MappedMemoryRule => {
     ai_provider_id: linkedPublicId(rule.aiProvider),
     model: rule.model,
     enabled: rule.enabled,
+    policy_ids: rule.policyIds ?? [],
     created_at: rule.createdAt,
     updated_at: rule.updatedAt,
   };
@@ -132,6 +134,7 @@ export type MemoryRuleWriteArgs = {
   aiProviderId?: number | null;
   model?: string | null;
   enabled?: boolean;
+  policyIds?: string[] | null;
 };
 
 const TOOL_HANDLER_PROBLEMS = {
@@ -168,11 +171,15 @@ const assertValid = async (
   }
 };
 
-/** Holds the writer to the handler the rule starts on every event. */
+/** Holds the writer to the handler the rule starts and the grant it runs under. */
 const assertWriterStartsHandler = async (args: {
   writer: Writer;
   memoryStoreId: number;
-  shape: { agentId?: number | null; toolId?: number | null };
+  shape: {
+    agentId?: number | null;
+    toolId?: number | null;
+    policyIds?: string[] | null;
+  };
 }): Promise<void> => {
   const store = await db.MemoryStore.findByPk(args.memoryStoreId, {
     attributes: ['projectId'],
@@ -182,8 +189,23 @@ const assertWriterStartsHandler = async (args: {
     carrier: 'memoryRules',
     writer: args.writer,
     projectId: store.projectId,
-    carried: { actions: await startsOfRow(args.shape) },
+    carried: {
+      policyIds: args.shape.policyIds,
+      actions: await startsOfRow(args.shape),
+    },
   });
+};
+
+const handlerColumns = (args: MemoryRuleWriteArgs) => {
+  return {
+    agentId: args.agentId ?? null,
+    toolId: args.toolId ?? null,
+    action: args.action ?? null,
+    presetParameters: args.presetParameters ?? null,
+    prompt: args.prompt ?? null,
+    aiProviderId: args.aiProviderId ?? null,
+    model: args.model ?? null,
+  };
 };
 
 export const createMemoryRule = async (
@@ -208,14 +230,9 @@ export const createMemoryRule = async (
     memoryStoreId: args.memoryStoreId,
     on: args.on,
     sourceAgentIds: args.sourceAgentIds ?? null,
-    agentId: args.agentId ?? null,
-    toolId: args.toolId ?? null,
-    action: args.action ?? null,
-    presetParameters: args.presetParameters ?? null,
-    prompt: args.prompt ?? null,
-    aiProviderId: args.aiProviderId ?? null,
-    model: args.model ?? null,
+    ...handlerColumns(args),
     enabled: args.enabled ?? true,
+    policyIds: args.policyIds ?? null,
   });
 
   return mapMemoryRule(await memoryRules.reload(rule));
@@ -276,6 +293,7 @@ const WRITABLE_FIELDS = [
   'aiProviderId',
   'model',
   'enabled',
+  'policyIds',
 ] as const;
 
 /**
@@ -306,6 +324,7 @@ const effectiveShape = (args: {
     aiProviderId: pick('aiProviderId', args.rule.aiProviderId) as number | null,
     model: pick('model', args.rule.model) as string | null,
     sourceAgentIds: pick('sourceAgentIds', args.rule.sourceAgentIds),
+    policyIds: pick('policyIds', args.rule.policyIds) as string[] | null,
   };
 };
 

@@ -88,7 +88,7 @@ const NOT_A_CARRIER = {
   OrchestrationRun: 'records a run of an orchestration',
   OrchestrationVersion:
     "an orchestration's archived graph, written back through its update",
-  PlaybookExport: "records an export a playbook version's author started",
+  PlaybookExport: "records an export a case's execution started",
   Session: 'binds a conversation to its agent; the turn is checked as its caller',
   TaskTransition: 'records a transition',
   Trace: 'records a run',

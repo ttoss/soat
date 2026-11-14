@@ -67,7 +67,7 @@ export class PlaybookVersion extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare version: number;
 
-  /** `{ definition }` in the wire shape, `JSON` for the key order it keeps. */
+  /** `{ definition, policy_ids }` in the wire shape, `JSON` for the key order it keeps. */
   @Column({ type: DataType.JSON, allowNull: false })
   declare config: object;
 
@@ -79,19 +79,6 @@ export class PlaybookVersion extends Model {
 
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare createdByPrincipalId: string | null;
-
-  // Who wrote this version, by credential: a node's executor runs as it, so an
-  // API key's boundary still applies to work it set up. Null when the
-  // credential carries its boundary in the token (a trigger or OAuth token).
-  @Column({ type: DataType.STRING(16), allowNull: true })
-  declare principalKind: string | null;
-
-  @Column({ type: DataType.STRING(32), allowNull: true })
-  declare principalId: string | null;
-
-  // The IAM token bound the author wrote this version under, or null.
-  @Column({ type: DataType.JSON, allowNull: true })
-  declare principalBound: object | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

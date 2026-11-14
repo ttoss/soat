@@ -4,6 +4,7 @@ import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import {
   createAllowAllPolicy,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -351,6 +352,7 @@ describe('Project pause', () => {
       const evaluation = await asAdmin()
         .post('/api/v1/evals')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           name: 'pause-eval',
           agent_id: agentId,

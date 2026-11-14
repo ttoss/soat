@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { db } from 'src/db';
 import { drainEvalQueueOnce } from 'src/lib/evaluationWorker';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -61,7 +61,10 @@ describe('Evaluations — decider scorers', () => {
   const replies: Reply[] = [];
 
   let adminToken: string;
+
+  let adminGrant: string[];
   let userToken: string;
+  let userPolicyId: string;
   let noPermToken: string;
   let projectId: string;
   let otherProjectId: string;
@@ -105,6 +108,7 @@ describe('Evaluations — decider scorers', () => {
     return authenticatedTestClient(token)
       .post('/api/v1/evals')
       .send({
+        policy_ids: token === userToken ? [userPolicyId] : adminGrant,
         project_id: projectId,
         name: unique('decider-eval'),
         agent_id: agentId,
@@ -123,6 +127,7 @@ describe('Evaluations — decider scorers', () => {
     const res = await asUser()
       .post('/api/v1/deciders')
       .send({
+        policy_ids: [userPolicyId],
         project_id: projectId,
         name: unique('reply-review'),
         tool_id: deciderToolId,
@@ -195,7 +200,9 @@ describe('Evaluations — decider scorers', () => {
       createOtherProject: true,
     });
     adminToken = setup.adminToken;
+    adminGrant = await testGrant({ token: adminToken });
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId as string;
@@ -261,6 +268,7 @@ describe('Evaluations — decider scorers', () => {
     const otherDeciderRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/deciders')
       .send({
+        policy_ids: adminGrant,
         project_id: otherProjectId,
         name: 'other-review',
         tool_id: otherToolRes.body.id,

@@ -1,3 +1,4 @@
+import { testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
   startChatCompletionsStub,
@@ -88,6 +89,7 @@ describe('POST /api/v1/evals/:eval_id/runs — agent version pinning', () => {
     const evaluation = await asAdmin()
       .post('/api/v1/evals')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: projectId,
         name: 'eval-pinning',
         agent_id: agent.body.id,

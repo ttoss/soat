@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
+import type { ActingPrincipalType } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
 import { runStateAutomation } from './tasksAutomation';
@@ -33,8 +34,7 @@ const log = createDebug('soat:tasks');
  * API Keys, never from the Actors module. `automation` and `approval` are the
  * engine's own system principals.
  */
-export type TaskPrincipalKind =
-  'user' | 'api_key' | 'trigger' | 'automation' | 'approval';
+export type TaskPrincipalKind = ActingPrincipalType | 'automation' | 'approval';
 
 export type TaskPrincipal = {
   kind: TaskPrincipalKind;

@@ -1,3 +1,4 @@
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -269,6 +270,7 @@ describe('Share references through served versions and attachments', () => {
     };
     const playbook = async (name: string) => {
       return createIn(granteeId, '/api/v1/playbooks', {
+        policy_ids: await testGrant({ token: adminToken }),
         name,
         definition: definition(true),
       });
@@ -294,6 +296,7 @@ describe('Share references through served versions and attachments', () => {
   test('lists an agent beside a playbook case whose version names nothing shared', async () => {
     const tool = await sharedTool('besideUnrelatedCase');
     const playbook = await createIn(granteeId, '/api/v1/playbooks', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'unrelated-case',
       definition: {
         nodes: [

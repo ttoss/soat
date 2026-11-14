@@ -182,11 +182,9 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PLAYBOOK_INPUT_CONFLICT:
     'Re-read the case, decide each conflicting field against its current value, and retry with the revisions `meta.conflicts` names.',
   PLAYBOOK_EXECUTOR_FORBIDDEN:
-    "Grant the author the start action `meta.action` names on the executor, or have someone who holds it write the playbook's definition, which makes them the author of the new version.",
+    "Add a policy allowing the start action `meta.action` names to the playbook's `policy_ids`; cases created on the new version run under it.",
   WORK_AUTHORITY_MISSING:
     'Start the work again with a credential that can run it; work runs only under the authority stored when it started.',
-  PLAYBOOK_AUTHOR_UNAVAILABLE:
-    "Write the playbook's definition again as a user or API key that can start its executors; cases created on that version run as them.",
   ON_BEHALF_OF_INVALID:
     'Forward the tool assertion of the call being served unchanged, within its lifetime, with the API key of the project it names; or drop the header to write as the key.',
   PLAYBOOK_NODE_NOT_RUNNABLE:

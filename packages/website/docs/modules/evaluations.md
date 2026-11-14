@@ -78,6 +78,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `scorers` | array | Scorer configs; see [Scorers](#scorers) |
 | `pass_threshold` | number | 0–1, or `null` to report without gating; see [Pass semantics](#pass-semantics) |
 | `group_by` | string | A key of the items' `metadata` a run rolls its scores up by, or `null`; see [Grouped aggregates](#grouped-aggregates) |
+| `policy_ids` | string[] | Required on create. The policies every run acts under; see [Run authority](#run-authority) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 An `agent_id` or `dataset_id` naming a resource in another project is rejected with `400`.
@@ -132,7 +133,7 @@ The engine's guarantees hold identically for built-in and custom scorers.
 
 ### Who may write an eval
 
-An eval starts its agent, and each `tool` and `decider` scorer, on every run. Every create, update and formation apply therefore needs `agents:CreateAgentGeneration` on the agent, `tools:CallTool` on each scorer tool and `deciders:CreateDecision` on each scorer decider, even when the write changes none of them: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+An eval starts its agent, and each `tool` and `decider` scorer, on every run. Every create, update and formation apply therefore needs `agents:CreateAgentGeneration` on the agent, `tools:CallTool` on each scorer tool and `deciders:CreateDecision` on each scorer decider, even when the write changes none of them: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
 
 ### Scorers
 
@@ -265,7 +266,8 @@ call, an unparseable answer, an out-of-range score, or a missing verdict errors 
 **Validation** runs at eval create and update, and authoritatively at run start: a tool
 deleted since fails the run request with `400`.
 
-Bind one like any other scorer:
+Bind one like any other scorer; the eval's `policy_ids` (`$POLICY_ID`) must allow
+`agents:CreateAgentGeneration` and `tools:CallTool` ([Run authority](#run-authority)):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -273,6 +275,7 @@ Bind one like any other scorer:
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name tone-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"tool","name":"tone","tool_id":"'"$TOOL_ID"'","pass_threshold":0.5}]' \
   --pass-threshold 0.8
 ```
@@ -287,6 +290,7 @@ const { data, error } = await soat.evaluations.createEval({
     name: 'tone-suite',
     agent_id: agentId,
     dataset_id: datasetId,
+    policy_ids: [policyId],
     scorers: [{ type: 'tool', name: 'tone', tool_id: toolId, pass_threshold: 0.5 }],
     pass_threshold: 0.8,
   },
@@ -306,6 +310,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "name": "tone-suite",
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "scorers": [{"type":"tool","name":"tone","tool_id":"'"$TOOL_ID"'","pass_threshold":0.5}],
     "pass_threshold": 0.8
   }'
@@ -361,8 +366,9 @@ levels) to read it as 0–1:
   eval_run_id, dataset_item_id }` and read back through `decision_id`. Its spend is the
   decision's own (`source: decider` in [usage](./usage.md)).
 - **The run's authority.** Like every scorer and every item's generation, the decision
-  runs under the authority the run stores: its starter's, or its trigger's for a
-  scheduled run.
+  runs under the authority the run stores ([Run authority](#run-authority)), so the eval's
+  `policy_ids` must allow `deciders:CreateDecision` and the decider backend's own start
+  action.
 - **Errors are not zeros.** A failed decision, or a `score` that is not a number in 0–1,
   errors the item with the decision's id and code in `error`.
 
@@ -372,6 +378,7 @@ levels) to read it as 0–1:
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name reply-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers_by_name.resolves_issue.probability"},"pass_threshold":0.7}]' \
   --pass-threshold 0.8
 ```
@@ -386,6 +393,7 @@ const { data, error } = await soat.evaluations.createEval({
     name: 'reply-suite',
     agent_id: agentId,
     dataset_id: datasetId,
+    policy_ids: [policyId],
     scorers: [
       {
         type: 'decider',
@@ -413,6 +421,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "name": "reply-suite",
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "scorers": [{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers_by_name.resolves_issue.probability"},"pass_threshold":0.7}],
     "pass_threshold": 0.8
   }'
@@ -582,7 +591,7 @@ Filtering runs by a metadata key is not supported — fetch and filter client-si
 
 ### Run authority
 
-A run stores the authority it was started under: its starter's, or its trigger's `policy_ids` for a scheduled run. Every item's generation and every scorer run under it, however long after the request the worker drives them.
+A run acts under the eval's `policy_ids`, capped by whoever starts it: the caller, or the trigger's `policy_ids` for a scheduled run. The run stores that authority; every item's generation and every scorer run under it, however long after the request the worker drives them, so every nested action stays capped by the eval's grant. A run whose agent, scorer tool or scorer decider that grant may not start is refused `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`) before it is recorded, even when its starter may start it; the starter needs only `evaluations:RunEval`. An eval with empty `policy_ids` is allowed nothing: its runs score nothing until a write gives it some.
 
 ### Run tool context
 
@@ -721,7 +730,7 @@ Datasets, their items, and evals are declarable in a [Formation](./formations.md
 | --- | --- |
 | `dataset` | `name`, `description` |
 | `dataset_item` | `dataset_id`, `input`, `expected_output`, `metadata` |
-| `eval` | `name`, `agent_id`, `dataset_id`, `scorers`, `pass_threshold`, `group_by` |
+| `eval` | `name`, `agent_id`, `dataset_id`, `policy_ids`, `scorers`, `pass_threshold`, `group_by` |
 
 Items are their own resource, so an item curated through the API is never collateral of a
 formation apply. `dataset_id` is immutable on a `dataset_item`. Running the suite gives
@@ -982,7 +991,8 @@ curl -X POST "https://api.example.com/api/v1/datasets/$DATASET_ID/items" \
 </TabItem>
 </Tabs>
 
-Bind an eval and gate it at an 80% pass rate:
+Bind an eval and gate it at an 80% pass rate. `$POLICY_ID` is a policy allowing
+`agents:CreateAgentGeneration`, the grant every run acts under ([Run authority](#run-authority)):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -990,6 +1000,7 @@ Bind an eval and gate it at an 80% pass rate:
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name billing-regression-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"contains","value":"first of each month"}]' \
   --pass-threshold 0.8
 ```
@@ -1004,6 +1015,7 @@ const { data, error } = await soat.evaluations.createEval({
     name: 'billing-regression-suite',
     agent_id: agentId,
     dataset_id: datasetId,
+    policy_ids: [policyId],
     scorers: [{ type: 'contains', value: 'first of each month' }],
     pass_threshold: 0.8,
   },
@@ -1023,6 +1035,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "name": "billing-regression-suite",
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "scorers": [{"type":"contains","value":"first of each month"}],
     "pass_threshold": 0.8
   }'

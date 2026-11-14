@@ -1,6 +1,7 @@
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -76,7 +77,12 @@ describe('Playbook validation against the project', () => {
     seq += 1;
     const res = await authenticatedTestClient(adminToken)
       .post('/api/v1/playbooks')
-      .send({ project_id: project, name: `playbook-${seq}`, definition });
+      .send({
+        policy_ids: await testGrant({ token: adminToken }),
+        project_id: project,
+        name: `playbook-${seq}`,
+        definition,
+      });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };
