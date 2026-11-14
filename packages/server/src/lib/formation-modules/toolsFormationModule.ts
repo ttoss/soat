@@ -248,7 +248,7 @@ export const toolsFormationModule = defineFormationModule({
 
   create: ({ properties, projectId, actor }) => {
     return createTool({
-      isAllowed: actor.isAllowed,
+      writer: actor,
       projectId,
       name: properties.name as string,
       type: toOptionalString(properties.type),
@@ -272,7 +272,7 @@ export const toolsFormationModule = defineFormationModule({
 
   update: async ({ properties, physicalResourceId, actor }) => {
     await updateTool({
-      isAllowed: actor.isAllowed,
+      writer: actor,
       id: physicalResourceId,
       name: toOptionalString(properties.name),
       type: toOptionalString(properties.type),

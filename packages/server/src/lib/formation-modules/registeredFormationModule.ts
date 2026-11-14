@@ -26,6 +26,10 @@ import {
   requirePhysicalResourceId,
 } from '../formationHandlerClient';
 import type { FormationResourceTypeRegistration } from '../formationResourceTypeConfig';
+import {
+  carriedActionsOfRegisteredWrite,
+  type WriterRequest,
+} from '../formationResourceTypeWriter';
 import { normalizeDeclaredProperties } from '../formationsProperties';
 import type {
   FormationActor,
@@ -36,6 +40,7 @@ import type {
 import { isObjectRecord } from '../openapiSchemaFields';
 import { resolveInlineSchema } from '../openapiUnknownFields';
 import { findProjectPublicId } from '../projects';
+import { assertWriterHolds } from '../writerRule';
 import {
   pushFieldTypeErrors,
   pushRequiredFieldErrors,
@@ -153,6 +158,30 @@ const deployerAssertion = async (args: {
   };
 };
 
+/** The deployer holds every action the write performs; the handler checks none. */
+const assertDeployerHolds = async (args: {
+  registration: FormationResourceTypeRegistration;
+  actor: FormationActor;
+  projectId: number;
+  request: WriterRequest;
+  physicalResourceId?: string;
+  properties?: Record<string, unknown>;
+}): Promise<void> => {
+  await assertWriterHolds({
+    carrier: 'registeredResources',
+    writer: args.actor,
+    projectId: args.projectId,
+    carried: {
+      actions: carriedActionsOfRegisteredWrite({
+        writer: args.registration.writer,
+        request: args.request,
+        physicalResourceId: args.physicalResourceId,
+        properties: args.properties,
+      }),
+    },
+  });
+};
+
 type AssertValid = (args: {
   properties: unknown;
   forUpdate: boolean;
@@ -175,6 +204,14 @@ const buildUpdate = (args: {
     actor,
   }): Promise<UpdateOutcome | void> => {
     const properties = assertValid({ properties: raw, forUpdate: true });
+    await assertDeployerHolds({
+      registration,
+      actor,
+      projectId,
+      request: 'update',
+      physicalResourceId,
+      properties,
+    });
     const projectPublicId = await findProjectPublicId({ id: projectId });
     const body = await callFormationHandler({
       registration,
@@ -226,6 +263,13 @@ const buildOperations = (args: {
       actor,
     }) => {
       const properties = assertValid({ properties: raw, forUpdate: false });
+      await assertDeployerHolds({
+        registration,
+        actor,
+        projectId,
+        request: 'create',
+        properties,
+      });
       // The handler is told which project in the id its own callers use; the
       // internal row id never leaves the process.
       const projectPublicId = await findProjectPublicId({ id: projectId });
@@ -263,6 +307,13 @@ const buildOperations = (args: {
       resourceKey,
       actor,
     }) => {
+      await assertDeployerHolds({
+        registration,
+        actor,
+        projectId,
+        request: 'delete',
+        physicalResourceId,
+      });
       const projectPublicId = await findProjectPublicId({ id: projectId });
       await callFormationHandler({
         registration,
@@ -410,10 +461,9 @@ export const buildRegisteredFormationModule = (args: {
   return {
     resourceType,
 
-    // An operator-registered type's operations are not in the permission
-    // catalog, so no policy could grant them; it is gated on the request's own
-    // `formations:*` action and its handler acts within the deployer's
-    // authority (`deployerAssertion`). See `FormationModuleAuthorization`.
+    // Gated on the request's own `formations:*` action; each write then asserts
+    // what its `writer` declares for the deployer (`assertDeployerHolds`). See
+    // `FormationModuleAuthorization`.
     authorization: { operatorRegistered: true },
 
     validateProperties: ({ properties, basePath }) => {

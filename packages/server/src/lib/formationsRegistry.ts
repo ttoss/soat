@@ -33,7 +33,9 @@ import { webhooksFormationModule } from './formation-modules/webhooksFormationMo
 import { workflowsFormationModule } from './formation-modules/workflowsFormationModule';
 import type { FormationResourceTypeRegistration } from './formationResourceTypeConfig';
 import { loadFormationResourceTypeConfig } from './formationResourceTypeConfig';
+import { declaredActionsOf } from './formationResourceTypeWriter';
 import type { FormationModule } from './formationsTypes';
+import { assertDeclaredActionsCheckable } from './iamCheck';
 
 const registeredModules = new Map<string, FormationModule>();
 
@@ -133,7 +135,8 @@ export const supportedResourceTypes = (): ReadonlySet<string> => {
  * A registration replaces a built-in only when it declares `overridesBuiltin`,
  * and declares it only for a built-in name; anything else throws. The parser
  * rejects both earlier with a message naming the file; this is the backstop for
- * any other caller.
+ * any other caller. Every action its `writer` declares must be one `iam/check`
+ * answers, so IAM modules are registered first.
  */
 export const registerFormationResourceTypes = (args: {
   registrations: FormationResourceTypeRegistration[];
@@ -147,6 +150,10 @@ export const registerFormationResourceTypes = (args: {
           : `Cannot override formation resource type '${registration.name}': it is not a built-in type`
       );
     }
+    assertDeclaredActionsCheckable({
+      owner: `Formation resource type '${registration.name}'`,
+      actions: declaredActionsOf(registration.writer),
+    });
     const module = buildRegisteredFormationModule({ registration });
     if (isBuiltIn) {
       registeredModules.set(registration.name, module);

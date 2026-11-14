@@ -18,6 +18,7 @@ import { startEvalWorker } from './lib/evaluationWorker';
 import { initFormationResourceTypes } from './lib/formationsRegistry';
 import { initIamRegistrations } from './lib/iamRegistrations';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
+import { initMcpToolRegistrations } from './lib/mcpToolRegistrations';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startPlaybookScheduler } from './lib/playbookCascade';
@@ -42,8 +43,10 @@ const startServer = async () => {
   // registration file says so immediately rather than after a schema sync. Any
   // problem is fatal — see `formationResourceTypeConfig.ts` for why.
   try {
-    initFormationResourceTypes();
+    // IAM modules first: the others declare actions only they may answer.
     initIamRegistrations();
+    initMcpToolRegistrations();
+    initFormationResourceTypes();
     // Same reason and the same place: a rate that cannot be parsed must not
     // reach the meter, where it would be swallowed and every embedding frozen
     // at an unintended cost.

@@ -210,16 +210,21 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 
 ### The writer rule
 
-A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, API key, orchestration, share, decider, eval, guardrail, ingestion rule, memory rule or playbook version is checked against the resource as the write leaves it, whichever fields the request names:
+A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, API key, orchestration, share, decider, eval, guardrail, ingestion rule, memory rule, playbook version, tool or [registered formation resource](./formations.md#what-a-write-performs) is checked against the resource as the write leaves it, whichever fields the request names:
 
-| The resource           | The writer must hold                                                                                                                                                         | Refusal                     |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| carries `policy_ids`   | every grant of each policy, where the resource acts (an API key is instead capped by its owner, see [API keys](./api-keys.md))                                               | `403 POLICY_GRANT_NOT_HELD` |
-| starts a target        | the target's start action: `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask`, `orchestrations:StartRun`, `evaluations:RunEval` | `403 ACTION_NOT_HELD`       |
-| grants a shared action | that action on the shared resource                                                                                                                                           | `403 ACTION_NOT_HELD`       |
-| sends a secret         | `secrets:UseSecret` on it                                                                                                                                                    | `403 FORBIDDEN`             |
+| The resource           | The writer must hold                                                                                                                                                                              | Refusal                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| carries `policy_ids`   | every grant of each policy, where the resource acts (an API key is instead capped by its owner, see [API keys](./api-keys.md))                                                                    | `403 POLICY_GRANT_NOT_HELD` |
+| starts a target        | the target's start action: `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask`, `orchestrations:StartRun`, `evaluations:RunEval`                      | `403 ACTION_NOT_HELD`       |
+| grants a shared action | that action on the shared resource                                                                                                                                                                | `403 ACTION_NOT_HELD`       |
+| calls actions          | each action calling it performs: a [`builtin` tool](./tools.md#who-may-write-a-tool)'s, or what a [registered MCP server](#registered-mcp-servers) declares for each of an `mcp` tool's `actions` | `403 ACTION_NOT_HELD`       |
+| sends a secret         | `secrets:UseSecret` on it                                                                                                                                                                         | `403 FORBIDDEN`             |
 
-A version restore or a release is an edit. A deployment storing a resource of its own that starts runtime work, such as a channel that runs an agent, asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), which takes these actions, and any other built-in action the resource will perform, on their resource type (`srn:<project_id>:agent:<id>`, `srn:<project_id>:secret:<id>`).
+A version restore or a release is an edit. A deployment's own resource deployed through a formation is checked by the runtime from its registration (`writer`, see [Formations](./formations.md#what-a-write-performs)); written through the deployment's own routes, the deployment asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), from the same declaration.
+
+### Registered MCP servers
+
+A deployment serving an MCP server of its own declares, beside its modules, what each of its tools performs (`mcp_tools`, see [Configuration](#configuration)). An `mcp` tool whose `mcp.url` is such a server (compared without a trailing slash) must list its `actions`, each a tool the server declares, else `400 VALIDATION_FAILED`; its writer must hold every action they declare, on the declared type, else `403 ACTION_NOT_HELD`. Each declared action must be one `iam/check` answers on that type, or the boot fails.
 
 ## Conditions
 
@@ -589,9 +594,9 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
 
 ## Configuration
 
-| Environment Variable       | Required | Description                                                                                                               |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions). Unset (the default) registers none. |
+| Environment Variable       | Required | Description                                                                                                                                                                                    |
+| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`) and [MCP servers](#registered-mcp-servers) (`mcp_tools`). Unset (the default) registers none. |
 
 ```json
 {
@@ -607,8 +612,21 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
         { "action": "channels:GetChannel", "description": "Get a channel" }
       ]
     }
+  ],
+  "mcp_tools": [
+    {
+      "url": "https://platform.internal/mcp",
+      "tools": {
+        "create-playbook-case": [
+          {
+            "action": "playbooks:CreatePlaybookCase",
+            "resource_type": "playbook_case"
+          }
+        ]
+      }
+    }
   ]
 }
 ```
 
-Read once at boot; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module.
+Read once at boot; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`.

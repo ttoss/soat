@@ -80,6 +80,9 @@ export const WRITER_RULE_CARRIERS = {
     policiesRequired:
       'policy_ids must name at least one policy: the grant every execution of the version acts under.',
   },
+  tools: { models: ['Tool'] },
+  // A registered formation type's resources live behind its handler, no model.
+  registeredResources: { models: [] },
 } satisfies Record<string, WriterRuleCarrier>;
 
 export type WriterRuleCarrierName = keyof typeof WRITER_RULE_CARRIERS;

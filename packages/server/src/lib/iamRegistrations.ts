@@ -193,14 +193,14 @@ export const findIamActionRegistration = (
   return registration?.actions.has(action) ? registration : undefined;
 };
 
-export const loadIamRegistrationConfig = (args: {
+/** The parsed `IAM_REGISTRATIONS_CONFIG` file, or `null` when none is named. */
+export const readIamRegistrationFile = (args: {
   env: Record<string, string | undefined>;
-}): IamModuleRegistration[] => {
+}): { config: unknown; source: string } | null => {
   const source = args.env[IAM_REGISTRATIONS_CONFIG_ENV];
-  if (!source) return [];
-  let config: unknown;
+  if (!source) return null;
   try {
-    config = JSON.parse(fs.readFileSync(source, 'utf-8'));
+    return { config: JSON.parse(fs.readFileSync(source, 'utf-8')), source };
   } catch (error) {
     throw new Error(
       `Could not load IAM registrations config (${source}): ${
@@ -209,7 +209,14 @@ export const loadIamRegistrationConfig = (args: {
       { cause: error }
     );
   }
-  const registrations = parseIamRegistrationConfig({ config, source });
+};
+
+export const loadIamRegistrationConfig = (args: {
+  env: Record<string, string | undefined>;
+}): IamModuleRegistration[] => {
+  const file = readIamRegistrationFile(args);
+  if (!file) return [];
+  const registrations = parseIamRegistrationConfig(file);
   log(
     'registered %d IAM module(s): %s',
     registrations.length,

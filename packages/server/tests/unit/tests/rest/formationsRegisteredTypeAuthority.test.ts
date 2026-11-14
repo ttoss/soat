@@ -9,6 +9,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
   type FakeFormationHandler,
   startFakeFormationHandler,
+  TEST_CHANNEL_ACTIONS,
 } from '../../fixtures/formationHandler';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -79,6 +80,7 @@ beforeAll(async () => {
       'formations:CreateFormation',
       'formations:DeleteFormation',
       'formations:GetFormation',
+      ...TEST_CHANNEL_ACTIONS,
     ],
     createNoPermUser: false,
   });
@@ -175,5 +177,74 @@ describe('a registered type handler receives the deployer authority', () => {
     });
     expect(validate).toBeDefined();
     expect(validate?.headers[ASSERTION]).toBeUndefined();
+  });
+});
+
+describe('the runtime asserts what the registration declares, before the handler', () => {
+  const deployAsUser = async (
+    resources: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    counter += 1;
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/formations')
+      .send({
+        project_id: projectId,
+        name: `registered-writer-${String(counter)}`,
+        template: { resources },
+      });
+    expect(res.status).toBe(201);
+    return res.body;
+  };
+
+  const creates = () => {
+    return handler.recorded.filter((recorded) => {
+      return recorded.body.request_type === 'create';
+    });
+  };
+
+  test('a deployer without the declared create action is refused', async () => {
+    unregisterFormationResourceTypes({ names: ['test_channel'] });
+    registerFormationResourceTypes({
+      registrations: [
+        {
+          ...handler.registration({ capabilities: ['validate'] }),
+          writer: {
+            resourceType: 'agent',
+            actions: {
+              create: 'agents:CreateAgent',
+              update: 'agents:UpdateAgent',
+              delete: 'agents:DeleteAgent',
+            },
+            carries: [],
+          },
+        },
+      ],
+    });
+
+    const body = await deployAsUser(template.resources);
+
+    expect(body.status).toBe('failed');
+    expect(JSON.stringify(body)).toContain('agents:CreateAgent');
+    expect(creates()).toHaveLength(0);
+  });
+
+  test('a property carrying an action the deployer does not hold is refused', async () => {
+    const body = await deployAsUser({
+      Chan: {
+        type: 'test_channel',
+        properties: { name: 'A', kind: 'x', agent_id: 'agt_someone_elses' },
+      },
+    });
+
+    expect(body.status).toBe('failed');
+    expect(JSON.stringify(body)).toContain('agents:CreateAgentGeneration');
+    expect(creates()).toHaveLength(0);
+  });
+
+  test('a deployer holding every declared action reaches the handler', async () => {
+    const body = await deployAsUser(template.resources);
+
+    expect(body.status).toBe('active');
+    expect(creates()).toHaveLength(1);
   });
 });

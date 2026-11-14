@@ -30,6 +30,21 @@ const VALID_ENTRY = {
     secret_env: 'CHANNEL_HANDLER_SECRET',
   },
   capabilities: ['validate', 'read'],
+  // Built-in actions, so the registry's `iam/check` test passes without a
+  // registered IAM module.
+  writer: {
+    resource_type: 'webhook',
+    create: 'webhooks:CreateWebhook',
+    update: 'webhooks:UpdateWebhook',
+    delete: 'webhooks:DeleteWebhook',
+    carries: [
+      {
+        property: 'agent_id',
+        action: 'agents:CreateAgentGeneration',
+        resource_type: 'agent',
+      },
+    ],
+  },
   schema: {
     type: 'object',
     properties: {
@@ -359,6 +374,67 @@ describe('parseFormationResourceTypeConfig', () => {
       );
     });
 
+    test('reads the writer declaration', () => {
+      const [registration] = parse({ resource_types: [VALID_ENTRY] });
+      expect(registration.writer).toEqual({
+        resourceType: 'webhook',
+        actions: {
+          create: 'webhooks:CreateWebhook',
+          update: 'webhooks:UpdateWebhook',
+          delete: 'webhooks:DeleteWebhook',
+        },
+        carries: [
+          {
+            property: 'agent_id',
+            action: 'agents:CreateAgentGeneration',
+            resourceType: 'agent',
+          },
+        ],
+      });
+    });
+
+    test('rejects an entry without a writer declaration', () => {
+      const { writer: _dropped, ...noWriter } = VALID_ENTRY;
+      rejects({ resource_types: [noWriter] }, /`writer` is required/);
+    });
+
+    test('rejects a lifecycle action that is not <module>:<Operation>', () => {
+      rejects(
+        {
+          resource_types: [
+            {
+              ...VALID_ENTRY,
+              writer: { ...VALID_ENTRY.writer, update: 'Update' },
+            },
+          ],
+        },
+        /`writer.update` must be an IAM action/
+      );
+    });
+
+    test('rejects a carried property the schema does not declare', () => {
+      rejects(
+        {
+          resource_types: [
+            {
+              ...VALID_ENTRY,
+              writer: {
+                ...VALID_ENTRY.writer,
+                carries: [
+                  {
+                    property: 'default.agent_id',
+                    action: 'agents:CreateAgentGeneration',
+                    resource_type: 'agent',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        /names 'default', which the schema does not declare/
+      );
+    });
+
     test('rejects a schema that is not an object schema with properties', () => {
       const { schema: _dropped, ...noSchema } = VALID_ENTRY;
       rejects(
@@ -510,6 +586,23 @@ describe('registerFormationResourceTypes — overriding a built-in', () => {
     }
 
     expect(getFormationModule({ resourceType: 'webhook' })).toBe(builtIn);
+  });
+
+  test('a writer action `iam/check` does not answer on its type is refused', () => {
+    const registration = webhookOverride();
+    expect(() => {
+      registerFormationResourceTypes({
+        registrations: [
+          {
+            ...registration,
+            writer: { ...registration.writer, resourceType: 'agent' },
+          },
+        ],
+      });
+    }).toThrow(/declares webhooks:CreateWebhook on 'agent'/);
+    expect(
+      getFormationModule({ resourceType: 'webhook' })?.authorization
+    ).not.toHaveProperty('operatorRegistered');
   });
 
   test('an override of a name no built-in has is refused by the registry', () => {
