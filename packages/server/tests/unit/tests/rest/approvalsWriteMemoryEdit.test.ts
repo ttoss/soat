@@ -174,4 +174,28 @@ describe('POST /api/v1/approvals/{approval_id}/approve — editing a held write_
       content: 'Refunds need a dated receipt.',
     });
   });
+
+  test.each([
+    ['empty', { content: '' }],
+    ['blank', { content: '   ' }],
+    ['missing', {}],
+    ['non-string', { content: 42 }],
+  ])(
+    'an edit with %s content is refused and the approval stays pending',
+    async (_label, editedArguments) => {
+      const seeded = await seedWrite();
+
+      const res = await authenticatedTestClient(writerToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: editedArguments });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('APPROVAL_INVALID_EDIT');
+
+      const after = await authenticatedTestClient(adminToken).get(
+        `/api/v1/approvals/${seeded.id}`
+      );
+      expect(after.body.status).toBe('pending');
+    }
+  );
 });

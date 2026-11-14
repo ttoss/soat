@@ -707,7 +707,8 @@ const assertValidEditedArgs = (args: {
  *
  * Scoped to the approval's own project, and silent where there is nothing to
  * check against: a proposal naming a tool that no longer exists, a tool that
- * declares no schema, or a schema ajv cannot compile.
+ * declares no schema, or a schema ajv cannot compile. A native tool has no row;
+ * the route checks its edit through `nativeProposalEditError`.
  */
 const assertEditMatchesToolSchema = async (args: {
   editedArguments?: object | null;
