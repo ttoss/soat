@@ -5,6 +5,7 @@ import {
   createPolicySetsIsAllowed,
   type LabeledPolicySets,
   unlabelPolicySets,
+  wrapIsAllowed,
 } from '../lib/permissions';
 import { buildRequestTagContext } from '../lib/tags';
 import { resolveReachableProjectIds } from './authProjectResolvers';
@@ -154,15 +155,15 @@ export const buildAuthority = (args: {
   // authority, so every check it makes reads them, the project probe of a
   // create included.
   const requestTagContext: Record<string, string> = {};
-  const isAllowed = Object.assign(
-    (check: Parameters<typeof checkPolicies>[0]) => {
+  const isAllowed = wrapIsAllowed({
+    isAllowed: checkPolicies,
+    around: (check: Parameters<typeof checkPolicies>[0]) => {
       return checkPolicies({
         ...check,
         context: { ...requestTagContext, ...check.context },
       });
     },
-    { refusedBy: checkPolicies.refusedBy }
-  );
+  });
   const getLabeledPolicies = async (
     projectPublicId: string
   ): Promise<LabeledPolicySets> => {
