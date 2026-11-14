@@ -14,10 +14,16 @@ import {
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
 import { readAgentRunAs } from './agentRunAs';
+import { type ProvenancedTool, RESULT_PROVENANCE } from './agentToolNames';
 import {
   claimPausedGeneration,
   notAwaitingToolOutputs,
 } from './generationPendingState';
+import {
+  countOf,
+  type ProvenanceCounts,
+  sumProvenance,
+} from './generationProvenance';
 import {
   collectSystemInstructions,
   withoutSystemMessages,
@@ -89,6 +95,28 @@ const isWithinProjectScope = (args: {
 }): boolean => {
   if (args.projectIds === undefined) return true;
   return args.projectIds.includes(args.projectId);
+};
+
+/**
+ * What the submitted outputs add to the turn's context, each by the client
+ * tool it answers. A tool no longer offered counts as untrusted.
+ */
+const submittedOutputsProvenance = (args: {
+  toolOutputs: Array<{ toolCallId: string }>;
+  pending: PendingGeneration;
+}): ProvenanceCounts => {
+  return sumProvenance(
+    ...args.toolOutputs.map((output) => {
+      const toolName = args.pending.pendingToolCalls.find((toolCall) => {
+        return toolCall.toolCallId === output.toolCallId;
+      })?.toolName;
+      const resolved: ProvenancedTool | undefined = toolName
+        ? args.pending.resolvedTools[toolName]
+        : undefined;
+      const metric = resolved?.[RESULT_PROVENANCE];
+      return countOf(metric === undefined ? 'untrusted_tool_results' : metric);
+    })
+  );
 };
 
 /** The authority the generation stores, which a resume only narrows. */
@@ -177,6 +205,9 @@ export const submitToolOutputs = async (args: {
     throw notAwaitingToolOutputs(args.generationId);
   }
 
+  pending.provenance.record(
+    submittedOutputsProvenance({ toolOutputs: args.toolOutputs, pending })
+  );
   const toolResultMessages = buildToolResultMessages({
     toolOutputs: args.toolOutputs,
     pendingToolCalls: pending.pendingToolCalls,

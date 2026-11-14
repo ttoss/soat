@@ -10,6 +10,7 @@ import {
 } from './agentGenerationTypes';
 import { emitGenerationEvent } from './generationEvents';
 import { recordSegmentUsage } from './generationLifecycle';
+import type { GenerationProvenance } from './generationProvenance';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
@@ -158,6 +159,7 @@ const storePendingGenerationState = (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   aiProviderId: string | null;
+  provenance: GenerationProvenance;
 }): Promise<unknown> => {
   // Computed once rather than twice below, so a change to how a turn is frozen
   // cannot land on only one copy and leave a recovered generation resuming from
@@ -193,6 +195,7 @@ const storePendingGenerationState = (args: {
     toolsAuthority: args.toolsAuthority,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
+    provenance: args.provenance,
   });
 
   // Persist pending state to DB so it can be recovered after a server restart.
@@ -254,6 +257,7 @@ export const savePendingGeneration = async (args: {
   toolsAuthority: WorkAuthority | null;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  provenance: GenerationProvenance;
 }): Promise<GenerationResult> => {
   const aiProviderId = servedAiProviderId({
     model: args.model,

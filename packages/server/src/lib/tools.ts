@@ -31,6 +31,7 @@ import {
 } from './toolsCall';
 import { assertNoLiteralCredentials } from './toolSecretRedaction';
 import { assertValidToolTemplateTokens } from './toolTemplates';
+import { assertTrustedOutputAllowed } from './toolTrust';
 import {
   assertToolTypeSupported,
   type ToolUpdateArgs,
@@ -70,6 +71,7 @@ export type MappedTool = {
   pipeline: object | null;
   output_mapping: object | null;
   guardrail_ids: string[] | null;
+  trusted_output: boolean;
   created_at: Date;
   updated_at: Date;
 };
@@ -110,6 +112,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
     pipeline: tool.pipeline,
     output_mapping: tool.outputMapping,
     guardrail_ids: tool.guardrailIds,
+    trusted_output: tool.trustedOutput,
     created_at: tool.createdAt,
     updated_at: tool.updatedAt,
   };
@@ -139,6 +142,7 @@ const buildToolConfigFields = (args: CreateToolArgs) => {
     pipeline: nullify(args.pipeline),
     outputMapping: nullify(args.outputMapping),
     guardrailIds: nullify(args.guardrailIds),
+    trustedOutput: args.trustedOutput ?? false,
   };
 };
 
@@ -223,6 +227,11 @@ export const createTool = async (
     projectId: args.projectId,
     isAllowed: args.writer.isAllowed,
   });
+  await assertTrustedOutputAllowed({
+    trustedOutput: args.trustedOutput,
+    projectId: args.projectId,
+    isAllowed: args.isAllowed,
+  });
   await validateToolDefinition({ definition: args, projectId: args.projectId });
   await assertWriterHolds({
     carrier: 'tools',
@@ -296,6 +305,7 @@ const buildToolUpdates = (args: {
   pipeline?: object | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
+  trustedOutput?: boolean;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const scalarFields = [
@@ -312,6 +322,7 @@ const buildToolUpdates = (args: {
     'pipeline',
     'outputMapping',
     'guardrailIds',
+    'trustedOutput',
   ] as const;
   for (const field of scalarFields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -348,6 +359,11 @@ export const updateTool = async (
     tool: args,
     projectId: tool.projectId,
     isAllowed: args.writer.isAllowed,
+  });
+  await assertTrustedOutputAllowed({
+    trustedOutput: args.trustedOutput,
+    projectId: tool.projectId,
+    isAllowed: args.isAllowed,
   });
 
   await validateToolUpdate({ args, tool });

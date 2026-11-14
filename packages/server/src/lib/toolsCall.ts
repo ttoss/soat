@@ -50,6 +50,7 @@ export type InlineToolDefinition = {
   presetParameters?: object;
   pipeline?: object;
   outputMapping?: object;
+  trustedOutput?: boolean;
 };
 
 // The fields the call paths actually read. Both `MappedTool` and

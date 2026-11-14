@@ -3,6 +3,10 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from '../db';
 import { isNativeProposal } from './agentToolApproval';
 import { enforceableCostUsd } from './costEnforceability';
+import {
+  isProvenanceMetric,
+  type ProvenanceCounts,
+} from './generationProvenance';
 import type {
   RuntimeMetric,
   RuntimeModule,
@@ -34,6 +38,8 @@ export type RuntimeEntities = {
   /** The tool's events: a stored tool's by its row, a native tool's by its id. */
   toolScope: () => Promise<EventWhere | null>;
   orchestrationRunId: () => Promise<number | null>;
+  /** What the step proposing the call had read; `null` outside a generation. */
+  generation: ProvenanceCounts | null;
 };
 
 const memoize = <T>(load: () => Promise<T>): (() => Promise<T>) => {
@@ -54,9 +60,11 @@ export const runtimeEntities = (args: {
   agentId?: string | null;
   toolId?: string | null;
   orchestrationRunId?: string | null;
+  generation: ProvenanceCounts | null;
 }): RuntimeEntities => {
   return {
     projectId: args.projectId,
+    generation: args.generation,
     guardrailId: () => {
       return args.guardrailId ?? null;
     },
@@ -100,7 +108,7 @@ export const runtimeEntities = (args: {
 // The events the module's entity owns, or `null` when the call has no such
 // entity.
 const moduleScope = async (args: {
-  module: RuntimeModule;
+  module: Exclude<RuntimeModule, 'generations'>;
   entities: RuntimeEntities;
 }): Promise<EventWhere | null> => {
   const { entities } = args;
@@ -129,10 +137,21 @@ const moduleScope = async (args: {
   }
 };
 
+const readGenerationCount = (args: {
+  metric: RuntimeMetric;
+  generation: ProvenanceCounts | null;
+}): number | undefined => {
+  return isProvenanceMetric(args.metric)
+    ? args.generation?.[args.metric]
+    : undefined;
+};
+
 const TOOL_ERROR_OUTCOMES = ['error', 'timeout'];
 
+type UsageMetric = Exclude<RuntimeMetric, keyof ProvenanceCounts>;
+
 const readMetric = (args: {
-  metric: RuntimeMetric;
+  metric: UsageMetric;
   where: EventWhere;
 }): Promise<number | null> => {
   switch (args.metric) {
@@ -169,7 +188,16 @@ export const resolveRuntimeMetric = async (args: {
   entities: RuntimeEntities;
   now: Date;
 }): Promise<number | null | undefined> => {
-  const scope = await moduleScope(args);
+  const { metric, module } = args;
+  // Counted in the turn, not read from the meter.
+  if (module === 'generations') {
+    return readGenerationCount({
+      metric,
+      generation: args.entities.generation,
+    });
+  }
+  if (isProvenanceMetric(metric)) return undefined;
+  const scope = await moduleScope({ module, entities: args.entities });
   if (scope === null) return undefined;
   const where =
     args.window === 'total'
@@ -180,5 +208,5 @@ export const resolveRuntimeMetric = async (args: {
             [Op.gte]: new Date(args.now.getTime() - WINDOW_MS[args.window]),
           },
         };
-  return readMetric({ metric: args.metric, where });
+  return readMetric({ metric, where });
 };

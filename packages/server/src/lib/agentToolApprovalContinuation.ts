@@ -23,6 +23,7 @@ import {
   registerApprovalResumeHandler,
 } from './approvals';
 import { expireChainIfSettled } from './generationChains';
+import { countStoredToolResult } from './generationProvenance';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
@@ -284,6 +285,13 @@ const executeApprovedAction = async (args: {
       item: args.item,
       projectInternalId: args.projectInternalId,
     }),
+  });
+
+  // The result enters the continuation, which starts from the proposing row.
+  await countStoredToolResult({
+    generationId: args.item.generation_id,
+    toolId: proposed.tool_id,
+    action: proposed.action,
   });
 
   return isPlainObject(rawResult) ? rawResult : { output: rawResult };

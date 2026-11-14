@@ -24,10 +24,15 @@ import {
   mapGenerationWithUsage,
   type PersistedGeneration,
 } from './generationMapper';
+import {
+  NO_PROVENANCE,
+  provenanceColumns,
+  type ProvenanceCounts,
+  provenanceStatusUpdates,
+} from './generationProvenance';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { readInputModalities } from './inputModalities';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
-import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
 import { type StartedWork, startedWorkColumns } from './principals';
 import { projectScopeWhere } from './projectScope';
@@ -77,6 +82,7 @@ const commitGenerationWithTrace = async (helperArgs: {
       inputModalities: string[];
       retrieval?: KnowledgeRetrieval;
       idempotency?: GenerationIdempotency;
+      provenance?: ProvenanceCounts;
     };
   agentDbId: number;
   initiatorDbId: number | null;
@@ -140,6 +146,8 @@ const commitGenerationWithTrace = async (helperArgs: {
         inputModalities: args.inputModalities,
         // Pointers, not text — see the column.
         retrieval: args.retrieval ?? null,
+        // Counts, not content — see the columns.
+        ...provenanceColumns(args.provenance ?? NO_PROVENANCE),
         idempotencyKey: args.idempotency?.key ?? null,
         idempotencyDigest: args.idempotency?.digest ?? null,
         ...attributionColumns(args),
@@ -181,6 +189,9 @@ const insertGenerationRecord = async (
       retrieval?: KnowledgeRetrieval;
       // A unique violation on it is the caller's retry losing the race.
       idempotency?: GenerationIdempotency;
+      // What the turn's context already holds when it starts: its chain's
+      // counts, its input and its knowledge injection.
+      provenance?: ProvenanceCounts;
     }
 ) => {
   const [agent, initiatorGeneration] = await Promise.all([
@@ -319,6 +330,15 @@ export const updateGenerationRecord = async (
     alreadyRedacted: gen.contentRedactedAt !== null,
     updates,
   });
+
+  // What the turn read since its row was last written rides the status write.
+  Object.assign(
+    updates,
+    provenanceStatusUpdates({
+      generationId: args.publicId,
+      status: args.status,
+    })
+  );
 
   await gen.update(updates);
 
@@ -469,29 +489,6 @@ export const getGeneration = async (args: {
   });
 
   return mapGenerationWithUsage(gen, usage);
-};
-
-/**
- * Every memory write a turn made, oldest first: each memory rule's firings and
- * the agent's own `write_memory` calls alike. The rows behind the generation's
- * per-rule `extraction` counts.
- */
-export const getGenerationMemoryAssertions = async (args: {
-  publicId: string;
-  projectIds?: number[];
-  limit?: number;
-  cursor?: string;
-}) => {
-  const gen = await generations.findByPublicId({
-    id: args.publicId,
-    projectIds: args.projectIds,
-  });
-  if (!gen) return null;
-  return listGenerationMemoryAssertions({
-    generationDbId: gen.id as number,
-    limit: args.limit,
-    cursor: args.cursor,
-  });
 };
 
 // Shallow-merged so repeated patches accumulate. The bag holds only caller

@@ -499,6 +499,8 @@ export const buildKnowledgeBindings = (args: {
         toolType: 'native',
         toolName: WRITE_MEMORY_TOOL_NAME,
         toolGuardrails: [],
+        // Its result is the platform's own receipt of the write.
+        trustedOutput: true,
         rawParameters: WRITE_MEMORY_PARAMETERS,
       },
     },

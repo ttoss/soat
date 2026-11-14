@@ -235,6 +235,7 @@ export const runToolNodeGate = async (args: {
     orchestrationRunId: args.orchestrationRunId ?? null,
     run: { nodeAttempt: args.nodeAttempt ?? null },
     baseGuardrails: [],
+    provenance: null,
   };
 
   const classification = await classifyGuardrailCall({

@@ -7,6 +7,10 @@ import {
 } from './agentAuthority';
 import { agentDenied, callerDenied } from './authorizationDenial';
 import { getDocument } from './documents';
+import {
+  type ProvenanceMetric,
+  resultProvenance,
+} from './generationProvenance';
 import { buildSrn } from './iam';
 import { resolveSoatActionScope } from './soatActionScope';
 import { soatTools } from './soatTools';
@@ -202,7 +206,11 @@ const resolveDocumentContent = async (args: {
   content: DocumentMessageContent;
   authUser?: AuthUser;
   agentAuthority?: AgentAuthority;
-}): Promise<{ content: string; documentId: string }> => {
+}): Promise<{
+  content: string;
+  documentId: string;
+  provenance: ProvenanceMetric;
+}> => {
   const document = await getDocument({ id: args.content.document_id });
 
   if (!document || !document.project_id) {
@@ -236,6 +244,7 @@ const resolveDocumentContent = async (args: {
   return {
     content: document.content ?? '',
     documentId: args.content.document_id,
+    provenance: 'knowledge_results',
   };
 };
 
@@ -280,7 +289,7 @@ const resolveToolOutputContent = async (args: {
   allowedToolIds?: string[];
   agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
-}): Promise<{ content: string }> => {
+}): Promise<{ content: string; provenance: ProvenanceMetric | null }> => {
   assertToolAllowedForAgent({
     allowedToolIds: args.allowedToolIds,
     agentId: args.agentAuthority?.agentId ?? null,
@@ -339,7 +348,14 @@ const resolveToolOutputContent = async (args: {
     );
   }
 
-  return { content: stringifyToolOutput(resolvedContent) };
+  return {
+    content: stringifyToolOutput(resolvedContent),
+    provenance: resultProvenance({
+      toolType: toolRow.type,
+      action: args.content.action,
+      trustedOutput: toolRow.trustedOutput,
+    }),
+  };
 };
 
 export const resolveMessageContent = async (args: {
@@ -350,7 +366,12 @@ export const resolveMessageContent = async (args: {
   allowedToolIds?: string[];
   agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
-}): Promise<{ content: string; documentId?: string }> => {
+}): Promise<{
+  content: string;
+  documentId?: string;
+  /** The counter the content feeds as it enters a generation's context. */
+  provenance?: ProvenanceMetric | null;
+}> => {
   if (typeof args.content === 'string') {
     return { content: args.content };
   }

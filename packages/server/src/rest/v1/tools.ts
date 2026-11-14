@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { pinCallerActorToolContext } from 'src/lib/generationAttribution';
 import { buildSrn } from 'src/lib/iam';
+import { toOptionalBoolean } from 'src/lib/resource-inputs/normalizers';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { listToolActions } from 'src/lib/toolActions';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
@@ -175,6 +176,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
       : undefined,
     contextKeys: parseNullableArray(contextKeys),
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
+    trustedOutput: toOptionalBoolean(body.trusted_output),
     ...jsonFields,
   });
 
@@ -321,6 +323,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     pipeline: parsedPipeline,
     outputMapping: parsedOutputMapping,
     guardrailIds: nextGuardrailIds,
+    trustedOutput: toOptionalBoolean(body.trusted_output),
   });
 
   ctx.body = redactToolSecrets(result);

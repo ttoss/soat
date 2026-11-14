@@ -92,6 +92,11 @@ export class Tool extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare guardrailIds: string[] | null;
 
+  // Whether this tool's results are content no attacker can write; read when a
+  // result enters a generation's context (`runtime.generations.*`).
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare trustedOutput: boolean;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

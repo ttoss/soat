@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import type { ProvenanceCounts } from './generationProvenance';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectDocumentVarPaths } from './guardrailDocument';
 import type { GuardrailEvaluationContext } from './guardrailEvaluation';
@@ -38,6 +39,8 @@ export type GuardrailCallIdentity = {
   action?: string | null;
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
+  /** What the step proposing the call had read; absent outside a generation. */
+  generation?: ProvenanceCounts | null;
 };
 
 // Reads a dotted path (`a.b.c`) off a nested object, returning `undefined` when
@@ -90,7 +93,7 @@ const buildDeterministicRuntime = (
 const UNRESOLVED = Symbol('unresolved');
 
 // A call with no entity of the key's module (no agent, no run, an inline
-// tool) leaves it unresolved rather than reading 0 and letting a ceiling pass.
+// tool, no generation) leaves it unresolved rather than reading 0 and letting a ceiling pass.
 const resolveMetricKey = async (args: {
   key: Extract<RuntimeKey, { kind: 'metric' }>;
   path: string;
@@ -133,6 +136,7 @@ export const buildGuardrailRuntimeContext = async (args: {
     agentId: args.identity.agentId,
     toolId: args.identity.toolId,
     orchestrationRunId: args.identity.orchestrationRunId,
+    generation: args.identity.generation ?? null,
   });
 
   for (const path of args.referencedRuntimePaths) {

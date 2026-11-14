@@ -23,6 +23,7 @@ import {
 } from './generationIdempotency';
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
+import { provenanceForNewRow } from './generationProvenance';
 import { createGenerationRecord } from './generations';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { assertGenerationProjectAcceptsWork } from './projectPause';
@@ -63,6 +64,7 @@ const dispatchGeneration = (args: {
       rootTraceId: args.rootTraceId ?? null,
       toolContext: args.ctx.toolContext ?? null,
       remainingDepth: args.ctx.remainingDepth ?? null,
+      provenance: args.ctx.provenance,
     });
   }
   return runNonStreamGeneration({
@@ -80,6 +82,7 @@ const dispatchGeneration = (args: {
     abortSignal: args.abortSignal,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: args.ctx.remainingDepth ?? null,
+    provenance: args.ctx.provenance,
   });
 };
 
@@ -139,6 +142,7 @@ const resolveContextAndRecord = async (
     actorId: args.actorId,
     pinnedAgentVersion: args.pinnedAgentVersion,
     outputSchemaOverride: args.outputSchemaOverride,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 
   // Awaited so the record reliably exists before the generation runs and a
@@ -185,6 +189,7 @@ const resolveContextAndRecord = async (
     inputMessages: ctx.inputMessages,
     toolSurface: ctx.toolSurface,
     retrieval: ctx.retrieval,
+    provenance: provenanceForNewRow(ctx.provenance),
     idempotency: args.idempotency,
   }).catch((error) => {
     // The one write failure that must not be swallowed: a claimed key means

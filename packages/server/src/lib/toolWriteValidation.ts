@@ -46,6 +46,7 @@ export type ToolUpdateArgs = {
   pipeline?: object | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
+  trustedOutput?: boolean;
 };
 
 /**

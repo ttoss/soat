@@ -28,6 +28,13 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
+import {
+  countOf,
+  createGenerationProvenance,
+  type GenerationProvenance,
+  readGenerationProvenance,
+  trackGenerationProvenance,
+} from './generationProvenance';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { assertGenerationModelPriced } from './modelPricingGate';
 import { withPromptCacheBreakpoint } from './promptCaching';
@@ -79,6 +86,11 @@ export type GenerationContext = {
    * after the fact.
    */
   agentVersion: number;
+  /**
+   * What the turn's context holds and where it came from, counted as results
+   * enter it (`generationProvenance.ts`).
+   */
+  provenance: GenerationProvenance;
   /**
    * The tool choice this turn runs under — the agent's own, on a continuation
    * as much as on the turn that started the chain. Resolved once here so the
@@ -228,6 +240,8 @@ export type BuildGenerationContextArgs = {
   pinnedAgentVersion?: number | null;
   /** Replaces the served output schema — see `withOutputSchema`. */
   outputSchemaOverride?: Record<string, unknown>;
+  /** The generation this turn continues, whose counts it starts from. */
+  initiatorGenerationId?: string | null;
 };
 
 const requireLiveAgent = async (args: {
@@ -273,12 +287,23 @@ const resolveTurnAgent = async (
   };
 };
 
+/** A continuation's context is its chain's: it starts from what its initiator had read. */
+const chainProvenance = async (
+  initiatorGenerationId: string | null | undefined
+): Promise<GenerationProvenance> => {
+  return createGenerationProvenance(
+    await readGenerationProvenance(initiatorGenerationId)
+  );
+};
+
 export const buildGenerationContext = async (
   args: BuildGenerationContextArgs
 ): Promise<GenerationContext> => {
   const toolContext = await resolvePinnedToolContext(args);
 
   const { typedAgent, agentVersion } = await resolveTurnAgent(args);
+
+  const provenance = await chainProvenance(args.initiatorGenerationId);
 
   const agentAuthority = await resolveAgentAuthority({
     agentId: args.agentId,
@@ -298,6 +323,7 @@ export const buildGenerationContext = async (
       .toolIds,
     agentAuthority,
     toolContext, // identity-pinned, not the raw caller bag
+    provenance,
   });
   const { model } = await resolveGenerationModel({
     agentId: args.agentId,
@@ -329,6 +355,7 @@ export const buildGenerationContext = async (
     remainingDepth: args.remainingDepth,
     guardrailContext: args.guardrailContext,
     sessionId: args.sessionId,
+    provenance,
   });
   const resolvedTools = toolSurface.tools;
 
@@ -343,6 +370,8 @@ export const buildGenerationContext = async (
     unavailableToolNames: toolSurface.unavailableToolNames,
     actorId: toolContext?.actor_id,
   });
+  provenance.record(countOf('knowledge_results', retrieval?.length ?? 0));
+  trackGenerationProvenance({ generationId, provenance });
 
   return {
     typedAgent,
@@ -358,6 +387,7 @@ export const buildGenerationContext = async (
     toolContext: toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
     agentVersion,
+    provenance,
     toolChoice: normalizeToolChoice(typedAgent.toolChoice),
   };
 };
