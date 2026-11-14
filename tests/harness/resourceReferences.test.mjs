@@ -34,6 +34,8 @@ describe('tool and agent references', () => {
     'lib/ingestionRuleRefs.ts':
       'reads the type of a converter already resolved to an internal id',
     'lib/knowledgeConfigBackfill.ts': 'a schema backfill over every row',
+    'lib/mcpDefinitionPins.ts':
+      'reads back the pins of a tool already resolved for the turn',
     'lib/memoryRules.ts':
       'reads the type of a handler already resolved to an internal id',
     'lib/modelRouteDefaults.ts': "lists a route's dependents",

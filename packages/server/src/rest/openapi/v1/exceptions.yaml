@@ -74,6 +74,7 @@ paths:
                 quota_unpriced,
                 event_trigger_loop,
                 chain_limit,
+                mcp_definition_drift,
                 manual,
               ]
         - $ref: './pagination.yaml#/components/parameters/Limit'
@@ -309,6 +310,7 @@ components:
               quota_unpriced,
               event_trigger_loop,
               chain_limit,
+              mcp_definition_drift,
               manual,
             ]
           description: How the exception was filed

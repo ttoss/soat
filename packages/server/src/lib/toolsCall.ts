@@ -5,6 +5,7 @@ import type { SenderCredential } from './assertionSender';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
+import { isPlainObject } from './plainObject';
 import { admitSharedCall } from './shareCaps';
 import {
   assertToolCallAllowed,
@@ -83,6 +84,16 @@ export const assertEphemeralTypeSupported = (
     throw new DomainError(
       'VALIDATION_FAILED',
       'Ephemeral tool definitions of type "pipeline" are not supported; create a persisted pipeline tool via POST /tools and reference it by ID instead.'
+    );
+  }
+  // Pins are stored on the tool's row, which an inline definition does not have.
+  if (
+    isPlainObject(definition.mcp) &&
+    definition.mcp.pin_definitions === true
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'An inline mcp tool cannot set mcp.pin_definitions; create a persisted tool via POST /tools and reference it by ID instead.'
     );
   }
 };

@@ -63,6 +63,11 @@ export class Tool extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare mcp: object | null;
 
+  // One digest per action, written once by the first listing while
+  // `mcp.pin_definitions` is on; cleared to re-pin.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare mcpPins: Record<string, string> | null;
+
   @Column({ type: DataType.JSON, allowNull: true })
   declare actions: string[] | null;
 
