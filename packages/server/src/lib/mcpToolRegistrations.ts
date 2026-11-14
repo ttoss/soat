@@ -144,10 +144,6 @@ export const findMcpToolRegistration = (
   return registered.get(normalizeMcpUrl(url));
 };
 
-export const listMcpToolRegistrations = (): McpToolRegistration[] => {
-  return [...registered.values()];
-};
-
 /** Called once at boot, after `initIamRegistrations`; any problem fails the boot. */
 export const initMcpToolRegistrations = (): void => {
   const file = readIamRegistrationFile({ env: process.env });

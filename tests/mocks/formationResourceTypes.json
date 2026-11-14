@@ -8,13 +8,21 @@
         "secret_env": "FORMATION_HANDLER_SECRET",
         "timeout_seconds": 10
       },
-      "capabilities": [
-        "validate",
-        "read"
-      ],
-      "write_only_properties": [
-        "access_token"
-      ],
+      "capabilities": ["validate", "read"],
+      "write_only_properties": ["access_token"],
+      "writer": {
+        "resource_type": "smoke_channel",
+        "create": "smoke-channels:CreateSmokeChannel",
+        "update": "smoke-channels:UpdateSmokeChannel",
+        "delete": "smoke-channels:DeleteSmokeChannel",
+        "carries": [
+          {
+            "property": "agent_id",
+            "action": "agents:CreateAgentGeneration",
+            "resource_type": "agent"
+          }
+        ]
+      },
       "schema": {
         "type": "object",
         "properties": {
@@ -31,10 +39,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "name",
-          "kind"
-        ]
+        "required": ["name", "kind"]
       }
     }
   ]
