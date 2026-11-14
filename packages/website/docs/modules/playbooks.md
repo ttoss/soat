@@ -348,6 +348,7 @@ A declared name left unbound, or any other `upstreams` the create rules refuse, 
 soat create-playbook \
   --project-id proj_… \
   --name client-pricing \
+  --policy-ids '["pol_…"]' \
   --definition '{
     "nodes": [
       { "id": "revenue", "title": "Annual revenue", "kind": "collect",
@@ -372,6 +373,7 @@ const { data, error } = await soat.playbooks.createPlaybook({
   body: {
     project_id: 'proj_…',
     name: 'client-pricing',
+    policy_ids: ['pol_…'],
     definition: {
       nodes: [
         {
@@ -424,6 +426,7 @@ curl -X POST https://api.example.com/api/v1/playbooks \
   -d '{
     "project_id": "proj_…",
     "name": "client-pricing",
+    "policy_ids": ["pol_…"],
     "definition": {
       "nodes": [
         { "id": "revenue", "title": "Annual revenue", "kind": "collect",

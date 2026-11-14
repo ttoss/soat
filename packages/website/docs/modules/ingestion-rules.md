@@ -195,6 +195,8 @@ Listing ingestion rules stays project-scoped: [`GET /api/v1/ingestion-rules`](/d
 
 ### Create an ingestion rule
 
+`pol_…` is a policy allowing `tools:CallTool` on the converter ([Who may write a converter](#who-may-write-a-converter)).
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -203,6 +205,7 @@ soat create-ingestion-rule \
   --project-id proj_ABC \
   --content-type-glob "image/*" \
   --tool-id tool_ocr \
+  --policy-ids '["pol_…"]' \
   --file-delivery base64 \
   --chunk-strategy whole
 ```
@@ -219,6 +222,7 @@ const { data, error } = await soat.ingestionRules.createIngestionRule({
     project_id: 'proj_ABC',
     content_type_glob: 'image/*',
     tool_id: 'tool_ocr',
+    policy_ids: ['pol_…'],
     file_delivery: 'base64',
     chunk_strategy: 'whole',
   },
@@ -237,6 +241,7 @@ curl -X POST https://api.example.com/api/v1/ingestion-rules \
     "project_id": "proj_ABC",
     "content_type_glob": "image/*",
     "tool_id": "tool_ocr",
+    "policy_ids": ["pol_…"],
     "file_delivery": "base64",
     "chunk_strategy": "whole"
   }'

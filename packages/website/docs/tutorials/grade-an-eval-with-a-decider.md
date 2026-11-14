@@ -400,15 +400,20 @@ The bridge is written for one question set: it reads each question by its positi
 
 ## Step 5 — Create the decider
 
-The questions are an array, in the order the bridge reads them. Jev accepts at most 10 levels on a `score`, fewer than a decider allows, so keep scores to 10 levels or less.
+The questions are an array, in the order the bridge reads them. Jev accepts at most 10 levels on a `score`, fewer than a decider allows, so keep scores to 10 levels or less. Every decision calls the bridge under the decider's `policy_ids` ([Deciders — Decision authority](/docs/modules/deciders#decision-authority)); the policy below allows that and nothing else.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+DECIDER_POLICY_ID=$(soat create-policy \
+  --name "reply-review-backend" \
+  --document '{"statement":[{"effect":"Allow","action":["tools:CallTool"]}]}' | jq -r '.id')
+
 DECIDER_ID=$(soat create-decider \
   --project-id "$PROJECT_ID" \
   --name reply-review \
+  --policy-ids '["'"$DECIDER_POLICY_ID"'"]' \
   --tool-id "$BRIDGE_ID" \
   --questions '[
     {
@@ -463,10 +468,20 @@ const QUESTIONS = [
   },
 ];
 
+const { data: deciderPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'reply-review-backend',
+    document: {
+      statement: [{ effect: 'Allow', action: ['tools:CallTool'] }],
+    },
+  },
+});
+
 const { data: decider } = await adminSoat.deciders.createDecider({
   body: {
     project_id: PROJECT_ID,
     name: 'reply-review',
+    policy_ids: [deciderPolicy!.id],
     tool_id: BRIDGE_ID,
     questions: QUESTIONS,
   },
@@ -478,12 +493,18 @@ const DECIDER_ID = decider!.id;
 <TabItem value="curl" label="curl">
 
 ```bash
+DECIDER_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"reply-review-backend","document":{"statement":[{"effect":"Allow","action":["tools:CallTool"]}]}}' | jq -r '.id')
+
 DECIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "'"$PROJECT_ID"'",
     "name": "reply-review",
+    "policy_ids": ["'"$DECIDER_POLICY_ID"'"],
     "tool_id": "'"$BRIDGE_ID"'",
     "questions": [
       {"type": "predicate", "name": "resolves_issue", "instructions": "Does the `reply` resolve what the `customer` asked?"},
@@ -690,15 +711,20 @@ done
 
 ## Step 8 — Bind the decider as a scorer and run
 
-`input` maps each item into the shape the questions read; `score` reads the decision's answers by name. Averaging the two `probability` values keeps Jev's certainty in the score: a reply Jev is unsure about scores lower than one it is sure about, even when both predicates hold.
+`input` maps each item into the shape the questions read; `score` reads the decision's answers by name. A run starts the agent and asks the decider under the eval's `policy_ids`, and the decision's bridge call stays capped by them too ([Evaluations — Run authority](/docs/modules/evaluations#run-authority)), so the eval's policy allows all three actions. Averaging the two `probability` values keeps Jev's certainty in the score: a reply Jev is unsure about scores lower than one it is sure about, even when both predicates hold.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+EVAL_POLICY_ID=$(soat create-policy \
+  --name "reply-quality-run" \
+  --document '{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration","deciders:CreateDecision","tools:CallTool"]}]}' | jq -r '.id')
+
 EVAL_ID=$(soat create-eval \
   --project-id "$PROJECT_ID" \
   --name reply-quality \
+  --policy-ids '["'"$EVAL_POLICY_ID"'"]' \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
   --scorers '[{
@@ -734,10 +760,20 @@ Expected output against the mock:
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: evalPolicy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'reply-quality-run',
+    document: {
+      statement: [{ effect: 'Allow', action: ['agents:CreateAgentGeneration', 'deciders:CreateDecision', 'tools:CallTool'] }],
+    },
+  },
+});
+
 const { data: evaluation } = await adminSoat.evaluations.createEval({
   body: {
     project_id: PROJECT_ID,
     name: 'reply-quality',
+    policy_ids: [evalPolicy!.id],
     agent_id: AGENT_ID,
     dataset_id: DATASET_ID,
     scorers: [
@@ -776,12 +812,18 @@ console.log(baseline!.decider_versions, baseline!.aggregate_scores);
 <TabItem value="curl" label="curl">
 
 ```bash
+EVAL_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"reply-quality-run","document":{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration","deciders:CreateDecision","tools:CallTool"]}]}}' | jq -r '.id')
+
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "'"$PROJECT_ID"'",
     "name": "reply-quality",
+    "policy_ids": ["'"$EVAL_POLICY_ID"'"],
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
     "scorers": [{

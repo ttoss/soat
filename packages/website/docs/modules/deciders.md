@@ -98,6 +98,7 @@ A `name` is unique within the set, starts with a letter or underscore and holds 
 soat create-decider \
   --project-id proj_… \
   --name support-triage \
+  --policy-ids '["pol_…"]' \
   --agent-id agent_… \
   --questions '[
     {
@@ -135,6 +136,7 @@ const { data, error } = await soat.deciders.createDecider({
   body: {
     project_id: 'proj_…',
     name: 'support-triage',
+    policy_ids: ['pol_…'],
     agent_id: 'agent_…',
     questions: [
       {
@@ -177,6 +179,7 @@ curl -X POST https://api.example.com/api/v1/deciders \
   -d '{
     "project_id": "proj_…",
     "name": "support-triage",
+    "policy_ids": ["pol_…"],
     "agent_id": "agent_…",
     "questions": [
       {
@@ -592,7 +595,7 @@ Both carry the decision, inline or not, with `answers` and `answers_by_name`. Se
 
 ### Formations
 
-A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) takes `name`, `description`, `questions` (the array of [Questions](#questions)) and exactly one of `agent_id` and `tool_id`, each of which may be a `{ "ref": "ResourceName" }` to an `agent` or `tool` resource in the same template. The questions are validated as on [`POST /api/v1/deciders`](/docs/api/deciders/create-decider), and a template update that changes them archives a new version. Tearing a stack down deletes a decider before the agent or tool it names; a decider outside the stack still keeps that agent or tool, and the teardown is refused before anything is deleted.
+A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) takes `name`, `description`, `policy_ids`, `questions` (the array of [Questions](#questions)) and exactly one of `agent_id` and `tool_id`; `agent_id` and `tool_id` may be a `{ "ref": "ResourceName" }` to an `agent` or `tool` resource in the same template, and each `policy_ids` entry one to a `policy`. The questions are validated as on [`POST /api/v1/deciders`](/docs/api/deciders/create-decider), and a template update that changes them archives a new version. Tearing a stack down deletes a decider before the agent or tool it names; a decider outside the stack still keeps that agent or tool, and the teardown is refused before anything is deleted.
 
 ```json
 {
@@ -601,10 +604,19 @@ A `decider` [formation](./formations.md) resource (`DeciderResourceProperties`) 
       "type": "agent",
       "properties": { "ai_provider_id": "aip_…", "name": "triage-judge" }
     },
+    "TriageGrant": {
+      "type": "policy",
+      "properties": {
+        "document": {
+          "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"] }]
+        }
+      }
+    },
     "Triage": {
       "type": "decider",
       "properties": {
         "name": "support-triage",
+        "policy_ids": [{ "ref": "TriageGrant" }],
         "agent_id": { "ref": "Judge" },
         "questions": [
           {

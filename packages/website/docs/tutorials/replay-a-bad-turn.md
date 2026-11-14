@@ -541,15 +541,20 @@ The fork starts with **no actor** ([single session per actor](/docs/modules/sess
 
 ## Step 6 — Prove the fix against the fixture
 
-The captured item is an ordinary dataset item, so the [eval](/docs/modules/evaluations) machinery applies unchanged, with the strict agent under test:
+The captured item is an ordinary dataset item, so the [eval](/docs/modules/evaluations) machinery applies unchanged, with the strict agent under test. A run starts the agent under the eval's `policy_ids` ([Evaluations — Run authority](/docs/modules/evaluations#run-authority)), so the eval carries a policy allowing that:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+POLICY_ID=$(soat create-policy \
+  --name "refund-clarity-run" \
+  --document '{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration"]}]}' | jq -r '.id')
+
 EVAL_ID=$(soat create-eval \
   --project-id "$PROJECT_ID" \
   --name "refund-clarity" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --agent-id "$STRICT_AGENT_ID" \
   --dataset-id "$DATASET_ID" \
   --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}]' \
@@ -569,10 +574,20 @@ soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: policy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'refund-clarity-run',
+    document: {
+      statement: [{ effect: 'Allow', action: ['agents:CreateAgentGeneration'] }],
+    },
+  },
+});
+
 const { data: evaluation } = await adminSoat.evaluations.createEval({
   body: {
     project_id: project.id,
     name: 'refund-clarity',
+    policy_ids: [policy.id],
     agent_id: strictAgent.id,
     dataset_id: dataset.id,
     scorers: [
@@ -594,6 +609,14 @@ console.log(run.status, run.passed, run.aggregate_scores);
 <TabItem value="curl" label="curl">
 
 ```bash
+POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"refund-clarity-run","document":{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration"]}]}}' | jq -r '.id')
+
+EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"refund-clarity","policy_ids":["'"$POLICY_ID"'"],"agent_id":"'"$STRICT_AGENT_ID"'","dataset_id":"'"$DATASET_ID"'","scorers":[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}],"pass_threshold":0.5}' | jq -r '.id')
+
 RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"wait":true}' | jq -r '.id')

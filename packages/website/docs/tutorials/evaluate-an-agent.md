@@ -268,6 +268,8 @@ A [content purge](/docs/tutorials/data-retention-and-zero-retention) never delet
 
 An eval freezes the criteria: agent under test, dataset, scorers, and the threshold the verdict gates on. Scorer config lives on the eval, not the agent, so two runs are judged the same way and their comparison measures the agent.
 
+A run starts the agent on every item under the eval's `policy_ids` ([Evaluations — Run authority](/docs/modules/evaluations#run-authority)); the policy below allows that and nothing else.
+
 Two deterministic scorers:
 
 | Scorer | Asks |
@@ -279,11 +281,16 @@ Two deterministic scorers:
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+POLICY_ID=$(soat create-policy \
+  --name "billing-regression-run" \
+  --document '{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration"]}]}' | jq -r '.id')
+
 EVAL_ID=$(soat create-eval \
   --project-id "$PROJECT_ID" \
   --name "billing-regression" \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"contains","value":"billing@example.com"}]' \
   --pass-threshold 0.67 | jq -r '.id')
 
@@ -294,12 +301,22 @@ soat get-eval --eval-id "$EVAL_ID" | jq '{name, pass_threshold, scorers}'
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: policy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'billing-regression-run',
+    document: {
+      statement: [{ effect: 'Allow', action: ['agents:CreateAgentGeneration'] }],
+    },
+  },
+});
+
 const { data: evaluation } = await adminSoat.evaluations.createEval({
   body: {
     project_id: project.id,
     name: 'billing-regression',
     agent_id: agent.id,
     dataset_id: dataset.id,
+    policy_ids: [policy.id],
     scorers: [
       { type: 'json_logic', expression: { '!=': [{ var: 'output' }, ''] } },
       { type: 'contains', value: 'billing@example.com' },
@@ -313,9 +330,13 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
 <TabItem value="curl" label="curl">
 
 ```bash
+POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"billing-regression-run","document":{"statement":[{"effect":"Allow","action":["agents:CreateAgentGeneration"]}]}}' | jq -r '.id')
+
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"billing-regression\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"contains\",\"value\":\"billing@example.com\"}],\"pass_threshold\":0.67}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"billing-regression\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"policy_ids\":[\"$POLICY_ID\"],\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"contains\",\"value\":\"billing@example.com\"}],\"pass_threshold\":0.67}" | jq -r '.id')
 ```
 
 </TabItem>

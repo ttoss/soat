@@ -266,7 +266,8 @@ call, an unparseable answer, an out-of-range score, or a missing verdict errors 
 **Validation** runs at eval create and update, and authoritatively at run start: a tool
 deleted since fails the run request with `400`.
 
-Bind one like any other scorer:
+Bind one like any other scorer; the eval's `policy_ids` (`$POLICY_ID`) must allow
+`agents:CreateAgentGeneration` and `tools:CallTool` ([Run authority](#run-authority)):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -274,6 +275,7 @@ Bind one like any other scorer:
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name tone-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"tool","name":"tone","tool_id":"'"$TOOL_ID"'","pass_threshold":0.5}]' \
   --pass-threshold 0.8
 ```
@@ -288,6 +290,7 @@ const { data, error } = await soat.evaluations.createEval({
     name: 'tone-suite',
     agent_id: agentId,
     dataset_id: datasetId,
+    policy_ids: [policyId],
     scorers: [{ type: 'tool', name: 'tone', tool_id: toolId, pass_threshold: 0.5 }],
     pass_threshold: 0.8,
   },
@@ -307,6 +310,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "name": "tone-suite",
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "scorers": [{"type":"tool","name":"tone","tool_id":"'"$TOOL_ID"'","pass_threshold":0.5}],
     "pass_threshold": 0.8
   }'
@@ -362,8 +366,9 @@ levels) to read it as 0–1:
   eval_run_id, dataset_item_id }` and read back through `decision_id`. Its spend is the
   decision's own (`source: decider` in [usage](./usage.md)).
 - **The run's authority.** Like every scorer and every item's generation, the decision
-  runs under the authority the run stores: its starter's, or its trigger's for a
-  scheduled run.
+  runs under the authority the run stores ([Run authority](#run-authority)), so the eval's
+  `policy_ids` must allow `deciders:CreateDecision` and the decider backend's own start
+  action.
 - **Errors are not zeros.** A failed decision, or a `score` that is not a number in 0–1,
   errors the item with the decision's id and code in `error`.
 
@@ -373,6 +378,7 @@ levels) to read it as 0–1:
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name reply-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers_by_name.resolves_issue.probability"},"pass_threshold":0.7}]' \
   --pass-threshold 0.8
 ```
@@ -387,6 +393,7 @@ const { data, error } = await soat.evaluations.createEval({
     name: 'reply-suite',
     agent_id: agentId,
     dataset_id: datasetId,
+    policy_ids: [policyId],
     scorers: [
       {
         type: 'decider',
@@ -414,6 +421,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "name": "reply-suite",
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "scorers": [{"type":"decider","name":"reply_review","decider_id":"'"$DECIDER_ID"'","score":{"var":"answers_by_name.resolves_issue.probability"},"pass_threshold":0.7}],
     "pass_threshold": 0.8
   }'
@@ -722,7 +730,7 @@ Datasets, their items, and evals are declarable in a [Formation](./formations.md
 | --- | --- |
 | `dataset` | `name`, `description` |
 | `dataset_item` | `dataset_id`, `input`, `expected_output`, `metadata` |
-| `eval` | `name`, `agent_id`, `dataset_id`, `scorers`, `pass_threshold`, `group_by` |
+| `eval` | `name`, `agent_id`, `dataset_id`, `policy_ids`, `scorers`, `pass_threshold`, `group_by` |
 
 Items are their own resource, so an item curated through the API is never collateral of a
 formation apply. `dataset_id` is immutable on a `dataset_item`. Running the suite gives
@@ -983,7 +991,8 @@ curl -X POST "https://api.example.com/api/v1/datasets/$DATASET_ID/items" \
 </TabItem>
 </Tabs>
 
-Bind an eval and gate it at an 80% pass rate:
+Bind an eval and gate it at an 80% pass rate. `$POLICY_ID` is a policy allowing
+`agents:CreateAgentGeneration`, the grant every run acts under ([Run authority](#run-authority)):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -991,6 +1000,7 @@ Bind an eval and gate it at an 80% pass rate:
 ```bash
 soat create-eval --project-id "$PROJECT_ID" --name billing-regression-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"contains","value":"first of each month"}]' \
   --pass-threshold 0.8
 ```
@@ -1005,6 +1015,7 @@ const { data, error } = await soat.evaluations.createEval({
     name: 'billing-regression-suite',
     agent_id: agentId,
     dataset_id: datasetId,
+    policy_ids: [policyId],
     scorers: [{ type: 'contains', value: 'first of each month' }],
     pass_threshold: 0.8,
   },
@@ -1024,6 +1035,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "name": "billing-regression-suite",
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "scorers": [{"type":"contains","value":"first of each month"}],
     "pass_threshold": 0.8
   }'

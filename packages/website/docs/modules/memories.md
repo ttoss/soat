@@ -515,13 +515,23 @@ Two rules on one store, different handlers, different selectors — unexpressibl
   "resources": {
     "SupportFacts": { "type": "memory_store", "properties": { "name": "Support facts" } },
 
+    "ExtractionGrant": {
+      "type": "policy",
+      "properties": {
+        "document": {
+          "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"] }]
+        }
+      }
+    },
+
     "GeneralExtraction": {
       "type": "memory_rule",
       "properties": {
         "memory_store_id": { "ref": "SupportFacts" },
         "on": "generations.completed",
         "source_agent_ids": [{ "ref": "SupportAgent" }],
-        "model": "<cheap-model>"
+        "model": "<cheap-model>",
+        "policy_ids": [{ "ref": "ExtractionGrant" }]
       }
     },
 
@@ -531,7 +541,8 @@ Two rules on one store, different handlers, different selectors — unexpressibl
         "memory_store_id": { "ref": "SupportFacts" },
         "on": "generations.completed",
         "source_agent_ids": [{ "ref": "BillingAgent" }],
-        "agent_id": { "ref": "StrictBillingExtractor" }
+        "agent_id": { "ref": "StrictBillingExtractor" },
+        "policy_ids": [{ "ref": "ExtractionGrant" }]
       }
     }
   }
