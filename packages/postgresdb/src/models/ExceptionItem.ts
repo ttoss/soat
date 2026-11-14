@@ -90,6 +90,7 @@ export class ExceptionItem extends Model {
       'quota_unpriced',
       'event_trigger_loop',
       'chain_limit',
+      'mcp_definition_drift',
       'manual'
     ),
     allowNull: false,
@@ -101,6 +102,7 @@ export class ExceptionItem extends Model {
     | 'quota_unpriced'
     | 'event_trigger_loop'
     | 'chain_limit'
+    | 'mcp_definition_drift'
     | 'manual';
 
   @Column({ type: DataType.TEXT, allowNull: false })

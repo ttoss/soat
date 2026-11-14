@@ -15,6 +15,7 @@ import type { ToolBinding } from './agentToolNames';
 import { isSoatActionAllowedByAgentPolicy } from './agentToolResolver';
 import { agentDenied, denialToolResult } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
+import type { CollectedGuardrail } from './guardrailCollection';
 import { buildSrn, type PolicyDocument } from './iam';
 import { searchKnowledge } from './knowledge';
 import {
@@ -26,6 +27,11 @@ import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
 import { agentReferences } from './resourceReferences';
 import { buildResourceTagContext } from './tags';
+import {
+  meterNativeToolExecution,
+  type ToolCallAttribution,
+  withReleasingGuardrails,
+} from './usageToolRecording';
 
 const log = createDebug('soat:knowledge');
 
@@ -256,9 +262,10 @@ type WriteMemoryAsAgentArgs = {
 /**
  * One agent write, held to the boundary: the tool door and an approved held
  * call both run through it, so neither can write what the other could not.
+ * `markExecuted` is the native-tool meter's: a refused write is not counted.
  */
 const writeMemoryAsAgent = async (
-  args: WriteMemoryAsAgentArgs & { content: string }
+  args: WriteMemoryAsAgentArgs & { content: string; markExecuted: () => void }
 ): Promise<Record<string, unknown>> => {
   // The store is resolved before the boundary check because the check needs
   // its SRN and tags. It leaks nothing a boundary would have hidden: the id
@@ -293,13 +300,15 @@ const writeMemoryAsAgent = async (
       })
     );
   }
+  const actorId = await resolveOwnerActorDbId({
+    actorId: args.actorId,
+    projectId: args.projectId,
+    projectLabel: "the agent's project",
+  });
+  args.markExecuted();
   const result = await writeMemory({
     memoryStoreId: memoryStore.id,
-    actorId: await resolveOwnerActorDbId({
-      actorId: args.actorId,
-      projectId: args.projectId,
-      projectLabel: "the agent's project",
-    }),
+    actorId,
     content: args.content,
     // No `sourceConversationPublicId`: `Memory.source_id` is the pointer a
     // client may supply on a hand-written fact, and this tool has none to
@@ -322,13 +331,25 @@ const writeMemoryAsAgent = async (
   return { action: result.action, memoryId: result.entry.id };
 };
 
-const buildWriteMemoryTool = (args: WriteMemoryAsAgentArgs): Tool => {
+const buildWriteMemoryTool = (
+  args: WriteMemoryAsAgentArgs & { attribution: ToolCallAttribution }
+): Tool => {
+  const { attribution, ...writeArgs } = args;
   return tool({
     description:
       'Write a fact to memory. The system automatically deduplicates: creates a new memory, supersedes an existing one the fact has changed, or skips a duplicate.',
     inputSchema: jsonSchema<{ content: string }>(WRITE_MEMORY_PARAMETERS),
     execute: async ({ content }: { content: string }) => {
-      return writeMemoryAsAgent({ ...args, content });
+      return meterNativeToolExecution({
+        meter: {
+          projectId: args.projectId,
+          toolId: WRITE_MEMORY_TOOL_ID,
+          attribution,
+        },
+        run: (markExecuted) => {
+          return writeMemoryAsAgent({ ...writeArgs, content, markExecuted });
+        },
+      });
     },
   });
 };
@@ -359,6 +380,7 @@ export const runApprovedWriteMemory = async (args: {
   actorId?: string;
   /** The frozen or edited arguments. */
   input: Record<string, unknown>;
+  markExecuted: () => void;
 }): Promise<Record<string, unknown>> => {
   log('runApprovedWriteMemory: agentId=%s', args.agent?.publicId);
   const writeMemoryStoreId =
@@ -380,6 +402,7 @@ export const runApprovedWriteMemory = async (args: {
     actorId: args.actorId,
     // Checked by `writeMemoryInputError` just above.
     content: args.input.content as string,
+    markExecuted: args.markExecuted,
   });
 };
 
@@ -445,6 +468,8 @@ export const buildKnowledgeBindings = (args: {
   typedAgent: TypedAgent;
   agentPolicy: PolicyDocument | null;
   actorId?: string;
+  /** The project and agent guardrails; the binding has no tool-scope ones. */
+  baseGuardrails: CollectedGuardrail[];
 }): ToolBinding[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
   if (!knowledgeConfig?.writeMemoryStoreId) return [];
@@ -459,6 +484,16 @@ export const buildKnowledgeBindings = (args: {
           projectId: args.projectId,
           agentPolicy: args.agentPolicy,
           actorId: args.actorId,
+          // A call runs only once every guardrail gating it released it.
+          attribution: withReleasingGuardrails({
+            attribution: {
+              generationId: args.generationId,
+              agentId: args.agentId,
+            },
+            guardrailIds: args.baseGuardrails.map((guardrail) => {
+              return guardrail.guardrailId;
+            }),
+          }),
         }),
       },
       gate: {

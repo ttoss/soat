@@ -13,6 +13,7 @@ import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
 } from './pipelineTools';
+import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -60,6 +61,7 @@ export type MappedTool = {
   parameters: object | null;
   execute: object | null;
   mcp: object | null;
+  mcp_pins: Record<string, string> | null;
   actions: string[] | null;
   denied_actions: string[] | null;
   context_keys: string[] | null;
@@ -99,6 +101,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
     parameters: tool.parameters,
     execute: tool.execute,
     mcp: tool.mcp,
+    mcp_pins: tool.mcpPins,
     actions: tool.actions,
     denied_actions: tool.deniedActions,
     context_keys: tool.contextKeys,
@@ -302,6 +305,26 @@ const buildToolUpdates = (args: {
   return updates;
 };
 
+const mcpUrl = (mcp: unknown): string | null => {
+  return isPlainObject(mcp) && typeof mcp.url === 'string' ? mcp.url : null;
+};
+
+/**
+ * Pins are cleared on request or for another server, never by re-sending an
+ * unchanged `mcp`, which every formation apply does: a deploy must not accept
+ * drift silently.
+ */
+const clearsMcpPins = (args: {
+  args: ToolUpdateArgs;
+  current: unknown;
+}): boolean => {
+  if (args.args.mcpPins === null) return true;
+  return (
+    args.args.mcp !== undefined &&
+    mcpUrl(args.args.mcp) !== mcpUrl(args.current)
+  );
+};
+
 export const updateTool = async (
   args: ToolUpdateArgs & { isAllowed: IsAllowedFn }
 ): Promise<MappedTool> => {
@@ -319,7 +342,10 @@ export const updateTool = async (
     projectId: tool.projectId,
   });
 
-  await tool.update(buildToolUpdates(args));
+  await tool.update({
+    ...buildToolUpdates(args),
+    ...(clearsMcpPins({ args, current: tool.mcp }) ? { mcpPins: null } : {}),
+  });
 
   return mapTool(await tools.reload(tool));
 };

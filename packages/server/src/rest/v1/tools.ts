@@ -265,6 +265,12 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   const outputMapping = body.output_mapping;
 
   const nextGuardrailIds = parseGuardrailIds(body.guardrail_ids);
+  if (body.mcp_pins !== undefined && body.mcp_pins !== null) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      '`mcp_pins` accepts only null, which clears the pins.'
+    );
+  }
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;
@@ -307,6 +313,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     parameters: parsedParameters,
     execute: parsedExecute,
     mcp: parsedMcp,
+    mcpPins: body.mcp_pins === null ? null : undefined,
     actions: parseNullableArray(actions),
     deniedActions: parseNullableArray(deniedActions),
     contextKeys: parseNullableArray(contextKeys),

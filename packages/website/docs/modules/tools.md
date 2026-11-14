@@ -46,6 +46,8 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `mcp`                   | `object \| null`                                                 | MCP server config (`url`, `headers`). Required for `mcp` type.                                                                                                                                                                                                                             |
 | `mcp.url`               | `string`                                                         | URL of the MCP server (SSE or Streamable HTTP transport).                                                                                                                                                                                                                                  |
 | `mcp.headers`           | `object`                                                         | Additional headers sent when connecting to the MCP server.                                                                                                                                                                                                                                 |
+| `mcp.pin_definitions`   | `boolean`                                                        | Pin each action's definition and withhold any action that drifts from its pin (default `false`). See [Pinning MCP definitions](#pinning-mcp-definitions).                                                                                                                                 |
+| `mcp_pins`              | `object \| null`                                                 | Read-only: action name → SHA-256 digest of its pinned definition. `null` until the first listing pins; `PATCH` with `mcp_pins: null` clears it. See [Pinning MCP definitions](#pinning-mcp-definitions).                                                                                 |
 | `actions`               | `string[] \| null`                                               | Allowlist of actions to expose. `builtin`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `denied_actions`        | `string[] \| null`                                               | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions).                                                                              |
 | `context_keys`          | `string[] \| null`                                               | Allowlist of [`tool_context`](../advanced/tool-context.md) keys forwarded to this tool as context headers. `null` forwards every key (the default); `[]` forwards none. See [Scoping which context keys reach a tool](#scoping-which-context-keys-reach-a-tool).                           |
@@ -332,6 +334,26 @@ Omitted or `null` exposes everything; `[]` nothing. MCP names are discovered at 
 `denied_actions` is a denylist (for a read+write server where enumerating every read tool would drift), enforced at the same points, applied after `actions` and winning: a name in both is denied. Omitted or `null` denies nothing.
 
 A server that defers its tools behind `search` / `describe` / `call` (SOAT's own [MCP server](/docs/mcp) among them) lists only those three, so both lists name the tools behind `call`, never the proxies. With `actions`, the named tools are described and registered under their own names and the proxies are not exposed; with only `denied_actions`, the proxies are exposed and `call` refuses a denied tool before contacting the server. [`POST /tools/{id}/call`](/docs/api/tools/call-tool) takes the tool's own name as `action` and sends it through `call`; an `action` of `call` is held to the lists by the tool it names.
+
+#### Pinning MCP definitions
+
+An action's `description` and `inputSchema` reach the model as the server sends them on every turn, so a server can rewrite a description into an instruction, widen a schema, or add an action that `actions: null` exposes. `mcp.pin_definitions: true` makes that a withheld action instead of a changed one:
+
+```json
+{
+  "type": "mcp",
+  "name": "crm",
+  "mcp": { "url": "https://mcp.example.com/mcp", "pin_definitions": true }
+}
+```
+
+- **Pin.** The first listing an agent turn makes stores one digest per attached action in `mcp_pins`: SHA-256 over `name`, `title`, `description`, `inputSchema`, `outputSchema` and `annotations` (key order ignored, `_meta` excluded). The write is conditional, so concurrent first turns agree on one set.
+- **Drift.** An action whose live digest differs from its pin, or that has none (a new action, or one `actions` admits later), is left out of the turn; the model is told it is [unavailable](./agents.md#a-binding-that-cannot-be-resolved), and the other actions keep working.
+- **Report.** Each drift files one [`mcp_definition_drift`](./exceptions.md#producers) exception per tool, action and digest pair.
+- **Deferred servers.** Each tool behind `search` / `describe` / `call` is pinned the first time it is described. A `describe` answering a drifted tool returns the unavailable note in its place, and `call` answers the same note for a tool that drifted or was never described, without contacting the server.
+- **Re-pin.** [`PATCH /tools/{id}`](/docs/api/tools/update-tool) with `"mcp_pins": null` accepts the current definitions: the next listing pins again. A new `mcp.url` clears the pins too. Re-sending an unchanged `mcp`, as every formation apply does, keeps them.
+
+Drift is checked where a listing is already fetched for a model: [`POST /tools/{id}/call`](/docs/api/tools/call-tool), pipeline steps and [`GET /tools/{id}/actions`](/docs/api/tools/list-tool-actions) show no definition to a model and are not gated. An unreachable server is reported as it is without pins. Only a persisted tool pins; an inline `mcp` definition with `pin_definitions` is `400 VALIDATION_FAILED`.
 
 #### Listing an MCP tool's actions
 

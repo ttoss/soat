@@ -11,13 +11,14 @@ type ForeignKeyValues = { [K in DurablePair['foreignKey']]?: number | null };
 /**
  * What a meter writes. The public ids of `USAGE_EVENT_DURABLE_IDS` are read
  * from the row each FK names ({@link withDurablePublicIds}), so no meter derives
- * one that could disagree with its FK. `generationPublicId` alone may be given:
- * an embedding made before its generation's row commits names the generation
- * by public id with no FK yet.
+ * one that could disagree with its FK. Two public ids may be given alone: an
+ * embedding made before its generation's row commits names the generation with
+ * no FK yet, and a native tool has no row to name.
  */
 export type UsageEventDefaults = ForeignKeyValues & {
   projectId: number;
   generationPublicId?: string | null;
+  toolPublicId?: string | null;
   nodeId?: string | null;
   triggerId?: string | null;
   actionId?: string | null;

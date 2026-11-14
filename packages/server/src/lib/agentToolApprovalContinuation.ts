@@ -24,6 +24,7 @@ import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
 import { callTool } from './tools';
+import { meterNativeToolExecution } from './usageToolRecording';
 import {
   forWork,
   parseWorkAuthority,
@@ -106,12 +107,17 @@ const proposingAgentAuthority = async (args: {
   });
 };
 
-/** The approved `write_memory` call, run as the agent that proposed it. */
-const executeApprovedWriteMemory = async (args: {
+type NativeExecuteArgs = {
   item: MappedApproval;
   projectInternalId: number;
   input: Record<string, unknown>;
-}): Promise<object> => {
+  markExecuted: () => void;
+};
+
+/** The approved `write_memory` call, run as the agent that proposed it. */
+const executeApprovedWriteMemory = async (
+  args: NativeExecuteArgs
+): Promise<object> => {
   const agent = args.item.agent_id
     ? await agentReferences.find({
         id: args.item.agent_id,
@@ -132,6 +138,7 @@ const executeApprovedWriteMemory = async (args: {
     ).policy,
     actorId: actorId ?? undefined,
     input: args.input,
+    markExecuted: args.markExecuted,
   });
 };
 
@@ -143,8 +150,8 @@ type EditCheck = {
 
 /** Everything resolution needs to know about one native tool, a tool with no row. */
 type NativeTool = {
-  /** How an approved call runs. */
-  execute: typeof executeApprovedWriteMemory;
+  /** How an approved call runs; `markExecuted` when its side effect starts. */
+  execute: (args: NativeExecuteArgs) => Promise<object>;
   /**
    * What an approver must hold, beyond `tools:CallTool`, to edit a held call:
    * the work the call performs in-process, which nothing else checks against
@@ -208,10 +215,22 @@ const executeApprovedNativeAction = async (args: {
       error: `The approved action targets ${args.toolId}, which cannot be executed at resolution time.`,
     };
   }
-  return nativeTool.execute({
-    item: args.item,
-    projectInternalId: args.projectInternalId,
-    input: args.input,
+  // Metered here, once for every native tool, under the proposing turn: the
+  // approver released the call, as for an approved stored tool.
+  return meterNativeToolExecution({
+    meter: {
+      projectId: args.projectInternalId,
+      toolId: args.toolId,
+      attribution: { generationId: args.item.generation_id },
+    },
+    run: (markExecuted) => {
+      return nativeTool.execute({
+        item: args.item,
+        projectInternalId: args.projectInternalId,
+        input: args.input,
+        markExecuted,
+      });
+    },
   });
 };
 
