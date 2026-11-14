@@ -27,6 +27,7 @@ describe('Agents', () => {
         'agents:UpdateAgent',
         'agents:DeleteAgent',
         'agents:CreateAgentGeneration',
+        'generations:ResumeGeneration',
         // A background generation hands back a generation id to poll, so the
         // generate tests need to read one back.
         'generations:GetGeneration',

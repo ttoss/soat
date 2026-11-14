@@ -185,7 +185,7 @@ describe('stored work authority', () => {
       });
       expect(parseWorkAuthority(run!.authority)).toMatchObject({
         grant: { holder: 'trigger', trigger: trigger.id },
-        caps: [{ kind: 'user', user: me.body.id }],
+        caps: [{ kind: 'grant', grant: { holder: 'user', user: me.body.id } }],
       });
     });
 

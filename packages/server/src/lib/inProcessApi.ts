@@ -5,7 +5,7 @@ import createDebug from 'debug';
 
 import type { Context } from '../Context';
 import { DomainError } from '../errors';
-import { attachWorkAuthority } from './inProcessAuthority';
+import { attachWork } from './inProcessAuthority';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:inprocess');
@@ -175,6 +175,8 @@ export const dispatchApiRequest = async (args: {
   body?: unknown;
   /** The stored authority the request runs under, in place of a credential header. */
   authority?: WorkAuthority | null;
+  /** The end user the work serves, which work the request starts serves too. */
+  actor?: string | null;
 }): Promise<InProcessApiResponse> => {
   // Imported at call time: `app` mounts the REST router, which reaches this
   // module through the tool layer, so a static import would close that cycle at
@@ -183,7 +185,12 @@ export const dispatchApiRequest = async (args: {
 
   const method = args.method.toUpperCase();
   const req = buildRequest(args);
-  if (args.authority) attachWorkAuthority({ req, authority: args.authority });
+  if (args.authority) {
+    attachWork({
+      req,
+      work: { authority: args.authority, actor: args.actor ?? null },
+    });
+  }
   const ctx: Context = app.createContext(req, new ServerResponse(req));
 
   // Koa's own `handleRequest` seeds this, so an unmatched route reports 404
@@ -222,6 +229,7 @@ export const dispatchApiRequestOrThrow = async (args: {
   headers?: Record<string, string | undefined>;
   body?: unknown;
   authority?: WorkAuthority | null;
+  actor?: string | null;
   /** Builds the error thrown for a non-2xx response, in the caller's own vocabulary. */
   wrapError: (response: InProcessApiResponse) => Error;
 }): Promise<unknown> => {
@@ -231,6 +239,7 @@ export const dispatchApiRequestOrThrow = async (args: {
     headers: args.headers,
     body: args.body,
     authority: args.authority,
+    actor: args.actor,
   });
 
   if (response.status < 200 || response.status >= 300) {

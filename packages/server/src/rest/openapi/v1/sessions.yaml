@@ -456,7 +456,10 @@ paths:
         requires_action. The agent continues its loop and returns the
         final or next requires_action result. A generation that did not
         run in the session's conversation is 404 (GENERATION_NOT_FOUND)
-        and receives no outputs.
+        and receives no outputs. Requires `generations:ResumeGeneration` on
+        the generation in addition to `agents:SubmitSessionToolOutputs`; the
+        resumed segment runs under the generation's stored authority held to
+        the caller's.
       operationId: submitSessionToolOutputs
       x-iam-action: agents:SubmitSessionToolOutputs
       x-iam-resource-type: session

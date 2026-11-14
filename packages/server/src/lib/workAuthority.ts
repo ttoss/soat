@@ -22,12 +22,12 @@ export type AuthorityGrant =
   | { holder: 'agent'; agent: string; policy: PolicyDocument | null };
 
 /**
- * What narrows the grant, each read live at every check: another user's grant
- * (the caller of a manual fire), an API key's own `policy_ids`, an OAuth
- * consent, or a bound (an IAM token's, an `On-Behalf-Of` assertion's).
+ * What narrows the grant, each read live at every check: another holder's
+ * grant (`narrowAuthority`), an API key's own `policy_ids`, an OAuth consent,
+ * or a bound (an IAM token's, an `On-Behalf-Of` assertion's).
  */
 export type AuthorityCap =
-  | { kind: 'user'; user: string }
+  | { kind: 'grant'; grant: AuthorityGrant }
   | { kind: 'key'; key: string }
   | { kind: 'scope'; scope: string | null }
   | { kind: 'bound'; bound: PrincipalBound; by: DeniedPrincipal };
@@ -133,8 +133,9 @@ const CAP_READERS: Record<
   AuthorityCap['kind'],
   (value: Record<string, unknown>) => AuthorityCap | null
 > = {
-  user: (value) => {
-    return str(value.user) ? { kind: 'user', user: value.user } : null;
+  grant: (value) => {
+    const grant = parseGrant(value.grant);
+    return grant ? { kind: 'grant', grant } : null;
   },
   key: (value) => {
     return str(value.key) ? { kind: 'key', key: value.key } : null;
@@ -315,6 +316,55 @@ export const sameWorkAuthority = (args: {
     JSON.stringify(authorityColumn(args.a)) ===
     JSON.stringify(authorityColumn(args.b))
   );
+};
+
+const sameJson = (a: unknown, b: unknown): boolean => {
+  return JSON.stringify(a) === JSON.stringify(b);
+};
+
+/**
+ * `authority` held to `by` as well: `by`'s grant and every cap of its joins
+ * `authority`'s caps, so the result allows only what both allow. Who acts, the
+ * chain and the project stay `authority`'s. A term `authority` already states
+ * is not repeated, so an authority narrowed by itself is itself.
+ */
+export const narrowAuthority = (args: {
+  authority: WorkAuthority;
+  by: Pick<WorkAuthority, 'grant' | 'caps'>;
+}): WorkAuthority => {
+  const { authority, by } = args;
+  const caps = [...authority.caps];
+  const candidates: AuthorityCap[] = [
+    ...(sameJson(by.grant, authority.grant)
+      ? []
+      : [{ kind: 'grant' as const, grant: by.grant }]),
+    ...by.caps,
+  ];
+  for (const cap of candidates) {
+    const serialized = serializeCap(cap);
+    if (
+      !caps.some((held) => {
+        return sameJson(serializeCap(held), serialized);
+      })
+    ) {
+      caps.push(cap);
+    }
+  }
+  return { ...authority, caps };
+};
+
+/**
+ * The authority stored work resumes under: what it stores, held to whoever
+ * resumes it, so a resume never widens it. Work storing none resumes under
+ * none; a resume nobody requested (a project's own) narrows nothing.
+ */
+export const resumedAuthority = (args: {
+  stored: WorkAuthority | null;
+  resumer: WorkAuthority | null;
+}): WorkAuthority | null => {
+  const { stored, resumer } = args;
+  if (!stored || !resumer) return stored;
+  return narrowAuthority({ authority: stored, by: resumer });
 };
 
 /**

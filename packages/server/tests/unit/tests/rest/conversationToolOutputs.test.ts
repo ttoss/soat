@@ -27,6 +27,7 @@ describe('Conversation turn completed through agent tool-outputs', () => {
         'conversations:UpdateConversation',
         'conversations:GenerateConversationMessage',
         'agents:CreateAgentGeneration',
+        'generations:ResumeGeneration',
       ],
       createNoPermUser: false,
     });

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 
 import type { AuthUser, Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
-import { attachedWorkAuthority } from '../lib/inProcessAuthority';
+import { attachedWork } from '../lib/inProcessAuthority';
 import { parseBound } from '../lib/principalBound';
 import {
   BEARER_TOKEN_TYPES,
@@ -341,9 +341,20 @@ export const verifyApiKeyToken = async (
 };
 
 export const authMiddleware = async (ctx: Context, next: Next) => {
-  const work = attachedWorkAuthority(ctx.req);
+  const work = attachedWork(ctx.req);
   if (work) {
-    ctx.authUser = await authUserOfWork({ db: ctx.db, authority: work });
+    const authUser = await authUserOfWork({
+      db: ctx.db,
+      authority: work.authority,
+    });
+    ctx.authUser = authUser && {
+      ...authUser,
+      work: {
+        trigger: work.authority.trigger,
+        work: work.authority.work,
+        actor: work.actor,
+      },
+    };
     await next();
     return;
   }

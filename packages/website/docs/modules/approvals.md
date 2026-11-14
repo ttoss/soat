@@ -108,8 +108,8 @@ the approver sees.
 ### Continuation identity
 
 A continuation runs **under the authority the proposing generation stores**,
-never the approver's: its starter's, or that of the caller who resumed it with
-tool outputs. The continuation's [`builtin` tools](./tools.md#builtin) and the
+never the approver's: its starter's, narrowed by any caller who
+[resumed it with tool outputs](./generations.md#acting-principal). The continuation's [`builtin` tools](./tools.md#builtin) and the
 approved action execute under it. Authorization is evaluated per request
 against current policies, so a chain started by a scoped API key never exceeds
 that key's policies, and revoking the key stops the chain mid-flight.

@@ -38,6 +38,7 @@ const REMOVED_SYMBOLS = [
   'replayedAuthHeader',
   'isTriggerToken',
   'isRunToken',
+  'toolsAuthHeader',
 ];
 
 /** Source with comments dropped, so prose naming a symbol is not a hit. */

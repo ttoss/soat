@@ -165,6 +165,7 @@ describe('Step rules narrowing tools under prompt caching', () => {
               action: [
                 'agents:CreateAgent',
                 'agents:CreateAgentGeneration',
+                'generations:ResumeGeneration',
                 'secrets:CreateSecret',
                 'tools:CreateTool',
               ],

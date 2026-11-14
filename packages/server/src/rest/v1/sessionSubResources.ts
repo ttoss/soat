@@ -12,6 +12,7 @@ import {
 import { assertNoSystemTagKeys } from 'src/lib/tags';
 import { captureAuthority } from 'src/lib/workAuthority';
 
+import { authorizeGenerationResume } from './generations';
 import {
   type AuthenticatedContext,
   parseNullableToolContextBody,
@@ -154,6 +155,8 @@ sessionSubResourcesRouter.post(
         'tool_outputs is required and must be a non-empty array'
       );
     }
+
+    await authorizeGenerationResume({ ctx, generationId: body.generation_id });
 
     const result = await submitSessionToolOutputs({
       agentId,

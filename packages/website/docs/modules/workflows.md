@@ -253,7 +253,7 @@ The reconciler considers only a dispatch that has read `running` longer than `TA
 
 **A paused task still transitions.** Entering a state whose dispatch is suppressed records `automation_status: paused`; resume reads it to know the `on_enter` still owes its work, and never re-spends a completed dispatch.
 
-**The resumed dispatch runs as whoever resumed**, not whoever last moved the task.
+**The resumed dispatch runs under the task's stored authority held to whoever resumed**: a resume decides whether the work runs, never widens what it may do.
 
 **A dispatch in flight finishes**, and its outcome still routes (into a state whose own dispatch is then suppressed). A task-dispatched orchestration run is not paused with its task; pause it through its own route.
 

@@ -22,6 +22,7 @@ import { dispatchToTarget } from './triggerTargets';
 import { readTargetType } from './triggerValidation';
 import {
   captureAuthority,
+  narrowAuthority,
   parseWorkAuthority,
   requireWorkAuthority,
   triggerAuthority,
@@ -144,10 +145,10 @@ const firingAuthority = (args: {
     projectPublicId: args.projectPublicId,
   })!;
   return {
-    ...callerAuthority,
-    grant: own.grant,
-    caps: [{ kind: 'user', user: terms.grant.user }, ...terms.caps],
-    trigger: own.trigger,
+    ...narrowAuthority({ authority: own, by: callerAuthority }),
+    principal: callerAuthority.principal,
+    actsFor: callerAuthority.actsFor,
+    work: callerAuthority.work,
   };
 };
 

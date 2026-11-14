@@ -1,3 +1,4 @@
+import { db } from '../db';
 import { DomainError } from '../errors';
 import { pendingGenerations } from './agentGenerationHelpers';
 import { recoverPendingFromDb } from './agentGenerationRecovery';
@@ -22,7 +23,12 @@ import {
   withoutSystemMessages,
 } from './modelMessages';
 import { assertProjectAcceptsWork } from './projectPause';
-import { sameWorkAuthority, type WorkAuthority } from './workAuthority';
+import {
+  parseWorkAuthority,
+  resumedAuthority,
+  sameWorkAuthority,
+  type WorkAuthority,
+} from './workAuthority';
 
 /**
  * The ids a caller may answer are the ones this pause opened.
@@ -85,28 +91,38 @@ const isWithinProjectScope = (args: {
   return args.projectIds.includes(args.projectId);
 };
 
-export const submitToolOutputs = async (args: {
+/** The authority the generation stores, which a resume only narrows. */
+const storedGenerationAuthority = async (
+  generationId: string
+): Promise<WorkAuthority | null> => {
+  const gen = await db.Generation.findOne({
+    where: { publicId: generationId },
+    attributes: ['authority'],
+  });
+  return parseWorkAuthority(gen?.authority);
+};
+
+/**
+ * The paused turn, with its tools bound to `authority`. The in-memory tools
+ * are bound to the authority the turn started under, so a segment running
+ * under another resumes through the rebuild.
+ */
+const loadPendingFor = async (args: {
   projectIds?: number[];
   agentId: string;
   generationId: string;
-  toolOutputs: Array<{ toolCallId: string; output: unknown }>;
   authority: WorkAuthority | null;
-}): Promise<GenerationResult> => {
-  let pending = pendingGenerations.get(args.generationId);
-
-  // The in-memory tools call with the starter's credential, so another
-  // submitter resumes through the rebuild, which binds them to its own.
-  if (
-    !pending ||
-    !sameWorkAuthority({ a: pending.toolsAuthority, b: args.authority })
-  ) {
-    pending = await recoverPendingFromDb({
-      generationId: args.generationId,
-      agentId: args.agentId,
-      projectIds: args.projectIds,
-      authority: args.authority,
-    });
-  }
+}): Promise<PendingGeneration> => {
+  const memory = pendingGenerations.get(args.generationId);
+  const pending =
+    memory && sameWorkAuthority({ a: memory.toolsAuthority, b: args.authority })
+      ? memory
+      : await recoverPendingFromDb({
+          generationId: args.generationId,
+          agentId: args.agentId,
+          projectIds: args.projectIds,
+          authority: args.authority,
+        });
   if (
     !pending ||
     pending.agentId !== args.agentId ||
@@ -120,6 +136,22 @@ export const submitToolOutputs = async (args: {
       `Generation '${args.generationId}' not found or does not belong to agent '${args.agentId}'.`
     );
   }
+  return pending;
+};
+
+export const submitToolOutputs = async (args: {
+  projectIds?: number[];
+  agentId: string;
+  generationId: string;
+  toolOutputs: Array<{ toolCallId: string; output: unknown }>;
+  /** The submitter's: the resumed segment runs under the stored one held to it. */
+  authority: WorkAuthority | null;
+}): Promise<GenerationResult> => {
+  const authority = resumedAuthority({
+    stored: await storedGenerationAuthority(args.generationId),
+    resumer: args.authority,
+  });
+  const pending = await loadPendingFor({ ...args, authority });
 
   assertToolOutputsWereOpened({
     toolOutputs: args.toolOutputs,
@@ -135,7 +167,7 @@ export const submitToolOutputs = async (args: {
     !(await claimPausedGeneration({
       publicId: args.generationId,
       projectId: pending.projectId,
-      authority: args.authority,
+      authority,
       actsAsAgent:
         readAgentRunAs(pending.agentConfig.runAs) === 'agent'
           ? pending.agentId

@@ -84,6 +84,7 @@ describe('Session reply', () => {
         'agents:CreateSession',
         'agents:SendSessionMessage',
         'agents:SubmitSessionToolOutputs',
+        'generations:ResumeGeneration',
         'conversations:GetConversation',
       ],
       createNoPermUser: false,

@@ -2,17 +2,22 @@ import type { Context } from '../Context';
 import type { DeniedPrincipal } from '../lib/authorizationDenial';
 import type {
   AuthorityCap,
+  AuthorityGrant,
   CredentialTerms,
   WorkAuthority,
 } from '../lib/workAuthority';
-import { type AuthorityTerms, type Cap, NOTHING } from './authority';
+import {
+  type AuthorityTerms,
+  type Cap,
+  type Grant,
+  NOTHING,
+} from './authority';
 import {
   agentGrant,
   keyBound,
   oauthScopeCap,
   principalBoundCap,
   triggerGrant,
-  userBound,
   userGrant,
 } from './authScopedBoundary';
 
@@ -76,15 +81,48 @@ type CapArgs<K extends AuthorityCap['kind']> = {
   preloaded?: PreloadedRows;
 };
 
-const userCap = async (args: CapArgs<'user'>): Promise<Cap> => {
-  const user = await loadUser({ ...args, publicId: args.cap.user });
-  return {
-    principal: { type: 'user', id: args.cap.user },
-    kind: 'other',
-    bound: user
-      ? userBound({ role: roleOf(user.role), policyIds: user.policyIds })
-      : NOTHING,
-  };
+/** A stated grant as the evaluator reads it; null for a user no longer stored. */
+const grantOf = async (args: {
+  grant: AuthorityGrant;
+  principal: DeniedPrincipal;
+  db: Context['db'];
+  preloaded?: PreloadedRows;
+}): Promise<Grant | null> => {
+  const { grant, principal } = args;
+  if (grant.holder === 'user') {
+    const user = await loadUser({ ...args, publicId: grant.user });
+    return user
+      ? userGrant({
+          principal,
+          role: roleOf(user.role),
+          policyIds: user.policyIds,
+        })
+      : null;
+  }
+  if (grant.holder === 'agent') {
+    return agentGrant({ agentId: grant.agent, policy: grant.policy });
+  }
+  return triggerGrant({
+    principal,
+    triggerPublicId: grant.trigger,
+    db: args.db,
+  });
+};
+
+/**
+ * Another holder's grant as a cap: what it allows, read live, naming the
+ * holder. A user no longer stored allows nothing.
+ */
+const grantCap = async (args: CapArgs<'grant'>): Promise<Cap> => {
+  const { grant } = args.cap;
+  const principal: DeniedPrincipal =
+    grant.holder === 'user'
+      ? { type: 'user', id: grant.user }
+      : grant.holder === 'trigger'
+        ? { type: 'trigger', id: grant.trigger }
+        : { type: 'agent', id: grant.agent };
+  const resolved = await grantOf({ ...args, grant, principal });
+  return { principal, kind: 'other', bound: resolved?.bound ?? NOTHING };
 };
 
 /**
@@ -122,8 +160,8 @@ const scopeCap = (args: CapArgs<'scope'>): Cap => {
 const capOf = (args: CapArgs<AuthorityCap['kind']>): Promise<Cap> | Cap => {
   const { cap } = args;
   switch (cap.kind) {
-    case 'user':
-      return userCap({ ...args, cap });
+    case 'grant':
+      return grantCap({ ...args, cap });
     case 'key':
       return keyCap({ ...args, cap });
     case 'scope':
@@ -144,29 +182,10 @@ export const resolveTerms = async (args: {
   db: Context['db'];
   preloaded?: PreloadedRows;
 }): Promise<AuthorityTerms | null> => {
-  const { terms, db } = args;
+  const { terms } = args;
   const principal = denied(terms.principal);
-  let grant: AuthorityTerms['grant'];
-  if (terms.grant.holder === 'user') {
-    const user = await loadUser({ ...args, publicId: terms.grant.user });
-    if (!user) return null;
-    grant = userGrant({
-      principal,
-      role: roleOf(user.role),
-      policyIds: user.policyIds,
-    });
-  } else if (terms.grant.holder === 'agent') {
-    grant = agentGrant({
-      agentId: terms.grant.agent,
-      policy: terms.grant.policy,
-    });
-  } else {
-    grant = triggerGrant({
-      principal,
-      triggerPublicId: terms.grant.trigger,
-      db,
-    });
-  }
+  const grant = await grantOf({ ...args, grant: terms.grant, principal });
+  if (!grant) return null;
   const caps = await Promise.all(
     terms.caps.map((cap) => {
       return capOf({ ...args, cap });
