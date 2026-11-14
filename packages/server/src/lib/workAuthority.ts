@@ -422,44 +422,6 @@ export const triggerAuthority = (args: {
 };
 
 /**
- * The authority of a user, or of an API key on its owner's grant, pinned to
- * `project` and held to `bound` when one is given.
- */
-export const principalAuthority = (args: {
-  principal:
-    | { type: 'user'; id: string }
-    | { type: 'api_key'; id: string; owner: string };
-  bound: PrincipalBound | undefined;
-  project: string;
-}): WorkAuthority => {
-  const { principal } = args;
-  const bound: AuthorityCap[] = args.bound
-    ? [
-        {
-          kind: 'bound',
-          bound: args.bound,
-          by: { type: 'iam_token', id: null },
-        },
-      ]
-    : [];
-  return {
-    project: args.project,
-    grant: {
-      holder: 'user',
-      user: principal.type === 'user' ? principal.id : principal.owner,
-    },
-    caps:
-      principal.type === 'user'
-        ? bound
-        : [{ kind: 'key', key: principal.id }, ...bound],
-    principal: { type: principal.type, id: principal.id },
-    trigger: null,
-    work: null,
-    actsFor: null,
-  };
-};
-
-/**
  * The authority a `run_as: agent` turn's builtin calls run under: the agent's
  * grant alone, pinned to the turn's project, in place of the work's grant and
  * caps. The work's principal, chain and work id carry on.

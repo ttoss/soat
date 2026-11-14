@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import {
   createProjectPolicy,
   createScopedPrincipal,
@@ -571,6 +573,36 @@ describe('Playbooks', () => {
       expect(restored.status).toBe(200);
       expect(restored.body.version).toBe(3);
       expect(restored.body.definition.nodes).toHaveLength(3);
+    });
+
+    test('a version archived without policy_ids restores under the playbook grant', async () => {
+      const playbook = await newPlaybook();
+      const laterGrant = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['playbooks:GetPlaybook'],
+      });
+      await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/playbooks/${playbook.id}`)
+        .send({ policy_ids: [laterGrant] });
+      const owner = await db.Playbook.findOne({
+        where: { publicId: playbook.id },
+      });
+      const row = await db.PlaybookVersion.findOne({
+        where: { playbookId: owner!.id, version: 1 },
+      });
+      const { policy_ids: _dropped, ...config } = row!.config as Record<
+        string,
+        unknown
+      >;
+      await row!.update({ config });
+
+      const restored = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/playbooks/${playbook.id}/versions/1/restore`)
+        .send({});
+
+      expect(restored.status).toBe(200);
+      expect(restored.body.policy_ids).toEqual([laterGrant]);
     });
 
     test('returns 400 for a version that is not a positive integer', async () => {

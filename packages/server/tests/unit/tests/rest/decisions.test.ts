@@ -565,6 +565,20 @@ describe('Decisions', () => {
       expect(await countDecisions(decider)).toBe(0);
     });
 
+    test('a decider that names no policy_ids is allowed nothing', async () => {
+      const decider = await createDecider();
+      await db.Decider.update(
+        { policyIds: null },
+        { where: { publicId: decider } }
+      );
+
+      const res = await decide({ decider });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
+      expect(await countDecisions(decider)).toBe(0);
+    });
+
     test('names the question-set version it was answered under', async () => {
       const decider = await createDecider();
       const patched = await authenticatedTestClient(userToken)

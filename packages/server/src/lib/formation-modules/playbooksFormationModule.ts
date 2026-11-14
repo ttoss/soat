@@ -39,7 +39,7 @@ export const playbooksFormationModule = defineFormationModule({
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       definition: properties.definition,
-      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
+      policyIds: toNullableArray<string>(properties.policy_ids),
       createdBy: actor.author,
       writer: actor,
     });

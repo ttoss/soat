@@ -1,3 +1,6 @@
+import { db } from 'src/db';
+import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
+
 import {
   createAllowAllPolicy,
   createScopedPrincipal,
@@ -187,6 +190,77 @@ describe('Resource grants', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.policy_ids).toEqual([widerPolicyId]);
+    });
+  });
+
+  describe('POST /api/v1/playbook-cases/{case_id}/inputs', () => {
+    test('a version archived without policy_ids is allowed nothing', async () => {
+      const playbookId = await createdId(
+        admin()
+          .post('/api/v1/playbooks')
+          .send({
+            project_id: projectId,
+            name: unique('rg-run'),
+            policy_ids: [widerPolicyId],
+            definition: {
+              nodes: [
+                {
+                  id: 'pricing',
+                  title: 'Pricing',
+                  kind: 'execute',
+                  inputs: [
+                    {
+                      name: 'amount',
+                      schema: { type: 'number' },
+                      required: true,
+                      source: 'manual',
+                    },
+                  ],
+                  executor: { type: 'tool', id: toolId },
+                },
+              ],
+            },
+          })
+      );
+      const caseId = await createdId(
+        admin()
+          .post(`/api/v1/playbooks/${playbookId}/cases`)
+          .send({ subject: unique('rg-case') })
+      );
+      const playbook = await db.Playbook.findOne({
+        where: { publicId: playbookId },
+      });
+      const version = await db.PlaybookVersion.findOne({
+        where: { playbookId: playbook!.id, version: 1 },
+      });
+      const { policy_ids: _dropped, ...config } = version!.config as Record<
+        string,
+        unknown
+      >;
+      await version!.update({ config });
+
+      const written = await admin()
+        .post(`/api/v1/playbook-cases/${caseId}/inputs`)
+        .send({
+          inputs: [
+            {
+              node_id: 'pricing',
+              name: 'amount',
+              value: 1,
+              expected_revision: null,
+            },
+          ],
+        });
+      expect(written.status).toBe(200);
+      await flushPlaybookExecutions();
+
+      const executions = await admin().get(
+        `/api/v1/playbook-cases/${caseId}/executions?limit=100`
+      );
+      expect(executions.body.data[0].error).toMatchObject({
+        code: 'PLAYBOOK_EXECUTOR_FORBIDDEN',
+        meta: { node_id: 'pricing', action: 'tools:CallTool' },
+      });
     });
   });
 });
