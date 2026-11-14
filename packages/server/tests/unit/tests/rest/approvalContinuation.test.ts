@@ -481,6 +481,34 @@ describe('Tool-call approval continuation', () => {
       );
     });
 
+    test('an approved inline-tool call is reported as not executable, not as a missing tool', async () => {
+      const root = await rootGeneration(agentId);
+      const item = await seed({
+        toolId: 'inline:refund',
+        generationId: root,
+      });
+
+      expect((await approve(item.id)).status).toBe(200);
+
+      expect(await continuationMessageFor(item.id)).toContain(
+        'Result: {"error":"The approved action targets an inline tool and cannot be executed at resolution time."}.'
+      );
+    });
+
+    test('an approved call to a native tool nothing executes is refused, not looked up as a stored tool', async () => {
+      const root = await rootGeneration(agentId);
+      const item = await seed({
+        toolId: 'native:unknown',
+        generationId: root,
+      });
+
+      expect((await approve(item.id)).status).toBe(200);
+
+      expect(await continuationMessageFor(item.id)).toContain(
+        'Result: {"error":"The approved action targets native:unknown, which cannot be executed at resolution time."}.'
+      );
+    });
+
     test('a failed action is reported to the continuation as its result', async () => {
       const root = await rootGeneration(agentId);
       const item = await seed({

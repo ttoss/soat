@@ -16,11 +16,10 @@ import {
 } from './agentToolActivity';
 import { resolvedActionName } from './agentToolApproval';
 import {
-  collectBindingGuardrails,
-  gateResolvedToolsWithGuardrails,
+  collectToolScopedGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
-import type { BindingTools } from './agentToolNames';
+import type { BindingGate, ToolBinding } from './agentToolNames';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
@@ -1258,11 +1257,15 @@ const ephemeralDefinitionToRow = (
 // released them, so those are the guardrails its executions are counted under.
 const releasedBy = (args: {
   attribution: ToolCallAttribution;
-  guardrails: Array<{ guardrailId: string }>;
+  guardrail: ResolverGuardrailContext;
+  toolGuardrails: Array<{ guardrailId: string }>;
 }): ToolCallAttribution => {
   return withReleasingGuardrails({
     attribution: args.attribution,
-    guardrailIds: args.guardrails.map((guardrail) => {
+    guardrailIds: [
+      ...args.guardrail.baseGuardrails,
+      ...args.toolGuardrails,
+    ].map((guardrail) => {
       return guardrail.guardrailId;
     }),
   });
@@ -1294,18 +1297,18 @@ export const resolveEphemeralAgentTool = async (args: {
   activity: ActivityCallContext;
   unavailable?: UnavailableToolSink;
   attribution: ToolCallAttribution;
-}): Promise<Record<string, Tool>> => {
+}): Promise<ToolBinding> => {
   assertEphemeralTypeSupported(args.definition);
 
   const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);
-  const guardrails = await collectBindingGuardrails({
-    context: args.guardrail,
-    toolGuardrailIds: null,
-  });
 
   const tools = await resolveToolByType(typedTool, {
     ...args,
-    attribution: releasedBy({ attribution: args.attribution, guardrails }),
+    attribution: releasedBy({
+      attribution: args.attribution,
+      guardrail: args.guardrail,
+      toolGuardrails: [],
+    }),
   });
   const mapped = wrapToolsWithOutputMapping({
     tools: recordToolActivity({
@@ -1320,23 +1323,25 @@ export const resolveEphemeralAgentTool = async (args: {
   const rawParameters =
     typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined;
 
-  return gateResolvedToolsWithGuardrails({
+  return {
+    bindingName: args.definition.name,
     tools: mapped,
-    // Inline tools have no persisted id to re-execute; the guardrail gate uses
-    // a synthetic marker for the proposal, so pass null here.
-    toolId: null,
-    toolType: typedTool.type,
-    toolName: typedTool.name,
-    guardrails,
-    presetParameters: resolvePresetParametersForGate({
-      presetParameters: typedTool.presetParameters,
-      toolContext: args.toolContext,
+    gate: {
+      // Inline tools have no persisted id to re-execute; the guardrail gate
+      // uses a synthetic marker for the proposal.
+      toolId: null,
+      toolType: typedTool.type,
       toolName: typedTool.name,
-      schema: typedTool.parameters,
-    }),
-    rawParameters,
-    context: args.guardrail,
-  });
+      toolGuardrails: [],
+      presetParameters: resolvePresetParametersForGate({
+        presetParameters: typedTool.presetParameters,
+        toolContext: args.toolContext,
+        toolName: typedTool.name,
+        schema: typedTool.parameters,
+      }),
+      rawParameters,
+    },
+  };
 };
 
 type ResolveToolByTypeArgs = {
@@ -1374,8 +1379,45 @@ const admitSharedBinding = (args: {
   });
 };
 
-// Resolves one persisted-tool binding into its (output-mapped, optionally
-// guardrail-gated) AI-SDK tools. Extracted so `resolveAgentToolBindings`
+// A binding that resolved to nothing offers nothing to gate.
+const unreachableBinding = (args: { toolPublicId: string }): ToolBinding => {
+  return {
+    bindingName: args.toolPublicId,
+    tools: {},
+    gate: {
+      toolId: args.toolPublicId,
+      toolType: 'unknown',
+      toolName: args.toolPublicId,
+      toolGuardrails: [],
+    },
+  };
+};
+
+const storedToolGate = (args: {
+  typedTool: AgentToolRow;
+  toolContext?: Record<string, string>;
+  toolGuardrails: BindingGate['toolGuardrails'];
+}): BindingGate => {
+  return {
+    toolId: args.typedTool.publicId,
+    toolType: args.typedTool.type,
+    toolName: args.typedTool.name,
+    toolGuardrails: args.toolGuardrails,
+    // The gate classifies the *effective* arguments, so it must see the values
+    // the dispatch will actually send — a guardrail comparing a pinned account
+    // against `{{context:ocaAdAccountId}}` gates nothing.
+    presetParameters: resolvePresetParametersForGate({
+      presetParameters: args.typedTool.presetParameters,
+      toolContext: args.toolContext,
+      toolName: args.typedTool.name,
+      schema: args.typedTool.parameters,
+    }),
+    rawParameters: localInjectableSchema(args.typedTool),
+  };
+};
+
+// Resolves one persisted-tool binding into its output-mapped AI-SDK tools and
+// what the gate needs to gate them. Extracted so `resolveAgentToolBindings`
 // stays within its complexity budget.
 const resolveReferenceBinding = async (args: {
   toolPublicId: string;
@@ -1385,7 +1427,7 @@ const resolveReferenceBinding = async (args: {
   resolveArgs: ResolveToolByTypeArgs;
   guardrail: ResolverGuardrailContext;
   activity: ActivityCallContext;
-}): Promise<BindingTools> => {
+}): Promise<ToolBinding> => {
   // The agent's project, never the caller's scope: a credential reaching
   // several projects must not widen what an agent's binding resolves to.
   const agentTool = await toolReferences.find({
@@ -1405,15 +1447,15 @@ const resolveReferenceBinding = async (args: {
       activity: args.activity,
     });
     args.resolveArgs.unavailable?.({ toolName: args.toolPublicId });
-    return { bindingName: args.toolPublicId, tools: {} };
+    return unreachableBinding({ toolPublicId: args.toolPublicId });
   }
 
   const typedTool = agentTool as unknown as AgentToolRow;
   const ownTool = typedTool.projectId === args.callerProjectId;
   // A shared tool's own guardrails name guardrails in its owner's project; the
   // agent's project and agent guardrails govern the call instead.
-  const guardrails = await collectBindingGuardrails({
-    context: args.guardrail,
+  const toolGuardrails = await collectToolScopedGuardrails({
+    projectId: args.guardrail.projectId,
     toolGuardrailIds: ownTool ? typedTool.guardrailIds : null,
   });
   const toolContext = pinCallingProject({
@@ -1427,7 +1469,8 @@ const resolveReferenceBinding = async (args: {
     activity: args.activity,
     attribution: releasedBy({
       attribution: args.resolveArgs.attribution,
-      guardrails,
+      guardrail: args.guardrail,
+      toolGuardrails,
     }),
   });
   // Activity recording sits innermost, so it only fires for a call that actually
@@ -1452,26 +1495,11 @@ const resolveReferenceBinding = async (args: {
       ? tools
       : wrapToolsWithOutputMapping({ tools, typedTool });
 
-  // Guardrails are the single tool-call gating mechanism.
-  const gated = gateResolvedToolsWithGuardrails({
+  return {
+    bindingName: typedTool.name,
     tools: mapped,
-    toolId: typedTool.publicId,
-    toolType: typedTool.type,
-    toolName: typedTool.name,
-    guardrails,
-    // The gate classifies the *effective* arguments, so it must see the values
-    // the dispatch will actually send — a guardrail comparing a pinned account
-    // against `{{context:ocaAdAccountId}}` gates nothing.
-    presetParameters: resolvePresetParametersForGate({
-      presetParameters: typedTool.presetParameters,
-      toolContext,
-      toolName: typedTool.name,
-      schema: typedTool.parameters,
-    }),
-    rawParameters: localInjectableSchema(typedTool),
-    context: args.guardrail,
-  });
-  return { bindingName: typedTool.name, tools: gated };
+    gate: storedToolGate({ typedTool, toolContext, toolGuardrails }),
+  };
 };
 
 export const resolveAgentToolBindings = async (args: {
@@ -1498,9 +1526,8 @@ export const resolveAgentToolBindings = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  // Per-generation guardrail-gate context (Milestone 2). Wraps every resolved
-  // tool with the classify → route interceptor when a guardrail applies at the
-  // project / agent / tool scope.
+  // Per-generation guardrail-gate context. Each binding declares its gate;
+  // `gateAndMergeBindings` applies it.
   guardrail: ResolverGuardrailContext;
   // Identity a successful tool call is attributed to on the activity feed
   // (approvals PRD Phase 4).
@@ -1510,8 +1537,8 @@ export const resolveAgentToolBindings = async (args: {
   unavailable?: UnavailableToolSink;
   // Who the turn's tool executions are metered against.
   attribution: ToolCallAttribution;
-}): Promise<BindingTools[]> => {
-  const bindings: BindingTools[] = [];
+}): Promise<ToolBinding[]> => {
+  const bindings: ToolBinding[] = [];
 
   for (const toolPublicId of args.toolIds) {
     bindings.push(
@@ -1528,7 +1555,7 @@ export const resolveAgentToolBindings = async (args: {
   }
 
   for (const definition of args.tools) {
-    const ephemeralTools = await resolveEphemeralAgentTool({
+    const ephemeral = await resolveEphemeralAgentTool({
       definition,
       projectId: args.projectId,
       callerProjectId: args.callerProjectId,
@@ -1544,7 +1571,7 @@ export const resolveAgentToolBindings = async (args: {
       unavailable: args.unavailable,
       attribution: args.attribution,
     });
-    bindings.push({ bindingName: definition.name, tools: ephemeralTools });
+    bindings.push(ephemeral);
   }
 
   return bindings;

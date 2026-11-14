@@ -139,6 +139,13 @@ A denied action does not run; its result is the
 `error.message` `Forbidden: agent <agent_id>'s policies deny <action>`. An agent that no
 longer exists bounds nothing in, so its approved `builtin` actions are refused.
 
+Two proposals name no stored tool. An approved
+[`write_memory`](./memories.md#write_memory-tool) call (`tool_id`
+`native:write_memory`) runs the agent's write path, held to the same
+`policy_ids`; any other `native:` `tool_id` is refused with an `error` result. An approved [inline tool](./agents.md#inline-ephemeral-tool-definitions) call
+(`tool_id` `inline:<name>`) has nothing to execute; its `result` is
+`{ "error": "The approved action targets an inline tool and cannot be executed at resolution time." }`.
+
 ### Duplicate proposals (dedup)
 
 Tool-call items carry a `dedup_key` derived from agent, tool, action and
@@ -237,8 +244,9 @@ requires what making the call would require:
 | ---------------- | ------------------------------------------------------------- |
 | any tool         | `tools:CallTool` on that tool                                 |
 | a `builtin` tool | the proposed action's own IAM action, anywhere in the project |
+| [`write_memory`](./memories.md#write_memory-tool) (`native:write_memory`) | `memories:CreateMemory` **and** `memories:UpdateMemory` on the store the agent's `write_memory_store_id` names, with its tags as condition inputs; anywhere in the project when it names none |
 
-A builtin action is dispatched in-process against the proposer's credential, so nothing else checks the approver. An edit failing either check answers `403 FORBIDDEN`; approving as proposed is unaffected.
+A builtin action is dispatched in-process against the proposer's credential, and a `write_memory` call writes in-process under the agent's `policy_ids`, so nothing else checks the approver. An edit failing any check answers `403 FORBIDDEN`; approving as proposed is unaffected.
 
 ## Examples
 

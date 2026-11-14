@@ -6,6 +6,12 @@ import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import {
+  runApprovedWriteMemory,
+  WRITE_MEMORY_TOOL_ID,
+  writeMemoryEditChecks,
+} from './agentKnowledge';
+import { isInlineProposal, isNativeProposal } from './agentToolApproval';
+import {
   type ApprovalResumeHandler,
   type DecisionOutput,
   type MappedApproval,
@@ -99,12 +105,102 @@ const proposingAgentAuthority = async (args: {
   });
 };
 
+/** The approved `write_memory` call, run as the agent that proposed it. */
+const executeApprovedWriteMemory = async (args: {
+  item: MappedApproval;
+  projectInternalId: number;
+  input: Record<string, unknown>;
+}): Promise<object> => {
+  const agent = args.item.agent_id
+    ? await agentReferences.find({
+        id: args.item.agent_id,
+        projectId: args.projectInternalId,
+        reach: 'project',
+      })
+    : null;
+  const actorId = await proposingActorId(args.item.generation_id);
+  return runApprovedWriteMemory({
+    agent,
+    generationId: args.item.generation_id ?? null,
+    projectId: args.projectInternalId,
+    agentPolicy: (
+      await proposingAgentAuthority({
+        item: args.item,
+        projectInternalId: args.projectInternalId,
+      })
+    ).policy,
+    actorId: actorId ?? undefined,
+    input: args.input,
+  });
+};
+
+type EditCheck = {
+  action: string;
+  resource: string;
+  context?: Record<string, string>;
+};
+
+/** Everything resolution needs to know about one native tool, a tool with no row. */
+type NativeTool = {
+  /** How an approved call runs. */
+  execute: typeof executeApprovedWriteMemory;
+  /**
+   * What an approver must hold, beyond `tools:CallTool`, to edit a held call:
+   * the work the call performs in-process, which nothing else checks against
+   * the approver.
+   */
+  editChecks: (args: {
+    agentId: string | null;
+    projectId: number;
+    projectPublicId: string;
+  }) => Promise<EditCheck[]>;
+};
+
+/**
+ * Every native tool, by `tool_id`. One missing here is refused at resolution
+ * rather than looked up as a stored tool, so an edit of it adds nothing.
+ */
+const NATIVE_TOOLS: Record<string, NativeTool | undefined> = {
+  [WRITE_MEMORY_TOOL_ID]: {
+    execute: executeApprovedWriteMemory,
+    editChecks: writeMemoryEditChecks,
+  },
+};
+
+export const nativeProposalEditChecks = async (args: {
+  toolId: string;
+  agentId: string | null;
+  projectId: number;
+  projectPublicId: string;
+}): Promise<EditCheck[]> => {
+  return (await NATIVE_TOOLS[args.toolId]?.editChecks(args)) ?? [];
+};
+
+const executeApprovedNativeAction = async (args: {
+  toolId: string;
+  item: MappedApproval;
+  projectInternalId: number;
+  input: Record<string, unknown>;
+}): Promise<object> => {
+  const nativeTool = NATIVE_TOOLS[args.toolId];
+  if (!nativeTool) {
+    return {
+      error: `The approved action targets ${args.toolId}, which cannot be executed at resolution time.`,
+    };
+  }
+  return nativeTool.execute({
+    item: args.item,
+    projectInternalId: args.projectInternalId,
+    input: args.input,
+  });
+};
+
 /**
  * Executes the frozen (or edited) proposed action at resolution time and returns
- * its output as the decision `result`. Runs through the normal persisted-tool
- * path (`callTool`), which re-applies preset parameters and output mapping.
- * Inline-tool proposals have no persisted id to execute against, so they carry a
- * structured note instead of a result.
+ * its output as the decision `result`. A persisted tool runs through
+ * `callTool`, which re-applies preset parameters and output mapping; a native
+ * tool runs through its {@link NATIVE_TOOLS} entry. An inline tool has nothing to
+ * execute against, so it carries a structured note instead of a result.
  */
 const executeApprovedAction = async (args: {
   item: MappedApproval;
@@ -113,7 +209,7 @@ const executeApprovedAction = async (args: {
   toolContext?: Record<string, string>;
 }): Promise<object | null> => {
   const proposed = args.item.proposed_action;
-  if (!proposed?.tool_id) {
+  if (!proposed?.tool_id || isInlineProposal(proposed.tool_id)) {
     return {
       error:
         'The approved action targets an inline tool and cannot be executed at resolution time.',
@@ -122,6 +218,15 @@ const executeApprovedAction = async (args: {
   const input = (args.item.edited_arguments ??
     proposed.arguments ??
     {}) as Record<string, unknown>;
+
+  if (isNativeProposal(proposed.tool_id)) {
+    return executeApprovedNativeAction({
+      toolId: proposed.tool_id,
+      item: args.item,
+      projectInternalId: args.projectInternalId,
+      input,
+    });
+  }
 
   log(
     'executeApprovedAction: id=%s toolId=%s action=%s',

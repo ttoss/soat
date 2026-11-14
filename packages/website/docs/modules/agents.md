@@ -660,7 +660,7 @@ Under `caller`, a `builtin` action must be allowed by both, as for [API keys](./
 
 A generation with no actor leaves the variable unbound, and a condition naming an unbound variable matches nothing ([IAM — Policy Variables](./iam.md#policy-variables)).
 
-The cap also gates the native **`write_memory`** tool (`knowledge_config.write_memory_store_id`): it needs `memories:CreateMemory` **and** `memories:UpdateMemory`, evaluated against the target store's SRN (`srn:<project_id>:memory_store:<memory_store_id>`) and its tags as [condition](./iam.md#condition-keys) inputs, so a policy can confine an agent to one store whatever `write_memory_store_id` later says.
+The cap also gates the native **`write_memory`** tool (`knowledge_config.write_memory_store_id`): it needs `memories:CreateMemory` **and** `memories:UpdateMemory`, evaluated against the target store's SRN (`srn:<project_id>:memory_store:<memory_store_id>`) and its tags as [condition](./iam.md#condition-keys) inputs, so a policy can confine an agent to one store whatever `write_memory_store_id` later says. Project- and agent-scope [guardrails](./guardrails.md#attachment) gate it like any other tool call ([Memories — `write_memory` Tool](./memories.md#write_memory-tool)).
 
 ### Resource-scoped policies
 

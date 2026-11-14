@@ -96,6 +96,28 @@ export const resolvedActionName = (args: {
   return args.key;
 };
 
+const INLINE_PROPOSAL_PREFIX = 'inline:';
+
+/**
+ * The `tool_id` a proposal from an inline (unpersisted) tool carries: there is
+ * no row to name, so the marker keeps the dedup key and item formed while
+ * telling resolution there is nothing to execute.
+ */
+export const inlineProposalToolId = (args: { toolName: string }): string => {
+  return `${INLINE_PROPOSAL_PREFIX}${args.toolName}`;
+};
+
+export const isInlineProposal = (toolId: string): boolean => {
+  return toolId.startsWith(INLINE_PROPOSAL_PREFIX);
+};
+
+/** The `tool_id` prefix of a proposal from a native tool, one with no row. */
+export const NATIVE_PROPOSAL_PREFIX = 'native:';
+
+export const isNativeProposal = (toolId: string): boolean => {
+  return toolId.startsWith(NATIVE_PROPOSAL_PREFIX);
+};
+
 // ── Dedup ───────────────────────────────────────────────────────────────────
 
 /**
