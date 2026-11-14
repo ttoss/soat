@@ -24,6 +24,7 @@ export const evalsFormationModule = defineFormationModule({
       scorers: properties.scorers,
       passThreshold: properties.pass_threshold,
       groupBy: properties.group_by,
+      evidence: properties.evidence,
     });
   },
 
@@ -42,6 +43,7 @@ export const evalsFormationModule = defineFormationModule({
           ? undefined
           : toNullableNumber(properties.pass_threshold),
       groupBy: properties.group_by,
+      evidence: properties.evidence,
     });
   },
 

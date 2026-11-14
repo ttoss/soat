@@ -336,7 +336,7 @@ A `json_logic` expression is evaluated over `input`, `output`, `object`, `expect
 BASELINE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true | jq -r '.id')
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" \
-  | jq '{status, passed, agent_version, item_count, completed_count, errored_count, aggregate_scores}'
+  | jq '{status, verdict, agent_version, item_count, completed_count, errored_count, aggregate_scores}'
 ```
 
 </TabItem>
@@ -349,7 +349,7 @@ const { data: baselineRun } = await adminSoat.evaluations.startEvalRun({
 });
 
 console.log(baselineRun.status); // 'completed'
-console.log(baselineRun.passed); // false — the prompt never mentions the hand-off
+console.log(baselineRun.verdict); // 'refuted' — the prompt never mentions the hand-off
 console.log(baselineRun.aggregate_scores);
 ```
 
@@ -362,7 +362,7 @@ BASELINE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -d '{"wait":true}' | jq -r '.id')
 
 curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, passed, aggregate_scores}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, verdict, aggregate_scores}'
 ```
 
 </TabItem>
@@ -373,7 +373,7 @@ Expected shape (`contains` fails every item; the prompt never asks for a hand-of
 ```json
 {
   "status": "completed",
-  "passed": false,
+  "verdict": "refuted",
   "agent_version": 1,
   "item_count": 3,
   "completed_count": 3,
@@ -485,7 +485,7 @@ CANDIDATE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true \
   --baseline-run-id "$BASELINE_RUN_ID" | jq -r '.id')
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$CANDIDATE_RUN_ID" \
-  | jq '{passed, agent_version, pass_rate: .aggregate_scores.pass_rate, baseline: .aggregate_scores.baseline}'
+  | jq '{verdict, agent_version, pass_rate: .aggregate_scores.pass_rate, baseline: .aggregate_scores.baseline}'
 ```
 
 </TabItem>
@@ -520,7 +520,7 @@ Expected shape (positive `pass_rate_delta` = improvement over the baseline):
 
 ```json
 {
-  "passed": true,
+  "verdict": "insufficient",
   "agent_version": 2,
   "pass_rate": 1,
   "baseline": {
@@ -544,6 +544,8 @@ Expected shape (positive `pass_rate_delta` = improvement over the baseline):
 :::
 
 Every delta is computed over the item intersection (cases present and scorable in both runs); comparison rules: [Evaluations](/docs/modules/evaluations).
+
+Three items cannot support a threshold of `0.67` even at a pass rate of `1`: the verdict reads the pass rate's interval, and three passes leave it at about `0.44`–`1`, so the run is `insufficient` while the baseline's `0` of `3` was already `refuted`. A suite that gates a release needs enough items for its interval to clear the threshold ([Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics)).
 
 ---
 
@@ -612,11 +614,11 @@ A baseline delta therefore never reports dataset drift as agent regression. Dele
 
 ## Step 8 — What the numbers mean
 
-[Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics): an item passes when all its scorers pass; the run's verdict gates on the pass rate against `pass_threshold`, never on a pooled mean.
+[Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics): an item passes when all its scorers pass; the run's verdict reads the pass rate's 95% interval against `pass_threshold`, never a pooled mean.
 
 :::info[Errors are not zeros]
 
-An item whose generation did not complete is an **error**: excluded from `aggregate_scores`, counted in `errored_count`, never scored 0. A run that scored nothing does not pass.
+An item whose generation did not complete is an **error**: excluded from `aggregate_scores`, counted in `errored_count`, never scored 0. A run that scored nothing is `insufficient`.
 
 :::
 
@@ -626,5 +628,5 @@ An item whose generation did not complete is an **error**: excluded from `aggreg
 
 - [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers) — answers with no single right string.
 - [Grade Structured Output with Your Own Scorer](/docs/tutorials/grade-structured-output-with-your-own-scorer) — a business rule in your own code.
-- [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — a rollout that waits for a green suite.
+- [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — a rollout that waits for a supported verdict.
 - [Evaluations](/docs/modules/evaluations) — full data model.

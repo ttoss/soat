@@ -179,7 +179,7 @@ Promote by itself. The platform owns the *queue*, the *recurrence signal*, and t
 
 The pieces for a self-modifying loop exist: a [`builtin` tool](/docs/modules/tools#builtin) can expose `update-agent`, `update-guardrail`, `set-agent-release`, `start-eval-run`, `promote-agent-release`, so an agent with those actions and a permitting credential can propose changes to its own definitions, with [eval-gated promotion](/docs/modules/agents#eval-gated-promotion) as the deterministic brake. Two boundaries mark where platform enforcement ends:
 
-- **The promotion gate verifies evidence; it does not produce it.** `promote` fails closed (`409 PROMOTION_GATE_UNMET`) until a passing run pinned to the canary exists; running the eval is an explicit call outside the gate, only as trustworthy as its scorers and dataset.
+- **The promotion gate verifies evidence; it does not produce it.** `promote` fails closed (`409 PROMOTION_GATE_UNMET`) until the newest run of this agent pinned to the canary reads `supported`; running the eval is an explicit call outside the gate, only as trustworthy as its scorers and dataset.
 - **`policy_ids` ceiling only `builtin` actions.** An agent reaching the platform through an `http` or `mcp` tool is outside that boundary; only a [guardrail](/docs/modules/guardrails) at tool, agent, or project scope reaches those calls.
 
 Deciding what the system should optimize is not a layer SOAT automates.
@@ -195,7 +195,7 @@ Pieces marked coming soon are designed but not built.
 | [Evaluations](/docs/modules/evaluations) — datasets, scorers, runs, baselines | Shipped                                                                                  |
 | [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion) of a canary release | Shipped                                                                         |
 | [Memories](/docs/modules/memories) forgetting — importance scoring, recency blending, compaction | Coming soon                                                                    |
-| An eval run's verdict read on the pass-rate interval and on the kinds the claim requires, with its reasons | Coming soon |
+| [An eval run's verdict](/docs/modules/evaluations#pass-semantics) read on the pass-rate interval and on the kinds the claim requires, with its reasons | Shipped |
 | The claim written on the eval and frozen on each run | Coming soon |
 | Claims held per agent version; promotion refused while the canary loses one the stable version supports | Coming soon |
 

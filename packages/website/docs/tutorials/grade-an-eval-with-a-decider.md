@@ -716,7 +716,7 @@ EVAL_ID=$(soat create-eval \
 
 BASELINE_RUN=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true)
 BASELINE_RUN_ID=$(echo "$BASELINE_RUN" | jq -r '.id')
-echo "$BASELINE_RUN" | jq '{status, passed, decider_versions, reply_review: .aggregate_scores.scorers.reply_review}'
+echo "$BASELINE_RUN" | jq '{status, verdict, decider_versions, reply_review: .aggregate_scores.scorers.reply_review}'
 ```
 
 Expected output against the mock:
@@ -724,11 +724,13 @@ Expected output against the mock:
 ```json
 {
   "status": "completed",
-  "passed": true,
+  "verdict": "insufficient",
   "decider_versions": { "reply_review": 1 },
   "reply_review": { "mean": 0.85, "pass_rate": 1 }
 }
 ```
+
+Two items cannot support a threshold of `0.8`, so the verdict is `insufficient` however they score; this tutorial reads the decider's figures, not a gate ([Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics)).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">

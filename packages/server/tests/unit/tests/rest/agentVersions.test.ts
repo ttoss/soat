@@ -983,9 +983,13 @@ describe('Agent versions', () => {
    * mocked, which is the one external boundary (`.claude/rules/tests.md`).
    */
   describe('eval-gated promotion', () => {
+    const GATE_ITEMS = 4;
     let datasetId: string;
 
-    /** An eval of `agent` that passes only when the agent answers "Paris". */
+    /**
+     * An eval of `agent` that supports its claim only when the agent answers
+     * "Paris" on all four items: 4 of 4 clears 0.5 (interval low ≈ 0.51).
+     */
     const createGateEval = async (name: string, targetAgentId: string) => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/evals')
@@ -995,7 +999,7 @@ describe('Agent versions', () => {
           agent_id: targetAgentId,
           dataset_id: datasetId,
           scorers: [{ type: 'exact_match' }],
-          pass_threshold: 1,
+          pass_threshold: 0.5,
         });
       expect(res.status).toBe(201);
       return res.body.id as string;
@@ -1027,22 +1031,24 @@ describe('Agent versions', () => {
       return { agentId: agent.id as string, evalId };
     };
 
-    /** Runs the gate's eval against one version, answering `answer` once. */
+    /** Runs the gate's eval against one version, answering `answer` per item. */
     const runEval = async (args: {
       evalId: string;
       version: number;
       answer: string;
     }) => {
-      mockCreateGeneration.mockResolvedValueOnce({
-        id: `gen_gate_${args.version}_${args.answer}`,
-        traceId: `trc_gate_${args.version}_${args.answer}`,
-        status: 'completed' as const,
-        output: {
-          model: 'test-model',
-          content: args.answer,
-          finishReason: 'stop' as const,
-        },
-      });
+      for (let item = 0; item < GATE_ITEMS; item += 1) {
+        mockCreateGeneration.mockResolvedValueOnce({
+          id: `gen_gate_${args.version}_${args.answer}_${item}`,
+          traceId: `trc_gate_${args.version}_${args.answer}_${item}`,
+          status: 'completed' as const,
+          output: {
+            model: 'test-model',
+            content: args.answer,
+            finishReason: 'stop' as const,
+          },
+        });
+      }
 
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/evals/${args.evalId}/runs`)
@@ -1050,7 +1056,7 @@ describe('Agent versions', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.agent_version).toBe(args.version);
-      return res.body as { id: string; passed: boolean };
+      return res.body as { id: string; verdict: string | null };
     };
 
     const promote = (agentId: string) => {
@@ -1078,13 +1084,15 @@ describe('Agent versions', () => {
       expect(dataset.status).toBe(201);
       datasetId = dataset.body.id;
 
-      const item = await authenticatedTestClient(userToken)
-        .post(`/api/v1/datasets/${datasetId}/items`)
-        .send({
-          input: [{ role: 'user', content: 'Capital of France?' }],
-          expected_output: 'Paris',
-        });
-      expect(item.status).toBe(201);
+      for (let index = 0; index < GATE_ITEMS; index += 1) {
+        const item = await authenticatedTestClient(userToken)
+          .post(`/api/v1/datasets/${datasetId}/items`)
+          .send({
+            input: [{ role: 'user', content: `Capital of France? (${index})` }],
+            expected_output: 'Paris',
+          });
+        expect(item.status).toBe(201);
+      }
     });
 
     afterEach(() => {
@@ -1126,7 +1134,7 @@ describe('Agent versions', () => {
       const { agentId, evalId } = await gatedAgent('gate-green');
 
       const run = await runEval({ evalId, version: 2, answer: 'Paris' });
-      expect(run.passed).toBe(true);
+      expect(run.verdict).toBe('supported');
 
       const res = await promote(agentId);
 
@@ -1145,7 +1153,7 @@ describe('Agent versions', () => {
       // Green — but it measured the stable config, which says nothing about
       // the canary being promoted.
       const run = await runEval({ evalId, version: 1, answer: 'Paris' });
-      expect(run.passed).toBe(true);
+      expect(run.verdict).toBe('supported');
 
       const res = await promote(agentId);
 
@@ -1157,7 +1165,7 @@ describe('Agent versions', () => {
       const { agentId, evalId } = await gatedAgent('gate-red');
 
       const run = await runEval({ evalId, version: 2, answer: 'Lyon' });
-      expect(run.passed).toBe(false);
+      expect(run.verdict).toBe('refuted');
 
       const res = await promote(agentId);
 

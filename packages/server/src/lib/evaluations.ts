@@ -19,6 +19,7 @@ import { validateScorers } from './evaluationScorers';
 import {
   assertValid,
   requireName,
+  validateEvidence,
   validateGroupBy,
   validatePassThreshold,
 } from './evaluationValidation';
@@ -52,6 +53,7 @@ export const mapEval = (evaluation: EvalRow) => {
         ? null
         : Number(evaluation.passThreshold),
     group_by: evaluation.groupBy,
+    evidence: evaluation.evidence ?? null,
     created_at: evaluation.createdAt,
     updated_at: evaluation.updatedAt,
   };
@@ -143,6 +145,7 @@ export const createEval = async (args: {
   scorers: unknown;
   passThreshold?: unknown;
   groupBy?: unknown;
+  evidence?: unknown;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   const name = requireName(args.name);
@@ -184,6 +187,12 @@ export const createEval = async (args: {
   });
   assertValid(validatePassThreshold(args.passThreshold));
   assertValid(validateGroupBy(args.groupBy));
+  assertValid(
+    validateEvidence({
+      evidence: args.evidence,
+      groupBy: typeof args.groupBy === 'string' ? args.groupBy : null,
+    })
+  );
 
   let evaluation;
   try {
@@ -198,6 +207,7 @@ export const createEval = async (args: {
           ? null
           : String(args.passThreshold),
       groupBy: args.groupBy ?? null,
+      evidence: args.evidence ?? null,
     });
   } catch (error) {
     throw rethrowAsConflict(
@@ -311,6 +321,31 @@ const assertWriterStartsUpdatedEval = (args: {
   });
 };
 
+/**
+ * Judges `evidence` as the update leaves the pair with `group_by`: clearing
+ * `group_by` under required groups is refused as surely as requiring groups
+ * with no `group_by`.
+ */
+const applyEvidenceUpdate = (args: {
+  evaluation: EvalRow;
+  updates: Record<string, unknown>;
+  evidence: unknown;
+  groupBy: unknown;
+}): void => {
+  if (args.evidence === undefined && args.groupBy === undefined) return;
+  const evidence =
+    args.evidence === undefined ? args.evaluation.evidence : args.evidence;
+  const groupBy =
+    args.groupBy === undefined ? args.evaluation.groupBy : args.groupBy;
+  assertValid(
+    validateEvidence({
+      evidence,
+      groupBy: typeof groupBy === 'string' ? groupBy : null,
+    })
+  );
+  if (args.evidence !== undefined) args.updates.evidence = args.evidence;
+};
+
 export const updateEval = async (args: {
   projectIds?: number[];
   id: string;
@@ -320,6 +355,7 @@ export const updateEval = async (args: {
   scorers?: unknown;
   passThreshold?: unknown;
   groupBy?: unknown;
+  evidence?: unknown;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   log('updateEval: id=%s', args.id);
@@ -369,6 +405,13 @@ export const updateEval = async (args: {
     assertValid(validateGroupBy(args.groupBy));
     updates.groupBy = args.groupBy;
   }
+
+  applyEvidenceUpdate({
+    evaluation,
+    updates,
+    evidence: args.evidence,
+    groupBy: args.groupBy,
+  });
 
   try {
     await evaluation.update(updates);

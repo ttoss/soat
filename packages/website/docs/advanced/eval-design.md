@@ -30,11 +30,11 @@ A claim names an observable property and the inputs it holds over. One claim is 
 
 The claim fixes what counts as enough evidence before a run is read:
 
-- **Every kind of input the claim covers is a kind in the dataset.** Put the kind in each item's `metadata` and set `group_by` to it ([Label each item's kind](#label-each-items-kind)). A kind the claim names and the dataset lacks leaves that part of the claim unmeasured, whatever the pass rate.
+- **Every kind of input the claim covers is a kind in the dataset.** Put the kind in each item's `metadata`, set `group_by` to it ([Label each item's kind](#label-each-items-kind)) and name the kinds the claim covers in `evidence.required_groups` ([Evidence](../modules/evaluations.md#evidence)). A required kind the dataset lacks reads `insufficient`, whatever the pass rate.
 - **The threshold is the pass rate the claim needs, at a size the items can show.** A run's `pass_rate_interval` says what its items support ([Noise before signal](#noise-before-signal)); twenty items passing in full support a pass rate of `0.84`, not `0.95`.
 - **One scorer per property the claim names**, the cheapest that decides it ([Choosing a scorer](#choosing-a-scorer)). An item passes when every scorer passes.
 
-The verdict is the pass rate against the threshold ([Pass semantics](../modules/evaluations.md#pass-semantics)); the interval and the per-kind figures are read beside it.
+The verdict is the pass rate's interval against the threshold, for the run and for every required kind ([Pass semantics](../modules/evaluations.md#pass-semantics)); `verdict_reasons` names the scope that decided it.
 
 ## The dataset
 
@@ -93,7 +93,7 @@ Agents are stochastic, and a dataset is a sample: two runs of one version over o
 
 1. **Read `baseline.p_value` before the delta.** Run the change with `baseline_run_id` naming the current version's run ([Evaluate an Agent — Step 6](/docs/tutorials/evaluate-an-agent#step-6--fix-the-prompt-then-measure-the-fix)). A delta whose `p_value` is above `0.05` is not yet distinguishable from items flipping at random: run again or add items. Read `flipped` beside it: `9` improved against `6` regressed is a different change from `3` against `0`.
 2. **Read it per kind.** With `group_by` set, each `baseline.grouping.groups` entry has its own `p_value`, and a kind that regressed can be significant while the overall delta is not.
-3. **Set `pass_threshold` below the current version's `pass_rate_interval.low`.** A threshold inside the interval passes or fails on which items the model happened to get right. A threshold of `1.0` fails on noise.
+3. **Set `pass_threshold` below the current version's `pass_rate_interval.low`.** The verdict reads the interval, so a threshold inside it is `insufficient` until the dataset grows. A threshold of `1.0` can never be `supported`.
 4. **Size the dataset by the interval.** When `pass_rate_interval` is wider than the change you need to see, no delta can show it: add items, weighted toward failures.
 
 Measure the agent at the `temperature` production serves. Temperature is part of the [agent version](../modules/agents.md#versioning-and-staged-rollout); an eval-only setting measures a different agent.
@@ -101,7 +101,7 @@ Measure the agent at the `temperature` production serves. Temperature is part of
 ### Reading a run
 
 - **Compare deltas, not raw pass rates.** [Baseline deltas](../modules/evaluations.md#baseline-deltas) are computed over the items both runs scored (`compared_item_count`); a run's own `pass_rate` includes items added since. Nonzero `added_item_count` or `removed_item_count` means the dataset moved under you.
-- **Read `errored_count` next to `passed`.** The pass rate is passed items over _non-errored_ items, and the verdict does not read the error count: a run whose items mostly errored passes on the few that scored ([Errors are not zeros](../modules/evaluations.md#errors-are-not-zeros)). Check it before promoting on a run.
+- **Read `errored_count` next to `verdict`.** The pass rate is passed items over _non-errored_ items, and the verdict does not read the error count: errored items shrink the sample, which widens the interval, but a run whose items mostly errored can still be `supported` by the ones that scored ([Errors are not zeros](../modules/evaluations.md#errors-are-not-zeros)). Check it before promoting on a run.
 - **Match `decider_versions` across the two runs.** A run pins each decider's version, and a baseline graded under another version is still compared: a delta across versions moves the criteria, not only the agent.
 
 ## Calibrating a judge
@@ -147,5 +147,5 @@ A run costs `items × (agent generation + one judge completion per llm_judge + o
 - [ ] The cheapest scorer per criterion; `llm_judge` only where no rule decides
 - [ ] Deltas read with `baseline.p_value`, overall and per kind; `pass_threshold` below the current `pass_rate_interval.low`
 - [ ] Judge model pinned, decider versions matched across compared runs, thresholds calibrated against human grades
-- [ ] `errored_count` read before trusting `passed`
+- [ ] `errored_count` read before trusting `verdict`
 - [ ] A held-out set behind the promotion gate

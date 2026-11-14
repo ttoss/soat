@@ -1,7 +1,4 @@
-import {
-  aggregateScores,
-  resolveRunPassed,
-} from 'src/lib/evaluationScorerAggregation';
+import { aggregateScores } from 'src/lib/evaluationScorerAggregation';
 import {
   buildJsonLogicContext,
   type EmbeddingScorerRunner,
@@ -11,6 +8,11 @@ import {
   type ToolScorerRunner,
   validateScorers,
 } from 'src/lib/evaluationScorers';
+import {
+  intervalVerdict,
+  type Verdict,
+  worstVerdict,
+} from 'src/lib/evaluationVerdict';
 
 /**
  * Direct tests for the scorer kernel (the evaluations module doc).
@@ -559,7 +561,7 @@ describe('evaluation scorers', () => {
      * any type it does not recognise *as* `output_schema`, and reports it under
      * that name. Nothing surfaces the substitution: the run reaches a terminal
      * status carrying scores never computed from the requested criterion, and
-     * `resolveRunPassed` feeds that verdict to eval-gated promotion.
+     * the run's verdict feeds them to eval-gated promotion.
      *
      * `validateScorers` rejects an unknown type at Eval create, so this is
      * reachable only from a stored Eval whose scorer type the running server
@@ -660,42 +662,48 @@ describe('evaluation scorers', () => {
 
   // ── run verdict ──────────────────────────────────────────────────────────
 
-  describe('resolveRunPassed', () => {
-    const aggregate = (passRate: number | null) => {
-      return {
-        scorers: {},
-        pass_rate: passRate,
-        pass_rate_interval: null,
-        scored_item_count: 1,
-      };
+  describe('intervalVerdict', () => {
+    const interval = (low: number, high: number) => {
+      return { low, high, level: 0.95 };
     };
 
-    test('is null when the eval declares no threshold', () => {
-      expect(
-        resolveRunPassed({ passThreshold: null, aggregate: aggregate(0) })
-      ).toBeNull();
+    test.each([
+      [interval(0.9, 0.99), 0.9, 'supported'],
+      [interval(0.76, 0.99), 0.9, 'insufficient'],
+      [interval(0.5, 0.9), 0.9, 'insufficient'],
+      [interval(0.3, 0.89), 0.9, 'refuted'],
+    ])('%o against %s is %s', (range, threshold, expected) => {
+      expect(intervalVerdict({ interval: range, threshold }).verdict).toBe(
+        expected
+      );
     });
 
-    test.each([
-      [0.8, 0.8, true],
-      [0.8, 0.79, false],
-      [0.8, 1, true],
-    ])(
-      'threshold %s against pass rate %s → %s',
-      (threshold, passRate, expected) => {
-        expect(
-          resolveRunPassed({
-            passThreshold: threshold,
-            aggregate: aggregate(passRate),
-          })
-        ).toBe(expected);
-      }
-    );
+    test('a run that scored nothing is insufficient', () => {
+      expect(intervalVerdict({ interval: null, threshold: 0 })).toEqual({
+        verdict: 'insufficient',
+        reason: 'no scored items',
+      });
+    });
 
-    test('a run that measured nothing does not pass', () => {
+    test('names the interval and the threshold in its reason', () => {
       expect(
-        resolveRunPassed({ passThreshold: 0, aggregate: aggregate(null) })
-      ).toBe(false);
+        intervalVerdict({ interval: interval(0.912, 0.964), threshold: 0.9 })
+          .reason
+      ).toBe('interval 0.91–0.96 at or above 0.9');
+    });
+  });
+
+  describe('worstVerdict', () => {
+    const reason = (verdict: Verdict) => {
+      return { scope: { kind: 'run' as const }, verdict, reason: '' };
+    };
+
+    test.each<[Verdict[], Verdict]>([
+      [['supported', 'supported'], 'supported'],
+      [['supported', 'insufficient'], 'insufficient'],
+      [['insufficient', 'refuted', 'supported'], 'refuted'],
+    ])('%o → %s', (verdicts, expected) => {
+      expect(worstVerdict(verdicts.map(reason))).toBe(expected);
     });
   });
 

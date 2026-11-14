@@ -531,7 +531,7 @@ BASELINE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait false | jq -r 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" \
-  | jq '{passed, completed_count, errored_count, scorers: .aggregate_scores.scorers}'
+  | jq '{verdict, completed_count, errored_count, scorers: .aggregate_scores.scorers}'
 
 soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$BASELINE_RUN_ID" \
   | jq '.data | map({output, error, scores: [.scores[]? | {scorer, passed, reasoning}]})'
@@ -676,7 +676,7 @@ CANDIDATE_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait false \
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$CANDIDATE_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$CANDIDATE_RUN_ID" \
-  | jq '{passed, errored_count, baseline: .aggregate_scores.baseline}'
+  | jq '{verdict, errored_count, baseline: .aggregate_scores.baseline}'
 ```
 
 </TabItem>
@@ -699,7 +699,7 @@ const { data: queuedCandidate } = await adminSoat.evaluations.startEvalRun({
 });
 const candidateRun = await settle(queuedCandidate.id);
 
-console.log(candidateRun.passed, candidateRun.aggregate_scores?.baseline);
+console.log(candidateRun.verdict, candidateRun.aggregate_scores?.baseline);
 ```
 
 </TabItem>

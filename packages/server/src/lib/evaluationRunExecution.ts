@@ -21,10 +21,7 @@ import {
   type DeciderScoring,
   runDeciderScorerCall,
 } from './evaluationDeciderScorer';
-import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
 import { runJudgeCompletion } from './evaluationJudge';
-import { buildRunAggregate } from './evaluationRunAggregate';
-import { resolveRunPassed } from './evaluationScorerAggregation';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
 import { runToolScorerCall } from './evaluationToolScorer';
 import type { GenerationInputMessage } from './generationInputMessages';
@@ -272,6 +269,11 @@ export const executeAndRecordItem = async (args: {
   item: DatasetItemRow;
   toolContext?: Record<string, string>;
 }): Promise<ItemOutcome> => {
+  log(
+    'executeAndRecordItem: runDbId=%d item=%s',
+    args.runDbId,
+    args.item.publicId
+  );
   const outcome = await runEvalItem({
     projectIds: args.projectIds,
     projectId: args.projectId,
@@ -331,6 +333,7 @@ export const executeAndRecordItem = async (args: {
 export const recountEvalRunProgress = async (args: {
   run: EvalRunRowInstance;
 }): Promise<void> => {
+  log('recountEvalRunProgress: run=%s', args.run.publicId);
   const results = await db.EvalResult.findAll({
     where: { evalRunId: args.run.id as number },
     attributes: ['error'],
@@ -343,168 +346,4 @@ export const recountEvalRunProgress = async (args: {
     completedCount: results.length - erroredCount,
     erroredCount,
   });
-};
-
-// ── Finalization ───────────────────────────────────────────────────────────
-
-/** What finalize reads off the Eval: the gate and the grouping key. */
-export type EvalSettlement = {
-  passThreshold: number | null;
-  groupBy: string | null;
-};
-
-/** The one transcription of an Eval row into its {@link EvalSettlement}. */
-export const evalSettlement = (args: {
-  evaluation: { passThreshold: string | null; groupBy: string | null };
-}): EvalSettlement => {
-  return {
-    passThreshold:
-      args.evaluation.passThreshold === null
-        ? null
-        : Number(args.evaluation.passThreshold),
-    groupBy: args.evaluation.groupBy,
-  };
-};
-
-/**
- * Rolls a run's persisted results up to its terminal state and fires
- * `eval_runs.completed`.
- *
- * The single finalize path for both run modes, and the only place the completion
- * event is emitted — which is what makes "exactly once per terminal run" a
- * property of the code rather than a convention two paths have to keep.
- */
-export const finalizeEvalRun = async (args: {
-  run: EvalRunRowInstance;
-  projectId: number;
-  settlement: EvalSettlement;
-}): Promise<void> => {
-  const results = await db.EvalResult.findAll({
-    where: { evalRunId: args.run.id as number },
-  });
-
-  const aggregate = await buildRunAggregate({
-    run: args.run,
-    groupBy: args.settlement.groupBy,
-    results,
-  });
-
-  const passed = resolveRunPassed({
-    passThreshold: args.settlement.passThreshold,
-    aggregate,
-  });
-
-  const erroredCount = results.filter((row) => {
-    return row.error !== null;
-  }).length;
-
-  await args.run.update({
-    status: 'completed',
-    aggregateScores: aggregate,
-    passed,
-    // The bag is only needed while items execute, and a finished run is a
-    // report that outlives the work.
-    toolContext: null,
-    completedCount: results.length - erroredCount,
-    erroredCount,
-    finishedAt: new Date(),
-  });
-
-  log(
-    'finalizeEvalRun: run=%s scored=%d errored=%d passed=%s',
-    args.run.publicId,
-    aggregate.scored_item_count,
-    erroredCount,
-    passed
-  );
-
-  await emitEvalRunEvent({
-    event: EVAL_RUN_COMPLETED_EVENT,
-    projectId: args.projectId,
-    run: args.run,
-  });
-};
-
-/**
- * Settles a run that could not be executed at all (an infrastructure failure,
- * not an item's generation failing — that is caught per item) and fires
- * `eval_runs.failed`.
- *
- * A gate consumer must hear about this: a run that silently stayed `running`
- * forever is a promotion that never resolves either way.
- */
-export const failEvalRun = async (args: {
-  run: EvalRunRowInstance;
-  projectId: number;
-  reason: string;
-}): Promise<void> => {
-  log('failEvalRun: run=%s reason=%s', args.run.publicId, args.reason);
-
-  await args.run.update({
-    status: 'failed',
-    finishedAt: new Date(),
-    toolContext: null,
-  });
-
-  await emitEvalRunEvent({
-    event: 'eval_runs.failed',
-    projectId: args.projectId,
-    run: args.run,
-  });
-};
-
-/**
- * Wins the exclusive right to settle a run, atomically.
- *
- * Several workers can finish a run's last items at the same instant and each
- * observe an empty task queue, so "is it done?" must not be a read followed by
- * a write. This is one conditional `UPDATE` on `finished_at IS NULL`: exactly
- * one caller sees a row count of 1. Without it a run would fire
- * `eval_runs.completed` more than once — and a promotion gate that receives the
- * same verdict twice can act twice.
- *
- * Guarding on `finished_at` rather than a `finalizing` status keeps the public
- * status vocabulary unchanged.
- */
-export const claimRunFinalization = async (args: {
-  runDbId: number;
-  now?: Date;
-}): Promise<boolean> => {
-  const [affected] = await db.EvalRun.update(
-    { finishedAt: args.now ?? new Date() },
-    { where: { id: args.runDbId, finishedAt: null } }
-  );
-  return affected === 1;
-};
-
-/**
- * Finalizes a run **iff** this caller wins the settle claim; returns whether it
- * did.
- *
- * The one place the claim and the finalize are paired, so neither worker call
- * site can drift into finalizing without claiming first — which is what would
- * let `eval_runs.completed` fire twice for one run.
- */
-export const finalizeIfUnclaimed = async (args: {
-  run: EvalRunRowInstance;
-  projectId: number;
-  settlement: EvalSettlement;
-  now?: Date;
-}): Promise<boolean> => {
-  if (
-    !(await claimRunFinalization({
-      runDbId: args.run.id as number,
-      now: args.now,
-    }))
-  ) {
-    log('finalizeIfUnclaimed: run=%s already settling', args.run.publicId);
-    return false;
-  }
-
-  await finalizeEvalRun({
-    run: args.run,
-    projectId: args.projectId,
-    settlement: args.settlement,
-  });
-  return true;
 };

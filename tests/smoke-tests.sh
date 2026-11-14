@@ -8086,11 +8086,11 @@ if ! printf '%s\n' "$GATE_RUN_RESP" | jq -e '.status == "completed" and .agent_v
   exit 1
 fi
 
-# Whether the sandbox model's answer passes is its own business, so the gate is
-# asserted in whichever direction the verdict went — both are real assertions
-# about it, and neither depends on the model.
-GATE_PASSED=$(printf '%s\n' "$GATE_RUN_RESP" | jq -r '.passed')
-if [ "$GATE_PASSED" = "true" ]; then
+# Whether the sandbox model's answers support the claim is its own business, so
+# the gate is asserted in whichever direction the verdict went — both are real
+# assertions about it, and neither depends on the model.
+GATE_VERDICT=$(printf '%s\n' "$GATE_RUN_RESP" | jq -r '.verdict')
+if [ "$GATE_VERDICT" = "supported" ]; then
   GATE_PROMOTED=$($SOAT_CLI promote-agent-release --agent-id "$GATE_AGENT_ID")
   if ! printf '%s\n' "$GATE_PROMOTED" | jq -e '.active_release == null' >/dev/null 2>&1; then
     echo "ERROR: a satisfied gate did not let the promotion through" >&2
@@ -8105,12 +8105,12 @@ if [ "$GATE_PASSED" = "true" ]; then
     printf '%s\n' "$GATE_VERSION_ROW" >&2
     exit 1
   fi
-  echo "promote after a passing run, with eval_run_id recorded: OK"
+  echo "promote after a supported run, with eval_run_id recorded: OK"
 else
-  # A run that did not pass is not evidence: the gate must still hold.
+  # A run that does not support the claim is not evidence: the gate must hold.
   expect_cli_error_status 409 promote-agent-release --agent-id "$GATE_AGENT_ID"
   $SOAT_CLI abort-agent-release --agent-id "$GATE_AGENT_ID" >/dev/null
-  echo "promote still blocked by a non-passing run: OK"
+  echo "promote still blocked by an unsupported run: OK"
 fi
 
 $SOAT_CLI delete-eval --eval_id "$GATE_EVAL_ID"

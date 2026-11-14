@@ -100,9 +100,9 @@ export class Eval extends Model {
   declare scorers: unknown;
 
   /**
-   * 0–1. A run `passed` iff its **pass rate** (passed items over non-errored
-   * items) is at least this. Null leaves `EvalRun.passed` null — the Eval
-   * reports scores without gating on them.
+   * 0–1. A run's verdict reads its pass rate's interval against this. Null
+   * leaves `EvalRun.verdict` null — the Eval reports scores without gating on
+   * them.
    */
   @Column({ type: DataType.DECIMAL, allowNull: true })
   declare passThreshold: string | null;
@@ -113,6 +113,13 @@ export class Eval extends Model {
    */
   @Column({ type: DataType.STRING, allowNull: true })
   declare groupBy: string | null;
+
+  /**
+   * Every rule a run's verdict reads beyond the threshold, in the wire shape
+   * (`{ required_groups }`). Null declares none.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare evidence: Record<string, unknown> | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

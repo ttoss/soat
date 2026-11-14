@@ -898,11 +898,14 @@ paths:
         in the version history.
 
 
-        When the release carries a `promotion_gate`, the eval it names must have
-        a run that finished `completed` with `passed: true` **and** was pinned to
-        the canary version (`agent_version`); otherwise the call is a `409` and
-        the rollout is left running untouched. The run that cleared the gate is
-        recorded as `eval_run_id` on the version that goes live.
+        When the release carries a `promotion_gate`, the newest `completed` run
+        of the eval it names that was recorded against this agent (`agent_id`)
+        and pinned to the canary version (`agent_version`) must read `verdict:
+        supported`. A newer run revokes an older one. Otherwise the call is a
+        `409`, whose `meta` names that run's `eval_run_id`, `verdict` and
+        `verdict_reasons` when there is one, and the rollout is left running
+        untouched. The run that cleared the gate is recorded as `eval_run_id` on
+        the version that goes live.
       operationId: promoteAgentRelease
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
@@ -941,8 +944,9 @@ paths:
         '409':
           description: >-
             Conflict — the agent has no active release
-            (`NO_ACTIVE_RELEASE`), or its `promotion_gate` has no passing eval
-            run against the canary version (`PROMOTION_GATE_UNMET`)
+            (`NO_ACTIVE_RELEASE`), or the newest run of its `promotion_gate`
+            against the canary version does not read `supported`
+            (`PROMOTION_GATE_UNMET`)
           content:
             application/json:
               schema:

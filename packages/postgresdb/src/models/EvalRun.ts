@@ -100,9 +100,38 @@ export class EvalRun extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare aggregateScores: object | null;
 
-  /** Null when the Eval carries no `passThreshold`. */
+  /**
+   * A point verdict some settled runs carry instead of `verdict`. Kept so that
+   * outcome is not lost; nothing writes or serves it.
+   */
   @Column({ type: DataType.BOOLEAN, allowNull: true })
   declare passed: boolean | null;
+
+  /**
+   * Public id of the agent every item executed against, resolved at run start
+   * like `agentVersion`. A plain id rather than an FK, so a run keeps naming
+   * the agent it measured after that agent is deleted. Null on a run that
+   * recorded none, which no promotion gate accepts.
+   */
+  @Column({ type: DataType.STRING(32), allowNull: true, defaultValue: null })
+  declare agentPublicId: string | null;
+
+  /**
+   * The Eval's `scorers`, `pass_threshold`, `group_by` and `evidence` as they
+   * were at run start, in the wire shape. Every item is scored, and the
+   * verdict settled, from this copy, so editing the Eval never regrades a run.
+   * Null on a run that recorded none.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare definition: Record<string, unknown> | null;
+
+  /** `supported` | `refuted` | `insufficient`; null without a threshold. */
+  @Column({ type: DataType.STRING(16), allowNull: true, defaultValue: null })
+  declare verdict: string | null;
+
+  /** Why the run settled on `verdict`, one entry per judged scope. */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare verdictReasons: unknown[] | null;
 
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare itemCount: number;

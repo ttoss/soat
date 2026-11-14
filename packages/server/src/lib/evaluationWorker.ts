@@ -20,17 +20,19 @@ import {
   countPendingEvalItemTasks,
   type EvalRunTaskInstance,
 } from './evaluationQueue';
+import { readRunDefinition } from './evaluationRunDefinition';
 import {
-  claimRunFinalization,
-  type EvalSettlement,
-  evalSettlement,
   executeAndRecordItem,
-  failEvalRun,
-  finalizeIfUnclaimed,
   recountEvalRunProgress,
 } from './evaluationRunExecution';
+import {
+  claimRunFinalization,
+  failEvalRun,
+  finalizeIfUnclaimed,
+} from './evaluationRunSettlement';
 import { scorerList } from './evaluationScorers';
 import { runAsJob } from './requestCorrelation';
+import { agentReferences } from './resourceReferences';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:evaluations');
@@ -72,10 +74,14 @@ const isLive = (status: string): boolean => {
 type LoadedRun = {
   run: InstanceType<(typeof db)['EvalRun']>;
   projectId: number;
-  settlement: EvalSettlement;
+  evalPublicId: string;
 };
 
-/** Loads a run together with the Eval fields execution and finalize need. */
+/**
+ * Loads a run with the two Eval facts that never change under it: its project
+ * and public id. What the run executes and is graded by is the run's own
+ * (`agentPublicId`, `definition`), never the Eval's current fields.
+ */
 const loadRunContext = async (args: {
   evalRunId: number;
 }): Promise<LoadedRun | null> => {
@@ -86,14 +92,16 @@ const loadRunContext = async (args: {
      point — the guards exist so a future caller cannot crash the drain loop. */
   if (!run) return null;
 
-  const evaluation = await db.Eval.findByPk(run.evalId as number);
+  const evaluation = await db.Eval.findByPk(run.evalId as number, {
+    attributes: ['projectId', 'publicId'],
+  });
   /* istanbul ignore next -- see above. */
   if (!evaluation) return null;
 
   return {
     run,
     projectId: evaluation.projectId as number,
-    settlement: evalSettlement({ evaluation }),
+    evalPublicId: evaluation.publicId,
   };
 };
 
@@ -121,35 +129,41 @@ const settleIfDrained = async (args: { evalRunId: number }): Promise<void> => {
   await finalizeIfUnclaimed(context);
 };
 
-/** The agent, item and scorer config one task needs to execute. */
+/** The agent and item one task executes, as the run recorded them. */
 const loadItemTarget = async (args: {
-  evalDbId: number;
+  context: LoadedRun;
   datasetItemDbId: number;
 }): Promise<{
-  agent: InstanceType<(typeof db)['Agent']>;
-  item: InstanceType<(typeof db)['DatasetItem']>;
-  scorers: unknown[];
-  evalPublicId: string;
-} | null> => {
-  const evaluation = (await db.Eval.findByPk(args.evalDbId, {
-    include: [{ model: db.Agent, as: 'agent' }],
-  })) as
-    | (InstanceType<(typeof db)['Eval']> & {
-        agent?: InstanceType<(typeof db)['Agent']>;
-      })
-    | null;
+  agent: InstanceType<(typeof db)['Agent']> | null;
+  item: InstanceType<(typeof db)['DatasetItem']> | null;
+}> => {
+  const { run, projectId } = args.context;
+  const agent =
+    run.agentPublicId === null
+      ? null
+      : await agentReferences.find({
+          id: run.agentPublicId,
+          projectId,
+          reach: 'project',
+        });
   const item = await db.DatasetItem.findByPk(args.datasetItemDbId);
+  return { agent, item };
+};
 
-  /* istanbul ignore next -- the agent FK is NOT NULL, and deleting a dataset
-     item cascades its task away before it can be claimed. */
-  if (!evaluation?.agent || !item) return null;
-
-  return {
-    agent: evaluation.agent,
-    item,
-    scorers: scorerList(evaluation.scorers),
-    evalPublicId: evaluation.publicId,
-  };
+/**
+ * Fails a run whose agent was deleted mid-run (the Eval may point at another
+ * one by now). Executing an item against anything else would mix two agents
+ * into one verdict, so the run stops here, settled once.
+ */
+const stopRunWithoutAgent = async (context: LoadedRun): Promise<void> => {
+  if (!(await claimRunFinalization({ runDbId: context.run.id as number }))) {
+    return;
+  }
+  await failEvalRun({
+    run: context.run,
+    projectId: context.projectId,
+    reason: `The agent '${String(context.run.agentPublicId)}' this run measures no longer exists.`,
+  });
 };
 
 /**
@@ -189,14 +203,19 @@ const handleEvalItemTask = async (args: {
     });
   }
 
-  const target = await loadItemTarget({
-    evalDbId: run.evalId as number,
+  const { agent, item } = await loadItemTarget({
+    context,
     datasetItemDbId: args.task.datasetItemId as number,
   });
-  /* istanbul ignore next -- the agent FK is NOT NULL, and a deleted item
-     cascades its task away before it can be claimed. */
-  if (!target) return;
-  const { agent, item, scorers, evalPublicId } = target;
+  /* istanbul ignore next -- a deleted item cascades its task away before it
+     can be claimed. */
+  if (!item) return;
+
+  const definition = readRunDefinition(run);
+  if (!agent || !definition) {
+    await stopRunWithoutAgent(context);
+    return;
+  }
 
   log(
     'handleEvalItemTask: run=%s item=%s attempt=%d',
@@ -210,10 +229,10 @@ const handleEvalItemTask = async (args: {
     runDbId: run.id as number,
     agent,
     agentVersion: run.agentVersion as number,
-    scorers,
+    scorers: scorerList(definition.scorers),
     deciderScoring: {
       versions: run.deciderVersions,
-      evalId: evalPublicId,
+      evalId: context.evalPublicId,
       runId: run.publicId,
     },
     item,

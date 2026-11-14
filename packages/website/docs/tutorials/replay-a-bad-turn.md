@@ -558,7 +558,7 @@ EVAL_ID=$(soat create-eval \
 RUN=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true)
 RUN_ID=$(printf '%s' "$RUN" | jq -r '.id')
 
-printf '%s' "$RUN" | jq '{status, passed, completed_count, errored_count, aggregate_scores}'
+printf '%s' "$RUN" | jq '{status, verdict, completed_count, errored_count, aggregate_scores}'
 printf '%s' "$RUN" | jq -e '.status == "completed"'
 
 soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
@@ -587,7 +587,7 @@ const { data: run } = await adminSoat.evaluations.startEvalRun({
   body: { wait: true },
 });
 
-console.log(run.status, run.passed, run.aggregate_scores);
+console.log(run.status, run.verdict, run.aggregate_scores);
 ```
 
 </TabItem>
@@ -599,7 +599,7 @@ RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -d '{"wait":true}' | jq -r '.id')
 
 curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, passed, aggregate_scores}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, verdict, aggregate_scores}'
 ```
 
 </TabItem>

@@ -14,11 +14,9 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { pinDeciderVersions } from './evaluationDeciderScorer';
 import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
+import { buildRunDefinition } from './evaluationRunDefinition';
 import {
-  evalSettlement,
   executeAndRecordItem,
-  failEvalRun,
-  finalizeEvalRun,
   recountEvalRunProgress,
 } from './evaluationRunExecution';
 import {
@@ -27,6 +25,7 @@ import {
   reloadEvalRun,
   TERMINAL_EVAL_RUN_STATUSES,
 } from './evaluationRunReads';
+import { failEvalRun, finalizeEvalRun } from './evaluationRunSettlement';
 import { getEvalRow } from './evaluations';
 import { validateScorerReferences } from './evaluationScorerReferences';
 import { scorerList, validateScorers } from './evaluationScorers';
@@ -184,6 +183,8 @@ type RunPlan = {
   agentVersion: number;
   deciderVersions: Record<string, number> | null;
   baselineRunDbId: number | null;
+  /** The Eval's grading fields as this run will be scored and settled by. */
+  definition: ReturnType<typeof buildRunDefinition>;
 };
 
 /**
@@ -260,6 +261,7 @@ const planRun = async (args: {
       evalDbId: evaluation.id as number,
       baselineRunId: args.baselineRunId,
     }),
+    definition: buildRunDefinition(evaluation),
   };
 };
 
@@ -284,7 +286,7 @@ const executeSyncRun = async (args: {
         runDbId: run.id as number,
         agent: plan.agent,
         agentVersion: plan.agentVersion,
-        scorers: scorerList(plan.evaluation.scorers),
+        scorers: scorerList(plan.definition.scorers),
         deciderScoring: {
           versions: plan.deciderVersions,
           evalId: plan.evaluation.publicId,
@@ -306,11 +308,7 @@ const executeSyncRun = async (args: {
     throw error;
   }
 
-  await finalizeEvalRun({
-    run,
-    projectId,
-    settlement: evalSettlement({ evaluation: plan.evaluation }),
-  });
+  await finalizeEvalRun({ run, projectId });
 };
 
 export const startEvalRun = async (args: {
@@ -356,6 +354,10 @@ export const startEvalRun = async (args: {
 
   const run = await db.EvalRun.create({
     evalId: plan.evaluation.id as number,
+    // What every item executes against and is graded by, fixed here: the Eval
+    // stays editable, and a run must not be regraded by a later edit.
+    agentPublicId: plan.agent.publicId,
+    definition: plan.definition,
     agentVersion: plan.agentVersion,
     deciderVersions: plan.deciderVersions,
     // A queued run has not started yet — `startedAt` is stamped by the first

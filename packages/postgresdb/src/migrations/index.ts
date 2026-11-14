@@ -58,6 +58,7 @@ import { webhookPolicyIds } from './2026-11-10-webhookPolicyIds';
 import { iamConditionKeys } from './2026-11-11-iamConditionKeys';
 import { memoryActor } from './2026-11-12-memoryActor';
 import { principalBound } from './2026-11-12-principalBound';
+import { evalRunEvidence } from './2026-11-14-evalRunEvidence';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -137,4 +138,5 @@ export const MIGRATIONS: Migration[] = [
   iamConditionKeys,
   principalBound,
   memoryActor,
+  evalRunEvidence,
 ];
