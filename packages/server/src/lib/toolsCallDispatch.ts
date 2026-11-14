@@ -7,7 +7,6 @@ import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
 import {
   buildHttpToolExecute,
-  isSoatActionAllowedByAgentPolicy,
   parseHttpExecuteConfig,
   toHttpToolDomainError,
 } from './agentToolResolver';
@@ -129,7 +128,6 @@ export const callSoatTool = async (
     def,
     rawArgs: mergedInput,
     agentAuthority: args.agentAuthority,
-    isSoatActionAllowedByAgentPolicy,
   });
   if (refusal) return refusal;
   return executeSoatTool({

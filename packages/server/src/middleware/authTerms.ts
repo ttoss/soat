@@ -162,6 +162,25 @@ const keyCap = async (args: CapArgs<'key'>): Promise<Cap> => {
   };
 };
 
+/**
+ * A project's `agent_policy_ids`, read live: none is no cap, and a project no
+ * longer stored allows nothing.
+ */
+const projectAgentsCap = async (
+  args: CapArgs<'project_agents'>
+): Promise<Cap> => {
+  const { project } = args.cap;
+  const row = await args.db.Project.findOne({
+    where: { publicId: project },
+    attributes: ['agentPolicyIds'],
+  });
+  return {
+    principal: { type: 'project', id: project },
+    kind: 'other',
+    bound: row ? keyBound({ policyIds: row.agentPolicyIds ?? [] }) : NOTHING,
+  };
+};
+
 const scopeCap = (args: CapArgs<'scope'>): Cap => {
   const { terms } = args;
   const credential = denied(terms.principal);
@@ -185,6 +204,8 @@ const capOf = (args: CapArgs<AuthorityCap['kind']>): Promise<Cap> | Cap => {
       return keyCap({ ...args, cap });
     case 'scope':
       return scopeCap({ ...args, cap });
+    case 'project_agents':
+      return projectAgentsCap({ ...args, cap });
     case 'bound':
       return principalBoundCap({ principal: cap.by, bound: cap.bound });
   }

@@ -130,7 +130,7 @@ Every write to a memory store — REST, the agent tool, a post-turn rule, a form
 
 Every call records exactly one [assertion](#assertions), whatever the outcome.
 
-On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merged onto the replacement (incoming keys win), so a replacement stays inside every tag-scoped search and policy the original satisfied. [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
+On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merged onto the replacement (incoming keys win), so a replacement stays inside every tag-scoped search and policy the original satisfied. The project's [content-bound tag keys](./projects.md#content-bound-tag-keys) are the exception: they judged the retired text, so the replacement carries them only when the write sets them, and a `content` or `metadata` change through [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) removes them the same way. [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
 
 Below `supersede_threshold`, cosine covers both "same fact, changed" and "related but distinct" (*prefers email* vs *prefers Portuguese*), and embeddings sit close on negations. `created` is the outcome there because a near-duplicate stays searchable while a wrongly retired fact does not.
 
@@ -263,6 +263,18 @@ only ever matches a valid one.
 The write claims the memory's `version`, so it takes `expected_version` or `If-Match` like
 [any other write](#concurrent-writes). A memory that is already invalidated — retracted, or
 superseded by a later write — answers `409 MEMORY_ALREADY_INVALIDATED`.
+
+### Write events
+
+Every door that stores or changes a memory emits an event with the memory as `data`, so a [trigger](./triggers.md#event-triggers) reacts to a memory whichever door wrote it:
+
+| Event | Fires when |
+| --- | --- |
+| `memories.created` | A memory is stored: the API, the [`write_memory` tool](#write_memory-tool), a [memory rule](#memory-rules), a formation. A supersede announces its replacement |
+| `memories.updated` | A memory's content, metadata or tags change |
+| `memories.retracted` | A memory is [retracted](#retraction) |
+
+A deduplicated write (`skipped`) stores nothing and emits nothing. Payloads: [Webhook events](../webhook-events.md).
 
 ### Concurrent writes
 

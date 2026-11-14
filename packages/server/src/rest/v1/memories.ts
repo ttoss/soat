@@ -46,7 +46,11 @@ import { memoryPins } from './memoryPins';
 import { sendNdjson } from './ndjsonResponse';
 import { compileReadPolicy } from './readPolicy';
 import { requireAllowed, resourceRefusal } from './resourceAccess';
-import { registerTagRoutes, type TagAccess } from './tagRoutes';
+import {
+  declareBodyTags,
+  registerTagRoutes,
+  type TagAccess,
+} from './tagRoutes';
 
 export const memoriesRouter = new Router<Context>();
 
@@ -272,6 +276,7 @@ memoriesRouter.get(
 );
 
 memoriesRouter.post('/memories', async (ctx: Context) => {
+  declareBodyTags(ctx);
   requireAuth(ctx);
 
   const body = ctx.request.body as {
@@ -398,6 +403,7 @@ memoriesRouter.get('/memories/:memory_id/assertions', async (ctx: Context) => {
 });
 
 memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
+  declareBodyTags(ctx);
   requireAuth(ctx);
 
   await resolveEntryForAction(

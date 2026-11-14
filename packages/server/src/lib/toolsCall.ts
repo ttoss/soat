@@ -333,7 +333,7 @@ const meterOf = (args: CallResolvedToolArgs): ToolExecutionMeter => {
     sender: {
       caller: args.caller,
       authority: args.authority,
-      agentPolicy: args.agentAuthority?.policy,
+      agentAuthority: args.agentAuthority,
     },
   };
 };

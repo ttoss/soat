@@ -10,7 +10,10 @@ import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeMessages } from './agentKnowledge';
 import { readKnowledgeConfig } from './agentKnowledgeConfig';
-import { resolveRequestedKnowledgePolicy } from './agentKnowledgeScopes';
+import {
+  resolveCapKnowledgePolicy,
+  resolveRequestedKnowledgePolicy,
+} from './agentKnowledgeScopes';
 import { resolveAgentModel } from './agentModelResolution';
 import {
   resolveServedAgentVersion,
@@ -25,7 +28,6 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
-import type { PolicyDocument } from './iam';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { assertGenerationModelPriced } from './modelPricingGate';
 import { withPromptCacheBreakpoint } from './promptCaching';
@@ -118,7 +120,7 @@ const assembleContextMessages = async (args: {
   knowledgeConfig?: object;
   /** Who named {@link knowledgeConfig}, and what bounds the agent. */
   authUser?: AuthUser;
-  agentPolicy: PolicyDocument | null;
+  agentAuthority: AgentAuthority;
   unavailableToolNames: string[];
   /** The turn's end user, from the identity-pinned `tool_context`. */
   actorId?: string;
@@ -142,10 +144,13 @@ const assembleContextMessages = async (args: {
             knowledgeProjectPublicId: (
               typedAgent.ownerProject ?? typedAgent.project
             ).publicId,
-            agentPolicy: args.agentPolicy,
+            agentAuthority: args.agentAuthority,
           }),
         }
       : undefined,
+    capPolicy: resolveCapKnowledgePolicy({
+      agentAuthority: args.agentAuthority,
+    }),
     projectIds,
     embeddingBilling: {
       projectId: args.typedAgent.project.id,
@@ -281,6 +286,7 @@ export const buildGenerationContext = async (
     policyIds: typedAgent.policyIds,
     actorId: toolContext?.actor_id,
     projectPublicId: typedAgent.project.publicId,
+    ownerProjectId: ownerProjectId(typedAgent),
   });
 
   const resolvedMessages = await resolveGenerationInputMessages({
@@ -333,7 +339,7 @@ export const buildGenerationContext = async (
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
     authUser: args.authUser,
-    agentPolicy: agentAuthority.policy,
+    agentAuthority,
     unavailableToolNames: toolSurface.unavailableToolNames,
     actorId: toolContext?.actor_id,
   });

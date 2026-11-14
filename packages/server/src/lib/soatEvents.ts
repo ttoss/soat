@@ -101,6 +101,9 @@ export const SOAT_EVENTS = {
       'A guardrail tripwire aborted a tool call; the payload carries the guardrail plus `guardrail_version` and the aborted call (`tool_id`, `tool_name`, `action`, `agent_id`, `generation_id`, `orchestration_run_id`, `node_id`).',
   },
   memory: {
+    'memories.created':
+      'A memory was stored, by any door (API, the `write_memory` tool, a memory rule, a formation). A supersede stores its replacement and announces that. A deduplicated write stores nothing and announces nothing.',
+    'memories.updated': "A memory's content, metadata or tags changed.",
     'memories.retracted':
       'A memory was retracted: the fact stopped holding with nothing replacing it, so it leaves knowledge search, dedup and the default listing. It stays readable by id, with its assertions.',
   },

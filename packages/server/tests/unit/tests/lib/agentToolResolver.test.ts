@@ -1,12 +1,13 @@
+import { type AgentAuthority, boundaryRefusalOf } from 'src/lib/agentAuthority';
 import {
   HttpToolError,
-  isSoatActionAllowedByAgentPolicy,
   parseHttpExecuteConfig,
   resolveBodyParamInterpolations,
   resolveUrlPathParams,
 } from 'src/lib/agentToolResolver';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import { buildSoatRequestBody } from 'src/lib/agentToolResolverSoatBody';
+import type { PolicyDocument } from 'src/lib/iam';
 import { withCallTimeout } from 'src/lib/inProcessApi';
 import { soatTools } from 'src/lib/soatTools';
 import {
@@ -347,36 +348,62 @@ describe('assertValidToolContext', () => {
   });
 });
 
-describe('isSoatActionAllowedByAgentPolicy', () => {
-  test('returns true when agentPolicy is null', () => {
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: null,
-      iamAction: 'agents:CreateGeneration',
-    });
+/** Whether a boundary of `policy` alone admits the check. */
+const boundaryAllows = (args: {
+  policy?: PolicyDocument;
+  iamAction: string;
+  resource?: string;
+  context?: Record<string, string>;
+}): boolean => {
+  const authority: AgentAuthority = {
+    runAs: 'caller',
+    agentId: 'agt_test',
+    boundary: args.policy
+      ? [{ by: { type: 'agent', id: 'agt_test' }, policy: args.policy }]
+      : [],
+  };
+  return (
+    boundaryRefusalOf({
+      authority,
+      action: args.iamAction,
+      resource: args.resource,
+      context: args.context,
+    }) === null
+  );
+};
 
-    expect(result).toBe(true);
+describe('boundaryRefusalOf', () => {
+  test('admits every call when the boundary is empty', () => {
+    expect(boundaryAllows({ iamAction: 'agents:CreateGeneration' })).toBe(true);
   });
 
-  test('returns true when agentPolicy is undefined', () => {
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: undefined,
-      iamAction: 'agents:CreateGeneration',
+  test('names the project when its cap refuses and the agent allows', () => {
+    const allowAll: PolicyDocument = {
+      statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
+    };
+    const by = boundaryRefusalOf({
+      authority: {
+        runAs: 'caller',
+        agentId: 'agt_test',
+        boundary: [
+          { by: { type: 'agent', id: 'agt_test' }, policy: allowAll },
+          {
+            by: { type: 'project', id: 'proj_test' },
+            policy: {
+              statement: [
+                { effect: 'Allow', action: ['files:GetFile'], resource: ['*'] },
+              ],
+            },
+          },
+        ],
+      },
+      action: 'agents:CreateGeneration',
     });
-
-    expect(result).toBe(true);
-  });
-
-  test('returns false when boundary policy is structurally invalid', () => {
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: { invalid: 'policy', notAStatement: true },
-      iamAction: 'agents:CreateGeneration',
-    });
-
-    expect(result).toBe(false);
+    expect(by).toEqual({ type: 'project', id: 'proj_test' });
   });
 
   test('returns true when valid Allow policy permits the action', () => {
-    const policy = {
+    const policy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -385,8 +412,8 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
       ],
     };
 
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: policy,
+    const result = boundaryAllows({
+      policy,
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -394,7 +421,7 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
   });
 
   test('returns false when valid policy does not allow the action', () => {
-    const policy = {
+    const policy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -403,8 +430,8 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
       ],
     };
 
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: policy,
+    const result = boundaryAllows({
+      policy,
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -412,7 +439,7 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
   });
 
   test('evaluates a resource-scoped statement against the passed SRN', () => {
-    const policy = {
+    const policy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -423,16 +450,16 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
     };
 
     expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
+      boundaryAllows({
+        policy,
         iamAction: 'memories:CreateMemory',
         resource: 'srn:proj_abc:memory_store:mstore_support',
       })
     ).toBe(true);
 
     expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
+      boundaryAllows({
+        policy,
         iamAction: 'memories:CreateMemory',
         resource: 'srn:proj_abc:memory_store:mstore_other',
       })
@@ -440,7 +467,7 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
   });
 
   test('evaluates statement conditions against the passed context', () => {
-    const policy = {
+    const policy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -452,16 +479,16 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
     };
 
     expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
+      boundaryAllows({
+        policy,
         iamAction: 'memories:CreateMemory',
         context: { 'iam:ResourceTag/env': 'prod' },
       })
     ).toBe(true);
 
     expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
+      boundaryAllows({
+        policy,
         iamAction: 'memories:CreateMemory',
         context: { 'iam:ResourceTag/env': 'staging' },
       })
@@ -469,7 +496,7 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
   });
 
   test('falls back to the resource-less shape when no resource is passed', () => {
-    const policy = {
+    const policy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -480,15 +507,15 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
     };
 
     expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
+      boundaryAllows({
+        policy,
         iamAction: 'memories:CreateMemory',
       })
     ).toBe(true);
   });
 
   test('returns true when wildcard action allows everything', () => {
-    const policy = {
+    const policy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -497,8 +524,8 @@ describe('isSoatActionAllowedByAgentPolicy', () => {
       ],
     };
 
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: policy,
+    const result = boundaryAllows({
+      policy,
       iamAction: 'agents:CreateGeneration',
     });
 
@@ -755,9 +782,6 @@ describe('resolveSoatTools', () => {
       },
       buildContextHeaders: () => {
         return {};
-      },
-      isSoatActionAllowedByAgentPolicy: () => {
-        return true;
       },
       logToolCallingError: () => {},
     });

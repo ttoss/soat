@@ -258,13 +258,30 @@ An **absent** key satisfies `StringNotEquals` and fails `StringEquals`: a resour
 | Key                     | Source        | Description                             |
 | ----------------------- | ------------- | --------------------------------------- |
 | `iam:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
+| `iam:RequestTag/<key>`  | Request tags  | Tag value the request writes            |
 | `iam:ResourceType`      | Request       | The type of the resource being accessed |
 
 These are the only keys a `condition` may name. Any other key — a typo like `iam:ResourceTags/env`, a different case like `iam:resourcetype`, or a key for a source the platform does not supply — is rejected with `400 VALIDATION_FAILED` when the policy is written, and the error names the key.
 
 The check exists because an unknown key is never present in the evaluation context, so the statement carrying it can never match: an `Allow` silently stops granting, and a `Deny` **silently stops denying**. The second is a fail-open, which is why a typo is refused at authoring time rather than discovered in production. The same rule already applies to [action strings](#actions).
 
-`<key>` after `iam:ResourceTag/` is an opaque tag name and is not checked beyond being non-empty — a condition may name a tag no resource carries yet.
+`<key>` after `iam:ResourceTag/` or `iam:RequestTag/` is an opaque tag name and is not checked beyond being non-empty — a condition may name a tag no resource carries yet.
+
+### Request tags
+
+`iam:RequestTag/<key>` holds the value a request writes for `<key>`: a create or update body carrying `tags`, a `PUT` or `PATCH` on a resource's `/tags`, a resource a [formation](./formations.md) template declares. It is absent from a request that writes no such tag, reads included, so a condition on it never matches a read and a `Deny` on it reserves one key without touching other tag writes:
+
+```json
+{
+  "effect": "Deny",
+  "action": ["*"],
+  "condition": { "StringEquals": { "iam:RequestTag/screened": "clean" } }
+}
+```
+
+Attached to every principal but a screener, it keeps any other principal from writing `screened: clean`, whichever route or resource the write goes through. A `StringLike` pattern `*` also matches an absent key; use `StringEquals` on the value, or `?*` for any non-empty one.
+
+A formation evaluates the literal tag values of each declared resource before applying anything. A value computed from an intrinsic (`param`, `sub`, `ref`) is known only after that check, so a template computing the value of a key that a `iam:RequestTag/<key>` condition in the caller's policies names is refused with `403 FORBIDDEN`.
 
 Operators and keys match **by exact string**; no case conversion applies to a `condition` block or to `tags` (see [Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
 
@@ -357,7 +374,7 @@ Every `403 FORBIDDEN` has one shape, whoever was refused: the caller's credentia
 }
 ```
 
-- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: `iam_token` for an [IAM token](#iam-tokens)'s bound (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the authority an `On-Behalf-Of` assertion carries, `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown.
+- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, `project` (`id` the project, for its [`agent_policy_ids`](./projects.md#project-agent-cap) capping an agent), or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: `iam_token` for an [IAM token](#iam-tokens)'s bound (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the authority an `On-Behalf-Of` assertion carries, `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown.
 - `resource` is `null` for a check that names none (an admin-only route, a resource-less boundary check). A refusal of several actions (a formation template, several secrets) names the first in `action`/`resource` and every one in the message.
 - The same body reaches an agent as a refused tool's result, the [MCP endpoint](../mcp/introduction.md) as an `isError` result whose text is this body, and an `mcp` or `http` tool's caller when the server it calls answers this body: that denial is relayed with the same code, action and message.
 
