@@ -8,6 +8,18 @@ const ADDED = [
   'playbooks',
 ];
 
+// `2026-09-16-memory-rules-from-agent-extraction` creates `memory_rules`
+// without `policy_ids` wherever `agents` exists, after this probe runs.
+const createdByMigration = async (args: {
+  context: { tableExists: (args: { table: string }) => Promise<boolean> };
+  table: string;
+}): Promise<boolean> => {
+  return (
+    args.table === 'memory_rules' &&
+    args.context.tableExists({ table: 'agents' })
+  );
+};
+
 const DROPPED = ['principal_kind', 'principal_id', 'principal_bound'].map(
   (column) => {
     return { table: 'playbook_versions', column };
@@ -26,7 +38,10 @@ export const resourceGrants = defineMigration({
     '`policy_ids` (jsonb) on evals, deciders, ingestion_rules, memory_rules and playbooks; playbook_versions.principal_kind/_id/_bound dropped.',
   isApplied: async (context) => {
     for (const table of ADDED) {
-      if (!(await context.tableExists({ table }))) continue;
+      if (!(await context.tableExists({ table }))) {
+        if (await createdByMigration({ context, table })) return false;
+        continue;
+      }
       if (!(await context.columnExists({ table, column: 'policy_ids' }))) {
         return false;
       }
