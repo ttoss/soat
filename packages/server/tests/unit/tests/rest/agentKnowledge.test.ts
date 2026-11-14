@@ -991,7 +991,7 @@ describe('Agent knowledge', () => {
         expect(await contentsOf(writeStoreId)).toEqual([]);
       });
 
-      test('an edit whose content is not a string writes nothing', async () => {
+      test('an edit whose content is not a string is refused and writes nothing', async () => {
         const { agentId, writeStoreId } = await signOffAgent({});
         const { result } = await remember({
           agentId,
@@ -1004,10 +1004,10 @@ describe('Agent knowledge', () => {
           .post(`/api/v1/approvals/${approvalId}/approve`)
           .send({ arguments: { content: 42 } });
 
-        expect(approved.status).toBe(200);
-        expect(await continuationFor(approvalId)).toContain(
-          'write_memory needs a non-empty string `content`.'
-        );
+        expect(approved.status).toBe(400);
+        expect(approved.body.error.code).toBe('APPROVAL_INVALID_EDIT');
+        const after = await asAdmin().get(`/api/v1/approvals/${approvalId}`);
+        expect(after.body.status).toBe('pending');
         expect(await contentsOf(writeStoreId)).toEqual([]);
       });
 
