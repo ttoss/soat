@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { invalidateReadAuditCache } from './auditLog';
 import { callerDenied } from './authorizationDenial';
+import { validateContentBoundTagKeys } from './contentBoundTags';
 import { type RetrievalMode } from './conversationRetrieval';
 import { assertGuardrailsExist } from './guardrails';
 import {
@@ -32,6 +33,7 @@ export const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     name: project.name,
     guardrail_ids: project.guardrailIds,
     agent_policy_ids: project.agentPolicyIds,
+    content_bound_tag_keys: project.contentBoundTagKeys ?? [],
     default_model_route_id: project.defaultModelRouteId,
     max_concurrent_runs: project.maxConcurrentRuns,
     max_chain_generations: project.maxChainGenerations,
@@ -271,6 +273,7 @@ const PROJECT_UPDATABLE_FIELDS = [
   'name',
   'guardrailIds',
   'agentPolicyIds',
+  'contentBoundTagKeys',
   'defaultModelRouteId',
   'maxConcurrentRuns',
   'maxChainGenerations',
@@ -300,6 +303,7 @@ const buildProjectUpdates = (
 const PROJECT_SCALAR_VALIDATORS: Partial<
   Record<ProjectUpdatableField, (value: unknown) => string | null>
 > = {
+  contentBoundTagKeys: validateContentBoundTagKeys,
   maxConcurrentRuns: validateMaxConcurrentRuns,
   maxChainGenerations: validateMaxChainGenerations,
   maxOrchestrationRunDepth: validateMaxOrchestrationRunDepth,
@@ -323,6 +327,7 @@ export const updateProject = async (args: {
   guardrailIds?: string[] | null;
   agentPolicyIds?: string[] | null;
   writer: Writer;
+  contentBoundTagKeys?: string[] | null;
   defaultModelRouteId?: string | null;
   maxConcurrentRuns?: number | null;
   maxChainGenerations?: number | null;

@@ -19,6 +19,7 @@ import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
 import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 import { makeItemRouteAuthorizer } from './resourceAccess';
+import { declareBodyTags } from './tagRoutes';
 
 const actorsRouter = new Router<Context>();
 
@@ -181,6 +182,7 @@ actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
 });
 
 actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
+  declareBodyTags(ctx);
   await actorAccess.authorizeWrite({ ctx, action: 'actors:UpdateActor' });
 
   const body = ctx.request.body as {
