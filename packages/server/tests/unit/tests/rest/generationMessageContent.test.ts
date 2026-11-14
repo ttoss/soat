@@ -177,12 +177,6 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
           : {}),
       });
     }
-    toolIds.listTools = await create('/api/v1/tools', {
-      project_id: projectId,
-      name: 'platform',
-      type: 'builtin',
-      actions: ['list-tools'],
-    });
     toolIds.getStore = await create('/api/v1/tools', {
       project_id: projectId,
       name: 'stores',
@@ -450,7 +444,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
 
       test("is refused when the agent's boundary does not allow the action", async () => {
         const agentId = await createAgent({
-          toolIds: [toolIds.listTools],
+          toolIds: [toolIds.getStore],
           agentPolicy: {
             statement: [
               {
@@ -464,7 +458,11 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
 
         const res = await generate({
           agentId,
-          content: toolOutput({ tool: 'listTools', action: 'list-tools' }),
+          content: toolOutput({
+            tool: 'getStore',
+            action: 'get-memory-store',
+            input: { memory_store_id: scopedStoreId },
+          }),
         });
 
         expectAgentDenied(res, agentId);

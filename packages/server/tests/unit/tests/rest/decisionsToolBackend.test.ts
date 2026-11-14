@@ -971,7 +971,7 @@ describe('Decisions — tool backend', () => {
         adminToken,
         projectId,
         username: unique('decider-narrow'),
-        actions: ['deciders:CreateDecision'],
+        actions: ['deciders:CreateDecision', 'tools:CallTool'],
       });
 
       const res = await decide({

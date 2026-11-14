@@ -6,6 +6,7 @@ import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { admitSharedCall } from './shareCaps';
+import { gateToolCall } from './toolCallGate';
 import {
   assertToolCallAllowed,
   type ToolCallGuardrailMode,
@@ -327,10 +328,30 @@ const meterOf = (args: CallResolvedToolArgs): ToolExecutionMeter => {
   };
 };
 
+const gateResolvedCall = async (args: {
+  call: CallResolvedToolArgs;
+  type: string;
+}): Promise<void> => {
+  const { call } = args;
+  const calling = await db.Project.findByPk(call.callerProjectId, {
+    attributes: ['publicId'],
+  });
+  await gateToolCall({
+    type: args.type,
+    tool: call.toolPublicId ? { publicId: call.toolPublicId } : 'inline',
+    callingProjectPublicId: (calling?.publicId as string | undefined) ?? '',
+    authority: call.authority,
+    agentAuthority: call.agentAuthority,
+  });
+};
+
 const runResolvedTool = async (
   args: CallResolvedToolArgs
 ): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
+  // First, so a call its authority refuses reaches neither an MCP server
+  // (`resolveCallPresets` reads its schema) nor a pipeline's first step.
+  await gateResolvedCall({ call: args, type });
   const meter = meterOf(args);
   const { presetParameters, mcp } = await resolveCallPresets({
     call: args,

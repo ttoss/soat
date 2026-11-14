@@ -1,7 +1,6 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { AgentAuthority } from './agentAuthority';
 import type { DeniedPrincipal } from './authorizationDenial';
 import { type PolicyDocument, validatePolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
@@ -421,22 +420,12 @@ export const triggerAuthority = (args: {
   };
 };
 
-/**
- * The authority a `run_as: agent` turn's builtin calls run under: the agent's
- * grant alone, pinned to the turn's project, in place of the work's grant and
- * caps. The work's principal, chain and work id carry on.
- */
-export const agentWorkAuthority = (args: {
-  authority: WorkAuthority;
-  agent: Extract<AgentAuthority, { runAs: 'agent' }>;
-}): WorkAuthority => {
-  const { agent } = args;
-  return {
-    ...args.authority,
-    project: agent.projectPublicId,
-    grant: { holder: 'agent', agent: agent.agentId, policy: agent.policy },
-    caps: [],
-  };
+/** Agent `agent`'s grant: its resolved `policy_ids`; `null` grants nothing. */
+export const agentHeldGrant = (args: {
+  agent: string;
+  policy: PolicyDocument | null;
+}): AuthorityGrant => {
+  return { holder: 'agent', agent: args.agent, policy: args.policy };
 };
 
 /**

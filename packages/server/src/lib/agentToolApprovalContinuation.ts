@@ -110,6 +110,7 @@ const executeApprovedWriteMemory = async (args: {
   item: MappedApproval;
   projectInternalId: number;
   input: Record<string, unknown>;
+  authority: WorkAuthority | null;
 }): Promise<object> => {
   const agent = args.item.agent_id
     ? await agentReferences.find({
@@ -123,12 +124,11 @@ const executeApprovedWriteMemory = async (args: {
     agent,
     generationId: args.item.generation_id ?? null,
     projectId: args.projectInternalId,
-    agentPolicy: (
-      await proposingAgentAuthority({
-        item: args.item,
-        projectInternalId: args.projectInternalId,
-      })
-    ).policy,
+    authority: args.authority,
+    agentAuthority: await proposingAgentAuthority({
+      item: args.item,
+      projectInternalId: args.projectInternalId,
+    }),
     actorId: actorId ?? undefined,
     input: args.input,
   });
@@ -181,6 +181,7 @@ const executeApprovedNativeAction = async (args: {
   item: MappedApproval;
   projectInternalId: number;
   input: Record<string, unknown>;
+  authority: WorkAuthority | null;
 }): Promise<object> => {
   const nativeTool = NATIVE_TOOLS[args.toolId];
   if (!nativeTool) {
@@ -192,6 +193,7 @@ const executeApprovedNativeAction = async (args: {
     item: args.item,
     projectInternalId: args.projectInternalId,
     input: args.input,
+    authority: args.authority,
   });
 };
 
@@ -225,6 +227,7 @@ const executeApprovedAction = async (args: {
       item: args.item,
       projectInternalId: args.projectInternalId,
       input,
+      authority: args.authority,
     });
   }
 

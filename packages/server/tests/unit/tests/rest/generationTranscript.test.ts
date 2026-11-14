@@ -160,6 +160,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
         'generations:PurgeGenerationContent',
         'traces:GetTrace',
         'tools:CreateTool',
+        'tools:CallTool',
       ],
     });
 

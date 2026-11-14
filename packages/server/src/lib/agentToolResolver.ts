@@ -1,11 +1,6 @@
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
-import {
-  evaluatePolicies,
-  type PolicyDocument,
-  validatePolicyDocument,
-} from 'src/lib/iam';
 
 import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
@@ -49,6 +44,7 @@ import {
   mergeAuthHeaders,
   parseHttpToolAuthConfig,
 } from './toolAuth';
+import { gateToolCall } from './toolCallGate';
 import {
   assertValidToolContext,
   buildContextHeaderName,
@@ -149,41 +145,6 @@ export const resolveBodyParamInterpolations = (args: {
 // can validate caller-supplied keys without importing this module. Re-exported
 // here because this is where tool callers reach for it.
 export { assertValidToolContext, buildContextHeaderName, buildContextHeaders };
-
-// ── IAM Boundary Check ────────────────────────────────────────────────────
-
-/**
- * Evaluates an agent's `policy_ids` for one SOAT action.
- *
- * `resource` is the SRN the call acts on and `context` the condition inputs for
- * it (`buildResourceTagContext`), so a boundary can scope a grant to a single
- * resource the way a human's policy does on the REST path. Both fall
- * back to the resource-less shape — `'*'` and no condition inputs — which is
- * what a list or a create-in-project means, and all a caller that cannot name
- * its resource may claim.
- */
-export const isSoatActionAllowedByAgentPolicy = (args: {
-  agentPolicy: unknown;
-  iamAction: string;
-  resource?: string;
-  context?: Record<string, string>;
-}): boolean => {
-  if (!args.agentPolicy) {
-    return true;
-  }
-
-  const validation = validatePolicyDocument(args.agentPolicy);
-  if (!validation.valid) {
-    return false;
-  }
-
-  return evaluatePolicies({
-    policies: [args.agentPolicy as PolicyDocument],
-    action: args.iamAction,
-    resource: args.resource ?? '*',
-    context: args.context,
-  });
-};
 
 // ── Per-type Tool Builders ────────────────────────────────────────────────
 
@@ -1129,7 +1090,39 @@ const isAgentToolType = (value: string): value is AgentToolType => {
   return AGENT_TOOL_TYPE_SET.has(value);
 };
 
-const resolveToolByType = async (
+/** Every call of a resolved tool crosses `gateToolCall` before it runs. */
+const gateEachCall = (args: {
+  tools: Record<string, Tool>;
+  typedTool: AgentToolRow;
+  args: ResolveToolByTypeArgs & { projectPublicId?: string };
+}): Record<string, Tool> => {
+  const { typedTool } = args;
+  const call = args.args;
+  const gated: Record<string, Tool> = {};
+  for (const [name, resolvedTool] of Object.entries(args.tools)) {
+    const { execute } = resolvedTool;
+    gated[name] = execute
+      ? {
+          ...resolvedTool,
+          execute: async (...executeArgs) => {
+            await gateToolCall({
+              type: typedTool.type,
+              tool: typedTool.publicId
+                ? { publicId: typedTool.publicId }
+                : 'inline',
+              callingProjectPublicId: call.projectPublicId ?? '',
+              authority: call.authority,
+              agentAuthority: call.agentAuthority,
+            });
+            return execute(...executeArgs);
+          },
+        }
+      : resolvedTool;
+  }
+  return gated;
+};
+
+const resolveUngatedToolByType = async (
   typedTool: AgentToolRow,
   args: ResolveToolByTypeArgs & { projectPublicId?: string }
 ): Promise<Record<string, Tool>> => {
@@ -1202,7 +1195,6 @@ const resolveToolByType = async (
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
         buildContextHeaders,
-        isSoatActionAllowedByAgentPolicy,
         logToolCallingError,
       });
     default: {
@@ -1217,6 +1209,17 @@ const resolveToolByType = async (
       );
     }
   }
+};
+
+const resolveToolByType = async (
+  typedTool: AgentToolRow,
+  args: ResolveToolByTypeArgs & { projectPublicId?: string }
+): Promise<Record<string, Tool>> => {
+  return gateEachCall({
+    tools: await resolveUngatedToolByType(typedTool, args),
+    typedTool,
+    args,
+  });
 };
 
 const orNull = <T>(value: T | null | undefined): T | null => {

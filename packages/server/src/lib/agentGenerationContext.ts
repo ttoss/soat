@@ -10,7 +10,7 @@ import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeMessages } from './agentKnowledge';
 import { readKnowledgeConfig } from './agentKnowledgeConfig';
-import { resolveRequestedKnowledgePolicy } from './agentKnowledgeScopes';
+import { resolveKnowledgePolicy } from './agentKnowledgeScopes';
 import { resolveAgentModel } from './agentModelResolution';
 import {
   resolveServedAgentVersion,
@@ -25,13 +25,13 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
-import type { PolicyDocument } from './iam';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { assertGenerationModelPriced } from './modelPricingGate';
 import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
 import type { ToolSurface } from './toolSurfaceMeasure';
 import { measureToolSurface } from './toolSurfaceMeasure';
+import { callerNamedAuthority, turnAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
@@ -116,9 +116,8 @@ const assembleContextMessages = async (args: {
   typedAgent: TypedAgent;
   resolvedMessages: Array<{ role: string; content: unknown }>;
   knowledgeConfig?: object;
-  /** Who named {@link knowledgeConfig}, and what bounds the agent. */
-  authUser?: AuthUser;
-  agentPolicy: PolicyDocument | null;
+  authority: WorkAuthority | null;
+  agentAuthority: AgentAuthority;
   unavailableToolNames: string[];
   /** The turn's end user, from the identity-pinned `tool_context`. */
   actorId?: string;
@@ -131,19 +130,21 @@ const assembleContextMessages = async (args: {
   // scope: a turn with no caller scope would otherwise search every project.
   const projectIds = [ownerProjectId(typedAgent)];
   const requestedConfig = readKnowledgeConfig(args.knowledgeConfig);
+  const policyUnder = (authority: WorkAuthority | null) => {
+    return resolveKnowledgePolicy({
+      authority,
+      projectIds,
+      knowledgeProjectPublicId: (typedAgent.ownerProject ?? typedAgent.project)
+        .publicId,
+    });
+  };
   const knowledge = await buildKnowledgeMessages({
     storedConfig: readKnowledgeConfig(typedAgent.knowledgeConfig),
+    storedPolicy: await policyUnder(turnAuthority(args)),
     requested: requestedConfig
       ? {
           config: requestedConfig,
-          policy: await resolveRequestedKnowledgePolicy({
-            authUser: args.authUser,
-            projectIds,
-            knowledgeProjectPublicId: (
-              typedAgent.ownerProject ?? typedAgent.project
-            ).publicId,
-            agentPolicy: args.agentPolicy,
-          }),
+          policy: await policyUnder(callerNamedAuthority(args)),
         }
       : undefined,
     projectIds,
@@ -332,8 +333,8 @@ export const buildGenerationContext = async (
     typedAgent,
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
-    authUser: args.authUser,
-    agentPolicy: agentAuthority.policy,
+    authority: args.authority,
+    agentAuthority,
     unavailableToolNames: toolSurface.unavailableToolNames,
     actorId: toolContext?.actor_id,
   });

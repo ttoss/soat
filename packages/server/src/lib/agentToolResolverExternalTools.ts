@@ -10,18 +10,13 @@ import createDebug from 'debug';
 
 import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
-import {
-  agentDenied,
-  denialToolResult,
-  readForwardedDenial,
-} from './authorizationDenial';
+import { readForwardedDenial } from './authorizationDenial';
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
 } from './externalToolCall';
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
-import { resolveSoatActionAgentScope } from './soatActionScope';
 import { withoutAgentExcludedActions } from './soatAgentActions';
 import { buildSoatActionTarget, soatTools } from './soatTools';
 import {
@@ -29,26 +24,14 @@ import {
   stripPresetKeysFromSchema,
 } from './toolPresetParameters';
 import { resolvePresetParametersForCall } from './toolTemplates';
+import { turnAuthority } from './turnAuthority';
 import {
   meterToolExecution,
   type ToolExecutionMeter,
 } from './usageToolRecording';
-import { agentWorkAuthority, type WorkAuthority } from './workAuthority';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
-
-/**
- * The authority a builtin call runs under: under `run_as: agent`, the agent's
- * grant in place of the work's; else the work's own.
- */
-const soatCallAuthority = (args: {
-  authority: WorkAuthority | null;
-  agentAuthority?: AgentAuthority;
-}): WorkAuthority | null => {
-  const { authority, agentAuthority } = args;
-  if (!authority || agentAuthority?.runAs !== 'agent') return authority;
-  return agentWorkAuthority({ authority, agent: agentAuthority });
-};
 
 /**
  * Invokes a SOAT platform action on behalf of a `soat` tool.
@@ -56,9 +39,9 @@ const soatCallAuthority = (args: {
  * Served in-process via `dispatchApiRequest` rather than over loopback:
  * the app's real middleware chain still runs, so permission checks, validation,
  * audit, metering and the response contract are unchanged — only the socket is
- * gone. The work's stored authority travels as a value, never a token; a
- * call without one is refused, since sharing a process never implies sharing
- * authority.
+ * gone. The turn's authority (`turnAuthority`) travels as a value, never a
+ * token, so the route's own check is the agent's gate; a call without one is
+ * refused, since sharing a process never implies sharing authority.
  */
 export const executeSoatTool = async (args: {
   toolName: string;
@@ -66,7 +49,6 @@ export const executeSoatTool = async (args: {
   rawArgs: Record<string, unknown>;
   meter: ToolExecutionMeter;
   authority: WorkAuthority | null;
-  /** Under `run_as: agent`, the call runs under the agent's grant, not `authority`'s. */
   agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
@@ -109,7 +91,7 @@ export const executeSoatTool = async (args: {
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
-            authority: soatCallAuthority(args),
+            authority: turnAuthority(args),
             actor: args.toolContext?.actor_id ?? null,
             headers: {
               ...args.buildContextHeaders({
@@ -149,51 +131,6 @@ export const executeSoatTool = async (args: {
   }
 };
 
-type IsSoatActionAllowedByAgentPolicy = (args: {
-  agentPolicy: unknown;
-  iamAction: string;
-  resource?: string;
-  context?: Record<string, string>;
-}) => boolean;
-
-/**
- * The refusal an agent's `policy_ids` gives one builtin call, or `null`
- * when it admits it. Every path that runs a builtin action for an agent asks
- * here, with the arguments the call will carry.
- */
-export const soatActionAgentRefusal = async (args: {
-  def: (typeof soatTools)[number];
-  rawArgs: Record<string, unknown>;
-  agentAuthority?: AgentAuthority;
-  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
-}): Promise<ReturnType<typeof denialToolResult> | null> => {
-  const { agentAuthority } = args;
-  if (!agentAuthority?.policy) return null;
-  const iamAction = args.def.iamAction ?? args.def.name;
-  // The SRN and tags of whatever this call names, so a boundary scoped to one
-  // resource means what it says. `null` leaves the resource-less `*`, which
-  // matches no scoped statement, so the unresolved case refuses.
-  const scope = await resolveSoatActionAgentScope({
-    resourceRef: args.def.resource,
-    toolArgs: args.rawArgs,
-    agentPolicy: agentAuthority.policy,
-  });
-  const allowed = args.isSoatActionAllowedByAgentPolicy({
-    agentPolicy: agentAuthority.policy,
-    iamAction,
-    ...(scope ?? {}),
-  });
-  return allowed
-    ? null
-    : denialToolResult(
-        agentDenied({
-          agentId: agentAuthority.agentId,
-          action: iamAction,
-          resource: scope?.resource ?? null,
-        })
-      );
-};
-
 /**
  * The generation's project, pinned onto every builtin action that names one.
  *
@@ -231,7 +168,6 @@ const buildSoatActionTool = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
   const pinned = pinnedProjectParameters(args.projectPublicId);
@@ -243,10 +179,6 @@ const buildSoatActionTool = (args: {
     description: args.toolDescription ?? args.def.description,
     inputSchema: jsonSchema(effectiveInputSchema),
     execute: async (toolArgs: unknown) => {
-      // Merged before the boundary check, not after: a preset or the pinned
-      // project can be what names the target, and a check run on the model's
-      // arguments alone would refuse a call whose resource the operator
-      // supplied.
       const rawArgs = mergePresetParameters({
         presetParameters: {
           ...resolvePresetParametersForCall({
@@ -259,13 +191,6 @@ const buildSoatActionTool = (args: {
         },
         input: toolArgs,
       });
-      const refusal = await soatActionAgentRefusal({
-        def: args.def,
-        rawArgs,
-        agentAuthority: args.agentAuthority,
-        isSoatActionAllowedByAgentPolicy: args.isSoatActionAllowedByAgentPolicy,
-      });
-      if (refusal) return refusal;
       return executeSoatTool({
         toolName: args.toolName,
         def: args.def,
@@ -308,7 +233,6 @@ export const resolveSoatTools = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
   logToolCallingError: LogToolCallingError;
 }): Record<string, Tool> => {
   const result: Record<string, Tool> = {};
@@ -341,7 +265,6 @@ export const resolveSoatTools = (args: {
       rootTraceId: args.rootTraceId,
       remainingDepth: args.remainingDepth,
       buildContextHeaders: args.buildContextHeaders,
-      isSoatActionAllowedByAgentPolicy: args.isSoatActionAllowedByAgentPolicy,
       logToolCallingError: args.logToolCallingError,
     });
   }

@@ -1,9 +1,12 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { buildSrn } from './iam';
 import {
   pinServerIdentityToolContext,
   type ServerToolContextIdentity,
 } from './toolContext';
+import { assertAllowedUnder } from './turnAuthority';
+import type { WorkAuthority } from './workAuthority';
 
 export type EndUserAttribution = {
   actorId: number | null;
@@ -158,6 +161,8 @@ export const pinCallerActorToolContext = async (args: {
   toolContext?: Record<string, string>;
   actorId: unknown;
   projectId: number;
+  /** The caller, who must be able to read the actor it names. */
+  authority: WorkAuthority | null;
 }): Promise<Record<string, string> | undefined> => {
   if (args.actorId === undefined) return args.toolContext;
   if (typeof args.actorId !== 'string') {
@@ -175,6 +180,24 @@ export const pinCallerActorToolContext = async (args: {
       `Actor '${args.actorId}' not found.`
     );
   }
+  const project = await db.Project.findByPk(args.projectId, {
+    attributes: ['publicId'],
+  });
+  const projectPublicId = (project?.publicId as string | undefined) ?? '';
+  await assertAllowedUnder({
+    authority: args.authority,
+    checks: [
+      {
+        projectPublicId,
+        action: 'actors:GetActor',
+        resource: buildSrn({
+          projectPublicId,
+          resourceType: 'actor',
+          resourceId: actor.publicId,
+        }),
+      },
+    ],
+  });
   return pinServerIdentityToolContext({
     toolContext: args.toolContext,
     identity: {

@@ -1,23 +1,21 @@
-import type { AuthUser } from 'src/Context';
-
 import type { KnowledgeConfig } from './agentKnowledgeConfig';
-import type { PolicyDocument } from './iam';
 import type { KnowledgeScope } from './knowledge';
 import {
   compileKnowledgeSearchPolicy,
   type KnowledgeSearchPolicy,
 } from './knowledgeSearchPolicy';
 import { readScopePolicySets } from './scopePolicySets';
+import { authUserUnder } from './turnAuthority';
+import type { WorkAuthority } from './workAuthority';
 
 /**
  * Which rows a turn's knowledge retrieval may inject, and as whom.
  *
- * The agent's stored `knowledge_config` is the agent's own and reads as the
- * agent. A generation's `knowledge_config` override is named by the caller, so
- * a row only the override reaches is read under the caller's
- * `knowledge:SearchKnowledge` policy and the agent's `policy_ids`. The turn then
+ * The agent's stored `knowledge_config` reads under the turn's authority
+ * (`turnAuthority`). A generation's `knowledge_config` override is named by
+ * the caller, so it reads as the caller (`callerNamedAuthority`). The turn then
  * searches the merged config as two scopes: the part the stored config also
- * reaches, unbounded, and the whole of it, bounded by that policy.
+ * reaches under the turn's policy, and the whole of it under the caller's.
  */
 
 const anyLength = (arr: unknown[] | undefined): boolean => {
@@ -122,47 +120,46 @@ const underPolicy = (args: {
 export const knowledgeScopes = (args: {
   merged: KnowledgeConfig;
   stored: KnowledgeConfig | null | undefined;
+  /** The turn's own policy, which the stored config reads under. */
+  storedPolicy: KnowledgeSearchPolicy;
   /** Absent when the request carried no override. */
   requestedPolicy?: KnowledgeSearchPolicy;
 }): KnowledgeScope[] => {
   const merged = scopeOf(args.merged);
-  if (!args.requestedPolicy) return [merged];
+  const storedPart = !args.requestedPolicy
+    ? merged
+    : args.stored
+      ? withinStored({ merged, stored: scopeOf(args.stored) })
+      : null;
   const scopes = [
-    args.stored ? withinStored({ merged, stored: scopeOf(args.stored) }) : null,
-    underPolicy({ scope: merged, policy: args.requestedPolicy }),
+    storedPart && underPolicy({ scope: storedPart, policy: args.storedPolicy }),
+    args.requestedPolicy &&
+      underPolicy({ scope: merged, policy: args.requestedPolicy }),
   ];
   return scopes.filter((scope): scope is KnowledgeScope => {
-    return scope !== null;
+    return !!scope;
   });
 };
 
 /**
- * The caller's `knowledge:SearchKnowledge` policy over the projects the turn
- * searches, each set bounded by the agent's boundary as one more set that
- * must allow. With no caller, the override reads nothing.
+ * `authority`'s `knowledge:SearchKnowledge` policy over the projects the turn
+ * searches. No authority reads nothing.
  */
-export const resolveRequestedKnowledgePolicy = async (args: {
-  authUser?: AuthUser;
+export const resolveKnowledgePolicy = async (args: {
+  authority: WorkAuthority | null;
   projectIds?: number[];
   /** Names the project when `projectIds` is unrestricted. */
   knowledgeProjectPublicId: string;
-  agentPolicy: PolicyDocument | null;
 }): Promise<KnowledgeSearchPolicy> => {
-  if (!args.authUser) return { forbidden: true };
+  const authUser = await authUserUnder(args.authority);
+  if (!authUser) return { forbidden: true };
   const policySets = await readScopePolicySets({
-    getPolicies: args.authUser.getPolicies,
+    getPolicies: authUser.getPolicies,
     projectPublicId:
       args.projectIds === undefined ? args.knowledgeProjectPublicId : undefined,
     projectIds: args.projectIds,
   });
   // No set compiles to unrestricted access, which is no caller's policy.
   if (policySets.length === 0) return { forbidden: true };
-  const { agentPolicy } = args;
-  return compileKnowledgeSearchPolicy({
-    policySets: agentPolicy
-      ? policySets.map((set) => {
-          return { ...set, policies: [...set.policies, [agentPolicy]] };
-        })
-      : policySets,
-  });
+  return compileKnowledgeSearchPolicy({ policySets });
 };

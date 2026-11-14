@@ -10,6 +10,7 @@ const ACTIONS = [
   'deciders:CreateInlineDecision',
   'deciders:GetDecision',
   'deciders:ListDecisions',
+  'tools:CallTool',
 ];
 
 const QUESTIONS = [

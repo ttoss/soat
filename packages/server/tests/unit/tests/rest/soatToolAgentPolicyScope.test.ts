@@ -1,5 +1,4 @@
 import type { Tool } from 'ai';
-import { isSoatActionAllowedByAgentPolicy } from 'src/lib/agentToolResolver';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import type { PolicyDocument } from 'src/lib/iam';
 import type { WorkAuthority } from 'src/lib/workAuthority';
@@ -57,7 +56,6 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByAgentPolicy,
       logToolCallingError: () => {},
     });
     return tools['platform_get-memory-store'];
@@ -183,7 +181,6 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByAgentPolicy,
       logToolCallingError: () => {},
     });
 

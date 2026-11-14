@@ -374,7 +374,7 @@ Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` a
 
 ### pipeline
 
-A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`compute → persist`) server-side, with no model reasoning between steps; callable by orchestration `tool` nodes and directly via the API.
+A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`compute → persist`) server-side, with no model reasoning between steps; callable by orchestration `tool` nodes and directly via the API. Each `tool_id` step that is an `http`, `mcp` or `pipeline` tool needs `tools:CallTool` on it as well, under the authority the pipeline runs under, and a `builtin` step's action is checked at its route; a step refused is `403 FORBIDDEN` before it runs.
 
 `pipeline` has `steps` and an optional `output`:
 
@@ -545,7 +545,7 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 - [`execute.auth`](#computed-credentials-executeauth) failing to produce the credential is `502 TOOL_AUTH_FAILED`; an `oauth_connection` tool whose actor holds no connected connection is `409 OAUTH_CONNECTION_REQUIRED` ([Using a connection from a tool](./oauth-connections.md#using-a-connection-from-a-tool)).
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped from it — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
-- `actor_id` runs the call for that actor of the calling project: the tool receives `actor_id` and `actor_external_id`, and an [`oauth_connection`](./oauth-connections.md#using-a-connection-from-a-tool) credential is the actor's. An actor outside the calling project is `400 ACTOR_NOT_FOUND`.
+- `actor_id` runs the call for that actor of the calling project: the tool receives `actor_id` and `actor_external_id`, and an [`oauth_connection`](./oauth-connections.md#using-a-connection-from-a-tool) credential is the actor's. An actor outside the calling project is `400 ACTOR_NOT_FOUND`; one the caller may not read (`actors:GetActor`) is `403`.
 
 ### Sharing a tool
 

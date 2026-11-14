@@ -297,7 +297,7 @@ describe('Tool-call approval continuation', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'aprcont',
-      policyActions: ['agents:CreateAgentGeneration'],
+      policyActions: ['agents:CreateAgentGeneration', 'tools:CallTool'],
       createNoPermUser: false,
     });
     adminToken = setup.adminToken;
@@ -551,7 +551,7 @@ describe('Tool-call approval continuation', () => {
       ).toBe(false);
     });
 
-    test('a proposing agent that no longer exists still resolves the item', async () => {
+    test('a proposing agent that no longer exists still resolves the item, its action refused', async () => {
       const item = await seed({
         toolId: refundToolId,
         amount: 29,
@@ -563,7 +563,11 @@ describe('Tool-call approval continuation', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('approved');
-      expect(await toolRequestWith(29)).toEqual({ amount: 29 });
+      expect(
+        toolRequests.some((body) => {
+          return body.amount === 29;
+        })
+      ).toBe(false);
     });
 
     test('a session-backed item continues in its session', async () => {

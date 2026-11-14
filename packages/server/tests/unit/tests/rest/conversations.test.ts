@@ -50,6 +50,7 @@ describe('Conversations', () => {
                 'conversations:UpdateConversation',
                 'conversations:DeleteConversation',
                 'conversations:GenerateConversationMessage',
+                'agents:CreateAgentGeneration',
                 'actors:UpdateActor',
                 'actors:DeleteActor',
               ],

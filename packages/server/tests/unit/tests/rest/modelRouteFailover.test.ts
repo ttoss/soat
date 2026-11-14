@@ -19,6 +19,7 @@ const ACTIONS = [
   'model-routes:CreateModelRoute',
   'ai-providers:CreateAiProvider',
   'tools:CreateTool',
+  'tools:CallTool',
   'agents:CreateAgent',
   'agents:CreateAgentGeneration',
   'generations:ResumeGeneration',

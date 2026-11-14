@@ -52,9 +52,6 @@ describe("a builtin tool acts on the generation's project", () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByAgentPolicy: () => {
-        return true;
-      },
       logToolCallingError: () => {},
     });
     return tools['platform_list-agents'];
@@ -164,9 +161,6 @@ describe("a builtin tool acts on the generation's project", () => {
       projectPublicId: projectId,
       buildContextHeaders: () => {
         return {};
-      },
-      isSoatActionAllowedByAgentPolicy: () => {
-        return true;
       },
       logToolCallingError: () => {},
     });

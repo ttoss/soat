@@ -1,6 +1,5 @@
 import {
   HttpToolError,
-  isSoatActionAllowedByAgentPolicy,
   parseHttpExecuteConfig,
   resolveBodyParamInterpolations,
   resolveUrlPathParams,
@@ -347,165 +346,6 @@ describe('assertValidToolContext', () => {
   });
 });
 
-describe('isSoatActionAllowedByAgentPolicy', () => {
-  test('returns true when agentPolicy is null', () => {
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: null,
-      iamAction: 'agents:CreateGeneration',
-    });
-
-    expect(result).toBe(true);
-  });
-
-  test('returns true when agentPolicy is undefined', () => {
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: undefined,
-      iamAction: 'agents:CreateGeneration',
-    });
-
-    expect(result).toBe(true);
-  });
-
-  test('returns false when boundary policy is structurally invalid', () => {
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: { invalid: 'policy', notAStatement: true },
-      iamAction: 'agents:CreateGeneration',
-    });
-
-    expect(result).toBe(false);
-  });
-
-  test('returns true when valid Allow policy permits the action', () => {
-    const policy = {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['agents:CreateGeneration'],
-        },
-      ],
-    };
-
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: policy,
-      iamAction: 'agents:CreateGeneration',
-    });
-
-    expect(result).toBe(true);
-  });
-
-  test('returns false when valid policy does not allow the action', () => {
-    const policy = {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['files:GetFile'],
-        },
-      ],
-    };
-
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: policy,
-      iamAction: 'agents:CreateGeneration',
-    });
-
-    expect(result).toBe(false);
-  });
-
-  test('evaluates a resource-scoped statement against the passed SRN', () => {
-    const policy = {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['memories:CreateMemory'],
-          resource: ['srn:proj_abc:memory_store:mstore_support'],
-        },
-      ],
-    };
-
-    expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
-        iamAction: 'memories:CreateMemory',
-        resource: 'srn:proj_abc:memory_store:mstore_support',
-      })
-    ).toBe(true);
-
-    expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
-        iamAction: 'memories:CreateMemory',
-        resource: 'srn:proj_abc:memory_store:mstore_other',
-      })
-    ).toBe(false);
-  });
-
-  test('evaluates statement conditions against the passed context', () => {
-    const policy = {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['memories:CreateMemory'],
-          resource: ['*'],
-          condition: { StringEquals: { 'iam:ResourceTag/env': 'prod' } },
-        },
-      ],
-    };
-
-    expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
-        iamAction: 'memories:CreateMemory',
-        context: { 'iam:ResourceTag/env': 'prod' },
-      })
-    ).toBe(true);
-
-    expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
-        iamAction: 'memories:CreateMemory',
-        context: { 'iam:ResourceTag/env': 'staging' },
-      })
-    ).toBe(false);
-  });
-
-  test('falls back to the resource-less shape when no resource is passed', () => {
-    const policy = {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['memories:CreateMemory'],
-          resource: ['*'],
-        },
-      ],
-    };
-
-    expect(
-      isSoatActionAllowedByAgentPolicy({
-        agentPolicy: policy,
-        iamAction: 'memories:CreateMemory',
-      })
-    ).toBe(true);
-  });
-
-  test('returns true when wildcard action allows everything', () => {
-    const policy = {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['*'],
-        },
-      ],
-    };
-
-    const result = isSoatActionAllowedByAgentPolicy({
-      agentPolicy: policy,
-      iamAction: 'agents:CreateGeneration',
-    });
-
-    expect(result).toBe(true);
-  });
-});
-
 describe('resolveUrlPathParams', () => {
   test('returns unchanged url and all args as remaining when no placeholders', () => {
     const result = resolveUrlPathParams({
@@ -755,9 +595,6 @@ describe('resolveSoatTools', () => {
       },
       buildContextHeaders: () => {
         return {};
-      },
-      isSoatActionAllowedByAgentPolicy: () => {
-        return true;
       },
       logToolCallingError: () => {},
     });

@@ -1,18 +1,12 @@
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
-import { agentDenied, callerDenied } from './authorizationDenial';
+import { agentDenied } from './authorizationDenial';
 import { getDocument } from './documents';
-import {
-  buildSrn,
-  evaluatePolicies,
-  evaluatePoliciesMultiResource,
-  type PolicyDocument,
-} from './iam';
-import { resolveSoatActionScope } from './soatActionScope';
-import { soatTools } from './soatTools';
+import { buildSrn } from './iam';
 import { buildResourceTagContext } from './tags';
 import { callTool, tools } from './tools';
+import { assertAllowedUnder, callerNamedAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
 
 export type ToolOutputMessageContent = {
@@ -86,14 +80,6 @@ const stringifyToolOutput = (value: unknown): string => {
   }
 };
 
-const ensureAuthUser = (authUser?: AuthUser): AuthUser => {
-  if (!authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  return authUser;
-};
-
 const buildDocumentPermissionContext = (args: {
   tags?: Record<string, string> | null;
 }): Record<string, string> => {
@@ -126,87 +112,6 @@ const buildDocumentPermissionResources = (args: {
   return resources;
 };
 
-const isAgentPolicyAllowed = (args: {
-  policy: PolicyDocument | null;
-  action: string;
-  resource?: string;
-  resources?: string[];
-  context?: Record<string, string>;
-}): boolean => {
-  if (!args.policy) {
-    return true;
-  }
-
-  const policies = [args.policy];
-
-  if (args.resources && args.resources.length > 0) {
-    return evaluatePoliciesMultiResource({
-      policies,
-      action: args.action,
-      resources: args.resources,
-      context: args.context,
-    });
-  }
-
-  return evaluatePolicies({
-    policies,
-    action: args.action,
-    resource: args.resource,
-    context: args.context,
-  });
-};
-
-const assertAgentPolicyAllowed = (args: {
-  agentAuthority?: AgentAuthority;
-  action: string;
-  resource?: string;
-  resources?: string[];
-  context?: Record<string, string>;
-}) => {
-  if (
-    args.agentAuthority &&
-    !isAgentPolicyAllowed({
-      policy: args.agentAuthority.policy,
-      action: args.action,
-      resource: args.resource,
-      resources: args.resources,
-      context: args.context,
-    })
-  ) {
-    throw agentDenied({
-      agentId: args.agentAuthority.agentId,
-      action: args.action,
-      resource: args.resource ?? args.resources?.[0] ?? null,
-    });
-  }
-};
-
-const assertCallerAllowed = async (args: {
-  authUser?: AuthUser;
-  projectPublicId: string;
-  action: string;
-  resource?: string;
-  resources?: string[];
-  context?: Record<string, string>;
-}) => {
-  const authUser = ensureAuthUser(args.authUser);
-  const allowed = await authUser.isAllowed({
-    projectPublicId: args.projectPublicId,
-    action: args.action,
-    resource: args.resource,
-    resources: args.resources,
-    context: args.context,
-  });
-
-  if (!allowed) {
-    throw callerDenied({
-      authUser,
-      action: args.action,
-      resource: args.resource ?? args.resources?.[0] ?? null,
-    });
-  }
-};
-
 const assertToolAllowedForAgent = (args: {
   allowedToolIds?: string[];
   agentId: string | null;
@@ -221,19 +126,13 @@ const assertToolAllowedForAgent = (args: {
   }
 };
 
-const findSoatToolDefinition = (action: string) => {
-  return soatTools.find((tool) => {
-    return tool.name === action;
-  });
-};
-
-const resolveSoatIamAction = (action: string): string => {
-  return findSoatToolDefinition(action)?.iamAction ?? action;
-};
-
+/**
+ * What the caller names in a turn's messages is read as the caller
+ * (`callerNamedAuthority`), whatever the agent runs as.
+ */
 const resolveDocumentContent = async (args: {
   content: DocumentMessageContent;
-  authUser?: AuthUser;
+  authority: WorkAuthority | null;
   agentAuthority?: AgentAuthority;
 }): Promise<{ content: string; documentId: string }> => {
   const document = await getDocument({ id: args.content.document_id });
@@ -245,64 +144,26 @@ const resolveDocumentContent = async (args: {
     );
   }
 
-  const resources = buildDocumentPermissionResources({
-    documentId: args.content.document_id,
-    projectPublicId: document.project_id,
-    path: document.path,
-  });
-  const context = buildDocumentPermissionContext({ tags: document.tags });
-
-  await assertCallerAllowed({
-    authUser: args.authUser,
-    projectPublicId: document.project_id,
-    action: 'documents:GetDocument',
-    resources,
-    context,
-  });
-  assertAgentPolicyAllowed({
-    agentAuthority: args.agentAuthority,
-    action: 'documents:GetDocument',
-    resources,
-    context,
+  await assertAllowedUnder({
+    authority: callerNamedAuthority(args),
+    checks: [
+      {
+        projectPublicId: document.project_id,
+        action: 'documents:GetDocument',
+        resources: buildDocumentPermissionResources({
+          documentId: args.content.document_id,
+          projectPublicId: document.project_id,
+          path: document.path,
+        }),
+        context: buildDocumentPermissionContext({ tags: document.tags }),
+      },
+    ],
   });
 
   return {
     content: document.content ?? '',
     documentId: args.content.document_id,
   };
-};
-
-/**
- * A builtin action a `tool_output` message names, checked against the same SRN
- * and tags the model's own call to it would be: a boundary confined to one
- * resource must not be wider through the door a caller drives, and the caller
- * names the action, so it must hold it too.
- */
-const assertBuiltinActionAllowed = async (args: {
-  action: string;
-  input?: Record<string, unknown>;
-  projectPublicId: string;
-  authUser?: AuthUser;
-  agentAuthority?: AgentAuthority;
-}) => {
-  const action = resolveSoatIamAction(args.action);
-  const scope = await resolveSoatActionScope({
-    resourceRef: findSoatToolDefinition(args.action)?.resource,
-    toolArgs: args.input,
-  });
-  assertAgentPolicyAllowed({
-    agentAuthority: args.agentAuthority,
-    action,
-    resource: scope?.resource ?? '*',
-    context: scope?.context,
-  });
-  await assertCallerAllowed({
-    authUser: args.authUser,
-    projectPublicId: args.projectPublicId,
-    action,
-    resource: scope?.resource,
-    context: scope?.context,
-  });
 };
 
 const resolveToolOutputContent = async (args: {
@@ -324,24 +185,10 @@ const resolveToolOutputContent = async (args: {
     projectIds: args.projectIds,
     id: args.content.tool_id,
   });
-  const tool = { project_id: toolRow.project.publicId, type: toolRow.type };
 
-  await assertCallerAllowed({
-    authUser: args.authUser,
-    projectPublicId: tool.project_id,
-    action: 'tools:CallTool',
-  });
-
-  if (tool.type === 'builtin' && args.content.action) {
-    await assertBuiltinActionAllowed({
-      action: args.content.action,
-      input: args.content.input,
-      projectPublicId: tool.project_id,
-      authUser: args.authUser,
-      agentAuthority: args.agentAuthority,
-    });
-  }
-
+  // Under the caller's authority, `callTool` checks `tools:CallTool` on the
+  // tool and each builtin action it reaches (named, preset or a pipeline
+  // step's) at the action's route.
   const toolResult = await callTool({
     guardrails: 'apply',
     projectId: toolRow.projectId,
@@ -349,7 +196,7 @@ const resolveToolOutputContent = async (args: {
     id: args.content.tool_id,
     action: args.content.action,
     input: args.content.input,
-    authority: args.authority,
+    authority: callerNamedAuthority(args),
     caller: args.authUser,
     // The generation calling a tool on its own behalf, so it carries the same
     // bag the model's own tool calls resolve from.
@@ -391,7 +238,7 @@ export const resolveMessageContent = async (args: {
   if (isDocumentMessageContent(args.content)) {
     return resolveDocumentContent({
       content: args.content,
-      authUser: args.authUser,
+      authority: args.authority,
       agentAuthority: args.agentAuthority,
     });
   }

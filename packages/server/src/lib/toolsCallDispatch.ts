@@ -7,14 +7,10 @@ import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
 import {
   buildHttpToolExecute,
-  isSoatActionAllowedByAgentPolicy,
   parseHttpExecuteConfig,
   toHttpToolDomainError,
 } from './agentToolResolver';
-import {
-  executeSoatTool,
-  soatActionAgentRefusal,
-} from './agentToolResolverExternalTools';
+import { executeSoatTool } from './agentToolResolverExternalTools';
 import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
 import { McpToolError } from './mcpProtocol';
@@ -125,13 +121,6 @@ export const callSoatTool = async (
       `action "${action}" is not a known SOAT action.`
     );
   }
-  const refusal = await soatActionAgentRefusal({
-    def,
-    rawArgs: mergedInput,
-    agentAuthority: args.agentAuthority,
-    isSoatActionAllowedByAgentPolicy,
-  });
-  if (refusal) return refusal;
   return executeSoatTool({
     toolName: tool.name,
     def,

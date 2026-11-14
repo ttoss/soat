@@ -2,20 +2,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { authUserOfWork } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
 import type { AgentAuthority } from './agentAuthority';
-import {
-  agentDenied,
-  authorizationDenied,
-  callerPrincipal,
-} from './authorizationDenial';
-import { buildSrn, evaluatePolicies } from './iam';
+import { buildSrn } from './iam';
 import { type OauthClientRow, resolveOauthClient } from './oauthClients';
 import { type OauthConnectionRow, tokenColumns } from './oauthConnections';
 import { requestTokens } from './oauthTokenEndpoint';
 import { decryptValue } from './secrets';
 import { toolAuthFailed } from './toolAuthConfig';
+import { assertAllowedUnder, turnAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:oauth-connections');
@@ -41,51 +36,6 @@ const reconnect = (args: {
       ...(args.connectionId ? { oauth_connection_id: args.connectionId } : {}),
     }
   );
-};
-
-/**
- * Caller ∩ the agent's `policy_ids`: both must allow using this connection, so
- * neither the tool's author nor a broad agent can reach an actor's grant.
- */
-const assertUseAllowed = async (args: {
-  projectPublicId: string;
-  resource: string;
-  authority: WorkAuthority | null;
-  agentAuthority?: AgentAuthority;
-}) => {
-  const { agentAuthority } = args;
-  if (
-    agentAuthority?.policy &&
-    !evaluatePolicies({
-      policies: [agentAuthority.policy],
-      action: USE_OAUTH_CONNECTION_ACTION,
-      resource: args.resource,
-    })
-  ) {
-    throw agentDenied({
-      agentId: agentAuthority.agentId,
-      action: USE_OAUTH_CONNECTION_ACTION,
-      resource: args.resource,
-    });
-  }
-  const caller = args.authority
-    ? await authUserOfWork({ db, authority: args.authority })
-    : undefined;
-  const allowed = await caller?.isAllowed({
-    projectPublicId: args.projectPublicId,
-    action: USE_OAUTH_CONNECTION_ACTION,
-    resource: args.resource,
-  });
-  if (!allowed) {
-    throw authorizationDenied({
-      principal: caller
-        ? callerPrincipal(caller)
-        : { type: 'caller', id: null },
-      denied: [
-        { action: USE_OAUTH_CONNECTION_ACTION, resource: args.resource },
-      ],
-    });
-  }
 };
 
 const isFresh = (row: OauthConnectionRow, now: Date): boolean => {
@@ -244,15 +194,21 @@ export const resolveOauthConnectionAccessToken = async (args: {
     actorId: args.actorId,
   });
 
-  await assertUseAllowed({
-    projectPublicId: client.project.publicId,
-    resource: buildSrn({
-      projectPublicId: client.project.publicId,
-      resourceType: 'oauth_connection',
-      resourceId: row?.publicId ?? '*',
-    }),
-    authority: args.authority,
-    agentAuthority: args.agentAuthority,
+  // The turn's authority, so neither the tool's author nor an agent past its
+  // grant reaches an actor's connection.
+  await assertAllowedUnder({
+    authority: turnAuthority(args),
+    checks: [
+      {
+        projectPublicId: client.project.publicId,
+        action: USE_OAUTH_CONNECTION_ACTION,
+        resource: buildSrn({
+          projectPublicId: client.project.publicId,
+          resourceType: 'oauth_connection',
+          resourceId: row?.publicId ?? '*',
+        }),
+      },
+    ],
   });
 
   const ids = {
