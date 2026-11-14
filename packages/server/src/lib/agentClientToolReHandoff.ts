@@ -1,13 +1,14 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
+import { actingAgentOf } from './agentAuthority';
 import { buildGenerationContext } from './agentGenerationContext';
 import { savePendingGeneration } from './agentGenerationHelpers';
 import type { MappedApproval } from './approvals';
 import { resolveChainLineage } from './generationChain';
 import { createGenerationRecord } from './generations';
-import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { toolReferences } from './resourceReferences';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:approvals');
 
@@ -66,7 +67,7 @@ const seedReHandoffPending = (args: {
     typedAgent: args.ctx.typedAgent,
     agentId: args.agentId,
     resolvedTools: args.ctx.resolvedTools,
-    toolsAuthHeader: args.ctx.toolsAuthHeader,
+    toolsAuthority: args.ctx.toolsAuthority,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: null,
   });
@@ -101,10 +102,9 @@ export const emitClientToolReHandoff = async (args: {
   item: MappedApproval;
   projectInternalId: number;
   // The re-handoff generation resolves its tool surface here and is resumed
-  // later by the client, so it needs the same identity as the other two
-  // continuation branches — and records the same principal, so a further
-  // approval re-mints from its own row.
-  authHeader?: string;
+  // later by the client, so it runs under the same authority as the other two
+  // continuation branches, and stores it for a further approval.
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
 }): Promise<boolean> => {
   const proposed = args.item.proposed_action;
@@ -141,7 +141,7 @@ export const emitClientToolReHandoff = async (args: {
     agentId,
     projectIds: [args.projectInternalId],
     messages: [{ role: 'user', content: note }],
-    authHeader: args.authHeader,
+    authority: args.authority,
     toolContext: reHandoffToolContext({
       toolContext: args.toolContext,
       sessionId: args.item.session_id,
@@ -165,7 +165,8 @@ export const emitClientToolReHandoff = async (args: {
     traceId,
     ...lineage,
     initiatorGenerationId: args.item.generation_id ?? null,
-    startedBy: resolveStartingPrincipal({ authHeader: args.authHeader }),
+    authority: args.authority,
+    actsAsAgent: actingAgentOf(ctx.agentAuthority),
     // Keeps the continuation's usage attributed to the same end user as the
     // turn that produced the approval; the actor is derived from the session.
     sessionId: args.item.session_id,

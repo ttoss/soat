@@ -1,9 +1,10 @@
 import type { AuthUser } from '../Context';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import {
   type ResolvableMessageContent,
   resolveMessageContent,
 } from './messageContent';
+import type { WorkAuthority } from './workAuthority';
 
 export type GenerationInputMessage = {
   role: string;
@@ -25,10 +26,10 @@ export type GenerationInputMessage = {
 export const resolveGenerationInputMessages = async (args: {
   projectIds?: number[];
   messages: GenerationInputMessage[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   allowedToolIds?: string[];
-  agentBoundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   // The generation's identity-pinned `tool_context`, so a `tool_output` block
   // resolves its tool's `{{context:}}` headers and presets from the same bag
   // the model's own tool calls use.
@@ -44,10 +45,10 @@ export const resolveGenerationInputMessages = async (args: {
       const resolvedContent = await resolveMessageContent({
         content: message.content as ResolvableMessageContent,
         projectIds: args.projectIds,
-        authHeader: args.authHeader,
+        authority: args.authority,
         authUser: args.authUser,
         allowedToolIds: args.allowedToolIds,
-        agentBoundary: args.agentBoundary,
+        agentAuthority: args.agentAuthority,
         toolContext: args.toolContext,
       });
 

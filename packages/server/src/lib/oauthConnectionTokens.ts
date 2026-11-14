@@ -2,9 +2,9 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { resolveBearerAuthUser } from '../middleware/auth';
+import { authUserOfWork } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import {
   agentDenied,
   authorizationDenied,
@@ -16,6 +16,7 @@ import { type OauthConnectionRow, tokenColumns } from './oauthConnections';
 import { requestTokens } from './oauthTokenEndpoint';
 import { decryptValue } from './secrets';
 import { toolAuthFailed } from './toolAuthConfig';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:oauth-connections');
 
@@ -49,28 +50,27 @@ const reconnect = (args: {
 const assertUseAllowed = async (args: {
   projectPublicId: string;
   resource: string;
-  authHeader?: string;
-  boundary?: AgentBoundary;
+  authority: WorkAuthority | null;
+  agentAuthority?: AgentAuthority;
 }) => {
-  const { boundary } = args;
+  const { agentAuthority } = args;
   if (
-    boundary?.policy &&
+    agentAuthority?.policy &&
     !evaluatePolicies({
-      policies: [boundary.policy],
+      policies: [agentAuthority.policy],
       action: USE_OAUTH_CONNECTION_ACTION,
       resource: args.resource,
     })
   ) {
     throw agentDenied({
-      agentId: boundary.agentId,
+      agentId: agentAuthority.agentId,
       action: USE_OAUTH_CONNECTION_ACTION,
       resource: args.resource,
     });
   }
-  const caller = await resolveBearerAuthUser({
-    db,
-    authHeader: args.authHeader,
-  });
+  const caller = args.authority
+    ? await authUserOfWork({ db, authority: args.authority })
+    : undefined;
   const allowed = await caller?.isAllowed({
     projectPublicId: args.projectPublicId,
     action: USE_OAUTH_CONNECTION_ACTION,
@@ -226,8 +226,8 @@ export const resolveOauthConnectionAccessToken = async (args: {
   projectId: number;
   oauthClientId: string;
   actorId?: string;
-  authHeader?: string;
-  boundary?: AgentBoundary;
+  authority: WorkAuthority | null;
+  agentAuthority?: AgentAuthority;
   now?: Date;
 }): Promise<string> => {
   const now = args.now ?? new Date();
@@ -251,8 +251,8 @@ export const resolveOauthConnectionAccessToken = async (args: {
       resourceType: 'oauth_connection',
       resourceId: row?.publicId ?? '*',
     }),
-    authHeader: args.authHeader,
-    boundary: args.boundary,
+    authority: args.authority,
+    agentAuthority: args.agentAuthority,
   });
 
   const ids = {

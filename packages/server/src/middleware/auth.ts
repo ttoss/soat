@@ -3,13 +3,7 @@ import bcrypt from 'bcryptjs';
 
 import type { AuthUser, Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
-import { resolveBoundSets } from '../lib/attachedPolicies';
-import {
-  callerPrincipal,
-  type DeniedPrincipal,
-} from '../lib/authorizationDenial';
-import { issuingKeyProject, requestOnBehalfOf } from '../lib/onBehalfOf';
-import { type LabeledPolicySets, resolvePolicySets } from '../lib/permissions';
+import { attachedWorkAuthority } from '../lib/inProcessAuthority';
 import { parseBound } from '../lib/principalBound';
 import {
   BEARER_TOKEN_TYPES,
@@ -18,18 +12,15 @@ import {
   type VerifiedToken,
   verifyToken,
 } from '../lib/signedTokens';
+import type { CredentialTerms, WorkAuthority } from '../lib/workAuthority';
 import {
-  actingKeyOf,
   type BoundClaims,
   boundIdentityFields,
   holdsItsBound,
 } from './authBound';
-import { narrowToOnBehalfOf } from './authOnBehalfOf';
-import { type Authority, buildAuthority } from './authority';
-import {
-  resolveScopedBoundaryDocs,
-  resolveTriggerPolicySets,
-} from './authScopedBoundary';
+import { type ResolvedCredential, withOnBehalfOf } from './authOnBehalfOf';
+import { buildAuthority } from './authority';
+import { type PreloadedRows, resolveTerms, workTerms } from './authTerms';
 
 export const BCRYPT_SALT_ROUNDS = 12;
 
@@ -55,138 +46,82 @@ export const signUserToken = (payload: { publicId: string; role: string }) => {
 type Next = () => Promise<void>;
 
 /**
- * An API key's authority: its owner's policies capped by the key's own, pinned
- * to the key's project when it has one.
+ * A resolved credential: who it is, its stated terms, and the rows read to
+ * authenticate it.
  */
-const apiKeyAuthority = (args: {
-  apiKeyPublicId: string;
-  projectPublicId: string | undefined;
-  role: 'admin' | 'user';
-  userPolicyIds: number[];
-  apiKeyPolicyIds: number[];
+type Resolved = ResolvedCredential & { preloaded?: PreloadedRows };
+
+const withAuthority = async (args: {
+  resolved: Resolved | undefined;
+  replayed: boolean;
   db: Context['db'];
-}): Authority => {
-  const { role, userPolicyIds, apiKeyPolicyIds, db } = args;
-  return buildAuthority({
-    reach: args.projectPublicId
-      ? { pinned: args.projectPublicId }
-      : {
-          pinned: null,
-          everyProject: role === 'admin' && apiKeyPolicyIds.length === 0,
-          candidatePolicyIds: 'all',
-        },
-    getSets: async () => {
-      return [
-        {
-          principal: { type: 'api_key', id: args.apiKeyPublicId },
-          sets: await resolvePolicySets({
-            userRole: role,
-            userPolicyIds,
-            apiKeyPolicyIds,
-            db,
-          }),
-        },
-      ];
-    },
-    db,
+}): Promise<AuthUser | undefined> => {
+  if (!args.resolved) return undefined;
+  const terms = await resolveTerms({
+    terms: args.resolved.authUser.terms,
+    replayed: args.replayed,
+    db: args.db,
+    preloaded: args.resolved.preloaded,
   });
-};
-
-/** The caller a raw `sk_` key resolves to, or undefined when it is not live. */
-const resolveApiKeyAuthUser = async (args: {
-  db: Context['db'];
-  rawKey: string;
-}): Promise<Context['authUser']> => {
-  const { db } = args;
-  const verified = await verifyApiKey({ rawKey: args.rawKey });
-  if (!verified) return;
-  const { apiKey: row, user: keyUser } = verified;
-  const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
-  const apiKeyPolicyIds = (row.policyIds as number[]) ?? [];
-  const role = keyUser.role as 'admin' | 'user';
-
-  // `projectId` is nullable: a null value means the key is unscoped (spans
-  // projects). Only resolve the project public ID when the key is scoped.
-  const rawProjectId = row.projectId as number | null;
-  let apiKeyProjectId: number | undefined;
-  let apiKeyProjectPublicId: string | undefined;
-  if (rawProjectId != null) {
-    const proj = await db.Project.findOne({
-      where: { id: rawProjectId },
-    });
-    if (proj) {
-      apiKeyProjectId = rawProjectId;
-      apiKeyProjectPublicId = proj.publicId as string;
-    }
-  }
-
+  if (!terms) return undefined;
   return {
-    id: keyUser.id as number,
-    publicId: keyUser.publicId as string,
-    username: keyUser.username as string,
-    role,
-    apiKeyPublicId: row.publicId as string,
-    apiKeyProjectId,
-    apiKeyProjectPublicId,
-    ...(apiKeyPolicyIds.length > 0 ? { apiKeyPolicyIds } : {}),
-    isControlPlaneKey:
-      role === 'admin' && rawProjectId == null && apiKeyPolicyIds.length === 0,
-    ...apiKeyAuthority({
-      apiKeyPublicId: row.publicId as string,
-      projectPublicId: apiKeyProjectPublicId,
-      role,
-      userPolicyIds,
-      apiKeyPolicyIds,
-      db,
-    }),
+    ...args.resolved.authUser,
+    ...buildAuthority({ terms, db: args.db }),
   };
 };
 
 /**
- * Project-scoping and credential-identity fields to spread onto a JWT-derived
- * `authUser`.
- *
- * `apiKeyPublicId` is set from a run token's `key` claim so a key-started run
- * *names the key* everywhere attribution is derived — task history, audit
- * entries, the principal an automation chain inherits. The claim already
- * decided the run's authorization boundary in `resolveScopedBoundaryDocs`; this
- * makes the identity match the authority.
- *
- * Deliberately *only* `apiKeyPublicId`, never the `apiKeyProject*` pair: those
- * drive write-project defaulting and scope enforcement, and a run token's
- * project already travels as `oauthProjectPublicId`, which every reader of the
- * pair falls back to — so setting them would only add a second source of truth.
+ * A raw `sk_` key, or undefined when it is not live: its owner's grant capped
+ * by the key's own `policy_ids`, pinned to its project when it has one. A key
+ * whose project is gone is not live.
  */
-const buildScopedIdentityFields = (args: {
-  scopedProjectPublicId?: string;
-  isTriggerToken: boolean;
-  isRunToken: boolean;
-  runApiKeyPublicId?: string;
-  runWorkPublicId?: string;
-  oauthScope?: string;
-}): Pick<
-  AuthUser,
-  | 'oauthProjectPublicId'
-  | 'oauthScope'
-  | 'isTriggerToken'
-  | 'isRunToken'
-  | 'runWorkPublicId'
-  | 'apiKeyPublicId'
-> => {
+const resolveApiKey = async (args: {
+  db: Context['db'];
+  rawKey: string;
+}): Promise<Resolved | undefined> => {
+  const { db } = args;
+  const verified = await verifyApiKey({ rawKey: args.rawKey });
+  if (!verified) return;
+  const { apiKey: row, user: keyUser } = verified;
+  const apiKeyPolicyIds = row.policyIds;
+  const apiKeyPublicId = row.publicId as string;
+
+  const rawProjectId = row.projectId as number | null;
+  const project =
+    rawProjectId === null
+      ? null
+      : await db.Project.findOne({ where: { id: rawProjectId } });
+  if (rawProjectId !== null && !project) return;
+
   return {
-    ...(args.scopedProjectPublicId
-      ? { oauthProjectPublicId: args.scopedProjectPublicId }
-      : {}),
-    ...(args.oauthScope !== undefined ? { oauthScope: args.oauthScope } : {}),
-    ...(args.isTriggerToken ? { isTriggerToken: true } : {}),
-    ...(args.isRunToken ? { isRunToken: true } : {}),
-    ...(args.isRunToken && args.runWorkPublicId
-      ? { runWorkPublicId: args.runWorkPublicId }
-      : {}),
-    // Set only from a run token's or an IAM token's `key` claim.
-    ...(args.runApiKeyPublicId
-      ? { apiKeyPublicId: args.runApiKeyPublicId }
-      : {}),
+    authUser: {
+      id: keyUser.id as number,
+      publicId: keyUser.publicId as string,
+      username: keyUser.username as string,
+      role: keyUser.role as 'admin' | 'user',
+      apiKeyPublicId,
+      ...(project
+        ? {
+            apiKeyProjectId: project.id as number,
+            apiKeyProjectPublicId: project.publicId as string,
+          }
+        : {}),
+      ...(apiKeyPolicyIds.length > 0 ? { apiKeyPolicyIds } : {}),
+      terms: {
+        pinned: project ? (project.publicId as string) : null,
+        grant: { holder: 'user', user: keyUser.publicId as string },
+        caps: [{ kind: 'key', key: apiKeyPublicId }],
+        principal: { type: 'api_key', id: apiKeyPublicId },
+      },
+    },
+    preloaded: {
+      user: {
+        publicId: keyUser.publicId as string,
+        role: keyUser.role as string,
+        policyIds: keyUser.policyIds,
+      },
+      key: { publicId: apiKeyPublicId, policyIds: apiKeyPolicyIds },
+    },
   };
 };
 
@@ -199,19 +134,12 @@ type JwtClaims = {
   role: string;
   prj?: string;
   scope?: string;
-  trg?: string;
-  orn?: string;
   key?: string;
-  clr?: boolean;
-  ckey?: string;
-  cscope?: string;
 } & BoundClaims &
   (
     | { typ: 'login' }
     | { typ: 'oauth'; prj: string }
-    | { typ: 'trigger'; prj: string; trg: string }
-    | { typ: 'run'; prj: string; orn: string }
-    | { typ: 'iam'; prj: string }
+    | { typ: 'iam'; prj: string; key: string }
   );
 
 const isJwtClaims = (
@@ -220,8 +148,7 @@ const isJwtClaims = (
   if (typeof claims.publicId !== 'string') return false;
   if (claims.typ === 'login') return claims.prj === undefined;
   if (typeof claims.prj !== 'string') return false;
-  if (claims.typ === 'trigger') return typeof claims.trg === 'string';
-  if (claims.typ === 'run') return typeof claims.orn === 'string';
+  if (claims.typ === 'iam') return typeof claims.key === 'string';
   return true;
 };
 
@@ -233,117 +160,53 @@ const verifyJwtClaims = (token: string): JwtClaims | null => {
 };
 
 /**
- * An IAM token's bound, or the one a run token carries for work a token
- * started: one more set, read per check, so it only narrows. Only an IAM
- * token's own claims carry the id that names it.
+ * What a JWT states, by its kind: a login token its user's grant; an OAuth
+ * token that grant capped by its consented scope; an IAM token its issuing
+ * key's terms capped by its bound.
  */
-const boundSets = async (payload: JwtClaims): Promise<LabeledPolicySets> => {
-  const bound = parseBound(payload.bnd);
-  if (!bound) return [];
-  const id = payload.typ === 'iam' ? (payload.jti ?? null) : null;
-  return [
-    {
-      principal: { type: 'iam_token', id },
-      sets: await resolveBoundSets(bound),
-    },
-  ];
-};
-
-/**
- * What a JWT may do. A project-scoped credential is pinned to its project and
- * intersects the owning user's policies with its boundary; a trigger token
- * instead acts under the trigger's own policy sets. Every set but an IAM token
- * bound is the `credential`'s.
- */
-const resolveJwtAuthority = async (args: {
-  payload: JwtClaims;
-  credential: DeniedPrincipal;
-  role: 'admin' | 'user';
-  userPolicyIds: number[];
-  db: Context['db'];
-}): Promise<Authority> => {
-  const { payload, credential, role, userPolicyIds, db } = args;
+const jwtTerms = (args: { payload: JwtClaims }): CredentialTerms => {
+  const { payload } = args;
+  const grant = { holder: 'user' as const, user: payload.publicId };
   if (payload.typ === 'login') {
-    return buildAuthority({
-      reach: {
-        pinned: null,
-        everyProject: role === 'admin',
-        candidatePolicyIds: userPolicyIds,
-      },
-      getSets: async () => {
-        return [
-          {
-            principal: credential,
-            sets: await resolvePolicySets({
-              userRole: role,
-              userPolicyIds,
-              apiKeyPolicyIds: [],
-              db,
-            }),
-          },
-        ];
-      },
-      db,
-    });
+    return {
+      pinned: null,
+      grant,
+      caps: [],
+      principal: { type: 'user', id: payload.publicId },
+    };
   }
-  const scoped = payload.prj;
-  if (payload.typ === 'trigger') {
-    const triggerPublicId = payload.trg;
-    return buildAuthority({
-      reach: { pinned: scoped },
-      getSets: async () => {
-        const sets = await resolveTriggerPolicySets({
-          triggerPublicId,
-          projectPublicId: scoped,
-          caller: payload.clr
-            ? {
-                role,
-                userPolicyIds,
-                apiKeyPublicId: payload.ckey,
-                oauthScope: payload.cscope,
-                bound: parseBound(payload.cbnd) ?? undefined,
-              }
-            : undefined,
-          db,
-        });
-        return [{ principal: credential, sets }];
-      },
-      db,
-    });
+  if (payload.typ === 'oauth') {
+    return {
+      pinned: payload.prj,
+      grant,
+      caps: [{ kind: 'scope', scope: payload.scope ?? null }],
+      principal: { type: 'user', id: payload.publicId },
+    };
   }
-  const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
-    scopedProjectPublicId: scoped,
-    credential:
-      payload.typ === 'oauth'
-        ? { typ: payload.typ, scopeClaim: payload.scope }
-        : { typ: payload.typ, apiKeyPublicId: actingKeyOf(payload) },
-    db,
-  });
-  return buildAuthority({
-    reach: { pinned: scoped },
-    getSets: async () => {
-      const sets = await resolvePolicySets({
-        userRole: role,
-        userPolicyIds,
-        apiKeyPolicyIds: [],
-        boundaryPolicyDocs,
-        db,
-      });
-      return [{ principal: credential, sets }, ...(await boundSets(payload))];
-    },
-    db,
-  });
+  const bound = parseBound(payload.bnd);
+  return {
+    pinned: payload.prj,
+    grant,
+    caps: [
+      { kind: 'key', key: payload.key },
+      ...(bound
+        ? [
+            {
+              kind: 'bound' as const,
+              bound,
+              by: { type: 'iam_token' as const, id: payload.jti ?? null },
+            },
+          ]
+        : []),
+    ],
+    principal: { type: 'api_key', id: payload.key },
+  };
 };
 
-/**
- * The caller one of our own JWTs resolves to, or undefined when it is not a
- * valid token of ours. Also how request-less work evaluates the run-as token
- * it minted, so it is authorized by the same evaluator a request is.
- */
-export const resolveJwtAuthUser = async (args: {
+const resolveJwt = async (args: {
   db: Context['db'];
   token: string;
-}): Promise<Context['authUser']> => {
+}): Promise<Resolved | undefined> => {
   const { db, token } = args;
   const payload = verifyJwtClaims(token);
   if (!payload) return;
@@ -354,72 +217,117 @@ export const resolveJwtAuthUser = async (args: {
   });
 
   if (!user) return;
-  const userId = user.id as number;
-  const role = user.role as 'admin' | 'user';
-  const userPolicyIds = (user.policyIds as number[]) ?? [];
-  const scopedProjectPublicId = payload.prj;
-  const isTriggerToken = payload.typ === 'trigger';
-  const isRunToken = payload.typ === 'run';
-  const runApiKeyPublicId = actingKeyOf(payload);
-
-  const authority = await resolveJwtAuthority({
-    payload,
-    credential: callerPrincipal({
-      publicId: user.publicId as string,
-      apiKeyPublicId: runApiKeyPublicId,
-    }),
-    role,
-    userPolicyIds,
-    db,
-  });
 
   return {
-    id: userId,
-    publicId: user.publicId as string,
-    username: user.username as string,
-    role,
-    ...buildScopedIdentityFields({
-      scopedProjectPublicId,
-      isTriggerToken,
-      isRunToken,
-      runApiKeyPublicId,
-      runWorkPublicId: payload.orn,
-      oauthScope: payload.typ === 'oauth' ? payload.scope : undefined,
-    }),
-    ...boundIdentityFields(payload),
-    ...authority,
+    authUser: {
+      id: user.id as number,
+      publicId: user.publicId as string,
+      username: user.username as string,
+      role: user.role as 'admin' | 'user',
+      ...(payload.prj ? { oauthProjectPublicId: payload.prj } : {}),
+      ...(payload.typ === 'oauth' && payload.scope !== undefined
+        ? { oauthScope: payload.scope }
+        : {}),
+      ...(payload.typ === 'iam' ? { apiKeyPublicId: payload.key } : {}),
+      ...boundIdentityFields(payload),
+      terms: jwtTerms({ payload }),
+    },
+    preloaded: {
+      user: {
+        publicId: user.publicId as string,
+        role: user.role as string,
+        policyIds: user.policyIds,
+      },
+    },
+  };
+};
+
+/** The user stored work's principal names: a key's owner, none for a trigger. */
+const workUser = async (args: {
+  db: Context['db'];
+  principal: WorkAuthority['principal'];
+}): Promise<InstanceType<Context['db']['User']> | null | undefined> => {
+  const { db, principal } = args;
+  if (principal.type === 'trigger') return null;
+  if (principal.type === 'user') {
+    const user = await db.User.findOne({
+      where: { publicId: principal.id },
+      attributes: AUTH_USER_ATTRIBUTES,
+    });
+    return user ?? undefined;
+  }
+  const key = await db.ApiKey.findOne({
+    where: { publicId: principal.id },
+    include: [{ model: db.User, attributes: AUTH_USER_ATTRIBUTES }],
+  });
+  return key?.user ?? undefined;
+};
+
+/**
+ * Stored work's authority as the caller it acts as. Undefined when it no
+ * longer resolves: the user or key its principal names is gone.
+ */
+const resolveWork = async (args: {
+  db: Context['db'];
+  authority: WorkAuthority;
+}): Promise<Resolved | undefined> => {
+  const { authority } = args;
+  const { principal } = authority;
+  const user = await workUser({ db: args.db, principal });
+  if (user === undefined) return;
+  return {
+    authUser: {
+      ...(user
+        ? {
+            id: user.id as number,
+            publicId: user.publicId as string,
+            username: user.username as string,
+            // Under an agent's grant, the user names who started the work only.
+            role:
+              authority.grant.holder === 'agent'
+                ? 'user'
+                : (user.role as 'admin' | 'user'),
+          }
+        : {}),
+      ...(principal.type === 'api_key' ? { apiKeyPublicId: principal.id } : {}),
+      ...(authority.project ? { oauthProjectPublicId: authority.project } : {}),
+      ...(authority.actsFor ? { onBehalfOfPrincipal: authority.actsFor } : {}),
+      work: { trigger: authority.trigger, work: authority.work },
+      terms: workTerms(authority),
+    },
   };
 };
 
 /**
- * The caller an `Authorization: Bearer` value resolves to, outside a request:
- * how a tool call evaluates the principal it runs for.
+ * The caller stored work acts as, evaluated by the same evaluator a request
+ * is; undefined when its authority no longer resolves.
  */
-export const resolveBearerAuthUser = async (args: {
+export const authUserOfWork = async (args: {
+  db: Context['db'];
+  authority: WorkAuthority;
+}): Promise<AuthUser | undefined> => {
+  return withAuthority({
+    resolved: await resolveWork(args),
+    replayed: true,
+    db: args.db,
+  });
+};
+
+const resolveBearer = async (args: {
   db: Context['db'];
   authHeader: string | undefined;
-}): Promise<Context['authUser']> => {
+}): Promise<Resolved | undefined> => {
   if (!args.authHeader?.startsWith('Bearer ')) return;
   const token = args.authHeader.slice(7);
   return token.startsWith(API_KEY_RAW_PREFIX)
-    ? resolveApiKeyAuthUser({ db: args.db, rawKey: token })
-    : resolveJwtAuthUser({ db: args.db, token });
-};
-
-const resolveProjectKey = async (ctx: Context, rawKey: string) => {
-  const authUser = await resolveApiKeyAuthUser({ db: ctx.db, rawKey });
-  if (authUser) ctx.authUser = authUser;
-};
-
-const resolveJwt = async (ctx: Context, token: string) => {
-  const authUser = await resolveJwtAuthUser({ db: ctx.db, token });
-  if (authUser) ctx.authUser = authUser;
+    ? resolveApiKey({ db: args.db, rawKey: token })
+    : resolveJwt({ db: args.db, token });
 };
 
 /**
  * Admits a raw `sk_` key to the MCP endpoint's `verifyToken` gate, or null when
  * it is not a live key. Per-request authorization still runs in
- * `resolveProjectKey` when the tool handler forwards the same bearer to REST.
+ * `resolveApiKey` when the tool handler forwards the same bearer to REST.
  */
 export const verifyApiKeyToken = async (
   token: string
@@ -432,42 +340,25 @@ export const verifyApiKeyToken = async (
   };
 };
 
-/** The caller capped by the `On-Behalf-Of` assertion it sends, if any. */
-const applyOnBehalfOf = (args: {
-  ctx: Context;
-  authUser: AuthUser;
-}): AuthUser => {
-  const { authUser } = args;
-  const projectPublicId = issuingKeyProject(authUser);
-  const asserted = requestOnBehalfOf({
-    headers: args.ctx.headers ?? {},
-    keyProjectPublicId: projectPublicId,
-  });
-  if (!asserted || !projectPublicId) return authUser;
-  return narrowToOnBehalfOf({
-    authUser,
-    asserted,
-    projectPublicId,
-    db: args.ctx.db,
-  });
-};
-
 export const authMiddleware = async (ctx: Context, next: Next) => {
-  const authHeader: string | undefined = ctx.headers?.authorization;
-
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-
-    if (token.startsWith(API_KEY_RAW_PREFIX)) {
-      await resolveProjectKey(ctx, token);
-    } else {
-      await resolveJwt(ctx, token);
-    }
+  const work = attachedWorkAuthority(ctx.req);
+  if (work) {
+    ctx.authUser = await authUserOfWork({ db: ctx.db, authority: work });
+    await next();
+    return;
   }
-
-  if (ctx.authUser) {
-    ctx.authUser = applyOnBehalfOf({ ctx, authUser: ctx.authUser });
-  }
+  const resolved = await resolveBearer({
+    db: ctx.db,
+    authHeader: ctx.headers?.authorization,
+  });
+  ctx.authUser = await withAuthority({
+    resolved: resolved && {
+      ...withOnBehalfOf({ headers: ctx.headers ?? {}, resolved }),
+      preloaded: resolved.preloaded,
+    },
+    replayed: false,
+    db: ctx.db,
+  });
 
   await next();
 };

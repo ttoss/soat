@@ -17,6 +17,7 @@ import { stripMarkdownJsonFence } from './outputSchema';
 import { isPlainObject } from './plainObject';
 import { isStringRecord } from './tags';
 import { callTool } from './tools';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:orchestrations');
 
@@ -154,7 +155,7 @@ export const executeAgentNode = async (args: {
   // The run's project, where the node's turn runs and is recorded.
   projectId: number;
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   // Stamped onto the generation's usage event so spend rolls up per run, per
   // node and per trigger.
   runPublicId?: string;
@@ -171,7 +172,7 @@ export const executeAgentNode = async (args: {
     state,
     projectIds,
     traceId,
-    authHeader,
+    authority,
     runPublicId,
     triggerId,
     nodeAttempt,
@@ -195,7 +196,7 @@ export const executeAgentNode = async (args: {
     agentId,
     messages,
     parentTraceId: traceId,
-    authHeader,
+    authority,
     orchestrationRunId: runPublicId,
     nodeId: node.id,
     nodeAttempt,
@@ -220,7 +221,7 @@ export const executeToolNode = async (args: {
   // The run's own project id — scopes guardrail collection, the call itself and
   // its activity entry to the run's project.
   projectId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   // Run-scoped idempotency key, forwarded to the HTTP tool executor as the
   // `Idempotency-Key` request header (D7).
   idempotencyKey?: string;
@@ -236,7 +237,7 @@ export const executeToolNode = async (args: {
   // reach an `agent` node's generation already has.
   toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, authHeader, idempotencyKey, toolContext } = args;
+  const { node, state, authority, idempotencyKey, toolContext } = args;
   const toolId = requireNodeField(node, 'toolId');
 
   const inputs =
@@ -251,7 +252,7 @@ export const executeToolNode = async (args: {
           node,
           inputs,
           projectId: args.projectId,
-          authHeader,
+          authority,
           orchestrationRunId: args.orchestrationRunId,
         });
   if (gated.kind === 'result') return gated.result;
@@ -264,7 +265,7 @@ export const executeToolNode = async (args: {
     id: toolId,
     action: node.operationId,
     input: gated.input,
-    authHeader,
+    authority,
     idempotencyKey,
     toolContext,
     attribution: {

@@ -16,13 +16,20 @@ export type PolicyAttachCheck = 'writer_holds_grants' | 'bounded_by_owner';
 
 /**
  * A carrier naming policies by public id acts under them, so a policy it names
- * cannot be deleted. `table` holds its jsonb `policy_ids`; `noun` and `meta`
- * name it in the refusal.
+ * cannot be deleted. `table` holds its `policy_ids`, a jsonb list or a
+ * `varchar[]` (`column`); `noun` and `meta` name it in the refusal.
  */
 type PolicyDependents = {
   table: string;
+  column: 'jsonb' | 'array';
   noun: string;
   meta: { count: string; sample: string };
+};
+
+const namingPolicy = (column: PolicyDependents['column']): string => {
+  return column === 'jsonb'
+    ? 'policy_ids @> :ids::jsonb'
+    : ':id = ANY(policy_ids)';
 };
 
 export type PolicyCarrier = {
@@ -59,7 +66,12 @@ const projectJsonbCarrier = (args: {
   return {
     models: [args.model],
     attach: 'writer_holds_grants',
-    dependents: { table: args.table, noun: args.noun, meta: args.meta },
+    dependents: {
+      table: args.table,
+      column: 'jsonb',
+      noun: args.noun,
+      meta: args.meta,
+    },
     actsIn: (policy) => {
       return publicIdsOf({
         sql: `SELECT DISTINCT p.public_id
@@ -83,6 +95,7 @@ export const POLICY_CARRIERS = {
     attach: 'writer_holds_grants',
     dependents: {
       table: 'agents',
+      column: 'jsonb',
       noun: 'agent',
       meta: { count: 'agents', sample: 'agent_sample' },
     },
@@ -115,25 +128,37 @@ export const POLICY_CARRIERS = {
   apiKeys: {
     models: ['ApiKey'],
     attach: 'bounded_by_owner',
+    dependents: {
+      table: 'api_keys',
+      column: 'array',
+      noun: 'API key',
+      meta: { count: 'api_keys', sample: 'api_key_sample' },
+    },
     actsIn: (policy) => {
       return publicIdsOf({
         sql: `SELECT DISTINCT COALESCE(p.public_id, :every) AS public_id
                 FROM api_keys k
                 LEFT JOIN projects p ON p.id = k.project_id
                WHERE :id = ANY(k.policy_ids)`,
-        replacements: { id: policy.id, every: EVERY_PROJECT },
+        replacements: { id: policy.publicId, every: EVERY_PROJECT },
       });
     },
   },
   users: {
     models: ['User'],
     attach: 'writer_holds_grants',
+    dependents: {
+      table: 'users',
+      column: 'array',
+      noun: 'user',
+      meta: { count: 'users', sample: 'user_sample' },
+    },
     actsIn: (policy) => {
       return publicIdsOf({
         sql: `SELECT DISTINCT :every AS public_id
                 FROM users u
                WHERE :id = ANY(u.policy_ids)`,
-        replacements: { id: policy.id, every: EVERY_PROJECT },
+        replacements: { id: policy.publicId, every: EVERY_PROJECT },
       });
     },
   },
@@ -152,11 +177,14 @@ export const findPolicyDependents = async (args: {
   limit: number;
 }): Promise<PolicyDependentCount[]> => {
   const carriers: PolicyCarrier[] = Object.values(POLICY_CARRIERS);
-  const replacements = { ids: JSON.stringify([args.policyPublicId]) };
+  const replacements = {
+    id: args.policyPublicId,
+    ids: JSON.stringify([args.policyPublicId]),
+  };
   return Promise.all(
     carriers.flatMap(({ dependents }) => {
       if (!dependents) return [];
-      const where = `FROM ${dependents.table} WHERE policy_ids @> :ids::jsonb`;
+      const where = `FROM ${dependents.table} WHERE ${namingPolicy(dependents.column)}`;
       return [
         (async () => {
           const [sample, [rows]] = await Promise.all([

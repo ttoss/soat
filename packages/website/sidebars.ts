@@ -244,7 +244,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Governance & Safety',
       items: [
-        'tutorials/agent-boundary-policy',
+        'tutorials/agent-policies',
         'tutorials/tag-based-access-control',
         'tutorials/build-an-agent-harness',
         'tutorials/gate-a-tool-with-guardrails',

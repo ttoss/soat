@@ -45,7 +45,7 @@ export const listToolActions = async (
       toolId: tool.publicId,
       workId: null,
       attribution: {},
-      sender: { caller: args.caller, authHeader: undefined },
+      sender: { caller: args.caller, authority: null },
     },
     contextKeys: tool.contextKeys,
   });

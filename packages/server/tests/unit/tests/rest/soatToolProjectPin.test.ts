@@ -1,8 +1,14 @@
 import type { Tool } from 'ai';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
+import type { WorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, loginAs } from '../../testClient';
+import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
+import {
+  authenticatedTestClient,
+  loginAs,
+  workAuthorityOfToken,
+} from '../../testClient';
 
 // A protocol test reads the call, not its meter: no project, so the
 // recorder's write is refused and swallowed.
@@ -11,7 +17,7 @@ const UNMETERED = {
   toolId: null,
   workId: null,
   attribution: {},
-  sender: { authHeader: undefined },
+  sender: { authority: ORPHAN_AUTHORITY },
 };
 
 /**
@@ -27,6 +33,7 @@ const UNMETERED = {
  */
 describe("a builtin tool acts on the generation's project", () => {
   let adminToken: string;
+  let adminAuthority: WorkAuthority;
   let projectId: string;
   let otherProjectId: string;
   let agentInProject: string;
@@ -40,12 +47,12 @@ describe("a builtin tool acts on the generation's project", () => {
         description: null,
         actions: ['list-agents'],
       },
-      authHeader: `Bearer ${adminToken}`,
+      authority: adminAuthority,
       projectPublicId,
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByBoundary: () => {
+      isSoatActionAllowedByAgentPolicy: () => {
         return true;
       },
       logToolCallingError: () => {},
@@ -71,6 +78,10 @@ describe("a builtin tool acts on the generation's project", () => {
       createOtherProject: true,
     });
     adminToken = setup.adminToken;
+    adminAuthority = await workAuthorityOfToken({
+      token: adminToken,
+      project: null,
+    });
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId as string;
     await loginAs('pinprojadmin', 'supersecret');
@@ -149,12 +160,12 @@ describe("a builtin tool acts on the generation's project", () => {
         actions: ['list-agents'],
         presetParameters: { project_id: otherProjectId },
       },
-      authHeader: `Bearer ${adminToken}`,
+      authority: adminAuthority,
       projectPublicId: projectId,
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByBoundary: () => {
+      isSoatActionAllowedByAgentPolicy: () => {
         return true;
       },
       logToolCallingError: () => {},

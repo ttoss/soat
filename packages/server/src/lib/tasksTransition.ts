@@ -4,8 +4,6 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
-import { readStoredRunPrincipal } from './orchestrationRunToken';
-import type { StartingPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
 import {
@@ -20,6 +18,7 @@ import {
   type TaskPrincipal,
 } from './tasks';
 import { parkTransitionForApproval } from './tasksApprovalGate';
+import { resolveDispatchAuthority } from './tasksDispatchAuthority';
 import { assertTransitionAllowed } from './tasksTransitionCheck';
 import {
   findTransitionClaim,
@@ -27,6 +26,11 @@ import {
 } from './tasksTransitionIdempotency';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContextUpdate } from './toolContextCarrier';
+import {
+  parseWorkAuthority,
+  storedAuthority,
+  type WorkAuthority,
+} from './workAuthority';
 import type { WorkflowState, WorkflowTransition } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
@@ -101,18 +105,17 @@ type TransitionArgs = {
   /** The tool a `tool` dispatch called — that kind's only recorded cause. */
   toolId?: string | null;
   /**
-   * True when the caller authenticated with a run-as token (`ctx.authUser
-   * .isRunToken`). Such a move is a dispatch's own `soat` tool acting as the
-   * principal that started the chain — machinery continuing the work, not a
-   * person directing it — even though it names a user or an API key on the wire.
-   * Without this the composed cycle is invisible here; see `isChainHop`.
+   * True when stored work made the request (`ctx.authUser.work`). Such a move
+   * is a dispatch's own `soat` tool continuing the chain — machinery, not a
+   * person directing it — even though it names a user or an API key. Without
+   * this the composed cycle is invisible here; see `isChainHop`.
    */
-  viaRunToken?: boolean;
+  viaWork?: boolean;
   /**
-   * The identity a `user` or `api_key` move's dispatch runs as, by
-   * `resolveStartingPrincipal`'s rule. Absent, that dispatch runs as nobody.
+   * The authority a `user`, `api_key` or `trigger` move's dispatches run
+   * under, which the task stores in place of the one it holds.
    */
-  startingPrincipal?: StartingPrincipal | null;
+  authority?: WorkAuthority | null;
   /**
    * Caller context for the dispatches the task makes from here on.
    *
@@ -151,17 +154,17 @@ const chainLimit = (): number => {
 /**
  * Whether this move continues a machine-driven chain rather than starting one.
  * Two shapes qualify, because the bounded loop can close through either: an
- * `automation` principal (the engine routing a dispatch outcome), and a
- * run-as token (the dispatched run calling `transition-task` with the
- * credential it was minted, which authenticates as the user who started the
- * chain and is otherwise indistinguishable from a person clicking a button).
+ * `automation` principal (the engine routing a dispatch outcome), and a call
+ * stored work makes (the dispatched run calling `transition-task` under its
+ * authority, which names the user who started the chain and is otherwise
+ * indistinguishable from a person clicking a button).
  *
  * Everything else — a human, a plain API key, an approval resolution — is an
  * outside intervention and resets the chain. `approval` in particular is the
  * clearest evidence there is that the task is not spinning unattended.
  */
 const isChainHop = (args: TransitionArgs): boolean => {
-  return args.principal.kind === 'automation' || args.viaRunToken === true;
+  return args.principal.kind === 'automation' || args.viaWork === true;
 };
 
 /**
@@ -281,6 +284,8 @@ const performTransitionTxn = async (args: {
    * than a throw from inside the locked transaction.
    */
   toolContext: Record<string, string> | null | undefined;
+  /** The stored authority the task's next dispatches run under. */
+  authority: object | null;
 }): Promise<
   | { replayed: true }
   | {
@@ -341,6 +346,7 @@ const performTransitionTxn = async (args: {
     } else if (args.toolContext !== undefined) {
       task.toolContext = args.toolContext;
     }
+    task.authority = closed ? null : args.authority;
     task.stallDeadlineAt =
       closed || !toStateDef
         ? null
@@ -362,34 +368,6 @@ const performTransitionTxn = async (args: {
       closed,
     };
   });
-};
-
-/**
- * The identity the *next* state's automation runs as.
- *
- * A human or API-key move names its `startingPrincipal`, which an OAuth or
- * trigger credential leaves empty. An `automation` move names nobody — its
- * cause is the generation or run recorded alongside it — so the identity is
- * inherited from the run that routed the task here, which is what keeps a chain
- * acting as the user who fired the first transition rather than decaying to no
- * principal at the second state.
- *
- * `approval` is deliberately not mapped: an approver resolving a gate is not
- * lending their credential to the work the next state does.
- */
-const resolveDispatchPrincipal = async (
-  args: TransitionArgs
-): Promise<StartingPrincipal | undefined> => {
-  const { kind } = args.principal;
-  if (kind === 'user' || kind === 'api_key') {
-    return args.startingPrincipal ?? undefined;
-  }
-  if (!args.orchestrationRunId) return undefined;
-  const run = await db.OrchestrationRun.findOne({
-    where: { publicId: args.orchestrationRunId },
-    attributes: ['principalKind', 'principalId', 'principalBound'],
-  });
-  return readStoredRunPrincipal(run) ?? undefined;
 };
 
 const currentTask = async (id: string) => {
@@ -447,6 +425,10 @@ const applyTransition = async (input: {
     states,
     payloadSchema,
     toolContext,
+    authority: await storedAuthority({
+      authority: await resolveDispatchAuthority({ args, task: loaded }),
+      projectId,
+    }),
   });
   if (result.replayed) return currentTask(args.id);
 
@@ -474,7 +456,7 @@ const applyTransition = async (input: {
       taskPublicId: args.id,
       projectId,
       state: toStateDef,
-      principal: await resolveDispatchPrincipal(args),
+      authority: parseWorkAuthority(updated!.authority),
     });
   }
 

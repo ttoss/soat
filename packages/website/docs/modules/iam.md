@@ -31,7 +31,7 @@ Every token the server signs states its kind, and each endpoint accepts only its
 
 ### JWT (Users)
 
-[`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password returns a signed JWT carrying the user's public ID and role. Admins bypass policy evaluation; regular users are authorized by their attached [policies](./policies.md).
+[`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password returns a signed JWT carrying the user's public ID and role. An admin holds the unrestricted grant; a regular user holds its attached [policies](./policies.md) (see [Grant and caps](#grant-and-caps)).
 
 ### API Keys
 
@@ -59,7 +59,7 @@ It answers `201 { "token", "expires_at" }`.
 - `ttl_seconds` runs from 30 to 900 (default 300). An expired token is `401`.
 - Every request is checked against the key's grant **as it stands at that request** ∩ the bound: an `Allow` beyond the key grants nothing, and a permission removed from the key, or the key deleted, leaves every live token too.
 - Work the token starts keeps the bound after the token expires: a generation (its tool calls, approvals and `tool-outputs` continuations), a session turn, a task dispatch, an orchestration run, a playbook version and a manual trigger fire. `policy_ids` are re-read by id; an inline `policy` is kept as a snapshot.
-- Only an API key scoped to a project issues one. A user login, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 API_KEY_SCOPED_TOKEN`).
+- Only an API key scoped to a project issues one. A user login, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 CREDENTIAL_NARROWED`).
 - Records name the issuing key as the principal; `principal` is opaque, grants nothing, and is recorded with the token's `jti` under `detail.iam_token` on every [audit log](./audit-log.md) entry the token makes.
 - An `mcp` tool called on the token carries the bound and `principal` encrypted in its [assertion](./tools.md#tool-assertions); a tool server calling back with that assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) is capped by them, and its audit entries record `principal` under `detail.on_behalf_of_principal`.
 - A request on the token may itself carry [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a call made in the token's project: it is held to the token's bound ∩ the assertion's authority, and so is work it starts.
@@ -212,12 +212,12 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 
 A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, API key, orchestration, share, decider, eval, guardrail, ingestion rule, memory rule or playbook version is checked against the resource as the write leaves it, whichever fields the request names:
 
-| The resource | The writer must hold | Refusal |
-| --- | --- | --- |
-| carries `policy_ids` | every grant of each policy, where the resource acts (an API key is instead capped by its owner, see [API keys](./api-keys.md)) | `403 POLICY_GRANT_NOT_HELD` |
-| starts a target | the target's start action: `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask`, `orchestrations:StartRun`, `evaluations:RunEval` | `403 ACTION_NOT_HELD` |
-| grants a shared action | that action on the shared resource | `403 ACTION_NOT_HELD` |
-| sends a secret | `secrets:UseSecret` on it | `403 FORBIDDEN` |
+| The resource           | The writer must hold                                                                                                                                                         | Refusal                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| carries `policy_ids`   | every grant of each policy, where the resource acts (an API key is instead capped by its owner, see [API keys](./api-keys.md))                                               | `403 POLICY_GRANT_NOT_HELD` |
+| starts a target        | the target's start action: `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask`, `orchestrations:StartRun`, `evaluations:RunEval` | `403 ACTION_NOT_HELD`       |
+| grants a shared action | that action on the shared resource                                                                                                                                           | `403 ACTION_NOT_HELD`       |
+| sends a secret         | `secrets:UseSecret` on it                                                                                                                                                    | `403 FORBIDDEN`             |
 
 A version restore or a release is an edit. A deployment storing a resource of its own that starts runtime work, such as a channel that runs an agent, asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), which takes these actions, and any other built-in action the resource will perform, on their resource type (`srn:<project_id>:agent:<id>`, `srn:<project_id>:secret:<id>`).
 
@@ -277,18 +277,31 @@ Anywhere else, or in a generation with no actor, the variable is **unbound**, an
 
 Authorization is **policy-only**: every decision is evaluated against the requested action and target SRN.
 
+### Grant and caps
+
+A request's authority is its **grant** ∩ every **cap**, inside the project its credential is pinned to:
+
+| Term                                                                                         | Absent                                                              | Held                                |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| Grant: the user's policies (a trigger's `policy_ids` for its firing)                         | Allows nothing: a user with no policy reads and lists nothing       | `admin` holds an unrestricted grant |
+| Cap: a key's `policy_ids`, an OAuth scope, an IAM token's bound, an `On-Behalf-Of` assertion | Narrows nothing: a key with no `policy_ids` holds its owner's grant | Each must also allow the request    |
+
+An **unrestricted** credential holds the unrestricted grant with no cap and no pin: a login token, or an `admin`'s key with no `project_id` and no `policy_ids`. Only it lists every project unfiltered, passes the instance-wide admin gates and manages other users' keys.
+
+A request narrowed beyond its key's own `policy_ids` (any token, or `On-Behalf-Of`) creates no API key, and only a credential no cap narrows consents to an OAuth client: `403 CREDENTIAL_NARROWED`. A credential never outlives the narrowing it was made under.
+
 ### Policy Resolution by Caller Type
 
 | Caller type                 | Policies used                                                                             |
 | --------------------------- | ----------------------------------------------------------------------------------------- |
-| **Admin (JWT)**             | Bypassed — admins have unrestricted access to all resources                               |
+| **Admin (JWT)**             | The unrestricted grant: every action on every resource                                    |
 | **Regular user (JWT)**      | All policies attached to the user (via `User.policyIds`)                                  |
 | **API key (no policies)**   | Inherits the owning user's policies, hard-locked to the key's project                     |
 | **API key (with policies)** | Intersection of user policies and key policies — both must allow the action               |
 | **OAuth token**             | Intersection of user policies and the consented scope, hard-locked to the token's project |
 | **IAM token**               | Its issuing key's policies ∩ the token's bound, hard-locked to the key's project          |
 
-Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope, never the scope binding, and passes the instance-wide admin gates (users, policies, project creation, the price book) only through a credential with no project and no policies, so a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource there addressed by id is `404`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
+Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin is the grant, which a credential's pin and caps narrow, and passes the instance-wide admin gates (users, policies, project creation, the price book) only through a credential with no project and no policies, so a resource write naming another project returns `403 API_KEY_PROJECT_SCOPE`, and a resource there addressed by id is `404`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
 
 ### Why Intersection Semantics Matter
 
@@ -298,7 +311,7 @@ A key with policies, or an OAuth token with a consented scope, **never exceeds i
 
 | Scenario                                                            | Result  | Reason                                   |
 | ------------------------------------------------------------------- | ------- | ---------------------------------------- |
-| Admin accessing any resource                                        | Allowed | Admins bypass policy evaluation          |
+| Admin accessing any resource                                        | Allowed | The unrestricted grant allows it         |
 | User with `resource: ["srn:proj_A:*:*"]` accessing proj_A           | Allowed | Policy covers the SRN                    |
 | User with `resource: ["srn:proj_A:*:*"]` accessing proj_B           | Denied  | Policy does not cover proj_B SRN         |
 | API key scoped to proj_A, accessing proj_B                          | Denied  | Key is hard-locked to proj_A             |

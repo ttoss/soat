@@ -1,5 +1,6 @@
 import { jsonSchema, type Tool, tool } from 'ai';
-import { mergeBindingTools } from 'src/lib/agentToolNames';
+import type { ResolverGuardrailContext } from 'src/lib/agentToolGuardrail';
+import { gateAndMergeBindings, type ToolBinding } from 'src/lib/agentToolNames';
 
 // The entry-point case (two bindings, one action) is pinned in
 // `rest/agentExternalTools.test.ts`; these are the naming edges.
@@ -11,13 +12,45 @@ const stub = (): Tool => {
   });
 };
 
-describe('mergeBindingTools', () => {
+// No guardrail applies, so the gate passes each tool through and only naming
+// is under test.
+const guardrail: ResolverGuardrailContext = {
+  agentId: null,
+  generationId: null,
+  projectId: 1,
+  projectPublicId: 'proj_test',
+  authority: null,
+  callerContext: {},
+  baseGuardrails: [],
+};
+
+const binding = (
+  bindingName: string,
+  tools: Record<string, Tool>
+): ToolBinding => {
+  return {
+    bindingName,
+    tools,
+    gate: {
+      toolId: null,
+      toolType: 'http',
+      toolName: bindingName,
+      toolGuardrails: [],
+    },
+  };
+};
+
+const mergeBindingTools = (args: { bindings: ToolBinding[] }) => {
+  return gateAndMergeBindings({ bindings: args.bindings, guardrail });
+};
+
+describe('gateAndMergeBindings naming', () => {
   test('a key one binding resolves keeps its name', () => {
     const only = stub();
 
     expect(
       mergeBindingTools({
-        bindings: [{ bindingName: 'a', tools: { x: only } }],
+        bindings: [binding('a', { x: only })],
       })
     ).toEqual({ x: only });
   });
@@ -27,10 +60,7 @@ describe('mergeBindingTools', () => {
     const fromB = stub();
 
     const merged = mergeBindingTools({
-      bindings: [
-        { bindingName: 'a', tools: { x: fromA } },
-        { bindingName: 'b', tools: { x: fromB } },
-      ],
+      bindings: [binding('a', { x: fromA }), binding('b', { x: fromB })],
     });
 
     expect(merged).toEqual({ a_x: fromA, b_x: fromB });
@@ -43,9 +73,9 @@ describe('mergeBindingTools', () => {
 
     const merged = mergeBindingTools({
       bindings: [
-        { bindingName: 'other', tools: { a_x: plain } },
-        { bindingName: 'a', tools: { x: fromA } },
-        { bindingName: 'a', tools: { x: fromSameName } },
+        binding('other', { a_x: plain }),
+        binding('a', { x: fromA }),
+        binding('a', { x: fromSameName }),
       ],
     });
 

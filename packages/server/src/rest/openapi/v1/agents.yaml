@@ -1145,8 +1145,20 @@ components:
           items:
             type: string
           description: >-
-            Policies capping every generation: it runs as the caller's
-            permissions intersected with these. Null is no cap.
+            Under `run_as: caller`, the policies capping the caller's
+            permissions on every generation; null is no cap. Under `run_as:
+            agent`, the agent's own grant.
+        run_as:
+          type: string
+          enum:
+            - caller
+            - agent
+          description: >-
+            What `policy_ids` are. `caller`: a turn runs as the caller's
+            permissions intersected with `policy_ids`. `agent`: a turn runs as
+            `policy_ids` alone, and the caller needs only
+            `agents:CreateAgentGeneration` on the agent. See
+            [Execution Identity](/docs/modules/agents#execution-identity).
         temperature:
           type: number
           nullable: true
@@ -1624,11 +1636,21 @@ components:
           items:
             type: string
           description: >-
-            Policies capping every generation: it runs as the caller's
-            permissions intersected with these. The caller must hold every
-            grant they carry inside the agent's project, else `403
-            POLICY_GRANT_NOT_HELD`. See
+            Under `run_as: caller`, the policies capping the caller's
+            permissions on every generation; under `run_as: agent`, the
+            agent's own grant. The caller must hold every grant they carry
+            inside the agent's project, else `403 POLICY_GRANT_NOT_HELD`. See
             [Execution Identity](/docs/modules/agents#execution-identity).
+        run_as:
+          type: string
+          enum:
+            - caller
+            - agent
+          description: >-
+            What `policy_ids` are: `caller` (default) caps the caller, `agent`
+            makes them the agent's own grant. `agent` requires a non-empty
+            `policy_ids`, else `400 AGENT_RUN_AS_REQUIRES_POLICIES`.
+          default: caller
         temperature:
           description: >-
             Sampling temperature passed to the model. Omitted, the provider's
@@ -1902,10 +1924,19 @@ components:
           items:
             type: string
           description: >-
-            Replaces the policies capping every generation; `null` removes the
-            cap. The caller must hold every grant of each policy it adds inside
-            the agent's project, else `403 POLICY_GRANT_NOT_HELD`. See
+            Replaces `policy_ids`; `null` removes them. The caller must hold
+            every grant of each policy it adds inside the agent's project, else
+            `403 POLICY_GRANT_NOT_HELD`. See
             [Execution Identity](/docs/modules/agents#execution-identity).
+        run_as:
+          type: string
+          enum:
+            - caller
+            - agent
+          description: >-
+            Replaces what `policy_ids` are: `caller` caps the caller, `agent`
+            makes them the agent's own grant. An agent left `run_as: agent` with
+            no `policy_ids` is `400 AGENT_RUN_AS_REQUIRES_POLICIES`.
         temperature:
           description: >-
             Sampling temperature passed to the model; `null` restores the

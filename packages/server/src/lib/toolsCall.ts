@@ -1,9 +1,8 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import type { SenderCredential } from './assertionSender';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
-import { readRunTokenWork } from './orchestrationRunToken';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { admitSharedCall } from './shareCaps';
@@ -31,6 +30,7 @@ import {
   type ToolExecutionMeter,
   withReleasingGuardrails,
 } from './usageToolRecording';
+import { type WorkAuthority, workOf } from './workAuthority';
 
 // ── Shared Tool Definition Types ─────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ const adjudicate = async (gateArgs: {
     toolGuardrailIds?: string[] | null;
     action?: string;
     input?: Record<string, unknown>;
-    authHeader?: string;
+    authority: WorkAuthority | null;
   };
   presetParameters: Record<string, unknown> | null;
 }): Promise<{ input: Record<string, unknown>; guardrailIds: string[] }> => {
@@ -134,7 +134,7 @@ const adjudicate = async (gateArgs: {
     input: args.input ?? {},
     presetParameters,
     projectId: args.callerProjectId,
-    authHeader: args.authHeader,
+    authority: args.authority,
   });
 };
 
@@ -189,7 +189,7 @@ type CallResolvedToolArgs = {
   toolGuardrailIds?: string[] | null;
   action?: string;
   input?: Record<string, unknown>;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   remainingDepth?: number;
   idempotencyKey?: string;
   // The caller's `tool_context` — an orchestration run's bag on a `tool`/`poll`
@@ -203,7 +203,7 @@ type CallResolvedToolArgs = {
    * The `policy_ids` of the agent whose call this is. Every `builtin`
    * action the call reaches is held to it, a pipeline's steps included.
    */
-  boundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   /** The request's resolved credential, when the call is made in one. */
   caller?: SenderCredential;
 };
@@ -226,10 +226,10 @@ const callPipelineStep = (args: {
   const shared = {
     action: step.action,
     input: step.input,
-    authHeader: pipeline.authHeader,
+    authority: pipeline.authority,
     remainingDepth: step.remainingDepth,
     toolContext: pipeline.toolContext,
-    boundary: pipeline.boundary,
+    agentAuthority: pipeline.agentAuthority,
     caller: pipeline.caller,
     attribution,
   };
@@ -317,12 +317,12 @@ const meterOf = (args: CallResolvedToolArgs): ToolExecutionMeter => {
     projectId: args.toolProjectId,
     callerProjectId: args.callerProjectId,
     toolId: args.toolPublicId ?? null,
-    workId: readRunTokenWork(args.authHeader),
+    workId: workOf(args.authority),
     attribution: args.attribution,
     sender: {
       caller: args.caller,
-      authHeader: args.authHeader,
-      boundaryPolicy: args.boundary?.policy,
+      authority: args.authority,
+      agentPolicy: args.agentAuthority?.policy,
     },
   };
 };

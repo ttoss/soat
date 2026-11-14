@@ -150,19 +150,10 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare triggerId: string | null;
 
-  // A run outlives the request that created it, so it cannot borrow that
-  // request's credential when a background worker drives it later — the
-  // identity belongs to the run. Null for a path with no principal to name,
-  // whose `soat` tool nodes then fail 401 rather than acting as nobody.
-  @Column({ type: DataType.STRING(16), allowNull: true })
-  declare principalKind: string | null;
-
-  @Column({ type: DataType.STRING(32), allowNull: true })
-  declare principalId: string | null;
-
-  // The IAM token bound the principal started the run under, or null.
+  // The authority the work runs under (`lib/workAuthority.ts`); null when it
+  // has none, and such work is refused.
   @Column({ type: DataType.JSON, allowNull: true })
-  declare principalBound: object | null;
+  declare authority: object | null;
 
   // Set only while `sleeping`: the scheduler wakes runs whose `wakeAt` is due
   // and continues them from `wakeContext`.

@@ -22,6 +22,7 @@ import {
   type StoredError,
   toStoredError,
 } from './storedError';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:orchestrations');
 
@@ -236,7 +237,7 @@ type ExecutionContext = {
   state: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   pollAttempt?: number;
   nodeType: string | null;
   attempt: number;
@@ -268,7 +269,7 @@ const runNodeAndRecord = async (
     // carries the same context without having to thread it.
     toolContext: ctx.runRecord.toolContext ?? undefined,
     traceId: ctx.traceId,
-    authHeader: ctx.authHeader,
+    authority: ctx.authority,
     pollAttempt: ctx.pollAttempt,
     // The attempt this execution is recorded under, so an agent node's
     // generation carries the run + node + attempt triple that identifies it.
@@ -311,7 +312,7 @@ export const executeAndRecordNode = async (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   pollAttempt?: number;
   retryAttempt?: number;
 }): Promise<NodeOutcome> => {
@@ -328,7 +329,7 @@ export const executeAndRecordNode = async (args: {
     state,
     projectIds: args.projectIds,
     traceId: args.traceId,
-    authHeader: args.authHeader,
+    authority: args.authority,
     pollAttempt: args.pollAttempt,
     nodeType,
     attempt,

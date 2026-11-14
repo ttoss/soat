@@ -1,6 +1,5 @@
 import createDebug from 'debug';
 
-import type { StartingPrincipal } from './principals';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
@@ -17,6 +16,7 @@ import {
   runDispatch,
 } from './tasksDispatch';
 import { isTaskPaused, markDispatchPaused } from './tasksPause';
+import type { WorkAuthority } from './workAuthority';
 import type { RetryPolicy, WorkflowDispatch } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
@@ -157,7 +157,7 @@ type AttemptContext = {
   /** The `{task}` context `inputs` was resolved from; see `runDispatch`. */
   taskContext: Record<string, unknown>;
   retry: RetryPolicy | null;
-  principal?: StartingPrincipal;
+  authority: WorkAuthority | null;
   /**
    * The task's caller context, read off the task row by
    * `runStateAutomation` rather than threaded down from the transition that
@@ -197,7 +197,7 @@ const runOneAttempt = async (args: {
     taskPublicId: ctx.taskPublicId,
     inputs: ctx.inputs,
     taskContext: ctx.taskContext,
-    principal: ctx.principal,
+    authority: ctx.authority,
     toolContext: ctx.toolContext,
     onDispatchStarted: async ({ generationId, orchestrationRunId }) => {
       await writeAttemptState({

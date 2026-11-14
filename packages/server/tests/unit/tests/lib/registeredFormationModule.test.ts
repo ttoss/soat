@@ -2,7 +2,6 @@ import { db } from 'src/db';
 import { buildRegisteredFormationModule } from 'src/lib/formation-modules/registeredFormationModule';
 import { registerFormationResourceTypes } from 'src/lib/formationsRegistry';
 import type { FormationActor } from 'src/lib/formationsTypes';
-import { resolveStartingPrincipal } from 'src/lib/orchestrationRunToken';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
@@ -38,9 +37,7 @@ beforeAll(async () => {
   actor = {
     userId: user!.id as number,
     author: { principalType: 'user', principalId: setup.userId },
-    principal: resolveStartingPrincipal({
-      authUser: { publicId: setup.userId },
-    }),
+    principal: { principalType: 'user', principalId: setup.userId },
     isAllowed: async () => {
       return true;
     },
@@ -48,7 +45,7 @@ beforeAll(async () => {
       return [];
     },
     keyPolicyBoundary: undefined,
-    scopedToken: false,
+    narrowed: false,
     recordRefusal: () => {},
   };
 });

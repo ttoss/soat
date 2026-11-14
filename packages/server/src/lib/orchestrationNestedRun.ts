@@ -1,3 +1,4 @@
+import type { WorkAuthority } from './workAuthority';
 /**
  * The seam a `loop` or `sub_orchestration` node uses to start a child run.
  *
@@ -37,7 +38,7 @@ export type NestedRunStarter = (args: {
   orchestrationPublicId: string;
   projectIds: number[];
   input: Record<string, unknown>;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   // The parent run's `tool_context`, inherited by the child so an agent several
   // levels down still calls its tools with the caller's context.
   toolContext?: Record<string, string>;

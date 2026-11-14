@@ -2,17 +2,15 @@ import crypto from 'node:crypto';
 
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
-import {
-  buildRunAuthHeader,
-  readStoredStartingPrincipal,
-} from 'src/lib/orchestrationRunToken';
+import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { signToken } from 'src/lib/signedTokens';
+import { parseWorkAuthority } from 'src/lib/workAuthority';
 
 import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, workRequest } from '../../testClient';
 
 /**
  * An IAM token carries `On-Behalf-Of` when the key that issued it is scoped to
@@ -165,7 +163,7 @@ describe('On-Behalf-Of on an IAM token', () => {
   });
 
   describe('work the token starts', () => {
-    /** A run credential re-minted for a generation `token` starts. */
+    /** Reads the document as the work a generation `token` starts. */
     const remintedFor = async (args: { token: string; assertion: string }) => {
       const res = await authenticatedTestClient(args.token)
         .post(`/api/v1/agents/${agentId}/generate?wait=true`)
@@ -176,16 +174,11 @@ describe('On-Behalf-Of on an IAM token', () => {
         where: { publicId: res.body.id },
       });
       expect(gen!.actedAsPrincipalId).toBe(projectKeyId);
-      const header = await buildRunAuthHeader({
-        principal: readStoredStartingPrincipal({
-          kind: gen!.actedAsPrincipalType,
-          id: gen!.actedAsPrincipalId,
-          bound: gen!.actedAsPrincipalBound,
-        }),
-        projectId: gen!.projectId as number,
-        workPublicId: res.body.id,
+      return workRequest({
+        authority: parseWorkAuthority(gen!.authority)!,
+        method: 'get',
+        path: `/api/v1/documents/${documentId}`,
       });
-      return header!.slice('Bearer '.length);
     };
 
     test('is held to the bound and the assertion together', async () => {
@@ -208,9 +201,79 @@ describe('On-Behalf-Of on an IAM token', () => {
         assertion: narrow,
       });
 
-      expect((await readDocument(both)).status).toBe(200);
-      expect((await readDocument(boundDenies)).status).toBe(403);
-      expect((await readDocument(assertionDenies)).status).toBe(403);
+      expect(both.status).toBe(200);
+      expect(boundDenies.status).toBe(403);
+      expect(assertionDenies.status).toBe(403);
+    });
+  });
+
+  describe('a playbook version the token writes', () => {
+    const PLAYBOOK_ACTIONS = ['playbooks:CreatePlaybook', 'tools:CallTool'];
+
+    test('runs its executor held to the bound and the assertion together', async () => {
+      const assertion = await assertionOf(projectKey);
+      const playbook = await authenticatedTestClient(
+        await tokenFor(PLAYBOOK_ACTIONS)
+      )
+        .post('/api/v1/playbooks')
+        .set(HEADER, assertion)
+        .send({
+          project_id: turn.projectId,
+          name: turn.unique('playbook'),
+          definition: {
+            nodes: [
+              {
+                id: 'call',
+                title: 'Call',
+                kind: 'execute',
+                inputs: [
+                  {
+                    name: 'go',
+                    schema: { type: 'boolean' },
+                    required: true,
+                    source: 'manual',
+                  },
+                ],
+                executor: { type: 'tool', id: toolId, operation_id: 'echo' },
+              },
+            ],
+          },
+        });
+      expect(playbook.status).toBe(201);
+      const created = await turn
+        .api()
+        .post(`/api/v1/playbooks/${playbook.body.id}/cases`)
+        .send({ subject: 'obo' });
+      expect(created.status).toBe(201);
+      const written = await turn
+        .api()
+        .post(`/api/v1/playbook-cases/${created.body.id}/inputs`)
+        .send({
+          inputs: [
+            {
+              node_id: 'call',
+              name: 'go',
+              value: true,
+              expected_revision: null,
+            },
+          ],
+        });
+      expect(written.status).toBe(200);
+      await flushPlaybookExecutions();
+
+      const executions = await turn
+        .api()
+        .get(`/api/v1/playbook-cases/${created.body.id}/executions`);
+      expect(executions.body.data[0].status).toBe('completed');
+      const version = await db.PlaybookVersion.findOne({
+        where: { principalId: projectKeyId },
+      });
+      expect(version!.principalBound).toMatchObject({
+        all: [
+          { policy: expect.any(Object) },
+          { policy_sets: expect.any(Array) },
+        ],
+      });
     });
   });
 

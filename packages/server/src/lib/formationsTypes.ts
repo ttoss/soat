@@ -2,7 +2,8 @@ import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { SenderCredential } from './assertionSender';
 import type { DeniedPrincipal } from './authorizationDenial';
-import type { RequestPrincipal, StartingPrincipal } from './principals';
+import type { AuthorPrincipal } from './playbookAuthor';
+import type { RequestPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
   type StoredError,
@@ -92,8 +93,7 @@ export type FormationResourceContext = {
  * request, and what a formation deploy had no way to name.
  *
  * `userId` is the account it acts for (a key acts for its owner): an `api_key`
- * mints under it, so the key can never exceed whoever deployed it, and a
- * `trigger`'s creator is the run-as identity a firing mints a token for.
+ * mints under it, so the key can never exceed whoever deployed it.
  * `author` is who a config version names: the key itself when a key deploys.
  * `principal` and `isAllowed` are the credential a `playbook` version runs as,
  * so a deploying key's own boundary bounds what the playbook may start.
@@ -109,15 +109,15 @@ export type FormationActor = {
   userId: number;
   /** Who a version the deploy writes names as its author. */
   author: RequestPrincipal;
-  principal: StartingPrincipal | null;
+  principal: AuthorPrincipal | null;
   isAllowed: IsAllowedFn;
   /**
    * The deploying key's `policy_ids` (`undefined` when it carries none), so an
    * `api_key` resource cannot be minted wider than the credential deploying it.
    */
-  keyPolicyBoundary: number[] | undefined;
-  /** A project-scoped token (OAuth, trigger, run), which writes no API key. */
-  scopedToken: boolean;
+  keyPolicyBoundary: string[] | undefined;
+  /** A request narrowed beyond its key's own `policy_ids`, which writes no API key. */
+  narrowed: boolean;
   /** Records a refusal the module makes before any `isAllowed` call. */
   recordRefusal: (action: string) => void;
 } & SenderCredential;

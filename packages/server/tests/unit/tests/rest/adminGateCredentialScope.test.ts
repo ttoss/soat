@@ -1,7 +1,10 @@
-import { signRunToken } from 'src/lib/orchestrationRunToken';
-
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  clientFor,
+  type TestCredential,
+  workAuthorityOf,
+} from '../../testClient';
 
 /**
  * The admin gate answers for the credential, not only the user behind it: an
@@ -31,17 +34,17 @@ describe('Admin gate and credential scope', () => {
     return res.body.key as string;
   };
 
-  const runToken = (): string => {
-    return signRunToken({
-      publicId: adminPublicId,
-      role: 'admin',
-      projectPublicId: projectId,
-      workPublicId: 'orun_admingate',
+  /** An admin's work, pinned to `projectId`. */
+  const adminWork = () => {
+    return workAuthorityOf({
+      project: projectId,
+      user: adminPublicId,
+      work: 'orun_admingate',
     });
   };
 
-  const adminRoutes = (token: string) => {
-    const client = authenticatedTestClient(token);
+  const adminRoutes = (credential: TestCredential) => {
+    const client = clientFor(credential);
     return [
       {
         name: 'GET /users',
@@ -119,11 +122,11 @@ describe('Admin gate and credential scope', () => {
     test.each([
       ['an admin key bound to a project', 'project'],
       ['an admin key narrowed by policies', 'policies'],
-      ['an admin run token', 'run'],
+      ["an admin's stored work", 'run'],
     ])('refuse %s with 403', async (_label, kind) => {
       const token =
         kind === 'run'
-          ? runToken()
+          ? adminWork()
           : await mintAdminKey(
               kind === 'project' ? { projectId } : { policyIds: [readPolicyId] }
             );
@@ -169,8 +172,8 @@ describe('Admin gate and credential scope', () => {
       expect(still.status).toBe(200);
     });
 
-    test('a run token for one project cannot update another', async () => {
-      const res = await authenticatedTestClient(runToken())
+    test('work pinned to one project cannot update another', async () => {
+      const res = await clientFor(adminWork())
         .patch(`/api/v1/projects/${otherProjectId}`)
         .send({ name: 'hijacked' });
       expect(res.status).toBe(403);

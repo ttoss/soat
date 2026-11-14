@@ -1,16 +1,16 @@
 import { db } from 'src/db';
 import { drainQueueOnce } from 'src/lib/orchestrationWorker';
+import { parseWorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs } from '../../testClient';
 
 /**
- * A background run re-mints its credential from the principal that started
- * it each time a worker drives it. When that principal is gone by then — the
- * API key revoked, the user deleted — the run must not act at all: falling
- * back to a token for the key's owning user would widen the run's reach to
- * everything that user may do. Its `soat` self-calls go out unauthenticated
- * and fail.
+ * A background run acts under the authority stored on it each time a worker
+ * drives it. When the principal it names is gone by then — the API key
+ * revoked, the user deleted — the run must not act at all: falling back to the
+ * key's owning user would widen the run's reach to everything that user may
+ * do. Its `soat` self-calls resolve no caller and fail.
  *
  * Each run lists the project's tools through a `soat` tool node, which an
  * owner-scoped credential would answer successfully.
@@ -102,7 +102,7 @@ afterAll(() => {
 });
 
 describe('a background run whose starting principal is gone', () => {
-  test('an API key revoked before the drive leaves the run unauthenticated', async () => {
+  test('an API key revoked before the drive leaves the run with no caller', async () => {
     const keyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/api-keys')
       .send({
@@ -115,7 +115,7 @@ describe('a background run whose starting principal is gone', () => {
     const run = await db.OrchestrationRun.findOne({
       where: { publicId: runId },
     });
-    expect(run!.principalKind).toBe('api_key');
+    expect(parseWorkAuthority(run!.authority)?.principal.type).toBe('api_key');
 
     const revoked = await authenticatedTestClient(adminToken).delete(
       `/api/v1/api-keys/${keyRes.body.id}`
@@ -127,7 +127,7 @@ describe('a background run whose starting principal is gone', () => {
     expect(settled.error?.code).toBe('TOOL_HTTP_ERROR');
   });
 
-  test('a user deleted before the drive leaves the run unauthenticated', async () => {
+  test('a user deleted before the drive leaves the run with no caller', async () => {
     const userRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/users')
       .send({ username: 'runasgone-leaver', password: 'leaverpass' });

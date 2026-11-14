@@ -26,6 +26,7 @@ import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
 import { runToolScorerCall } from './evaluationToolScorer';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { type StoredError, toStoredErrorKeepingMessage } from './storedError';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
 
@@ -110,6 +111,7 @@ const buildScorerRunners = (args: {
   projectId: number;
   deciderScoring: DeciderScoring;
   datasetItemId: string;
+  authority: WorkAuthority | null;
 }) => {
   return {
     runJudge: (judge: {
@@ -124,7 +126,11 @@ const buildScorerRunners = (args: {
       scorer: Record<string, unknown>;
       context: Record<string, unknown>;
     }) => {
-      return runToolScorerCall({ projectId: args.projectId, ...call });
+      return runToolScorerCall({
+        projectId: args.projectId,
+        authority: args.authority,
+        ...call,
+      });
     },
     // The embedding stack is env-configured (EMBEDDING_PROVIDER / _MODEL — the
     // same one document ingestion uses), so the only thing bound here is the
@@ -135,6 +141,7 @@ const buildScorerRunners = (args: {
     runDecider: (call: { scorer: Record<string, unknown>; input: unknown }) => {
       return runDeciderScorerCall({
         projectId: args.projectId,
+        authority: args.authority,
         ...call,
         scoring: args.deciderScoring,
         datasetItemId: args.datasetItemId,
@@ -167,10 +174,13 @@ export const runEvalItem = async (args: {
   expectedOutput: string | null;
   itemMetadata: unknown;
   toolContext?: Record<string, string>;
+  /** The run's stored authority, which its generations and scorers run under. */
+  authority: WorkAuthority | null;
 }): Promise<ItemOutcome> => {
   let generation: GenerationResult | ReadableStream;
   try {
     generation = await createGeneration({
+      authority: args.authority,
       projectIds: args.projectIds,
       agentId: args.agentPublicId,
       messages: args.input as GenerationInputMessage[],
@@ -224,6 +234,7 @@ export const runEvalItem = async (args: {
         projectId: args.projectId,
         deciderScoring: args.deciderScoring,
         datasetItemId: args.datasetItemId,
+        authority: args.authority,
       }),
     });
   } catch (error) {
@@ -268,6 +279,7 @@ export const executeAndRecordItem = async (args: {
   deciderScoring: DeciderScoring;
   item: DatasetItemRow;
   toolContext?: Record<string, string>;
+  authority: WorkAuthority | null;
 }): Promise<ItemOutcome> => {
   log(
     'executeAndRecordItem: runDbId=%d item=%s',
@@ -275,6 +287,7 @@ export const executeAndRecordItem = async (args: {
     args.item.publicId
   );
   const outcome = await runEvalItem({
+    authority: args.authority,
     projectIds: args.projectIds,
     projectId: args.projectId,
     agentPublicId: args.agent.publicId,

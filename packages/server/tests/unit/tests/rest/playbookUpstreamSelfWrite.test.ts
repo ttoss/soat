@@ -1,9 +1,13 @@
-import { signRunToken } from 'src/lib/orchestrationRunToken';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  clientFor,
+  type TestCredential,
+  workAuthorityOf,
+} from '../../testClient';
 
 const PROFILE = {
   id: 'profile',
@@ -117,9 +121,9 @@ describe("Playbook writes from a dependent case's own work", () => {
   const writeRegime = async (args: {
     caseId: string;
     value: string;
-    token?: string;
+    token?: TestCredential;
   }) => {
-    const res = await authenticatedTestClient(args.token ?? adminToken)
+    const res = await clientFor(args.token ?? adminToken)
       .post(`/api/v1/playbook-cases/${args.caseId}/inputs`)
       .send({
         inputs: [
@@ -135,15 +139,10 @@ describe("Playbook writes from a dependent case's own work", () => {
     return res;
   };
 
-  /** A run-as token, as the work named `work` would carry. */
+  /** The stored authority the work named `work` would hold. */
   const runTokenFor = async (work: string) => {
     const me = await admin().get('/api/v1/users/me');
-    return signRunToken({
-      publicId: me.body.id,
-      role: 'admin',
-      projectPublicId: projectId,
-      workPublicId: work,
-    });
+    return workAuthorityOf({ project: projectId, user: me.body.id, work });
   };
 
   /** A filled company case and a dependent whose `review` is parked. */
@@ -244,7 +243,7 @@ describe("Playbook writes from a dependent case's own work", () => {
       const { company, dependent } = await boundPair();
       const sibling = await newCase(dependentId, { company: company.id });
 
-      const res = await authenticatedTestClient(await runTokenFor(dependent.id))
+      const res = await clientFor(await runTokenFor(dependent.id))
         .post(`/api/v1/playbook-cases/${sibling.id}/upgrade`)
         .send({ version: 1 });
 
@@ -284,7 +283,7 @@ describe("Playbook writes from a dependent case's own work", () => {
     test("refuses a confirmation of the upstream case from the dependent's work", async () => {
       const { company, dependent } = await boundPair();
 
-      const res = await authenticatedTestClient(await runTokenFor(dependent.id))
+      const res = await clientFor(await runTokenFor(dependent.id))
         .post(
           `/api/v1/playbook-cases/${company.id}/nodes/approval/confirmation`
         )
@@ -299,9 +298,7 @@ describe("Playbook writes from a dependent case's own work", () => {
     test("refuses an upgrade of the upstream case from the dependent's work", async () => {
       const { company, parked } = await boundPair();
 
-      const res = await authenticatedTestClient(
-        await runTokenFor(parked.run_id)
-      )
+      const res = await clientFor(await runTokenFor(parked.run_id))
         .post(`/api/v1/playbook-cases/${company.id}/upgrade`)
         .send({ version: 1 });
 

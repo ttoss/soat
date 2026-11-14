@@ -156,16 +156,6 @@ export const listProjects = async (args: {
   const listWhere = async (): Promise<
     Record<string, unknown> | undefined | null
   > => {
-    // Admin fast-path: skip when the request uses a project-scoped API key or a
-    // project-scoped OAuth token so the restriction is enforced even for admins.
-    if (
-      args.authUser.role === 'admin' &&
-      !args.authUser.apiKeyProjectPublicId &&
-      !args.authUser.oauthProjectPublicId
-    ) {
-      return undefined;
-    }
-
     const projectIds = await args.authUser.resolveProjectIds({
       action: 'projects:ListProjects',
     });
@@ -200,10 +190,6 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
       'RESOURCE_NOT_FOUND',
       `Project '${args.id}' not found.`
     );
-  }
-
-  if (args.authUser.role === 'admin' && !args.authUser.oauthProjectPublicId) {
-    return mapProject(project);
   }
 
   const allowed = await args.authUser.isAllowed({

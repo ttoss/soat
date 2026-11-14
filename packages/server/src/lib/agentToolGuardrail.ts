@@ -6,6 +6,7 @@ import {
   computeToolCallDedupKey,
   DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS,
   injectApprovalJustificationSchema,
+  inlineProposalToolId,
   resolvedActionName,
   stripApprovalJustification,
 } from './agentToolApproval';
@@ -37,6 +38,7 @@ import {
 } from './guardrailEvaluationRecord';
 import { isPlainObject } from './plainObject';
 import { gatePresetsOf, mergePresetParameters } from './toolPresetParameters';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:guardrails');
 
@@ -61,7 +63,7 @@ export type ResolverGuardrailContext = {
   projectId: number;
   projectPublicId: string;
   sessionId?: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   callerContext: Record<string, unknown>;
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
@@ -82,7 +84,7 @@ export const buildResolverGuardrailContext = async (args: {
   projectGuardrailIds?: string[] | null;
   agentGuardrailIds?: string[] | null;
   sessionId?: string | null;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   guardrailContext?: Record<string, unknown> | null;
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
@@ -99,7 +101,7 @@ export const buildResolverGuardrailContext = async (args: {
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
     sessionId: args.sessionId ?? null,
-    authHeader: args.authHeader,
+    authority: args.authority,
     callerContext: isPlainObject(args.guardrailContext)
       ? args.guardrailContext
       : {},
@@ -161,7 +163,7 @@ const evaluateAll = async (args: {
         callerContext: args.context.callerContext,
         call,
         projectId: args.context.projectId,
-        authHeader: args.context.authHeader,
+        authority: args.context.authority,
       }
     );
     const evaluationContext = {
@@ -282,14 +284,13 @@ const routeToApproval = async (args: {
 }): Promise<Record<string, unknown>> => {
   const { gate } = args;
   const governing = governingResult(args.evaluated, 'route_to_approval');
-  // Inline-tool proposals have no persisted id to re-execute at resolution; use
-  // a synthetic marker so the dedup key and item still form.
-  const proposalToolId = gate.toolId ?? `inline:${gate.toolName}`;
+  const proposalToolId =
+    gate.toolId ?? inlineProposalToolId({ toolName: gate.toolName });
   const item = await emitApproval({
     projectId: gate.context.projectId,
     origin: 'tool_call',
     proposedAction: {
-      toolId: gate.toolId ?? proposalToolId,
+      toolId: proposalToolId,
       action: gate.action,
       arguments: args.effectiveArgs,
     },
@@ -584,21 +585,17 @@ const buildClientToolGate = (args: {
   };
 };
 
-/**
- * Every guardrail governing one tool binding: the generation's project/agent
- * base plus the tool's own scope.
- */
-export const collectBindingGuardrails = async (args: {
-  context: ResolverGuardrailContext;
+/** A binding's own tool-scope guardrails; the project/agent base is the gate's. */
+export const collectToolScopedGuardrails = async (args: {
+  projectId: number;
   toolGuardrailIds: string[] | null;
 }): Promise<CollectedGuardrail[]> => {
-  const toolScoped = args.toolGuardrailIds?.length
-    ? await collectApplicableGuardrails({
-        projectId: args.context.projectId,
+  return args.toolGuardrailIds?.length
+    ? collectApplicableGuardrails({
+        projectId: args.projectId,
         toolGuardrailIds: args.toolGuardrailIds,
       })
     : [];
-  return [...args.context.baseGuardrails, ...toolScoped];
 };
 
 /**
@@ -616,8 +613,6 @@ export const gateResolvedToolsWithGuardrails = (args: {
   toolId: string | null;
   toolType: string;
   toolName: string;
-  // From `collectBindingGuardrails`, collected before the binding resolved so
-  // its executions are metered under the guardrails that release them.
   guardrails: CollectedGuardrail[];
   presetParameters?: Record<string, unknown> | null;
   rawParameters?: Record<string, unknown>;

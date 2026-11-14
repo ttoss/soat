@@ -6,6 +6,8 @@ import {
   addConversationMessage,
 } from './conversationMessages';
 import { resolveMessageContent } from './messageContent';
+import type { WorkAuthority } from './workAuthority';
+import { captureAuthority } from './workAuthority';
 
 export const assertSessionMessageInput = (args: {
   message?: string;
@@ -35,6 +37,7 @@ export const addResolvedSessionUserMessage = async (args: {
   idempotencyDigest?: string;
 }) => {
   const resolvedContent = await resolveMessageContent({
+    authority: captureAuthority({ authUser: args.authUser }),
     content: args.documentId
       ? { type: 'document', document_id: args.documentId }
       : (args.message ?? ''),
@@ -72,7 +75,7 @@ export type GenerateSessionResponseFn = (args: {
   agentId: number;
   sessionId: string;
   toolContext?: Record<string, string>;
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   authUser: AuthUser | undefined;
   initiatorGenerationId?: string | null;
 }) => Promise<unknown>;
@@ -82,7 +85,7 @@ export const triggerOrReturnMessage = (args: {
   agentId: number;
   sessionId: string;
   toolContext?: Record<string, string>;
-  authHeader: string | undefined;
+  authority: WorkAuthority | null;
   authUser: AuthUser | undefined;
   savedContent: string | null;
   savedDocumentId: string | undefined;
@@ -97,7 +100,7 @@ export const triggerOrReturnMessage = (args: {
       agentId: args.agentId,
       sessionId: args.sessionId,
       toolContext: args.toolContext,
-      authHeader: args.authHeader,
+      authority: args.authority,
       authUser: args.authUser,
       initiatorGenerationId: args.initiatorGenerationId,
     });

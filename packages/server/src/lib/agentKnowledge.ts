@@ -10,8 +10,9 @@ import {
   readKnowledgeConfig,
 } from './agentKnowledgeConfig';
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
-import type { BindingTools } from './agentToolNames';
-import { isSoatActionAllowedByBoundary } from './agentToolResolver';
+import { NATIVE_PROPOSAL_PREFIX } from './agentToolApproval';
+import type { ToolBinding } from './agentToolNames';
+import { isSoatActionAllowedByAgentPolicy } from './agentToolResolver';
 import { agentDenied, denialToolResult } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
 import { buildSrn, type PolicyDocument } from './iam';
@@ -23,6 +24,7 @@ import {
 import type { KnowledgeSearchPolicy } from './knowledgeSearchPolicy';
 import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
+import { agentReferences } from './resourceReferences';
 import { buildResourceTagContext } from './tags';
 
 const log = createDebug('soat:knowledge');
@@ -191,7 +193,7 @@ export const buildKnowledgeMessages = async (args: {
  *
  * Both are evaluated against the target store's SRN and tags, the same pair
  * `rest/v1/memories.ts` checks a human against: this tool writes
- * in-process, so the boundary is the only gate there is, and an operator must
+ * in-process, so the boundary is the only IAM check there is, and an operator must
  * be able to say "this agent may write to this store only".
  */
 const MEMORY_WRITE_ACTIONS = [
@@ -199,15 +201,15 @@ const MEMORY_WRITE_ACTIONS = [
   'memories:UpdateMemory',
 ] as const;
 
-const findBoundaryDeniedMemoryWriteAction = (args: {
-  boundaryPolicy: unknown;
+const findAgentDeniedMemoryWriteAction = (args: {
+  agentPolicy: unknown;
   resource: string;
   context: Record<string, string>;
 }): string | null => {
   for (const iamAction of MEMORY_WRITE_ACTIONS) {
     if (
-      !isSoatActionAllowedByBoundary({
-        boundaryPolicy: args.boundaryPolicy,
+      !isSoatActionAllowedByAgentPolicy({
+        agentPolicy: args.agentPolicy,
         iamAction,
         resource: args.resource,
         context: args.context,
@@ -219,96 +221,203 @@ const findBoundaryDeniedMemoryWriteAction = (args: {
   return null;
 };
 
-export const buildWriteMemoryTool = (args: {
+/**
+ * The `tool_id` a held `write_memory` call is proposed under. The tool has no
+ * row, so resolution recognises the call by this id and runs
+ * {@link runApprovedWriteMemory} instead of `callTool`.
+ */
+export const WRITE_MEMORY_TOOL_ID = `${NATIVE_PROPOSAL_PREFIX}write_memory`;
+
+const WRITE_MEMORY_TOOL_NAME = 'write_memory';
+
+const WRITE_MEMORY_PARAMETERS = {
+  type: 'object' as const,
+  properties: {
+    content: {
+      type: 'string' as const,
+      description: 'The atomic fact to remember',
+    },
+  },
+  required: ['content'],
+};
+
+type WriteMemoryAsAgentArgs = {
   writeMemoryStoreId: string;
   agentId: string;
-  /**
-   * The turn this call belongs to — the origin every agent-written assertion
-   * records. It was already a required argument where the tool surface is
-   * resolved; it simply was not forwarded this far.
-   */
-  generationId: string;
+  /** The turn this call belongs to — the origin every agent-written assertion records. */
+  generationId: string | null;
   /** The agent's own project, the only one whose store it writes to. */
   projectId: number;
-  boundaryPolicy?: unknown;
+  agentPolicy?: unknown;
   /** The turn's end user, whose memory every write is. */
   actorId?: string;
-}): Tool => {
+};
+
+/**
+ * One agent write, held to the boundary: the tool door and an approved held
+ * call both run through it, so neither can write what the other could not.
+ */
+const writeMemoryAsAgent = async (
+  args: WriteMemoryAsAgentArgs & { content: string }
+): Promise<Record<string, unknown>> => {
+  // The store is resolved before the boundary check because the check needs
+  // its SRN and tags. It leaks nothing a boundary would have hidden: the id
+  // comes from the agent's own `knowledge_config`, not from the model.
+  const memoryStore = await findMemoryStoreIamScope({
+    id: args.writeMemoryStoreId,
+    projectId: args.projectId,
+  });
+  if (!memoryStore) {
+    return { error: `Memory store ${args.writeMemoryStoreId} not found` };
+  }
+  const resource = buildSrn({
+    projectPublicId: memoryStore.projectPublicId,
+    resourceType: 'memory_store',
+    resourceId: args.writeMemoryStoreId,
+  });
+  const deniedAction = findAgentDeniedMemoryWriteAction({
+    agentPolicy: args.agentPolicy,
+    resource,
+    context: buildResourceTagContext({
+      resourceType: 'memory_store',
+      tags: memoryStore.tags,
+    }),
+  });
+  if (deniedAction) {
+    log('writeMemoryAsAgent: denied %s', deniedAction);
+    return denialToolResult(
+      agentDenied({
+        agentId: args.agentId,
+        action: deniedAction,
+        resource,
+      })
+    );
+  }
+  const result = await writeMemory({
+    memoryStoreId: memoryStore.id,
+    actorId: await resolveOwnerActorDbId({
+      actorId: args.actorId,
+      projectId: args.projectId,
+      projectLabel: "the agent's project",
+    }),
+    content: args.content,
+    // No `sourceConversationPublicId`: `Memory.source_id` is the pointer a
+    // client may supply on a hand-written fact, and this tool has none to
+    // give. Where the turn came from is on the assertion instead, as the
+    // generation — which a conversation is reachable from.
+    //
+    // No thresholds either: the tool door always uses the store's
+    // effective pair. An agent that could loosen the corpus's dedup policy
+    // from the side would make the store-level default meaningless.
+    assertion: {
+      mechanism: 'tool',
+      generationId: args.generationId,
+      // The agent is the asserter on both agent doors. `startedBy` on the
+      // generation names whoever asked for the turn, which is a different
+      // question from who claimed the fact.
+      principalType: 'agent',
+      principalId: args.agentId,
+    },
+  });
+  return { action: result.action, memoryId: result.entry.id };
+};
+
+const buildWriteMemoryTool = (args: WriteMemoryAsAgentArgs): Tool => {
   return tool({
     description:
       'Write a fact to memory. The system automatically deduplicates: creates a new memory, supersedes an existing one the fact has changed, or skips a duplicate.',
-    inputSchema: jsonSchema<{ content: string }>({
-      type: 'object',
-      properties: {
-        content: {
-          type: 'string',
-          description: 'The atomic fact to remember',
-        },
-      },
-      required: ['content'],
-    }),
+    inputSchema: jsonSchema<{ content: string }>(WRITE_MEMORY_PARAMETERS),
     execute: async ({ content }: { content: string }) => {
-      // The store is resolved before the boundary check because the check needs
-      // its SRN and tags. It leaks nothing a boundary would have hidden: the id
-      // comes from the agent's own `knowledge_config`, not from the model.
-      const memoryStore = await findMemoryStoreIamScope({
-        id: args.writeMemoryStoreId,
-        projectId: args.projectId,
-      });
-      if (!memoryStore) {
-        return { error: `Memory store ${args.writeMemoryStoreId} not found` };
-      }
-      const resource = buildSrn({
-        projectPublicId: memoryStore.projectPublicId,
-        resourceType: 'memory_store',
-        resourceId: args.writeMemoryStoreId,
-      });
-      const deniedAction = findBoundaryDeniedMemoryWriteAction({
-        boundaryPolicy: args.boundaryPolicy,
-        resource,
-        context: buildResourceTagContext({
-          resourceType: 'memory_store',
-          tags: memoryStore.tags,
-        }),
-      });
-      if (deniedAction) {
-        log('write_memory: denied %s', deniedAction);
-        return denialToolResult(
-          agentDenied({
-            agentId: args.agentId,
-            action: deniedAction,
-            resource,
-          })
-        );
-      }
-      const result = await writeMemory({
-        memoryStoreId: memoryStore.id,
-        actorId: await resolveOwnerActorDbId({
-          actorId: args.actorId,
-          projectId: args.projectId,
-          projectLabel: "the agent's project",
-        }),
-        content,
-        // No `sourceConversationPublicId`: `Memory.source_id` is the pointer a
-        // client may supply on a hand-written fact, and this tool has none to
-        // give. Where the turn came from is on the assertion instead, as the
-        // generation — which a conversation is reachable from.
-        //
-        // No thresholds either: the tool door always uses the store's
-        // effective pair. An agent that could loosen the corpus's dedup policy
-        // from the side would make the store-level default meaningless.
-        assertion: {
-          mechanism: 'tool',
-          generationId: args.generationId,
-          // The agent is the asserter on both agent doors. `startedBy` on the
-          // generation names whoever asked for the turn, which is a different
-          // question from who claimed the fact.
-          principalType: 'agent',
-          principalId: args.agentId,
-        },
-      });
-      return { action: result.action, memoryId: result.entry.id };
+      return writeMemoryAsAgent({ ...args, content });
     },
+  });
+};
+
+/**
+ * Runs a held `write_memory` call a human approved. The store is the one the
+ * agent's `knowledge_config` names now, and the boundary is the agent's
+ * `policy_ids` now — the approver decided whether the fact is written, not
+ * where or past which cap.
+ */
+export const runApprovedWriteMemory = async (args: {
+  /** The proposing agent as it stands now; null once it is gone. */
+  agent: { publicId: string; knowledgeConfig: unknown } | null;
+  generationId: string | null;
+  projectId: number;
+  agentPolicy: unknown;
+  actorId?: string;
+  /** The frozen or edited arguments; an edit is not checked against a schema upstream. */
+  input: Record<string, unknown>;
+}): Promise<Record<string, unknown>> => {
+  log('runApprovedWriteMemory: agentId=%s', args.agent?.publicId);
+  const writeMemoryStoreId =
+    args.agent &&
+    readKnowledgeConfig(args.agent.knowledgeConfig)?.writeMemoryStoreId;
+  if (!args.agent || !writeMemoryStoreId) {
+    return {
+      error: 'The agent no longer exists or names no write_memory store.',
+    };
+  }
+  const { content } = args.input;
+  if (typeof content !== 'string' || content.trim() === '') {
+    return { error: 'write_memory needs a non-empty string `content`.' };
+  }
+  return writeMemoryAsAgent({
+    writeMemoryStoreId,
+    agentId: args.agent.publicId,
+    generationId: args.generationId,
+    projectId: args.projectId,
+    agentPolicy: args.agentPolicy,
+    actorId: args.actorId,
+    content,
+  });
+};
+
+/**
+ * What an approver must hold to edit a held `write_memory` call: an edit
+ * authors the fact the agent writes, so it needs both memory-write actions on
+ * the store the agent writes to now, with that store's tags as condition
+ * inputs. With no store to name, only a project-wide grant covers the edit.
+ */
+export const writeMemoryEditChecks = async (args: {
+  agentId: string | null;
+  projectId: number;
+  projectPublicId: string;
+}): Promise<
+  Array<{ action: string; resource: string; context: Record<string, string> }>
+> => {
+  const agent = args.agentId
+    ? await agentReferences.find({
+        id: args.agentId,
+        projectId: args.projectId,
+        reach: 'project',
+      })
+    : null;
+  const writeMemoryStoreId =
+    agent && readKnowledgeConfig(agent.knowledgeConfig)?.writeMemoryStoreId;
+  const memoryStore = writeMemoryStoreId
+    ? await findMemoryStoreIamScope({
+        id: writeMemoryStoreId,
+        projectId: args.projectId,
+      })
+    : null;
+  log(
+    'writeMemoryEditChecks: store=%s',
+    memoryStore ? writeMemoryStoreId : '*'
+  );
+  const resource = buildSrn({
+    projectPublicId: args.projectPublicId,
+    resourceType: 'memory_store',
+    resourceId: memoryStore && writeMemoryStoreId ? writeMemoryStoreId : '*',
+  });
+  const context = memoryStore
+    ? buildResourceTagContext({
+        resourceType: 'memory_store',
+        tags: memoryStore.tags,
+      })
+    : {};
+  return MEMORY_WRITE_ACTIONS.map((action) => {
+    return { action, resource, context };
   });
 };
 
@@ -324,23 +433,30 @@ export const buildKnowledgeBindings = (args: {
   generationId: string;
   projectId: number;
   typedAgent: TypedAgent;
-  boundaryPolicy: PolicyDocument | null;
+  agentPolicy: PolicyDocument | null;
   actorId?: string;
-}): BindingTools[] => {
+}): ToolBinding[] => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
   if (!knowledgeConfig?.writeMemoryStoreId) return [];
   return [
     {
       bindingName: KNOWLEDGE_BINDING_NAME,
       tools: {
-        write_memory: buildWriteMemoryTool({
+        [WRITE_MEMORY_TOOL_NAME]: buildWriteMemoryTool({
           writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
           agentId: args.agentId,
           generationId: args.generationId,
           projectId: args.projectId,
-          boundaryPolicy: args.boundaryPolicy,
+          agentPolicy: args.agentPolicy,
           actorId: args.actorId,
         }),
+      },
+      gate: {
+        toolId: WRITE_MEMORY_TOOL_ID,
+        toolType: 'native',
+        toolName: WRITE_MEMORY_TOOL_NAME,
+        toolGuardrails: [],
+        rawParameters: WRITE_MEMORY_PARAMETERS,
       },
     },
   ];

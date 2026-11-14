@@ -1,21 +1,26 @@
-import { signRunToken } from 'src/lib/orchestrationRunToken';
 import { signToken } from 'src/lib/signedTokens';
-import { signTriggerToken } from 'src/lib/triggerToken';
+import { triggerAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  clientFor,
+  type TestCredential,
+  workAuthorityOf,
+} from '../../testClient';
 
 /**
- * A project-scoped token carries its boundary inline (consent scope, trigger
- * policy, starting key), and a minted key cannot carry it: it would hold the
- * owner's full permissions in the project. So such a token never writes a key.
+ * An OAuth token and stored work carry a boundary beyond a key's own (consent
+ * scope, trigger policy, starting key), and a minted key cannot carry it: it
+ * would hold the owner's full permissions in the project. So neither writes a
+ * key.
  */
 describe('API key writes from a project-scoped token', () => {
   let userToken: string;
   let userId: string;
   let projectId: string;
   let ownKeyId: string;
-  let tokens: Array<[string, () => string]>;
+  let tokens: Array<[string, () => TestCredential]>;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -49,36 +54,32 @@ describe('API key writes from a project-scoped token', () => {
         },
       ],
       [
-        'trigger run-as',
+        'firing',
         () => {
-          return signTriggerToken({
-            publicId: userId,
-            role: 'user',
+          return triggerAuthority({
+            triggerPublicId: 'trg_scopedmint',
             projectPublicId: projectId,
-            triggerId: 'trg_scopedmint',
           });
         },
       ],
       [
         'run',
         () => {
-          return signRunToken({
-            publicId: userId,
-            role: 'user',
-            projectPublicId: projectId,
-            workPublicId: 'orn_scopedmint',
+          return workAuthorityOf({
+            project: projectId,
+            user: userId,
+            work: 'orn_scopedmint',
           });
         },
       ],
       [
         'key-started run',
         () => {
-          return signRunToken({
-            publicId: userId,
-            role: 'user',
-            projectPublicId: projectId,
-            workPublicId: 'orn_scopedmint',
-            apiKeyPublicId: ownKeyId,
+          return workAuthorityOf({
+            project: projectId,
+            user: userId,
+            key: ownKeyId,
+            work: 'orn_scopedmint',
           });
         },
       ],
@@ -87,10 +88,10 @@ describe('API key writes from a project-scoped token', () => {
 
   const each = (
     name: string,
-    fn: (token: string) => Promise<void>,
-    kinds = ['OAuth', 'trigger run-as', 'run', 'key-started run']
+    fn: (token: TestCredential) => Promise<void>,
+    kinds = ['OAuth', 'firing', 'run', 'key-started run']
   ) => {
-    test.each(kinds)(`${name} (%s token)`, async (kind) => {
+    test.each(kinds)(`${name} (%s)`, async (kind) => {
       const entry = tokens.find(([k]) => {
         return k === kind;
       });
@@ -100,13 +101,13 @@ describe('API key writes from a project-scoped token', () => {
   };
 
   describe('POST /api/v1/api-keys', () => {
-    each('returns 403 API_KEY_SCOPED_TOKEN', async (token) => {
-      const res = await authenticatedTestClient(token)
+    each('returns 403 CREDENTIAL_NARROWED', async (token) => {
+      const res = await clientFor(token)
         .post('/api/v1/api-keys')
         .send({ name: 'Minted', project_id: projectId });
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_SCOPED_TOKEN');
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
     });
 
     test('a user token still mints a key', async () => {
@@ -131,14 +132,19 @@ describe('API key writes from a project-scoped token', () => {
   });
 
   describe('PUT /api/v1/api-keys/:api_key_id', () => {
-    each('returns 403 API_KEY_SCOPED_TOKEN', async (token) => {
-      const res = await authenticatedTestClient(token)
-        .put(`/api/v1/api-keys/${ownKeyId}`)
-        .send({ policy_ids: [] });
+    each(
+      'returns 403 CREDENTIAL_NARROWED',
+      async (token) => {
+        const res = await clientFor(token)
+          .put(`/api/v1/api-keys/${ownKeyId}`)
+          .send({ policy_ids: [] });
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('API_KEY_SCOPED_TOKEN');
-    });
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
+      },
+      // A firing acts as no user, so it owns no key to update.
+      ['OAuth', 'run', 'key-started run']
+    );
 
     test('a user token still updates a key', async () => {
       const res = await authenticatedTestClient(userToken)
@@ -151,9 +157,9 @@ describe('API key writes from a project-scoped token', () => {
 
   describe('an api_key formation resource', () => {
     each(
-      'is refused with API_KEY_SCOPED_TOKEN',
+      'is refused with CREDENTIAL_NARROWED',
       async (token) => {
-        const res = await authenticatedTestClient(token)
+        const res = await clientFor(token)
           .post('/api/v1/formations')
           .send({
             project_id: projectId,
@@ -166,9 +172,9 @@ describe('API key writes from a project-scoped token', () => {
           });
 
         expect(res.body.status).not.toBe('active');
-        expect(JSON.stringify(res.body)).toContain('API_KEY_SCOPED_TOKEN');
-        // A trigger token's boundary needs a live trigger, which is beside the
-        // point here: the refusal reads the credential kind, not its boundary.
+        expect(JSON.stringify(res.body)).toContain('CREDENTIAL_NARROWED');
+        // A firing's boundary needs a live trigger, which is beside the point
+        // here: the refusal reads the narrowing, not its boundary.
       },
       ['OAuth', 'run', 'key-started run']
     );

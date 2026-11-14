@@ -12,6 +12,7 @@ import {
   resolveToolOutputsResult,
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
+import { readAgentRunAs } from './agentRunAs';
 import {
   claimPausedGeneration,
   notAwaitingToolOutputs,
@@ -20,8 +21,8 @@ import {
   collectSystemInstructions,
   withoutSystemMessages,
 } from './modelMessages';
-import type { StartingPrincipal } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
+import { sameWorkAuthority, type WorkAuthority } from './workAuthority';
 
 /**
  * The ids a caller may answer are the ones this pause opened.
@@ -89,20 +90,21 @@ export const submitToolOutputs = async (args: {
   agentId: string;
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
-  authHeader?: string;
-  // Who `authHeader` names; the resumed segment's tool calls run as them.
-  actedAs: StartingPrincipal | null;
+  authority: WorkAuthority | null;
 }): Promise<GenerationResult> => {
   let pending = pendingGenerations.get(args.generationId);
 
   // The in-memory tools call with the starter's credential, so another
   // submitter resumes through the rebuild, which binds them to its own.
-  if (!pending || pending.toolsAuthHeader !== args.authHeader) {
+  if (
+    !pending ||
+    !sameWorkAuthority({ a: pending.toolsAuthority, b: args.authority })
+  ) {
     pending = await recoverPendingFromDb({
       generationId: args.generationId,
       agentId: args.agentId,
       projectIds: args.projectIds,
-      authHeader: args.authHeader,
+      authority: args.authority,
     });
   }
   if (
@@ -132,7 +134,12 @@ export const submitToolOutputs = async (args: {
   if (
     !(await claimPausedGeneration({
       publicId: args.generationId,
-      actedAs: args.actedAs,
+      projectId: pending.projectId,
+      authority: args.authority,
+      actsAsAgent:
+        readAgentRunAs(pending.agentConfig.runAs) === 'agent'
+          ? pending.agentId
+          : null,
     }))
   ) {
     throw notAwaitingToolOutputs(args.generationId);

@@ -1,7 +1,7 @@
 ---
 description: "Cap what an agent can do with its policy_ids, so a sub-agent holding a caller's full token still cannot exceed its own ceiling."
 keywords:
-  - agent boundary policy
+  - agent policies
   - agent permissions
   - least privilege
   - nested agent calls

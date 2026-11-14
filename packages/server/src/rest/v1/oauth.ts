@@ -1,13 +1,14 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { credentialNarrowed } from 'src/lib/authorizationDenial';
 import type { ConsentSelection } from 'src/lib/oauthConsent';
 import { buildConsentPolicy, buildConsentScopes } from 'src/lib/oauthConsent';
 import { getPermissionCatalog } from 'src/lib/permissionCatalog';
 import { getProject, listProjects } from 'src/lib/projects';
 import { PROJECT_SCOPE_PREFIX, saveConsentGrant } from 'src/oauth/server';
 
-import { requireAuth } from './helpers';
+import { requireAuth, requireCallerUser } from './helpers';
 
 const oauthRouter = new Router<Context>();
 
@@ -108,7 +109,7 @@ oauthRouter.get('/oauth/consent-info', async (ctx: Context) => {
  *       '401':
  *         description: Unauthenticated.
  *       '403':
- *         description: No access to the requested project.
+ *         description: No access to the requested project, or `CREDENTIAL_NARROWED` when the credential is narrowed by anything but a project pin (its own `policy_ids`, a token, `On-Behalf-Of`).
  */
 oauthRouter.post('/oauth/consent', async (ctx: Context) => {
   requireAuth(ctx);
@@ -123,7 +124,11 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', 'project_id is required.');
   }
 
-  // getProject enforces access — throws RESOURCE_NOT_FOUND (404) or FORBIDDEN (403)
+  // The consented token holds the user's grant ∩ the selection, so the
+  // consenting credential may be pinned to the project but capped by nothing.
+  if (ctx.authUser.narrowing !== 'none') {
+    throw credentialNarrowed({ writing: 'an OAuth consent' });
+  }
   await getProject({ id: body.project_id, authUser: ctx.authUser });
 
   const selection = parseSelection(body.selection);
@@ -167,7 +172,7 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
     await saveConsentGrant({
       codeChallenge,
       clientId,
-      subject: ctx.authUser.publicId,
+      subject: requireCallerUser(ctx, 'oauth:Consent').publicId,
       scopes,
     });
     result.authorize_url = `/authorize?${body.authorize_query}`;

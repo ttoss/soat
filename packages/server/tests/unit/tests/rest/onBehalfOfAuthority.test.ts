@@ -280,6 +280,20 @@ describe('On-Behalf-Of authority', () => {
     });
   });
 
+  describe('POST /api/v1/api-keys', () => {
+    test('a callback creates no API key', async () => {
+      const assertion = await directCallAssertion(projectKey);
+
+      const res = await authenticatedTestClient(projectKey)
+        .post('/api/v1/api-keys')
+        .set(HEADER, assertion)
+        .send({ name: turn.unique('obo-key') });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('CREDENTIAL_NARROWED');
+    });
+  });
+
   describe('every callback is capped', () => {
     test('a call a capped callback makes carries its cap on', async () => {
       const capped = await directCallAssertion(
@@ -308,12 +322,35 @@ describe('On-Behalf-Of authority', () => {
       expect(alone.status).toBe(200);
     });
 
-    test('a generation with no caller and an uncapped agent caps its callback', async () => {
+    test("a generation's callback is capped by its agent's policy_ids", async () => {
+      const callbackOf = async (actions: string[]) => {
+        const agentId = await turn.createAgent({
+          tool_bindings: [{ tool_id: toolId }],
+          policy_ids: [
+            await turn.createPolicy({
+              statement: [{ effect: 'Allow', action: actions }],
+            }),
+          ],
+        });
+        await turn.generate({ agentId, calls: [{ name: 'echo', args: {} }] });
+        return lastAssertion();
+      };
+
+      const denied = await readDocument(await callbackOf(['tools:*']));
+      const allowed = await readDocument(
+        await callbackOf(['tools:*', 'documents:GetDocument'])
+      );
+
+      expect(denied.status).toBe(403);
+      expect(allowed.status).toBe(200);
+    });
+
+    test('a generation an OAuth token started caps its callback by the consent', async () => {
       const agentId = await turn.createAgent({
         tool_bindings: [{ tool_id: toolId }],
       });
       const admin = jwt.decode(turn.adminToken) as { publicId: string };
-      // An OAuth token starts a generation that records no caller.
+      // The generation stores the token's user held to the consented scope.
       const oauthToken = signToken({
         typ: 'oauth',
         claims: {
@@ -334,6 +371,7 @@ describe('On-Behalf-Of authority', () => {
       const res = await readDocument(assertion);
 
       expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
   });
 

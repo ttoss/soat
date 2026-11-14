@@ -1,15 +1,18 @@
 import jwt from 'jsonwebtoken';
-import { signRunToken } from 'src/lib/orchestrationRunToken';
-import { signTriggerToken } from 'src/lib/triggerToken';
+import { triggerAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  workAuthorityOf,
+  workRequest,
+} from '../../testClient';
 
 /**
- * A run-as token already minted outlives the API key or trigger whose policy
- * was its boundary. Once that source is gone the token authorizes nothing,
- * rather than falling back to everything its owner may do. The owner here is
- * an admin, whose fallback would be the wildcard.
+ * Stored work outlives the API key or trigger whose policy bounds it. Once
+ * that source is gone the work authorizes nothing, rather than falling back to
+ * everything its owner may do. The owner here is an admin, whose fallback
+ * would be the wildcard.
  */
 
 let adminToken: string;
@@ -29,8 +32,8 @@ beforeAll(async () => {
   adminPublicId = (jwt.decode(adminToken) as { publicId: string }).publicId;
 });
 
-describe('a run-as token whose boundary source is gone', () => {
-  test('a run token whose API key was deleted is refused', async () => {
+describe('stored work whose boundary source is gone', () => {
+  test('work whose API key was deleted is refused', async () => {
     const keyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/api-keys')
       .send({
@@ -40,17 +43,17 @@ describe('a run-as token whose boundary source is gone', () => {
       });
     expect(keyRes.status).toBe(201);
 
-    const runToken = signRunToken({
-      publicId: adminPublicId,
-      role: 'admin',
-      projectPublicId: projectId,
-      workPublicId: 'orun_orphan1',
-      apiKeyPublicId: keyRes.body.id,
-    });
     const listTools = () => {
-      return authenticatedTestClient(runToken).get(
-        `/api/v1/tools?project_id=${projectId}`
-      );
+      return workRequest({
+        authority: workAuthorityOf({
+          project: projectId,
+          user: adminPublicId,
+          key: keyRes.body.id,
+          work: 'orun_orphan1',
+        }),
+        method: 'get',
+        path: `/api/v1/tools?project_id=${projectId}`,
+      });
     };
     expect((await listTools()).status).toBe(200);
 
@@ -60,11 +63,11 @@ describe('a run-as token whose boundary source is gone', () => {
     expect(deleted.status).toBe(204);
 
     const res = await listTools();
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
 
-  test('a trigger token whose trigger was deleted is refused', async () => {
+  test('a firing whose trigger was deleted is refused', async () => {
     const orchestrationRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/orchestrations')
       .send({
@@ -86,16 +89,15 @@ describe('a run-as token whose boundary source is gone', () => {
       });
     expect(triggerRes.status).toBe(201);
 
-    const triggerToken = signTriggerToken({
-      publicId: adminPublicId,
-      role: 'admin',
-      projectPublicId: projectId,
-      triggerId: triggerRes.body.id,
-    });
     const listTriggers = () => {
-      return authenticatedTestClient(triggerToken).get(
-        `/api/v1/triggers?project_id=${projectId}`
-      );
+      return workRequest({
+        authority: triggerAuthority({
+          triggerPublicId: triggerRes.body.id,
+          projectPublicId: projectId,
+        }),
+        method: 'get',
+        path: `/api/v1/triggers?project_id=${projectId}`,
+      });
     };
     expect((await listTriggers()).status).toBe(200);
 

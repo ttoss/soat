@@ -50,9 +50,30 @@ describe('effective authority chokepoint', () => {
   });
 
   test('only the chokepoint builds a project resolver', () => {
-    assert.deepEqual(filesMatching(/\bcreate\w*ResolveProjectIds\(/), [
+    assert.deepEqual(filesMatching(/\bresolveReachableProjectIds\(/), [
       CHOKEPOINT,
     ]);
+  });
+
+  test('admin is a grant: only the user grant reads the role', () => {
+    assert.deepEqual(
+      filesMatching(
+        /\brole\s*[!=]==?\s*'admin'|'admin'\s*[!=]==?\s*\w*\.?role\b/
+      ),
+      ['middleware/authScopedBoundary.ts', 'middleware/authTerms.ts']
+    );
+  });
+
+  test('no grant or cap is stated outside the credential resolvers', () => {
+    assert.deepEqual(
+      filesMatching(/\b(holder:\s*'\w+'|kind:\s*'(key_policies|other)')( as const)?,/),
+      [
+        'lib/workAuthority.ts',
+        'middleware/auth.ts',
+        'middleware/authScopedBoundary.ts',
+        'middleware/authTerms.ts',
+      ]
+    );
   });
 
   test('only the chokepoint defines an authority member', () => {

@@ -1,17 +1,14 @@
 import crypto from 'node:crypto';
 
 import { db } from 'src/db';
-import {
-  buildRunAuthHeader,
-  readStoredStartingPrincipal,
-} from 'src/lib/orchestrationRunToken';
+import { parseWorkAuthority } from 'src/lib/workAuthority';
 
 import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { proposeCalls } from '../../fixtures/scriptedModel';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, workRequest } from '../../testClient';
 
 /**
  * Work a capped callback starts keeps the cap: the turn it runs, the tool
@@ -171,11 +168,11 @@ describe('work a capped callback starts', () => {
         error: {
           code: 'FORBIDDEN',
           message: expect.stringMatching(
-            /^Forbidden: IAM token \S+'s policies deny documents:GetDocument on /
+            /^Forbidden: the On-Behalf-Of assertion's policies deny documents:GetDocument on /
           ),
           meta: expect.objectContaining({
             action: 'documents:GetDocument',
-            denied_by: expect.objectContaining({ type: 'iam_token' }),
+            denied_by: { type: 'on_behalf_of', id: null },
           }),
         },
       });
@@ -199,24 +196,17 @@ describe('work a capped callback starts', () => {
       expect(capped.status).toBe(403);
     });
 
-    test('stores the cap, so a credential re-minted for it later is capped', async () => {
+    test('stores the cap, so its work later is capped', async () => {
       const { id } = await readThroughTurn(await cappedAssertion());
       const gen = await db.Generation.findOne({ where: { publicId: id } });
       expect(gen!.actedAsPrincipalId).toBe(projectKeyId);
 
-      const header = await buildRunAuthHeader({
-        principal: readStoredStartingPrincipal({
-          kind: gen!.actedAsPrincipalType,
-          id: gen!.actedAsPrincipalId,
-          bound: gen!.actedAsPrincipalBound,
-        }),
-        projectId: gen!.projectId as number,
-        workPublicId: id,
+      const res = await workRequest({
+        authority: parseWorkAuthority(gen!.authority)!,
+        method: 'get',
+        path: `/api/v1/documents/${documentId}`,
       });
-
-      expect((await readDocument(header!.slice('Bearer '.length))).status).toBe(
-        403
-      );
+      expect(res.status).toBe(403);
     });
   });
 });

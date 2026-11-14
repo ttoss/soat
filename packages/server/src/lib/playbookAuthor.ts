@@ -1,15 +1,10 @@
 import createDebug from 'debug';
 
-import type { Context } from '../Context';
+import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { resolveJwtAuthUser } from '../middleware/auth';
+import { authUserOfWork } from '../middleware/auth';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
-import {
-  buildRunAuthHeader,
-  readStoredRunPrincipal,
-  resolveStartingPrincipal,
-} from './orchestrationRunToken';
 import type {
   PlaybookDefinition,
   PlaybookExecutor,
@@ -21,9 +16,22 @@ import {
   type ToolStart,
 } from './playbookExecutorReferences';
 import { throwPlaybookDefinitionProblems } from './playbookWire';
-import { runPrincipalColumns, type StartingPrincipal } from './principals';
+import {
+  intersectBounds,
+  parseBound,
+  type PrincipalBound,
+  serializeBound,
+} from './principalBound';
+import { principalFromAuthUser, type RequestPrincipal } from './principals';
 import { mayStart, START_ACTIONS } from './startActions';
 import type { ValidationProblem } from './validationProblems';
+import {
+  forWork,
+  principalAuthority,
+  requireWorkAuthority,
+  type WorkAuthority,
+  workAuthorityMissing,
+} from './workAuthority';
 import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 const log = createDebug('soat:playbooks');
@@ -131,12 +139,35 @@ export const executorReferenceProblems = async (args: {
   return problems;
 };
 
+/** The principal a version's executors run as, held to the bound it wrote under. */
+export type AuthorPrincipal = RequestPrincipal & { bound?: PrincipalBound };
+
 /**
  * The credential writing a version, which its executors run as. `principal`
- * is null for a credential carrying its boundary in the token (a trigger or
- * OAuth token): no run can be minted from it.
+ * is null for one whose authority a principal and a bound cannot restate (a
+ * trigger's grant, an OAuth consent): its executors cannot run.
  */
-export type PlaybookAuthor = Writer & { principal: StartingPrincipal | null };
+export type PlaybookAuthor = Writer & { principal: AuthorPrincipal | null };
+
+/** The author a caller writes a version as, or null when it cannot be one. */
+export const authorOf = (authUser: AuthUser): AuthorPrincipal | null => {
+  const { terms } = authUser;
+  if (terms.principal.type === 'trigger') return null;
+  const restated = terms.caps.every((cap) => {
+    return (
+      cap.kind === 'bound' ||
+      (cap.kind === 'key' && terms.principal.id === cap.key)
+    );
+  });
+  if (!restated) return null;
+  const bounds = terms.caps.flatMap((cap) => {
+    return cap.kind === 'bound' ? [cap.bound] : [];
+  });
+  return {
+    ...principalFromAuthUser(authUser),
+    ...(bounds.length > 0 ? { bound: intersectBounds({ bounds }) } : {}),
+  };
+};
 
 /**
  * Refuses a definition its writer could not run as the version's author: one
@@ -179,55 +210,80 @@ export const assertAuthorCanRun = async (args: {
 };
 
 /** The version row's author columns. */
-export const authorColumns = (principal: StartingPrincipal | null) => {
-  return runPrincipalColumns(principal);
-};
-
-/** The author a case's executors run as: who wrote its pinned version. */
-export type PlaybookRunAs = {
-  principal: StartingPrincipal;
-  authHeader: string;
-  isAllowed: IsAllowedFn;
+export const authorColumns = (principal: AuthorPrincipal | null) => {
+  return {
+    principalKind: principal?.principalType ?? null,
+    principalId: principal?.principalId ?? null,
+    principalBound: principal?.bound ? serializeBound(principal.bound) : null,
+  };
 };
 
 /**
- * Mints the run-as credential for the author of a case's version and resolves
- * it as a request would be, so the run is authorized by the author's policies
- * as they stand now, with an API key's boundary intact.
+ * The authority a version's executions run under: its author's, pinned to
+ * the case's project. Null when the author no longer resolves.
  */
-export const resolvePlaybookRunAs = async (args: {
+export const versionAuthority = async (args: {
   version: {
     principalKind: string | null;
     principalId: string | null;
     principalBound: object | null;
-  };
-  projectId: number;
+  } | null;
+  projectPublicId: string;
+}): Promise<WorkAuthority | null> => {
+  const { version } = args;
+  const bound = parseBound(version?.principalBound);
+  if (!version?.principalId || bound === null) return null;
+  const project = args.projectPublicId;
+  if (version.principalKind === 'user') {
+    return principalAuthority({
+      principal: { type: 'user', id: version.principalId },
+      bound,
+      project,
+    });
+  }
+  if (version.principalKind !== 'api_key') return null;
+  const key = await db.ApiKey.findOne({
+    where: { publicId: version.principalId },
+    include: [{ model: db.User, attributes: ['publicId'] }],
+  });
+  if (!key?.user) return null;
+  return principalAuthority({
+    principal: {
+      type: 'api_key',
+      id: version.principalId,
+      owner: key.user.publicId as string,
+    },
+    bound,
+    project,
+  });
+};
+
+/** The authority a case's executors run under, and its checks. */
+export type PlaybookRunAs = {
+  authority: WorkAuthority;
+  isAllowed: IsAllowedFn;
+};
+
+/**
+ * Resolves an execution's authority as a request would be, so the run is
+ * authorized by its policies as they stand now. Work holding none, or whose
+ * authority no longer resolves, is refused.
+ */
+export const resolvePlaybookRunAs = async (args: {
+  authority: WorkAuthority | null;
   workPublicId: string;
 }): Promise<PlaybookRunAs> => {
-  const authHeader = await buildRunAuthHeader({
-    principal: readStoredRunPrincipal(args.version),
-    projectId: args.projectId,
-    workPublicId: args.workPublicId,
+  const authority = requireWorkAuthority({
+    authority: args.authority,
+    work: args.workPublicId,
   });
-  const authUser: Context['authUser'] = authHeader
-    ? await resolveJwtAuthUser({
-        db,
-        token: authHeader.slice('Bearer '.length),
-      })
-    : undefined;
-
-  const principal = resolveStartingPrincipal({ authHeader });
-  if (!authHeader || !authUser || !principal) {
-    log('resolvePlaybookRunAs: no author for %s', args.workPublicId);
-    throw new DomainError(
-      'PLAYBOOK_AUTHOR_UNAVAILABLE',
-      "The case's playbook version has no author its executors can run as."
-    );
+  const authUser = await authUserOfWork({ db, authority });
+  if (!authUser) {
+    log('resolvePlaybookRunAs: unresolved for %s', args.workPublicId);
+    throw workAuthorityMissing({ work: args.workPublicId });
   }
-
   return {
-    principal,
-    authHeader,
+    authority: forWork({ authority, work: args.workPublicId }),
     isAllowed: authUser.isAllowed,
   };
 };

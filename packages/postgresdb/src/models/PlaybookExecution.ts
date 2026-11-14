@@ -118,6 +118,11 @@ export class PlaybookExecution extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare createdByPrincipalId: string | null;
 
+  // The authority the work runs under (`lib/workAuthority.ts`); null when it
+  // has none, and such work is refused.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare authority: object | null;
+
   /**
    * The tool call the write was made on behalf of (`tool_id`, `agent_id`,
    * `generation_id`, `session_id`, `actor_id`), verified from the request's

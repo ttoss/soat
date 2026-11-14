@@ -59,6 +59,7 @@ describe('buildGenerationContext — pinned agent version', () => {
       agentId,
       messages: [{ role: 'user', content: 'hi' }],
       pinnedAgentVersion: 99,
+      authority: null,
     });
 
     expect(ctx.agentVersion).toBe(2);

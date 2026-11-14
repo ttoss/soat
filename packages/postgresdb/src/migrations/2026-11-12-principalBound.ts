@@ -18,7 +18,11 @@ export const principalBound = defineMigration({
   isApplied: async (context) => {
     for (const { table, column } of COLUMNS) {
       if (!(await context.tableExists({ table }))) continue;
-      if (!(await context.columnExists({ table, column }))) return false;
+      if (await context.columnExists({ table, column })) continue;
+      // `2026-11-13-work-authority` drops the column for `authority`.
+      if (!(await context.columnExists({ table, column: 'authority' }))) {
+        return false;
+      }
     }
     return true;
   },

@@ -73,7 +73,7 @@ describe("an approved builtin action is held to the agent's boundary", () => {
   const createAgent = async (args: {
     aiProviderId: string;
     name: string;
-    boundaryPolicy?: object;
+    agentPolicy?: object;
   }): Promise<string> => {
     const res = await authenticatedTestClient(adminToken)
       .post('/api/v1/agents')
@@ -81,8 +81,8 @@ describe("an approved builtin action is held to the agent's boundary", () => {
         project_id: projectId,
         ai_provider_id: args.aiProviderId,
         name: args.name,
-        ...(args.boundaryPolicy
-          ? { policy_ids: [await createPolicy(args.boundaryPolicy)] }
+        ...(args.agentPolicy
+          ? { policy_ids: [await createPolicy(args.agentPolicy)] }
           : {}),
       });
     expect(res.status).toBe(201);
@@ -195,7 +195,7 @@ describe("an approved builtin action is held to the agent's boundary", () => {
     boundedAgentId = await createAgent({
       aiProviderId: providerRes.body.id,
       name: 'aprbound-bounded',
-      boundaryPolicy: {
+      agentPolicy: {
         statement: [
           {
             effect: 'Allow',

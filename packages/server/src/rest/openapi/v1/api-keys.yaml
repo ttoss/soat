@@ -26,8 +26,8 @@ paths:
       summary: List API keys
       description: >
         Lists API keys accessible to the caller.
-        - JWT admin: returns all API keys.
-        - JWT regular user: returns only the user's own API keys.
+        - An unrestricted admin (a login, or a key bound to no project and narrowed by no policy): returns all API keys.
+        - Any other unscoped credential: returns only its user's own API keys.
         - Project-scoped credential (API key or OAuth token): returns the caller's own
           keys scoped to that project, or every key scoped to it when the credential
           holds `api-keys:ListApiKeys` on the project. Confinement to a project is not
@@ -75,7 +75,7 @@ paths:
         - `project_id` is optional. When set, the key is scoped to that single project. When omitted or null, the key is **unscoped** and spans every project its owner can reach.
         - If `policy_ids` is provided, the key's effective permissions are the intersection of the user's policies and the key's policies.
         - Otherwise the key inherits the user's permissions (confined to the key's project when scoped).
-        - When the request is authenticated with a **project-scoped token** (an OAuth access token, a trigger run-as token, a run token or an IAM token), it returns `403 API_KEY_SCOPED_TOKEN`: such a token never creates a key.
+        - When the request is narrowed beyond its credential's own grant (an OAuth access token, an IAM token, an `On-Behalf-Of` assertion, or a call durable work makes under its stored authority), it returns `403 CREDENTIAL_NARROWED`: a key would outlive that narrowing.
         - When the request is authenticated with a **project-scoped API key**, the new key is confined to that same project: omitting `project_id` defaults to it, naming a different project returns `403 API_KEY_PROJECT_SCOPE`, and `project_id: null` (an unscoped key) is likewise refused. Minting an unscoped key requires an unscoped credential.
         - When the request is authenticated with an **API key narrowed by `policy_ids`**, the new key stays inside that boundary: omitting `policy_ids` inherits the caller's own, a non-empty subset of them is accepted, and an empty list or any other policy returns `403 API_KEY_POLICY_BOUNDARY`.
       operationId: createApiKey
@@ -145,7 +145,7 @@ paths:
       tags:
         - API Keys
       summary: Get an API key
-      description: Returns details of an API key. Only the owner or an admin can access it, and a project-scoped credential can only reach keys in its own project.
+      description: Returns details of an API key. Only the owner or an unrestricted admin can access it, and a project-scoped credential can only reach keys in its own project.
       operationId: getApiKey
       x-iam-action: api-keys:GetApiKey
       x-iam-resource-type: apiKey
@@ -193,7 +193,7 @@ paths:
       tags:
         - API Keys
       summary: Update an API key
-      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise). A project-scoped token (OAuth, trigger, run or IAM) never updates a key (`403 API_KEY_SCOPED_TOKEN`).
+      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an unrestricted admin (a login, or a key bound to no project and narrowed by no policy) can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise). A request narrowed beyond its credential's own grant (OAuth, trigger, run or IAM token, or `On-Behalf-Of`) never updates a key (`403 CREDENTIAL_NARROWED`).
       operationId: updateApiKey
       x-iam-action: api-keys:UpdateApiKey
       x-iam-resource-type: apiKey
@@ -271,7 +271,7 @@ paths:
       tags:
         - API Keys
       summary: Delete an API key
-      description: Deletes an API key. Only the owner or an admin can delete it, and a project-scoped credential can only delete keys in its own project.
+      description: Deletes an API key. Only the owner or an unrestricted admin can delete it, and a project-scoped credential can only delete keys in its own project.
       operationId: deleteApiKey
       x-iam-action: api-keys:DeleteApiKey
       x-iam-resource-type: apiKey

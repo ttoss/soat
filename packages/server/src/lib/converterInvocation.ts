@@ -9,6 +9,7 @@ import type { GenerationEndUser } from './generationAttribution';
 import { buildIngestionCallbackBlock } from './ingestionCallbackToken';
 import type { MappedIngestionRule } from './ingestionRules';
 import { callTool } from './tools';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:ingestionConverter');
 
@@ -162,12 +163,15 @@ const invokeToolConverter = async (args: {
   documentId: string;
   attemptId: string;
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 }): Promise<InvokeConverterResult> => {
   const input = await buildToolConverterInput(args);
   let raw: unknown;
   try {
     raw = await callTool({
       guardrails: 'apply',
+      authority: args.authority,
       projectId: args.projectId,
       reach: 'shares',
       id: args.rule.tool_id!,
@@ -220,10 +224,13 @@ const invokeAgentConverter = async (args: {
   rule: MappedIngestionRule;
   projectId: number;
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 }): Promise<InvokeConverterResult> => {
   let result: Awaited<ReturnType<typeof createGeneration>>;
   try {
     result = await createGeneration({
+      authority: args.authority,
       projectIds: [args.projectId],
       runProjectId: args.projectId,
       agentId: args.rule.agent_id!,
@@ -282,6 +289,8 @@ export const invokeConverter = async (args: {
   attemptId: string;
   /** Who the ingest runs for, validated by its route. */
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 }): Promise<InvokeConverterResult> => {
   log(
     'invokeConverter: file=%s glob=%s toolId=%s agentId=%s delivery=%s',

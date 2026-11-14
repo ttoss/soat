@@ -107,19 +107,16 @@ the approver sees.
 
 ### Continuation identity
 
-A continuation runs **as the principal the proposing generation acted as**,
-never as the approver. The platform reads
-[`acted_as`](./generations.md#acting-principal) off the proposing generation —
-its starter, or the caller who resumed it with tool outputs — and re-mints a short-lived run-as token; the continuation's
-[`builtin` tools](./tools.md#builtin) and the approved action execute with it.
-The token asserts identity only; authorization is evaluated per request, so a
-chain started by a scoped API key never exceeds that key's policies, and
-revoking the key stops the chain mid-flight.
+A continuation runs **under the authority the proposing generation stores**,
+never the approver's: its starter's, or that of the caller who resumed it with
+tool outputs. The continuation's [`builtin` tools](./tools.md#builtin) and the
+approved action execute under it. Authorization is evaluated per request
+against current policies, so a chain started by a scoped API key never exceeds
+that key's policies, and revoking the key stops the chain mid-flight.
 
-The continuation records that principal as its own starter and `acted_as`, so
-later approvals in the chain re-mint from there. A chain with no recorded principal
-(started by a trigger or an OAuth token) gets no credential; its self-calls
-stay unauthenticated.
+The continuation stores that authority as its own, so later approvals in the
+chain run under it too. A proposing generation with no stored authority leaves
+the continuation none: its calls are refused with `409 WORK_AUTHORITY_MISSING`.
 
 The proposing turn's [`tool_context`](./agents.md#tool-context) is not stored
 on the item. A tool that authorizes through a context header gets its value
@@ -141,6 +138,13 @@ A denied action does not run; its result is the
 [denial body](./iam.md#what-a-denial-looks-like), `error.code` `FORBIDDEN` and
 `error.message` `Forbidden: agent <agent_id>'s policies deny <action>`. An agent that no
 longer exists bounds nothing in, so its approved `builtin` actions are refused.
+
+Two proposals name no stored tool. An approved
+[`write_memory`](./memories.md#write_memory-tool) call (`tool_id`
+`native:write_memory`) runs the agent's write path, held to the same
+`policy_ids`; any other `native:` `tool_id` is refused with an `error` result. An approved [inline tool](./agents.md#inline-ephemeral-tool-definitions) call
+(`tool_id` `inline:<name>`) has nothing to execute; its `result` is
+`{ "error": "The approved action targets an inline tool and cannot be executed at resolution time." }`.
 
 ### Duplicate proposals (dedup)
 
@@ -240,8 +244,9 @@ requires what making the call would require:
 | ---------------- | ------------------------------------------------------------- |
 | any tool         | `tools:CallTool` on that tool                                 |
 | a `builtin` tool | the proposed action's own IAM action, anywhere in the project |
+| [`write_memory`](./memories.md#write_memory-tool) (`native:write_memory`) | `memories:CreateMemory` **and** `memories:UpdateMemory` on the store the agent's `write_memory_store_id` names, with its tags as condition inputs; anywhere in the project when it names none |
 
-A builtin action is dispatched in-process against the proposer's credential, so nothing else checks the approver. An edit failing either check answers `403 FORBIDDEN`; approving as proposed is unaffected.
+A builtin action is dispatched in-process against the proposer's credential, and a `write_memory` call writes in-process under the agent's `policy_ids`, so nothing else checks the approver. An edit failing any check answers `403 FORBIDDEN`; approving as proposed is unaffected.
 
 ## Examples
 

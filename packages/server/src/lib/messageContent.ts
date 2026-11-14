@@ -1,6 +1,6 @@
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import { agentDenied, callerDenied } from './authorizationDenial';
 import { getDocument } from './documents';
 import {
@@ -9,10 +9,11 @@ import {
   evaluatePoliciesMultiResource,
   type PolicyDocument,
 } from './iam';
-import { resolveSoatActionScope } from './soatActionBoundary';
+import { resolveSoatActionScope } from './soatActionScope';
 import { soatTools } from './soatTools';
 import { buildResourceTagContext } from './tags';
 import { callTool, tools } from './tools';
+import type { WorkAuthority } from './workAuthority';
 
 export type ToolOutputMessageContent = {
   type: 'tool_output';
@@ -125,7 +126,7 @@ const buildDocumentPermissionResources = (args: {
   return resources;
 };
 
-const isBoundaryAllowed = (args: {
+const isAgentPolicyAllowed = (args: {
   policy: PolicyDocument | null;
   action: string;
   resource?: string;
@@ -155,17 +156,17 @@ const isBoundaryAllowed = (args: {
   });
 };
 
-const assertBoundaryAllowed = (args: {
-  boundary?: AgentBoundary;
+const assertAgentPolicyAllowed = (args: {
+  agentAuthority?: AgentAuthority;
   action: string;
   resource?: string;
   resources?: string[];
   context?: Record<string, string>;
 }) => {
   if (
-    args.boundary &&
-    !isBoundaryAllowed({
-      policy: args.boundary.policy,
+    args.agentAuthority &&
+    !isAgentPolicyAllowed({
+      policy: args.agentAuthority.policy,
       action: args.action,
       resource: args.resource,
       resources: args.resources,
@@ -173,7 +174,7 @@ const assertBoundaryAllowed = (args: {
     })
   ) {
     throw agentDenied({
-      agentId: args.boundary.agentId,
+      agentId: args.agentAuthority.agentId,
       action: args.action,
       resource: args.resource ?? args.resources?.[0] ?? null,
     });
@@ -233,7 +234,7 @@ const resolveSoatIamAction = (action: string): string => {
 const resolveDocumentContent = async (args: {
   content: DocumentMessageContent;
   authUser?: AuthUser;
-  agentBoundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
 }): Promise<{ content: string; documentId: string }> => {
   const document = await getDocument({ id: args.content.document_id });
 
@@ -258,8 +259,8 @@ const resolveDocumentContent = async (args: {
     resources,
     context,
   });
-  assertBoundaryAllowed({
-    boundary: args.agentBoundary,
+  assertAgentPolicyAllowed({
+    agentAuthority: args.agentAuthority,
     action: 'documents:GetDocument',
     resources,
     context,
@@ -282,15 +283,15 @@ const assertBuiltinActionAllowed = async (args: {
   input?: Record<string, unknown>;
   projectPublicId: string;
   authUser?: AuthUser;
-  agentBoundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
 }) => {
   const action = resolveSoatIamAction(args.action);
   const scope = await resolveSoatActionScope({
     resourceRef: findSoatToolDefinition(args.action)?.resource,
     toolArgs: args.input,
   });
-  assertBoundaryAllowed({
-    boundary: args.agentBoundary,
+  assertAgentPolicyAllowed({
+    agentAuthority: args.agentAuthority,
     action,
     resource: scope?.resource ?? '*',
     context: scope?.context,
@@ -307,15 +308,15 @@ const assertBuiltinActionAllowed = async (args: {
 const resolveToolOutputContent = async (args: {
   content: ToolOutputMessageContent;
   projectIds?: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   allowedToolIds?: string[];
-  agentBoundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
 }): Promise<{ content: string }> => {
   assertToolAllowedForAgent({
     allowedToolIds: args.allowedToolIds,
-    agentId: args.agentBoundary?.agentId ?? null,
+    agentId: args.agentAuthority?.agentId ?? null,
     toolId: args.content.tool_id,
   });
 
@@ -337,7 +338,7 @@ const resolveToolOutputContent = async (args: {
       input: args.content.input,
       projectPublicId: tool.project_id,
       authUser: args.authUser,
-      agentBoundary: args.agentBoundary,
+      agentAuthority: args.agentAuthority,
     });
   }
 
@@ -348,7 +349,7 @@ const resolveToolOutputContent = async (args: {
     id: args.content.tool_id,
     action: args.content.action,
     input: args.content.input,
-    authHeader: args.authHeader,
+    authority: args.authority,
     caller: args.authUser,
     // The generation calling a tool on its own behalf, so it carries the same
     // bag the model's own tool calls resolve from.
@@ -377,10 +378,10 @@ const resolveToolOutputContent = async (args: {
 export const resolveMessageContent = async (args: {
   content: ResolvableMessageContent;
   projectIds?: number[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   allowedToolIds?: string[];
-  agentBoundary?: AgentBoundary;
+  agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
 }): Promise<{ content: string; documentId?: string }> => {
   if (typeof args.content === 'string') {
@@ -391,7 +392,7 @@ export const resolveMessageContent = async (args: {
     return resolveDocumentContent({
       content: args.content,
       authUser: args.authUser,
-      agentBoundary: args.agentBoundary,
+      agentAuthority: args.agentAuthority,
     });
   }
 
@@ -405,10 +406,10 @@ export const resolveMessageContent = async (args: {
   return resolveToolOutputContent({
     content: args.content,
     projectIds: args.projectIds,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     allowedToolIds: args.allowedToolIds,
-    agentBoundary: args.agentBoundary,
+    agentAuthority: args.agentAuthority,
     toolContext: args.toolContext,
   });
 };

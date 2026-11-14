@@ -831,9 +831,19 @@ components:
           items:
             type: string
           description: >-
-            Policies capping every generation. The deployer must hold every
-            grant they carry inside the agent's project, else `403
-            POLICY_GRANT_NOT_HELD`.
+            Under `run_as: caller`, the policies capping the caller's
+            permissions on every generation; under `run_as: agent`, the
+            agent's own grant. The deployer must hold every grant they carry
+            inside the agent's project, else `403 POLICY_GRANT_NOT_HELD`.
+        run_as:
+          type: string
+          enum:
+            - caller
+            - agent
+          description: >-
+            What `policy_ids` are: `caller` (default) caps the caller, `agent`
+            makes them the agent's own grant and requires a non-empty
+            `policy_ids`.
         temperature:
           type: number
           nullable: true
@@ -1114,7 +1124,7 @@ components:
                 session_token:
                   type: string
                   nullable: true
-                  description: '`aws_sigv4`: the temporary credential''s session token'
+                  description: "`aws_sigv4`: the temporary credential's session token"
                 credentials:
                   type: string
                   nullable: true
@@ -2315,7 +2325,14 @@ components:
             quotas REST contract.
         meter_type:
           type: string
-          enum: [llm_tokens, compute_execution, api_request, storage, tool_execution]
+          enum:
+            [
+              llm_tokens,
+              compute_execution,
+              api_request,
+              storage,
+              tool_execution,
+            ]
           description: >-
             Only for metric cost_usd. The meter this cap answers for; omit it
             and the cap sums every priced meter. See the quotas REST contract.

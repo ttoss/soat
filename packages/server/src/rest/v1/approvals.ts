@@ -2,6 +2,8 @@ import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { isNativeProposal } from 'src/lib/agentToolApproval';
+import { nativeProposalEditChecks } from 'src/lib/agentToolApprovalContinuation';
 import { APPROVAL_STATUSES } from 'src/lib/approvalFilters';
 import {
   approveApproval,
@@ -52,20 +54,14 @@ const approvalSrn = (approval: { id: string } & ProjectOwned): string => {
  * no longer exists, or a builtin naming an action the catalog does not know.
  */
 const proposedBuiltinIamAction = async (args: {
-  projectPublicId: string;
+  projectId: number;
   proposed: NonNullable<WireProposedAction>;
 }): Promise<string | undefined> => {
   if (!args.proposed.action) return undefined;
 
-  const project = await db.Project.findOne({
-    where: { publicId: args.projectPublicId },
-    attributes: ['id'],
-  });
-  if (!project) return undefined;
-
   const tool = await toolReferences.find({
     id: args.proposed.tool_id,
-    projectId: project.id,
+    projectId: args.projectId,
     reach: 'project',
   });
   if (tool?.type !== 'builtin') return undefined;
@@ -73,6 +69,53 @@ const proposedBuiltinIamAction = async (args: {
   return soatTools.find((def) => {
     return def.name === args.proposed.action;
   })?.iamAction;
+};
+
+/**
+ * What the proposed call performs in-process, beyond calling the tool: a
+ * `builtin` action, or a native tool's work (`nativeProposalEditChecks`).
+ */
+const underlyingEditChecks = async (args: {
+  projectPublicId: string;
+  agentId: string | null;
+  proposed: NonNullable<WireProposedAction>;
+}): Promise<
+  Array<{ action: string; resource: string; context?: Record<string, string> }>
+> => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectPublicId },
+    attributes: ['id'],
+  });
+  if (!project) return [];
+
+  if (isNativeProposal(args.proposed.tool_id)) {
+    return nativeProposalEditChecks({
+      toolId: args.proposed.tool_id,
+      agentId: args.agentId,
+      projectId: project.id as number,
+      projectPublicId: args.projectPublicId,
+    });
+  }
+
+  const iamAction = await proposedBuiltinIamAction({
+    projectId: project.id as number,
+    proposed: args.proposed,
+  });
+  if (!iamAction) return [];
+  return [
+    {
+      action: iamAction,
+      // The edit names its own target inside the arguments, so what is asked
+      // is whether the approver may perform this action anywhere in the
+      // project. A narrower grant cannot be shown to cover the edited target,
+      // and is refused rather than assumed.
+      resource: buildSrn({
+        projectPublicId: args.projectPublicId,
+        resourceType: '*',
+        resourceId: '*',
+      }),
+    },
+  ];
 };
 
 /**
@@ -85,10 +128,11 @@ const proposedBuiltinIamAction = async (args: {
  * principal's agent into a machine for running whatever they wrote.
  *
  * So an editor must hold what making the call themselves would need:
- * `tools:CallTool` on the tool, and for a `builtin` proposal the action's own
- * IAM action as well — that dispatch re-checks the action against whoever's
- * credential is on the request, which here is the proposer's, so nothing else
- * on this path asks whether the approver could have performed it.
+ * `tools:CallTool` on the tool, and whatever the call performs in-process
+ * (`underlyingEditChecks`) — a `builtin` action, or a held `write_memory`
+ * call's memory writes. That work runs under the proposer's credential or the
+ * agent's boundary, so nothing else on this path asks whether the approver
+ * could have performed it.
  *
  * The tool row is consulted only for the second half; `tools:CallTool` is
  * answered from the proposal alone, so a proposal naming a tool that has since
@@ -98,6 +142,7 @@ const assertMayEditProposedAction = async (args: {
   authUser: AuthUser;
   approval: {
     project_id?: string | null;
+    agent_id?: string | null;
     proposed_action?: WireProposedAction;
   };
 }): Promise<void> => {
@@ -110,9 +155,14 @@ const assertMayEditProposedAction = async (args: {
   const requireAllowedCall = async (check: {
     action: string;
     resource: string;
+    context?: Record<string, string>;
   }) => {
     if (await args.authUser.isAllowed({ projectPublicId, ...check })) return;
-    throw callerDenied({ authUser: args.authUser, ...check });
+    throw callerDenied({
+      authUser: args.authUser,
+      action: check.action,
+      resource: check.resource,
+    });
   };
 
   await requireAllowedCall({
@@ -124,24 +174,13 @@ const assertMayEditProposedAction = async (args: {
     }),
   });
 
-  const iamAction = await proposedBuiltinIamAction({
+  for (const check of await underlyingEditChecks({
     projectPublicId,
+    agentId: args.approval.agent_id ?? null,
     proposed,
-  });
-  if (!iamAction) return;
-
-  await requireAllowedCall({
-    action: iamAction,
-    // The edit names its own target inside the arguments, so what is asked is
-    // whether the approver may perform this action anywhere in the project. A
-    // narrower grant cannot be shown to cover the edited target, and is
-    // refused rather than assumed.
-    resource: buildSrn({
-      projectPublicId,
-      resourceType: '*',
-      resourceId: '*',
-    }),
-  });
+  })) {
+    await requireAllowedCall(check);
+  }
 };
 
 const parseApprovalStatuses = (ctx: Context) => {

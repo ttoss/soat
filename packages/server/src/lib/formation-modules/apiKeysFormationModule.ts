@@ -3,10 +3,10 @@ import {
   createApiKey,
   deleteApiKey,
   getApiKey,
+  heldKeyPolicyIds,
   updateApiKey,
 } from '../apiKeys';
 import { toOptionalString } from '../resource-inputs/normalizers';
-import { assertWriterHolds, type Writer } from '../writerRule';
 import { defineFormationModule } from './defineFormationModule';
 
 /** `undefined` when the template omits `policy_ids`. */
@@ -20,23 +20,6 @@ const readPolicyPublicIds = (
         return typeof id === 'string';
       })
     : [];
-};
-
-const lookupPolicyIds = async (args: {
-  publicIds: string[] | undefined;
-  writer: Writer;
-  projectId: number;
-}): Promise<number[] | undefined> => {
-  if (args.publicIds === undefined) return undefined;
-  const policies = await assertWriterHolds({
-    carrier: 'apiKeys',
-    writer: args.writer,
-    projectId: args.projectId,
-    carried: { policyIds: args.publicIds },
-  });
-  return policies.map((policy) => {
-    return policy.id;
-  });
 };
 
 export const apiKeysFormationModule = defineFormationModule({
@@ -56,11 +39,10 @@ export const apiKeysFormationModule = defineFormationModule({
   create: async ({ properties, projectId, actor }) => {
     const policyPublicIds = readPolicyPublicIds(properties);
     const policyIds = await boundKeyPolicyIds({
-      scopedToken: actor.scopedToken,
-      boundaryPolicyIds: actor.keyPolicyBoundary,
-      requestedPolicyPublicIds: policyPublicIds,
-      requestedPolicyIds: await lookupPolicyIds({
-        publicIds: policyPublicIds,
+      narrowed: actor.narrowed,
+      keyPolicyIds: actor.keyPolicyBoundary,
+      requestedPolicyIds: await heldKeyPolicyIds({
+        policyIds: policyPublicIds,
         writer: actor,
         projectId,
       }),
@@ -81,11 +63,10 @@ export const apiKeysFormationModule = defineFormationModule({
   update: async ({ properties, physicalResourceId, projectId, actor }) => {
     const policyPublicIds = readPolicyPublicIds(properties);
     const policyIds = await boundKeyPolicyIds({
-      scopedToken: actor.scopedToken,
-      boundaryPolicyIds: actor.keyPolicyBoundary,
-      requestedPolicyPublicIds: policyPublicIds,
-      requestedPolicyIds: await lookupPolicyIds({
-        publicIds: policyPublicIds,
+      narrowed: actor.narrowed,
+      keyPolicyIds: actor.keyPolicyBoundary,
+      requestedPolicyIds: await heldKeyPolicyIds({
+        policyIds: policyPublicIds,
         writer: actor,
         projectId,
       }),

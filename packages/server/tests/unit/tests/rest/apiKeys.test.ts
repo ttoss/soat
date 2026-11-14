@@ -662,7 +662,7 @@ describe('API Keys', () => {
 
     test('a policy-less key falls back to the owning user policies for getPolicies', async () => {
       // The key itself has no policy_ids, so files.ts's `authUser.getPolicies`
-      // call reads alice's own user-level policies alone (`resolvePolicySets`)
+      // call reads alice's own user-level policies alone (no cap narrows them)
       // to evaluate `files:GetFile` access.
       const response = await authenticatedTestClient(rawKey).get(
         `/api/v1/files?project_id=${projectAId}`

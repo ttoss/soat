@@ -1,11 +1,17 @@
 import type { Tool } from 'ai';
-import { isSoatActionAllowedByBoundary } from 'src/lib/agentToolResolver';
+import { isSoatActionAllowedByAgentPolicy } from 'src/lib/agentToolResolver';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import type { PolicyDocument } from 'src/lib/iam';
+import type { WorkAuthority } from 'src/lib/workAuthority';
 
 import { agentRefusal } from '../../fixtures/agentRefusal';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, loginAs } from '../../testClient';
+import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
+import {
+  authenticatedTestClient,
+  loginAs,
+  workAuthorityOfToken,
+} from '../../testClient';
 
 // A protocol test reads the call, not its meter: no project, so the
 // recorder's write is refused and swallowed.
@@ -16,7 +22,7 @@ const UNMETERED = {
   toolId: null,
   workId: null,
   attribution: {},
-  sender: { authHeader: undefined },
+  sender: { authority: ORPHAN_AUTHORITY },
 };
 
 /**
@@ -32,6 +38,7 @@ const UNMETERED = {
  */
 describe('a builtin tool is bounded by the resource its arguments name', () => {
   let adminToken: string;
+  let adminAuthority: WorkAuthority;
   let projectId: string;
   let allowedStoreId: string;
   let otherStoreId: string;
@@ -44,13 +51,13 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
         description: null,
         actions: ['get-memory-store'],
       },
-      authHeader: `Bearer ${adminToken}`,
+      authority: adminAuthority,
       projectPublicId: projectId,
-      boundary: { agentId: AGENT_ID, policy },
+      agentAuthority: { runAs: 'caller', agentId: AGENT_ID, policy },
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByBoundary,
+      isSoatActionAllowedByAgentPolicy,
       logToolCallingError: () => {},
     });
     return tools['platform_get-memory-store'];
@@ -80,6 +87,10 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       policyActions: ['memories:*'],
     });
     adminToken = setup.adminToken;
+    adminAuthority = await workAuthorityOfToken({
+      token: adminToken,
+      project: null,
+    });
     projectId = setup.projectId;
     await loginAs('boundscopeadmin', 'supersecret');
 
@@ -122,7 +133,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
   });
 
   test('a resource-tag condition reads the target resource tags', async () => {
-    const boundaryPolicy: PolicyDocument = {
+    const agentPolicy: PolicyDocument = {
       statement: [
         {
           effect: 'Allow',
@@ -134,13 +145,13 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
     };
 
     const tagged = await callWith({
-      tool: resolveGetMemoryStore(boundaryPolicy),
+      tool: resolveGetMemoryStore(agentPolicy),
       memoryStoreId: allowedStoreId,
     });
     expect(tagged.error).toBeUndefined();
 
     const untagged = await callWith({
-      tool: resolveGetMemoryStore(boundaryPolicy),
+      tool: resolveGetMemoryStore(agentPolicy),
       memoryStoreId: otherStoreId,
     });
     expect(untagged).toEqual(
@@ -160,9 +171,10 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
         actions: ['get-memory-store'],
         presetParameters: { memory_store_id: allowedStoreId },
       },
-      authHeader: `Bearer ${adminToken}`,
+      authority: adminAuthority,
       projectPublicId: projectId,
-      boundary: {
+      agentAuthority: {
+        runAs: 'caller',
         agentId: AGENT_ID,
         policy: allowMemoriesOn(
           `srn:${projectId}:memory_store:${allowedStoreId}`
@@ -171,7 +183,7 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByBoundary,
+      isSoatActionAllowedByAgentPolicy,
       logToolCallingError: () => {},
     });
 

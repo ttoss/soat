@@ -9,6 +9,7 @@ import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
 import { callTool } from './tools';
 import { serverSideToolProblem } from './toolsCallDispatch';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:deciders');
 
@@ -92,7 +93,7 @@ export const answerWithTool = async (args: {
    * The requester's credential: a `builtin` step calls this server's API as
    * whoever asked for the decision, never as nobody or as anyone else.
    */
-  authHeader?: string;
+  authority: WorkAuthority | null;
 }): Promise<DecisionAnswer[]> => {
   log('answerWithTool: toolId=%s', args.toolPublicId);
   const raw = await callTool({
@@ -101,7 +102,7 @@ export const answerWithTool = async (args: {
     id: args.toolPublicId,
     guardrails: 'apply',
     input: { input: args.input, questions: args.questions },
-    authHeader: args.authHeader,
+    authority: args.authority,
     attribution: { source: DECIDER_USAGE_SOURCE },
   });
   return parseToolAnswers({ questions: args.questions, raw });

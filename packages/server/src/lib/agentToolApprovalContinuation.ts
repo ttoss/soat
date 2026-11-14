@@ -2,9 +2,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { reactsToExpiredApproval } from './agentApprovalExpiry';
-import { type AgentBoundary, resolveAgentBoundary } from './agentBoundary';
+import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
+import {
+  runApprovedWriteMemory,
+  WRITE_MEMORY_TOOL_ID,
+  writeMemoryEditChecks,
+} from './agentKnowledge';
+import { isInlineProposal, isNativeProposal } from './agentToolApproval';
 import {
   type ApprovalResumeHandler,
   type DecisionOutput,
@@ -13,14 +19,15 @@ import {
 } from './approvals';
 import { expireChainIfSettled } from './generationChains';
 import type { PolicyDocument } from './iam';
-import {
-  buildRunAuthHeader,
-  readStoredStartingPrincipal,
-} from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
 import { callTool } from './tools';
+import {
+  forWork,
+  parseWorkAuthority,
+  type WorkAuthority,
+} from './workAuthority';
 
 const log = createDebug('soat:approvals');
 
@@ -29,40 +36,21 @@ const errorMessage = (error: unknown): string => {
 };
 
 /**
- * Re-mints the continuation's credential from the principal the generation that
- * proposed the approved call acted as: its submitter when a `tool-outputs`
- * resumption proposed it.
- *
- * The approval can sit pending for days, so identity comes from the row, not
- * the resolving request: the approver decided *whether* the action happens, not
- * *as whom*. `undefined` when the chain has no principal or it no longer
- * resolves; self-calls then go out unauthenticated.
+ * The continuation's authority: the one the generation that proposed the
+ * approved call stores. The approval can sit pending for days, so it comes
+ * from the row, not the resolving request: the approver decided *whether* the
+ * action happens, not *as whom*. Null when there is no proposing generation.
  */
-const resolveContinuationAuthHeader = async (args: {
+const resolveContinuationAuthority = async (args: {
   item: MappedApproval;
-  projectInternalId: number;
-}): Promise<string | undefined> => {
-  if (!args.item.generation_id) return undefined;
-
+}): Promise<WorkAuthority | null> => {
+  if (!args.item.generation_id) return null;
   const proposing = await db.Generation.findOne({
     where: { publicId: args.item.generation_id },
-    attributes: [
-      'actedAsPrincipalType',
-      'actedAsPrincipalId',
-      'actedAsPrincipalBound',
-    ],
+    attributes: ['authority'],
   });
-  if (!proposing) return undefined;
-
-  return buildRunAuthHeader({
-    principal: readStoredStartingPrincipal({
-      kind: proposing.actedAsPrincipalType,
-      id: proposing.actedAsPrincipalId,
-      bound: proposing.actedAsPrincipalBound,
-    }),
-    projectId: args.projectInternalId,
-    workPublicId: args.item.id,
-  });
+  const authority = parseWorkAuthority(proposing?.authority);
+  return authority ? forWork({ authority, work: args.item.id }) : null;
 };
 
 /** Refuses every action: what an agent that no longer resolves is bounded by. */
@@ -89,10 +77,10 @@ const proposingActorId = async (
  * The proposing agent's `policy_ids` as they stand now, the same cap the
  * agent's own calls are held to.
  */
-const proposingAgentBoundary = async (args: {
+const proposingAgentAuthority = async (args: {
   item: MappedApproval;
   projectInternalId: number;
-}): Promise<AgentBoundary> => {
+}): Promise<AgentAuthority> => {
   const agent = args.item.agent_id
     ? await agentReferences.find({
         id: args.item.agent_id,
@@ -101,30 +89,127 @@ const proposingAgentBoundary = async (args: {
       })
     : null;
   if (!agent) {
-    return { agentId: args.item.agent_id ?? null, policy: DENY_ALL_POLICY };
+    return {
+      runAs: 'caller',
+      agentId: args.item.agent_id ?? null,
+      policy: DENY_ALL_POLICY,
+    };
   }
-  return resolveAgentBoundary({
+  return resolveAgentAuthority({
     agentId: agent.publicId,
+    runAs: agent.runAs,
     policyIds: agent.policyIds,
     actorId: await proposingActorId(args.item.generation_id),
+    // An approval with no project row left pins the grant to no project.
+    projectPublicId: args.item.project_id ?? '',
+  });
+};
+
+/** The approved `write_memory` call, run as the agent that proposed it. */
+const executeApprovedWriteMemory = async (args: {
+  item: MappedApproval;
+  projectInternalId: number;
+  input: Record<string, unknown>;
+}): Promise<object> => {
+  const agent = args.item.agent_id
+    ? await agentReferences.find({
+        id: args.item.agent_id,
+        projectId: args.projectInternalId,
+        reach: 'project',
+      })
+    : null;
+  const actorId = await proposingActorId(args.item.generation_id);
+  return runApprovedWriteMemory({
+    agent,
+    generationId: args.item.generation_id ?? null,
+    projectId: args.projectInternalId,
+    agentPolicy: (
+      await proposingAgentAuthority({
+        item: args.item,
+        projectInternalId: args.projectInternalId,
+      })
+    ).policy,
+    actorId: actorId ?? undefined,
+    input: args.input,
+  });
+};
+
+type EditCheck = {
+  action: string;
+  resource: string;
+  context?: Record<string, string>;
+};
+
+/** Everything resolution needs to know about one native tool, a tool with no row. */
+type NativeTool = {
+  /** How an approved call runs. */
+  execute: typeof executeApprovedWriteMemory;
+  /**
+   * What an approver must hold, beyond `tools:CallTool`, to edit a held call:
+   * the work the call performs in-process, which nothing else checks against
+   * the approver.
+   */
+  editChecks: (args: {
+    agentId: string | null;
+    projectId: number;
+    projectPublicId: string;
+  }) => Promise<EditCheck[]>;
+};
+
+/**
+ * Every native tool, by `tool_id`. One missing here is refused at resolution
+ * rather than looked up as a stored tool, so an edit of it adds nothing.
+ */
+const NATIVE_TOOLS: Record<string, NativeTool | undefined> = {
+  [WRITE_MEMORY_TOOL_ID]: {
+    execute: executeApprovedWriteMemory,
+    editChecks: writeMemoryEditChecks,
+  },
+};
+
+export const nativeProposalEditChecks = async (args: {
+  toolId: string;
+  agentId: string | null;
+  projectId: number;
+  projectPublicId: string;
+}): Promise<EditCheck[]> => {
+  return (await NATIVE_TOOLS[args.toolId]?.editChecks(args)) ?? [];
+};
+
+const executeApprovedNativeAction = async (args: {
+  toolId: string;
+  item: MappedApproval;
+  projectInternalId: number;
+  input: Record<string, unknown>;
+}): Promise<object> => {
+  const nativeTool = NATIVE_TOOLS[args.toolId];
+  if (!nativeTool) {
+    return {
+      error: `The approved action targets ${args.toolId}, which cannot be executed at resolution time.`,
+    };
+  }
+  return nativeTool.execute({
+    item: args.item,
+    projectInternalId: args.projectInternalId,
+    input: args.input,
   });
 };
 
 /**
  * Executes the frozen (or edited) proposed action at resolution time and returns
- * its output as the decision `result`. Runs through the normal persisted-tool
- * path (`callTool`), which re-applies preset parameters and output mapping.
- * Inline-tool proposals have no persisted id to execute against, so they carry a
- * structured note instead of a result.
+ * its output as the decision `result`. A persisted tool runs through
+ * `callTool`, which re-applies preset parameters and output mapping; a native
+ * tool runs through its {@link NATIVE_TOOLS} entry. An inline tool has nothing to
+ * execute against, so it carries a structured note instead of a result.
  */
 const executeApprovedAction = async (args: {
   item: MappedApproval;
   projectInternalId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
 }): Promise<object | null> => {
   const proposed = args.item.proposed_action;
-  if (!proposed?.tool_id) {
+  if (!proposed?.tool_id || isInlineProposal(proposed.tool_id)) {
     return {
       error:
         'The approved action targets an inline tool and cannot be executed at resolution time.',
@@ -133,6 +218,15 @@ const executeApprovedAction = async (args: {
   const input = (args.item.edited_arguments ??
     proposed.arguments ??
     {}) as Record<string, unknown>;
+
+  if (isNativeProposal(proposed.tool_id)) {
+    return executeApprovedNativeAction({
+      toolId: proposed.tool_id,
+      item: args.item,
+      projectInternalId: args.projectInternalId,
+      input,
+    });
+  }
 
   log(
     'executeApprovedAction: id=%s toolId=%s action=%s',
@@ -155,7 +249,7 @@ const executeApprovedAction = async (args: {
     // The approved action runs as the chain's principal too, not just the
     // continuation that reports it — a proposed `soat` call is executed here,
     // and without the credential it reaches the loopback unauthenticated.
-    authHeader: args.authHeader,
+    authority: args.authority,
     toolContext: args.toolContext,
     attribution: { generationId: args.item.generation_id },
     signedOff: {
@@ -163,7 +257,7 @@ const executeApprovedAction = async (args: {
         ? proposed.arguments
         : {},
     },
-    boundary: await proposingAgentBoundary({
+    agentAuthority: await proposingAgentAuthority({
       item: args.item,
       projectInternalId: args.projectInternalId,
     }),
@@ -269,7 +363,7 @@ const fireContinuation = async (args: {
   item: MappedApproval;
   decision: DecisionOutput;
   projectInternalId: number;
-  authHeader?: string;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
 }): Promise<void> => {
   const { item } = args;
@@ -289,9 +383,8 @@ const fireContinuation = async (args: {
       agentId: agent.id as number,
       sessionId: item.session_id,
       message,
-      authHeader: args.authHeader,
-      // No request drives a continuation: the principal is read off the
-      // re-minted `authHeader`.
+      authority: args.authority,
+      // No request drives a continuation: it runs under `authority`.
       authUser: undefined,
       toolContext: args.toolContext,
       initiatorGenerationId: item.generation_id,
@@ -305,11 +398,9 @@ const fireContinuation = async (args: {
     projectIds: [args.projectInternalId],
     initiatorGenerationId: item.generation_id,
     messages: [{ role: 'user', content: message }],
-    // Carries the chain's identity into the continuation's own `soat` tools,
-    // and — because `createGeneration` reads the principal back off it — onto
-    // the continuation's generation row, so a further approval in the same
-    // chain re-mints from there in turn.
-    authHeader: args.authHeader,
+    // The chain's authority, which the continuation's generation stores, so a
+    // further approval in the same chain runs under it in turn.
+    authority: args.authority,
     toolContext: args.toolContext,
   });
 };
@@ -336,10 +427,7 @@ const runToolCallContinuation = async (args: {
     });
     const projectInternalId = project.id as number;
 
-    const authHeader = await resolveContinuationAuthHeader({
-      item,
-      projectInternalId,
-    });
+    const authority = await resolveContinuationAuthority({ item });
 
     let result: object | null = null;
     if (args.decision.decision === 'approved') {
@@ -349,7 +437,7 @@ const runToolCallContinuation = async (args: {
       const reHandedOff = await emitClientToolReHandoff({
         item,
         projectInternalId,
-        authHeader,
+        authority,
         toolContext: args.toolContext,
       });
       if (reHandedOff) return;
@@ -357,7 +445,7 @@ const runToolCallContinuation = async (args: {
       result = await executeApprovedAction({
         item,
         projectInternalId,
-        authHeader,
+        authority,
         toolContext: args.toolContext,
       }).catch((error: unknown) => {
         log('executeApprovedAction failed id=%s %o', item.id, error);
@@ -384,7 +472,7 @@ const runToolCallContinuation = async (args: {
       item,
       decision: { ...args.decision, result },
       projectInternalId,
-      authHeader,
+      authority,
       toolContext: args.toolContext,
     });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
 import { principalFromAuthUser } from './principals';
+import type { ActingPrincipal } from './workAuthority';
 
 /**
  * Whose policies refused: the request's credential (`user`, `api_key`, or
@@ -94,8 +95,7 @@ export const authorizationDenied = (args: {
 
 /** The request's credential, as the principal whose policies refused it. */
 export const callerPrincipal = (authUser: {
-  publicId: string;
-  apiKeyPublicId?: string;
+  terms: { principal: ActingPrincipal };
 }): DeniedPrincipal => {
   const { principalType, principalId } = principalFromAuthUser(authUser);
   return { type: principalType, id: principalId };
@@ -107,8 +107,7 @@ export const callerPrincipal = (authUser: {
  */
 export const callerDenied = (args: {
   authUser: {
-    publicId: string;
-    apiKeyPublicId?: string;
+    terms: { principal: ActingPrincipal };
     isAllowed?: { refusedBy?: RefusedBy };
   };
   action: string;
@@ -210,4 +209,15 @@ export const readForwardedDenial = (args: {
     ...args.extra,
     ...meta,
   });
+};
+
+/**
+ * A request narrowed beyond its credential's own grant writes no durable
+ * credential: the credential would outlive the narrowing it was made under.
+ */
+export const credentialNarrowed = (args: { writing: string }): DomainError => {
+  return new DomainError(
+    'CREDENTIAL_NARROWED',
+    `This request is narrowed beyond its credential's own grant and cannot write ${args.writing}.`
+  );
 };

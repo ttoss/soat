@@ -29,6 +29,7 @@ import {
   SUPPORTED_CONTENT_TYPES,
 } from './sourcePageResolver';
 import { isUniqueViolation } from './uniqueViolation';
+import type { WorkAuthority } from './workAuthority';
 
 export { finalizeIngestedPages } from './documentIngestionCore';
 
@@ -141,6 +142,8 @@ type IngestionPipelineArgs = ChunkConfigInput & {
   docPath: string;
   isAsync: boolean;
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 };
 
 const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
@@ -168,6 +171,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     documentId: doc.publicId,
     attemptId,
     endUser: args.endUser,
+    authority: args.authority,
   });
 
   if (resolved.status === 'pending') {
@@ -223,6 +227,8 @@ const processDocumentIngestion = async (args: {
   chunkOverlap?: number;
   isAsync: boolean;
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 }): Promise<void> => {
   log('processDocumentIngestion: docId=%d fileId=%s', args.docId, args.fileId);
 
@@ -283,6 +289,8 @@ export const enqueueDocumentIngestion = async (args: {
   wait?: boolean;
   /** Who the ingest runs for, validated by the route (`assertCallerEndUser`). */
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 }) => {
   const runAsync = args.wait !== true;
 
@@ -340,6 +348,7 @@ export const enqueueDocumentIngestion = async (args: {
     chunkOverlap: args.chunkOverlap,
     isAsync: runAsync,
     endUser: args.endUser,
+    authority: args.authority,
   };
 
   if (runAsync) {
@@ -389,6 +398,8 @@ export const reingestDocument = async (args: {
   wait?: boolean;
   /** Who the re-ingest runs for, validated by the route. */
   endUser: GenerationEndUser;
+  /** The ingest request's authority, which the converter runs under. */
+  authority: WorkAuthority | null;
 }) => {
   const doc = (await db.Document.findOne({
     where: { publicId: args.id },
@@ -438,6 +449,7 @@ export const reingestDocument = async (args: {
     chunkOverlap: args.chunkOverlap,
     isAsync: runAsync,
     endUser: args.endUser,
+    authority: args.authority,
   };
 
   if (runAsync) {

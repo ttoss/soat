@@ -174,15 +174,14 @@ const deferAttributionUntilAuthorized = (args: {
  * {@link deferAttributionUntilAuthorized} — which still lands before any
  * mutation, because a handler authorizes before it writes.
  *
- * **Run-as tokens are exempt, deliberately.** A background drive continues work
+ * **Stored work is exempt, deliberately.** A background drive continues work
  * whose arrival was already counted; metering it would bill a run's self-calls
  * as fresh client traffic and let a long chain breach the starting key's quota
- * mid-flight. The `isRunToken` marker states the exemption outright, so it
- * does not rest on `apiKeyPublicId` happening to be unset and needs no token
- * decoding here.
+ * mid-flight. The `work` marker states the exemption outright, so it does not
+ * rest on `apiKeyPublicId` happening to be unset.
  *
- * **The control-plane key is exempt too** (`isControlPlaneKey`: an admin's
- * key bound to no project and narrowed by no policy). It spans every project,
+ * **The control-plane key is exempt too** (a key whose authority is
+ * `unrestricted`: an admin's key bound to no project and narrowed by no policy). It spans every project,
  * so a read it makes of one is the operator's traffic, not that project's, and
  * must neither fill its meter nor be refused by its quota. A key *bound* to a
  * project is that project's traffic whoever minted it — a gateway mints every
@@ -200,8 +199,8 @@ export const requestAttributionMiddleware = async (
     !ctx.path.startsWith('/api/v1') ||
     !authUser ||
     apiKeyPublicId == null ||
-    authUser.isRunToken ||
-    authUser.isControlPlaneKey
+    authUser.work !== undefined ||
+    authUser.unrestricted
   ) {
     await next();
     return;

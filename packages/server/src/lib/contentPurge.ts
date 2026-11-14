@@ -43,7 +43,10 @@ const traces = makeResourceAccessor<InstanceType<(typeof db)['Trace']>>({
  * shape `Generation.startedByPrincipal*` already uses.
  */
 export type RedactionPrincipal = {
-  principalType: Extract<PrincipalType, 'user' | 'api_key' | 'system'>;
+  principalType: Extract<
+    PrincipalType,
+    'user' | 'api_key' | 'trigger' | 'system'
+  >;
   principalId: string;
 };
 

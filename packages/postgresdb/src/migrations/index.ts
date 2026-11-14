@@ -58,6 +58,9 @@ import { webhookPolicyIds } from './2026-11-10-webhookPolicyIds';
 import { iamConditionKeys } from './2026-11-11-iamConditionKeys';
 import { memoryActor } from './2026-11-12-memoryActor';
 import { principalBound } from './2026-11-12-principalBound';
+import { agentRunAs } from './2026-11-13-agentRunAs';
+import { policyIdsPublic } from './2026-11-13-policyIdsPublic';
+import { workAuthority } from './2026-11-13-workAuthority';
 import { evalRunEvidence } from './2026-11-14-evalRunEvidence';
 
 /**
@@ -138,5 +141,8 @@ export const MIGRATIONS: Migration[] = [
   iamConditionKeys,
   principalBound,
   memoryActor,
+  policyIdsPublic,
+  agentRunAs,
+  workAuthority,
   evalRunEvidence,
 ];

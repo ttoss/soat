@@ -407,6 +407,8 @@ Set `write_memory_store_id` in the agent's `knowledge_config` to inject a `write
 
 The agent's [`policy_ids`](./agents.md#execution-identity) gate the tool: it must allow `memories:CreateMemory` **and** `memories:UpdateMemory` (a write may supersede) on the target store's SRN, `srn:<project_id>:memory_store:<memory_store_id>`, with the store's tags as condition inputs. A boundary scoped to one store therefore holds even if `write_memory_store_id` is later pointed elsewhere.
 
+Project- and agent-scope [guardrails](./guardrails.md#attachment) gate every `write_memory` call like any other tool call, so a fact read from a document or tool output persists only past them. A held call files an [approval](./approvals.md) whose `proposed_action` is `{ "tool_id": "native:write_memory", "action": "write_memory", "arguments": { "content": "…" } }`. Approving it writes the fact as the agent, under the proposing generation and actor, to the store `write_memory_store_id` names at decision time, held to the agent's `policy_ids` at decision time; the write's output, or the denial, is the decision's `result`. Edited `arguments` must carry a non-empty string `content`, and editing them needs the memory-write actions on that store ([Approvals — Who may resolve](./approvals.md#who-may-resolve)). A `write_memory` call records no `tool_execution` [usage](./usage.md) event, so a guard reading `runtime.*.tool_calls` ([Guardrails — Guards and Guardrail Context](./guardrails.md#guards-and-guardrail-context)) does not count it.
+
 Memories written by the tool carry `source_type: "manual"`: `source_id` is a pointer a client supplies on a hand-written fact, and the tool has none to give. The turn behind the write is on its [assertion](#assertions), with `mechanism: "tool"` and the agent as principal.
 
 ```json
@@ -433,7 +435,7 @@ That makes it the opposite half of the [`write_memory` tool](#write_memory-tool)
 
 Because a rule belongs to its store, one store can have several (a cheap general one, a strict one for billing turns), one agent can feed two stores under different rules, and "what feeds this store?" is one listing instead of a sweep over every agent in the project.
 
-A rule starts its handler on every event it reads. Every create, update and formation apply of a rule with a handler needs its start action (`agents:CreateAgentGeneration` on the agent, `tools:CallTool` on the tool), even when the write leaves the handler as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+A rule starts its handler on every event it reads, under the authority the turn it reads stores: a tool handler's call, and every tool call an agent handler's turn makes, is authorized as that turn's starter. Every create, update and formation apply of a rule with a handler needs its start action (`agents:CreateAgentGeneration` on the agent, `tools:CallTool` on the tool), even when the write leaves the handler as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
 
 #### The rule
 

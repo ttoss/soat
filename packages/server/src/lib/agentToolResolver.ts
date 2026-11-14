@@ -8,7 +8,7 @@ import {
 } from 'src/lib/iam';
 
 import { DomainError } from '../errors';
-import type { AgentBoundary } from './agentBoundary';
+import type { AgentAuthority } from './agentAuthority';
 import {
   type ActivityCallContext,
   recordToolActivity,
@@ -16,11 +16,10 @@ import {
 } from './agentToolActivity';
 import { resolvedActionName } from './agentToolApproval';
 import {
-  collectBindingGuardrails,
-  gateResolvedToolsWithGuardrails,
+  collectToolScopedGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
-import type { BindingTools } from './agentToolNames';
+import type { BindingGate, ToolBinding } from './agentToolNames';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
@@ -35,7 +34,6 @@ import {
 } from './httpToolResponse';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import { openMcpTransport } from './mcpTransport';
-import { readRunTokenWork } from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { withRequestIdHeader } from './requestCorrelation';
 import { toolReferences } from './resourceReferences';
@@ -82,6 +80,7 @@ import {
   type ToolExecutionMeter,
   withReleasingGuardrails,
 } from './usageToolRecording';
+import { type WorkAuthority, workOf } from './workAuthority';
 // Re-exported from its own module (both http and soat tool paths throw it).
 export { HttpToolError } from './httpToolError';
 
@@ -163,23 +162,23 @@ export { assertValidToolContext, buildContextHeaderName, buildContextHeaders };
  * what a list or a create-in-project means, and all a caller that cannot name
  * its resource may claim.
  */
-export const isSoatActionAllowedByBoundary = (args: {
-  boundaryPolicy: unknown;
+export const isSoatActionAllowedByAgentPolicy = (args: {
+  agentPolicy: unknown;
   iamAction: string;
   resource?: string;
   context?: Record<string, string>;
 }): boolean => {
-  if (!args.boundaryPolicy) {
+  if (!args.agentPolicy) {
     return true;
   }
 
-  const validation = validatePolicyDocument(args.boundaryPolicy);
+  const validation = validatePolicyDocument(args.agentPolicy);
   if (!validation.valid) {
     return false;
   }
 
   return evaluatePolicies({
-    policies: [args.boundaryPolicy as PolicyDocument],
+    policies: [args.agentPolicy as PolicyDocument],
     action: args.iamAction,
     resource: args.resource ?? '*',
     context: args.context,
@@ -641,19 +640,19 @@ type HttpToolExecuteArgs = {
   // execute headers and context headers.
   extraHeaders?: Record<string, string>;
   // Who the call runs for: gates and selects an `oauth_connection` credential.
-  authHeader?: string;
-  boundary?: AgentBoundary;
+  authority: WorkAuthority | null;
+  agentAuthority?: AgentAuthority;
 };
 
 const authIdentity = (args: {
-  call: Pick<HttpToolExecuteArgs, 'projectId' | 'authHeader' | 'boundary'>;
+  call: Pick<HttpToolExecuteArgs, 'projectId' | 'authority' | 'agentAuthority'>;
   toolContext?: Record<string, string>;
 }): HttpToolAuthIdentity => {
   return {
     projectId: args.call.projectId,
     actorId: args.toolContext?.actor_id,
-    authHeader: args.call.authHeader,
-    boundary: args.call.boundary,
+    authority: args.call.authority,
+    agentAuthority: args.call.agentAuthority,
   };
 };
 
@@ -807,7 +806,10 @@ const resolveHttpTool = (
   typedTool: TypedHttpTool,
   meter: ToolExecutionMeter,
   toolContext?: Record<string, string>,
-  identity?: { authHeader?: string; boundary?: AgentBoundary }
+  identity?: {
+    authority: WorkAuthority | null;
+    agentAuthority?: AgentAuthority;
+  }
 ): Tool => {
   const parameters =
     typeof typedTool.parameters === 'string'
@@ -835,8 +837,8 @@ const resolveHttpTool = (
             contextKeys: typedTool.contextKeys,
             presetParameters: typedTool.presetParameters,
             parameterSchema: parameters,
-            authHeader: identity?.authHeader,
-            boundary: identity?.boundary,
+            authority: identity?.authority ?? null,
+            agentAuthority: identity?.agentAuthority,
           },
           toolContext
         )
@@ -1063,10 +1065,10 @@ const resolvePipelineTool = (
   typedTool: AgentToolRow,
   args: {
     callerProjectId?: number;
-    authHeader?: string;
+    authority: WorkAuthority | null;
     remainingDepth?: number;
     attribution: ToolCallAttribution;
-    boundary?: AgentBoundary;
+    agentAuthority?: AgentAuthority;
   }
 ): Tool => {
   const parameters =
@@ -1094,10 +1096,10 @@ const resolvePipelineTool = (
         reach: 'shares',
         id: typedTool.publicId,
         input,
-        authHeader: args.authHeader,
+        authority: args.authority,
         remainingDepth: args.remainingDepth,
         attribution: args.attribution,
-        boundary: args.boundary,
+        agentAuthority: args.agentAuthority,
       });
     },
   });
@@ -1136,11 +1138,11 @@ const resolveToolByType = async (
     projectId: typedTool.projectId,
     callerProjectId: args.callerProjectId,
     toolId: typedTool.publicId || null,
-    workId: readRunTokenWork(args.authHeader),
+    workId: workOf(args.authority),
     attribution: args.attribution,
     sender: {
-      authHeader: args.authHeader,
-      boundaryPolicy: args.boundary?.policy,
+      authority: args.authority,
+      agentPolicy: args.agentAuthority?.policy,
     },
   };
 
@@ -1161,8 +1163,8 @@ const resolveToolByType = async (
     case 'http':
       return {
         [typedTool.name]: resolveHttpTool(typedTool, meter, args.toolContext, {
-          authHeader: args.authHeader,
-          boundary: args.boundary,
+          authority: args.authority,
+          agentAuthority: args.agentAuthority,
         }),
       };
     case 'client':
@@ -1173,10 +1175,10 @@ const resolveToolByType = async (
       return {
         [typedTool.name]: resolvePipelineTool(typedTool, {
           callerProjectId: args.callerProjectId,
-          authHeader: args.authHeader,
+          authority: args.authority,
           remainingDepth: args.remainingDepth,
           attribution: args.attribution,
-          boundary: args.boundary,
+          agentAuthority: args.agentAuthority,
         }),
       };
     case 'mcp':
@@ -1191,8 +1193,8 @@ const resolveToolByType = async (
       return resolveSoatTools({
         typedTool,
         meter,
-        boundary: args.boundary,
-        authHeader: args.authHeader,
+        agentAuthority: args.agentAuthority,
+        authority: args.authority,
         projectPublicId: args.projectPublicId,
         toolContext: args.toolContext,
         traceId: args.traceId,
@@ -1200,7 +1202,7 @@ const resolveToolByType = async (
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
         buildContextHeaders,
-        isSoatActionAllowedByBoundary,
+        isSoatActionAllowedByAgentPolicy,
         logToolCallingError,
       });
     default: {
@@ -1255,11 +1257,15 @@ const ephemeralDefinitionToRow = (
 // released them, so those are the guardrails its executions are counted under.
 const releasedBy = (args: {
   attribution: ToolCallAttribution;
-  guardrails: Array<{ guardrailId: string }>;
+  guardrail: ResolverGuardrailContext;
+  toolGuardrails: Array<{ guardrailId: string }>;
 }): ToolCallAttribution => {
   return withReleasingGuardrails({
     attribution: args.attribution,
-    guardrailIds: args.guardrails.map((guardrail) => {
+    guardrailIds: [
+      ...args.guardrail.baseGuardrails,
+      ...args.toolGuardrails,
+    ].map((guardrail) => {
       return guardrail.guardrailId;
     }),
   });
@@ -1280,8 +1286,8 @@ export const resolveEphemeralAgentTool = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
   callerProjectId?: number;
-  boundary?: AgentBoundary;
-  authHeader?: string;
+  agentAuthority?: AgentAuthority;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   traceId?: string;
   parentTraceId?: string | null;
@@ -1291,18 +1297,18 @@ export const resolveEphemeralAgentTool = async (args: {
   activity: ActivityCallContext;
   unavailable?: UnavailableToolSink;
   attribution: ToolCallAttribution;
-}): Promise<Record<string, Tool>> => {
+}): Promise<ToolBinding> => {
   assertEphemeralTypeSupported(args.definition);
 
   const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);
-  const guardrails = await collectBindingGuardrails({
-    context: args.guardrail,
-    toolGuardrailIds: null,
-  });
 
   const tools = await resolveToolByType(typedTool, {
     ...args,
-    attribution: releasedBy({ attribution: args.attribution, guardrails }),
+    attribution: releasedBy({
+      attribution: args.attribution,
+      guardrail: args.guardrail,
+      toolGuardrails: [],
+    }),
   });
   const mapped = wrapToolsWithOutputMapping({
     tools: recordToolActivity({
@@ -1317,23 +1323,25 @@ export const resolveEphemeralAgentTool = async (args: {
   const rawParameters =
     typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined;
 
-  return gateResolvedToolsWithGuardrails({
+  return {
+    bindingName: args.definition.name,
     tools: mapped,
-    // Inline tools have no persisted id to re-execute; the guardrail gate uses
-    // a synthetic marker for the proposal, so pass null here.
-    toolId: null,
-    toolType: typedTool.type,
-    toolName: typedTool.name,
-    guardrails,
-    presetParameters: resolvePresetParametersForGate({
-      presetParameters: typedTool.presetParameters,
-      toolContext: args.toolContext,
+    gate: {
+      // Inline tools have no persisted id to re-execute; the guardrail gate
+      // uses a synthetic marker for the proposal.
+      toolId: null,
+      toolType: typedTool.type,
       toolName: typedTool.name,
-      schema: typedTool.parameters,
-    }),
-    rawParameters,
-    context: args.guardrail,
-  });
+      toolGuardrails: [],
+      presetParameters: resolvePresetParametersForGate({
+        presetParameters: typedTool.presetParameters,
+        toolContext: args.toolContext,
+        toolName: typedTool.name,
+        schema: typedTool.parameters,
+      }),
+      rawParameters,
+    },
+  };
 };
 
 type ResolveToolByTypeArgs = {
@@ -1343,8 +1351,8 @@ type ResolveToolByTypeArgs = {
    * tool's own project when that is where the tool lives.
    */
   callerProjectId?: number;
-  boundary?: AgentBoundary;
-  authHeader?: string;
+  agentAuthority?: AgentAuthority;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   traceId?: string;
   parentTraceId?: string | null;
@@ -1371,8 +1379,45 @@ const admitSharedBinding = (args: {
   });
 };
 
-// Resolves one persisted-tool binding into its (output-mapped, optionally
-// guardrail-gated) AI-SDK tools. Extracted so `resolveAgentToolBindings`
+// A binding that resolved to nothing offers nothing to gate.
+const unreachableBinding = (args: { toolPublicId: string }): ToolBinding => {
+  return {
+    bindingName: args.toolPublicId,
+    tools: {},
+    gate: {
+      toolId: args.toolPublicId,
+      toolType: 'unknown',
+      toolName: args.toolPublicId,
+      toolGuardrails: [],
+    },
+  };
+};
+
+const storedToolGate = (args: {
+  typedTool: AgentToolRow;
+  toolContext?: Record<string, string>;
+  toolGuardrails: BindingGate['toolGuardrails'];
+}): BindingGate => {
+  return {
+    toolId: args.typedTool.publicId,
+    toolType: args.typedTool.type,
+    toolName: args.typedTool.name,
+    toolGuardrails: args.toolGuardrails,
+    // The gate classifies the *effective* arguments, so it must see the values
+    // the dispatch will actually send — a guardrail comparing a pinned account
+    // against `{{context:ocaAdAccountId}}` gates nothing.
+    presetParameters: resolvePresetParametersForGate({
+      presetParameters: args.typedTool.presetParameters,
+      toolContext: args.toolContext,
+      toolName: args.typedTool.name,
+      schema: args.typedTool.parameters,
+    }),
+    rawParameters: localInjectableSchema(args.typedTool),
+  };
+};
+
+// Resolves one persisted-tool binding into its output-mapped AI-SDK tools and
+// what the gate needs to gate them. Extracted so `resolveAgentToolBindings`
 // stays within its complexity budget.
 const resolveReferenceBinding = async (args: {
   toolPublicId: string;
@@ -1382,7 +1427,7 @@ const resolveReferenceBinding = async (args: {
   resolveArgs: ResolveToolByTypeArgs;
   guardrail: ResolverGuardrailContext;
   activity: ActivityCallContext;
-}): Promise<BindingTools> => {
+}): Promise<ToolBinding> => {
   // The agent's project, never the caller's scope: a credential reaching
   // several projects must not widen what an agent's binding resolves to.
   const agentTool = await toolReferences.find({
@@ -1402,15 +1447,15 @@ const resolveReferenceBinding = async (args: {
       activity: args.activity,
     });
     args.resolveArgs.unavailable?.({ toolName: args.toolPublicId });
-    return { bindingName: args.toolPublicId, tools: {} };
+    return unreachableBinding({ toolPublicId: args.toolPublicId });
   }
 
   const typedTool = agentTool as unknown as AgentToolRow;
   const ownTool = typedTool.projectId === args.callerProjectId;
   // A shared tool's own guardrails name guardrails in its owner's project; the
   // agent's project and agent guardrails govern the call instead.
-  const guardrails = await collectBindingGuardrails({
-    context: args.guardrail,
+  const toolGuardrails = await collectToolScopedGuardrails({
+    projectId: args.guardrail.projectId,
     toolGuardrailIds: ownTool ? typedTool.guardrailIds : null,
   });
   const toolContext = pinCallingProject({
@@ -1424,7 +1469,8 @@ const resolveReferenceBinding = async (args: {
     activity: args.activity,
     attribution: releasedBy({
       attribution: args.resolveArgs.attribution,
-      guardrails,
+      guardrail: args.guardrail,
+      toolGuardrails,
     }),
   });
   // Activity recording sits innermost, so it only fires for a call that actually
@@ -1449,26 +1495,11 @@ const resolveReferenceBinding = async (args: {
       ? tools
       : wrapToolsWithOutputMapping({ tools, typedTool });
 
-  // Guardrails are the single tool-call gating mechanism.
-  const gated = gateResolvedToolsWithGuardrails({
+  return {
+    bindingName: typedTool.name,
     tools: mapped,
-    toolId: typedTool.publicId,
-    toolType: typedTool.type,
-    toolName: typedTool.name,
-    guardrails,
-    // The gate classifies the *effective* arguments, so it must see the values
-    // the dispatch will actually send — a guardrail comparing a pinned account
-    // against `{{context:ocaAdAccountId}}` gates nothing.
-    presetParameters: resolvePresetParametersForGate({
-      presetParameters: typedTool.presetParameters,
-      toolContext,
-      toolName: typedTool.name,
-      schema: typedTool.parameters,
-    }),
-    rawParameters: localInjectableSchema(typedTool),
-    context: args.guardrail,
-  });
-  return { bindingName: typedTool.name, tools: gated };
+    gate: storedToolGate({ typedTool, toolContext, toolGuardrails }),
+  };
 };
 
 export const resolveAgentToolBindings = async (args: {
@@ -1488,16 +1519,15 @@ export const resolveAgentToolBindings = async (args: {
    */
   projectPublicId?: string;
   projectIds?: number[];
-  boundary?: AgentBoundary;
-  authHeader?: string;
+  agentAuthority?: AgentAuthority;
+  authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  // Per-generation guardrail-gate context (Milestone 2). Wraps every resolved
-  // tool with the classify → route interceptor when a guardrail applies at the
-  // project / agent / tool scope.
+  // Per-generation guardrail-gate context. Each binding declares its gate;
+  // `gateAndMergeBindings` applies it.
   guardrail: ResolverGuardrailContext;
   // Identity a successful tool call is attributed to on the activity feed
   // (approvals PRD Phase 4).
@@ -1507,8 +1537,8 @@ export const resolveAgentToolBindings = async (args: {
   unavailable?: UnavailableToolSink;
   // Who the turn's tool executions are metered against.
   attribution: ToolCallAttribution;
-}): Promise<BindingTools[]> => {
-  const bindings: BindingTools[] = [];
+}): Promise<ToolBinding[]> => {
+  const bindings: ToolBinding[] = [];
 
   for (const toolPublicId of args.toolIds) {
     bindings.push(
@@ -1525,12 +1555,12 @@ export const resolveAgentToolBindings = async (args: {
   }
 
   for (const definition of args.tools) {
-    const ephemeralTools = await resolveEphemeralAgentTool({
+    const ephemeral = await resolveEphemeralAgentTool({
       definition,
       projectId: args.projectId,
       callerProjectId: args.callerProjectId,
-      boundary: args.boundary,
-      authHeader: args.authHeader,
+      agentAuthority: args.agentAuthority,
+      authority: args.authority,
       toolContext: args.toolContext,
       traceId: args.traceId,
       parentTraceId: args.parentTraceId,
@@ -1541,7 +1571,7 @@ export const resolveAgentToolBindings = async (args: {
       unavailable: args.unavailable,
       attribution: args.attribution,
     });
-    bindings.push({ bindingName: definition.name, tools: ephemeralTools });
+    bindings.push(ephemeral);
   }
 
   return bindings;

@@ -3,6 +3,50 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.110.0](https://github.com/ttoss/soat/compare/v0.109.0...v0.110.0) (2026-11-14)
+
+* feat(iam)!: durable work stores its authority and refuses with none (#1920) ([d46395e](https://github.com/ttoss/soat/commit/d46395eea9d9f51ddf0616c396a64dad2a829f03)), closes [#1920](https://github.com/ttoss/soat/issues/1920)
+
+### BREAKING CHANGES
+
+* trigger and run tokens, SOAT_TRIGGER_TOKEN_TTL,
+  SOAT_RUN_TOKEN_TTL and TRIGGER_CREATOR_UNAVAILABLE are removed; a firing
+  acts as its trigger and survives its creator; OAuth- and trigger-started
+  work keeps its identity; work stored before this change runs no tool.
+
+# [0.109.0](https://github.com/ttoss/soat/compare/v0.108.0...v0.109.0) (2026-11-13)
+
+* feat(iam)!: authority is grant ∩ caps, each absent value stated (#1908) ([93a8a91](https://github.com/ttoss/soat/commit/93a8a9142cdc39b8828bc070c3e0342eca100a5e)), closes [#1908](https://github.com/ttoss/soat/issues/1908)
+* feat(iam)!: one builder for every authorization denial, relayed by every forwarder (#1901) ([48bed07](https://github.com/ttoss/soat/commit/48bed073abadae62b492f8a755e5dc97516d82ce)), closes [#1901](https://github.com/ttoss/soat/issues/1901)
+
+### Bug Fixes
+
+* **agents:** a denial thrown inside an agent's tool reaches the model with its meta ([#1907](https://github.com/ttoss/soat/issues/1907)) ([c405e26](https://github.com/ttoss/soat/commit/c405e2645c2ba8d4c3ae7402ed226c380a464338))
+* **documents:** ingestion-callback 401 hint names the callback token ([#1904](https://github.com/ttoss/soat/issues/1904)) ([bc053d9](https://github.com/ttoss/soat/commit/bc053d9c423d186b63c164707ea3b0b7539e5930))
+* **iam:** an agent policy denial names the agent's id ([#1906](https://github.com/ttoss/soat/issues/1906)) ([e6ad66b](https://github.com/ttoss/soat/commit/e6ad66b66d2c2559d9b784e7361d1b7c2d91cb4f))
+* **iam:** match glob project segments in project-less lists and refusals ([#1894](https://github.com/ttoss/soat/issues/1894)) ([efac807](https://github.com/ttoss/soat/commit/efac80772bfc79ffba2b910c0d900deeefc70043))
+* **iam:** work a capped On-Behalf-Of callback starts keeps its cap ([#1896](https://github.com/ttoss/soat/issues/1896)) ([9984400](https://github.com/ttoss/soat/commit/9984400f1a3f431de581848950f7f5e61de7a8d9))
+* **server:** a narrowed credential's denial names the set that refused it ([#1903](https://github.com/ttoss/soat/issues/1903)) ([ba90682](https://github.com/ttoss/soat/commit/ba9068262c061c81b6d233b69fce1e612940185d))
+* **server:** read json logic vars through the iterator-aware walk ([#1900](https://github.com/ttoss/soat/issues/1900)) ([cb8e62b](https://github.com/ttoss/soat/commit/cb8e62b397bcad58363abfaf263b9753ff74c5e1))
+
+### Features
+
+* **iam:** admit On-Behalf-Of on an IAM token its project's key issued ([#1905](https://github.com/ttoss/soat/issues/1905)) ([6588eb9](https://github.com/ttoss/soat/commit/6588eb9e97183d59ed50806609f9db33da27d4ec))
+* **iam:** iam/check answers any built-in action on its module's resource types ([#1899](https://github.com/ttoss/soat/issues/1899)) ([04ea145](https://github.com/ttoss/soat/commit/04ea14503b1e1092c001695bc8813196e5dfe78b))
+* **orchestrations:** item_tool_context gives each loop child its own tool_context keys ([#1898](https://github.com/ttoss/soat/issues/1898)) ([3f99ddc](https://github.com/ttoss/soat/commit/3f99ddcb481ac86e25f577b5ab873876fd935f4f))
+* **server:** publish each operation's iam srn type as x-iam-resource-type ([#1902](https://github.com/ttoss/soat/issues/1902)) ([6c02bce](https://github.com/ttoss/soat/commit/6c02bce0d3bd1f18f6beb9aa235cfd774df7d4e6))
+
+### BREAKING CHANGES
+
+* an agent policy refusal tool result is
+  { error: { code, message, meta } }; a relayed upstream denial answers
+  403 FORBIDDEN instead of TOOL_HTTP_ERROR / MCP_TOOL_ERROR; a project
+  price row naming another project's resource is 400 VALIDATION_FAILED.
+* API_KEY_SCOPED_TOKEN is CREDENTIAL_NARROWED and also refuses
+  a key write under On-Behalf-Of and an OAuth consent from a narrowed
+  credential; an admin's pinned or capped key is held to its pin and policies;
+  a policy a user or key names cannot be deleted.
+
 # [0.108.0](https://github.com/ttoss/soat/compare/v0.107.0...v0.108.0) (2026-11-12)
 
 * feat(tools)!: cap every tool callback by the authority sealed in its assertion (#1888) ([73b9004](https://github.com/ttoss/soat/commit/73b90041e088fced4480e126d0767be052ed3b23)), closes [#1888](https://github.com/ttoss/soat/issues/1888)

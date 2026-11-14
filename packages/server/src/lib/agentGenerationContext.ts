@@ -4,7 +4,7 @@ import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
 
 import { DomainError } from '../errors';
-import { resolveAgentBoundary } from './agentBoundary';
+import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
 import { buildAllMessages } from './agentGenerationHelpers';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
@@ -32,6 +32,7 @@ import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
 import type { ToolSurface } from './toolSurfaceMeasure';
 import { measureToolSurface } from './toolSurfaceMeasure';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
 
@@ -39,8 +40,10 @@ export type GenerationContext = {
   typedAgent: TypedAgent;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
+  /** The agent's `policy_ids` for this turn, and what they are. */
+  agentAuthority: AgentAuthority;
   /** The credential {@link GenerationContext.resolvedTools} call with. */
-  toolsAuthHeader: string | undefined;
+  toolsAuthority: WorkAuthority | null;
   /**
    * What {@link GenerationContext.resolvedTools} costs to send, measured before
    * the provider sees it. Stamped on the generation record; a resumed turn
@@ -115,7 +118,7 @@ const assembleContextMessages = async (args: {
   knowledgeConfig?: object;
   /** Who named {@link knowledgeConfig}, and what bounds the agent. */
   authUser?: AuthUser;
-  boundaryPolicy: PolicyDocument | null;
+  agentPolicy: PolicyDocument | null;
   unavailableToolNames: string[];
   /** The turn's end user, from the identity-pinned `tool_context`. */
   actorId?: string;
@@ -139,7 +142,7 @@ const assembleContextMessages = async (args: {
             knowledgeProjectPublicId: (
               typedAgent.ownerProject ?? typedAgent.project
             ).publicId,
-            boundaryPolicy: args.boundaryPolicy,
+            agentPolicy: args.agentPolicy,
           }),
         }
       : undefined,
@@ -204,7 +207,7 @@ export type BuildGenerationContextArgs = {
   projectIds?: number[];
   runProjectId?: number;
   messages: GenerationInputMessage[];
-  authHeader?: string;
+  authority: WorkAuthority | null;
   authUser?: AuthUser;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -240,44 +243,54 @@ const requireLiveAgent = async (args: {
   return liveAgent;
 };
 
+/**
+ * The config a turn runs against. Resolved before anything reads it: under a
+ * staged rollout everything must come from the assigned archived version, not
+ * the live row. The output schema is applied once, here, so the
+ * structured-output request, the text-encoded tool-call check and the frozen
+ * config a resumed turn reads see the schema that constrained the call.
+ */
+const resolveTurnAgent = async (
+  args: BuildGenerationContextArgs
+): Promise<{ typedAgent: TypedAgent; agentVersion: number }> => {
+  const served = await resolveServedAgentVersion({
+    agent: await requireLiveAgent(args),
+    sessionId: args.sessionId,
+    actorId: args.actorId,
+    pinnedVersion: args.pinnedAgentVersion,
+  });
+  return {
+    agentVersion: served.agentVersion,
+    typedAgent: withOutputSchema({
+      typedAgent: served.typedAgent,
+      outputSchema: args.outputSchemaOverride,
+    }),
+  };
+};
+
 export const buildGenerationContext = async (
   args: BuildGenerationContextArgs
 ): Promise<GenerationContext> => {
   const toolContext = await resolvePinnedToolContext(args);
 
-  const liveAgent = await requireLiveAgent(args);
+  const { typedAgent, agentVersion } = await resolveTurnAgent(args);
 
-  // Before anything reads the config: under a staged rollout everything below
-  // must come from the assigned archived version, not the live row.
-  const served = await resolveServedAgentVersion({
-    agent: liveAgent,
-    sessionId: args.sessionId,
-    actorId: args.actorId,
-    pinnedVersion: args.pinnedAgentVersion,
-  });
-  const { agentVersion } = served;
-  // Applied once, here, so everything below — the structured-output request,
-  // the text-encoded tool-call check and the frozen config a resumed turn
-  // reads — sees the schema that actually constrained the call.
-  const typedAgent = withOutputSchema({
-    typedAgent: served.typedAgent,
-    outputSchema: args.outputSchemaOverride,
-  });
-
-  const boundary = await resolveAgentBoundary({
+  const agentAuthority = await resolveAgentAuthority({
     agentId: args.agentId,
+    runAs: typedAgent.runAs,
     policyIds: typedAgent.policyIds,
     actorId: toolContext?.actor_id,
+    projectPublicId: typedAgent.project.publicId,
   });
 
   const resolvedMessages = await resolveGenerationInputMessages({
     projectIds: args.projectIds,
     messages: args.messages,
-    authHeader: args.authHeader,
+    authority: args.authority,
     authUser: args.authUser,
     allowedToolIds: splitToolBindings(readAgentToolBindings(typedAgent))
       .toolIds,
-    agentBoundary: boundary,
+    agentAuthority,
     toolContext, // identity-pinned, not the raw caller bag
   });
   const { model } = await resolveGenerationModel({
@@ -301,8 +314,8 @@ export const buildGenerationContext = async (
     generationId,
     projectIds: args.projectIds,
     typedAgent,
-    boundary,
-    authHeader: args.authHeader,
+    agentAuthority,
+    authority: args.authority,
     toolContext,
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
@@ -320,7 +333,7 @@ export const buildGenerationContext = async (
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
     authUser: args.authUser,
-    boundaryPolicy: boundary.policy,
+    agentPolicy: agentAuthority.policy,
     unavailableToolNames: toolSurface.unavailableToolNames,
     actorId: toolContext?.actor_id,
   });
@@ -329,7 +342,8 @@ export const buildGenerationContext = async (
     typedAgent,
     model,
     resolvedTools,
-    toolsAuthHeader: args.authHeader,
+    agentAuthority,
+    toolsAuthority: args.authority,
     toolSurface: await measureToolSurface({ tools: resolvedTools }),
     allMessages,
     retrieval,
