@@ -166,6 +166,8 @@ Every outbound tool call writes one `tool_execution` event: one `tool_call` comp
 - **Attribution** is what the call site holds: `tool_id` and `project_id` always; inside a generation its `generation_id`, `agent_id`, run, node, trigger, actor, session and `source` are read off the generation; an orchestration node sets `orchestration_run_id` and `node_id`; a trigger sets `trigger_id`; an eval `tool` scorer sets `source: eval_scorer`.
 - **No replay identity**: a retry is a second call on the wire, so the idempotency key is unique per execution (`tool:<uuid>`).
 
+A native tool, one that runs in-process with no tool row ([`write_memory`](./memories.md#write_memory-tool)), writes a `tool_execution` event per executed call too: `tool_id` is its `native:<name>` id, with no components and `cost_usd` `null`. Inside a generation it carries the generation's attribution and the guardrails that released it; an [approved](./approvals.md) held call is attributed to the proposing generation. A call refused before it ran (a guardrail decision other than execute, the agent's `policy_ids`) writes none.
+
 [`GET /api/v1/usage/aggregate?meter_type=tool_execution&group_by=tool`](/docs/api/usage/get-usage-aggregate) counts calls per tool; `tool_id` and `outcome` narrow it.
 
 #### Calls through a share

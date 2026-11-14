@@ -184,7 +184,7 @@ Any other path — a non-leaf (`runtime.tools.tool_calls`), an unserved combinat
 
 | Metric | Type | Reads |
 | --- | --- | --- |
-| `tool_calls` | integer | [`tool_execution`](./usage.md#tool-executions) events: one per outbound tool call, whatever the target answered |
+| `tool_calls` | integer | [`tool_execution`](./usage.md#tool-executions) events: one per executed tool call, outbound (whatever the target answered) or [native](./usage.md#tool-executions) |
 | `errors` | integer | `tool_execution` events whose `outcome` is `error` or `timeout` |
 | `tokens` | integer | Billable tokens (input + output + cached) of the entity's [usage events](./usage.md) |
 | `cost_usd` | number | Cost of the entity's usage events, every meter |
