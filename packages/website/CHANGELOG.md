@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.110.0](https://github.com/ttoss/soat/compare/v0.109.0...v0.110.0) (2026-11-14)
+
+* feat(iam)!: durable work stores its authority and refuses with none (#1920) ([d46395e](https://github.com/ttoss/soat/commit/d46395eea9d9f51ddf0616c396a64dad2a829f03)), closes [#1920](https://github.com/ttoss/soat/issues/1920)
+
+### BREAKING CHANGES
+
+* trigger and run tokens, SOAT_TRIGGER_TOKEN_TTL,
+  SOAT_RUN_TOKEN_TTL and TRIGGER_CREATOR_UNAVAILABLE are removed; a firing
+  acts as its trigger and survives its creator; OAuth- and trigger-started
+  work keeps its identity; work stored before this change runs no tool.
+
 # [0.109.0](https://github.com/ttoss/soat/compare/v0.108.0...v0.109.0) (2026-11-13)
 
 * feat(iam)!: authority is grant ∩ caps, each absent value stated (#1908) ([93a8a91](https://github.com/ttoss/soat/commit/93a8a9142cdc39b8828bc070c3e0342eca100a5e)), closes [#1908](https://github.com/ttoss/soat/issues/1908)
