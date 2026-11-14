@@ -114,7 +114,7 @@ Datasets, dataset items, and evals are [formation](/docs/modules/formations) res
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-cat > release-notes-formation.json << 'EOF'
+cat > release-notes-formation.json << EOF
 {
   "resources": {
     "provider": {
@@ -161,7 +161,13 @@ cat > release-notes-formation.json << 'EOF'
       "properties": {
         "name": "release-notes-gate-run",
         "document": {
-          "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"] }]
+          "statement": [
+            {
+              "effect": "Allow",
+              "action": ["agents:CreateAgentGeneration"],
+              "resource": ["srn:$PROJECT_ID:*:*"]
+            }
+          ]
         }
       }
     },
@@ -257,7 +263,11 @@ const template = {
         name: 'release-notes-gate-run',
         document: {
           statement: [
-            { effect: 'Allow', action: ['agents:CreateAgentGeneration'] },
+            {
+              effect: 'Allow',
+              action: ['agents:CreateAgentGeneration'],
+              resource: [`srn:${project.id}:*:*`],
+            },
           ],
         },
       },
@@ -299,7 +309,7 @@ const EVAL_ID = stack.outputs?.eval_id as string;
 <TabItem value="curl" label="curl">
 
 ```bash
-cat > release-notes-formation.json << 'EOF'
+cat > release-notes-formation.json << EOF
 {
   "resources": {
     "provider": { "type": "ai_provider", "properties": { "name": "Local Ollama", "provider": "ollama", "default_model": "qwen2.5:0.5b" } },
@@ -307,7 +317,7 @@ cat > release-notes-formation.json << 'EOF'
     "suite": { "type": "dataset", "properties": { "name": "release-notes-suite", "description": "Cases every release must still pass" } },
     "emptyFileCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "We fixed a crash when uploading a 0-byte file." }], "expected_output": "Fixed a crash when uploading an empty file." } },
     "passkeyCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "Login now supports passkeys." }], "expected_output": "Added passkey support to login." } },
-    "runGrant": { "type": "policy", "properties": { "name": "release-notes-gate-run", "document": { "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"] }] } } },
+    "runGrant": { "type": "policy", "properties": { "name": "release-notes-gate-run", "document": { "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"], "resource": ["srn:$PROJECT_ID:*:*"] }] } } },
     "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "policy_ids": [{ "ref": "runGrant" }], "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 1 } }
   },
   "outputs": { "agent_id": { "ref": "agent" }, "eval_id": { "ref": "gate" }, "dataset_id": { "ref": "suite" } }

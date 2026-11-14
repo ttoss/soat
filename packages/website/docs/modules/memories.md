@@ -519,7 +519,13 @@ Two rules on one store, different handlers, different selectors — unexpressibl
       "type": "policy",
       "properties": {
         "document": {
-          "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"] }]
+          "statement": [
+            {
+              "effect": "Allow",
+              "action": ["agents:CreateAgentGeneration"],
+              "resource": ["srn:proj_V1StGXR8Z5jdHi6B:*:*"]
+            }
+          ]
         }
       }
     },
