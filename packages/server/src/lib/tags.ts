@@ -1,5 +1,9 @@
 import { DomainError } from '../errors';
-import { RESOURCE_TYPE_KEY, resourceTagKey } from './iamConditionKeys';
+import {
+  requestTagKey,
+  RESOURCE_TYPE_KEY,
+  resourceTagKey,
+} from './iamConditionKeys';
 import { isStringRecord, readStringBag } from './stringBag';
 import { applyFilterWhere, containment } from './structuredFilter';
 
@@ -148,6 +152,20 @@ export const parseTagPairs = (
     tags[pair.slice(0, separator)] = pair.slice(separator + 1);
   }
   return tags;
+};
+
+/**
+ * IAM evaluation context for the tags a request writes: one
+ * `iam:RequestTag/<key>` entry per pair, keys and values verbatim.
+ */
+export const buildRequestTagContext = (
+  tags: Record<string, string>
+): Record<string, string> => {
+  return Object.fromEntries(
+    Object.entries(tags).map(([key, value]) => {
+      return [requestTagKey(key), value];
+    })
+  );
 };
 
 /**

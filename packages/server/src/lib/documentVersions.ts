@@ -143,7 +143,7 @@ const documentVersionArchive = makeVersionArchive({
       title: configString(args.config.title),
       path: configString(args.config.path),
       metadata: readMetadataConfig(args.config.metadata),
-      tags: readTagConfig(args.config.tags),
+      archivedTags: readTagConfig(args.config.tags),
       chunkStrategy: readChunkStrategy(args.config.chunk_strategy),
       chunkSize: configNumber(args.config.chunk_size) ?? undefined,
       chunkOverlap: configNumber(args.config.chunk_overlap) ?? undefined,

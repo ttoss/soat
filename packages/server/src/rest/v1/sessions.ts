@@ -35,6 +35,7 @@ import { compileReadPolicy } from './readPolicy';
 import { requireAllowed } from './resourceAccess';
 import { sessionSubResourcesRouter } from './sessionSubResources';
 import { authorizeSharedUse } from './sharedAccess';
+import { declareBodyTags } from './tagRoutes';
 
 export const sessionsRouter = new Router<Context>();
 
@@ -113,6 +114,7 @@ const resolveOwnAgentTarget = async (args: {
 };
 
 sessionsRouter.post('/sessions', async (ctx: Context) => {
+  declareBodyTags(ctx);
   requireAuth(ctx);
 
   const body = ctx.request.body as {

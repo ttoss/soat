@@ -1,4 +1,9 @@
 import type { ChunkStrategy } from './chunking';
+import {
+  changesReadableText,
+  restoredTags,
+  withoutContentBoundTags,
+} from './contentBoundTags';
 import type { Transaction } from './dbTransaction';
 import {
   commitDocumentChunkChanges,
@@ -58,4 +63,55 @@ export const writeDocumentUpdate = async (a: {
       transaction,
     });
   }
+};
+
+/**
+ * The bag an update writes (`lib/contentBoundTags.ts`):
+ * - the one the caller sets, as sent: its keys are the ones that write stated;
+ * - else a restore's archived bag, which never brings back a content-bound
+ *   value (`restoredTags`);
+ * - else, when the update changes text an agent can read, the stored bag minus
+ *   the project's content-bound keys: a verdict nobody restated in this write;
+ * - else `undefined`, leaving the stored bag.
+ */
+export const tagsAfterUpdate = (args: {
+  doc: LoadedDoc;
+  update: {
+    content?: string;
+    title?: string | null;
+    path?: string | null;
+    metadata?: Record<string, unknown> | null;
+    tags?: Record<string, string> | null;
+    /** A restore's archived bag: written, but not stated by the caller. */
+    archivedTags?: Record<string, string> | null;
+    revivesWithdrawn?: boolean;
+  };
+  currentContent: string | null;
+}): Record<string, string> | null | undefined => {
+  const { doc, update } = args;
+  if (update.tags !== undefined) return update.tags;
+  const changed =
+    update.revivesWithdrawn === true ||
+    changesReadableText([
+      [update.content, args.currentContent],
+      [update.title, doc.title],
+      [
+        update.path === undefined
+          ? undefined
+          : normalizeStatedPath(update.path),
+        doc.file?.path,
+      ],
+      [update.metadata, doc.metadata],
+    ]);
+  const keys = doc.file?.project?.contentBoundTagKeys ?? [];
+  if (update.archivedTags !== undefined) {
+    return restoredTags({
+      keys,
+      archived: update.archivedTags,
+      current: doc.tags,
+      textChanged: changed,
+    });
+  }
+  if (!changed) return undefined;
+  return withoutContentBoundTags({ keys, tags: doc.tags });
 };

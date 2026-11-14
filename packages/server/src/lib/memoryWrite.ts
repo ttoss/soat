@@ -2,9 +2,14 @@ import type { MemorySource } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import {
+  contentBoundTagKeysOfStore,
+  withoutContentBoundTags,
+} from 'src/lib/contentBoundTags';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
 import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
+import { emitMemoryEvent } from 'src/lib/memoryEvents';
 import type { MappedMemory, MemoryRow } from 'src/lib/memoryMapper';
 import { mapMemory, memories, memoryIncludes } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
@@ -259,16 +264,22 @@ const inheritBags = (args: {
   retired: MemoryRow;
   tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
+  /** Judged the retired text, not the replacement's (`contentBoundTags.ts`). */
+  contentBoundKeys: readonly string[];
 }) => {
+  const inherited = withoutContentBoundTags({
+    keys: args.contentBoundKeys,
+    tags: args.retired.tags,
+  });
   return {
     tags:
       args.tags && Object.keys(args.tags).length > 0
         ? mergeTags({
-            current: args.retired.tags,
+            current: inherited,
             incoming: args.tags,
             merge: true,
           })
-        : args.retired.tags,
+        : inherited,
     metadata:
       args.metadata || args.retired.metadata
         ? { ...(args.retired.metadata ?? {}), ...(args.metadata ?? {}) }
@@ -328,6 +339,9 @@ const supersedeMemory = async (args: {
       retired: args.match,
       tags: args.tags,
       metadata: args.metadata,
+      contentBoundKeys: await contentBoundTagKeysOfStore({
+        memoryStoreId: args.memoryStoreId,
+      }),
     }),
   });
 
@@ -422,13 +436,14 @@ const measureWrite = async (args: {
 };
 
 /**
- * The one exit every outcome takes: append the assertion, then reload the
- * memory through the same includes, so no branch can return a result the others
- * would not, or leave the write unrecorded.
+ * The one exit every outcome takes: append the assertion, reload the memory
+ * through the same includes, and announce a stored row, so no branch can return
+ * a result the others would not, or leave the write unrecorded.
  */
 const settleWrite = async (
   args: SettledWrite & {
     memoryStoreId: number;
+    projectId: number | null;
     contentId: number;
     similarity: number | null;
     declared: boolean;
@@ -445,10 +460,18 @@ const settleWrite = async (
     source: args.assertion,
   });
 
-  return {
-    action: args.action,
-    entry: mapMemory(await memories.reload(args.memory)),
-  };
+  const entry = mapMemory(await memories.reload(args.memory));
+  // A skip stored nothing; a supersede stored its replacement.
+  if (args.action !== 'skipped') {
+    await emitMemoryEvent({
+      type: 'memories.created',
+      memoryStoreId: args.memoryStoreId,
+      projectId: args.projectId ?? undefined,
+      memory: entry,
+    });
+  }
+
+  return { action: args.action, entry };
 };
 
 /**
@@ -526,6 +549,7 @@ export const writeMemory = async (
     return settleWrite({
       ...settled,
       memoryStoreId: args.memoryStoreId,
+      projectId: store.projectId,
       contentId: content.id as number,
       similarity,
       declared: declaredTarget !== null,
