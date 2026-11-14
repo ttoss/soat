@@ -49,7 +49,7 @@
     {
       "operationId": "submitSessionToolOutputs",
       "action": "agents:SubmitSessionToolOutputs",
-      "description": "Submit tool outputs for client tools in a session"
+      "description": "Submit tool outputs for client tools in a session (also requires generations:ResumeGeneration on the generation)"
     },
     {
       "operationId": "getSessionTags",

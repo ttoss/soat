@@ -79,7 +79,11 @@ describe('Agent Generation Routes', () => {
             statement: [
               {
                 effect: 'Allow',
-                action: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+                action: [
+                  'agents:CreateAgent',
+                  'agents:CreateAgentGeneration',
+                  'generations:ResumeGeneration',
+                ],
               },
             ],
           },
@@ -161,7 +165,11 @@ describe('Agent Generation Routes', () => {
             statement: [
               {
                 effect: 'Allow',
-                action: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+                action: [
+                  'agents:CreateAgent',
+                  'agents:CreateAgentGeneration',
+                  'generations:ResumeGeneration',
+                ],
               },
             ],
           },
@@ -571,6 +579,7 @@ describe('Agent Generation Routes', () => {
                 action: [
                   'agents:CreateAgent',
                   'agents:CreateAgentGeneration',
+                  'generations:ResumeGeneration',
                   'generations:GetGeneration',
                   'tools:CreateTool',
                   'usage:ListEvents',
@@ -652,6 +661,10 @@ describe('Agent Generation Routes', () => {
     });
 
     test('tool-outputs returns completed for a real pending generation', async () => {
+      const authority = await workAuthorityOfToken({
+        token: userToken,
+        project: projectPublicId,
+      });
       const pending: PendingGeneration = {
         agentId,
         projectId: projectDbId,
@@ -682,13 +695,10 @@ describe('Agent Generation Routes', () => {
           promptCaching: null,
         },
         resolvedTools: {},
-        toolsAuthority: await workAuthorityOfToken({
-          token: userToken,
-          project: null,
-        }),
+        toolsAuthority: authority,
       };
       await createGenerationRecord({
-        authority: null,
+        authority,
         actsAsAgent: null,
         publicId: 'gen_stub_pending',
         projectId: projectDbId,
@@ -1184,6 +1194,10 @@ describe('Agent Generation Routes', () => {
       // just the same.
       test('the tool-outputs continuation fails on it too', async () => {
         nextContent = blob;
+        const authority = await workAuthorityOfToken({
+          token: userToken,
+          project: projectPublicId,
+        });
 
         const pending: PendingGeneration = {
           agentId: pausingAgentId,
@@ -1226,13 +1240,10 @@ describe('Agent Generation Routes', () => {
               }),
             }),
           },
-          toolsAuthority: await workAuthorityOfToken({
-            token: userToken,
-            project: null,
-          }),
+          toolsAuthority: authority,
         };
         await createGenerationRecord({
-          authority: null,
+          authority,
           actsAsAgent: null,
           publicId: 'gen_text_encoded_continuation',
           projectId: projectDbId,
@@ -1375,6 +1386,7 @@ describe('Agent Generation Routes', () => {
                 action: [
                   'agents:CreateAgent',
                   'agents:CreateAgentGeneration',
+                  'generations:ResumeGeneration',
                   'tools:CreateTool',
                   'usage:ListEvents',
                 ],
@@ -1674,7 +1686,11 @@ describe('Agent Generation Routes', () => {
             statement: [
               {
                 effect: 'Allow',
-                action: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+                action: [
+                  'agents:CreateAgent',
+                  'agents:CreateAgentGeneration',
+                  'generations:ResumeGeneration',
+                ],
               },
             ],
           },

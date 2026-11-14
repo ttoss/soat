@@ -15,7 +15,11 @@ import {
   type TaskPauseOrigin,
 } from './tasksPause';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
-import type { WorkAuthority } from './workAuthority';
+import {
+  parseWorkAuthority,
+  resumedAuthority,
+  type WorkAuthority,
+} from './workAuthority';
 
 const log = createDebug('soat:tasks');
 
@@ -80,10 +84,8 @@ export const pauseTask = async (args: {
  * A state whose dispatch had already completed (or that declares none) is left
  * alone, so a resume never re-spends work the pause did not stop.
  *
- * The dispatch runs as whoever resumed, not as whoever last moved the task: the
- * resume is the decision to spend, and the move that scheduled the work may be
- * weeks old. Mirrors `resolveDispatchPrincipal`'s rule that a human or API-key
- * move names itself.
+ * The dispatch runs under the task's stored authority held to whoever resumed:
+ * a resume decides whether the work runs, never widens what it may do.
  */
 export const resumeTask = async (args: {
   id: string;
@@ -132,7 +134,10 @@ export const resumeTask = async (args: {
         taskPublicId: args.id,
         projectId: task.projectId as number,
         state,
-        authority: args.authority,
+        authority: resumedAuthority({
+          stored: parseWorkAuthority(refreshed!.authority),
+          resumer: args.authority,
+        }),
       });
     }
   }

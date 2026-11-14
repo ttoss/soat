@@ -84,15 +84,20 @@ consented scope. Both fields are `null` only for a generation started with no au
 
 ### Acting principal
 
-`acted_as` records whose credential the generation's tool calls ran as. A generation
-acts as its starter until a caller resumes it by
-[submitting tool outputs](#lifecycle): the resumed segment's tool calls run on that
-caller's credential, and `acted_as` names them while `started_by_principal_*` keeps the
-starter, through a [session](./sessions.md) too. A segment of a
-[`run_as: agent`](./agents.md#execution-identity) agent's turn names the agent.
+`acted_as` records whose authority the generation's tool calls ran as: its starter, or
+the agent for a segment of a [`run_as: agent`](./agents.md#execution-identity) agent's
+turn.
 
-An [approved tool call](./approvals.md#continuation-identity) runs as the `acted_as` of
-the generation that proposed it.
+**A resume only narrows.** A caller who [submits tool outputs](#lifecycle), directly or
+through a [session](./sessions.md), needs `generations:ResumeGeneration` on the
+generation as well as the agent or session action. The resumed segment runs under the
+stored authority held to the submitter's: it can do only what both allow, and the
+generation stores that narrower authority for the rest of the turn. A submitter wider
+than the starter adds nothing; `acted_as` keeps naming the starter. Under
+`run_as: agent` the segment runs under the agent's grant either way.
+
+An [approved tool call](./approvals.md#continuation-identity) runs under the authority
+the generation that proposed it stores; the approver's is never used.
 
 ### Lifecycle
 

@@ -199,6 +199,7 @@ describe('Usage of a generation that pauses on a client tool', () => {
       policyActions: [
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
+        'generations:ResumeGeneration',
         'tools:CreateTool',
         'guardrails:CreateGuardrail',
         'generations:GetGeneration',

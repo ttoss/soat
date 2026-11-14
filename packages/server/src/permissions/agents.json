@@ -32,11 +32,6 @@
       "description": "Run a generation for an agent"
     },
     {
-      "operationId": "submitAgentToolOutputs",
-      "action": "agents:CreateAgentGeneration",
-      "description": "Submit tool outputs to resume a paused generation"
-    },
-    {
       "operationId": "listAgentVersions",
       "action": "agents:ListAgentVersions",
       "description": "List an agent's archived config versions"

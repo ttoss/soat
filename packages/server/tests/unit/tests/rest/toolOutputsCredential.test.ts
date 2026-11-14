@@ -1,6 +1,9 @@
 import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
   offeredToolNames,
@@ -25,9 +28,10 @@ const toolResultTexts = (request: RecordedRequest): string[] => {
 };
 
 /**
- * The continuation of a paused generation calls tools on the credential of the
- * caller who submits its tool outputs, whether the pause is still in memory or
- * rebuilt from the database: the submitter never borrows the starter's.
+ * A resume only narrows: the continuation of a paused generation runs under
+ * the authority it stores held to the submitter's, whether the pause is still
+ * in memory or rebuilt from the database. Neither side lends the other what
+ * it lacks, and resuming needs `generations:ResumeGeneration` on the turn.
  */
 describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs credential', () => {
   let stub: ChatCompletionsStub;
@@ -36,17 +40,19 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
   let userId: string;
   let agentId: string;
   let listToolsName: string;
+  let noResumeToken: string;
 
   beforeAll(async () => {
     stub = await startChatCompletionsStub();
 
-    // The submitter may answer the generation but not list tools, which only
-    // the starter (the admin) may do.
+    // The user may start and answer a generation but not list tools, which
+    // only the admin may do.
     const setup = await setupProjectWithUsers({
       prefix: 'tooloutcred',
       policyActions: [
         'agents:GetAgent',
         'agents:CreateAgentGeneration',
+        'generations:ResumeGeneration',
         'tools:CallTool',
       ],
       createNoPermUser: false,
@@ -54,6 +60,12 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     adminToken = setup.adminToken;
     userToken = setup.userToken;
     userId = setup.userId;
+    noResumeToken = await createScopedPrincipal({
+      adminToken,
+      projectId: setup.projectId,
+      username: 'tooloutcrednoresume',
+      actions: ['agents:CreateAgentGeneration', 'tools:CallTool'],
+    });
 
     const asAdmin = authenticatedTestClient(adminToken);
     const provider = await asAdmin.post('/api/v1/ai-providers').send({
@@ -105,11 +117,11 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     await stub.close();
   });
 
-  /** The admin starts a turn that pauses on the client tool. */
-  const pauseAsAdmin = async (): Promise<string> => {
+  /** `token` starts a turn that pauses on the client tool. */
+  const pauseAs = async (token: string): Promise<string> => {
     stub.reply(toolCallCompletion([{ id: 'tc_client', name: 'clientTool' }]));
     stub.completions.length = 0;
-    const paused = await authenticatedTestClient(adminToken)
+    const paused = await authenticatedTestClient(token)
       .post(`/api/v1/agents/${agentId}/generate?wait=true`)
       .send({ messages: [{ role: 'user', content: 'hello' }] });
     expect(paused.status).toBe(200);
@@ -120,8 +132,16 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     return paused.body.id;
   };
 
-  /** The user answers it, and the continuation calls the list-tools action. */
-  const submitAsUser = async (generationId: string) => {
+  const submit = (args: { token: string; generationId: string }) => {
+    return authenticatedTestClient(args.token)
+      .post(
+        `/api/v1/agents/${agentId}/generate/${args.generationId}/tool-outputs`
+      )
+      .send({ tool_outputs: [{ tool_call_id: 'tc_client', output: 'ok' }] });
+  };
+
+  /** `token` answers it, and the continuation calls the list-tools action. */
+  const resumeAs = async (args: { token: string; generationId: string }) => {
     stub.reply(
       toolCallCompletion([
         { id: 'tc_list', name: listToolsName, args: { action: 'list-tools' } },
@@ -129,37 +149,56 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
       textCompletion('done')
     );
     stub.completions.length = 0;
-    const res = await authenticatedTestClient(userToken)
-      .post(`/api/v1/agents/${agentId}/generate/${generationId}/tool-outputs`)
-      .send({ tool_outputs: [{ tool_call_id: 'tc_client', output: 'ok' }] });
+    const res = await submit(args);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('completed');
     const [, afterToolCall] = stub.completions;
     return toolResultTexts(afterToolCall).join('\n');
   };
 
-  test('a pause still in memory runs its tools as the submitter', async () => {
-    const generationId = await pauseAsAdmin();
+  const userDenied = () => {
+    return `user ${userId}'s policies deny tools:ListTools`;
+  };
+
+  test('a pause still in memory is held to a narrower submitter', async () => {
+    const generationId = await pauseAs(adminToken);
     expect(pendingGenerations.has(generationId)).toBe(true);
 
-    const toolResult = await submitAsUser(generationId);
+    const toolResult = await resumeAs({ token: userToken, generationId });
 
     expect(toolResult).not.toContain('credListTools');
-    expect(toolResult).toContain(
-      `user ${userId}'s policies deny tools:ListTools`
-    );
+    expect(toolResult).toContain(userDenied());
   });
 
-  test('a pause rebuilt from the database runs its tools as the submitter', async () => {
-    const generationId = await pauseAsAdmin();
+  test('a pause rebuilt from the database is held to a narrower submitter', async () => {
+    const generationId = await pauseAs(adminToken);
     pendingGenerations.delete(generationId);
 
-    const toolResult = await submitAsUser(generationId);
+    const toolResult = await resumeAs({ token: userToken, generationId });
 
     expect(toolResult).not.toContain('credListTools');
-    expect(toolResult).toContain(
-      `user ${userId}'s policies deny tools:ListTools`
+    expect(toolResult).toContain(userDenied());
+  });
+
+  test('a wider submitter lends the turn nothing its starter lacks', async () => {
+    const generationId = await pauseAs(userToken);
+
+    const toolResult = await resumeAs({ token: adminToken, generationId });
+
+    expect(toolResult).not.toContain('credListTools');
+    expect(toolResult).toContain(userDenied());
+  });
+
+  test('a caller without generations:ResumeGeneration is refused', async () => {
+    const generationId = await pauseAs(adminToken);
+
+    const res = await submit({ token: noResumeToken, generationId });
+
+    expect(res.status).toBe(403);
+    const generation = await authenticatedTestClient(adminToken).get(
+      `/api/v1/generations/${generationId}`
     );
+    expect(generation.body.status).toBe('requires_action');
   });
 
   const getGeneration = async (generationId: string) => {
@@ -171,7 +210,7 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
   };
 
   test('a generation acts as the principal that started it', async () => {
-    const generationId = await pauseAsAdmin();
+    const generationId = await pauseAs(adminToken);
 
     const generation = await getGeneration(generationId);
 
@@ -182,18 +221,18 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     });
   });
 
-  test('a resumed generation acts as the submitter, still started by the starter', async () => {
-    const generationId = await pauseAsAdmin();
+  test('a resumed generation still acts as its starter', async () => {
+    const generationId = await pauseAs(adminToken);
     const startedBy = (await getGeneration(generationId))
       .started_by_principal_id;
 
-    await submitAsUser(generationId);
+    await resumeAs({ token: userToken, generationId });
     const generation = await getGeneration(generationId);
 
     expect(generation.started_by_principal_id).toBe(startedBy);
     expect(generation.acted_as).toEqual({
       principal_type: 'user',
-      principal_id: userId,
+      principal_id: startedBy,
     });
   });
 });

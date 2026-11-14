@@ -23,6 +23,7 @@ import { validateMetadataBag } from 'src/lib/metadataBag';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import { authorizeAgentWrite } from './agentAccess';
+import { authorizeGenerationResume } from './generations';
 import { parseToolContextBody } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
 import { authorizeSharedUse } from './sharedAccess';
@@ -161,6 +162,7 @@ const buildGenerationArgs = (args: {
     authority: captureAuthority({ authUser: ctx.authUser }),
     authUser: ctx.authUser,
     toolContext: parseToolContextBody(body.tool_context),
+    actorId: ctx.authUser?.work?.actor ?? undefined,
     knowledgeConfig: toObjectOrUndefined(body.knowledge_config),
     actionId: typeof body.action_id === 'string' ? body.action_id : undefined,
     metadata: isRecord(body.metadata) ? body.metadata : undefined,
@@ -292,6 +294,11 @@ agentGenerationRouter.post(
             action: 'agents:CreateAgentGeneration',
           })
         ).projectIds;
+
+    await authorizeGenerationResume({
+      ctx,
+      generationId: ctx.params.generation_id,
+    });
 
     const { tool_outputs: toolOutputs } = ctx.request.body as {
       tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;

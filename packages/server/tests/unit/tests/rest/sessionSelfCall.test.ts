@@ -55,6 +55,7 @@ describe('Session self-call', () => {
         'agents:CreateSession',
         'agents:SendSessionMessage',
         'agents:SubmitSessionToolOutputs',
+        'generations:ResumeGeneration',
         'tools:ListTools',
       ],
       createNoPermUser: false,

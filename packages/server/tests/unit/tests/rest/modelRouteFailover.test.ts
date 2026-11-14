@@ -21,6 +21,7 @@ const ACTIONS = [
   'tools:CreateTool',
   'agents:CreateAgent',
   'agents:CreateAgentGeneration',
+  'generations:ResumeGeneration',
   'generations:GetGeneration',
   'usage:ListEvents',
 ];

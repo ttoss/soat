@@ -521,7 +521,10 @@ describe('IAM tokens', () => {
             projectPublicId: turn.projectId,
           }),
           caps: [
-            { kind: 'user', user: owner!.user!.publicId as string },
+            {
+              kind: 'grant',
+              grant: { holder: 'user', user: owner!.user!.publicId as string },
+            },
             { kind: 'key', key: keyId },
             ...(bound
               ? [

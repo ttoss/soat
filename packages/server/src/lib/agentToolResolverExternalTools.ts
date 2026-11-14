@@ -110,6 +110,7 @@ export const executeSoatTool = async (args: {
             method: args.def.method,
             path,
             authority: soatCallAuthority(args),
+            actor: args.toolContext?.actor_id ?? null,
             headers: {
               ...args.buildContextHeaders({
                 toolContext: args.toolContext,

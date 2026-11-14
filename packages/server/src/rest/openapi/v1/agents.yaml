@@ -558,13 +558,17 @@ paths:
       summary: Submit tool outputs for a paused generation
       description: >
         Resumes a generation that was paused due to client tool calls.
-        Provide tool outputs for each pending tool call.
+        Provide tool outputs for each pending tool call. Requires
+        `agents:CreateAgentGeneration` on the agent in addition to
+        `generations:ResumeGeneration` on the generation. The resumed segment
+        runs under the generation's stored authority held to the caller's, so
+        a resume never widens what the turn may do.
       operationId: submitAgentToolOutputs
-      x-iam-action: agents:CreateAgentGeneration
-      x-iam-resource-type: agent
+      x-iam-action: generations:ResumeGeneration
+      x-iam-resource-type: generation
       x-soat-resource:
-        kind: agent
-        from: agent_id
+        kind: generation
+        from: generation_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/GenerationId'

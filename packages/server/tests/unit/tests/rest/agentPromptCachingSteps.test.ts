@@ -225,6 +225,7 @@ describe('Agent prompt caching across steps', () => {
               action: [
                 'agents:CreateAgent',
                 'agents:CreateAgentGeneration',
+                'generations:ResumeGeneration',
                 'secrets:CreateSecret',
                 'tools:CreateTool',
                 'usage:ListEvents',

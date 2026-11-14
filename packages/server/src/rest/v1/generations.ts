@@ -40,6 +40,27 @@ const generationAccess = makeItemRouteAuthorizer({
 });
 
 /**
+ * Resuming a paused generation needs `generations:ResumeGeneration` on the
+ * generation itself, beside whatever the entry point's own resource asks: a
+ * caller who may run the agent may not resume every turn of it.
+ */
+export const authorizeGenerationResume = async (args: {
+  ctx: Context;
+  generationId: string;
+}): Promise<void> => {
+  await authorizeResource({
+    ctx: args.ctx,
+    scope: await generations.findScope({ id: args.generationId }),
+    resourceType: 'generation',
+    resourceId: args.generationId,
+    label: 'Generation',
+    errorCode: 'GENERATION_NOT_FOUND',
+    action: 'generations:ResumeGeneration',
+    onDenied: 'refuse',
+  });
+};
+
+/**
  * @openapi
  * GET /api/v1/generations
  * operationId: listGenerations

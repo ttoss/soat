@@ -155,6 +155,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
       policyActions: [
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
+        'generations:ResumeGeneration',
         'generations:GetGeneration',
         'generations:PurgeGenerationContent',
         'traces:GetTrace',

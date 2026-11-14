@@ -27,6 +27,11 @@
       "description": "Attach caller-supplied metadata to a generation record"
     },
     {
+      "operationId": "submitAgentToolOutputs",
+      "action": "generations:ResumeGeneration",
+      "description": "Resume a paused generation by submitting tool outputs (also requires agents:CreateAgentGeneration on the agent)"
+    },
+    {
       "operationId": "purgeGenerationContent",
       "action": "generations:PurgeGenerationContent",
       "description": "Purge a generation's content, clearing its metadata, error and derived summaries"

@@ -3,21 +3,26 @@ import type { IncomingMessage } from 'node:http';
 import type { WorkAuthority } from './workAuthority';
 
 /**
- * The authority an in-process request runs under, keyed by the request
- * object itself: no header carries it, so nothing outside the process can
- * claim one.
+ * What an in-process request carries from the work making it: the authority
+ * it runs under and the end user (actor) that work serves.
  */
-const AUTHORITIES = new WeakMap<IncomingMessage, WorkAuthority>();
+export type AttachedWork = { authority: WorkAuthority; actor: string | null };
 
-export const attachWorkAuthority = (args: {
+/**
+ * Keyed by the request object itself: no header carries it, so nothing
+ * outside the process can claim one.
+ */
+const ATTACHED = new WeakMap<IncomingMessage, AttachedWork>();
+
+export const attachWork = (args: {
   req: IncomingMessage;
-  authority: WorkAuthority;
+  work: AttachedWork;
 }): void => {
-  AUTHORITIES.set(args.req, args.authority);
+  ATTACHED.set(args.req, args.work);
 };
 
-export const attachedWorkAuthority = (
+export const attachedWork = (
   req: IncomingMessage
-): WorkAuthority | undefined => {
-  return AUTHORITIES.get(req);
+): AttachedWork | undefined => {
+  return ATTACHED.get(req);
 };
