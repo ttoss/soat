@@ -29,6 +29,8 @@ Access is policy-based, with no membership table: the [policies](./policies.md) 
 | `id`         | string | Public identifier prefixed with `proj_` |
 | `name`       | string | Human-readable project name             |
 | `guardrail_ids` | array | Guardrails attached at the project scope — the baseline governing every tool call by every agent in the project. See [Guardrails — Attachment](./guardrails.md#attachment) |
+| `agent_policy_ids` | array \| null | [Policies](./policies.md) capping every turn of every agent the project owns, its stored `knowledge_config` retrieval included. `null` (default) or `[]` adds no cap. See [Project agent cap](#project-agent-cap). |
+| `content_bound_tag_keys` | array | Tag keys that state a judgment about what an agent can read; removed by a write that changes that text. `[]` (default) names none. See [Content-bound tag keys](#content-bound-tag-keys) |
 | `default_model_route_id` | string \| null | [Model route](./model-routes.md#project-default-route) inherited by consumers in this project that bind neither `model_route_id` nor `ai_provider_id`. `null` (default) means no default, so every consumer must bind explicitly. Settable/clearable via `update-project`. |
 | `max_concurrent_runs` | integer \| null | Maximum [orchestration runs](./orchestrations.md#concurrency-limits) of this project driven at once. `null` (default) means unlimited; otherwise an integer ≥ 1. Settable/clearable via `update-project`. |
 | `max_chain_generations` | integer \| null | Generations one [continuation chain](./chains.md#bounding-a-chain) in this project may hold before the platform stops resuming it. `null` (default) means no project ceiling, leaving the deployment-wide one; otherwise an integer ≥ 1. The effective budget is the smallest of the deployment's ceiling, this one, and the agent's own `maxChainGenerations`. Settable/clearable via `update-project`. |
@@ -78,6 +80,48 @@ All projects: a wildcard project segment:
 Authorization is policy-only; a project-scoped grant is honored by every project endpoint, including [`GET /projects/{id}`](/docs/api/projects/get-project). See [IAM](./iam.md).
 
 Creating and deleting a project are admin-only. [`PATCH /projects/{id}`](/docs/api/projects/update-project) is `projects:UpdateProject`: a policy granting it on `srn:<project-id>:*:*` lets a non-admin user, or a key it mints for that project, change the project's settings. Detaching a guardrail additionally needs `guardrails:DetachGuardrail`.
+
+### Project agent cap
+
+`agent_policy_ids` holds a rule every agent in the project obeys — "agents read only screened content", "no agent writes outside `/reports/`" — in one place, so an agent created, restored or released without it is still bound:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-project --project-id proj_… --agent_policy_ids '["pol_…"]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_…' },
+  body: { agent_policy_ids: ['pol_…'] },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_… \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "agent_policy_ids": ["pol_…"] }'
+```
+
+</TabItem>
+</Tabs>
+
+- **One more cap.** Every turn of an agent the project owns must also satisfy these policies, under both `run_as` modes and on every path the agent's own [`policy_ids`](./agents.md#execution-identity) cap: `builtin` actions, approved actions, pipeline steps, resumption, `On-Behalf-Of` callbacks, `write_memory` and `knowledge_config` override retrieval.
+- **Stored knowledge too.** Unlike the agent's `policy_ids`, the cap also bounds the agent's stored [`knowledge_config`](./agents.md#knowledge-config) retrieval: whoever governs the project sets it, not the agent's author.
+- **Shared agents** are bounded by their owner project's cap, wherever they run.
+- **Read live.** Each turn, approval and continuation reads the cap as it stands, and durable work an agent starts under `run_as: agent` stores it as a cap read at every later check, so tightening it reaches work already pending.
+- **Refusals name the project**: `meta.denied_by` is `{ "type": "project", "id": "proj_…" }`.
+- **Writes** need `projects:UpdateProject`, and follow the agent `policy_ids` rules: the caller must hold every grant the policies carry (`403 POLICY_GRANT_NOT_HELD`), an unknown id is `400 POLICY_NOT_FOUND`, a policy named here cannot be deleted (`409 POLICY_HAS_DEPENDENTS`), and one that no longer resolves allows nothing.
 
 ### Default Model Route
 
@@ -233,6 +277,51 @@ The resume hands back only what the pause held. A run or task an operator paused
 
 Both transitions emit a [webhook event](./webhooks.md): `projects.paused` and `projects.resumed`, each carrying the project as its `data`.
 
+### Content-bound tag keys
+
+`content_bound_tag_keys` names tag keys that state a judgment about what an agent can read, such as a screening verdict (`screened: clean`). The judgment must not outlive the text it judged, so a write that changes that text removes the keys from the resource's tags:
+
+| Resource | Writes that remove the keys |
+| --- | --- |
+| [Document](./documents.md) | A change to the content, `title`, `path` or `metadata`, moving or renaming its backing [file](./files.md) included; a re-ingest; a version restore that changes them, reviving a withdrawn document included. A restore brings back the archived tags but never an archived value of these keys: over the same text it keeps the current one |
+| [Memory](./memories.md) | A change to `content` or `metadata`. A superseding memory does not inherit them |
+
+- A write that sets a key itself keeps it.
+- Tag-only writes, and writes that re-send the stored value, keep them.
+- Removing a key from the list does not restore tags already removed.
+- Each key is a non-empty tag key outside the reserved `system.` prefix; `null` or `[]` names none. Anything else is `400 VALIDATION_FAILED`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-project --project-id proj_V1StGXR8Z5jdHi6B --content-bound-tag-keys screened
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_V1StGXR8Z5jdHi6B' },
+  body: { content_bound_tag_keys: ['screened'] },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_V1StGXR8Z5jdHi6B \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "content_bound_tag_keys": ["screened"] }'
+```
+
+</TabItem>
+</Tabs>
+
 ### Deletion
 
 Deleting a project with any dependent resource returns `409 Conflict`, code `PROJECT_HAS_DEPENDENTS`. Every project-scoped resource counts, including those accumulated while running:
@@ -260,6 +349,8 @@ A deleted formation and a usage event with no `cost_usd` (or a zero one) are not
 | `409`  | `{ "error": { "code": "PROJECT_PAUSED" } }` | Starting work — a generation, run, eval run, tool call or trigger fire — or resuming a run or task in a paused project | Resume the project once whatever paused it is resolved; `error.meta.pause_reason` says why — see [Pausing a project](#pausing-a-project) |
 | `409`  | `{ "error": { "code": "PROJECT_NOT_PAUSED" } }` | Resuming a project that is not paused | Nothing to do; `paused_at` is `null` |
 | `409`  | `{ "error": { "code": "MODEL_NOT_PRICED" } }` | A generation on a project with `require_priced_model` whose model carries no price row | Price the `(provider, model, component)` rows in `error.meta.unpriced_rows`, or set `require_priced_model` to `false` — see [Priced models](#priced-models) |
+| `403`  | `{ "error": { "code": "POLICY_GRANT_NOT_HELD" } }` | Setting `agent_policy_ids` to a policy granting what the caller does not hold | Use a caller holding every grant, or narrower policies — see [Project agent cap](#project-agent-cap) |
+| `400`  | `{ "error": { "code": "POLICY_NOT_FOUND" } }` | `agent_policy_ids` names a policy that does not exist | Check the policy ids |
 | `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |
 
 ## Examples

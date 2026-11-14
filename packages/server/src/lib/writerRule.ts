@@ -40,6 +40,7 @@ type WriterRuleCarrier = {
  */
 export const WRITER_RULE_CARRIERS = {
   agents: { policies: 'agents' },
+  projects: { policies: 'projects' },
   triggers: {
     policies: 'triggers',
     policiesRequired:

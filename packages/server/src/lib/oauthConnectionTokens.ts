@@ -4,13 +4,13 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { authUserOfWork } from '../middleware/auth';
 import { lockForTransaction } from './advisoryLocks';
-import type { AgentAuthority } from './agentAuthority';
 import {
-  agentDenied,
-  authorizationDenied,
-  callerPrincipal,
-} from './authorizationDenial';
-import { buildSrn, evaluatePolicies } from './iam';
+  type AgentAuthority,
+  boundaryDenied,
+  boundaryRefusalOf,
+} from './agentAuthority';
+import { authorizationDenied, callerPrincipal } from './authorizationDenial';
+import { buildSrn } from './iam';
 import { type OauthClientRow, resolveOauthClient } from './oauthClients';
 import { type OauthConnectionRow, tokenColumns } from './oauthConnections';
 import { requestTokens } from './oauthTokenEndpoint';
@@ -44,7 +44,7 @@ const reconnect = (args: {
 };
 
 /**
- * Caller ∩ the agent's `policy_ids`: both must allow using this connection, so
+ * Caller ∩ the agent's boundary: both must allow using this connection, so
  * neither the tool's author nor a broad agent can reach an actor's grant.
  */
 const assertUseAllowed = async (args: {
@@ -53,17 +53,14 @@ const assertUseAllowed = async (args: {
   authority: WorkAuthority | null;
   agentAuthority?: AgentAuthority;
 }) => {
-  const { agentAuthority } = args;
-  if (
-    agentAuthority?.policy &&
-    !evaluatePolicies({
-      policies: [agentAuthority.policy],
-      action: USE_OAUTH_CONNECTION_ACTION,
-      resource: args.resource,
-    })
-  ) {
-    throw agentDenied({
-      agentId: agentAuthority.agentId,
+  const by = boundaryRefusalOf({
+    authority: args.agentAuthority,
+    action: USE_OAUTH_CONNECTION_ACTION,
+    resource: args.resource,
+  });
+  if (by) {
+    throw boundaryDenied({
+      by,
       action: USE_OAUTH_CONNECTION_ACTION,
       resource: args.resource,
     });

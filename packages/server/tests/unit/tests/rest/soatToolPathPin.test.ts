@@ -44,9 +44,6 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByAgentPolicy: () => {
-        return true;
-      },
       logToolCallingError: () => {},
     });
     return tools[`notes_${action}`];

@@ -232,4 +232,34 @@ describe("an approved builtin action is held to the agent's boundary", () => {
     );
     expect(message).not.toContain(`"id":"${memoryStoreId}"`);
   });
+
+  test("the project's agent_policy_ids refuse the approved action", async () => {
+    const capId = await createPolicy({
+      statement: [
+        { effect: 'Allow', action: ['*'], resource: ['*'] },
+        {
+          effect: 'Deny',
+          action: ['memories:GetMemoryStore'],
+          resource: ['*'],
+        },
+      ],
+    });
+    const cap = await authenticatedTestClient(adminToken)
+      .patch(`/api/v1/projects/${projectId}`)
+      .send({ agent_policy_ids: [capId] });
+    expect(cap.status).toBe(200);
+
+    try {
+      const message = await approveGetMemoryStore(openAgentId);
+
+      expect(message).toContain(
+        `"denied_by":{"type":"project","id":"${projectId}"}`
+      );
+      expect(message).not.toContain(`"id":"${memoryStoreId}"`);
+    } finally {
+      await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ agent_policy_ids: null });
+    }
+  });
 });

@@ -42,7 +42,7 @@ import {
 } from './helpers';
 import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
-import { registerTagRoutes } from './tagRoutes';
+import { declareBodyTags, registerTagRoutes } from './tagRoutes';
 
 const collectionsRouter = new Router<Context>();
 
@@ -171,6 +171,7 @@ collectionsRouter.get(
 collectionsRouter.put(
   '/collections/:collection_id/items/:key',
   async (ctx: Context) => {
+    declareBodyTags(ctx);
     requireAuth(ctx);
     const action = 'collections:PutCollectionItem';
     const body = ctx.request.body as ItemBody;
@@ -208,6 +209,7 @@ collectionsRouter.put(
 collectionsRouter.patch(
   '/collections/:collection_id/items/:key',
   async (ctx: Context) => {
+    declareBodyTags(ctx);
     const body = ctx.request.body as ItemBody;
     const tags = assertNoSystemTagKeys(readNullableTagBag(body.tags));
     const { collection } = await requireCollectionItem({

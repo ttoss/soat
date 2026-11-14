@@ -2,7 +2,11 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { reactsToExpiredApproval } from './agentApprovalExpiry';
-import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
+import {
+  type AgentAuthority,
+  resolveAgentAuthority,
+  unresolvedAgentAuthority,
+} from './agentAuthority';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import {
@@ -19,7 +23,6 @@ import {
   registerApprovalResumeHandler,
 } from './approvals';
 import { expireChainIfSettled } from './generationChains';
-import type { PolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
@@ -55,11 +58,6 @@ const resolveContinuationAuthority = async (args: {
   return authority ? forWork({ authority, work: args.item.id }) : null;
 };
 
-/** Refuses every action: what an agent that no longer resolves is bounded by. */
-const DENY_ALL_POLICY: PolicyDocument = {
-  statement: [{ effect: 'Deny', action: ['*'], resource: ['*'] }],
-};
-
 /** The end user the proposing generation ran for, bound into its policies. */
 const proposingActorId = async (
   generationId: string | null | undefined
@@ -76,8 +74,8 @@ const proposingActorId = async (
 };
 
 /**
- * The proposing agent's `policy_ids` as they stand now, the same cap the
- * agent's own calls are held to.
+ * The proposing agent's boundary as it stands now, the same cap the agent's
+ * own calls are held to.
  */
 const proposingAgentAuthority = async (args: {
   item: MappedApproval;
@@ -90,17 +88,12 @@ const proposingAgentAuthority = async (args: {
         reach: 'project',
       })
     : null;
-  if (!agent) {
-    return {
-      runAs: 'caller',
-      agentId: args.item.agent_id ?? null,
-      policy: DENY_ALL_POLICY,
-    };
-  }
+  if (!agent) return unresolvedAgentAuthority(args.item.agent_id ?? null);
   return resolveAgentAuthority({
     agentId: agent.publicId,
     runAs: agent.runAs,
     policyIds: agent.policyIds,
+    ownerProjectId: agent.projectId as number,
     actorId: await proposingActorId(args.item.generation_id),
     // An approval with no project row left pins the grant to no project.
     projectPublicId: args.item.project_id ?? '',
@@ -130,12 +123,10 @@ const executeApprovedWriteMemory = async (
     agent,
     generationId: args.item.generation_id ?? null,
     projectId: args.projectInternalId,
-    agentPolicy: (
-      await proposingAgentAuthority({
-        item: args.item,
-        projectInternalId: args.projectInternalId,
-      })
-    ).policy,
+    agentAuthority: await proposingAgentAuthority({
+      item: args.item,
+      projectInternalId: args.projectInternalId,
+    }),
     actorId: actorId ?? undefined,
     input: args.input,
     markExecuted: args.markExecuted,

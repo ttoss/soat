@@ -125,9 +125,6 @@ describe('actions withheld from the agent tool surface', () => {
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByAgentPolicy: () => {
-        return true;
-      },
       logToolCallingError: () => {},
     });
 

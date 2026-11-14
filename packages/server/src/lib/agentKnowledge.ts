@@ -3,6 +3,11 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import { resolveOwnerActorDbId } from './actorOwnership';
+import {
+  type AgentAuthority,
+  boundaryDenied,
+  boundaryRefusalOf,
+} from './agentAuthority';
 import type { TypedAgent } from './agentGenerationTypes';
 import {
   type KnowledgeConfig,
@@ -12,11 +17,10 @@ import {
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import { NATIVE_PROPOSAL_PREFIX } from './agentToolApproval';
 import type { ToolBinding } from './agentToolNames';
-import { isSoatActionAllowedByAgentPolicy } from './agentToolResolver';
-import { agentDenied, denialToolResult } from './authorizationDenial';
+import { denialToolResult } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
 import type { CollectedGuardrail } from './guardrailCollection';
-import { buildSrn, type PolicyDocument } from './iam';
+import { buildSrn } from './iam';
 import { searchKnowledge } from './knowledge';
 import {
   type KnowledgeRetrieval,
@@ -109,6 +113,8 @@ export const buildKnowledgeMessages = async (args: {
    * read under (`resolveRequestedKnowledgePolicy`).
    */
   requested?: { config: KnowledgeConfig; policy: KnowledgeSearchPolicy };
+  /** The owner project's `agent_policy_ids`, which bound stored retrieval. */
+  capPolicy: KnowledgeSearchPolicy | null;
   projectIds?: number[];
   /**
    * The agent's own project and the turn — what the query embedding is billed
@@ -155,6 +161,7 @@ export const buildKnowledgeMessages = async (args: {
     merged: config,
     stored: args.storedConfig,
     requestedPolicy: args.requested?.policy,
+    capPolicy: args.capPolicy,
   });
   if (!scope) return { messages: [], retrieval: null };
 
@@ -207,22 +214,19 @@ const MEMORY_WRITE_ACTIONS = [
   'memories:UpdateMemory',
 ] as const;
 
-const findAgentDeniedMemoryWriteAction = (args: {
-  agentPolicy: unknown;
+const memoryWriteRefusal = (args: {
+  agentAuthority: AgentAuthority | undefined;
   resource: string;
   context: Record<string, string>;
-}): string | null => {
-  for (const iamAction of MEMORY_WRITE_ACTIONS) {
-    if (
-      !isSoatActionAllowedByAgentPolicy({
-        agentPolicy: args.agentPolicy,
-        iamAction,
-        resource: args.resource,
-        context: args.context,
-      })
-    ) {
-      return iamAction;
-    }
+}): ReturnType<typeof boundaryDenied> | null => {
+  for (const action of MEMORY_WRITE_ACTIONS) {
+    const by = boundaryRefusalOf({
+      authority: args.agentAuthority,
+      action,
+      resource: args.resource,
+      context: args.context,
+    });
+    if (by) return boundaryDenied({ by, action, resource: args.resource });
   }
   return null;
 };
@@ -254,7 +258,7 @@ type WriteMemoryAsAgentArgs = {
   generationId: string | null;
   /** The agent's own project, the only one whose store it writes to. */
   projectId: number;
-  agentPolicy?: unknown;
+  agentAuthority?: AgentAuthority;
   /** The turn's end user, whose memory every write is. */
   actorId?: string;
 };
@@ -282,23 +286,17 @@ const writeMemoryAsAgent = async (
     resourceType: 'memory_store',
     resourceId: args.writeMemoryStoreId,
   });
-  const deniedAction = findAgentDeniedMemoryWriteAction({
-    agentPolicy: args.agentPolicy,
+  const refusal = memoryWriteRefusal({
+    agentAuthority: args.agentAuthority,
     resource,
     context: buildResourceTagContext({
       resourceType: 'memory_store',
       tags: memoryStore.tags,
     }),
   });
-  if (deniedAction) {
-    log('writeMemoryAsAgent: denied %s', deniedAction);
-    return denialToolResult(
-      agentDenied({
-        agentId: args.agentId,
-        action: deniedAction,
-        resource,
-      })
-    );
+  if (refusal) {
+    log('writeMemoryAsAgent: denied %o', refusal.meta);
+    return denialToolResult(refusal);
   }
   const actorId = await resolveOwnerActorDbId({
     actorId: args.actorId,
@@ -368,7 +366,7 @@ export const writeMemoryInputError = (
 /**
  * Runs a held `write_memory` call a human approved. The store is the one the
  * agent's `knowledge_config` names now, and the boundary is the agent's
- * `policy_ids` now — the approver decided whether the fact is written, not
+ * as it resolves now — the approver decided whether the fact is written, not
  * where or past which cap.
  */
 export const runApprovedWriteMemory = async (args: {
@@ -376,7 +374,7 @@ export const runApprovedWriteMemory = async (args: {
   agent: { publicId: string; knowledgeConfig: unknown } | null;
   generationId: string | null;
   projectId: number;
-  agentPolicy: unknown;
+  agentAuthority: AgentAuthority;
   actorId?: string;
   /** The frozen or edited arguments. */
   input: Record<string, unknown>;
@@ -398,7 +396,7 @@ export const runApprovedWriteMemory = async (args: {
     agentId: args.agent.publicId,
     generationId: args.generationId,
     projectId: args.projectId,
-    agentPolicy: args.agentPolicy,
+    agentAuthority: args.agentAuthority,
     actorId: args.actorId,
     // Checked by `writeMemoryInputError` just above.
     content: args.input.content as string,
@@ -466,7 +464,7 @@ export const buildKnowledgeBindings = (args: {
   generationId: string;
   projectId: number;
   typedAgent: TypedAgent;
-  agentPolicy: PolicyDocument | null;
+  agentAuthority: AgentAuthority;
   actorId?: string;
   /** The project and agent guardrails; the binding has no tool-scope ones. */
   baseGuardrails: CollectedGuardrail[];
@@ -482,7 +480,7 @@ export const buildKnowledgeBindings = (args: {
           agentId: args.agentId,
           generationId: args.generationId,
           projectId: args.projectId,
-          agentPolicy: args.agentPolicy,
+          agentAuthority: args.agentAuthority,
           actorId: args.actorId,
           // A call runs only once every guardrail gating it released it.
           attribution: withReleasingGuardrails({
