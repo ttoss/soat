@@ -295,11 +295,6 @@ agentGenerationRouter.post(
           })
         ).projectIds;
 
-    await authorizeGenerationResume({
-      ctx,
-      generationId: ctx.params.generation_id,
-    });
-
     const { tool_outputs: toolOutputs } = ctx.request.body as {
       tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;
     };
@@ -310,6 +305,11 @@ agentGenerationRouter.post(
         'toolOutputs is required and must be a non-empty array'
       );
     }
+
+    await authorizeGenerationResume({
+      ctx,
+      generationId: ctx.params.generation_id,
+    });
 
     const result = await submitToolOutputs({
       projectIds,

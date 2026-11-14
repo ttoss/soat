@@ -298,7 +298,7 @@ echo "Agent: $AGENT_ID"
 
 ## Step 5 — Forbid everything else: the harness identity
 
-A dedicated user with a [policy](/docs/modules/policies) allowing one action, `agents:CreateAgentGeneration` (covers starting a generation and submitting tool outputs), scoped to this project. See [IAM](/docs/modules/iam).
+A dedicated user with a [policy](/docs/modules/policies) allowing two actions, scoped to this project: `agents:CreateAgentGeneration` to start a generation, and `generations:ResumeGeneration` to submit tool outputs to it. See [IAM](/docs/modules/iam).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -313,7 +313,7 @@ RUNNER_POLICY_ID=$(soat create-policy \
     "statement": [
       {
         "effect": "Allow",
-        "action": ["agents:CreateAgentGeneration"],
+        "action": ["agents:CreateAgentGeneration", "generations:ResumeGeneration"],
         "resource": ["srn:'"$PROJECT_ID"':*:*"]
       }
     ]
@@ -340,7 +340,10 @@ const { data: runnerPolicy } = await adminSoat.policies.createPolicy({
       statement: [
         {
           effect: 'Allow',
-          action: ['agents:CreateAgentGeneration'],
+          action: [
+            'agents:CreateAgentGeneration',
+            'generations:ResumeGeneration',
+          ],
           resource: [`srn:${projectId}:*:*`],
         },
       ],
@@ -382,7 +385,7 @@ RUNNER_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
       "statement": [
         {
           "effect": "Allow",
-          "action": ["agents:CreateAgentGeneration"],
+          "action": ["agents:CreateAgentGeneration", "generations:ResumeGeneration"],
           "resource": ["srn:'"$PROJECT_ID"':*:*"]
         }
       ]
