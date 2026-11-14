@@ -122,6 +122,8 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
   return {
     name: typeof body.name === 'string' ? body.name : undefined,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
+    // An explicit `null` or `[]` removes the cap.
+    agentPolicyIds: provided<string[] | null>(body, 'agent_policy_ids'),
     // An explicit `null` names no key, as `[]` does.
     contentBoundTagKeys: provided<string[] | null>(
       body,
@@ -175,6 +177,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   const {
     name,
     guardrailIds,
+    agentPolicyIds,
     contentBoundTagKeys,
     maxConcurrentRuns,
     maxChainGenerations,
@@ -194,7 +197,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'name, guardrail_ids, content_bound_tag_keys, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, require_priced_model, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
+      'name, guardrail_ids, agent_policy_ids, content_bound_tag_keys, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, require_priced_model, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
     );
   }
 
@@ -215,7 +218,9 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     id: ctx.params.project_id,
     name,
     guardrailIds,
+    agentPolicyIds,
     contentBoundTagKeys,
+    writer: ctx.authUser,
     maxConcurrentRuns,
     maxChainGenerations,
     maxOrchestrationRunDepth,

@@ -33,11 +33,13 @@ export type AuthorityGrant =
 /**
  * What narrows the grant, each read live at every check: another holder's
  * grant (`narrowAuthority`), an API key's own `policy_ids`, an OAuth consent,
- * or a bound (an IAM token's, an `On-Behalf-Of` assertion's).
+ * a bound (an IAM token's, an `On-Behalf-Of` assertion's), or a project's
+ * `agent_policy_ids` over an agent's work.
  */
 export type AuthorityCap =
   | { kind: 'grant'; grant: AuthorityGrant }
   | { kind: 'key'; key: string }
+  | { kind: 'project_agents'; project: string }
   | { kind: 'scope'; scope: string | null }
   | { kind: 'bound'; bound: PrincipalBound; by: DeniedPrincipal };
 
@@ -146,6 +148,7 @@ const DENIED_TYPES = new Set<string>([
   'iam_token',
   'on_behalf_of',
   'generation',
+  'project',
   'agent',
   'trigger',
   ...RESOURCE_GRANT_PRINCIPAL_TYPES,
@@ -169,6 +172,11 @@ const CAP_READERS: Record<
   },
   key: (value) => {
     return str(value.key) ? { kind: 'key', key: value.key } : null;
+  },
+  project_agents: (value) => {
+    return str(value.project)
+      ? { kind: 'project_agents', project: value.project }
+      : null;
   },
   scope: (value) => {
     return value.scope === null || typeof value.scope === 'string'
@@ -423,8 +431,9 @@ export const triggerAuthority = (args: {
 
 /**
  * The authority a `run_as: agent` turn's builtin calls run under: the agent's
- * grant alone, pinned to the turn's project, in place of the work's grant and
- * caps. The work's principal, chain and work id carry on.
+ * grant capped by its owner project's `agent_policy_ids`, pinned to the turn's
+ * project, in place of the work's grant and caps. The work's principal, chain
+ * and work id carry on.
  */
 export const agentWorkAuthority = (args: {
   authority: WorkAuthority;
@@ -434,8 +443,8 @@ export const agentWorkAuthority = (args: {
   return {
     ...args.authority,
     project: agent.projectPublicId,
-    grant: { holder: 'agent', agent: agent.agentId, policy: agent.policy },
-    caps: [],
+    grant: { holder: 'agent', agent: agent.agentId, policy: agent.grant },
+    caps: [{ kind: 'project_agents', project: agent.capProject }],
   };
 };
 
