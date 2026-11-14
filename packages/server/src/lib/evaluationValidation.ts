@@ -91,6 +91,57 @@ export const validateGroupBy = (value: unknown): string | null => {
   return null;
 };
 
+const EVIDENCE_KEYS: ReadonlySet<string> = new Set(['required_groups']);
+
+/** Non-empty, unique group names, and a `group_by` to read them from. */
+const validateRequiredGroups = (args: {
+  groups: unknown;
+  groupBy: string | null;
+}): string | null => {
+  if (!Array.isArray(args.groups)) {
+    return 'evidence.required_groups must be an array of group names.';
+  }
+  const seen = new Set<string>();
+  for (const [index, group] of args.groups.entries()) {
+    if (typeof group !== 'string' || group === '') {
+      return `evidence.required_groups.${index} must be a non-empty string.`;
+    }
+    if (seen.has(group)) {
+      return `evidence.required_groups names '${group}' more than once.`;
+    }
+    seen.add(group);
+  }
+  if (args.groups.length > 0 && args.groupBy === null) {
+    return 'evidence.required_groups needs group_by to read the groups from.';
+  }
+  return null;
+};
+
+/**
+ * The `evidence` object, judged with the `group_by` it will be stored beside:
+ * a required group names a value of that key, so requiring one with no key to
+ * read it from is refused rather than stored as a rule no run can meet.
+ */
+export const validateEvidence = (args: {
+  evidence: unknown;
+  groupBy: string | null;
+}): string | null => {
+  const { evidence } = args;
+  if (evidence === null || evidence === undefined) return null;
+  if (!isPlainObject(evidence)) return 'evidence must be an object, or null.';
+
+  const extra = Object.keys(evidence).find((key) => {
+    return !EVIDENCE_KEYS.has(key);
+  });
+  if (extra !== undefined) return `evidence.${extra} is not a known rule.`;
+
+  if (evidence.required_groups === undefined) return null;
+  return validateRequiredGroups({
+    groups: evidence.required_groups,
+    groupBy: args.groupBy,
+  });
+};
+
 /** Turns a validator's message into the `400` the route surfaces. */
 export const assertValid = (message: string | null): void => {
   if (message) throw new DomainError('VALIDATION_FAILED', message);

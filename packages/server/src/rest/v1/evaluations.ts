@@ -364,6 +364,7 @@ evaluationsRouter.post('/evals', async (ctx: Context) => {
     scorers: body.scorers,
     passThreshold: body.pass_threshold,
     groupBy: body.group_by,
+    evidence: body.evidence,
     writer: ctx.authUser,
   });
 });
@@ -422,6 +423,7 @@ evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
     scorers: body.scorers,
     passThreshold: body.pass_threshold,
     groupBy: body.group_by,
+    evidence: body.evidence,
     writer: ctx.authUser,
   });
 });

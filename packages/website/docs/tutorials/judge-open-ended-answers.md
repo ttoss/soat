@@ -276,7 +276,7 @@ Slots fill in one pass: a value containing `{{output}}` is never re-expanded, an
 RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true | jq -r '.id')
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
-  | jq '{status, passed, completed_count, errored_count, aggregate_scores}'
+  | jq '{status, verdict, completed_count, errored_count, aggregate_scores}'
 
 soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
   | jq '.data | map({output, error, scores})'
@@ -451,7 +451,7 @@ printf '%s' "$QUEUED_RUN" | jq '{status, item_count, aggregate_scores}'
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$QUEUED_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$QUEUED_RUN_ID" \
-  | jq '{status, passed, completed_count, errored_count, pass_rate: .aggregate_scores.pass_rate}'
+  | jq '{status, verdict, completed_count, errored_count, pass_rate: .aggregate_scores.pass_rate}'
 ```
 
 </TabItem>
@@ -472,7 +472,7 @@ while (settled.status === 'queued' || settled.status === 'running') {
   });
   settled = data;
 }
-console.log(settled.passed, settled.aggregate_scores);
+console.log(settled.verdict, settled.aggregate_scores);
 ```
 
 </TabItem>
@@ -484,7 +484,7 @@ QUEUED_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -d '{"wait":false}' | jq -r '.id')
 
 curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$QUEUED_RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, passed, aggregate_scores}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, verdict, aggregate_scores}'
 ```
 
 </TabItem>
@@ -507,7 +507,7 @@ Cancelling drops the run's outstanding tasks and settles it `cancelled` ([Evalua
 DOOMED_RUN_ID=$(soat start-eval-run --eval-id "$EVAL_ID" --wait false | jq -r '.id')
 
 soat cancel-eval-run --eval-id "$EVAL_ID" --eval-run-id "$DOOMED_RUN_ID" \
-  | jq '{status, item_count, completed_count, errored_count, aggregate_scores, passed}'
+  | jq '{status, item_count, completed_count, errored_count, aggregate_scores, verdict}'
 ```
 
 </TabItem>
@@ -550,7 +550,7 @@ Expected shape:
   "completed_count": 0,
   "errored_count": 0,
   "aggregate_scores": null,
-  "passed": null
+  "verdict": null
 }
 ```
 

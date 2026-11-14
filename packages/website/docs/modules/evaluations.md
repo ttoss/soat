@@ -88,13 +88,16 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | --- | --- | --- |
 | `id` | string | Public identifier (e.g. `evrun_…`) |
 | `eval_id` | string | ID of the eval this run belongs to |
+| `agent_id` | string \| null | The agent every item ran against, recorded at run start and kept after that agent is deleted; see [Version pinning](#version-pinning). `null` on a run that recorded none, which no promotion gate accepts |
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
 | `decider_versions` | object \| null | Scorer name → the decider version each [`decider` scorer](#decider-scorers-decider) grades under, resolved when the run started; `null` when the eval has none |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `cancelled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
+| `definition` | object \| null | The eval's `scorers`, `pass_threshold`, `group_by` and `evidence` as they were at run start; see [Version pinning](#version-pinning). `null` on a run that recorded none |
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a cancelled run |
-| `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a cancelled run |
+| `verdict` | string \| null | `supported` \| `refuted` \| `insufficient`; see [Pass semantics](#pass-semantics). `null` when the run has no threshold, until it completes, and on a cancelled or failed run |
+| `verdict_reasons` | array \| null | `[{ scope, verdict, reason }]`, one per judged scope, the run first; `scope` is `{ kind: "run" }` or `{ kind: "group", name }`. `null` when `verdict` is |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [cancelled](#canceling-a-run) run the last two count what actually ran |
 | `metadata` | object | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
@@ -484,7 +487,12 @@ The generation must belong to the same project as the dataset.
 ### Version pinning
 
 A run resolves **one** agent version at run start, stamps it on `agent_version`, and every
-item executes against it.
+item executes against it. It records the agent on `agent_id` and copies the eval's
+`scorers`, `pass_threshold`, `group_by` and `evidence` onto `definition` in the same
+moment: every item executes against that agent and is scored by those scorers, and the run
+settles on that threshold, grouping and evidence. Editing the eval, mid-run or later,
+neither regrades a run nor changes what it says it measured; a queued run whose agent is
+deleted mid-run settles `failed`.
 
 - Pass `agent_version` to name an archived [version](./agents.md#versioning-and-staged-rollout).
   An unknown version is a `400`.
@@ -492,20 +500,53 @@ item executes against it.
   version, or the live draft version when no release is in effect.
 
 An [eval-gated promotion](./agents.md#eval-gated-promotion) matches on the pin: a release
-naming this eval as its `promotion_gate` promotes only once a run finished `completed` with
-`passed: true` **and** carried the canary's `agent_version`.
+naming this eval as its `promotion_gate` reads the newest `completed` run recorded against
+the agent being promoted and carrying the canary's `agent_version`, and promotes only when
+its `verdict` is `supported`.
 
 ### Pass semantics
 
 1. **Per scorer, per item** — a binary scorer passes when its score is 1; an `llm_judge`
    scorer passes when its score is at least the scorer's own `pass_threshold`.
 2. **Per item** — `EvalResult.passed` is the AND over its per-scorer flags.
-3. **Per run** — `EvalRun.passed` is `null` when the eval has no `pass_threshold`;
-   otherwise it is true when the **pass rate** (passed items over non-errored items) is at
-   least the threshold.
+3. **Per run** — `EvalRun.verdict` is `null` when the run's `definition.pass_threshold`
+   is; otherwise it reads the [95% interval](#uncertainty) of the **pass rate** (passed
+   items over non-errored items) against the threshold:
 
-The verdict gates on the pass rate, never on a pooled mean; `aggregate_scores` still
-reports per-scorer means. A run that scored nothing does not pass.
+   | Condition | `verdict` |
+   | --- | --- |
+   | `pass_rate_interval.low` at or above the threshold | `supported` |
+   | `pass_rate_interval.high` below the threshold | `refuted` |
+   | The threshold inside the interval, or nothing scored | `insufficient` |
+
+4. **Per required group** — each group [`evidence.required_groups`](#evidence) names is
+   judged by the same rule on its own interval; one with no scored items is
+   `insufficient`. The run's `verdict` is the worst across the run and every required
+   group: `refuted` over `insufficient` over `supported`.
+
+The interval carries the sample size, so a small suite cannot read `supported` on a lucky
+point estimate: at a threshold of `0.9`, 19 of 20 is `insufficient` and an all-pass run is
+`supported` from 35 items, and every required group needs that sample on its own. A
+threshold of `1` can never be `supported`. The verdict gates on the pass rate, never on a
+pooled mean; `aggregate_scores` still reports per-scorer means. `verdict_reasons` says
+which scope decided it.
+
+### Evidence
+
+`evidence` on the eval holds the rules a run's verdict reads beyond the threshold, and the
+run copies it onto `definition`. `null` declares none; on update, `null` clears it and
+omitting it keeps it.
+
+| Key | Rule |
+| --- | --- |
+| `required_groups` | Values of `group_by`, each judged on its own interval ([Pass semantics](#pass-semantics)). Needs `group_by`; names are non-empty and unique. Other groups stay report-only |
+
+```json
+{ "group_by": "payment_method", "evidence": { "required_groups": ["pix", "card", "boleto"] } }
+```
+
+An unknown key, `required_groups` without `group_by`, an empty or repeated name, and
+clearing `group_by` while groups are required are `400 VALIDATION_FAILED`.
 
 ### Errors are not zeros
 
@@ -543,7 +584,7 @@ that still has queued tasks is left alone.
 
 `start-eval-run` accepts a `metadata` bag: caller-owned key/value annotations, stored on the run and returned verbatim by every read of it, the list included. Use it to record what the run measured — the commit or release candidate, the CI job, the experiment. `trigger_id` records a *scheduled* origin; `metadata` records the caller's own.
 
-Nothing in the scoring path reads it, and no key is reserved: `status`, `agent_version`, `aggregate_scores`, `passed` and the counts are fields of their own and cannot be written from here. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no run is created.
+Nothing in the scoring path reads it, and no key is reserved: `status`, `agent_version`, `aggregate_scores`, `verdict` and the counts are fields of their own and cannot be written from here. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no run is created.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -802,12 +843,13 @@ the run-level figures:
   `removed_item_count` / `pass_rate_delta` / `flipped` / `p_value` / `scorers` fields as
   [Baseline deltas](#baseline-deltas). Its `ungrouped_item_count` counts the compared items
   that name no group.
-- **The verdict does not read groups.** `passed` gates on the run's pass rate only
-  ([Pass semantics](#pass-semantics)). A kind that needs its own threshold gets its own
-  dataset and eval.
+- **The verdict reads only the required groups.** A group named in
+  [`evidence.required_groups`](#evidence) is judged on its own interval and can decide the
+  verdict; every other group is report-only ([Pass semantics](#pass-semantics)). A kind
+  that needs its own threshold gets its own dataset and eval.
 
-`group_by` is set on create or update (`null` clears it) and applies to the runs that
-settle afterwards; a settled run keeps the grouping it was stored with. Omitted, a run
+`group_by` is set on create or update (`null` clears it) and applies to the runs created
+afterwards: a run groups by the `group_by` its `definition` recorded. Omitted, a run
 reports no `grouping`.
 
 ### Uncertainty
@@ -843,8 +885,9 @@ its figures can be trusted, with no extra call:
 - **Groups carry both.** Each `grouping.groups` entry has its own `pass_rate_interval`, and
   each `baseline.grouping.groups` entry its own `flipped` and `p_value`, so a kind that
   regressed shows as significant even when the overall delta is not.
-- **The verdict reads neither.** `passed` gates on `pass_rate` alone
-  ([Pass semantics](#pass-semantics)); the figures are there to read beside it. Choosing a
+- **The verdict reads the interval, not the p-value.** `verdict` reads
+  `pass_rate_interval` against the threshold ([Pass semantics](#pass-semantics)); the
+  baseline's `p_value` is there to read beside it. Choosing a
   `pass_threshold` with them: [Eval Design — Noise before signal](../advanced/eval-design.md#noise-before-signal).
 
 ### Lifecycle webhooks
@@ -856,7 +899,7 @@ Two [webhook](./webhooks.md) events carry a run's outcome:
 | `eval_runs.completed` | A run reached a terminal status with its items scored |
 | `eval_runs.failed` | A run could not be executed to completion |
 
-Both carry the [eval run](#eval-run) in `data`, `passed` and `aggregate_scores` included,
+Both carry the [eval run](#eval-run) in `data`, `verdict`, `verdict_reasons` and `aggregate_scores` included,
 so a promotion gate needs no second call. Exactly one event fires per terminal run.
 
 ### Eval spend is separable from production spend
@@ -884,7 +927,7 @@ eval'd agent's tools at a staging target.
 ### Retention and erasure
 
 `EvalResult.output` is a copy of a generation's content, so purging that content
-(directly, or through its trace) clears the copy. Scores, `passed`, and the frozen
+(directly, or through its trace) clears the copy. Scores, `verdict`, and the frozen
 `input` / `expected_output` survive. A content purge never deletes or mutates a dataset
 item, including one curated with
 [`create-dataset-item-from-generation`](#curating-items-from-production); deleting the

@@ -852,9 +852,9 @@ paths:
                   type: number
                   nullable: true
                   description: >-
-                    0–1. The run passes iff its pass rate — passed items over
-                    non-errored items — is at least this. Null reports scores
-                    without gating on them.
+                    0–1. A run's verdict reads the 95% interval of its pass rate
+                    (passed items over non-errored items) against this. Null
+                    reports scores without a verdict.
                   example: 0.8
                 group_by:
                   type: string
@@ -866,6 +866,8 @@ paths:
                     per string value of that key in
                     `aggregate_scores.grouping`. Null reports no grouping.
                   example: kind
+                evidence:
+                  $ref: '#/components/schemas/Evidence'
       responses:
         '201':
           description: Eval created successfully
@@ -1011,8 +1013,13 @@ paths:
                   maxLength: 255
                   description: >-
                     A key of the items' `metadata` to group run scores by; null
-                    clears it, omitting it leaves it unchanged.
+                    clears it, omitting it leaves it unchanged. Refused while
+                    `evidence.required_groups` names a group.
                   example: kind
+                evidence:
+                  description: Replaces the stored evidence; null clears it, omitting it leaves it unchanged.
+                  allOf:
+                    - $ref: '#/components/schemas/Evidence'
       responses:
         '200':
           description: Eval updated successfully
@@ -1253,7 +1260,7 @@ paths:
 
                     The bag is caller-owned and no key is reserved: everything
                     the platform decides about a run (`status`, `agent_version`,
-                    `baseline_run_id`, `aggregate_scores`, `passed`, the counts)
+                    `baseline_run_id`, `aggregate_scores`, `verdict`, the counts)
                     is a field of its own and cannot be written from here.
                     Nothing in the scoring path reads it. A non-object is
                     rejected with `400 VALIDATION_FAILED` and no run is created.
@@ -1952,12 +1959,82 @@ components:
             The item `metadata` key a run rolls its scores up by; null when
             the eval groups nothing
           example: kind
+        evidence:
+          $ref: '#/components/schemas/Evidence'
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    Evidence:
+      type: object
+      nullable: true
+      additionalProperties: false
+      description: >-
+        The rules a run's verdict reads beyond the threshold. Null declares
+        none.
+      properties:
+        required_groups:
+          type: array
+          description: >-
+            Values of `group_by` each judged on its own interval against
+            `pass_threshold`. A required group with no scored items is
+            `insufficient`; the run's verdict is the worst across the run and
+            every required group. Needs `group_by`. Names are non-empty and
+            unique.
+          items:
+            type: string
+            minLength: 1
+          example: [pix, card, boleto]
+    EvalRunDefinition:
+      type: object
+      nullable: true
+      additionalProperties: false
+      description: >-
+        The eval's grading fields as they were when the run was created. Every
+        item is scored by these scorers and the run settles on this threshold,
+        grouping and evidence, whatever the eval holds later. Null on a run
+        that recorded none.
+      properties:
+        scorers:
+          $ref: '#/components/schemas/Scorers'
+        pass_threshold:
+          type: number
+          nullable: true
+        group_by:
+          type: string
+          nullable: true
+        evidence:
+          $ref: '#/components/schemas/Evidence'
+    VerdictReason:
+      type: object
+      additionalProperties: false
+      required:
+        - scope
+        - verdict
+        - reason
+      properties:
+        scope:
+          type: object
+          additionalProperties: false
+          required:
+            - kind
+          description: What this reason judges
+          properties:
+            kind:
+              type: string
+              enum: [run, group]
+            name:
+              type: string
+              description: The group, on a `group` scope
+              example: boleto
+        verdict:
+          type: string
+          enum: [supported, refuted, insufficient]
+        reason:
+          type: string
+          example: interval 0.91–0.96 at or above 0.9
     AggregateScores:
       type: object
       nullable: true
@@ -2170,6 +2247,14 @@ components:
         eval_id:
           type: string
           example: eval_V1StGXR8Z5jdHi6B
+        agent_id:
+          type: string
+          nullable: true
+          description: >-
+            The agent every item in this run executed against, recorded when
+            the run was created and kept after that agent is deleted. Null on
+            a run that recorded none, which no promotion gate accepts.
+          example: agent_V1StGXR8Z5jdHi6B
         agent_version:
           type: integer
           description: The one agent version every item in this run executed against
@@ -2200,14 +2285,26 @@ components:
             trigger fire) started it, null for a run started through this API.
             Kept even if the trigger is later deleted.
           example: trg_V1StGXR8Z5jdHi6B
+        definition:
+          $ref: '#/components/schemas/EvalRunDefinition'
         aggregate_scores:
           $ref: '#/components/schemas/AggregateScores'
-        passed:
-          type: boolean
+        verdict:
+          type: string
           nullable: true
+          enum: [supported, refuted, insufficient, null]
           description: >-
-            Null when the eval declares no pass_threshold, and until the run is
-            terminal
+            `supported` when the pass rate's 95% interval sits at or above
+            `definition.pass_threshold`, `refuted` when it sits below, and
+            `insufficient` when it holds the threshold or nothing was scored;
+            the worst of that and every required group. Null when the run has
+            no threshold, and until it completes.
+        verdict_reasons:
+          type: array
+          nullable: true
+          description: One entry per judged scope, the run first. Null when `verdict` is.
+          items:
+            $ref: '#/components/schemas/VerdictReason'
         item_count:
           type: integer
         completed_count:

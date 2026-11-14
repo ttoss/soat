@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
-import { finalizeIfUnclaimed } from 'src/lib/evaluationRunExecution';
+import { finalizeIfUnclaimed } from 'src/lib/evaluationRunSettlement';
 import {
   drainEvalQueueOnce,
   kickEvalWorker,
@@ -1142,14 +1142,15 @@ describe('Evaluations', () => {
       expect(res.body.started_at).toBeDefined();
       expect(res.body.finished_at).toBeDefined();
 
-      // Two of three items pass every scorer → pass rate 2/3 ≥ 0.6.
+      // Two of three items pass every scorer → pass rate 2/3, above 0.6, but
+      // three items leave an interval (≈ 0.21–0.94) that holds the threshold.
       expect(res.body.aggregate_scores.pass_rate).toBeCloseTo(2 / 3);
       expect(res.body.aggregate_scores.scored_item_count).toBe(3);
       expect(res.body.aggregate_scores.scorers.exact_match).toEqual({
         mean: 2 / 3,
         pass_rate: 2 / 3,
       });
-      expect(res.body.passed).toBe(true);
+      expect(res.body.verdict).toBe('insufficient');
 
       const results = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
@@ -1213,7 +1214,9 @@ describe('Evaluations', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('completed');
-      expect(res.body.passed).toBe(true);
+      // One item can never clear a threshold of 1: its interval's low bound
+      // stays under it, so the run reports without supporting the claim.
+      expect(res.body.verdict).toBe('insufficient');
       expect(res.body.aggregate_scores.scorers.embedding_similarity).toEqual({
         mean: 1,
         pass_rate: 1,
@@ -1247,7 +1250,7 @@ describe('Evaluations', () => {
       expect(res.body.agent_version).toBe(1);
     });
 
-    test('a run below the threshold fails the verdict', async () => {
+    test('a pass rate below the threshold on three items is insufficient, not refuted', async () => {
       mockCreateGeneration
         .mockResolvedValueOnce(completedGeneration('gen_f1', 'Lyon'))
         .mockResolvedValueOnce(completedGeneration('gen_f2', 'Lyon'))
@@ -1258,7 +1261,8 @@ describe('Evaluations', () => {
         .send({ wait: true });
 
       expect(res.body.aggregate_scores.pass_rate).toBeCloseTo(1 / 3);
-      expect(res.body.passed).toBe(false);
+      // The interval (≈ 0.06–0.79) still holds 0.6: too few items to refute.
+      expect(res.body.verdict).toBe('insufficient');
     });
 
     test('a requires_action generation errors the item instead of scoring it 0', async () => {
@@ -1286,7 +1290,7 @@ describe('Evaluations', () => {
       // scorable items give a clean 1.0 rather than a fabricated regression.
       expect(res.body.aggregate_scores.scored_item_count).toBe(2);
       expect(res.body.aggregate_scores.pass_rate).toBe(1);
-      expect(res.body.passed).toBe(true);
+      expect(res.body.verdict_reasons[0].reason).toContain('interval');
 
       const results = await asUser().get(
         `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
@@ -1567,7 +1571,7 @@ describe('Evaluations', () => {
       expect(run.item_count).toBe(2);
       expect(run.completed_count).toBe(0);
       expect(run.aggregate_scores).toBeNull();
-      expect(run.passed).toBeNull();
+      expect(run.verdict).toBeNull();
       expect(run.started_at).toBeNull();
       // A run started through the API has no schedule origin; `trigger_id` is
       // only set when a trigger fired it (Phase 3).
@@ -1676,8 +1680,8 @@ describe('Evaluations', () => {
       expect(after.body.completed_count).toBe(2);
       expect(after.body.errored_count).toBe(0);
       expect(after.body.aggregate_scores.pass_rate).toBeCloseTo(0.5);
-      // One of two items matched, and the eval's threshold is 0.5.
-      expect(after.body.passed).toBe(true);
+      // One of two items matched: two items cannot settle a 0.5 threshold.
+      expect(after.body.verdict).toBe('insufficient');
       expect(after.body.finished_at).not.toBeNull();
 
       const results = await asUser().get(
@@ -2158,7 +2162,8 @@ describe('Evaluations', () => {
         id: runId,
         eval_id: evalId,
         status: 'completed',
-        passed: true,
+        // One item at a threshold of 1: matched, and still not enough evidence.
+        verdict: 'insufficient',
         aggregate_scores: expect.objectContaining({ pass_rate: 1 }),
       });
     });
@@ -2181,7 +2186,8 @@ describe('Evaluations', () => {
 
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('eval_runs.completed');
-      expect(events[0].data.passed).toBe(false);
+      // The one item missed, and nothing under a threshold of 1 can reach it.
+      expect(events[0].data.verdict).toBe('refuted');
     });
 
     test('an abandoned run fires eval_runs.failed, so a gate stops waiting', async () => {
@@ -2217,7 +2223,7 @@ describe('Evaluations', () => {
         id: abandoned.publicId,
         eval_id: evalId,
         status: 'failed',
-        passed: null,
+        verdict: null,
         aggregate_scores: null,
       });
     });
@@ -2715,7 +2721,6 @@ describe('Evaluations', () => {
         evalPublicId: evalId,
         projectId: (await db.Eval.findOne({ where: { publicId: evalId } }))!
           .projectId as number,
-        settlement: { passThreshold: null, groupBy: null },
       };
 
       // The drain already settled it, so this stands in for the losing worker.

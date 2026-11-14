@@ -242,7 +242,7 @@ export const ERROR_CODES = {
   PROMOTION_GATE_UNMET: {
     httpStatus: 409,
     description:
-      "The release's promotion_gate has no passing eval run against the canary version. Run the eval with agent_version pinned to the canary, or abort the rollout.",
+      "The newest run of the release's promotion_gate against the canary version of this agent does not read supported. Run the eval with agent_version pinned to the canary, with enough items for its interval to clear the threshold, or abort the rollout.",
   },
   NO_ACTIVE_RELEASE: {
     httpStatus: 409,

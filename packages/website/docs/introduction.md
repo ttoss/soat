@@ -64,8 +64,8 @@ The platform is organized around the [four layers of an agent system](/docs/agen
 
 The **ratchet**: produce a verdict from evidence, gate every change on it, keep history append-only. Versioned agents, canary rollout, the approvals recurrence view, and:
 
-- **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent compared against a baseline; a pass/fail verdict
-- **[Eval-gated promotion](/docs/modules/agents#eval-gated-promotion)** — a canary release promotes only on a passing eval run against that canary
+- **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent compared against a baseline; a verdict read on the pass rate's interval: supported, refuted or insufficient
+- **[Eval-gated promotion](/docs/modules/agents#eval-gated-promotion)** — a canary release promotes only on a supported eval run against that canary
 
 Promotion stays human-gated. Framing: [The Layers of an Agent System](/docs/agent-system-layers); sequencing: [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
 

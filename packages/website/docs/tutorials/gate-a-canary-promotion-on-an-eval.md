@@ -15,7 +15,7 @@ import TabItem from '@theme/TabItem';
 
 # Gate a Canary Promotion on an Eval
 
-A **promotion gate** names an [eval](/docs/modules/evaluations) on a [canary release](/docs/tutorials/agent-versioning-and-canary-rollout); `promote-agent-release` refuses until that eval has a run that finished `completed`, `passed: true`, pinned to the canary version.
+A **promotion gate** names an [eval](/docs/modules/evaluations) on a [canary release](/docs/tutorials/agent-versioning-and-canary-rollout); `promote-agent-release` refuses until the eval's newest run of this agent, pinned to the canary version, finished `completed` with `verdict: supported`.
 
 You will deploy an agent and its suite as one [formation](/docs/modules/formations), change the prompt through the template, start a gated canary release, see `PROMOTION_GATE_UNMET`, see a green run of the wrong version fail to open the gate, produce the run that does, promote, then add a nightly scheduled run and a webhook.
 
@@ -156,6 +156,22 @@ cat > release-notes-formation.json << 'EOF'
         "expected_output": "Added passkey support to login."
       }
     },
+    "darkModeCase": {
+      "type": "dataset_item",
+      "properties": {
+        "dataset_id": { "ref": "suite" },
+        "input": [{ "role": "user", "content": "The dashboard now has a dark mode." }],
+        "expected_output": "Added a dark mode to the dashboard."
+      }
+    },
+    "exportCase": {
+      "type": "dataset_item",
+      "properties": {
+        "dataset_id": { "ref": "suite" },
+        "input": [{ "role": "user", "content": "Reports can be exported as CSV." }],
+        "expected_output": "Added CSV export to reports."
+      }
+    },
     "gate": {
       "type": "eval",
       "properties": {
@@ -165,7 +181,7 @@ cat > release-notes-formation.json << 'EOF'
         "scorers": [
           { "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }
         ],
-        "pass_threshold": 1
+        "pass_threshold": 0.5
       }
     }
   },
@@ -241,6 +257,22 @@ const template = {
         expected_output: 'Added passkey support to login.',
       },
     },
+    darkModeCase: {
+      type: 'dataset_item',
+      properties: {
+        dataset_id: { ref: 'suite' },
+        input: [{ role: 'user', content: 'The dashboard now has a dark mode.' }],
+        expected_output: 'Added a dark mode to the dashboard.',
+      },
+    },
+    exportCase: {
+      type: 'dataset_item',
+      properties: {
+        dataset_id: { ref: 'suite' },
+        input: [{ role: 'user', content: 'Reports can be exported as CSV.' }],
+        expected_output: 'Added CSV export to reports.',
+      },
+    },
     gate: {
       type: 'eval',
       properties: {
@@ -250,7 +282,7 @@ const template = {
         scorers: [
           { type: 'json_logic', expression: { '!=': [{ var: 'output' }, ''] } },
         ],
-        pass_threshold: 1,
+        pass_threshold: 0.5,
       },
     },
   },
@@ -285,7 +317,9 @@ cat > release-notes-formation.json << 'EOF'
     "suite": { "type": "dataset", "properties": { "name": "release-notes-suite", "description": "Cases every release must still pass" } },
     "emptyFileCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "We fixed a crash when uploading a 0-byte file." }], "expected_output": "Fixed a crash when uploading an empty file." } },
     "passkeyCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "Login now supports passkeys." }], "expected_output": "Added passkey support to login." } },
-    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 1 } }
+    "darkModeCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "The dashboard now has a dark mode." }], "expected_output": "Added a dark mode to the dashboard." } },
+    "exportCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "Reports can be exported as CSV." }], "expected_output": "Added CSV export to reports." } },
+    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 0.5 } }
   },
   "outputs": { "agent_id": { "ref": "agent" }, "eval_id": { "ref": "gate" }, "dataset_id": { "ref": "suite" } }
 }
@@ -303,7 +337,7 @@ EVAL_ID=$(printf '%s' "$STACK" | jq -r '.outputs.eval_id')
 </TabItem>
 </Tabs>
 
-The only scorer asserts the agent answered at all, so the gate mechanism, not the 0.5B model's output, is under observation. A real gate uses the scorers from [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) and a judge from [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
+The only scorer asserts the agent answered at all, so the gate mechanism, not the 0.5B model's output, is under observation. Four cases at a `pass_threshold` of `0.5` are the fewest whose all-pass interval clears the threshold: the verdict reads the interval, not the point pass rate ([Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics)). A real gate uses the scorers from [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) and a judge from [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
 
 ---
 
@@ -476,7 +510,7 @@ Run the eval without `agent_version`. During an active release an unpinned run u
 
 ```bash
 STABLE_RUN=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true)
-printf '%s' "$STABLE_RUN" | jq '{agent_version, status, passed}'
+printf '%s' "$STABLE_RUN" | jq '{agent_version, status, verdict}'
 
 # → expect-fail
 soat promote-agent-release --agent-id "$AGENT_ID"
@@ -490,12 +524,12 @@ const { data: stableRun } = await adminSoat.evaluations.startEvalRun({
   path: { eval_id: EVAL_ID },
   body: { wait: true },
 });
-console.log(stableRun.agent_version, stableRun.passed); // 1 true
+console.log(stableRun.agent_version, stableRun.verdict); // 1 supported
 
 const { error: still } = await adminSoat.agentVersions.promoteAgentRelease({
   path: { agent_id: AGENT_ID },
 });
-console.log(still.error.code); // PROMOTION_GATE_UNMET — the green run was version 1
+console.log(still.error.code); // PROMOTION_GATE_UNMET — the supported run was version 1
 ```
 
 </TabItem>
@@ -504,7 +538,7 @@ console.log(still.error.code); // PROMOTION_GATE_UNMET — the green run was ver
 ```bash
 curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"wait":true}' | jq '{agent_version, passed}'
+  -d '{"wait":true}' | jq '{agent_version, verdict}'
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.error.code'
@@ -513,7 +547,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
 </TabItem>
 </Tabs>
 
-The run passes and the gate stays shut: a green run against another version is not evidence about the canary. A run resolves one version at start, stamps it on `agent_version`, and every item executes against it ([Evaluations — Version pinning](/docs/modules/evaluations#version-pinning)).
+The run is `supported` and the gate stays shut: a run against another version is not evidence about the canary. A run resolves one version at start, stamps it on `agent_version`, and every item executes against it ([Evaluations — Version pinning](/docs/modules/evaluations#version-pinning)).
 
 ---
 
@@ -526,7 +560,7 @@ Same eval, pinned to the canary version ([Evaluations — Version pinning](/docs
 
 ```bash
 CANARY_RUN=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true --agent-version 2)
-printf '%s' "$CANARY_RUN" | jq '{id, agent_version, status, passed}'
+printf '%s' "$CANARY_RUN" | jq '{id, agent_version, status, verdict}'
 
 soat promote-agent-release --agent-id "$AGENT_ID" | jq '{version, active_release, instructions}'
 
@@ -541,7 +575,7 @@ const { data: canaryRun } = await adminSoat.evaluations.startEvalRun({
   path: { eval_id: EVAL_ID },
   body: { wait: true, agent_version: 2 },
 });
-console.log(canaryRun.agent_version, canaryRun.passed); // 2 true
+console.log(canaryRun.agent_version, canaryRun.verdict); // 2 supported
 
 const { data: promoted } = await adminSoat.agentVersions.promoteAgentRelease({
   path: { agent_id: AGENT_ID },
@@ -556,7 +590,7 @@ console.log(promoted.instructions); // version 2's prompt
 ```bash
 curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"wait":true,"agent_version":2}' | jq '{agent_version, passed}'
+  -d '{"wait":true,"agent_version":2}' | jq '{agent_version, verdict}'
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{version, active_release}'
@@ -706,7 +740,7 @@ NIGHTLY_RUN_ID=$(printf '%s' "$FIRING" | jq -r '.result.result_id')
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$NIGHTLY_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$NIGHTLY_RUN_ID" \
-  | jq '{status, passed, agent_version, trigger_id}'
+  | jq '{status, verdict, agent_version, trigger_id}'
 
 # → retry 30
 soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" | jq -e '.data[0].event_type == "eval_runs.completed"'
@@ -727,7 +761,7 @@ const { data: deliveries } = await adminSoat.webhooks.listWebhookDeliveries({
   query: { webhook_id: webhook.id },
 });
 console.log(deliveries.data[0]?.event_type); // 'eval_runs.completed'
-console.log(deliveries.data[0]?.payload.data); // the eval run: { id, eval_id, status, passed, aggregate_scores, … }
+console.log(deliveries.data[0]?.payload.data); // the eval run: { id, eval_id, status, verdict, verdict_reasons, aggregate_scores, … }
 ```
 
 </TabItem>
@@ -739,7 +773,7 @@ FIRING=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers/$TRIGGER_ID/fire" \
 NIGHTLY_RUN_ID=$(printf '%s' "$FIRING" | jq -r '.result.result_id')
 
 curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$NIGHTLY_RUN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, passed, trigger_id}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, verdict, trigger_id}'
 
 curl -s "$SOAT_BASE_URL/api/v1/webhooks/deliveries?webhook_id=$WEBHOOK_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[0] | {event_type, payload: .payload.data}'
@@ -755,11 +789,14 @@ The run records its origin in `trigger_id`, kept even if the trigger is deleted.
   "id": "evrun_g5i4CdIFvcOvRZR8",
   "eval_id": "eval_rgMz0oEpbT3oWEK9",
   "status": "completed",
-  "passed": true,
+  "verdict": "supported",
+  "verdict_reasons": [
+    { "scope": { "kind": "run" }, "verdict": "supported", "reason": "interval 0.51–1 at or above 0.5" }
+  ],
   "aggregate_scores": {
     "scorers": { "json_logic": { "mean": 1, "pass_rate": 1 } },
     "pass_rate": 1,
-    "scored_item_count": 2
+    "scored_item_count": 4
   }
 }
 ```

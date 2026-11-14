@@ -61,6 +61,7 @@ import { principalBound } from './2026-11-12-principalBound';
 import { agentRunAs } from './2026-11-13-agentRunAs';
 import { policyIdsPublic } from './2026-11-13-policyIdsPublic';
 import { workAuthority } from './2026-11-13-workAuthority';
+import { evalRunEvidence } from './2026-11-14-evalRunEvidence';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -143,4 +144,5 @@ export const MIGRATIONS: Migration[] = [
   policyIdsPublic,
   agentRunAs,
   workAuthority,
+  evalRunEvidence,
 ];
