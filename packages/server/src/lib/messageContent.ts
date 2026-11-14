@@ -1,18 +1,17 @@
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
-import type { AgentAuthority } from './agentAuthority';
+import {
+  type AgentAuthority,
+  boundaryDenied,
+  boundaryRefusalOf,
+} from './agentAuthority';
 import { agentDenied, callerDenied } from './authorizationDenial';
 import { getDocument } from './documents';
 import {
   type ProvenanceMetric,
   resultProvenance,
 } from './generationProvenance';
-import {
-  buildSrn,
-  evaluatePolicies,
-  evaluatePoliciesMultiResource,
-  type PolicyDocument,
-} from './iam';
+import { buildSrn } from './iam';
 import { resolveSoatActionScope } from './soatActionScope';
 import { soatTools } from './soatTools';
 import { buildResourceTagContext } from './tags';
@@ -130,36 +129,6 @@ const buildDocumentPermissionResources = (args: {
   return resources;
 };
 
-const isAgentPolicyAllowed = (args: {
-  policy: PolicyDocument | null;
-  action: string;
-  resource?: string;
-  resources?: string[];
-  context?: Record<string, string>;
-}): boolean => {
-  if (!args.policy) {
-    return true;
-  }
-
-  const policies = [args.policy];
-
-  if (args.resources && args.resources.length > 0) {
-    return evaluatePoliciesMultiResource({
-      policies,
-      action: args.action,
-      resources: args.resources,
-      context: args.context,
-    });
-  }
-
-  return evaluatePolicies({
-    policies,
-    action: args.action,
-    resource: args.resource,
-    context: args.context,
-  });
-};
-
 const assertAgentPolicyAllowed = (args: {
   agentAuthority?: AgentAuthority;
   action: string;
@@ -167,18 +136,16 @@ const assertAgentPolicyAllowed = (args: {
   resources?: string[];
   context?: Record<string, string>;
 }) => {
-  if (
-    args.agentAuthority &&
-    !isAgentPolicyAllowed({
-      policy: args.agentAuthority.policy,
-      action: args.action,
-      resource: args.resource,
-      resources: args.resources,
-      context: args.context,
-    })
-  ) {
-    throw agentDenied({
-      agentId: args.agentAuthority.agentId,
+  const by = boundaryRefusalOf({
+    authority: args.agentAuthority,
+    action: args.action,
+    resource: args.resource,
+    resources: args.resources,
+    context: args.context,
+  });
+  if (by) {
+    throw boundaryDenied({
+      by,
       action: args.action,
       resource: args.resource ?? args.resources?.[0] ?? null,
     });

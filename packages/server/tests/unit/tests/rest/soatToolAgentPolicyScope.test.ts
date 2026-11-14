@@ -1,5 +1,4 @@
 import type { Tool } from 'ai';
-import { isSoatActionAllowedByAgentPolicy } from 'src/lib/agentToolResolver';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
 import type { PolicyDocument } from 'src/lib/iam';
 import type { WorkAuthority } from 'src/lib/workAuthority';
@@ -53,11 +52,14 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       },
       authority: adminAuthority,
       projectPublicId: projectId,
-      agentAuthority: { runAs: 'caller', agentId: AGENT_ID, policy },
+      agentAuthority: {
+        runAs: 'caller',
+        agentId: AGENT_ID,
+        boundary: [{ by: { type: 'agent', id: AGENT_ID }, policy }],
+      },
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByAgentPolicy,
       logToolCallingError: () => {},
     });
     return tools['platform_get-memory-store'];
@@ -176,14 +178,18 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       agentAuthority: {
         runAs: 'caller',
         agentId: AGENT_ID,
-        policy: allowMemoriesOn(
-          `srn:${projectId}:memory_store:${allowedStoreId}`
-        ),
+        boundary: [
+          {
+            by: { type: 'agent', id: AGENT_ID },
+            policy: allowMemoriesOn(
+              `srn:${projectId}:memory_store:${allowedStoreId}`
+            ),
+          },
+        ],
       },
       buildContextHeaders: () => {
         return {};
       },
-      isSoatActionAllowedByAgentPolicy,
       logToolCallingError: () => {},
     });
 

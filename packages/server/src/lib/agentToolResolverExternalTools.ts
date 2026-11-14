@@ -8,13 +8,13 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
-import type { AgentAuthority } from './agentAuthority';
-import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import {
-  agentDenied,
-  denialToolResult,
-  readForwardedDenial,
-} from './authorizationDenial';
+  type AgentAuthority,
+  boundaryDenied,
+  boundaryRefusalOf,
+} from './agentAuthority';
+import { buildSoatRequestBody } from './agentToolResolverSoatBody';
+import { denialToolResult, readForwardedDenial } from './authorizationDenial';
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
@@ -149,26 +149,18 @@ export const executeSoatTool = async (args: {
   }
 };
 
-type IsSoatActionAllowedByAgentPolicy = (args: {
-  agentPolicy: unknown;
-  iamAction: string;
-  resource?: string;
-  context?: Record<string, string>;
-}) => boolean;
-
 /**
- * The refusal an agent's `policy_ids` gives one builtin call, or `null`
- * when it admits it. Every path that runs a builtin action for an agent asks
- * here, with the arguments the call will carry.
+ * The refusal the agent's boundary gives one builtin call, or `null` when it
+ * admits it. Every path that runs a builtin action for an agent asks here,
+ * with the arguments the call will carry.
  */
 export const soatActionAgentRefusal = async (args: {
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
   agentAuthority?: AgentAuthority;
-  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
 }): Promise<ReturnType<typeof denialToolResult> | null> => {
   const { agentAuthority } = args;
-  if (!agentAuthority?.policy) return null;
+  if (!agentAuthority || agentAuthority.boundary.length === 0) return null;
   const iamAction = args.def.iamAction ?? args.def.name;
   // The SRN and tags of whatever this call names, so a boundary scoped to one
   // resource means what it says. `null` leaves the resource-less `*`, which
@@ -176,22 +168,24 @@ export const soatActionAgentRefusal = async (args: {
   const scope = await resolveSoatActionAgentScope({
     resourceRef: args.def.resource,
     toolArgs: args.rawArgs,
-    agentPolicy: agentAuthority.policy,
+    policies: agentAuthority.boundary.map(({ policy }) => {
+      return policy;
+    }),
   });
-  const allowed = args.isSoatActionAllowedByAgentPolicy({
-    agentPolicy: agentAuthority.policy,
-    iamAction,
+  const by = boundaryRefusalOf({
+    authority: agentAuthority,
+    action: iamAction,
     ...(scope ?? {}),
   });
-  return allowed
-    ? null
-    : denialToolResult(
-        agentDenied({
-          agentId: agentAuthority.agentId,
+  return by
+    ? denialToolResult(
+        boundaryDenied({
+          by,
           action: iamAction,
           resource: scope?.resource ?? null,
         })
-      );
+      )
+    : null;
 };
 
 /**
@@ -231,7 +225,6 @@ const buildSoatActionTool = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
   const pinned = pinnedProjectParameters(args.projectPublicId);
@@ -263,7 +256,6 @@ const buildSoatActionTool = (args: {
         def: args.def,
         rawArgs,
         agentAuthority: args.agentAuthority,
-        isSoatActionAllowedByAgentPolicy: args.isSoatActionAllowedByAgentPolicy,
       });
       if (refusal) return refusal;
       return executeSoatTool({
@@ -308,7 +300,6 @@ export const resolveSoatTools = (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
-  isSoatActionAllowedByAgentPolicy: IsSoatActionAllowedByAgentPolicy;
   logToolCallingError: LogToolCallingError;
 }): Record<string, Tool> => {
   const result: Record<string, Tool> = {};
@@ -341,7 +332,6 @@ export const resolveSoatTools = (args: {
       rootTraceId: args.rootTraceId,
       remainingDepth: args.remainingDepth,
       buildContextHeaders: args.buildContextHeaders,
-      isSoatActionAllowedByAgentPolicy: args.isSoatActionAllowedByAgentPolicy,
       logToolCallingError: args.logToolCallingError,
     });
   }

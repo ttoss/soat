@@ -8,7 +8,7 @@
  */
 import createDebug from 'debug';
 
-import { buildSrn, type PolicyDocument, validatePolicyDocument } from './iam';
+import { buildSrn, type PolicyDocument } from './iam';
 import { resolveResourceScope } from './resourceScopes';
 import type { SoatResourceRef } from './soatToolsResource';
 import { buildResourceTagContext } from './tags';
@@ -30,11 +30,8 @@ export type SoatActionScope = {
  * the scope, so the cost is a wasted read, never a check made against `*` that
  * should have been made against an SRN.
  */
-const policyNeedsResourceScope = (agentPolicy: unknown): boolean => {
-  if (!agentPolicy) return false;
-  const validation = validatePolicyDocument(agentPolicy);
-  if (!validation.valid) return false;
-  return (agentPolicy as PolicyDocument).statement.some((statement) => {
+const policyNeedsResourceScope = (policy: PolicyDocument): boolean => {
+  return policy.statement.some((statement) => {
     if (statement.condition) return true;
     const resources = statement.resource ?? ['*'];
     return resources.some((resource) => {
@@ -100,8 +97,9 @@ export const resolveSoatActionScope = async (args: {
 export const resolveSoatActionAgentScope = async (args: {
   resourceRef?: SoatResourceRef;
   toolArgs: unknown;
-  agentPolicy: unknown;
+  /** The agent boundary's documents. */
+  policies: PolicyDocument[];
 }): Promise<SoatActionScope | null> => {
-  if (!policyNeedsResourceScope(args.agentPolicy)) return null;
+  if (!args.policies.some(policyNeedsResourceScope)) return null;
   return resolveSoatActionScope(args);
 };

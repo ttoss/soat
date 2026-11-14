@@ -2,13 +2,18 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { reactsToExpiredApproval } from './agentApprovalExpiry';
-import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
+import {
+  type AgentAuthority,
+  resolveAgentAuthority,
+  unresolvedAgentAuthority,
+} from './agentAuthority';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import {
   runApprovedWriteMemory,
   WRITE_MEMORY_TOOL_ID,
   writeMemoryEditChecks,
+  writeMemoryInputError,
 } from './agentKnowledge';
 import { isInlineProposal, isNativeProposal } from './agentToolApproval';
 import {
@@ -23,7 +28,6 @@ import {
   countOf,
   storedToolResultProvenance,
 } from './generationProvenance';
-import type { PolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { sendSessionMessage } from './sessionOperations';
@@ -59,11 +63,6 @@ const resolveContinuationAuthority = async (args: {
   return authority ? forWork({ authority, work: args.item.id }) : null;
 };
 
-/** Refuses every action: what an agent that no longer resolves is bounded by. */
-const DENY_ALL_POLICY: PolicyDocument = {
-  statement: [{ effect: 'Deny', action: ['*'], resource: ['*'] }],
-};
-
 /** The end user the proposing generation ran for, bound into its policies. */
 const proposingActorId = async (
   generationId: string | null | undefined
@@ -80,8 +79,8 @@ const proposingActorId = async (
 };
 
 /**
- * The proposing agent's `policy_ids` as they stand now, the same cap the
- * agent's own calls are held to.
+ * The proposing agent's boundary as it stands now, the same cap the agent's
+ * own calls are held to.
  */
 const proposingAgentAuthority = async (args: {
   item: MappedApproval;
@@ -94,17 +93,12 @@ const proposingAgentAuthority = async (args: {
         reach: 'project',
       })
     : null;
-  if (!agent) {
-    return {
-      runAs: 'caller',
-      agentId: args.item.agent_id ?? null,
-      policy: DENY_ALL_POLICY,
-    };
-  }
+  if (!agent) return unresolvedAgentAuthority(args.item.agent_id ?? null);
   return resolveAgentAuthority({
     agentId: agent.publicId,
     runAs: agent.runAs,
     policyIds: agent.policyIds,
+    ownerProjectId: agent.projectId as number,
     actorId: await proposingActorId(args.item.generation_id),
     // An approval with no project row left pins the grant to no project.
     projectPublicId: args.item.project_id ?? '',
@@ -134,12 +128,10 @@ const executeApprovedWriteMemory = async (
     agent,
     generationId: args.item.generation_id ?? null,
     projectId: args.projectInternalId,
-    agentPolicy: (
-      await proposingAgentAuthority({
-        item: args.item,
-        projectInternalId: args.projectInternalId,
-      })
-    ).policy,
+    agentAuthority: await proposingAgentAuthority({
+      item: args.item,
+      projectInternalId: args.projectInternalId,
+    }),
     actorId: actorId ?? undefined,
     input: args.input,
     markExecuted: args.markExecuted,
@@ -166,6 +158,11 @@ type NativeTool = {
     projectId: number;
     projectPublicId: string;
   }) => Promise<EditCheck[]>;
+  /**
+   * Why an input cannot be a call of this tool, or `null`. With no tool row
+   * there is no `parameters` schema to check an edit against, so this is it.
+   */
+  inputError: (input: Record<string, unknown>) => string | null;
 };
 
 /**
@@ -176,6 +173,7 @@ const NATIVE_TOOLS: Record<string, NativeTool | undefined> = {
   [WRITE_MEMORY_TOOL_ID]: {
     execute: executeApprovedWriteMemory,
     editChecks: writeMemoryEditChecks,
+    inputError: writeMemoryInputError,
   },
 };
 
@@ -186,6 +184,19 @@ export const nativeProposalEditChecks = async (args: {
   projectPublicId: string;
 }): Promise<EditCheck[]> => {
   return (await NATIVE_TOOLS[args.toolId]?.editChecks(args)) ?? [];
+};
+
+/**
+ * Why an edit of a held native call is refused, or `null`. A native tool
+ * missing from {@link NATIVE_TOOLS} recognises no input, so its edit is refused.
+ */
+export const nativeProposalEditError = (args: {
+  toolId: string;
+  input: Record<string, unknown>;
+}): string | null => {
+  const nativeTool = NATIVE_TOOLS[args.toolId];
+  if (!nativeTool) return `${args.toolId} takes no edited arguments.`;
+  return nativeTool.inputError(args.input);
 };
 
 const executeApprovedNativeAction = async (args: {

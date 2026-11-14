@@ -196,7 +196,8 @@ describe('Agent run_as', () => {
       expect(parseWorkAuthority(task!.authority)).toMatchObject({
         project: turn.projectId,
         grant: { holder: 'agent', agent: taskAgent },
-        caps: [],
+        // The project's `agent_policy_ids`, read live at every later check.
+        caps: [{ kind: 'project_agents', project: turn.projectId }],
       });
     });
 

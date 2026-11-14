@@ -22,14 +22,17 @@ export type PolicyAttachCheck = 'writer_holds_grants' | 'bounded_by_owner';
 type PolicyDependents = {
   table: string;
   column: 'jsonb' | 'array';
+  /** The column's name, when it is not `policy_ids`. */
+  name?: string;
   noun: string;
   meta: { count: string; sample: string };
 };
 
-const namingPolicy = (column: PolicyDependents['column']): string => {
-  return column === 'jsonb'
-    ? 'policy_ids @> :ids::jsonb'
-    : ':id = ANY(policy_ids)';
+const namingPolicy = (dependents: PolicyDependents): string => {
+  const name = dependents.name ?? 'policy_ids';
+  return dependents.column === 'jsonb'
+    ? `${name} @> :ids::jsonb`
+    : `:id = ANY(${name})`;
 };
 
 export type PolicyCarrier = {
@@ -187,6 +190,25 @@ export const POLICY_CARRIERS = {
       });
     },
   },
+  // A cap, not a grant: every agent turn in the project is held to it.
+  projects: {
+    models: ['Project'],
+    attach: 'writer_holds_grants',
+    dependents: {
+      table: 'projects',
+      column: 'jsonb',
+      name: 'agent_policy_ids',
+      noun: 'project',
+      meta: { count: 'projects', sample: 'project_sample' },
+    },
+    actsIn: (policy) => {
+      return publicIdsOf({
+        sql: `SELECT public_id FROM projects
+               WHERE agent_policy_ids @> :ids::jsonb`,
+        replacements: { ids: JSON.stringify([policy.publicId]) },
+      });
+    },
+  },
   apiKeys: {
     models: ['ApiKey'],
     attach: 'bounded_by_owner',
@@ -246,7 +268,7 @@ export const findPolicyDependents = async (args: {
   return Promise.all(
     carriers.flatMap(({ dependents }) => {
       if (!dependents) return [];
-      const where = `FROM ${dependents.table} WHERE ${namingPolicy(dependents.column)}`;
+      const where = `FROM ${dependents.table} WHERE ${namingPolicy(dependents)}`;
       return [
         (async () => {
           const [sample, [rows]] = await Promise.all([
