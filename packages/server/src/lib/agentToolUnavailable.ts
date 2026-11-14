@@ -47,7 +47,7 @@ export const collectUnavailableTools = (): {
  * specific without guessing, and costs no retries — an unavailable tool is not
  * in the surface, so there is nothing to call.
  */
-const unavailableToolsNote = (toolNames: string[]): string => {
+export const unavailableToolsNote = (toolNames: string[]): string => {
   return [
     `These tools are configured for you but are unavailable for this turn and cannot be called: ${toolNames.join(', ')}.`,
     'If answering needs one of them, say plainly that the tool is currently unavailable and that you could not reach it. Do not state a cause, and do not say you lack the capability.',

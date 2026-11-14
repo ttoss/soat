@@ -36,6 +36,7 @@ export const EXCEPTION_KINDS = [
   'quota_unpriced',
   'event_trigger_loop',
   'chain_limit',
+  'mcp_definition_drift',
   'manual',
 ] as const;
 export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];
@@ -50,7 +51,8 @@ export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];
  * not an incident response (`warning`); an event trigger that refused to extend
  * a causal chain, and a continuation chain that spent its generation budget, are
  * loops running unattended — the guard worked, and the wiring still needs a
- * human (`warning`).
+ * human (`warning`); an MCP action withheld because its definition drifted
+ * from its pin is the guard working, and still needs a review (`warning`).
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ExceptionKind, ExceptionSeverity> = {
   run_failed: 'critical',
@@ -59,6 +61,7 @@ const DEFAULT_SEVERITY_BY_KIND: Record<ExceptionKind, ExceptionSeverity> = {
   quota_unpriced: 'warning',
   event_trigger_loop: 'warning',
   chain_limit: 'warning',
+  mcp_definition_drift: 'warning',
   manual: 'warning',
 };
 

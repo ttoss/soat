@@ -197,6 +197,7 @@ const ROLES = {
     'Project.agentPolicyIds',
     'Session.tags',
     'Task.metadata',
+    'Tool.mcpPins',
     'Trigger.policyIds',
     'UsageEvent.guardrailIds',
     'Webhook.policyIds',

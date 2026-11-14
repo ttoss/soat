@@ -32,7 +32,7 @@ Exceptions are **auto-filed** (or filed as `manual`); there is no public create 
 | `project_id` | string | Owning project |
 | `status` | string | `open`, `acknowledged`, `resolved` |
 | `severity` | string | `info`, `warning`, `critical` |
-| `kind` | string | `run_failed`, `guardrail_tripwire`, `approval_expired`, `quota_unpriced`, `event_trigger_loop`, `chain_limit`, `manual` |
+| `kind` | string | `run_failed`, `guardrail_tripwire`, `approval_expired`, `quota_unpriced`, `event_trigger_loop`, `chain_limit`, `mcp_definition_drift`, `manual` |
 | `title` | string | Human-readable one-line summary |
 | `detail` | object \| null | Structured context (tool, error, guardrail version) |
 | `occurrence_count` | integer | Times this exact failure was observed while open |
@@ -60,6 +60,7 @@ Severity is keyed to actionability. Each `kind` has a default a producer may ove
 | `quota_unpriced` | `warning` | A cost cap is measuring less than it caps; needs a config fix, not incident response |
 | `event_trigger_loop` | `warning` | The causation guard stopped a self-feeding [event trigger](./triggers.md#loops-and-cost); the wiring still needs a human |
 | `chain_limit` | `warning` | A [continuation chain](./chains.md) spent its generation budget — the guard stopped it, and an agent that cannot terminate on its own still needs a human |
+| `mcp_definition_drift` | `warning` | An MCP action was withheld because its definition differs from its pin — the guard worked; someone reviews the change and re-pins |
 | `manual` | `warning` | Author-chosen |
 
 ### Occurrence dedup
@@ -81,6 +82,8 @@ Producers subscribe to platform events: `run_failed` rides `orchestration_runs.f
 `event_trigger_loop` is filed by the [event-trigger](./triggers.md#loops-and-cost) dispatcher when a trigger refuses to extend the causal chain that reached it (the chain already names it, or is past the depth cap). Deduped on trigger and reason, so `occurrence_count` is how often it was refused; `detail` carries the chain and event name, the only place that wiring is visible (events are not persisted).
 
 `chain_limit` is filed when a [continuation chain](./chains.md) is refused for spending its generation budget. It rides `generations.chain_limit` and is deduped on the chain's **root generation**, the id every refusal in a chain shares. `detail` carries the root, the initiator of the refused turn, the chain's size, the budget hit, and `limit_source`: `agent` ([`max_chain_generations`](./agents.md#stop-conditions) on the agent), `project` ([`max_chain_generations`](./projects.md) on the project), or `platform` (the deployment ceiling). The refusal itself is recorded on a trace and returned to a caller that is usually a background sweep; the exception is what reaches a human.
+
+`mcp_definition_drift` is filed inline when an agent turn withholds an action of an `mcp` tool with [`pin_definitions`](./tools.md#pinning-mcp-definitions), in the tool's project. Deduped on tool, action, pinned digest and live digest, so `occurrence_count` is how many turns ran without it; `detail` carries `tool_id`, `tool_name`, `action`, `pinned_digest` (`null` for an action that was never pinned) and `live_digest`. A filing error never fails the turn.
 
 `quota_unpriced` is filed inline from the [quota](./quotas.md#token-and-cost-enforcement) pre-generation check, the only place that knows a cost cap evaluated against a window whose usage was not fully priced. Nothing priced and partly priced file the same item (the fix is the price rows named in `unpriced_rows`), deduped on the quota, so `occurrence_count` is the number of generations run under the degraded cap. The check fails open; a filing error never blocks a generation.
 

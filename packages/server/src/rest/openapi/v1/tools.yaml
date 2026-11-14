@@ -833,7 +833,24 @@ components:
             `{{secret:...}}` and `{{context:<key>}}` references, resolved right
             before the outbound MCP request; `url` accepts `{{secret:...}}` only.
             A literal credential in `headers` or `url` is refused, exactly as in
-            `execute`.
+            `execute`. `pin_definitions: true` pins each action's definition;
+            see `mcp_pins`.
+        mcp_pins:
+          type: object
+          nullable: true
+          readOnly: true
+          additionalProperties:
+            type: string
+          description: >-
+            For an `mcp` tool with `mcp.pin_definitions`: the SHA-256 digest of
+            each action's definition, written once by the first listing an
+            agent turn makes (a deferred server's tools as each is first
+            described). An action whose live definition differs, or that has no
+            pin, is withheld from the model. `null` until pinned; `PATCH` with
+            `mcp_pins: null` or a new `mcp.url` clears it, and the next listing
+            pins again.
+          example:
+            lookup: 3f0a9c1e5b7d2f4a6c8e0b1d3f5a7c9e1b3d5f7a9c0e2b4d6f8a0c2e4b6d8f0a
         actions:
           type: array
           nullable: true
@@ -1071,6 +1088,13 @@ components:
           $ref: '#/components/schemas/ToolExecuteConfig'
         mcp:
           $ref: '#/components/schemas/ToolMcpConfig'
+        mcp_pins:
+          type: object
+          nullable: true
+          enum: [null]
+          description: >-
+            Only `null`: clears the pins, so the next listing pins every action
+            again. The one way to accept a definition that drifted.
         actions:
           type: array
           nullable: true
@@ -1436,3 +1460,12 @@ components:
           description: >-
             Headers sent on every MCP request. Values accept
             `{{secret:...}}` and `{{context:<key>}}` references.
+        pin_definitions:
+          type: boolean
+          description: >-
+            Pin each action's definition on the first listing an agent turn
+            makes, and withhold from the model any action whose `name`,
+            `title`, `description`, `inputSchema`, `outputSchema` or
+            `annotations` later differ from its pin, or that has none. Each
+            drift files one `mcp_definition_drift` exception. Default `false`.
+            Only a persisted tool pins.
