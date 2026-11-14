@@ -42,6 +42,8 @@ describe('every metadata ingress refuses a non-object bag', () => {
         'ingestion-rules:UpdateIngestionRule',
         'tools:CreateTool',
         'tools:CallTool',
+        // The `builtin` tool the fixture writes.
+        'tools:ListTools',
         'metadata-schemas:ListMetadataSchemas',
       ],
     });
