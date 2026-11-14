@@ -2,7 +2,7 @@ import type { Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { createScopedPrincipal } from '../../fixtures/bootstrap';
+import { createScopedPrincipal, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -428,11 +428,14 @@ describe('Share caps', () => {
         cap: { calls: 1, window: 'rolling_24h' },
       });
       await callAsGrantee(toolId);
-      await admin().post('/api/v1/ingestion-rules').send({
-        project_id: granteeId,
-        content_type_glob: 'audio/x-capped',
-        tool_id: toolId,
-      });
+      await admin()
+        .post('/api/v1/ingestion-rules')
+        .send({
+          policy_ids: await testGrant({ token: adminToken }),
+          project_id: granteeId,
+          content_type_glob: 'audio/x-capped',
+          tool_id: toolId,
+        });
       const file = await admin()
         .post('/api/v1/files/upload')
         .attach('file', Buffer.from('bytes'), {

@@ -7,6 +7,7 @@ import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
@@ -145,6 +146,7 @@ describe('On-Behalf-Of', () => {
     const playbook = await asAdmin()
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: await testGrant({ token: turn.adminToken }),
         project_id: turn.projectId,
         name: 'obo',
         definition: {

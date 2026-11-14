@@ -1,4 +1,4 @@
-import { createAllowAllPolicy } from '../../fixtures/bootstrap';
+import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -8,6 +8,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  */
 describe('Share references', () => {
   let adminToken: string;
+  let grant: string[];
   let publisherId: string;
   let granteeId: string;
   let granteeKey: string;
@@ -88,6 +89,7 @@ describe('Share references', () => {
       .post('/api/v1/users/bootstrap')
       .send({ username: 'sharerefsadmin', password: 'supersecret' });
     adminToken = await loginAs('sharerefsadmin', 'supersecret');
+    grant = await testGrant({ token: adminToken });
 
     publisherId = (
       await admin().post('/api/v1/projects').send({ name: 'Publisher' })
@@ -133,6 +135,7 @@ describe('Share references', () => {
       pipeline: { steps: [{ id: 'call', tool_id: toolId }] },
     });
     const rule = await createInGrantee('/api/v1/ingestion-rules', {
+      policy_ids: await testGrant({ token: adminToken }),
       content_type_glob: 'audio/x-share-ref',
       tool_id: toolId,
     });
@@ -245,6 +248,7 @@ describe('Share references', () => {
               Rule: {
                 type: 'ingestion_rule',
                 properties: {
+                  policy_ids: grant,
                   content_type_glob: 'audio/x-formation-ref',
                   tool_id: tool,
                 },

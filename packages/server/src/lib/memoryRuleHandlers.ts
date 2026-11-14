@@ -4,8 +4,10 @@ import { db } from '../db';
 import { createGeneration } from './agentGeneration';
 import { runBuiltInExtractor } from './memoryExtraction';
 import { isPlainObject } from './plainObject';
+import { resourceWorkAuthority } from './resourceWork';
 import { callTool } from './tools';
 import { parseWorkAuthority, type WorkAuthority } from './workAuthority';
+import { startOf } from './writerRule';
 
 const log = createDebug('soat:memoryRules');
 
@@ -107,15 +109,27 @@ export type HandlerTurn = {
   projectId: number;
 };
 
-/** A handler runs under the authority of the turn it reads. */
-const turnAuthority = async (
-  turn: HandlerTurn
-): Promise<WorkAuthority | null> => {
+/**
+ * A handler runs under its rule's `policy_ids`, carrying on the trigger, work
+ * and principal the turn it reads acted for.
+ */
+const handlerAuthority = async (args: {
+  turn: HandlerTurn;
+  handler: { type: 'agent' | 'tool'; id: string };
+}): Promise<WorkAuthority> => {
+  const { turn } = args;
   const generation = await db.Generation.findOne({
     where: { publicId: turn.generationPublicId },
     attributes: ['authority'],
   });
-  return parseWorkAuthority(generation?.authority);
+  return resourceWorkAuthority({
+    carrier: 'memoryRules',
+    id: turn.ruleId,
+    projectId: turn.projectId,
+    startedBy: null,
+    chain: parseWorkAuthority(generation?.authority),
+    starts: [startOf(args.handler)],
+  });
 };
 
 const runAgentHandler = async (args: {
@@ -123,7 +137,10 @@ const runAgentHandler = async (args: {
   turn: HandlerTurn;
 }): Promise<MemoryFact[]> => {
   const result = await createGeneration({
-    authority: await turnAuthority(args.turn),
+    authority: await handlerAuthority({
+      turn: args.turn,
+      handler: { type: 'agent', id: args.handlerAgentId },
+    }),
     projectIds: [args.turn.projectId],
     agentId: args.handlerAgentId,
     messages: [
@@ -158,7 +175,10 @@ const runToolHandler = async (args: {
 }): Promise<MemoryFact[]> => {
   const raw = await callTool({
     guardrails: 'apply',
-    authority: await turnAuthority(args.turn),
+    authority: await handlerAuthority({
+      turn: args.turn,
+      handler: { type: 'tool', id: args.toolId },
+    }),
     projectId: args.turn.projectId,
     reach: 'project',
     id: args.toolId,

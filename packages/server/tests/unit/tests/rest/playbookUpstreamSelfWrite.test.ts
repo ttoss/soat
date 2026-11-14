@@ -1,7 +1,7 @@
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import {
   authenticatedTestClient,
   clientFor,
@@ -92,7 +92,12 @@ describe("Playbook writes from a dependent case's own work", () => {
     seq += 1;
     const res = await admin()
       .post('/api/v1/playbooks')
-      .send({ project_id: projectId, name: `playbook-${seq}`, definition });
+      .send({
+        policy_ids: await testGrant({ token: adminToken }),
+        project_id: projectId,
+        name: `playbook-${seq}`,
+        definition,
+      });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };

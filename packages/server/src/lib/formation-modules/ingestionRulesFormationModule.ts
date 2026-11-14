@@ -12,6 +12,7 @@ import {
   validateIngestionRule,
 } from '../ingestionRules';
 import {
+  toNullableArray,
   toNullableNumber,
   toNullableObject,
   toNullableString,
@@ -136,6 +137,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
       chunkSize: toNullableNumber(properties.chunk_size),
       chunkOverlap: toNullableNumber(properties.chunk_overlap),
       metadata: toNullableObject(properties.metadata),
+      policyIds: toNullableArray<string>(properties.policy_ids),
     });
   },
 
@@ -159,6 +161,7 @@ export const ingestionRulesFormationModule = defineFormationModule({
       chunkSize: toNullableNumber(properties.chunk_size),
       chunkOverlap: toNullableNumber(properties.chunk_overlap),
       metadata: toNullableObject(properties.metadata),
+      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
     });
   },
 

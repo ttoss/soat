@@ -2,6 +2,7 @@ import type { IncomingHttpHeaders, Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -18,6 +19,7 @@ describe('Shared agents', () => {
   let toolStub: Server;
   let toolHits: IncomingHttpHeaders[];
   let adminToken: string;
+  let grant: string[];
   let publisherId: string;
   let granteeId: string;
   let granteeKey: string;
@@ -146,6 +148,7 @@ describe('Shared agents', () => {
       .post('/api/v1/users/bootstrap')
       .send({ username: 'sharedagentadmin', password: 'supersecret' });
     adminToken = await loginAs('sharedagentadmin', 'supersecret');
+    grant = await testGrant({ token: adminToken });
 
     publisherId = (
       await admin().post('/api/v1/projects').send({ name: 'Publisher' })
@@ -372,11 +375,14 @@ describe('Shared agents', () => {
     });
 
     test('an ingestion rule converts with the shared agent', async () => {
-      const rule = await admin().post('/api/v1/ingestion-rules').send({
-        project_id: granteeId,
-        content_type_glob: 'image/x-shared-agent',
-        agent_id: sharedAgentId,
-      });
+      const rule = await admin()
+        .post('/api/v1/ingestion-rules')
+        .send({
+          policy_ids: await testGrant({ token: adminToken }),
+          project_id: granteeId,
+          content_type_glob: 'image/x-shared-agent',
+          agent_id: sharedAgentId,
+        });
       expect(rule.status).toBe(201);
       const file = await admin()
         .post('/api/v1/files/upload')
@@ -406,6 +412,7 @@ describe('Shared agents', () => {
               Rule: {
                 type: 'ingestion_rule',
                 properties: {
+                  policy_ids: grant,
                   content_type_glob: `image/x-${name}`,
                   agent_id: agentId,
                 },

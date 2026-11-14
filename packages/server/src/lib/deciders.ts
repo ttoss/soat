@@ -25,7 +25,12 @@ import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
 import type { VersionedWrite } from './writePrecondition';
-import { assertWriterHolds, startOf, type Writer } from './writerRule';
+import {
+  assertWriterHolds,
+  type CarriedAction,
+  startOf,
+  type Writer,
+} from './writerRule';
 
 const log = createDebug('soat:deciders');
 
@@ -66,6 +71,7 @@ export const mapDecider = (row: DeciderRow) => {
     tool_id: row.tool?.publicId ?? null,
     version: row.version,
     questions: row.questions,
+    policy_ids: row.policyIds ?? [],
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -163,11 +169,22 @@ export const resolveDeciderBackend = async (args: {
   return { agent: null, tool };
 };
 
-/** Holds the writer to the backend the decider starts on every decision. */
+/** What answering through the backend starts. */
+export const deciderStarts = (args: {
+  agent: { publicId: string } | null;
+  tool: { publicId: string } | null;
+}): CarriedAction[] => {
+  return args.agent
+    ? [startOf({ type: 'agent', id: args.agent.publicId })]
+    : [startOf({ type: 'tool', id: args.tool!.publicId })];
+};
+
+/** Holds the writer to the backend the decider starts and the grant it runs under. */
 const assertWriterStartsBackend = (args: {
   writer: Writer;
   projectId: number;
   backend: { agent: DeciderAgentRow | null; tool: DeciderToolRow | null };
+  policyIds: string[] | null | undefined;
 }): Promise<unknown> => {
   const { agent, tool } = args.backend;
   return assertWriterHolds({
@@ -175,9 +192,8 @@ const assertWriterStartsBackend = (args: {
     writer: args.writer,
     projectId: args.projectId,
     carried: {
-      actions: agent
-        ? [startOf({ type: 'agent', id: agent.publicId })]
-        : [startOf({ type: 'tool', id: tool!.publicId })],
+      policyIds: args.policyIds,
+      actions: deciderStarts({ agent, tool }),
     },
   });
 };
@@ -190,6 +206,7 @@ export const createDecider = async (
     agentId?: unknown;
     toolId?: unknown;
     questions: unknown;
+    policyIds: string[] | null | undefined;
     writer: Writer;
   } & VersionedWrite
 ): Promise<MappedDecider> => {
@@ -203,6 +220,7 @@ export const createDecider = async (
     writer: args.writer,
     projectId: args.projectId,
     backend,
+    policyIds: args.policyIds,
   });
   await assertNameAvailable({ projectId: args.projectId, name });
 
@@ -214,6 +232,7 @@ export const createDecider = async (
     toolId: backend.tool?.id ?? null,
     version: 1,
     questions,
+    policyIds: args.policyIds,
   });
   const mapped = mapDecider(await deciders.reload(decider));
 
@@ -314,6 +333,7 @@ export const updateDecider = async (
     agentId?: unknown;
     toolId?: unknown;
     questions?: unknown;
+    policyIds?: string[] | null;
     writer: Writer;
   } & VersionedWrite
 ): Promise<MappedDecider> => {
@@ -336,8 +356,11 @@ export const updateDecider = async (
     writer: args.writer,
     projectId: decider.projectId,
     backend: decider,
+    policyIds:
+      args.policyIds === undefined ? decider.policyIds : args.policyIds,
   });
   if (questions !== undefined) decider.questions = questions;
+  if (args.policyIds !== undefined) decider.policyIds = args.policyIds;
 
   // Only a changed question set bumps the version; a rename, a repoint or an
   // identical rewrite leaves it where it is.

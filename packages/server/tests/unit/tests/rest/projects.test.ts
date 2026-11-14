@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import { signToken } from 'src/lib/signedTokens';
 
-import { createAllowAllPolicy } from '../../fixtures/bootstrap';
+import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Projects', () => {
@@ -1115,6 +1115,7 @@ describe('Projects', () => {
       const evalRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/evals')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: project,
           name: 'late-module-eval',
           agent_id: agentRes.body.id,

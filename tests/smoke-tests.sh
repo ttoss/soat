@@ -84,6 +84,11 @@ PROJECT_RESP=$($SOAT_CLI create-project --name smoke-test-project)
 PROJECT_PUBLIC_ID=$(printf '%s\n' "$PROJECT_RESP" | jq -r '.id')
 echo "Project id: $PROJECT_PUBLIC_ID"
 
+# Evals, deciders, ingestion and memory rules and playbooks run under their
+# policy_ids; the admin holds this one.
+GRANT_POLICY_ID=$($SOAT_CLI create-policy --name smoke-resource-grant \
+  --document '{"statement":[{"effect":"Allow","action":["*"]}]}' | jq -r '.id')
+
 # A tool takes a credential only as a {{secret:...}} reference, so every tool
 # that calls back into this server authenticates through this secret.
 ADMIN_TOKEN_SECRET_RESP=$($SOAT_CLI create-secret \
@@ -1337,6 +1342,7 @@ echo "Converter pipeline tool id: $CONVERTER_TOOL_ID"
 
 echo "--- Creating an ingestion rule for image/x-smoke-test ---"
 INGESTION_RULE_RESP=$($SOAT_CLI create-ingestion-rule \
+  --policy-ids '["'"$GRANT_POLICY_ID"'"]' \
   --project-id "$PROJECT_PUBLIC_ID" \
   --content-type-glob "image/x-smoke-test" \
   --tool-id "$CONVERTER_TOOL_ID" \
@@ -1422,6 +1428,7 @@ ASYNC_TOOL_ID=$(printf '%s\n' "$ASYNC_PIPELINE_TOOL_RESP" | jq -r '.id')
 echo "Async converter pipeline tool id: $ASYNC_TOOL_ID"
 
 ASYNC_RULE_RESP=$($SOAT_CLI create-ingestion-rule \
+  --policy-ids '["'"$GRANT_POLICY_ID"'"]' \
   --project-id "$PROJECT_PUBLIC_ID" \
   --content-type-glob "image/x-smoke-test-async" \
   --tool-id "$ASYNC_TOOL_ID" \
@@ -1889,6 +1896,7 @@ echo "--- Creating a memory rule (built-in extractor) ---"
 # again below, so the rule never sees a turn. What a firing does is covered by
 # the unit suite — it is asynchronous and LLM-dependent.
 MRULE_RESP=$($SOAT_CLI create-memory-rule \
+  --policy-ids '["'"$GRANT_POLICY_ID"'"]' \
   --memory-store-id "$MEM_ID" \
   --on generations.completed \
   --prompt "Extract decisions only.")
@@ -1930,7 +1938,7 @@ echo "--- The built-in extractor cannot bind to the message event ---"
 MRULE_BAD_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memory-rules" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"memory_store_id\":\"$MEM_ID\",\"on\":\"conversation_messages.generated\"}")
+  -d "{\"memory_store_id\":\"$MEM_ID\",\"policy_ids\":[\"$GRANT_POLICY_ID\"],\"on\":\"conversation_messages.generated\"}")
 if [ "$MRULE_BAD_STATUS" != "400" ]; then
   echo "ERROR: handlerless rule on the message event expected 400, got $MRULE_BAD_STATUS" >&2
   exit 1
@@ -5974,7 +5982,7 @@ echo "--- Creating formation with dataset / dataset_item / eval resources ---"
 EVAL_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-formation" \
-  --template '{"resources":{"suite":{"type":"dataset","properties":{"name":"smoke-formation-suite"}},"case":{"type":"dataset_item","properties":{"dataset_id":{"ref":"suite"},"input":[{"role":"user","content":"Say hello."}],"expected_output":"hello"}},"regression":{"type":"eval","properties":{"name":"smoke-formation-eval","agent_id":"'"$AGENT_ID"'","dataset_id":{"ref":"suite"},"scorers":[{"type":"contains","value":"hello"}],"pass_threshold":0.5}}}}')
+  --template '{"resources":{"suite":{"type":"dataset","properties":{"name":"smoke-formation-suite"}},"case":{"type":"dataset_item","properties":{"dataset_id":{"ref":"suite"},"input":[{"role":"user","content":"Say hello."}],"expected_output":"hello"}},"regression":{"type":"eval","properties":{"name":"smoke-formation-eval","policy_ids":["'"$GRANT_POLICY_ID"'"],"agent_id":"'"$AGENT_ID"'","dataset_id":{"ref":"suite"},"scorers":[{"type":"contains","value":"hello"}],"pass_threshold":0.5}}}}')
 EVAL_FORMATION_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.id')
 EVAL_FORM_DATASET_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "suite") | .physical_resource_id')
 EVAL_FORM_EVAL_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "regression") | .physical_resource_id')
@@ -6361,6 +6369,7 @@ DEL_DATASET_ID=$(printf '%s\n' "$($SOAT_CLI create-dataset \
   --project_id "$DEL_PROJECT_ID" --name smoke-delete-dataset)" | jq -r '.id')
 
 DEL_EVAL_ID=$(printf '%s\n' "$($SOAT_CLI create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$DEL_PROJECT_ID" \
   --name smoke-delete-eval \
   --agent_id "$DEL_AGENT_ID" \
@@ -7619,6 +7628,7 @@ echo "--- Creating eval ---"
 # embedding_similarity scorer runs with pass_threshold 0 to exercise the
 # embedding wiring without depending on how close the wording lands.
 EVAL_RESP=$($SOAT_CLI create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval" \
   --agent_id "$AGENT_ID" \
@@ -7809,6 +7819,7 @@ fi
 
 echo "--- Rejecting a baseline from another eval ---"
 EVAL_OTHER_RESP=$($SOAT_CLI create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-other" \
   --agent_id "$AGENT_ID" \
@@ -7829,6 +7840,7 @@ $SOAT_CLI delete-eval --eval_id "$EVAL_OTHER_ID"
 
 echo "--- Running an llm_judge scorer ---"
 EVAL_JUDGE_RESP=$($SOAT_CLI create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-judge" \
   --agent_id "$AGENT_ID" \
@@ -7868,6 +7880,7 @@ $SOAT_CLI delete-eval --eval_id "$EVAL_JUDGE_ID"
 echo "--- Rejecting an llm_judge scorer with no pass_threshold ---"
 set +e
 EVAL_JUDGE_BAD=$($SOAT_CLI create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-judge-bad" \
   --agent_id "$AGENT_ID" \
@@ -7910,6 +7923,7 @@ echo "Custom scorer tool id: $SCORER_TOOL_ID"
 
 echo "--- Running an eval with the custom tool scorer ---"
 EVAL_TOOL_RESP=$($SOAT_CLI create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-tool-scorer" \
   --agent_id "$AGENT_ID" \
@@ -7962,6 +7976,7 @@ SCORER_CLIENT_TOOL_RESP=$($SOAT_CLI create-tool \
   --parameters '{"type":"object","properties":{},"required":[]}')
 SCORER_CLIENT_TOOL_ID=$(printf '%s\n' "$SCORER_CLIENT_TOOL_RESP" | jq -r '.id')
 expect_cli_error_status 400 create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-tool-scorer-client" \
   --agent_id "$AGENT_ID" \
@@ -8053,6 +8068,7 @@ $SOAT_CLI update-agent --agent-id "$GATE_AGENT_ID" \
   --instructions "Answer in two words." >/dev/null
 
 GATE_EVAL_RESP=$($SOAT_CLI create-eval \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-gate" \
   --agent_id "$GATE_AGENT_ID" \
@@ -8178,6 +8194,7 @@ DECIDER_AGENT_RESP=$($SOAT_CLI create-agent \
 DECIDER_AGENT_ID=$(printf '%s\n' "$DECIDER_AGENT_RESP" | jq -r '.id')
 
 DECIDER_RESP=$($SOAT_CLI create-decider \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-triage" \
   --agent_id "$DECIDER_AGENT_ID" \
@@ -8250,6 +8267,7 @@ DECIDER_ENGINE_RESP=$($SOAT_CLI create-tool \
 DECIDER_ENGINE_ID=$(printf '%s\n' "$DECIDER_ENGINE_RESP" | jq -r '.id')
 
 TOOL_DECIDER_RESP=$($SOAT_CLI create-decider \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-tool-triage" \
   --tool_id "$DECIDER_ENGINE_ID" \
@@ -8307,6 +8325,7 @@ echo "=== Playbooks ==="
 
 echo "--- Creating a playbook and a case ---"
 PLAYBOOK_RESP=$($SOAT_CLI create-playbook \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-pricing" \
   --definition '{"nodes":[{"id":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"id":"pricing","title":"Pricing","kind":"collect","final":true,"inputs":[{"name":"revenue","schema":{"type":"number"},"required":true,"source":{"node_id":"revenue","field":"output.amount"}},{"name":"margin","schema":{"type":"number"},"required":true,"source":"manual"}]}]}')
@@ -8365,6 +8384,7 @@ fi
 
 echo "--- Approving a confirm node once its input is collected ---"
 CONFIRM_PLAYBOOK_RESP=$($SOAT_CLI create-playbook \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-confirmed" \
   --definition '{"nodes":[{"id":"revenue","title":"Revenue","kind":"collect","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":"manual"}]},{"id":"approve","title":"Approve","kind":"confirm","inputs":[{"name":"amount","schema":{"type":"number"},"required":true,"source":{"node_id":"revenue","field":"output.amount"}}]}]}')
@@ -8399,6 +8419,7 @@ EXPORT_TOOL_ID=$($SOAT_CLI create-tool \
   --type http \
   --execute '{"url":"http://formation-handler:50480/health","method":"GET","response_mode":"base64"}' | jq -r '.id')
 EXPORT_PLAYBOOK_ID=$($SOAT_CLI create-playbook \
+  --policy_ids '["'"$GRANT_POLICY_ID"'"]' \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-exported" \
   --definition "{\"nodes\":[{\"id\":\"pricing\",\"title\":\"Pricing\",\"kind\":\"collect\",\"final\":true,\"inputs\":[{\"name\":\"amount\",\"schema\":{\"type\":\"number\"},\"required\":true,\"source\":\"manual\"}],\"transformations\":[{\"name\":\"summary\",\"format\":\"json\",\"tool\":\"$EXPORT_TOOL_ID\"}]}]}" | jq -r '.id')

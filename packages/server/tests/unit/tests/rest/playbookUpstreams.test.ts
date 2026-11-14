@@ -3,6 +3,7 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -96,6 +97,7 @@ type CaseBody = {
 
 describe('Playbook upstreams', () => {
   let adminToken: string;
+  let adminGrant: string[];
   let userToken: string;
   let readerToken: string;
   let projectId: string;
@@ -116,7 +118,12 @@ describe('Playbook upstreams', () => {
   const createPlaybook = (definition: unknown, project = projectId) => {
     return admin()
       .post('/api/v1/playbooks')
-      .send({ project_id: project, name: unique('playbook'), definition });
+      .send({
+        policy_ids: adminGrant,
+        project_id: project,
+        name: unique('playbook'),
+        definition,
+      });
   };
 
   const newPlaybook = async (definition: unknown): Promise<string> => {
@@ -196,6 +203,7 @@ describe('Playbook upstreams', () => {
       createOtherProject: true,
     });
     adminToken = setup.adminToken;
+    adminGrant = await testGrant({ token: adminToken });
     userToken = setup.userToken;
     readerToken = await createScopedPrincipal({
       adminToken,

@@ -210,15 +210,20 @@ OPENAI_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 
 ## Step 4 — Create the decider
 
-One question of each type the Decisions API answers. The decider stores them as version 1; every decision names the version it was answered under.
+One question of each type the Decisions API answers. The decider stores them as version 1; every decision names the version it was answered under. Every decision calls the tool under the decider's `policy_ids` ([Deciders — Decision authority](/docs/modules/deciders#decision-authority)); the policy below allows that and nothing else.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+POLICY_ID=$(soat create-policy \
+  --name "ticket-triage-backend" \
+  --document '{"statement":[{"effect":"Allow","action":["tools:CallTool"]}]}' | jq -r '.id')
+
 DECIDER_ID=$(soat create-decider \
   --project-id "$PROJECT_ID" \
   --name ticket-triage \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --tool-id "$OPENAI_TOOL_ID" \
   --questions '[
     {
@@ -282,10 +287,20 @@ const QUESTIONS = [
   },
 ];
 
+const { data: policy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'ticket-triage-backend',
+    document: {
+      statement: [{ effect: 'Allow', action: ['tools:CallTool'] }],
+    },
+  },
+});
+
 const { data: decider } = await adminSoat.deciders.createDecider({
   body: {
     project_id: PROJECT_ID,
     name: 'ticket-triage',
+    policy_ids: [policy!.id],
     tool_id: OPENAI_TOOL_ID,
     questions: QUESTIONS,
   },
@@ -297,12 +312,18 @@ const DECIDER_ID = decider!.id;
 <TabItem value="curl" label="curl">
 
 ```bash
+POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"ticket-triage-backend","document":{"statement":[{"effect":"Allow","action":["tools:CallTool"]}]}}' | jq -r '.id')
+
 DECIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "'"$PROJECT_ID"'",
     "name": "ticket-triage",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "tool_id": "'"$OPENAI_TOOL_ID"'",
     "questions": [
       {"type": "predicate", "name": "refund_request", "instructions": "Is the customer asking for money back?"},

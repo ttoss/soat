@@ -1,5 +1,7 @@
 import type { Context } from '../Context';
 import type { DeniedPrincipal } from '../lib/authorizationDenial';
+import { RESOURCE_GRANT_PRINCIPALS } from '../lib/resourceGrantCarriers';
+import { resourcePolicyIds } from '../lib/resourceGrants';
 import type {
   AuthorityCap,
   AuthorityGrant,
@@ -16,6 +18,7 @@ import {
   agentGrant,
   keyBound,
   oauthScopeCap,
+  ownPoliciesGrant,
   principalBoundCap,
   triggerGrant,
   userGrant,
@@ -102,6 +105,14 @@ const grantOf = async (args: {
   if (grant.holder === 'agent') {
     return agentGrant({ agentId: grant.agent, policy: grant.policy });
   }
+  if (grant.holder === 'resource') {
+    return ownPoliciesGrant({
+      principal,
+      policyIds: () => {
+        return resourcePolicyIds(grant);
+      },
+    });
+  }
   return triggerGrant({
     principal,
     triggerPublicId: grant.trigger,
@@ -113,14 +124,22 @@ const grantOf = async (args: {
  * Another holder's grant as a cap: what it allows, read live, naming the
  * holder. A user no longer stored allows nothing.
  */
+const holderOf = (grant: AuthorityGrant): DeniedPrincipal => {
+  switch (grant.holder) {
+    case 'user':
+      return { type: 'user', id: grant.user };
+    case 'trigger':
+      return { type: 'trigger', id: grant.trigger };
+    case 'agent':
+      return { type: 'agent', id: grant.agent };
+    case 'resource':
+      return { type: RESOURCE_GRANT_PRINCIPALS[grant.carrier], id: grant.id };
+  }
+};
+
 const grantCap = async (args: CapArgs<'grant'>): Promise<Cap> => {
   const { grant } = args.cap;
-  const principal: DeniedPrincipal =
-    grant.holder === 'user'
-      ? { type: 'user', id: grant.user }
-      : grant.holder === 'trigger'
-        ? { type: 'trigger', id: grant.trigger }
-        : { type: 'agent', id: grant.agent };
+  const principal = holderOf(grant);
   const resolved = await grantOf({ ...args, grant, principal });
   return { principal, kind: 'other', bound: resolved?.bound ?? NOTHING };
 };

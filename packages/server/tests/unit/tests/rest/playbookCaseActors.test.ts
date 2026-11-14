@@ -1,4 +1,4 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const DEFINITION = {
@@ -60,6 +60,7 @@ describe('Playbook case actors', () => {
     const playbook = await authenticatedTestClient(adminToken)
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: projectId,
         name: 'actor-cases',
         definition: DEFINITION,

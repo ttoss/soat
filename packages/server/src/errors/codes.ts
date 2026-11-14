@@ -257,7 +257,7 @@ export const ERROR_CODES = {
   POLICY_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The policy is in the `policy_ids` of one or more triggers, agents, webhooks, users or API keys, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.agents` and `meta.agent_sample` do the same for agents, `meta.webhooks` and `meta.webhook_sample` for webhooks, `meta.users` and `meta.user_sample` for users, `meta.api_keys` and `meta.api_key_sample` for API keys.',
+      'The policy is in the `policy_ids` of one or more triggers, agents, webhooks, users, API keys, evals, deciders, ingestion rules, memory rules or playbooks, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.<carrier>s` and `meta.<carrier>_sample` do the same for each other carrier (`agents`, `webhooks`, `users`, `api_keys`, `evals`, `deciders`, `ingestion_rules`, `memory_rules`, `playbooks`).',
   },
   PROJECT_PAUSED: {
     httpStatus: 409,
@@ -814,12 +814,7 @@ export const ERROR_CODES = {
   PLAYBOOK_EXECUTOR_FORBIDDEN: {
     httpStatus: 403,
     description:
-      "The playbook version's author may not start an executor the definition names, checked when a node runs or exports. `meta` names the `node` and the IAM `action`.",
-  },
-  PLAYBOOK_AUTHOR_UNAVAILABLE: {
-    httpStatus: 409,
-    description:
-      'A definition with executors or transformations was written with a trigger or OAuth token, which carry their boundary in the token: no node can run as them.',
+      "The playbook version's `policy_ids` do not allow starting an executor the definition names, checked when a node runs or exports. `meta` names the `node` and the IAM `action`.",
   },
   PLAYBOOK_NODE_NOT_RUNNABLE: {
     httpStatus: 409,

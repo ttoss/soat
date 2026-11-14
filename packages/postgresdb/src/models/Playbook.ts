@@ -78,6 +78,10 @@ export class Playbook extends Model {
   @Column({ type: DataType.JSON, allowNull: false })
   declare definition: object;
 
+  // Public ids of the policies its work runs under; queried by policy.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare policyIds: string[] | null;
+
   @HasMany(() => {
     return PlaybookVersion;
   })

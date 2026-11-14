@@ -3,6 +3,7 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import {
   authenticatedTestClient,
@@ -61,7 +62,12 @@ describe('Playbook case upgrades', () => {
     seq += 1;
     const res = await asAdmin()
       .post('/api/v1/playbooks')
-      .send({ project_id: projectId, name: `upgrade-${seq}`, definition });
+      .send({
+        policy_ids: await testGrant({ token: adminToken }),
+        project_id: projectId,
+        name: `upgrade-${seq}`,
+        definition,
+      });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };

@@ -4,7 +4,11 @@ import type { AddressInfo } from 'node:net';
 import { db } from 'src/db';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createProjectPolicy,
+  setupProjectWithUsers,
+  testGrant,
+} from '../../fixtures/bootstrap';
 import {
   createQuotaRow,
   freshProjectAndAgent,
@@ -79,6 +83,7 @@ describe('Decisions', () => {
 
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let noPermToken: string;
   let providerId: string;
@@ -149,6 +154,7 @@ describe('Decisions', () => {
     const res = await authenticatedTestClient(userToken)
       .post('/api/v1/deciders')
       .send({
+        policy_ids: [userPolicyId],
         project_id: projectId,
         name: unique('triage'),
         agent_id: agentId,
@@ -228,6 +234,7 @@ describe('Decisions', () => {
     });
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
     noPermToken = setup.noPermToken!;
 
@@ -542,6 +549,36 @@ describe('Decisions', () => {
       expect(res.body.error.code).toBe('OUTPUT_SCHEMA_VALIDATION_FAILED');
     });
 
+    test('an agent the decider grant may not start is never run', async () => {
+      const grantId = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['deciders:CreateDecision'],
+      });
+      const decider = await createDecider({ policy_ids: [grantId] });
+
+      const res = await decide({ decider });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
+      expect(res.body.error.meta.action).toBe('agents:CreateAgentGeneration');
+      expect(await countDecisions(decider)).toBe(0);
+    });
+
+    test('a decider that names no policy_ids is allowed nothing', async () => {
+      const decider = await createDecider();
+      await db.Decider.update(
+        { policyIds: null },
+        { where: { publicId: decider } }
+      );
+
+      const res = await decide({ decider });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
+      expect(await countDecisions(decider)).toBe(0);
+    });
+
     test('names the question-set version it was answered under', async () => {
       const decider = await createDecider();
       const patched = await authenticatedTestClient(userToken)
@@ -646,6 +683,7 @@ describe('Decisions', () => {
       const deciderRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/deciders')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: fresh.projectPublicId,
           name: 'quota-triage',
           agent_id: fresh.agentPublicId,

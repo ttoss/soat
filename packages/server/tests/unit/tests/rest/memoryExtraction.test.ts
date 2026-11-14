@@ -1,3 +1,4 @@
+import { testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatReply,
   type ChatRequest,
@@ -88,6 +89,7 @@ describe('Memory rules — the built-in extractor', () => {
 
   const createRule = async (body: Record<string, unknown>) => {
     return create('/api/v1/memory-rules', {
+      policy_ids: await testGrant({ token: adminToken }),
       on: 'generations.completed',
       ...body,
     });

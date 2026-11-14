@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { droppedEventCount } from 'src/lib/eventBus';
 import * as generationsModule from 'src/lib/generations';
 
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -208,7 +209,11 @@ describe('Memory rule dispatch', () => {
   const createRule = async (body: Record<string, unknown>) => {
     const res = await asAdmin()
       .post('/api/v1/memory-rules')
-      .send({ on: 'generations.completed', ...body });
+      .send({
+        policy_ids: await testGrant({ token: adminToken }),
+        on: 'generations.completed',
+        ...body,
+      });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };
@@ -581,6 +586,7 @@ describe('Memory rule dispatch', () => {
     let toolServer: Server;
     let toolServerUrl: string;
     let lastToolInput: Record<string, unknown> | undefined;
+    const toolPaths: string[] = [];
 
     beforeAll(async () => {
       toolServer = createServer((req, res) => {
@@ -589,6 +595,7 @@ describe('Memory rule dispatch', () => {
           raw += String(chunk);
         });
         req.on('end', () => {
+          toolPaths.push(req.url ?? '');
           lastToolInput = raw ? JSON.parse(raw) : undefined;
           res.setHeader('Content-Type', 'application/json');
           res.end(
@@ -654,6 +661,42 @@ describe('Memory rule dispatch', () => {
       expect(String(lastToolInput!.transcript)).toContain(
         'I moved to the annual plan.'
       );
+    });
+
+    test('a handler tool the rule grant does not allow is never called', async () => {
+      const scope = await createProject();
+      const storeId = await scope.createStore();
+      const sourceAgentId = await scope.createAgent();
+      const tool = await asAdmin()
+        .post('/api/v1/tools')
+        .send({
+          project_id: scope.projectId,
+          name: 'memory-rule-ungranted',
+          type: 'http',
+          execute: { url: `${toolServerUrl}/ungranted`, method: 'POST' },
+        });
+      const grant = await asAdmin()
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['memories:GetMemory'] }],
+          },
+        });
+      await createRule({
+        policy_ids: [grant.body.id],
+        memory_store_id: storeId,
+        source_agent_ids: [sourceAgentId],
+        tool_id: tool.body.id,
+      });
+
+      const generationId = await turn({
+        agentId: sourceAgentId,
+        message: 'I moved to the annual plan.',
+      });
+
+      await waitForSummary(generationId);
+      expect(toolPaths).not.toContain('/ungranted');
+      expect(await listMemories(storeId)).toEqual([]);
     });
   });
 

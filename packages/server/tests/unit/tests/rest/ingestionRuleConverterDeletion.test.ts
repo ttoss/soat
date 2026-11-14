@@ -1,3 +1,4 @@
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -55,6 +56,7 @@ describe('Ingestion rules whose converter is deleted', () => {
     const res = await admin()
       .post('/api/v1/ingestion-rules')
       .send({
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: args.projectId,
         content_type_glob: args.glob,
         ...args.converter,

@@ -4,6 +4,7 @@ import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 type McpCall = { name: string; arguments: Record<string, unknown> };
@@ -32,6 +33,7 @@ const executesOnAmount = (executor: Record<string, unknown>) => {
 
 describe('Playbook execute node on an mcp tool', () => {
   let turn: AgentToolTurn;
+  let adminGrant: string[];
   let mcpToolId: string;
   let mcpUrl: string;
   const calls: McpCall[] = [];
@@ -44,6 +46,7 @@ describe('Playbook execute node on an mcp tool', () => {
     return admin()
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: adminGrant,
         project_id: turn.projectId,
         name: turn.unique('playbook'),
         definition,
@@ -79,6 +82,7 @@ describe('Playbook execute node on an mcp tool', () => {
 
   beforeAll(async () => {
     turn = await startAgentToolTurn({ prefix: 'playbookmcpexecutor' });
+    adminGrant = await testGrant({ token: turn.adminToken });
     const path = `/${turn.unique('mcp')}`;
     mcpUrl = `${turn.target.baseUrl}${path}`;
     turn.target.reply(path, async (body) => {

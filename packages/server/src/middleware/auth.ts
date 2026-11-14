@@ -242,13 +242,16 @@ const resolveJwt = async (args: {
   };
 };
 
-/** The user stored work's principal names: a key's owner, none for a trigger. */
+/**
+ * The user stored work's principal names: a key's owner, none for a resource
+ * acting under its own grant.
+ */
 const workUser = async (args: {
   db: Context['db'];
   principal: WorkAuthority['principal'];
 }): Promise<InstanceType<Context['db']['User']> | null | undefined> => {
   const { db, principal } = args;
-  if (principal.type === 'trigger') return null;
+  if (principal.type !== 'user' && principal.type !== 'api_key') return null;
   if (principal.type === 'user') {
     const user = await db.User.findOne({
       where: { publicId: principal.id },

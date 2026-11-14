@@ -7,7 +7,7 @@ import {
 import { recoverPlaybookExports } from 'src/lib/playbookExportRender';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -50,7 +50,12 @@ const newCase = async (definition: object): Promise<string> => {
   seq += 1;
   const playbook = await asAdmin()
     .post('/api/v1/playbooks')
-    .send({ project_id: projectId, name: `jobs-${seq}`, definition });
+    .send({
+      policy_ids: await testGrant({ token: adminToken }),
+      project_id: projectId,
+      name: `jobs-${seq}`,
+      definition,
+    });
   const created = await asAdmin()
     .post(`/api/v1/playbooks/${playbook.body.id}/cases`)
     .send({ subject: `jobs-${seq}` });

@@ -8,7 +8,7 @@ import {
   parseDeciderQuestions,
 } from './deciderQuestions';
 import { deciderQuestionSetAt } from './deciderQuestionSet';
-import { deciders, resolveDeciderBackend } from './deciders';
+import { deciders, deciderStarts, resolveDeciderBackend } from './deciders';
 import {
   admitDecisionBackend,
   type DecisionEvaluation,
@@ -19,6 +19,7 @@ import { emitResourceEvent } from './eventBus';
 import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
+import { resourceWorkAuthority } from './resourceWork';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:decisions');
@@ -243,8 +244,9 @@ export const createDecision = async (args: {
   metadata?: Record<string, unknown>;
   wait: boolean;
   /**
-   * Borrowed, not stored: evaluation never outlives this process, since an
-   * interrupted decision is failed rather than re-run.
+   * Who asked, held to the decider's `policy_ids` for its backend. Borrowed,
+   * not stored: evaluation never outlives this process, since an interrupted
+   * decision is failed rather than re-run.
    */
   authority: WorkAuthority | null;
   /** Answer under this archived question set rather than the live one. */
@@ -267,7 +269,13 @@ export const createDecision = async (args: {
     tool: decider.tool,
     questions: questionSet.questions,
     input: args.input,
-    authority: args.authority,
+    authority: await resourceWorkAuthority({
+      carrier: 'deciders',
+      id: decider.publicId as string,
+      projectId: decider.projectId,
+      startedBy: args.authority,
+      starts: deciderStarts(decider),
+    }),
   });
 
   return recordAndEvaluate({

@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
 
+import { testGrant } from '../../fixtures/bootstrap';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -50,13 +51,20 @@ describe('Converter ingestion', () => {
     return res.body.id;
   };
 
-  const createRule = async (args: { glob: string; toolId: string }) => {
-    const res = await asAdmin().post('/api/v1/ingestion-rules').send({
-      project_id: projectId,
-      content_type_glob: args.glob,
-      tool_id: args.toolId,
-      chunk_strategy: 'whole',
-    });
+  const createRule = async (args: {
+    glob: string;
+    toolId: string;
+    policyIds?: string[];
+  }) => {
+    const res = await asAdmin()
+      .post('/api/v1/ingestion-rules')
+      .send({
+        policy_ids: args.policyIds ?? (await testGrant({ token: adminToken })),
+        project_id: projectId,
+        content_type_glob: args.glob,
+        tool_id: args.toolId,
+        chunk_strategy: 'whole',
+      });
     expect(res.status).toBe(201);
   };
 
@@ -215,11 +223,14 @@ describe('Converter ingestion', () => {
         type: 'client',
       });
 
-      const res = await asAdmin().post('/api/v1/ingestion-rules').send({
-        project_id: projectId,
-        content_type_glob: 'video/mp4',
-        tool_id: tool.body.id,
-      });
+      const res = await asAdmin()
+        .post('/api/v1/ingestion-rules')
+        .send({
+          policy_ids: await testGrant({ token: adminToken }),
+          project_id: projectId,
+          content_type_glob: 'video/mp4',
+          tool_id: tool.body.id,
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
@@ -236,11 +247,14 @@ describe('Converter ingestion', () => {
           actions: ['list-documents'],
         });
 
-      const res = await asAdmin().post('/api/v1/ingestion-rules').send({
-        project_id: projectId,
-        content_type_glob: 'video/mp4',
-        tool_id: tool.body.id,
-      });
+      const res = await asAdmin()
+        .post('/api/v1/ingestion-rules')
+        .send({
+          policy_ids: await testGrant({ token: adminToken }),
+          project_id: projectId,
+          content_type_glob: 'video/mp4',
+          tool_id: tool.body.id,
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
@@ -272,12 +286,15 @@ describe('Converter ingestion', () => {
           });
         expect(tool.status).toBe(201);
 
-        const res = await asAdmin().post('/api/v1/ingestion-rules').send({
-          project_id: projectId,
-          content_type_glob: glob,
-          tool_id: tool.body.id,
-          preset_parameters: rulePresets,
-        });
+        const res = await asAdmin()
+          .post('/api/v1/ingestion-rules')
+          .send({
+            policy_ids: await testGrant({ token: adminToken }),
+            project_id: projectId,
+            content_type_glob: glob,
+            tool_id: tool.body.id,
+            preset_parameters: rulePresets,
+          });
 
         expect(res.status).toBe(201);
       }
@@ -310,6 +327,36 @@ describe('Converter ingestion', () => {
       });
 
       expect(content).toBe('converted by /any');
+    });
+
+    test('a converter the rule grant does not allow is never called', async () => {
+      const policy = await asAdmin()
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['documents:GetDocument'] }],
+          },
+        });
+      await createRule({
+        glob: 'text/x-ungranted',
+        toolId: await createHttpTool({ name: 'ungranted', path: '/ungranted' }),
+        policyIds: [policy.body.id],
+      });
+      const fileId = await uploadFile({
+        filename: 'notes.ungranted',
+        contentType: 'text/x-ungranted',
+      });
+
+      const ingest = await asAdmin()
+        .post('/api/v1/documents/ingest?wait=true')
+        .send({ project_id: projectId, file_id: fileId });
+
+      expect(ingest.body.status).toBe('failed');
+      expect(
+        received.some((entry) => {
+          return entry.path === '/ungranted';
+        })
+      ).toBe(false);
     });
   });
 

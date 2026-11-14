@@ -10,16 +10,25 @@ import {
   type PrincipalBound,
   serializeBound,
 } from './principalBound';
+import {
+  isResourceGrantCarrier,
+  RESOURCE_GRANT_PRINCIPAL_TYPES,
+  RESOURCE_GRANT_PRINCIPALS,
+  type ResourceGrantCarrier,
+  type ResourceGrantPrincipalType,
+} from './resourceGrantCarriers';
 
 /**
  * Who holds an authority's grant: a user (a credential's owner), a trigger
- * acting under its own `policy_ids`, or a `run_as: agent` agent under the
- * `policy_ids` its turn resolved (`null` grants nothing).
+ * acting under its own `policy_ids`, a `run_as: agent` agent under the
+ * `policy_ids` its turn resolved (`null` grants nothing), or a resource of
+ * `RESOURCE_GRANT_PRINCIPALS` under its own `policy_ids`, read live.
  */
 export type AuthorityGrant =
   | { holder: 'user'; user: string }
   | { holder: 'trigger'; trigger: string }
-  | { holder: 'agent'; agent: string; policy: PolicyDocument | null };
+  | { holder: 'agent'; agent: string; policy: PolicyDocument | null }
+  | { holder: 'resource'; carrier: ResourceGrantCarrier; id: string };
 
 /**
  * What narrows the grant, each read live at every check: another holder's
@@ -34,7 +43,7 @@ export type AuthorityCap =
 
 /** The principal that acts: what records credit and refusals name. */
 export type ActingPrincipal = {
-  type: 'user' | 'api_key' | 'trigger';
+  type: 'user' | 'api_key' | 'trigger' | ResourceGrantPrincipalType;
   id: string;
 };
 
@@ -96,18 +105,38 @@ const parseAgentGrant = (args: {
   return { holder: 'agent', agent, policy: policy as PolicyDocument };
 };
 
+/** One reader per grant holder; a holder none reads is not a grant. */
+const GRANT_READERS: Record<
+  AuthorityGrant['holder'],
+  (value: Record<string, unknown>) => AuthorityGrant | null
+> = {
+  user: (value) => {
+    return str(value.user) ? { holder: 'user', user: value.user } : null;
+  },
+  trigger: (value) => {
+    return str(value.trigger)
+      ? { holder: 'trigger', trigger: value.trigger }
+      : null;
+  },
+  agent: (value) => {
+    return str(value.agent)
+      ? parseAgentGrant({ agent: value.agent, policy: value.policy })
+      : null;
+  },
+  resource: (value) => {
+    return isResourceGrantCarrier(value.carrier) && str(value.id)
+      ? { holder: 'resource', carrier: value.carrier, id: value.id }
+      : null;
+  },
+};
+
+const isGrantHolder = (holder: unknown): holder is AuthorityGrant['holder'] => {
+  return typeof holder === 'string' && Object.hasOwn(GRANT_READERS, holder);
+};
+
 const parseGrant = (value: unknown): AuthorityGrant | null => {
-  if (!isPlainObject(value)) return null;
-  if (value.holder === 'user' && str(value.user)) {
-    return { holder: 'user', user: value.user };
-  }
-  if (value.holder === 'trigger' && str(value.trigger)) {
-    return { holder: 'trigger', trigger: value.trigger };
-  }
-  if (value.holder === 'agent' && str(value.agent)) {
-    return parseAgentGrant({ agent: value.agent, policy: value.policy });
-  }
-  return null;
+  if (!isPlainObject(value) || !isGrantHolder(value.holder)) return null;
+  return GRANT_READERS[value.holder](value);
 };
 
 const DENIED_TYPES = new Set<string>([
@@ -119,6 +148,7 @@ const DENIED_TYPES = new Set<string>([
   'generation',
   'agent',
   'trigger',
+  ...RESOURCE_GRANT_PRINCIPAL_TYPES,
 ]);
 
 const parseDenied = (value: unknown): DeniedPrincipal | null => {
@@ -173,7 +203,12 @@ const parseCaps = (value: unknown): AuthorityCap[] | null => {
   return caps;
 };
 
-const ACTING_TYPES = new Set<string>(['user', 'api_key', 'trigger']);
+const ACTING_TYPES = new Set<string>([
+  'user',
+  'api_key',
+  'trigger',
+  ...RESOURCE_GRANT_PRINCIPAL_TYPES,
+]);
 
 const parsePrincipal = (value: unknown): ActingPrincipal | null => {
   if (!isPlainObject(value) || !str(value.id)) return null;
@@ -387,44 +422,6 @@ export const triggerAuthority = (args: {
 };
 
 /**
- * The authority of a user, or of an API key on its owner's grant, pinned to
- * `project` and held to `bound` when one is given.
- */
-export const principalAuthority = (args: {
-  principal:
-    | { type: 'user'; id: string }
-    | { type: 'api_key'; id: string; owner: string };
-  bound: PrincipalBound | undefined;
-  project: string;
-}): WorkAuthority => {
-  const { principal } = args;
-  const bound: AuthorityCap[] = args.bound
-    ? [
-        {
-          kind: 'bound',
-          bound: args.bound,
-          by: { type: 'iam_token', id: null },
-        },
-      ]
-    : [];
-  return {
-    project: args.project,
-    grant: {
-      holder: 'user',
-      user: principal.type === 'user' ? principal.id : principal.owner,
-    },
-    caps:
-      principal.type === 'user'
-        ? bound
-        : [{ kind: 'key', key: principal.id }, ...bound],
-    principal: { type: principal.type, id: principal.id },
-    trigger: null,
-    work: null,
-    actsFor: null,
-  };
-};
-
-/**
  * The authority a `run_as: agent` turn's builtin calls run under: the agent's
  * grant alone, pinned to the turn's project, in place of the work's grant and
  * caps. The work's principal, chain and work id carry on.
@@ -439,5 +436,26 @@ export const agentWorkAuthority = (args: {
     project: agent.projectPublicId,
     grant: { holder: 'agent', agent: agent.agentId, policy: agent.policy },
     caps: [],
+  };
+};
+
+/**
+ * A resource's grant alone, acting as the resource on `chain`'s behalf: its
+ * trigger, work id and the principal it acts for.
+ */
+export const resourceGrantAuthority = (args: {
+  carrier: ResourceGrantCarrier;
+  id: string;
+  projectPublicId: string;
+  chain?: WorkAuthority | null;
+}): WorkAuthority => {
+  return {
+    project: args.projectPublicId,
+    grant: { holder: 'resource', carrier: args.carrier, id: args.id },
+    caps: [],
+    principal: { type: RESOURCE_GRANT_PRINCIPALS[args.carrier], id: args.id },
+    trigger: args.chain?.trigger ?? null,
+    work: args.chain?.work ?? null,
+    actsFor: args.chain?.actsFor ?? null,
   };
 };

@@ -1,6 +1,7 @@
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
 import { principalFromAuthUser } from './principals';
+import type { ResourceGrantPrincipalType } from './resourceGrantCarriers';
 import type { ActingPrincipal } from './workAuthority';
 
 /**
@@ -8,7 +9,7 @@ import type { ActingPrincipal } from './workAuthority';
  * `caller` where the site holds its policies but not its id), what narrows it
  * (an `iam_token` bound, an `on_behalf_of` assertion's cap, a `generation`'s
  * execution identity), or a resource acting under its own `policy_ids`
- * (`agent`, `trigger`). `id` is `null` where the refusing site holds the policy
+ * (`agent`, `trigger`, or a `RESOURCE_GRANT_PRINCIPALS` type). `id` is `null` where the refusing site holds the policy
  * but not its owner's id.
  */
 export type DeniedPrincipal = {
@@ -20,7 +21,8 @@ export type DeniedPrincipal = {
     | 'on_behalf_of'
     | 'generation'
     | 'agent'
-    | 'trigger';
+    | 'trigger'
+    | ResourceGrantPrincipalType;
   id: string | null;
 };
 
@@ -44,6 +46,11 @@ const PRINCIPAL_LABELS: Record<DeniedPrincipal['type'], string> = {
   generation: 'generation',
   agent: 'agent',
   trigger: 'trigger',
+  eval: 'eval',
+  decider: 'decider',
+  ingestion_rule: 'ingestion rule',
+  memory_rule: 'memory rule',
+  playbook_version: 'playbook version',
 };
 
 const owner = (principal: DeniedPrincipal): string => {

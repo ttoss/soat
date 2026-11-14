@@ -32,7 +32,6 @@ import {
   resolveWriteProjectPublicId,
 } from './helpers';
 import { resolveListScope } from './listScope';
-import { playbookAuthorOf } from './playbookAccess';
 import { requireAllowed } from './resourceAccess';
 
 export const formationsRouter = new Router<Context>();
@@ -81,7 +80,7 @@ const formationActorOf = (
   return {
     userId: requireCallerUser(ctx, 'formations:CreateFormation').id,
     author: requestPrincipalFromCtx(ctx),
-    ...playbookAuthorOf(ctx),
+    isAllowed: ctx.authUser.isAllowed,
     getPolicies: ctx.authUser.getPolicies,
     iamToken: ctx.authUser.iamToken,
     onBehalfOfPrincipal: ctx.authUser.onBehalfOfPrincipal,

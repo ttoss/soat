@@ -2,7 +2,7 @@ import type { IncomingHttpHeaders, Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { createAllowAllPolicy } from '../../fixtures/bootstrap';
+import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -16,6 +16,7 @@ describe('Shared tools', () => {
   let toolHits: IncomingHttpHeaders[];
   let providerBodies: Array<Record<string, unknown>>;
   let adminToken: string;
+  let grant: string[];
   let publisherId: string;
   let granteeId: string;
   let granteeKey: string;
@@ -142,6 +143,7 @@ describe('Shared tools', () => {
       .post('/api/v1/users/bootstrap')
       .send({ username: 'sharedtooladmin', password: 'supersecret' });
     adminToken = await loginAs('sharedtooladmin', 'supersecret');
+    grant = await testGrant({ token: adminToken });
 
     const publisher = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
@@ -302,6 +304,7 @@ describe('Shared tools', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: granteeId,
           content_type_glob: 'image/png',
           tool_id: sharedToolId,
@@ -314,6 +317,7 @@ describe('Shared tools', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/deciders')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: granteeId,
           name: 'shared-backend',
           tool_id: sharedToolId,
@@ -476,6 +480,7 @@ describe('Shared tools', () => {
               Rule: {
                 type: 'ingestion_rule',
                 properties: {
+                  policy_ids: grant,
                   content_type_glob: `audio/x-${name}`,
                   tool_id: toolId,
                 },
@@ -511,6 +516,7 @@ describe('Shared tools', () => {
       const rule = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: granteeId,
           content_type_glob: 'audio/x-shared-gone',
           tool_id: gone.toolId,

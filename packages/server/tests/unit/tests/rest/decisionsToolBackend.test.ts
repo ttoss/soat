@@ -4,8 +4,10 @@ import type { AddressInfo } from 'node:net';
 import { db } from 'src/db';
 
 import {
+  createProjectPolicy,
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import {
   createQuotaRow,
@@ -162,6 +164,7 @@ describe('Decisions — tool backend', () => {
 
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let agentId: string;
   let httpToolId: string;
@@ -236,6 +239,7 @@ describe('Decisions — tool backend', () => {
     return authenticatedTestClient(userToken)
       .post('/api/v1/deciders')
       .send({
+        policy_ids: [userPolicyId],
         project_id: projectId,
         name: unique('triage'),
         questions: QUESTIONS,
@@ -276,6 +280,7 @@ describe('Decisions — tool backend', () => {
     });
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
 
     const providerRes = await authenticatedTestClient(adminToken)
@@ -761,6 +766,25 @@ describe('Decisions — tool backend', () => {
       expect(res.body.error.code).toBe('TOOL_HTTP_ERROR');
     });
 
+    test('a tool the decider grant does not allow is never called', async () => {
+      const grantId = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['deciders:GetDecider'],
+      });
+      const decider = await createDecider({
+        tool_id: await createHttpTool('/ungranted'),
+        policy_ids: [grantId],
+      });
+
+      const res = await decide({ decider });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ACTION_NOT_HELD');
+      expect(res.body.error.meta.action).toBe('tools:CallTool');
+      expect(received['/ungranted']).toBeUndefined();
+    });
+
     test('an unreachable tool fails the decision', async () => {
       const closed = createServer();
       await new Promise<void>((resolve) => {
@@ -830,6 +854,7 @@ describe('Decisions — tool backend', () => {
       const deciderRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/deciders')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: fresh.projectPublicId,
           name: 'quota-triage',
           tool_id: toolRes.body.id,

@@ -325,15 +325,20 @@ The `get-actor-tags` step runs as whoever requested the decision, so it reads on
 
 ## Step 5 — Create the decider
 
-The decider holds one `choice` [question](/docs/modules/deciders#questions) and names the pipeline as its backend with `tool_id`.
+The decider holds one `choice` [question](/docs/modules/deciders#questions) and names the pipeline as its backend with `tool_id`. Every decision runs the pipeline under the decider's `policy_ids`, capped by whoever requests it ([Deciders — Decision authority](/docs/modules/deciders#decision-authority)): the policy below allows calling the pipeline and reading actor tags, nothing else.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+POLICY_ID=$(soat create-policy \
+  --name "refund-route-backend" \
+  --document '{"statement":[{"effect":"Allow","action":["tools:CallTool","actors:GetActor"]}]}' | jq -r '.id')
+
 DECIDER_ID=$(soat create-decider \
   --project-id "$PROJECT_ID" \
   --name refund-route \
+  --policy-ids '["'"$POLICY_ID"'"]' \
   --tool-id "$RULES_ID" \
   --questions '[
     {
@@ -353,10 +358,20 @@ echo "Decider: $DECIDER_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: policy } = await adminSoat.policies.createPolicy({
+  body: {
+    name: 'refund-route-backend',
+    document: {
+      statement: [{ effect: 'Allow', action: ['tools:CallTool', 'actors:GetActor'] }],
+    },
+  },
+});
+
 const { data: decider } = await adminSoat.deciders.createDecider({
   body: {
     project_id: PROJECT_ID,
     name: 'refund-route',
+    policy_ids: [policy!.id],
     tool_id: RULES_ID,
     questions: [
       {
@@ -378,12 +393,18 @@ const DECIDER_ID = decider!.id;
 <TabItem value="curl" label="curl">
 
 ```bash
+POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"refund-route-backend","document":{"statement":[{"effect":"Allow","action":["tools:CallTool","actors:GetActor"]}]}}' | jq -r '.id')
+
 DECIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/deciders" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "'"$PROJECT_ID"'",
     "name": "refund-route",
+    "policy_ids": ["'"$POLICY_ID"'"],
     "tool_id": "'"$RULES_ID"'",
     "questions": [
       {

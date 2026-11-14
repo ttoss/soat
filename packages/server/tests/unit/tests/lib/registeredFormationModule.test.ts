@@ -37,7 +37,6 @@ beforeAll(async () => {
   actor = {
     userId: user!.id as number,
     author: { principalType: 'user', principalId: setup.userId },
-    principal: { principalType: 'user', principalId: setup.userId },
     isAllowed: async () => {
       return true;
     },

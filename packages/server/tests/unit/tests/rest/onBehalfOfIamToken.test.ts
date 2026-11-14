@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
-import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { signToken } from 'src/lib/signedTokens';
 import { parseWorkAuthority } from 'src/lib/workAuthority';
 
@@ -204,76 +203,6 @@ describe('On-Behalf-Of on an IAM token', () => {
       expect(both.status).toBe(200);
       expect(boundDenies.status).toBe(403);
       expect(assertionDenies.status).toBe(403);
-    });
-  });
-
-  describe('a playbook version the token writes', () => {
-    const PLAYBOOK_ACTIONS = ['playbooks:CreatePlaybook', 'tools:CallTool'];
-
-    test('runs its executor held to the bound and the assertion together', async () => {
-      const assertion = await assertionOf(projectKey);
-      const playbook = await authenticatedTestClient(
-        await tokenFor(PLAYBOOK_ACTIONS)
-      )
-        .post('/api/v1/playbooks')
-        .set(HEADER, assertion)
-        .send({
-          project_id: turn.projectId,
-          name: turn.unique('playbook'),
-          definition: {
-            nodes: [
-              {
-                id: 'call',
-                title: 'Call',
-                kind: 'execute',
-                inputs: [
-                  {
-                    name: 'go',
-                    schema: { type: 'boolean' },
-                    required: true,
-                    source: 'manual',
-                  },
-                ],
-                executor: { type: 'tool', id: toolId, operation_id: 'echo' },
-              },
-            ],
-          },
-        });
-      expect(playbook.status).toBe(201);
-      const created = await turn
-        .api()
-        .post(`/api/v1/playbooks/${playbook.body.id}/cases`)
-        .send({ subject: 'obo' });
-      expect(created.status).toBe(201);
-      const written = await turn
-        .api()
-        .post(`/api/v1/playbook-cases/${created.body.id}/inputs`)
-        .send({
-          inputs: [
-            {
-              node_id: 'call',
-              name: 'go',
-              value: true,
-              expected_revision: null,
-            },
-          ],
-        });
-      expect(written.status).toBe(200);
-      await flushPlaybookExecutions();
-
-      const executions = await turn
-        .api()
-        .get(`/api/v1/playbook-cases/${created.body.id}/executions`);
-      expect(executions.body.data[0].status).toBe('completed');
-      const version = await db.PlaybookVersion.findOne({
-        where: { principalId: projectKeyId },
-      });
-      expect(version!.principalBound).toMatchObject({
-        all: [
-          { policy: expect.any(Object) },
-          { policy_sets: expect.any(Array) },
-        ],
-      });
     });
   });
 

@@ -6,13 +6,11 @@ import {
   updatePlaybook,
 } from '../playbooks';
 import {
+  toNullableArray,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
-
-// The version a deploy writes runs as the deploying credential, not its
-// owner's account, so a key's own boundary bounds what the playbook starts.
 
 export const playbooksFormationModule = defineFormationModule({
   resourceType: 'playbook',
@@ -29,8 +27,9 @@ export const playbooksFormationModule = defineFormationModule({
       name: properties.name,
       description: toNullableString(properties.description),
       definition: properties.definition,
+      policyIds: toNullableArray<string>(properties.policy_ids),
       createdBy: actor.author,
-      author: actor,
+      writer: actor,
     });
   },
 
@@ -40,8 +39,9 @@ export const playbooksFormationModule = defineFormationModule({
       name: toOptionalString(properties.name),
       description: toNullableString(properties.description),
       definition: properties.definition,
+      policyIds: toNullableArray<string>(properties.policy_ids),
       createdBy: actor.author,
-      author: actor,
+      writer: actor,
     });
   },
 

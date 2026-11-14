@@ -21,7 +21,7 @@ describe('a body with a presence-only union keeps a flag per field', () => {
     expect(flags).not.toContain('body:body-root');
   });
 
-  test('content_type_glob stays required, tool_id and agent_id optional', () => {
+  test('content_type_glob and policy_ids stay required, tool_id and agent_id optional', () => {
     const required = routes['create-ingestion-rule'].flags
       .filter((flag) => {
         return flag.required;
@@ -30,6 +30,6 @@ describe('a body with a presence-only union keeps a flag per field', () => {
         return flag.name;
       });
 
-    expect(required).toEqual(['content_type_glob']);
+    expect(required).toEqual(['policy_ids', 'content_type_glob']);
   });
 });

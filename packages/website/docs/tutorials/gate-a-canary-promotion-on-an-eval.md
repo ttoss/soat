@@ -108,13 +108,13 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 2 — Ship the agent and its suite in one template
 
-Datasets, dataset items, and evals are [formation](/docs/modules/formations) resource types, so the suite lives in the agent's template. Test cases are their own resource, not a list inside the dataset (same shape as [Memories](/docs/modules/memories)).
+Datasets, dataset items, and evals are [formation](/docs/modules/formations) resource types, so the suite lives in the agent's template. Test cases are their own resource, not a list inside the dataset (same shape as [Memories](/docs/modules/memories)). A run starts the agent under the eval's `policy_ids` ([Evaluations — Run authority](/docs/modules/evaluations#run-authority)), so the template declares that policy beside it.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-cat > release-notes-formation.json << 'EOF'
+cat > release-notes-formation.json << EOF
 {
   "resources": {
     "provider": {
@@ -156,10 +156,26 @@ cat > release-notes-formation.json << 'EOF'
         "expected_output": "Added passkey support to login."
       }
     },
+    "runGrant": {
+      "type": "policy",
+      "properties": {
+        "name": "release-notes-gate-run",
+        "document": {
+          "statement": [
+            {
+              "effect": "Allow",
+              "action": ["agents:CreateAgentGeneration"],
+              "resource": ["srn:$PROJECT_ID:*:*"]
+            }
+          ]
+        }
+      }
+    },
     "gate": {
       "type": "eval",
       "properties": {
         "name": "release-notes-gate",
+        "policy_ids": [{ "ref": "runGrant" }],
         "agent_id": { "ref": "agent" },
         "dataset_id": { "ref": "suite" },
         "scorers": [
@@ -241,10 +257,26 @@ const template = {
         expected_output: 'Added passkey support to login.',
       },
     },
+    runGrant: {
+      type: 'policy',
+      properties: {
+        name: 'release-notes-gate-run',
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['agents:CreateAgentGeneration'],
+              resource: [`srn:${project.id}:*:*`],
+            },
+          ],
+        },
+      },
+    },
     gate: {
       type: 'eval',
       properties: {
         name: 'release-notes-gate',
+        policy_ids: [{ ref: 'runGrant' }],
         agent_id: { ref: 'agent' },
         dataset_id: { ref: 'suite' },
         scorers: [
@@ -277,7 +309,7 @@ const EVAL_ID = stack.outputs?.eval_id as string;
 <TabItem value="curl" label="curl">
 
 ```bash
-cat > release-notes-formation.json << 'EOF'
+cat > release-notes-formation.json << EOF
 {
   "resources": {
     "provider": { "type": "ai_provider", "properties": { "name": "Local Ollama", "provider": "ollama", "default_model": "qwen2.5:0.5b" } },
@@ -285,7 +317,8 @@ cat > release-notes-formation.json << 'EOF'
     "suite": { "type": "dataset", "properties": { "name": "release-notes-suite", "description": "Cases every release must still pass" } },
     "emptyFileCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "We fixed a crash when uploading a 0-byte file." }], "expected_output": "Fixed a crash when uploading an empty file." } },
     "passkeyCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "Login now supports passkeys." }], "expected_output": "Added passkey support to login." } },
-    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 1 } }
+    "runGrant": { "type": "policy", "properties": { "name": "release-notes-gate-run", "document": { "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"], "resource": ["srn:$PROJECT_ID:*:*"] }] } } },
+    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "policy_ids": [{ "ref": "runGrant" }], "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 1 } }
   },
   "outputs": { "agent_id": { "ref": "agent" }, "eval_id": { "ref": "gate" }, "dataset_id": { "ref": "suite" } }
 }

@@ -114,8 +114,13 @@ paths:
               required:
                 - memory_store_id
                 - on
+                - policy_ids
               additionalProperties: false
               properties:
+                policy_ids:
+                  description: The policies every handler the rule starts acts under.
+                  allOf:
+                    - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
                 memory_store_id:
                   x-soat-ref: memory-stores
                   type: string
@@ -298,6 +303,10 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                policy_ids:
+                  description: Replaces the policies every handler the rule starts acts under.
+                  allOf:
+                    - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
                 'on':
                   $ref: '#/components/schemas/MemoryRuleEvent'
                 source_agent_ids:
@@ -439,6 +448,16 @@ components:
     MemoryRule:
       type: object
       properties:
+        policy_ids:
+          description: >-
+            The policies every handler the rule starts acts under.
+            Empty for one written without any, which does not run
+            until a write gives it one.
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6B']
         id:
           type: string
           example: mrule_V1StGXR8Z5jdHi6B
