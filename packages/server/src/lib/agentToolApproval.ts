@@ -1,5 +1,6 @@
 import { isPlainObject } from './plainObject';
 import { stableDigest } from './stableDigest';
+import type { ToolCallRunsAs } from './toolCallRunsAs';
 
 // Used solely by the guardrail interceptor when a class-C guardrail files an
 // approval — guardrails are the single tool-call gating mechanism.
@@ -123,7 +124,8 @@ export const isNativeProposal = (toolId: string): boolean => {
 /**
  * The dedup key for a tool-call proposal: while a matching item is `pending`, a
  * re-proposal returns the existing item instead of filing a second (§3 Phase 2).
- * Keyed by project, proposing agent, tool, action, and the resolved arguments.
+ * Keyed by project, proposing agent, tool, action, the resolved arguments and
+ * whom the call runs as: resolution runs one item as one identity.
  */
 export const computeToolCallDedupKey = (args: {
   projectId: number;
@@ -131,6 +133,7 @@ export const computeToolCallDedupKey = (args: {
   toolId: string;
   action: string;
   arguments: Record<string, unknown>;
+  runsAs: ToolCallRunsAs;
 }): string => {
   return stableDigest({
     projectId: args.projectId,
@@ -138,5 +141,6 @@ export const computeToolCallDedupKey = (args: {
     toolId: args.toolId,
     action: args.action,
     arguments: args.arguments,
+    runsAs: args.runsAs,
   });
 };

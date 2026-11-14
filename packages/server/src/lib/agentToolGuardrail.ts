@@ -37,6 +37,7 @@ import {
   persistGuardrailEvaluations,
 } from './guardrailEvaluationRecord';
 import { isPlainObject } from './plainObject';
+import { toolCallRunsAs } from './toolCallRunsAs';
 import { gatePresetsOf, mergePresetParameters } from './toolPresetParameters';
 import type { WorkAuthority } from './workAuthority';
 
@@ -306,6 +307,7 @@ const routeToApproval = async (args: {
       toolId: proposalToolId,
       action: gate.action,
       arguments: args.effectiveArgs,
+      runsAs: await toolCallRunsAs(gate.context.generationId),
     }),
     generationId: gate.context.generationId,
     agentId: gate.context.agentId,
