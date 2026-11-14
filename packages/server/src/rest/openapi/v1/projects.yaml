@@ -175,7 +175,8 @@ paths:
       description: >-
         Updates a project's name, its attached guardrails (`guardrail_ids` —
         the project-scope baseline governing every tool call by every agent in
-        the project), its orchestration concurrency limit
+        the project), the policies capping every agent turn in it
+        (`agent_policy_ids`), its orchestration concurrency limit
         (`max_concurrent_runs`), its continuation-chain ceiling
         (`max_chain_generations`), its orchestration nesting bound
         (`max_orchestration_run_depth`), its inherited model route
@@ -186,7 +187,8 @@ paths:
         (`trace_content_mode`). At least one field is required. Requires
         projects:UpdateProject on the project, which a project-scoped policy
         can grant. Detaching a guardrail (removing an id) additionally requires
-        guardrails:DetachGuardrail.
+        guardrails:DetachGuardrail. The caller must hold every grant
+        `agent_policy_ids` carries, else `403 POLICY_GRANT_NOT_HELD`.
       operationId: updateProject
       x-iam-action: projects:UpdateProject
       parameters:
@@ -215,6 +217,19 @@ paths:
                   items:
                     type: string
                   description: Guardrails attached at the project scope.
+                agent_policy_ids:
+                  x-soat-ref: policies
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  example: ['pol_V1StGXR8Z5jdHi6B']
+                  description: >-
+                    Policies capping every turn of every agent the project
+                    owns, its stored `knowledge_config` retrieval included.
+                    `null` or `[]` adds no cap. The caller must hold every
+                    grant they carry, else `403 POLICY_GRANT_NOT_HELD`. See
+                    [Project agent cap](/docs/modules/projects#project-agent-cap).
                 max_concurrent_runs:
                   type: integer
                   nullable: true
@@ -715,6 +730,17 @@ components:
             Guardrails attached at the project scope — the baseline governing
             every tool call by every agent in the project.
           example: []
+        agent_policy_ids:
+          x-soat-ref: policies
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Policies capping every turn of every agent the project owns, on
+            every path the agent's own `policy_ids` cap and on its stored
+            `knowledge_config` retrieval. `null` adds no cap.
+          example: null
         max_concurrent_runs:
           type: integer
           nullable: true

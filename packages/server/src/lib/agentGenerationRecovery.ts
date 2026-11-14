@@ -7,6 +7,7 @@ import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
 import {
   type ClientToolResult,
   type GenerationResult,
+  ownerProjectId,
   type PendingGeneration,
   toAgentConfig,
   type TypedAgent,
@@ -312,6 +313,7 @@ export const recoverPendingFromDb = async (args: {
       policyIds: typedAgent.policyIds,
       actorId: pendingState.toolContext?.actor_id,
       projectPublicId: typedAgent.project.publicId,
+      ownerProjectId: ownerProjectId(typedAgent),
     }),
     traceId: gen.trace.publicId,
     pendingState,

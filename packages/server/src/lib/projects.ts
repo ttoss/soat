@@ -22,6 +22,7 @@ import {
   validateTraceContentMode,
   validateTraceContentRetentionDays,
 } from './traceContentPolicy';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const log = createDebug('soat:projects');
 
@@ -30,6 +31,7 @@ export const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     id: project.publicId,
     name: project.name,
     guardrail_ids: project.guardrailIds,
+    agent_policy_ids: project.agentPolicyIds,
     default_model_route_id: project.defaultModelRouteId,
     max_concurrent_runs: project.maxConcurrentRuns,
     max_chain_generations: project.maxChainGenerations,
@@ -245,12 +247,30 @@ const assertDefaultModelRouteWritable = async (args: {
   });
 };
 
+/**
+ * `agent_policy_ids` caps every agent turn in the project, so its writer holds
+ * every grant it names, as for an agent's `policy_ids`.
+ */
+const assertAgentPolicyIdsWritable = async (args: {
+  projectId: number;
+  agentPolicyIds: string[] | null;
+  writer: Writer;
+}): Promise<void> => {
+  await assertWriterHolds({
+    carrier: 'projects',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: { policyIds: args.agentPolicyIds },
+  });
+};
+
 /** Every column a project update may set. Listed once so "provided means
  * write it, absent means leave it" is one rule rather than one branch per
  * field. */
 const PROJECT_UPDATABLE_FIELDS = [
   'name',
   'guardrailIds',
+  'agentPolicyIds',
   'defaultModelRouteId',
   'maxConcurrentRuns',
   'maxChainGenerations',
@@ -301,6 +321,8 @@ export const updateProject = async (args: {
   id: string;
   name?: string;
   guardrailIds?: string[] | null;
+  agentPolicyIds?: string[] | null;
+  writer: Writer;
   defaultModelRouteId?: string | null;
   maxConcurrentRuns?: number | null;
   maxChainGenerations?: number | null;
@@ -319,6 +341,14 @@ export const updateProject = async (args: {
     await assertGuardrailsExist({
       guardrailIds: args.guardrailIds,
       projectId: (project as unknown as { id: number }).id,
+    });
+  }
+
+  if (args.agentPolicyIds !== undefined) {
+    await assertAgentPolicyIdsWritable({
+      projectId: project.id as number,
+      agentPolicyIds: args.agentPolicyIds,
+      writer: args.writer,
     });
   }
 

@@ -1,11 +1,6 @@
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
-import {
-  evaluatePolicies,
-  type PolicyDocument,
-  validatePolicyDocument,
-} from 'src/lib/iam';
 
 import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
@@ -151,39 +146,6 @@ export const resolveBodyParamInterpolations = (args: {
 export { assertValidToolContext, buildContextHeaderName, buildContextHeaders };
 
 // ── IAM Boundary Check ────────────────────────────────────────────────────
-
-/**
- * Evaluates an agent's `policy_ids` for one SOAT action.
- *
- * `resource` is the SRN the call acts on and `context` the condition inputs for
- * it (`buildResourceTagContext`), so a boundary can scope a grant to a single
- * resource the way a human's policy does on the REST path. Both fall
- * back to the resource-less shape — `'*'` and no condition inputs — which is
- * what a list or a create-in-project means, and all a caller that cannot name
- * its resource may claim.
- */
-export const isSoatActionAllowedByAgentPolicy = (args: {
-  agentPolicy: unknown;
-  iamAction: string;
-  resource?: string;
-  context?: Record<string, string>;
-}): boolean => {
-  if (!args.agentPolicy) {
-    return true;
-  }
-
-  const validation = validatePolicyDocument(args.agentPolicy);
-  if (!validation.valid) {
-    return false;
-  }
-
-  return evaluatePolicies({
-    policies: [args.agentPolicy as PolicyDocument],
-    action: args.iamAction,
-    resource: args.resource ?? '*',
-    context: args.context,
-  });
-};
 
 // ── Per-type Tool Builders ────────────────────────────────────────────────
 
@@ -1142,7 +1104,7 @@ const resolveToolByType = async (
     attribution: args.attribution,
     sender: {
       authority: args.authority,
-      agentPolicy: args.agentAuthority?.policy,
+      agentAuthority: args.agentAuthority,
     },
   };
 
@@ -1202,7 +1164,6 @@ const resolveToolByType = async (
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
         buildContextHeaders,
-        isSoatActionAllowedByAgentPolicy,
         logToolCallingError,
       });
     default: {

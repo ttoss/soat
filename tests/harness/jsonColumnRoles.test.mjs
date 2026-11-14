@@ -194,6 +194,7 @@ const ROLES = {
     'MemoryRule.policyIds',
     'MemoryStore.tags',
     'Playbook.policyIds',
+    'Project.agentPolicyIds',
     'Session.tags',
     'Task.metadata',
     'Trigger.policyIds',
