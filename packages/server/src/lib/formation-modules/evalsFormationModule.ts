@@ -1,5 +1,6 @@
 import { createEval, deleteEval, getEval, updateEval } from '../evaluations';
 import {
+  toNullableArray,
   toNullableNumber,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -24,6 +25,7 @@ export const evalsFormationModule = defineFormationModule({
       scorers: properties.scorers,
       passThreshold: properties.pass_threshold,
       groupBy: properties.group_by,
+      policyIds: toNullableArray<string>(properties.policy_ids),
     });
   },
 
@@ -42,6 +44,7 @@ export const evalsFormationModule = defineFormationModule({
           ? undefined
           : toNullableNumber(properties.pass_threshold),
       groupBy: properties.group_by,
+      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
     });
   },
 

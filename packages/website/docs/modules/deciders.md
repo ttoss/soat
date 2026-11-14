@@ -41,6 +41,7 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 | `tool_id`     | string  | The [tool](#the-tool-backend) that answers, or null                         |
 | `version`     | integer | The question set's version; see [Versions](#versions)                       |
 | `questions`   | array   | 1 to 20 [questions](#questions), in the order the model is shown them       |
+| `policy_ids`  | string[] | Required on create. The policies every decision acts under; see [Decision authority](#decision-authority) |
 | `created_at`  | string  | ISO 8601 creation timestamp                                                 |
 | `updated_at`  | string  | ISO 8601 last-updated timestamp                                             |
 
@@ -383,6 +384,12 @@ The output names each answer field, which is what leaves the engine's own extras
 `version` starts at 1 and increments on every write that changes `questions`; each version's question set is archived. A rename, a new description, a new backend or a rewrite of the questions the decider already holds leaves it alone. Because every decision names its `decider_version`, rewording a level never reinterprets an earlier answer: read the questions a decision was answered under with [`GET /api/v1/deciders/{decider_id}/versions/{version}`](/docs/api/deciders/get-decider-version).
 
 [`PATCH /api/v1/deciders/{decider_id}`](/docs/api/deciders/update-decider) takes `expected_version` (or `If-Match`) and answers `409 VERSION_CONFLICT` on a stale one. [`POST /api/v1/deciders/{decider_id}/versions/{version}/restore`](/docs/api/deciders/restore-decider-version) writes an archived question set back as a new version.
+
+### Decision authority
+
+A decision's backend runs under the decider's `policy_ids`, capped by the caller who requests it: a decision whose backend the decider's grant may not start (`agents:CreateAgentGeneration` or `tools:CallTool`) is refused `403 ACTION_NOT_HELD` before it is recorded, even when the caller may start it. The caller needs only `deciders:CreateDecision`; every nested action stays capped by both. `policy_ids` are not part of the question set: changing them leaves `version` alone, and the next decision reads them. A decider with empty `policy_ids` is allowed nothing, so its decisions fail until a write gives it some. An [inline decision](#inline-questions) has no decider and runs as its caller.
+
+Every create, update, restore and formation apply needs the backend's start action (`agents:CreateAgentGeneration` or `tools:CallTool`): the [writer rule](./iam.md#the-writer-rule). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
 
 ### Requesting a decision
 

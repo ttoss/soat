@@ -6,7 +6,7 @@ import { redactEvalResultOutputs } from './evaluationPurge';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
-import type { PrincipalType } from './principals';
+import type { ActingPrincipalType } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import type { SoatEventTypeFor, SoatResourceType } from './soatEvents';
@@ -43,10 +43,7 @@ const traces = makeResourceAccessor<InstanceType<(typeof db)['Trace']>>({
  * shape `Generation.startedByPrincipal*` already uses.
  */
 export type RedactionPrincipal = {
-  principalType: Extract<
-    PrincipalType,
-    'user' | 'api_key' | 'trigger' | 'system'
-  >;
+  principalType: ActingPrincipalType | 'system';
   principalId: string;
 };
 

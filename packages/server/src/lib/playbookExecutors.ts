@@ -2,15 +2,16 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { createDecision } from './decisions';
 import { applyInputMapping } from './jsonLogicMapping';
 import { startOrchestrationRun } from './orchestrationEngine';
 import type { MappedOrchestrationRun } from './orchestrations';
 import { isPlainObject } from './plainObject';
-import type { PlaybookRunAs } from './playbookAuthor';
 import type { JsonValue, PlaybookExecutor } from './playbookDefinition';
 import { createTask } from './tasks';
 import { NON_SUCCESS_TERMINAL_STATUSES, runDispatch } from './tasksDispatch';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:playbookExecutions');
 
@@ -22,6 +23,12 @@ export type ExecutorOutcome =
   | { kind: 'settled'; output: JsonValue; runId: string | null }
   | { kind: 'pending'; runId: string };
 
+/** The authority a case's executors run under, and its checks. */
+export type ExecutorRunAs = {
+  authority: WorkAuthority;
+  isAllowed: IsAllowedFn;
+};
+
 type StartArgs = {
   executor: PlaybookExecutor;
   /** The node's input values, the context its `input` mapping reads. */
@@ -31,7 +38,7 @@ type StartArgs = {
   projectId: number;
   executionPublicId: string;
   title: string;
-  runAs: PlaybookRunAs;
+  runAs: ExecutorRunAs;
 };
 
 const failed = (message: string, meta?: Record<string, unknown>) => {

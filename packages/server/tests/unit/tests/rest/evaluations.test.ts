@@ -12,6 +12,7 @@ import {
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import {
+  createProjectPolicy,
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
@@ -30,6 +31,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 describe('Evaluations', () => {
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let noPermToken: string;
   let projectId: string;
   let otherProjectId: string;
@@ -73,7 +75,7 @@ describe('Evaluations', () => {
   const createEval = async (body: Record<string, unknown>) => {
     const res = await asUser()
       .post('/api/v1/evals')
-      .send({ project_id: projectId, ...body });
+      .send({ policy_ids: [userPolicyId], project_id: projectId, ...body });
     expect(res.status).toBe(201);
     return res.body;
   };
@@ -128,6 +130,7 @@ describe('Evaluations', () => {
 
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId as string;
@@ -536,6 +539,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'cross-project-agent',
           agent_id: otherProjectAgentId,
@@ -551,6 +555,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'cross-project-dataset',
           agent_id: agentId,
@@ -566,6 +571,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'bad-scorer',
           agent_id: agentId,
@@ -581,6 +587,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'embedding-no-threshold-eval',
           agent_id: agentId,
@@ -596,6 +603,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'judge-no-threshold-eval',
           agent_id: agentId,
@@ -611,6 +619,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'schemaless-agent-eval',
           agent_id: agentId,
@@ -628,6 +637,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'bad-threshold',
           agent_id: agentId,
@@ -654,6 +664,7 @@ describe('Evaluations', () => {
       const res = await authenticatedTestClient(noPermToken)
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'forbidden',
           agent_id: agentId,
@@ -667,6 +678,7 @@ describe('Evaluations', () => {
       const res = await authenticatedTestClient(projectKey)
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           name: 'implicit-project-eval',
           agent_id: agentId,
           dataset_id: datasetId,
@@ -681,6 +693,7 @@ describe('Evaluations', () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name: 'numeric-agent',
           agent_id: 42,
@@ -3188,6 +3201,7 @@ describe('Evaluations', () => {
         const res = await asUser()
           .post('/api/v1/evals')
           .send({
+            policy_ids: [userPolicyId],
             project_id: projectId,
             name: 'tool-scorer-missing-tool',
             agent_id: agentId,
@@ -3216,6 +3230,7 @@ describe('Evaluations', () => {
         const res = await asUser()
           .post('/api/v1/evals')
           .send({
+            policy_ids: [userPolicyId],
             project_id: projectId,
             name: 'tool-scorer-foreign-tool',
             agent_id: agentId,
@@ -3232,6 +3247,7 @@ describe('Evaluations', () => {
         const res = await asUser()
           .post('/api/v1/evals')
           .send({
+            policy_ids: [userPolicyId],
             project_id: projectId,
             name: 'tool-scorer-client-tool',
             agent_id: agentId,
@@ -3246,6 +3262,7 @@ describe('Evaluations', () => {
         const res = await asUser()
           .post('/api/v1/evals')
           .send({
+            policy_ids: [userPolicyId],
             project_id: projectId,
             name: 'tool-scorer-soat-no-action',
             agent_id: agentId,
@@ -3260,6 +3277,7 @@ describe('Evaluations', () => {
         const res = await asUser()
           .post('/api/v1/evals')
           .send({
+            policy_ids: [userPolicyId],
             project_id: projectId,
             name: 'tool-scorer-soat-preset-action',
             agent_id: agentId,
@@ -3464,6 +3482,34 @@ describe('Evaluations', () => {
         expect(res.status).toBe(201);
         expect(res.body.status).toBe('completed');
         expect(res.body.errored_count).toBe(1);
+      });
+
+      test('refuses a run whose eval grant does not allow its scorer tool', async () => {
+        const grantId = await createProjectPolicy({
+          adminToken,
+          projectId,
+          actions: ['agents:CreateAgentGeneration'],
+        });
+        const res = await asUser()
+          .post('/api/v1/evals')
+          .send({
+            policy_ids: [grantId],
+            project_id: projectId,
+            name: 'tool-scorer-ungranted',
+            agent_id: agentId,
+            dataset_id: datasetId,
+            scorers: [{ type: 'tool', name: 'tone', tool_id: httpToolId }],
+          });
+        expect(res.status).toBe(201);
+
+        const run = await asUser()
+          .post(`/api/v1/evals/${res.body.id}/runs`)
+          .send({ wait: true });
+
+        expect(run.status).toBe(403);
+        expect(run.body.error.code).toBe('ACTION_NOT_HELD');
+        expect(run.body.error.meta.action).toBe('tools:CallTool');
+        expect(scorerRequests).toHaveLength(0);
       });
 
       test('a pipeline tool can be the scorer, deriving its verdict from the context', async () => {

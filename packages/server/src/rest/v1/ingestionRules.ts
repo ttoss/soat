@@ -45,6 +45,7 @@ type CreateBody = {
   chunk_size?: number | null;
   chunk_overlap?: number | null;
   metadata?: unknown;
+  policy_ids?: string[];
 };
 
 type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
@@ -109,6 +110,7 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
     metadata: parseMetadataBag(body.metadata),
+    policyIds: body.policy_ids,
     writer: ctx.authUser,
   });
 
@@ -147,6 +149,7 @@ ingestionRulesRouter.patch(
       chunkSize: body.chunk_size,
       chunkOverlap: body.chunk_overlap,
       metadata: readNullableMetadataBag(body.metadata),
+      policyIds: body.policy_ids,
       writer: ctx.authUser,
     });
   }

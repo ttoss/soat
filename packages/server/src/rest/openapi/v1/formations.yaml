@@ -1281,7 +1281,18 @@ components:
         - agent_id
         - dataset_id
         - scorers
+        - policy_ids
       properties:
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          description: >-
+            The policies every run of the eval acts under. Use { "ref": "LogicalId" } for a policy in the
+            template. The deploying caller must hold every grant they carry
+            inside the project, else the resource fails with
+            `POLICY_GRANT_NOT_HELD`.
         name:
           type: string
           description: Eval name, unique within the project
@@ -1997,7 +2008,18 @@ components:
       additionalProperties: false
       required:
         - content_type_glob
+        - policy_ids
       properties:
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          description: >-
+            The policies every conversion the rule starts acts under. Use { "ref": "LogicalId" } for a policy in the
+            template. The deploying caller must hold every grant they carry
+            inside the project, else the resource fails with
+            `POLICY_GRANT_NOT_HELD`.
         content_type_glob:
           type: string
           description: MIME type glob matched against a file's content_type (e.g. image/*, audio/mpeg, application/pdf)
@@ -2058,7 +2080,18 @@ components:
       required:
         - memory_store_id
         - on
+        - policy_ids
       properties:
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          description: >-
+            The policies every handler the rule starts acts under. Use { "ref": "LogicalId" } for a policy in the
+            template. The deploying caller must hold every grant they carry
+            inside the project, else the resource fails with
+            `POLICY_GRANT_NOT_HELD`.
         memory_store_id:
           x-soat-ref: memory-stores
           type: string
@@ -2402,7 +2435,18 @@ components:
       required:
         - name
         - questions
+        - policy_ids
       properties:
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          description: >-
+            The policies every decision's backend acts under. Use { "ref": "LogicalId" } for a policy in the
+            template. The deploying caller must hold every grant they carry
+            inside the project, else the resource fails with
+            `POLICY_GRANT_NOT_HELD`.
         name:
           type: string
           description: Human-readable name, unique per project
@@ -2433,16 +2477,18 @@ components:
         Creates a playbook — a versioned template of nodes that cases are
         filled against. An executor's `id` and a transformation's `tool` accept
         a `{ "ref": … }` to a resource in the same template. The version a
-        deploy writes runs as the credential that deployed it, checked as a
-        direct write is: `playbooks:CreatePlaybook` plus the start action of
-        every executor it names. Only a change to `definition` archives a new
-        version; a playbook with cases is not deleted. Mirrors the playbooks
-        REST contract.
+        deploy writes runs under its `policy_ids`, checked as a direct write
+        is: `playbooks:CreatePlaybook` plus the start action of
+        every executor it names, holding every grant of its `policy_ids`. Only
+        a change to `definition` or `policy_ids` archives a new version; a
+        playbook with cases is not deleted. Mirrors the playbooks REST
+        contract.
       type: object
       additionalProperties: false
       required:
         - name
         - definition
+        - policy_ids
       properties:
         name:
           type: string
@@ -2455,6 +2501,16 @@ components:
           description: The nodes and how their inputs are sourced
           allOf:
             - $ref: './playbooks.yaml#/components/schemas/PlaybookDefinition'
+        policy_ids:
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          description: >-
+            The policies every execution of the version runs under. Use { "ref":
+            "LogicalId" } for a policy in the template. The deploying caller
+            must hold every grant they carry inside the project, else the
+            resource fails with `POLICY_GRANT_NOT_HELD`.
 
     ResourceDeclaration:
       type: object

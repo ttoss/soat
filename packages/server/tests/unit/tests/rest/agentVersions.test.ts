@@ -15,6 +15,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 describe('Agent versions', () => {
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let otherProjectId: string;
   let aiProviderId: string;
@@ -62,6 +63,7 @@ describe('Agent versions', () => {
 
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId as string;
     noPermToken = setup.noPermToken as string;
@@ -991,6 +993,7 @@ describe('Agent versions', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/evals')
         .send({
+          policy_ids: [userPolicyId],
           project_id: projectId,
           name,
           agent_id: targetAgentId,

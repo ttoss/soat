@@ -2,7 +2,6 @@ import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { SenderCredential } from './assertionSender';
 import type { DeniedPrincipal } from './authorizationDenial';
-import type { AuthorPrincipal } from './playbookAuthor';
 import type { RequestPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
@@ -95,8 +94,7 @@ export type FormationResourceContext = {
  * `userId` is the account it acts for (a key acts for its owner): an `api_key`
  * mints under it, so the key can never exceed whoever deployed it.
  * `author` is who a config version names: the key itself when a key deploys.
- * `principal` and `isAllowed` are the credential a `playbook` version runs as,
- * so a deploying key's own boundary bounds what the playbook may start.
+ * `isAllowed` is the deploying credential the writer rule holds a write to.
  * Its sender credential (policy sets, principal) is what a registered type's
  * handler receives sealed in each write's assertion.
  *
@@ -109,7 +107,6 @@ export type FormationActor = {
   userId: number;
   /** Who a version the deploy writes names as its author. */
   author: RequestPrincipal;
-  principal: AuthorPrincipal | null;
   isAllowed: IsAllowedFn;
   /**
    * The deploying key's `policy_ids` (`undefined` when it carries none), so an

@@ -78,6 +78,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `scorers` | array | Scorer configs; see [Scorers](#scorers) |
 | `pass_threshold` | number | 0–1, or `null` to report without gating; see [Pass semantics](#pass-semantics) |
 | `group_by` | string | A key of the items' `metadata` a run rolls its scores up by, or `null`; see [Grouped aggregates](#grouped-aggregates) |
+| `policy_ids` | string[] | Required on create. The policies every run acts under; see [Run authority](#run-authority) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 An `agent_id` or `dataset_id` naming a resource in another project is rejected with `400`.
@@ -132,7 +133,7 @@ The engine's guarantees hold identically for built-in and custom scorers.
 
 ### Who may write an eval
 
-An eval starts its agent, and each `tool` and `decider` scorer, on every run. Every create, update and formation apply therefore needs `agents:CreateAgentGeneration` on the agent, `tools:CallTool` on each scorer tool and `deciders:CreateDecision` on each scorer decider, even when the write changes none of them: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+An eval starts its agent, and each `tool` and `decider` scorer, on every run. Every create, update and formation apply therefore needs `agents:CreateAgentGeneration` on the agent, `tools:CallTool` on each scorer tool and `deciders:CreateDecision` on each scorer decider, even when the write changes none of them: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
 
 ### Scorers
 
@@ -582,7 +583,7 @@ Filtering runs by a metadata key is not supported — fetch and filter client-si
 
 ### Run authority
 
-A run stores the authority it was started under: its starter's, or its trigger's `policy_ids` for a scheduled run. Every item's generation and every scorer run under it, however long after the request the worker drives them.
+A run acts under the eval's `policy_ids`, capped by whoever starts it: the caller, or the trigger's `policy_ids` for a scheduled run. The run stores that authority; every item's generation and every scorer run under it, however long after the request the worker drives them, so every nested action stays capped by the eval's grant. A run whose agent, scorer tool or scorer decider that grant may not start is refused `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`) before it is recorded, even when its starter may start it; the starter needs only `evaluations:RunEval`. An eval with empty `policy_ids` is allowed nothing: its runs score nothing until a write gives it some.
 
 ### Run tool context
 

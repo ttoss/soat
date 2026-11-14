@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 
 import { agentRefusal } from '../../fixtures/agentRefusal';
 import { pollUntil } from '../../fixtures/agentToolTurn';
+import { testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatRequest,
   startChatCompletionStub,
@@ -188,6 +189,7 @@ describe('Agent knowledge', () => {
         execute: { url: `http://127.0.0.1:${port}/convert`, method: 'POST' },
       });
       await create('/api/v1/ingestion-rules', {
+        policy_ids: await testGrant({ token: adminToken }),
         project_id: scope.projectId,
         content_type_glob: 'application/x-report',
         tool_id: converterId,

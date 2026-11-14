@@ -1,6 +1,8 @@
 import {
+  createProjectPolicy,
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -41,6 +43,7 @@ const codesOf = (problems: { code: string; path: string }[]) => {
 
 describe('Playbook executor references', () => {
   let adminToken: string;
+  let adminGrant: string[];
   let noPermToken: string;
   let projectId: string;
   let otherProjectId: string;
@@ -83,11 +86,20 @@ describe('Playbook executor references', () => {
     );
   };
 
-  const createPlaybook = (definition: object, token = adminToken) => {
+  const createPlaybook = (
+    definition: object,
+    token = adminToken,
+    policyIds = adminGrant
+  ) => {
     seq += 1;
     return authenticatedTestClient(token)
       .post('/api/v1/playbooks')
-      .send({ project_id: projectId, name: `refs-${seq}`, definition });
+      .send({
+        policy_ids: policyIds,
+        project_id: projectId,
+        name: `refs-${seq}`,
+        definition,
+      });
   };
 
   beforeAll(async () => {
@@ -97,6 +109,7 @@ describe('Playbook executor references', () => {
       createOtherProject: true,
     });
     adminToken = setup.adminToken;
+    adminGrant = await testGrant({ token: adminToken });
     noPermToken = setup.noPermToken!;
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId!;
@@ -135,6 +148,7 @@ describe('Playbook executor references', () => {
     });
     existing.tool = toolId;
     existing.decider = await create('/api/v1/deciders', {
+      policy_ids: await testGrant({ token: adminToken }),
       name: 'refs-decider',
       tool_id: toolId,
       questions: [
@@ -320,9 +334,15 @@ describe('Playbook executor references', () => {
         username: 'pbkrefsnostart',
         actions: ['playbooks:CreatePlaybook'],
       });
+      const held = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['playbooks:CreatePlaybook'],
+      });
       const res = await createPlaybook(
         definitionOf({ type: 'agent', id: MISSING.agent }),
-        token
+        token,
+        [held]
       );
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ACTION_NOT_HELD');

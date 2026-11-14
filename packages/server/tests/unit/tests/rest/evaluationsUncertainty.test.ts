@@ -19,6 +19,7 @@ const ITEMS = Array.from({ length: 12 }, (_, index) => {
 describe('Evaluations — uncertainty', () => {
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let agentId: string;
   let datasetId: string;
@@ -42,6 +43,7 @@ describe('Evaluations — uncertainty', () => {
     const res = await asUser()
       .post('/api/v1/evals')
       .send({
+        policy_ids: [userPolicyId],
         project_id: projectId,
         name: unique('uncertainty-eval'),
         agent_id: agentId,
@@ -123,6 +125,7 @@ describe('Evaluations — uncertainty', () => {
     });
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
 
     const providerRes = await authenticatedTestClient(adminToken)

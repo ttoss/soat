@@ -1,6 +1,8 @@
 import {
+  createProjectPolicy,
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import {
   createPlaybookDecider,
@@ -93,6 +95,8 @@ describe('Playbooks', () => {
   let DEFINITION: ReturnType<typeof definitionOf>;
   let deciderId: string;
   let adminToken: string;
+  let adminGrant: string[];
+  let userPolicyId: string;
   let userToken: string;
   let projectId: string;
   let noPermToken: string;
@@ -110,6 +114,7 @@ describe('Playbooks', () => {
     return authenticatedTestClient(token)
       .post('/api/v1/playbooks')
       .send({
+        policy_ids: token === userToken ? [userPolicyId] : adminGrant,
         project_id: projectId,
         name: unique('pricing'),
         definition: DEFINITION,
@@ -118,7 +123,10 @@ describe('Playbooks', () => {
   };
 
   const newPlaybook = async (body: Record<string, unknown> = {}) => {
-    const res = await createPlaybook(adminToken, body);
+    const res = await createPlaybook(adminToken, {
+      policy_ids: [userPolicyId],
+      ...body,
+    });
     expect(res.status).toBe(201);
     return res.body as { id: string; version: number };
   };
@@ -137,6 +145,8 @@ describe('Playbooks', () => {
       policyActions: PLAYBOOK_ACTIONS,
     });
     adminToken = setup.adminToken;
+    adminGrant = await testGrant({ token: adminToken });
+    userPolicyId = setup.policyId;
     userToken = setup.userToken;
     projectId = setup.projectId;
     noPermToken = setup.noPermToken!;
@@ -260,7 +270,12 @@ describe('Playbooks', () => {
         username: 'pbkwriternostart',
         actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
       });
-      const res = await createPlaybook(token);
+      const held = await createProjectPolicy({
+        adminToken,
+        projectId,
+        actions: ['playbooks:CreatePlaybook', 'tools:CallTool'],
+      });
+      const res = await createPlaybook(token, { policy_ids: [held] });
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ACTION_NOT_HELD');
       expect(res.body.error.meta).toEqual({

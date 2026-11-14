@@ -84,18 +84,18 @@ paths:
         `name` in the project is `409 NAME_CONFLICT`.
 
 
-        The caller becomes the version's author, whom its executors run as, so
-        it must be allowed to start every executor the definition names
-        (`403 ACTION_NOT_HELD`), and each must exist in the
+        The version's executors run under `policy_ids`, required and
+        non-empty (`400 VALIDATION_FAILED`). The caller must hold every grant
+        of each policy it names (`403 POLICY_GRANT_NOT_HELD`) and be allowed
+        to start every executor the definition names (`403
+        ACTION_NOT_HELD`), and each must exist in the
         project, or be an agent or tool shared with it (`400
         PLAYBOOK_VALIDATION_FAILED`, an `EXECUTOR_NOT_FOUND` problem). A
         `tool` executor on an `mcp` tool must name in `operation_id` an action
         the tool's binding allows (`EXECUTOR_ACTION_REQUIRED`,
         `EXECUTOR_ACTION_UNAVAILABLE`). An executor cannot be a `client` tool
         (`EXECUTOR_TOOL_UNSUPPORTED`), nor a transformation's tool a `client`
-        or `mcp` tool (`TRANSFORMATION_TOOL_UNSUPPORTED`). A definition with executors written with a trigger or OAuth token is `409
-        PLAYBOOK_AUTHOR_UNAVAILABLE`: those carry their boundary in the token,
-        so no run can act as them.
+        or `mcp` tool (`TRANSFORMATION_TOOL_UNSUPPORTED`).
       operationId: createPlaybook
       x-iam-action: playbooks:CreatePlaybook
       x-iam-resource-type: playbook
@@ -258,20 +258,21 @@ paths:
         - Playbooks
       summary: Update a playbook
       description: >-
-        Updates any of `name`, `description` and `definition`. Only a change to
-        `definition` archives a new version; a rename or a rewrite of the
-        definition the playbook already holds leaves `version` where it is. A
-        case keeps the version it was created on.
+        Updates any of `name`, `description`, `definition` and `policy_ids`.
+        Only a change to `definition` or `policy_ids` archives a new version; a
+        rename or a rewrite the playbook already holds leaves `version` where
+        it is. A case keeps the version it was created on.
 
 
-        A new version is authored by the caller, checked as on create: `403
-        ACTION_NOT_HELD` for an executor it may not start, an
+        Every write is checked as on create against the playbook as it stands
+        after it: `400 VALIDATION_FAILED` for one left without `policy_ids`,
+        `403 POLICY_GRANT_NOT_HELD` for a policy whose grants the caller does
+        not hold, `403 ACTION_NOT_HELD` for an executor it may not start, an
         `EXECUTOR_NOT_FOUND` problem for one that does not exist,
         `EXECUTOR_ACTION_REQUIRED` or `EXECUTOR_ACTION_UNAVAILABLE` for an
         `mcp` tool action a run could not call, `EXECUTOR_TOOL_UNSUPPORTED`
         for a `client` tool executor, `TRANSFORMATION_TOOL_UNSUPPORTED` for a
-        `client` or `mcp` transformation tool, `409
-        PLAYBOOK_AUTHOR_UNAVAILABLE` for a trigger or OAuth token.
+        `client` or `mcp` transformation tool.
       operationId: updatePlaybook
       x-iam-action: playbooks:UpdatePlaybook
       x-iam-resource-type: playbook
@@ -483,7 +484,8 @@ paths:
         Writes an archived definition back as the playbook's live one, which
         archives it again as a new version rather than rewinding the counter.
         Restoring the definition the playbook already holds is a no-op. The
-        caller authors the new version, checked as on create.
+        archived `policy_ids` are restored with it, the playbook's own when the
+        version archived none; the write is checked as an update.
       operationId: restorePlaybookVersion
       x-iam-action: playbooks:RestorePlaybookVersion
       x-iam-resource-type: playbook
@@ -999,10 +1001,9 @@ paths:
         executor. A `collect`
         node takes its own input values as its output, any other node starts
         its executor with the node's input values mapped through the
-        executor's `input`. The executor runs as the
-        author of the case's playbook version, whose permission to start it is
-        checked again here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`); an author that
-        no longer exists is `409 WORK_AUTHORITY_MISSING`. Only a `ready`,
+        executor's `input`. The executor runs under the
+        `policy_ids` of the case's playbook version, which must allow starting
+        it (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). Only a `ready`,
         `stale`, `failed` or `done` node with every required input set runs;
         anything else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
         PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
@@ -1061,7 +1062,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden, or the author may not start the executor
+          description: Forbidden, or the version's policy_ids do not allow starting the executor
           content:
             application/json:
               schema:
@@ -1073,7 +1074,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: The node cannot run now, the case is paused, or the version has no author to run as
+          description: The node cannot run now, or the case is paused
           content:
             application/json:
               schema:
@@ -1198,9 +1199,9 @@ paths:
 
         Without `revision` the node's current output is exported, which needs
         the node `done` (`409 PLAYBOOK_NODE_NOT_EXPORTABLE`); a `revision`
-        names an earlier output or confirmation of the node. Each tool runs as
-        the author of the case's playbook version, whose permission to call it
-        is checked here (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). A paused case is
+        names an earlier output or confirmation of the node. Each tool runs
+        under the `policy_ids` of the case's playbook version, which must allow
+        calling it (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). A paused case is
         `409 PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
         PROJECT_PAUSED`.
 
@@ -1254,7 +1255,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden, or the author may not call a transformation's tool
+          description: Forbidden, or the version's policy_ids do not allow a transformation's tool
           content:
             application/json:
               schema:
@@ -1267,8 +1268,7 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
-            The node has no current output, the case is paused, or the version
-            has no author to run as
+            The node has no current output, or the case is paused
           content:
             application/json:
               schema:
@@ -2021,10 +2021,20 @@ components:
           type: integer
           description: >-
             The definition's version. Bumped only by a write that changes
-            `definition`.
+            `definition` or `policy_ids`.
           example: 1
         definition:
           $ref: '#/components/schemas/PlaybookDefinition'
+        policy_ids:
+          description: >-
+            The policies every execution of this version runs under, whoever
+            wrote it. Empty for a playbook written without one, whose cases do
+            not run until a write gives it one.
+          type: array
+          items:
+            x-soat-ref: policies
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6B']
         created_at:
           type: string
           format: date-time
@@ -2037,12 +2047,17 @@ components:
       required:
         - name
         - definition
+        - policy_ids
       properties:
         project_id:
           x-soat-ref: projects
           type: string
           description: Project ID (required if not using project key auth)
           example: proj_V1StGXR8Z5jdHi6B
+        policy_ids:
+          description: The policies every execution of the version runs under.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         name:
           type: string
           description: Human-readable name, unique per project
@@ -2074,6 +2089,12 @@ components:
           description: Replaces the whole definition; a change archives a new version
           allOf:
             - $ref: '#/components/schemas/PlaybookDefinition'
+        policy_ids:
+          description: >-
+            Replaces the policies the version runs under; a change archives a
+            new version.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         version_label:
           type: string
           description: >-
@@ -2152,6 +2173,12 @@ components:
           properties:
             definition:
               $ref: '#/components/schemas/PlaybookDefinition'
+            policy_ids:
+              description: The policies the version's executions run under.
+              type: array
+              items:
+                x-soat-ref: policies
+                type: string
         label:
           type: string
           nullable: true

@@ -4,13 +4,11 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { type Page, paginatedList } from './pagination';
-import {
-  assertAuthorCanRun,
-  authorColumns,
-  executorReferenceProblems,
-  type PlaybookAuthor,
-} from './playbookAuthor';
 import type { PlaybookDefinition } from './playbookDefinition';
+import {
+  assertWriterCanRun,
+  executorReferenceProblems,
+} from './playbookStarts';
 import {
   playbookDependents,
   playbookUpstreamProblems,
@@ -32,6 +30,7 @@ import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
 import type { StoredError } from './storedError';
 import type { VersionedWrite } from './writePrecondition';
+import type { Writer } from './writerRule';
 
 const log = createDebug('soat:playbooks');
 
@@ -59,6 +58,7 @@ export const mapPlaybook = (row: PlaybookRow) => {
     description: row.description,
     version: row.version,
     definition: row.definition,
+    policy_ids: row.policyIds ?? [],
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -161,7 +161,8 @@ export const createPlaybook = async (
     name: unknown;
     description?: unknown;
     definition: unknown;
-    author: PlaybookAuthor;
+    policyIds: string[] | null | undefined;
+    writer: Writer;
   } & VersionedWrite
 ): Promise<MappedPlaybook> => {
   log('createPlaybook: projectId=%d', args.projectId);
@@ -176,11 +177,12 @@ export const createPlaybook = async (
   const project = await db.Project.findByPk(args.projectId, {
     attributes: ['publicId'],
   });
-  await assertAuthorCanRun({
+  await assertWriterCanRun({
     definition,
+    policyIds: args.policyIds,
     projectId: args.projectId,
     projectPublicId: project!.publicId as string,
-    author: args.author,
+    writer: args.writer,
   });
 
   const playbook = await db.Playbook.create({
@@ -189,6 +191,7 @@ export const createPlaybook = async (
     description,
     version: 1,
     definition,
+    policyIds: args.policyIds,
   });
   const mapped = mapPlaybook(await playbooks.reload(playbook));
 
@@ -200,7 +203,6 @@ export const createPlaybook = async (
     config: buildPlaybookConfigSnapshot(mapped),
     label: args.versionLabel,
     createdBy: args.createdBy,
-    columns: authorColumns(args.author.principal),
   });
 
   log('createPlaybook: created id=%s', playbook.publicId);
@@ -251,7 +253,8 @@ export const updatePlaybook = async (
     name?: unknown;
     description?: unknown;
     definition?: unknown;
-    author: PlaybookAuthor;
+    policyIds?: string[] | null;
+    writer: Writer;
   } & VersionedWrite
 ): Promise<MappedPlaybook> => {
   log('updatePlaybook: id=%s', args.id);
@@ -268,14 +271,18 @@ export const updatePlaybook = async (
           projectId: playbook.projectId,
           playbookId: playbook.publicId,
         });
-  if (definition !== undefined) {
-    await assertAuthorCanRun({
-      definition,
-      projectId: playbook.projectId,
-      projectPublicId: playbook.project.publicId,
-      author: args.author,
-    });
-  }
+  await assertWriterCanRun({
+    definition:
+      definition ??
+      parsePlaybookDefinition({
+        definition: playbook.definition,
+      }),
+    policyIds:
+      args.policyIds === undefined ? playbook.policyIds : args.policyIds,
+    projectId: playbook.projectId,
+    projectPublicId: playbook.project.publicId,
+    writer: args.writer,
+  });
 
   // `save` mutates the instance in place, so this one reference yields both the
   // pre- and post-write definition.
@@ -293,16 +300,16 @@ export const updatePlaybook = async (
     playbook.description = readDescription(args.description);
   }
   if (definition !== undefined) playbook.definition = definition;
+  if (args.policyIds !== undefined) playbook.policyIds = args.policyIds;
 
-  // Only a changed definition bumps the version; a rename or an identical
-  // rewrite leaves it where it is.
+  // Only a changed definition or grant bumps the version; a rename or an
+  // identical rewrite leaves it where it is.
   await playbookVersionStore.commitConfigChange({
     resource: toResourceRef(playbook),
     expectedVersion: args.expectedVersion,
     before,
     label: args.versionLabel,
     createdBy: args.createdBy,
-    columns: authorColumns(args.author.principal),
     applyWrite: async ({ transaction }) => {
       await playbook.save({ transaction });
       return {

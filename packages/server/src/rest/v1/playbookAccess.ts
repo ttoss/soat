@@ -1,6 +1,5 @@
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { authorOf, type PlaybookAuthor } from 'src/lib/playbookAuthor';
 import { findCasePinnedFields, playbookCases } from 'src/lib/playbookCases';
 import { playbooks } from 'src/lib/playbooks';
 
@@ -56,18 +55,6 @@ const pinnedCase = (authorize: CaseAuthorize): CaseAuthorize => {
 export const playbookCaseAccess = {
   authorizeRead: pinnedCase(caseAuthorizer.authorizeRead),
   authorizeWrite: pinnedCase(caseAuthorizer.authorizeWrite),
-};
-
-/**
- * The caller as the author of a version it writes, by the same rule a run
- * records the principal that started it.
- */
-export const playbookAuthorOf = (ctx: Context): PlaybookAuthor => {
-  return {
-    principal: authorOf(ctx.authUser!),
-    isAllowed: ctx.authUser!.isAllowed,
-    getPolicies: ctx.authUser!.getPolicies,
-  };
 };
 
 /**

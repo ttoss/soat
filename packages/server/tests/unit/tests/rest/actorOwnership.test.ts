@@ -5,7 +5,7 @@ import { load } from 'js-yaml';
 import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { soatTools } from 'src/lib/soatTools';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -99,6 +99,7 @@ describe('Actor ownership', () => {
     listPlaybookCases: {
       create: async (actorId) => {
         const playbookId = await created('/api/v1/playbooks', {
+          policy_ids: await testGrant({ token: adminToken }),
           project_id: projectId,
           name: `owned-${(seq += 1)}`,
           definition: PLAYBOOK_DEFINITION,

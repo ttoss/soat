@@ -98,13 +98,13 @@ export const principalBoundCap = (args: {
 };
 
 /**
- * A trigger's `policy_ids`, the grant its firings act under. A trigger no
- * longer stored, or one with no policy, grants nothing.
+ * A resource's own `policy_ids`, read live when checked: its firings' or its
+ * work's grant. A resource no longer stored, or one with no policy, grants
+ * nothing.
  */
-export const triggerGrant = (args: {
+export const ownPoliciesGrant = (args: {
   principal: DeniedPrincipal;
-  triggerPublicId: string;
-  db: Context['db'];
+  policyIds: () => Promise<string[] | null>;
 }): Grant => {
   return {
     principal: args.principal,
@@ -112,17 +112,29 @@ export const triggerGrant = (args: {
     bound: {
       allows: 'policies',
       load: async () => {
-        const trigger = await args.db.Trigger.findOne({
-          where: { publicId: args.triggerPublicId },
-        });
         return [
-          await resolveAttachedPolicySet({
-            policyIds: trigger?.policyIds ?? null,
-          }),
+          await resolveAttachedPolicySet({ policyIds: await args.policyIds() }),
         ];
       },
     },
   };
+};
+
+/** A trigger's `policy_ids`, the grant its firings act under. */
+export const triggerGrant = (args: {
+  principal: DeniedPrincipal;
+  triggerPublicId: string;
+  db: Context['db'];
+}): Grant => {
+  return ownPoliciesGrant({
+    principal: args.principal,
+    policyIds: async () => {
+      const trigger = await args.db.Trigger.findOne({
+        where: { publicId: args.triggerPublicId },
+      });
+      return trigger?.policyIds ?? null;
+    },
+  });
 };
 
 /**

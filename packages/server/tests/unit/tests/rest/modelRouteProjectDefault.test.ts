@@ -101,6 +101,7 @@ const startLlmStub = async (
 describe('Project default model route', () => {
   let adminToken: string;
   let userToken: string;
+  let userPolicyId: string;
   let projectId: string;
   let otherProjectId: string;
   let projectDbId: number;
@@ -181,6 +182,7 @@ describe('Project default model route', () => {
     return authenticatedTestClient(userToken)
       .post('/api/v1/evals')
       .send({
+        policy_ids: [userPolicyId],
         project_id: projectId,
         name: `judged-${evalCount}`,
         agent_id: evalAgentId,
@@ -269,6 +271,7 @@ describe('Project default model route', () => {
     });
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPolicyId = setup.policyId;
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId!;
 

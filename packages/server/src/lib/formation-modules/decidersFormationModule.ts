@@ -8,6 +8,7 @@ import {
   updateDecider,
 } from '../deciders';
 import {
+  toNullableArray,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -59,6 +60,7 @@ export const decidersFormationModule = defineFormationModule({
       agentId: properties.agent_id,
       toolId: properties.tool_id,
       questions: properties.questions,
+      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
     });
   },
 
@@ -72,6 +74,7 @@ export const decidersFormationModule = defineFormationModule({
       agentId: properties.agent_id,
       toolId: properties.tool_id,
       questions: properties.questions,
+      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
     });
   },
 

@@ -16,14 +16,23 @@ export const PRINCIPAL_TYPES = [
   'approval',
   'trigger',
   'system',
+  'eval',
+  'decider',
+  'ingestion_rule',
+  'memory_rule',
+  'playbook_version',
 ] as const;
 
 export type PrincipalType = (typeof PRINCIPAL_TYPES)[number];
 
+/** Every principal type a credential or stored work acts as. */
+export type ActingPrincipalType = ActingPrincipal['type'];
+
 /**
  * The principal to credit for an action: `user` names the acting user,
  * `api_key` the key itself (`key_…`) so a record says *which* key acted, and
- * `trigger` a trigger acting under its own grant.
+ * `trigger` or a `RESOURCE_GRANT_PRINCIPALS` type a resource acting under its
+ * own grant.
  */
 export type RequestPrincipal = {
   principalType: ActingPrincipal['type'];

@@ -44,6 +44,7 @@ The same shape applied to turns instead of files is a [memory rule](./memories.m
 | `chunk_size` | number \| null | Optional default for the `size` strategy |
 | `chunk_overlap` | number \| null | Optional default for the `size` strategy |
 | `metadata` | object | Caller-owned annotations on the rule — see [Tags and metadata](iam.md#tags-and-metadata) |
+| `policy_ids` | string[] | Required on create. The policies every conversion acts under; see [Who may write a converter](#who-may-write-a-converter) |
 | `created_at` | string | ISO 8601 creation timestamp |
 | `updated_at` | string | ISO 8601 last-updated timestamp |
 
@@ -156,7 +157,9 @@ Converter-related `error.code` values on a failed document (alongside `FILE_PARS
 
 ### Who may write a converter
 
-A rule runs its converter on every matching document. Every create, update and formation apply needs the converter's start action (`tools:CallTool` on the tool, `agents:CreateAgentGeneration` on the agent), even when the write leaves the converter as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`).
+A rule runs its converter on every matching document, under the rule's `policy_ids` capped by whoever ingests the document: a converter the rule's grant may not start (`tools:CallTool` or `agents:CreateAgentGeneration`) is never called and the ingest fails, and every tool call a converter agent makes is refused what the grant does not allow. A rule with empty `policy_ids` is allowed nothing, so its conversions fail until a write gives it some.
+
+Every create, update and formation apply needs the converter's start action (`tools:CallTool` on the tool, `agents:CreateAgentGeneration` on the agent), even when the write leaves the converter as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
 
 ### Who may act on an ingestion rule
 

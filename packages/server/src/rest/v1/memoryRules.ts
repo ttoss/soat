@@ -33,6 +33,7 @@ type RuleBody = {
   ai_provider_id?: string | null;
   model?: string | null;
   enabled?: boolean;
+  policy_ids?: string[];
 };
 
 /**
@@ -120,6 +121,7 @@ const writeArgs = (body: RuleBody) => {
     prompt: body.prompt,
     model: body.model,
     enabled: body.enabled,
+    policyIds: body.policy_ids,
   };
 };
 

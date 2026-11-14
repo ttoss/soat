@@ -125,6 +125,68 @@ export const POLICY_CARRIERS = {
     noun: 'webhook',
     meta: { count: 'webhooks', sample: 'webhook_sample' },
   }),
+  evals: projectJsonbCarrier({
+    model: 'Eval',
+    table: 'evals',
+    noun: 'eval',
+    meta: { count: 'evals', sample: 'eval_sample' },
+  }),
+  deciders: projectJsonbCarrier({
+    model: 'Decider',
+    table: 'deciders',
+    noun: 'decider',
+    meta: { count: 'deciders', sample: 'decider_sample' },
+  }),
+  ingestionRules: projectJsonbCarrier({
+    model: 'IngestionRule',
+    table: 'ingestion_rules',
+    noun: 'ingestion rule',
+    meta: { count: 'ingestion_rules', sample: 'ingestion_rule_sample' },
+  }),
+  memoryRules: {
+    models: ['MemoryRule'],
+    attach: 'writer_holds_grants',
+    dependents: {
+      table: 'memory_rules',
+      column: 'jsonb',
+      noun: 'memory rule',
+      meta: { count: 'memory_rules', sample: 'memory_rule_sample' },
+    },
+    actsIn: (policy) => {
+      return publicIdsOf({
+        sql: `SELECT DISTINCT p.public_id
+                FROM memory_rules r
+                JOIN memory_stores s ON s.id = r.memory_store_id
+                JOIN projects p ON p.id = s.project_id
+               WHERE r.policy_ids @> :ids::jsonb`,
+        replacements: { ids: JSON.stringify([policy.publicId]) },
+      });
+    },
+  },
+  // A case runs on the version it pinned, so an archived version still acts.
+  playbookVersions: {
+    models: ['Playbook', 'PlaybookVersion'],
+    attach: 'writer_holds_grants',
+    dependents: {
+      table: 'playbooks',
+      column: 'jsonb',
+      noun: 'playbook',
+      meta: { count: 'playbooks', sample: 'playbook_sample' },
+    },
+    actsIn: (policy) => {
+      return publicIdsOf({
+        sql: `SELECT DISTINCT p.public_id
+                FROM playbooks b
+                JOIN projects p ON p.id = b.project_id
+               WHERE b.policy_ids @> :ids::jsonb
+                  OR EXISTS (
+                       SELECT 1 FROM playbook_versions v
+                        WHERE v.playbook_id = b.id
+                          AND (v.config::jsonb -> 'policy_ids') @> :ids::jsonb)`,
+        replacements: { ids: JSON.stringify([policy.publicId]) },
+      });
+    },
+  },
   apiKeys: {
     models: ['ApiKey'],
     attach: 'bounded_by_owner',

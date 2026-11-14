@@ -1,6 +1,7 @@
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
+  testGrant,
 } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -22,7 +23,11 @@ describe('Memory Rules API', () => {
   ) => {
     return authenticatedTestClient(token)
       .post('/api/v1/memory-rules')
-      .send({ memory_store_id: memoryStoreId, ...body });
+      .send({
+        policy_ids: await testGrant({ token: adminToken }),
+        memory_store_id: memoryStoreId,
+        ...body,
+      });
   };
 
   const createTypedTool = async (body: Record<string, unknown>) => {
@@ -282,7 +287,10 @@ describe('Memory Rules API', () => {
     test('requires memory_store_id', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/memory-rules')
-        .send({ on: 'generations.completed' });
+        .send({
+          policy_ids: await testGrant({ token: adminToken }),
+          on: 'generations.completed',
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -310,6 +318,7 @@ describe('Memory Rules API', () => {
       const res = await authenticatedTestClient(scopedToken)
         .post('/api/v1/memory-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           memory_store_id: otherStoreId,
           on: 'generations.completed',
         });
@@ -327,6 +336,7 @@ describe('Memory Rules API', () => {
       await authenticatedTestClient(adminToken)
         .post('/api/v1/memory-rules')
         .send({
+          policy_ids: await testGrant({ token: adminToken }),
           memory_store_id: storeRes.body.id,
           on: 'generations.completed',
         });
