@@ -13,6 +13,7 @@ import {
   runApprovedWriteMemory,
   WRITE_MEMORY_TOOL_ID,
   writeMemoryEditChecks,
+  writeMemoryInputError,
 } from './agentKnowledge';
 import { isInlineProposal, isNativeProposal } from './agentToolApproval';
 import {
@@ -152,6 +153,11 @@ type NativeTool = {
     projectId: number;
     projectPublicId: string;
   }) => Promise<EditCheck[]>;
+  /**
+   * Why an input cannot be a call of this tool, or `null`. With no tool row
+   * there is no `parameters` schema to check an edit against, so this is it.
+   */
+  inputError: (input: Record<string, unknown>) => string | null;
 };
 
 /**
@@ -162,6 +168,7 @@ const NATIVE_TOOLS: Record<string, NativeTool | undefined> = {
   [WRITE_MEMORY_TOOL_ID]: {
     execute: executeApprovedWriteMemory,
     editChecks: writeMemoryEditChecks,
+    inputError: writeMemoryInputError,
   },
 };
 
@@ -172,6 +179,19 @@ export const nativeProposalEditChecks = async (args: {
   projectPublicId: string;
 }): Promise<EditCheck[]> => {
   return (await NATIVE_TOOLS[args.toolId]?.editChecks(args)) ?? [];
+};
+
+/**
+ * Why an edit of a held native call is refused, or `null`. A native tool
+ * missing from {@link NATIVE_TOOLS} recognises no input, so its edit is refused.
+ */
+export const nativeProposalEditError = (args: {
+  toolId: string;
+  input: Record<string, unknown>;
+}): string | null => {
+  const nativeTool = NATIVE_TOOLS[args.toolId];
+  if (!nativeTool) return `${args.toolId} takes no edited arguments.`;
+  return nativeTool.inputError(args.input);
 };
 
 const executeApprovedNativeAction = async (args: {

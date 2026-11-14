@@ -352,6 +352,17 @@ const buildWriteMemoryTool = (
   });
 };
 
+/** Why `input` cannot be a `write_memory` call, or `null` when it can. */
+export const writeMemoryInputError = (
+  input: Record<string, unknown>
+): string | null => {
+  const { content } = input;
+  if (typeof content !== 'string' || content.trim() === '') {
+    return 'write_memory needs a non-empty string `content`.';
+  }
+  return null;
+};
+
 /**
  * Runs a held `write_memory` call a human approved. The store is the one the
  * agent's `knowledge_config` names now, and the boundary is the agent's
@@ -365,7 +376,7 @@ export const runApprovedWriteMemory = async (args: {
   projectId: number;
   agentAuthority: AgentAuthority;
   actorId?: string;
-  /** The frozen or edited arguments; an edit is not checked against a schema upstream. */
+  /** The frozen or edited arguments. */
   input: Record<string, unknown>;
   markExecuted: () => void;
 }): Promise<Record<string, unknown>> => {
@@ -378,10 +389,8 @@ export const runApprovedWriteMemory = async (args: {
       error: 'The agent no longer exists or names no write_memory store.',
     };
   }
-  const { content } = args.input;
-  if (typeof content !== 'string' || content.trim() === '') {
-    return { error: 'write_memory needs a non-empty string `content`.' };
-  }
+  const inputError = writeMemoryInputError(args.input);
+  if (inputError) return { error: inputError };
   return writeMemoryAsAgent({
     writeMemoryStoreId,
     agentId: args.agent.publicId,
@@ -389,7 +398,8 @@ export const runApprovedWriteMemory = async (args: {
     projectId: args.projectId,
     agentAuthority: args.agentAuthority,
     actorId: args.actorId,
-    content,
+    // Checked by `writeMemoryInputError` just above.
+    content: args.input.content as string,
     markExecuted: args.markExecuted,
   });
 };

@@ -3,7 +3,10 @@ import type { AuthUser, Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { isNativeProposal } from 'src/lib/agentToolApproval';
-import { nativeProposalEditChecks } from 'src/lib/agentToolApprovalContinuation';
+import {
+  nativeProposalEditChecks,
+  nativeProposalEditError,
+} from 'src/lib/agentToolApprovalContinuation';
 import { APPROVAL_STATUSES } from 'src/lib/approvalFilters';
 import {
   approveApproval,
@@ -15,6 +18,7 @@ import {
 } from 'src/lib/approvals';
 import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
+import { isPlainObject } from 'src/lib/plainObject';
 import { toolReferences } from 'src/lib/resourceReferences';
 import { soatTools } from 'src/lib/soatTools';
 
@@ -183,6 +187,29 @@ const assertMayEditProposedAction = async (args: {
   }
 };
 
+/**
+ * A native tool has no row, so `approveApproval`'s check against the tool's
+ * `parameters` has nothing to read; its input is checked by its registry entry.
+ */
+const assertValidNativeEdit = (args: {
+  proposed?: WireProposedAction;
+  editedArguments: unknown;
+}): void => {
+  const toolId = args.proposed?.tool_id;
+  if (!toolId || !isNativeProposal(toolId)) return;
+  // A non-object edit is refused by `approveApproval` with its own message.
+  if (!isPlainObject(args.editedArguments)) return;
+  const error = nativeProposalEditError({
+    toolId,
+    input: args.editedArguments,
+  });
+  if (!error) return;
+  throw new DomainError(
+    'APPROVAL_INVALID_EDIT',
+    `edited arguments are not a valid call: ${error}`
+  );
+};
+
 const parseApprovalStatuses = (ctx: Context) => {
   return parseEnumListQuery({
     ctx,
@@ -285,6 +312,10 @@ approvalsRouter.post(
       await assertMayEditProposedAction({
         authUser: ctx.authUser,
         approval,
+      });
+      assertValidNativeEdit({
+        proposed: approval.proposed_action,
+        editedArguments: body.arguments,
       });
     }
 
