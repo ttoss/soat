@@ -15,6 +15,7 @@ import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
 import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
+import type { GenerationProvenance } from './generationProvenance';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -85,6 +86,8 @@ export const resolveAgentToolSurface = async (args: {
    * caller typed.
    */
   sessionId?: string | null;
+  /** The turn's tally, which its tools count their results into. */
+  provenance: GenerationProvenance;
 }): Promise<ResolvedToolSurface> => {
   // Bindings resolve in the agent's own project; the turn's calls are gated,
   // metered and recorded in the project it runs in.
@@ -108,6 +111,7 @@ export const resolveAgentToolSurface = async (args: {
     sessionId: args.sessionId ?? null,
     authority: args.authority,
     guardrailContext: args.guardrailContext,
+    provenance: args.provenance,
   });
 
   const bindings = await resolveAgentToolBindings({

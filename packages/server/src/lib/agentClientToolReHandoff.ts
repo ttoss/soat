@@ -6,6 +6,7 @@ import { buildGenerationContext } from './agentGenerationContext';
 import { savePendingGeneration } from './agentGenerationHelpers';
 import type { MappedApproval } from './approvals';
 import { resolveChainLineage } from './generationChain';
+import { provenanceForNewRow } from './generationProvenance';
 import { createGenerationRecord } from './generations';
 import { toolReferences } from './resourceReferences';
 import type { WorkAuthority } from './workAuthority';
@@ -67,6 +68,7 @@ const seedReHandoffPending = (args: {
     typedAgent: args.ctx.typedAgent,
     agentId: args.agentId,
     resolvedTools: args.ctx.resolvedTools,
+    provenance: args.ctx.provenance,
     toolsAuthority: args.ctx.toolsAuthority,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: null,
@@ -146,6 +148,7 @@ export const emitClientToolReHandoff = async (args: {
       toolContext: args.toolContext,
       sessionId: args.item.session_id,
     }),
+    initiatorGenerationId: args.item.generation_id,
   });
 
   const traceId = generatePublicId(PUBLIC_ID_PREFIXES.trace);
@@ -172,6 +175,7 @@ export const emitClientToolReHandoff = async (args: {
     sessionId: args.item.session_id,
     inputMessages: ctx.inputMessages,
     retrieval: ctx.retrieval,
+    provenance: provenanceForNewRow(ctx.provenance),
   });
 
   await seedReHandoffPending({

@@ -6,23 +6,26 @@
  * `runtime.action`. A module answers about the entity of that module in the
  * current call: `projects` the project, `agents` the calling agent, `tools` the
  * tool, `guardrails` the guardrail being evaluated, `orchestrations` the
- * current run. The served combinations are {@link RUNTIME_SERVED}; the catalog
+ * current run, `generations` the current generation and its continuation chain. The served combinations are {@link RUNTIME_SERVED}; the catalog
  * is derived from it, so a key cannot be served without a row here, and
  * `guardrails.md` carries the same table (pinned by
  * `guardrailRuntimeCatalog.test.ts`).
  */
+
+import { PROVENANCE_METRICS } from './generationProvenance';
 
 export const RUNTIME_METRICS = [
   'tool_calls',
   'tokens',
   'cost_usd',
   'errors',
+  ...PROVENANCE_METRICS,
 ] as const;
 
 export type RuntimeMetric = (typeof RUNTIME_METRICS)[number];
 
 // `total` is the entity's lifetime: "this run so far" for `orchestrations`,
-// all-time for a tool. The others are rolling and end at evaluation time.
+// "this chain so far" for `generations`, all-time for a tool. The others are rolling and end at evaluation time.
 export const RUNTIME_WINDOWS = ['1h', '24h', '7d', '30d', 'total'] as const;
 
 export type RuntimeWindow = (typeof RUNTIME_WINDOWS)[number];
@@ -33,6 +36,7 @@ export const RUNTIME_MODULES = [
   'agents',
   'tools',
   'orchestrations',
+  'generations',
 ] as const;
 
 export type RuntimeModule = (typeof RUNTIME_MODULES)[number];
@@ -65,6 +69,11 @@ export const RUNTIME_SERVED: { readonly [M in RuntimeModule]: ServedModule } = {
   orchestrations: {
     identity: ['node_attempt'],
     metrics: ['tool_calls', 'tokens', 'cost_usd'],
+    windows: ['total'],
+  },
+  generations: {
+    identity: [],
+    metrics: PROVENANCE_METRICS,
     windows: ['total'],
   },
 };

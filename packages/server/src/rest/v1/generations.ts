@@ -2,11 +2,11 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { purgeGenerationContent } from 'src/lib/contentPurge';
+import { getGenerationMemoryAssertions } from 'src/lib/generationMemoryAssertions';
 import {
   GENERATION_STATUSES,
   generations,
   getGeneration,
-  getGenerationMemoryAssertions,
   getGenerationTraceId,
   listGenerations,
   updateGenerationMetadata,

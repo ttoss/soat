@@ -328,6 +328,15 @@ export class Generation extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare retrieval: Array<Record<string, unknown>> | null;
 
+  // How many results from untrusted tools, and from knowledge, had entered the
+  // turn's context, its continuation chain included. Counts, not content, so a
+  // purge keeps them; only `generationProvenance.ts` computes their writes.
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare untrustedToolResults: number;
+
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare knowledgeResults: number;
+
   // Caller-owned. The server writes nothing here, so there is no reserved-key
   // list to maintain and no key a caller sets that reaches platform state.
   @Column({ type: DataType.JSON, allowNull: true })

@@ -192,8 +192,12 @@ const assertPoliciesHeld = async (args: {
   });
 };
 
-const assertActionsHeld = async (args: {
-  writer: Writer;
+/**
+ * Throws `ACTION_NOT_HELD` for the first of `actions` the writer may not
+ * perform in its project.
+ */
+export const assertActionsHeld = async (args: {
+  isAllowed: IsAllowedFn;
   projectPublicId: string;
   actions: CarriedAction[];
 }): Promise<void> => {
@@ -203,7 +207,7 @@ const assertActionsHeld = async (args: {
       resourceType: carried.resourceType,
       resourceId: carried.resourceId,
     });
-    const allowed = await args.writer.isAllowed({
+    const allowed = await args.isAllowed({
       projectPublicId: args.projectPublicId,
       action: carried.action,
       resource,
@@ -252,7 +256,7 @@ export const assertWriterHolds = async (args: {
   });
   if (project) {
     await assertActionsHeld({
-      writer: args.writer,
+      isAllowed: args.writer.isAllowed,
       projectPublicId: project.publicId,
       actions: args.carried.actions ?? [],
     });

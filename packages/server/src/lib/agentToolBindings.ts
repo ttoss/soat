@@ -10,6 +10,7 @@ import {
   type InlineToolDefinition,
   validateToolDefinition,
 } from './tools';
+import { assertTrustedOutputAllowed } from './toolTrust';
 
 const log = createDebug('soat:agents');
 
@@ -80,8 +81,8 @@ export const splitToolBindings = (
 const validateInlineBindingTool = async (args: {
   tool: unknown;
   projectId: number;
-  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
-  secretUse: IsAllowedFn;
+  /** The writer, who holds what an inline tool the write stores needs. */
+  isAllowed: IsAllowedFn;
 }): Promise<void> => {
   if (!isPlainObject(args.tool)) {
     throw new DomainError(
@@ -94,7 +95,12 @@ const validateInlineBindingTool = async (args: {
   await assertToolSecretUseAllowed({
     tool: definition,
     projectId: args.projectId,
-    isAllowed: args.secretUse,
+    isAllowed: args.isAllowed,
+  });
+  await assertTrustedOutputAllowed({
+    trustedOutput: definition.trustedOutput,
+    projectId: args.projectId,
+    isAllowed: args.isAllowed,
   });
   await validateToolDefinition({ definition, projectId: args.projectId });
 };
@@ -105,8 +111,8 @@ const validateInlineBindingTool = async (args: {
 const validateBindingEntry = async (args: {
   entry: unknown;
   projectId: number;
-  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
-  secretUse: IsAllowedFn;
+  /** The writer, who holds what an inline tool the write stores needs. */
+  isAllowed: IsAllowedFn;
 }): Promise<AgentToolBinding> => {
   const { entry, projectId } = args;
   if (!isPlainObject(entry)) {
@@ -129,7 +135,7 @@ const validateBindingEntry = async (args: {
     await validateInlineBindingTool({
       tool: entry.tool,
       projectId,
-      secretUse: args.secretUse,
+      isAllowed: args.isAllowed,
     });
   }
 
@@ -152,6 +158,7 @@ type WireInlineToolDefinition = {
   preset_parameters?: object;
   pipeline?: object;
   output_mapping?: object;
+  trusted_output?: boolean;
 };
 
 // The fields whose names differ between the wire and canonical shapes.
@@ -162,6 +169,7 @@ const INLINE_TOOL_FIELD_PAIRS: Array<
   ['deniedActions', 'denied_actions'],
   ['presetParameters', 'preset_parameters'],
   ['outputMapping', 'output_mapping'],
+  ['trustedOutput', 'trusted_output'],
 ];
 
 const SAME_SPELLING_FIELDS = [
@@ -262,8 +270,8 @@ export const toWireToolBinding = (
 export const validateToolBindings = async (args: {
   projectId: number;
   bindings: AgentToolBinding[];
-  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
-  secretUse: IsAllowedFn;
+  /** The writer, who holds what an inline tool the write stores needs. */
+  isAllowed: IsAllowedFn;
 }): Promise<AgentToolBinding[]> => {
   if (!Array.isArray(args.bindings)) {
     throw new DomainError(
@@ -284,7 +292,7 @@ export const validateToolBindings = async (args: {
       await validateBindingEntry({
         entry,
         projectId: args.projectId,
-        secretUse: args.secretUse,
+        isAllowed: args.isAllowed,
       })
     );
   }
@@ -302,14 +310,14 @@ export const validateToolBindings = async (args: {
 export const resolveBindingsForCreate = async (args: {
   projectId: number;
   toolBindings?: AgentToolBinding[] | null;
-  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
-  secretUse: IsAllowedFn;
+  /** The writer, who holds what an inline tool the write stores needs. */
+  isAllowed: IsAllowedFn;
 }): Promise<AgentToolBinding[] | null> => {
   if (!args.toolBindings) return null;
   return validateToolBindings({
     projectId: args.projectId,
     bindings: args.toolBindings,
-    secretUse: args.secretUse,
+    isAllowed: args.isAllowed,
   });
 };
 
@@ -321,14 +329,14 @@ export const resolveBindingsForCreate = async (args: {
 export const resolveBindingsForUpdate = async (args: {
   projectId: number;
   toolBindings?: AgentToolBinding[] | null;
-  /** Who answers `secrets:UseSecret` for an inline tool the write stores. */
-  secretUse: IsAllowedFn;
+  /** The writer, who holds what an inline tool the write stores needs. */
+  isAllowed: IsAllowedFn;
 }): Promise<AgentToolBinding[] | null | undefined> => {
   if (args.toolBindings === undefined) return undefined;
   if (args.toolBindings === null) return null;
   return validateToolBindings({
     projectId: args.projectId,
     bindings: args.toolBindings,
-    secretUse: args.secretUse,
+    isAllowed: args.isAllowed,
   });
 };

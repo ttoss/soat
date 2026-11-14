@@ -26,6 +26,7 @@ import {
   recordGenerationFailure,
   recordSegmentUsage,
 } from './generationLifecycle';
+import type { GenerationProvenance } from './generationProvenance';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
 import {
@@ -264,6 +265,7 @@ type StreamRunArgs = {
   rootTraceId?: string | null;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  provenance: GenerationProvenance;
 };
 
 /** What `streamText` hands `onEnd` that the turn's records are built from. */
@@ -299,6 +301,7 @@ const settleStreamedClientCalls = (args: {
     result: end,
     toolContext: run.toolContext ?? null,
     remainingDepth: run.remainingDepth ?? null,
+    provenance: run.provenance,
   });
 };
 
@@ -345,6 +348,7 @@ export const runStreamGeneration = async (
     logContext: 'stream',
     toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
     promptCaching: args.typedAgent.promptCaching,
+    provenance: args.provenance,
   });
   log(
     'runStreamGeneration: agentId=%s toolCount=%d stepRulesCount=%d',

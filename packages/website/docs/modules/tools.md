@@ -55,6 +55,7 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `pipeline`              | `object \| null`                                                 | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).                                                                                                                                                                                 |
 | `output_mapping`        | `object \| null`                                                 | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).                                                                                                                                                                           |
 | `guardrail_ids`         | `array \| null`                                                  | Guardrails attached at the tool scope, governing this tool wherever it is used — see [Guardrails — Attachment](./guardrails.md#attachment)                                                                                                                                                 |
+| `trusted_output`        | `boolean`                                                        | Whether the tool's results are content no attacker can write (default `false`). Setting `true` needs `guardrails:DetachGuardrail`. See [Trusted output](#trusted-output). |
 | `created_at`            | `string`                                                         | ISO 8601 creation timestamp                                                                                                                                                                                                                                                                |
 | `updated_at`            | `string`                                                         | ISO 8601 last-updated timestamp                                                                                                                                                                                                                                                            |
 
@@ -568,6 +569,14 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped from it — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
 - `actor_id` runs the call for that actor of the calling project: the tool receives `actor_id` and `actor_external_id`, and an [`oauth_connection`](./oauth-connections.md#using-a-connection-from-a-tool) credential is the actor's. An actor outside the calling project is `400 ACTOR_NOT_FOUND`.
+
+### Trusted output
+
+`trusted_output: false` (the default, every type) marks a tool's results as content an attacker could write. Each one that enters a generation's context counts toward `runtime.generations.untrusted_tool_results.total`, which a guardrail reads to require sign-off on a write once the turn has read such content ([What the turn has read](./guardrails.md#what-the-turn-has-read)). It changes nothing until a guardrail reads the key.
+
+- **Declared once, on the tool.** A `builtin` or `mcp` tool mixing trusted and attacker-writable actions is split into two tools with different `actions`. A `pipeline` declares its own flag: a quarantine pipeline (fetch, then a tool-less reader with a constrained output schema) may be declared trusted.
+- **Knowledge reads count as knowledge.** A `search-knowledge` or `get-document` result of a `builtin` tool counts toward `runtime.generations.knowledge_results.total` whatever the flag says.
+- **Setting `true` needs `guardrails:DetachGuardrail`** besides `tools:CreateTool` / `tools:UpdateTool`, on a stored tool, an agent's inline `tool_bindings` definition and a [formation](./formations.md) resource: it loosens every guardrail reading the key, as removing a guardrail does. Without it the write is `403 ACTION_NOT_HELD`.
 
 ### Sharing a tool
 

@@ -269,7 +269,7 @@ export const createAgent = async (
 
   const toolBindings = await resolveBindingsForCreate({
     ...args,
-    secretUse: args.writer.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
 
   const agent = await db.Agent.create({
@@ -437,7 +437,7 @@ export const updateAgent = async (
   const bindingsUpdate = await resolveBindingsForUpdate({
     projectId: agent.projectId,
     toolBindings: args.toolBindings,
-    secretUse: args.writer.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
 
   const updates = buildAgentUpdates(args);

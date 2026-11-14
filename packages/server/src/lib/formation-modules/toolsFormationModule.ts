@@ -10,6 +10,7 @@ import {
   toNullableArray,
   toNullableObject,
   toNullableString,
+  toOptionalBoolean,
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { SECRET_USE_ACTION, toolSecretIds } from '../secretUse';
@@ -267,6 +268,7 @@ export const toolsFormationModule = defineFormationModule({
       pipeline: optional(toNullableObject(properties.pipeline)),
       outputMapping: optional(toNullableObject(properties.output_mapping)),
       guardrailIds: optional(toNullableArray<string>(properties.guardrail_ids)),
+      trustedOutput: toOptionalBoolean(properties.trusted_output),
     });
   },
 
@@ -287,6 +289,7 @@ export const toolsFormationModule = defineFormationModule({
       pipeline: toNullableObject(properties.pipeline),
       outputMapping: toNullableObject(properties.output_mapping),
       guardrailIds: toNullableArray<string>(properties.guardrail_ids),
+      trustedOutput: toOptionalBoolean(properties.trusted_output),
     });
   },
 

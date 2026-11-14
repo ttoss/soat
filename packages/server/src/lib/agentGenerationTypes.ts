@@ -11,6 +11,7 @@
 import type { LanguageModel, LanguageModelUsage, Tool } from 'ai';
 
 import { type AgentRunAs, readAgentRunAs } from './agentRunAs';
+import type { GenerationProvenance } from './generationProvenance';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -217,6 +218,8 @@ export type PendingGeneration = {
    */
   toolsAuthority: WorkAuthority | null;
   toolContext?: Record<string, string>;
+  /** The turn's tally, the one `resolvedTools` count into. */
+  provenance: GenerationProvenance;
 };
 
 export type GenerationResult = {

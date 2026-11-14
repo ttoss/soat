@@ -28,6 +28,8 @@ describe('tool and agent references', () => {
     'lib/aiProviders.ts': "lists a provider's dependents",
     'lib/completionModel.ts':
       'reads back the internal id of an agent already resolved',
+    'lib/generationProvenance.ts':
+      'reads the trust of a tool an approved call already ran',
     'lib/guardrailDryRun.ts': 'reads a display name for a report',
     'lib/guardrailRuntimeMetrics.ts': 'reads display names for a report',
     'lib/guardrails.ts': "lists a project's tools and agents",

@@ -1220,6 +1220,17 @@ components:
           items:
             type: string
           description: Guardrails attached at the tool scope.
+        trusted_output:
+          type: boolean
+          description: >-
+            Declares this tool's results content no attacker can write, so they
+            do not count toward
+            `runtime.generations.untrusted_tool_results.total`. Default `false`.
+            Setting `true` loosens every guardrail reading that key, so it
+            requires `guardrails:DetachGuardrail` besides the write's own
+            permission (`403 ACTION_NOT_HELD` without it). A `search-knowledge`
+            or `get-document` result from a `builtin` tool counts toward
+            `runtime.generations.knowledge_results.total` whatever this says.
 
     DatasetResourceProperties:
       description: >-
