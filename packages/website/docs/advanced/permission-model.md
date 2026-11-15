@@ -1,5 +1,5 @@
 ---
-description: 'The permission model in one page: grant and cap, who a request runs as, what a resource that acts later runs under, run_as, stored authority, IAM tokens and what a tool server receives.'
+description: 'The permission model in one page: grant and cap, who a request runs as, what deferred work runs under, run_as, stored authority and IAM tokens.'
 ---
 
 import Tabs from '@theme/Tabs';
