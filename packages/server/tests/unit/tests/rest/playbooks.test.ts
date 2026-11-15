@@ -293,6 +293,94 @@ describe('Playbooks', () => {
     });
   });
 
+  describe('an input required on a condition', () => {
+    const conditional = (required: unknown) => {
+      return {
+        nodes: [
+          {
+            id: 'intake',
+            title: 'Intake',
+            kind: 'collect',
+            inputs: [
+              {
+                name: 'married',
+                schema: { type: 'boolean' },
+                required: true,
+                source: 'manual',
+              },
+              {
+                name: 'spouse',
+                schema: { type: 'string' },
+                required,
+                source: 'manual',
+              },
+            ],
+          },
+        ],
+      };
+    };
+
+    test('stores an expression over a sibling input and reads it back', async () => {
+      const required = { '==': [{ var: 'married' }, true] };
+      const res = await createPlaybook(userToken, {
+        definition: conditional(required),
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.definition.nodes[0].inputs[1].required).toEqual(required);
+    });
+
+    test('returns 400 for a required that is neither a boolean nor an expression', async () => {
+      for (const required of [1, 'yes', { married: true }, null]) {
+        const res = await createPlaybook(adminToken, {
+          definition: conditional(required),
+        });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    });
+
+    test('refuses an expression reading a name that is not a sibling input', async () => {
+      const res = await createPlaybook(adminToken, {
+        definition: conditional({
+          and: [{ var: 'married' }, { var: 'children.0' }],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PLAYBOOK_VALIDATION_FAILED');
+      expect(res.body.error.meta.problems).toEqual([
+        expect.objectContaining({
+          code: 'UNKNOWN_FIELD',
+          path: 'definition.nodes[0].inputs[1].required',
+        }),
+      ]);
+    });
+
+    test('refuses an expression reading its own input', async () => {
+      const res = await createPlaybook(adminToken, {
+        definition: conditional({ '!': [{ var: 'spouse' }] }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.meta.problems).toEqual([
+        expect.objectContaining({
+          code: 'UNKNOWN_FIELD',
+          path: 'definition.nodes[0].inputs[1].required',
+        }),
+      ]);
+    });
+
+    test('accepts a var scoped to an iterator element', async () => {
+      const res = await createPlaybook(adminToken, {
+        definition: conditional({
+          some: [{ var: 'married' }, { '==': [{ var: '' }, true] }],
+        }),
+      });
+      expect(res.status).toBe(201);
+    });
+  });
+
   describe('POST /api/v1/playbooks/validate', () => {
     test('answers valid for a sound definition', async () => {
       const res = await authenticatedTestClient(userToken)

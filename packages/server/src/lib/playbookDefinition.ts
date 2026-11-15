@@ -11,10 +11,13 @@ export type JsonSchema = { [key: string]: JsonValue };
 /** `field` is `output[.path]` or `input.<name>[.path]` of the node named. */
 export type PlaybookInputSource = 'manual' | { node_id: string; field: string };
 
+/** A boolean, or JSON Logic over the other inputs of the node, by name. */
+export type PlaybookRequired = boolean | { [operator: string]: JsonValue };
+
 export type PlaybookInput = {
   name: string;
   schema: JsonSchema;
-  required: boolean;
+  required: PlaybookRequired;
   description?: string;
   source: PlaybookInputSource;
 };

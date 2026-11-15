@@ -48,7 +48,7 @@ export const playbookMissingInputs = (args: {
                 ...(input.description !== undefined && {
                   description: input.description,
                 }),
-                required: input.required,
+                required: views.get(key)?.resolvedRequired[input.name] ?? true,
               };
             });
         });
