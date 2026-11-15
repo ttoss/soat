@@ -33,22 +33,9 @@ import {
   meterToolExecution,
   type ToolExecutionMeter,
 } from './usageToolRecording';
-import { agentWorkAuthority, type WorkAuthority } from './workAuthority';
+import { turnCallAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
-
-/**
- * The authority a builtin call runs under: under `run_as: agent`, the agent's
- * grant in place of the work's; else the work's own.
- */
-const soatCallAuthority = (args: {
-  authority: WorkAuthority | null;
-  agentAuthority?: AgentAuthority;
-}): WorkAuthority | null => {
-  const { authority, agentAuthority } = args;
-  if (!authority || agentAuthority?.runAs !== 'agent') return authority;
-  return agentWorkAuthority({ authority, agent: agentAuthority });
-};
 
 /**
  * Invokes a SOAT platform action on behalf of a `soat` tool.
@@ -109,7 +96,7 @@ export const executeSoatTool = async (args: {
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
-            authority: soatCallAuthority(args),
+            authority: turnCallAuthority(args),
             actor: args.toolContext?.actor_id ?? null,
             headers: {
               ...args.buildContextHeaders({
