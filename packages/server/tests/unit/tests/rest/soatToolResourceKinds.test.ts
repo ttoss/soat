@@ -57,7 +57,7 @@ const parseResult = (
   }
 };
 
-/** Every kind `resourceScopes.ts` resolves, in the order `kinds` lists them. */
+/** Every kind `resourceScopes.ts` lists. */
 const KINDS = [
   'actor',
   'agent',

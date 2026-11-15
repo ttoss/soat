@@ -2,9 +2,7 @@
  * The spec annotation that says which argument of a call names the thing it
  * acts on: `x-soat-resource` on an operation, read into the derived tool.
  *
- * Its own module so the boundary path can take the type without importing the
- * whole spec-processing surface, and so `soatToolsHelpers.ts` stays inside the
- * module ceiling.
+ * Its own module so `soatToolsHelpers.ts` stays inside the module ceiling.
  */
 
 /**
