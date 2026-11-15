@@ -3,7 +3,6 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
   signatureHeader,
-  verifyBareBodySignature,
   verifyTimestampedSignature,
 } from 'src/lib/hmacSignature';
 import { findWebhookTriggerForDelivery } from 'src/lib/triggers';
@@ -11,39 +10,25 @@ import { isUniqueViolationOf } from 'src/lib/uniqueViolation';
 
 const hooksRouter = new Router<Context>();
 
-type VerifiedSignature =
-  { valid: false } | { valid: true; idempotencyKey: string | null };
-
 /**
- * `t=<unix>,v1=<hex>` over `<t>.<body>` (`timestampedSignature`), or the
- * bare-body `sha256=<hex>`. Only the timestamped scheme yields a key: its digest
- * names one signed delivery, while a bare-body digest repeats for every
- * identical body a sender legitimately sends.
+ * `t=<unix>,v1=<hex>` over `<t>.<body>` (`timestampedSignature`), the only
+ * scheme accepted. Its digest names one signed delivery, so it keys the firing.
  */
 const verifySignature = (args: {
   secret: string;
   rawBody: string;
   header?: string;
   triggerPublicId: string;
-}): VerifiedSignature => {
-  if (!args.header) return { valid: false };
-  if (args.header.startsWith('sha256=')) {
-    return verifyBareBodySignature({
-      secret: args.secret,
-      rawBody: args.rawBody,
-      header: args.header,
-    })
-      ? { valid: true, idempotencyKey: null }
-      : { valid: false };
-  }
+}): { idempotencyKey: string } | null => {
+  if (!args.header) return null;
   const digest = verifyTimestampedSignature({
     secret: args.secret,
     rawBody: args.rawBody,
     header: args.header,
   });
   return digest
-    ? { valid: true, idempotencyKey: `${digest}:${args.triggerPublicId}` }
-    : { valid: false };
+    ? { idempotencyKey: `${digest}:${args.triggerPublicId}` }
+    : null;
 };
 
 /**
@@ -88,7 +73,7 @@ hooksRouter.post('/hooks/triggers/:trigger_id', async (ctx: Context) => {
     header: ctx.get(signatureHeader()) || undefined,
     triggerPublicId: triggerId,
   });
-  if (!signature.valid) {
+  if (!signature) {
     throw new DomainError('UNAUTHORIZED', 'Invalid or missing signature.');
   }
 

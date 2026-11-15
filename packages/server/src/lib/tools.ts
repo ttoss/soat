@@ -230,7 +230,7 @@ export const createTool = async (
   await assertTrustedOutputAllowed({
     trustedOutput: args.trustedOutput,
     projectId: args.projectId,
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
   await validateToolDefinition({ definition: args, projectId: args.projectId });
   await assertWriterHolds({
@@ -363,7 +363,7 @@ export const updateTool = async (
   await assertTrustedOutputAllowed({
     trustedOutput: args.trustedOutput,
     projectId: tool.projectId,
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
   });
 
   await validateToolUpdate({ args, tool });

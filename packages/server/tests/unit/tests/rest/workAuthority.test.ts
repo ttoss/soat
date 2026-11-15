@@ -19,11 +19,13 @@ describe('stored work authority', () => {
   let projectId: string;
   let listToolId: string;
 
-  const sign = (secret: string, body: string) => {
-    return `sha256=${crypto
-      .createHmac('sha256', secret)
-      .update(body)
-      .digest('hex')}`;
+  const sign = (args: { secret: string; body: string }) => {
+    const t = Math.floor(Date.now() / 1000);
+    const v1 = crypto
+      .createHmac('sha256', args.secret)
+      .update(`${t}.${args.body}`)
+      .digest('hex');
+    return `t=${t},v1=${v1}`;
   };
 
   const policyAllowing = async (name: string, actions: string[]) => {
@@ -124,7 +126,7 @@ describe('stored work authority', () => {
       const fired = await testClient
         .post(`/hooks/triggers/${trigger.body.id}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(trigger.body.secret, body))
+        .set('X-Soat-Signature', sign({ secret: trigger.body.secret, body }))
         .send(body);
       expect(fired.status).toBe(202);
       const firing = await pollFiring(fired.body.firing_id);
