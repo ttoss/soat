@@ -51,6 +51,7 @@ describe('Conversation self-call', () => {
         'conversations:CreateConversation',
         'conversations:UpdateConversation',
         'conversations:GenerateConversationMessage',
+        'agents:CreateAgentGeneration',
         'tools:ListTools',
       ],
       createNoPermUser: false,
