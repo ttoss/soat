@@ -19,6 +19,8 @@ A memory is **state**. Every write that produced or changed it is an **assertion
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Agent with Persistent Memory - Step 4 (Create a memory store)](/docs/tutorials/memories-agent#step-4--create-a-memory-store)

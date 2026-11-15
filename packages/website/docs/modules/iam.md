@@ -17,6 +17,8 @@ Every request is authenticated via JWT (users) or an API key, and authorized ent
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies)

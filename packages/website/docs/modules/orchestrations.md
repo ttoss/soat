@@ -17,6 +17,8 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 
 > See the [Permissions Reference](../permissions.md#orchestrations) for the IAM action strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Orchestration Control Flow: Delay, Poll, and Loop](/docs/tutorials/orchestration-control-flow) — `delay`, `poll`, `loop`, and `condition` nodes in one run

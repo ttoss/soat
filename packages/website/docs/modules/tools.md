@@ -17,6 +17,8 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Execute Agent Tool Calls in Your Own App - Step 4 (Declare the function as a client tool)](/docs/tutorials/client-tools#step-4--declare-the-function-as-a-client-tool)

@@ -158,6 +158,7 @@ const sidebars: SidebarsConfig = {
         'advanced/retrieval-quality',
         'advanced/eval-design',
         'advanced/tool-context',
+        'advanced/permission-model',
       ],
     },
     {

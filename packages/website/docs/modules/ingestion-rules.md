@@ -19,6 +19,8 @@ The same shape applied to turns instead of files is a [memory rule](./memories.m
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Ingest Images and Audio with Converters - Step 6 (Route images to the agent)](/docs/tutorials/ingest-images-and-audio#step-6--route-images-to-the-agent)

@@ -19,6 +19,8 @@ Getting a machine-readable judgment out of an agent otherwise means configuring 
 - **Two backends answer**: a tool-less agent, which SOAT prompts, or a tool, which receives the questions and answers them — a classifier, a calibrated model or any endpoint of your own.
 - **The shapes are OpenAI's Decisions API**: questions, input and answers are those of its request and response, so a tool that forwards to `https://api.openai.com/v1/decisions`, with `model` as a preset parameter, answers a decider unchanged.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Route Work with a Decider](/docs/tutorials/route-work-with-a-decider) — a tool-backed decider applies rules to a customer's actor tags, and an orchestration branches on its answer

@@ -29,6 +29,8 @@ repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in
 > See the [Permissions Reference](../permissions.md#triggers) for the IAM action
 > strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Automate a Flow with Triggers](/docs/tutorials/automate-a-flow-with-triggers)
