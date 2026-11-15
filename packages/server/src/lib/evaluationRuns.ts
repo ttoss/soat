@@ -15,7 +15,11 @@ import { DomainError } from '../errors';
 import { pinDeciderVersions } from './evaluationDeciderScorer';
 import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
 import {
-  evalSettlement,
+  type EvalRunDefinition,
+  evalRunDefinitionOf,
+  storedEvalRunDefinition,
+} from './evaluationRunDefinition';
+import {
   executeAndRecordItem,
   failEvalRun,
   finalizeEvalRun,
@@ -32,7 +36,7 @@ import {
   evalStarts,
   validateScorerReferences,
 } from './evaluationScorerReferences';
-import { scorerList, validateScorers } from './evaluationScorers';
+import { validateScorers } from './evaluationScorers';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
@@ -187,6 +191,7 @@ type RunPlan = {
   agent: AgentRow;
   items: Array<InstanceType<(typeof db)['DatasetItem']>>;
   agentVersion: number;
+  definition: EvalRunDefinition;
   deciderVersions: Record<string, number> | null;
   baselineRunDbId: number | null;
 };
@@ -257,6 +262,7 @@ const planRun = async (args: {
       agent,
       requestedVersion: args.agentVersion,
     }),
+    definition: evalRunDefinitionOf({ evaluation }),
     deciderVersions: await pinDeciderVersions({
       scorers: evaluation.scorers,
       projectId: evaluation.projectId as number,
@@ -291,7 +297,7 @@ const executeSyncRun = async (args: {
         runDbId: run.id as number,
         agent: plan.agent,
         agentVersion: plan.agentVersion,
-        scorers: scorerList(plan.evaluation.scorers),
+        scorers: plan.definition.scorers,
         deciderScoring: {
           versions: plan.deciderVersions,
           evalId: plan.evaluation.publicId,
@@ -316,7 +322,7 @@ const executeSyncRun = async (args: {
   await finalizeEvalRun({
     run,
     projectId,
-    settlement: evalSettlement({ evaluation: plan.evaluation }),
+    settlement: plan.definition,
   });
 };
 
@@ -378,7 +384,9 @@ export const startEvalRun = async (args: {
 
   const run = await db.EvalRun.create({
     evalId: plan.evaluation.id as number,
+    agentPublicId: plan.agent.publicId,
     agentVersion: plan.agentVersion,
+    definition: storedEvalRunDefinition({ definition: plan.definition }),
     deciderVersions: plan.deciderVersions,
     // A queued run has not started yet — `startedAt` is stamped by the first
     // worker that picks up one of its items.

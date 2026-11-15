@@ -42,7 +42,9 @@ export const mapEvalRun = (run: EvalRunRow) => {
   return {
     id: run.publicId,
     eval_id: run.eval?.publicId,
+    agent_id: run.agentPublicId ?? null,
     agent_version: run.agentVersion,
+    definition: run.definition ?? null,
     decider_versions: run.deciderVersions ?? null,
     status: run.status,
     baseline_run_id: run.baselineRun?.publicId ?? null,

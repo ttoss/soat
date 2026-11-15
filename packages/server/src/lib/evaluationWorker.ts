@@ -18,19 +18,22 @@ import {
   ackEvalItemTask,
   claimEvalItemTasks,
   countPendingEvalItemTasks,
+  discardEvalItemTasks,
   type EvalRunTaskInstance,
 } from './evaluationQueue';
 import {
+  type EvalRunDefinition,
+  readEvalRunDefinition,
+} from './evaluationRunDefinition';
+import {
   claimRunFinalization,
-  type EvalSettlement,
-  evalSettlement,
   executeAndRecordItem,
   failEvalRun,
   finalizeIfUnclaimed,
   recountEvalRunProgress,
 } from './evaluationRunExecution';
-import { scorerList } from './evaluationScorers';
 import { runAsJob } from './requestCorrelation';
+import { agentReferences } from './resourceReferences';
 import { createScheduler } from './scheduler';
 import { parseWorkAuthority } from './workAuthority';
 
@@ -73,10 +76,15 @@ const isLive = (status: string): boolean => {
 type LoadedRun = {
   run: InstanceType<(typeof db)['EvalRun']>;
   projectId: number;
-  settlement: EvalSettlement;
+  evalPublicId: string;
+  definition: EvalRunDefinition | null;
 };
 
-/** Loads a run together with the Eval fields execution and finalize need. */
+/**
+ * Loads a run with its project. Everything a run is executed and settled by is
+ * read off the run: of its Eval, only the immutable project and id are read
+ * (`tests/harness/evalRunWorkerReads.test.mjs`).
+ */
 const loadRunContext = async (args: {
   evalRunId: number;
 }): Promise<LoadedRun | null> => {
@@ -87,16 +95,37 @@ const loadRunContext = async (args: {
      point — the guards exist so a future caller cannot crash the drain loop. */
   if (!run) return null;
 
-  const evaluation = await db.Eval.findByPk(run.evalId as number);
+  const evaluation = await db.Eval.findByPk(run.evalId as number, {
+    attributes: ['projectId', 'publicId'],
+  });
   /* istanbul ignore next -- see above. */
   if (!evaluation) return null;
 
   return {
     run,
     projectId: evaluation.projectId as number,
-    settlement: evalSettlement({ evaluation }),
+    evalPublicId: evaluation.publicId,
+    definition: readEvalRunDefinition({ run }),
   };
 };
+
+/**
+ * Settles `failed` a run that cannot go on: it recorded no definition, or its
+ * agent was deleted. Never falls back to the Eval's current values, which may
+ * name another agent or other scorers.
+ */
+const failUnrunnable = async (args: {
+  context: LoadedRun;
+  reason: string;
+}): Promise<void> => {
+  const { run, projectId } = args.context;
+  await discardEvalItemTasks({ evalRunId: run.id as number });
+  if (!(await claimRunFinalization({ runDbId: run.id as number }))) return;
+  log('failUnrunnable: run=%s %s', run.publicId, args.reason);
+  await failEvalRun({ run, projectId, reason: args.reason });
+};
+
+const NO_DEFINITION = 'The run recorded no definition to score it by.';
 
 /**
  * Settles a run whose queue has drained.
@@ -116,41 +145,45 @@ const settleIfDrained = async (args: { evalRunId: number }): Promise<void> => {
 
   // A run that is no longer live has nothing left to settle: it was cancelled
   // (which dropped its tasks and deliberately published no partial aggregate),
-  // or a redelivered task arrived after it had already completed.
-  if (!isLive(context.run.status)) return;
+  // a redelivered task arrived after it had already completed, or its first
+  // item failed it for having no definition.
+  const { definition } = context;
+  if (!isLive(context.run.status) || !definition) return;
 
-  await finalizeIfUnclaimed(context);
+  await finalizeIfUnclaimed({ ...context, settlement: definition });
 };
 
-/** The agent, item and scorer config one task needs to execute. */
-const loadItemTarget = async (args: {
-  evalDbId: number;
-  datasetItemDbId: number;
+/**
+ * The run's own definition and agent, or null after failing the run when it
+ * has no definition or its agent has been deleted.
+ */
+const loadRunnable = async (args: {
+  context: LoadedRun;
 }): Promise<{
+  definition: EvalRunDefinition;
   agent: InstanceType<(typeof db)['Agent']>;
-  item: InstanceType<(typeof db)['DatasetItem']>;
-  scorers: unknown[];
-  evalPublicId: string;
 } | null> => {
-  const evaluation = (await db.Eval.findByPk(args.evalDbId, {
-    include: [{ model: db.Agent, as: 'agent' }],
-  })) as
-    | (InstanceType<(typeof db)['Eval']> & {
-        agent?: InstanceType<(typeof db)['Agent']>;
+  const { context } = args;
+  const { definition, run } = context;
+  if (!definition) {
+    await failUnrunnable({ context, reason: NO_DEFINITION });
+    return null;
+  }
+  const agent = run.agentPublicId
+    ? await agentReferences.find({
+        id: run.agentPublicId,
+        projectId: context.projectId,
+        reach: 'project',
       })
-    | null;
-  const item = await db.DatasetItem.findByPk(args.datasetItemDbId);
-
-  /* istanbul ignore next -- the agent FK is NOT NULL, and deleting a dataset
-     item cascades its task away before it can be claimed. */
-  if (!evaluation?.agent || !item) return null;
-
-  return {
-    agent: evaluation.agent,
-    item,
-    scorers: scorerList(evaluation.scorers),
-    evalPublicId: evaluation.publicId,
-  };
+    : null;
+  if (!agent) {
+    await failUnrunnable({
+      context,
+      reason: `The run's agent '${run.agentPublicId ?? ''}' no longer exists.`,
+    });
+    return null;
+  }
+  return { definition, agent };
 };
 
 /**
@@ -190,14 +223,13 @@ const handleEvalItemTask = async (args: {
     });
   }
 
-  const target = await loadItemTarget({
-    evalDbId: run.evalId as number,
-    datasetItemDbId: args.task.datasetItemId as number,
-  });
-  /* istanbul ignore next -- the agent FK is NOT NULL, and a deleted item
-     cascades its task away before it can be claimed. */
-  if (!target) return;
-  const { agent, item, scorers, evalPublicId } = target;
+  const runnable = await loadRunnable({ context });
+  if (!runnable) return;
+  const { definition, agent } = runnable;
+  const item = await db.DatasetItem.findByPk(args.task.datasetItemId as number);
+  /* istanbul ignore next -- deleting a dataset item cascades its task away
+     before it can be claimed. */
+  if (!item) return;
 
   log(
     'handleEvalItemTask: run=%s item=%s attempt=%d',
@@ -212,10 +244,10 @@ const handleEvalItemTask = async (args: {
     runDbId: run.id as number,
     agent,
     agentVersion: run.agentVersion as number,
-    scorers,
+    scorers: definition.scorers,
     deciderScoring: {
       versions: run.deciderVersions,
-      evalId: evalPublicId,
+      evalId: context.evalPublicId,
       runId: run.publicId,
     },
     item,
@@ -282,6 +314,52 @@ export const drainEvalQueueOnce = async (args?: {
   return tasks.length;
 };
 
+/** Settles one stale run; whether it was settled by this call. */
+const reapRun = async (args: {
+  run: InstanceType<(typeof db)['EvalRun']>;
+  now: Date;
+}): Promise<boolean> => {
+  const { run, now } = args;
+  const pending = await countPendingEvalItemTasks({
+    evalRunId: run.id as number,
+  });
+  // Still has queued work: the drain sweep owns it, not the reaper.
+  if (pending > 0) return false;
+
+  const context = await loadRunContext({ evalRunId: run.id as number });
+  /* istanbul ignore next -- see `loadRunContext`. */
+  if (!context) return false;
+
+  const resultCount = await db.EvalResult.count({
+    where: { evalRunId: run.id as number },
+  });
+
+  if (resultCount >= (run.itemCount as number) && context.definition) {
+    log('reapAbandonedEvalRuns: finalizing stalled run=%s', run.publicId);
+    return finalizeIfUnclaimed({
+      ...context,
+      settlement: context.definition,
+      now,
+    });
+  }
+
+  if (!(await claimRunFinalization({ runDbId: run.id as number, now }))) {
+    return false;
+  }
+  log(
+    'reapAbandonedEvalRuns: failing abandoned run=%s results=%d/%d',
+    run.publicId,
+    resultCount,
+    run.itemCount
+  );
+  await failEvalRun({
+    run: context.run,
+    projectId: context.projectId,
+    reason: `Abandoned with ${resultCount} of ${String(run.itemCount)} items scored.`,
+  });
+  return true;
+};
+
 /**
  * Recovers non-terminal runs with no outstanding work that have gone quiet past
  * the grace period. Two shapes land here and need opposite treatment:
@@ -316,41 +394,7 @@ export const reapAbandonedEvalRuns = async (args?: {
   let reaped = 0;
 
   for (const run of stale) {
-    const pending = await countPendingEvalItemTasks({
-      evalRunId: run.id as number,
-    });
-    // Still has queued work: the drain sweep owns it, not the reaper.
-    if (pending > 0) continue;
-
-    const context = await loadRunContext({ evalRunId: run.id as number });
-    /* istanbul ignore next -- see `loadRunContext`. */
-    if (!context) continue;
-
-    const resultCount = await db.EvalResult.count({
-      where: { evalRunId: run.id as number },
-    });
-
-    if (resultCount >= (run.itemCount as number)) {
-      log('reapAbandonedEvalRuns: finalizing stalled run=%s', run.publicId);
-      if (!(await finalizeIfUnclaimed({ ...context, now }))) continue;
-    } else {
-      if (!(await claimRunFinalization({ runDbId: run.id as number, now }))) {
-        continue;
-      }
-      log(
-        'reapAbandonedEvalRuns: failing abandoned run=%s results=%d/%d',
-        run.publicId,
-        resultCount,
-        run.itemCount
-      );
-      await failEvalRun({
-        run: context.run,
-        projectId: context.projectId,
-        reason: `Abandoned with ${resultCount} of ${String(run.itemCount)} items scored.`,
-      });
-    }
-
-    reaped += 1;
+    if (await reapRun({ run, now })) reaped += 1;
   }
 
   return reaped;

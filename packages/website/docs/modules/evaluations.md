@@ -91,7 +91,9 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | --- | --- | --- |
 | `id` | string | Public identifier (e.g. `evrun_…`) |
 | `eval_id` | string | ID of the eval this run belongs to |
+| `agent_id` | string \| null | The agent every item ran against, resolved when the run was created; kept after that agent is deleted. `null` on a run that recorded none; see [Version pinning](#version-pinning) |
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
+| `definition` | object \| null | The eval's `scorers`, `pass_threshold` and `group_by` as they were when the run was created, which every item is scored and the run settled by; see [Version pinning](#version-pinning) |
 | `decider_versions` | object \| null | Scorer name → the decider version each [`decider` scorer](#decider-scorers-decider) grades under, resolved when the run started; `null` when the eval has none |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `cancelled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
@@ -494,17 +496,41 @@ The generation must belong to the same project as the dataset.
 
 ### Version pinning
 
-A run resolves **one** agent version at run start, stamps it on `agent_version`, and every
-item executes against it.
+A run resolves **one** agent and **one** agent version at run start, stamps them on
+`agent_id` and `agent_version`, and every item executes against them.
 
 - Pass `agent_version` to name an archived [version](./agents.md#versioning-and-staged-rollout).
   An unknown version is a `400`.
 - Omit it and the run uses the [active release's](./agents.md#staged-rollout) **stable**
   version, or the live draft version when no release is in effect.
 
+A run also copies what grades it into `definition`: the eval's `scorers`, `pass_threshold`
+and `group_by` at run start. Every item is scored by `definition.scorers`, `passed` reads
+`definition.pass_threshold` and the grouping is keyed by `definition.group_by`. An edit to
+the eval (its agent, scorers, threshold or grouping key) applies to runs created after it;
+a queued run keeps what it started with, and a finished run still says what graded it.
+
+```json
+{
+  "id": "evrun_V1StGXR8Z5jdHi6B",
+  "agent_id": "agent_V1StGXR8Z5jdHi6B",
+  "agent_version": 7,
+  "definition": {
+    "scorers": [{ "type": "contains", "value": "refund" }],
+    "pass_threshold": 0.8,
+    "group_by": "kind"
+  }
+}
+```
+
+`definition.pass_threshold: null` means the run reports without gating; `definition: null`
+means the run recorded no definition. A queued run whose agent is deleted before its items
+run settles `failed` rather than running the eval's current agent.
+
 An [eval-gated promotion](./agents.md#eval-gated-promotion) matches on the pin: a release
 naming this eval as its `promotion_gate` promotes only once a run finished `completed` with
-`passed: true` **and** carried the canary's `agent_version`.
+`passed: true` **and** carried the agent being promoted in `agent_id` and the canary's
+`agent_version`. A run with `agent_id: null` satisfies no gate.
 
 ### Pass semantics
 
@@ -817,9 +843,9 @@ the run-level figures:
   ([Pass semantics](#pass-semantics)). A kind that needs its own threshold gets its own
   dataset and eval.
 
-`group_by` is set on create or update (`null` clears it) and applies to the runs that
-settle afterwards; a settled run keeps the grouping it was stored with. Omitted, a run
-reports no `grouping`.
+`group_by` is set on create or update (`null` clears it) and applies to the runs created
+afterwards: a run groups by its own [`definition.group_by`](#version-pinning). Omitted, a
+run reports no `grouping`.
 
 ### Uncertainty
 

@@ -360,23 +360,10 @@ export const recountEvalRunProgress = async (args: {
 
 // ── Finalization ───────────────────────────────────────────────────────────
 
-/** What finalize reads off the Eval: the gate and the grouping key. */
+/** What finalize reads off the run's definition: the gate and grouping key. */
 export type EvalSettlement = {
   passThreshold: number | null;
   groupBy: string | null;
-};
-
-/** The one transcription of an Eval row into its {@link EvalSettlement}. */
-export const evalSettlement = (args: {
-  evaluation: { passThreshold: string | null; groupBy: string | null };
-}): EvalSettlement => {
-  return {
-    passThreshold:
-      args.evaluation.passThreshold === null
-        ? null
-        : Number(args.evaluation.passThreshold),
-    groupBy: args.evaluation.groupBy,
-  };
 };
 
 /**

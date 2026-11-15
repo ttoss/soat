@@ -88,9 +88,9 @@ export const resolvePromotionGate = async (args: {
 /**
  * The newest passing run of the gate's eval against one agent version, or null.
  *
- * Matching is on the run's pinned `agentVersion`, which is the version every
- * item of that run actually executed against — so a green run of the same eval
- * against a *different* version is not evidence and does not satisfy the gate.
+ * Matching is on the run's own `agentPublicId` and pinned `agentVersion`,
+ * which every item of that run executed against: a green run of another agent
+ * or version is not evidence, and a run that recorded no agent matches none.
  */
 const findPassingGateRun = async (args: {
   gate: string;
@@ -109,6 +109,7 @@ const findPassingGateRun = async (args: {
   return db.EvalRun.findOne({
     where: {
       evalId: evaluation.id as number,
+      agentPublicId: args.agent.publicId,
       agentVersion: args.version,
       status: PASSING_RUN_STATUS,
       passed: true,

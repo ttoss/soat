@@ -102,6 +102,7 @@ Measure the agent at the `temperature` production serves. Temperature is part of
 
 - **Compare deltas, not raw pass rates.** [Baseline deltas](../modules/evaluations.md#baseline-deltas) are computed over the items both runs scored (`compared_item_count`); a run's own `pass_rate` includes items added since. Nonzero `added_item_count` or `removed_item_count` means the dataset moved under you.
 - **Read `errored_count` next to `passed`.** The pass rate is passed items over _non-errored_ items, and the verdict does not read the error count: a run whose items mostly errored passes on the few that scored ([Errors are not zeros](../modules/evaluations.md#errors-are-not-zeros)). Check it before promoting on a run.
+- **Match `definition` across the two runs.** Each run records the scorers, threshold and grouping key it was graded by; a baseline graded under a different `definition` is still compared, so a delta across definitions moves the criteria, not only the agent.
 - **Match `decider_versions` across the two runs.** A run pins each decider's version, and a baseline graded under another version is still compared: a delta across versions moves the criteria, not only the agent.
 
 ## Calibrating a judge
