@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.112.0](https://github.com/ttoss/soat/compare/v0.111.0...v0.112.0) (2026-11-15)
+
+* fix(evaluations)!: an eval run records its agent and definition; a promotion gate accepts only a run of the promoted agent (#1946) ([6c207da](https://github.com/ttoss/soat/commit/6c207dab3fc5c97da54f0680deff37dea692cb5e)), closes [#1946](https://github.com/ttoss/soat/issues/1946)
+* feat(triggers)!: inbound trigger hook accepts only the timestamped signature (#1940) ([ac75c1d](https://github.com/ttoss/soat/commit/ac75c1d879eeec4cc31a34803b2dbe1ef8cb3989)), closes [#1940](https://github.com/ttoss/soat/issues/1940)
+
+### Bug Fixes
+
+* **agents:** run_as agent tool assertions carry the agent's grant ([#1941](https://github.com/ttoss/soat/issues/1941)) ([587cd39](https://github.com/ttoss/soat/commit/587cd395b2485e3213673ed5650f9b090bc72810))
+* **approvals:** key a held tool call on the identity it runs as ([#1939](https://github.com/ttoss/soat/issues/1939)) ([fb3c229](https://github.com/ttoss/soat/commit/fb3c2293b34d0944ae2e947032b7f8b638d7877d)), closes [#1922](https://github.com/ttoss/soat/issues/1922)
+
+### Features
+
+* **guardrails:** trusted_output on tools and runtime.generations.* provenance counters ([#1937](https://github.com/ttoss/soat/issues/1937)) ([3a6448d](https://github.com/ttoss/soat/commit/3a6448dd3d1ffb5c63fc142a5560d5f1ee79e0e3))
+
+### BREAKING CHANGES
+
+* a passing run recorded before agent_id existed satisfies
+  no promotion gate; a release mid-rollout needs a fresh run.
+* the inbound trigger hook refuses `X-Soat-Signature:
+  sha256=<hex>` with `401`; sign `t=<unix>,v1=<hex(HMAC-SHA256(secret,
+  "<t>.<body>"))>` instead.
+
 # [0.111.0](https://github.com/ttoss/soat/compare/v0.110.0...v0.111.0) (2026-11-14)
 
 ### Bug Fixes
