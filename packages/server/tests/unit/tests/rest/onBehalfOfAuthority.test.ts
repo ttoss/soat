@@ -345,6 +345,40 @@ describe('On-Behalf-Of authority', () => {
       expect(allowed.status).toBe(200);
     });
 
+    test("a run_as: agent generation's callback runs under the agent's policy_ids, not the caller's", async () => {
+      const callbackOf = async (args: { actions: string[]; key: string }) => {
+        const agentId = await turn.createAgent({
+          run_as: 'agent',
+          tool_bindings: [{ tool_id: toolId }],
+          policy_ids: [
+            await turn.createPolicy({
+              statement: [{ effect: 'Allow', action: args.actions }],
+            }),
+          ],
+        });
+        const res = await authenticatedTestClient(args.key)
+          .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+          .send({ messages: [proposeCalls([{ name: 'echo', args: {} }])] });
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('completed');
+        return lastAssertion();
+      };
+      const runOnly = await mintKey(['agents:CreateAgentGeneration']);
+
+      const narrowCaller = await readDocument(
+        await callbackOf({ actions: ['documents:GetDocument'], key: runOnly })
+      );
+      const wideCaller = await readDocument(
+        await callbackOf({ actions: ['tools:*'], key: projectKey })
+      );
+
+      expect(narrowCaller.status).toBe(200);
+      expect(wideCaller.status).toBe(403);
+      expect(wideCaller.body.error.meta).toMatchObject({
+        denied_by: { type: 'on_behalf_of', id: null },
+      });
+    });
+
     test('a generation an OAuth token started caps its callback by the consent', async () => {
       const agentId = await turn.createAgent({
         tool_bindings: [{ tool_id: toolId }],

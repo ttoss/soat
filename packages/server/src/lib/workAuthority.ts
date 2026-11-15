@@ -430,18 +430,20 @@ export const triggerAuthority = (args: {
 };
 
 /**
- * The authority a `run_as: agent` turn's builtin calls run under: the agent's
- * grant capped by its owner project's `agent_policy_ids`, pinned to the turn's
- * project, in place of the work's grant and caps. The work's principal, chain
- * and work id carry on.
+ * The authority a turn's tool calls run under, a builtin's dispatch and an
+ * assertion's sealed authority alike. Under `run_as: agent`: the agent's grant
+ * capped by its owner project's `agent_policy_ids`, pinned to the turn's
+ * project, in place of the work's grant and caps; the work's principal, chain
+ * and work id carry on. Else the work's own.
  */
-export const agentWorkAuthority = (args: {
-  authority: WorkAuthority;
-  agent: Extract<AgentAuthority, { runAs: 'agent' }>;
-}): WorkAuthority => {
-  const { agent } = args;
+export const turnCallAuthority = (args: {
+  authority: WorkAuthority | null;
+  agentAuthority?: AgentAuthority;
+}): WorkAuthority | null => {
+  const { authority, agentAuthority: agent } = args;
+  if (!authority || agent?.runAs !== 'agent') return authority;
   return {
-    ...args.authority,
+    ...authority,
     project: agent.projectPublicId,
     grant: { holder: 'agent', agent: agent.agentId, policy: agent.grant },
     caps: [{ kind: 'project_agents', project: agent.capProject }],
