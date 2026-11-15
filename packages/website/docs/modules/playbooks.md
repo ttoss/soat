@@ -17,6 +17,8 @@ An [orchestration](./orchestrations.md) is a pipeline that runs once and ends, a
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Data Model
 
 ### Playbook

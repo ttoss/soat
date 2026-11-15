@@ -17,6 +17,8 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Debug Session, Generation, and Trace History - Step 3 (Run two generations)](/docs/tutorials/debug-session-generation-trace-history#step-3---run-two-generations-and-capture-generation_id--trace_id)

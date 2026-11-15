@@ -22,6 +22,8 @@ Creating a task places it in the `initial` state (or a named `state`, [Alternate
 > `workflows:` action strings and [#tasks](../permissions.md#tasks) for the
 > `tasks:` action strings.
 
+How authority is formed, stored and narrowed: [The Permission Model](../advanced/permission-model.md).
+
 ## Related Tutorials
 
 - [Write a Sonnet with a Workflow](/docs/tutorials/orchestrate-a-sonnet-with-workflows) — agent-driven states, a human review, a backward move
