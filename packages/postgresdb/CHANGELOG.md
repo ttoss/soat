@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.112.0](https://github.com/ttoss/soat/compare/v0.111.0...v0.112.0) (2026-11-15)
+
+* fix(evaluations)!: an eval run records its agent and definition; a promotion gate accepts only a run of the promoted agent (#1946) ([6c207da](https://github.com/ttoss/soat/commit/6c207dab3fc5c97da54f0680deff37dea692cb5e)), closes [#1946](https://github.com/ttoss/soat/issues/1946)
+
+### Features
+
+* **guardrails:** trusted_output on tools and runtime.generations.* provenance counters ([#1937](https://github.com/ttoss/soat/issues/1937)) ([3a6448d](https://github.com/ttoss/soat/commit/3a6448dd3d1ffb5c63fc142a5560d5f1ee79e0e3))
+
+### BREAKING CHANGES
+
+* a passing run recorded before agent_id existed satisfies
+  no promotion gate; a release mid-rollout needs a fresh run.
+
 # [0.111.0](https://github.com/ttoss/soat/compare/v0.110.0...v0.111.0) (2026-11-14)
 
 ### Features
