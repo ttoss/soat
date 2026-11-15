@@ -61,6 +61,7 @@ import { principalBound } from './2026-11-12-principalBound';
 import { agentRunAs } from './2026-11-13-agentRunAs';
 import { policyIdsPublic } from './2026-11-13-policyIdsPublic';
 import { workAuthority } from './2026-11-13-workAuthority';
+import { generationProvenance } from './2026-11-14-generationProvenance';
 import { resourceGrants } from './2026-11-14-resourceGrants';
 
 /**
@@ -145,4 +146,5 @@ export const MIGRATIONS: Migration[] = [
   agentRunAs,
   workAuthority,
   resourceGrants,
+  generationProvenance,
 ];

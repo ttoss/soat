@@ -2,7 +2,8 @@
  * `step_rules` — the per-step `tool_choice` / `active_tool_ids` overrides an
  * agent can declare (`modules/agents.md` — Step Rules) — compiled into the AI
  * SDK's `prepareStep` callback, together with the per-step prompt-cache
- * breakpoint (`promptCaching.ts`), the one other thing decided per step.
+ * breakpoint (`promptCaching.ts`) and the provenance snapshot the step's calls
+ * are judged on (`generationProvenance.ts`).
  *
  * A leaf module, so both the streaming and non-streaming paths can call one
  * `buildPrepareStep`: `agentGenerationHelpers` cannot import
@@ -14,6 +15,7 @@ import createDebug from 'debug';
 
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { resolveToolIdsToNames } from './agentToolSelection';
+import type { GenerationProvenance } from './generationProvenance';
 import {
   buildStepCacheBreakpoint,
   readPromptCachingConfig,
@@ -206,18 +208,17 @@ export const buildPrepareStep = (args: {
    * continues one — the AI SDK's `stepNumber` restarts at 0 there regardless.
    */
   stepsAlreadySpent?: number;
-}):
-  | ((opts: { stepNumber: number; messages: ModelMessage[] }) => {
-      toolChoice?: ToolChoice<Record<string, Tool>>;
-      activeTools?: string[];
-      messages?: ModelMessage[];
-    })
-  | undefined => {
+  /** The turn's tally, snapshotted as each step starts. */
+  provenance: GenerationProvenance;
+}): ((opts: { stepNumber: number; messages: ModelMessage[] }) => {
+  toolChoice?: ToolChoice<Record<string, Tool>>;
+  activeTools?: string[];
+  messages?: ModelMessage[];
+}) => {
   const rules = Array.isArray(args.stepRules)
     ? (args.stepRules as StepRule[])
     : [];
   const markStep = buildStepCacheBreakpoint(args.promptCaching);
-  if (rules.length === 0 && !markStep) return undefined;
 
   const toolIdToName = args.toolIdToName ?? {};
   const promptCachingEnabled = readPromptCachingConfig(
@@ -228,6 +229,7 @@ export const buildPrepareStep = (args: {
   const stepsAlreadySpent = args.stepsAlreadySpent ?? 0;
 
   return ({ stepNumber, messages }) => {
+    args.provenance.startStep();
     // stepNumber is 0-based (AI SDK) and segment-local; step_rules are
     // 1-indexed and turn-wide.
     const oneIndexedStep = stepNumber + stepsAlreadySpent + 1;

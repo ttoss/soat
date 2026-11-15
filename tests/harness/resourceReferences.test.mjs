@@ -28,12 +28,16 @@ describe('tool and agent references', () => {
     'lib/aiProviders.ts': "lists a provider's dependents",
     'lib/completionModel.ts':
       'reads back the internal id of an agent already resolved',
+    'lib/generationProvenance.ts':
+      'reads the trust of a tool an approved call already ran',
     'lib/guardrailDryRun.ts': 'reads a display name for a report',
     'lib/guardrailRuntimeMetrics.ts': 'reads display names for a report',
     'lib/guardrails.ts': "lists a project's tools and agents",
     'lib/ingestionRuleRefs.ts':
       'reads the type of a converter already resolved to an internal id',
     'lib/knowledgeConfigBackfill.ts': 'a schema backfill over every row',
+    'lib/mcpDefinitionPins.ts':
+      'reads back the pins of a tool already resolved for the turn',
     'lib/memoryRules.ts':
       'reads the type of a handler already resolved to an internal id',
     'lib/modelRouteDefaults.ts': "lists a route's dependents",

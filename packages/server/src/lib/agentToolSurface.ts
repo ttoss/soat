@@ -15,6 +15,7 @@ import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
 import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
+import type { GenerationProvenance } from './generationProvenance';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -85,6 +86,8 @@ export const resolveAgentToolSurface = async (args: {
    * caller typed.
    */
   sessionId?: string | null;
+  /** The turn's tally, which its tools count their results into. */
+  provenance: GenerationProvenance;
 }): Promise<ResolvedToolSurface> => {
   // Bindings resolve in the agent's own project; the turn's calls are gated,
   // metered and recorded in the project it runs in.
@@ -108,6 +111,7 @@ export const resolveAgentToolSurface = async (args: {
     sessionId: args.sessionId ?? null,
     authority: args.authority,
     guardrailContext: args.guardrailContext,
+    provenance: args.provenance,
   });
 
   const bindings = await resolveAgentToolBindings({
@@ -131,9 +135,8 @@ export const resolveAgentToolSurface = async (args: {
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
     guardrail,
-    // Attributes a successful tool call to this agent/generation on the activity
-    // feed (approvals PRD Phase 4). A resumed generation's tool calls are as
-    // autonomous as a fresh one's, so they record under the same identity.
+    // Credits a successful call to this agent and generation on the activity
+    // feed; a resumed generation's calls record under the same identity.
     activity: {
       projectId,
       agentId: args.agentId,
@@ -148,13 +151,10 @@ export const resolveAgentToolSurface = async (args: {
   const knowledgeBindings =
     ownerId === projectId
       ? buildKnowledgeBindings({
-          agentId: args.agentId,
-          generationId: args.generationId,
+          ...args,
           projectId,
-          typedAgent: args.typedAgent,
-          authority: args.authority,
-          agentAuthority: args.agentAuthority,
           actorId: args.toolContext?.actor_id,
+          baseGuardrails: guardrail.baseGuardrails,
         })
       : [];
 

@@ -12,6 +12,10 @@ import {
 } from './agentToolApproval';
 import { emitApproval } from './approvals';
 import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
+import {
+  type GenerationProvenance,
+  persistGenerationProvenance,
+} from './generationProvenance';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import {
@@ -37,6 +41,7 @@ import {
   persistGuardrailEvaluations,
 } from './guardrailEvaluationRecord';
 import { isPlainObject } from './plainObject';
+import { toolCallRunsAs } from './toolCallRunsAs';
 import { gatePresetsOf, mergePresetParameters } from './toolPresetParameters';
 import type { WorkAuthority } from './workAuthority';
 
@@ -68,6 +73,11 @@ export type ResolverGuardrailContext = {
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
   baseGuardrails: CollectedGuardrail[];
+  /**
+   * The turn's tally, which `runtime.generations.*` reads; `null` outside a
+   * generation, where those keys are unresolvable.
+   */
+  provenance: GenerationProvenance | null;
 };
 
 /**
@@ -88,6 +98,7 @@ export const buildResolverGuardrailContext = async (args: {
   guardrailContext?: Record<string, unknown> | null;
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
+  provenance: GenerationProvenance;
 }): Promise<ResolverGuardrailContext> => {
   const baseGuardrails = await collectApplicableGuardrails({
     projectId: args.projectId,
@@ -108,6 +119,7 @@ export const buildResolverGuardrailContext = async (args: {
     orchestrationRunId: args.orchestrationRunId ?? null,
     run: args.run ?? null,
     baseGuardrails,
+    provenance: args.provenance,
   };
 };
 
@@ -283,6 +295,14 @@ const routeToApproval = async (args: {
   records: GuardrailEvaluationRecord[];
 }): Promise<Record<string, unknown>> => {
   const { gate } = args;
+  // Stored before the item exists: the continuation it resumes into inherits
+  // what this turn had read, and the turn may still be running then.
+  if (gate.context.generationId && gate.context.provenance) {
+    await persistGenerationProvenance({
+      generationId: gate.context.generationId,
+      provenance: gate.context.provenance,
+    });
+  }
   const governing = governingResult(args.evaluated, 'route_to_approval');
   const proposalToolId =
     gate.toolId ?? inlineProposalToolId({ toolName: gate.toolName });
@@ -306,6 +326,7 @@ const routeToApproval = async (args: {
       toolId: proposalToolId,
       action: gate.action,
       arguments: args.effectiveArgs,
+      runsAs: await toolCallRunsAs(gate.context.generationId),
     }),
     generationId: gate.context.generationId,
     agentId: gate.context.agentId,
@@ -411,6 +432,7 @@ export const classifyGuardrailCall = async (args: {
     action: args.action,
     orchestrationRunId: args.context.orchestrationRunId,
     run: args.context.run,
+    generation: args.context.provenance?.step() ?? null,
   };
 
   const { composed, evaluated } = await evaluateAll({

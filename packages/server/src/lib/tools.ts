@@ -2,7 +2,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { AgentAuthority } from './agentAuthority';
 import type { SenderCredential } from './assertionSender';
 import { assertGuardrailsExist } from './guardrails';
@@ -13,6 +12,7 @@ import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
 } from './pipelineTools';
+import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -21,6 +21,7 @@ import { assertSecretRefsExist } from './secrets';
 import { assertToolSecretUseAllowed } from './secretUse';
 import { validateSoatActions } from './soatActionValidation';
 import type { ToolCallGuardrailMode } from './toolCallGuardrail';
+import { carriedActionsOfTool } from './toolCarriedActions';
 import { assertValidToolContextAllowlist } from './toolContext';
 import {
   type CallableToolDefinition,
@@ -30,6 +31,7 @@ import {
 } from './toolsCall';
 import { assertNoLiteralCredentials } from './toolSecretRedaction';
 import { assertValidToolTemplateTokens } from './toolTemplates';
+import { assertTrustedOutputAllowed } from './toolTrust';
 import {
   assertToolTypeSupported,
   type ToolUpdateArgs,
@@ -37,6 +39,7 @@ import {
 } from './toolWriteValidation';
 import type { ToolCallAttribution } from './usageToolRecording';
 import type { WorkAuthority } from './workAuthority';
+import { assertWriterHolds, type Writer } from './writerRule';
 
 const log = createDebug('soat:tools');
 
@@ -60,6 +63,7 @@ export type MappedTool = {
   parameters: object | null;
   execute: object | null;
   mcp: object | null;
+  mcp_pins: Record<string, string> | null;
   actions: string[] | null;
   denied_actions: string[] | null;
   context_keys: string[] | null;
@@ -67,6 +71,7 @@ export type MappedTool = {
   pipeline: object | null;
   output_mapping: object | null;
   guardrail_ids: string[] | null;
+  trusted_output: boolean;
   created_at: Date;
   updated_at: Date;
 };
@@ -99,6 +104,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
     parameters: tool.parameters,
     execute: tool.execute,
     mcp: tool.mcp,
+    mcp_pins: tool.mcpPins,
     actions: tool.actions,
     denied_actions: tool.deniedActions,
     context_keys: tool.contextKeys,
@@ -106,6 +112,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
     pipeline: tool.pipeline,
     output_mapping: tool.outputMapping,
     guardrail_ids: tool.guardrailIds,
+    trusted_output: tool.trustedOutput,
     created_at: tool.createdAt,
     updated_at: tool.updatedAt,
   };
@@ -135,6 +142,7 @@ const buildToolConfigFields = (args: CreateToolArgs) => {
     pipeline: nullify(args.pipeline),
     outputMapping: nullify(args.outputMapping),
     guardrailIds: nullify(args.guardrailIds),
+    trustedOutput: args.trustedOutput ?? false,
   };
 };
 
@@ -212,14 +220,32 @@ export const validateToolDefinition = async (args: {
 };
 
 export const createTool = async (
-  args: CreateToolArgs & { isAllowed: IsAllowedFn }
+  args: CreateToolArgs & { writer: Writer }
 ): Promise<MappedTool> => {
   await assertToolSecretUseAllowed({
     tool: args,
     projectId: args.projectId,
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
+  });
+  await assertTrustedOutputAllowed({
+    trustedOutput: args.trustedOutput,
+    projectId: args.projectId,
+    isAllowed: args.writer.isAllowed,
   });
   await validateToolDefinition({ definition: args, projectId: args.projectId });
+  await assertWriterHolds({
+    carrier: 'tools',
+    writer: args.writer,
+    projectId: args.projectId,
+    carried: {
+      actions: carriedActionsOfTool({
+        type: args.type ?? 'http',
+        mcp: args.mcp,
+        actions: args.actions,
+        pipeline: args.pipeline,
+      }),
+    },
+  });
   await assertGuardrailsExist({
     guardrailIds: args.guardrailIds,
     projectId: args.projectId,
@@ -279,6 +305,7 @@ const buildToolUpdates = (args: {
   pipeline?: object | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
+  trustedOutput?: boolean;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const scalarFields = [
@@ -295,6 +322,7 @@ const buildToolUpdates = (args: {
     'pipeline',
     'outputMapping',
     'guardrailIds',
+    'trustedOutput',
   ] as const;
   for (const field of scalarFields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -302,24 +330,66 @@ const buildToolUpdates = (args: {
   return updates;
 };
 
+const mcpUrl = (mcp: unknown): string | null => {
+  return isPlainObject(mcp) && typeof mcp.url === 'string' ? mcp.url : null;
+};
+
+/**
+ * Pins are cleared on request or for another server, never by re-sending an
+ * unchanged `mcp`, which every formation apply does: a deploy must not accept
+ * drift silently.
+ */
+const clearsMcpPins = (args: {
+  args: ToolUpdateArgs;
+  current: unknown;
+}): boolean => {
+  if (args.args.mcpPins === null) return true;
+  return (
+    args.args.mcp !== undefined &&
+    mcpUrl(args.args.mcp) !== mcpUrl(args.current)
+  );
+};
+
 export const updateTool = async (
-  args: ToolUpdateArgs & { isAllowed: IsAllowedFn }
+  args: ToolUpdateArgs & { writer: Writer }
 ): Promise<MappedTool> => {
   const tool = await tools.getByPublicId(args);
 
   await assertToolSecretUseAllowed({
     tool: args,
     projectId: tool.projectId,
-    isAllowed: args.isAllowed,
+    isAllowed: args.writer.isAllowed,
+  });
+  await assertTrustedOutputAllowed({
+    trustedOutput: args.trustedOutput,
+    projectId: tool.projectId,
+    isAllowed: args.writer.isAllowed,
   });
 
   await validateToolUpdate({ args, tool });
+  // The tool as it stands after the write, so an edit to any of its fields is checked.
+  await assertWriterHolds({
+    carrier: 'tools',
+    writer: args.writer,
+    projectId: tool.projectId,
+    carried: {
+      actions: carriedActionsOfTool({
+        type: args.type ?? tool.type,
+        mcp: args.mcp === undefined ? tool.mcp : args.mcp,
+        actions: args.actions === undefined ? tool.actions : args.actions,
+        pipeline: args.pipeline === undefined ? tool.pipeline : args.pipeline,
+      }),
+    },
+  });
   await assertGuardrailsExist({
     guardrailIds: args.guardrailIds,
     projectId: tool.projectId,
   });
 
-  await tool.update(buildToolUpdates(args));
+  await tool.update({
+    ...buildToolUpdates(args),
+    ...(clearsMcpPins({ args, current: tool.mcp }) ? { mcpPins: null } : {}),
+  });
 
   return mapTool(await tools.reload(tool));
 };

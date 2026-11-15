@@ -1,9 +1,16 @@
 import type { Tool } from 'ai';
 
+import { resolvedActionName } from './agentToolApproval';
 import {
   gateResolvedToolsWithGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
+import {
+  countOf,
+  type GenerationProvenance,
+  type ProvenanceMetric,
+  resultProvenance,
+} from './generationProvenance';
 import type { CollectedGuardrail } from './guardrailCollection';
 
 /**
@@ -20,8 +27,17 @@ export type BindingGate = {
    * added by {@link gateAndMergeBindings} for every binding, never by it.
    */
   toolGuardrails: CollectedGuardrail[];
+  /** Whether a result of this binding enters the context as trusted content. */
+  trustedOutput: boolean;
   presetParameters?: Record<string, unknown> | null;
   rawParameters?: Record<string, unknown>;
+};
+
+/** The counter a resolved tool's results feed; read off a client tool on submit. */
+export const RESULT_PROVENANCE: unique symbol = Symbol('soat.resultProvenance');
+
+export type ProvenancedTool = Tool & {
+  [RESULT_PROVENANCE]?: ProvenanceMetric | null;
 };
 
 /** What one binding contributed to the turn, keyed as it resolved them. */
@@ -79,8 +95,54 @@ const mergeBindingTools = (args: {
 };
 
 /**
+ * Marks each tool with the counter its results feed and counts every result
+ * its `execute` returns. Inside the gate, so a held or refused call counts
+ * nothing; a thrown result counts, since its error text enters the context too.
+ */
+const countEnteringResults = (args: {
+  tools: Record<string, Tool>;
+  gate: BindingGate;
+  provenance: GenerationProvenance | null;
+}): Record<string, Tool> => {
+  return Object.fromEntries(
+    Object.entries(args.tools).map(([key, resolved]) => {
+      const metric = resultProvenance({
+        toolType: args.gate.toolType,
+        action: resolvedActionName({
+          type: args.gate.toolType,
+          toolName: args.gate.toolName,
+          key,
+        }),
+        trustedOutput: args.gate.trustedOutput,
+      });
+      const marked: ProvenancedTool = {
+        ...resolved,
+        [RESULT_PROVENANCE]: metric,
+      };
+      const { execute } = resolved;
+      const { provenance } = args;
+      if (!execute || !provenance || !metric) return [key, marked];
+      return [
+        key,
+        {
+          ...marked,
+          execute: async (...executeArgs: Parameters<typeof execute>) => {
+            try {
+              return await execute(...executeArgs);
+            } finally {
+              provenance.record(countOf(metric));
+            }
+          },
+        },
+      ];
+    })
+  );
+};
+
+/**
  * The only way a turn's bindings become its tool set: every binding passes the
- * guardrail gate under the project and agent guardrails plus its own.
+ * guardrail gate under the project and agent guardrails plus its own, and
+ * every result it returns is counted where it came from.
  */
 export const gateAndMergeBindings = (args: {
   bindings: ToolBinding[];
@@ -91,7 +153,11 @@ export const gateAndMergeBindings = (args: {
       return {
         bindingName,
         tools: gateResolvedToolsWithGuardrails({
-          tools,
+          tools: countEnteringResults({
+            tools,
+            gate,
+            provenance: args.guardrail.provenance,
+          }),
           toolId: gate.toolId,
           toolType: gate.toolType,
           toolName: gate.toolName,

@@ -170,7 +170,7 @@ runtime.<module>.<identity>            runtime.tools.name
 runtime.<module>.<metric>.<window>     runtime.tools.tool_calls.24h
 ```
 
-A module answers about **the entity of that module in the current call**: `projects` the project, `agents` the calling agent, `tools` the tool being called, `guardrails` the guardrail being evaluated, `orchestrations` the current [orchestration run](./orchestrations.md). Windows `1h` / `24h` / `7d` / `30d` are rolling and end at evaluation time; `total` is the entity's lifetime — all-time for a tool, "this run so far" for `orchestrations`. The served combinations:
+A module answers about **the entity of that module in the current call**: `projects` the project, `agents` the calling agent, `tools` the tool being called, `guardrails` the guardrail being evaluated, `orchestrations` the current [orchestration run](./orchestrations.md), `generations` the current generation and its [continuation chain](./chains.md). Windows `1h` / `24h` / `7d` / `30d` are rolling and end at evaluation time; `total` is the entity's lifetime — all-time for a tool, "this run so far" for `orchestrations`, "this chain so far" for `generations`. The served combinations:
 
 | Module | Identity | Metrics | Windows |
 | --- | --- | --- | --- |
@@ -179,17 +179,20 @@ A module answers about **the entity of that module in the current call**: `proje
 | `agents` | `id` | `tool_calls` `tokens` `cost_usd` | `1h` `24h` `7d` `30d` |
 | `tools` | `id` `name` | `tool_calls` `errors` | `1h` `24h` `7d` `30d` `total` |
 | `orchestrations` | `node_attempt` | `tool_calls` `tokens` `cost_usd` | `total` |
+| `generations` | | `untrusted_tool_results` `knowledge_results` | `total` |
 
 Any other path — a non-leaf (`runtime.tools.tool_calls`), an unserved combination (`runtime.tools.tokens.24h`) — is refused at write time.
 
 | Metric | Type | Reads |
 | --- | --- | --- |
-| `tool_calls` | integer | [`tool_execution`](./usage.md#tool-executions) events: one per outbound tool call, whatever the target answered |
+| `tool_calls` | integer | [`tool_execution`](./usage.md#tool-executions) events: one per executed tool call, outbound (whatever the target answered) or [native](./usage.md#tool-executions) |
 | `errors` | integer | `tool_execution` events whose `outcome` is `error` or `timeout` |
 | `tokens` | integer | Billable tokens (input + output + cached) of the entity's [usage events](./usage.md) |
 | `cost_usd` | number | Cost of the entity's usage events, every meter |
+| `untrusted_tool_results` | integer | Results from tools with `trusted_output: false` that entered the turn's context ([What the turn has read](#what-the-turn-has-read)) |
+| `knowledge_results` | integer | Knowledge that entered the turn's context ([What the turn has read](#what-the-turn-has-read)) |
 
-Every metric is read live from the [usage meter](./usage.md) at evaluation time. An entity that has done nothing yet reads `0`; a key whose entity the call does not have — `agents.*` on an orchestration tool node, `orchestrations.*` outside a run, `tools.*` on an inline tool — is unresolvable, and so is a failing query.
+Every usage metric is read live from the [usage meter](./usage.md) at evaluation time; the `generations` metrics are counted in the turn. An entity that has done nothing yet reads `0`; a key whose entity the call does not have — `agents.*` on an orchestration tool node, `orchestrations.*` outside a run, `generations.*` outside a generation, `tools.*` on an inline tool — is unresolvable, and so is a failing query.
 
 `guardrails.tool_calls.*` counts the executions of the calls **this guardrail** released: every guardrail that applied to a call and let it through is recorded on its `tool_execution` event. Attach one guardrail to a set of tools (every write, say) and one key caps the set, with no tool list in the expression. A [pipeline](./tools.md) passes the guardrails that released it to each step.
 
@@ -296,6 +299,36 @@ Attach it to the tools the run dispatches; the guard fails before the tool runs.
 
 - **Fail-closed outside a run.** The keys are unresolvable when no run is in scope (they do not read as `0`), so a per-run ceiling attached at project scope trips on plain agent calls too; attach at tool scope unless that is intended.
 - **Metering granularity is the resolution.** Counters advance as each provider call is metered ([usage coverage](./usage.md#coverage)), so a ceiling trips on the first gated call after it is crossed; a single over-budget call can still complete.
+
+### What the turn has read
+
+`runtime.generations.untrusted_tool_results.total` and `runtime.generations.knowledge_results.total` count the results that entered the current generation's context, plus every generation before it in its [continuation chain](./chains.md). They express "once this turn has read content an attacker could write, a write needs a person":
+
+```json
+{
+  "default_class": "C",
+  "class": {
+    "if": [
+      { ">": [{ "var": "runtime.generations.untrusted_tool_results.total" }, 0] },
+      "C",
+      "A"
+    ]
+  }
+}
+```
+
+Attach it to every write tool. What counts:
+
+| Key | Counts |
+| --- | --- |
+| `untrusted_tool_results` | A result of a tool whose [`trusted_output`](./tools.md#trusted-output) is `false`: a server-executed call, a [client tool](./tools.md) output submitted to the turn, a `tool_output` message block, the result of an [approved](./approvals.md) call its continuation reports, and a sub-agent's answer through a `builtin` tool |
+| `knowledge_results` | Each result `knowledge_config` injects, a `document` message block, and a `search-knowledge` or `get-document` result of a `builtin` tool, whatever its `trusted_output` |
+
+- **Judged on what the model had read.** A call is evaluated on the counts at the start of the step that proposed it. A result arriving during that step, a parallel sibling's included, counts from the next step, so a write proposed in the same step as a read is not held by that read.
+- **Fixed when it enters.** Whether a result counts is decided by its tool's `trusted_output` at that moment; a later edit does not rewrite the chain.
+- **Durable.** The counts are stored as numbers on the generation, never read back from content, so they hold across a `submit-tool-outputs` resumption, a recovered generation, an approval continuation, `trace_content_mode: "none"` and a content purge.
+- **Outside a generation** — a direct call, a pipeline step, an orchestration tool node, a [dry run](#dry-run-evaluation) — the keys are unresolvable and fail closed. Attach these guardrails at agent or tool scope.
+- **Results only.** A call held for approval, blocked or tripped counts nothing; the platform's own results (`write_memory`) are trusted.
 
 ### Client Tools
 

@@ -28,6 +28,7 @@ import {
   type ResponseMode,
 } from './httpToolResponse';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
+import { mcpDefinitionGate } from './mcpDefinitionPins';
 import { openMcpTransport } from './mcpTransport';
 import { isPlainObject } from './plainObject';
 import { withRequestIdHeader } from './requestCorrelation';
@@ -896,6 +897,10 @@ const resolveMcpToolEntry = async (args: {
       reportResolutionFailure: ({ reason }) => {
         reportBindingUnavailable({ typedTool, reason, activity, unavailable });
       },
+      definitions: mcpDefinitionGate({
+        tool: typedTool,
+        onWithheld: unavailable,
+      }),
     });
   } catch (error) {
     // The swallow is for an unreachable MCP server, not a missing
@@ -938,13 +943,19 @@ type AgentToolRow = {
       }
     | string
     | null;
-  mcp: { url: string; headers?: Record<string, string> } | null;
+  mcp: {
+    url: string;
+    headers?: Record<string, string>;
+    pin_definitions?: boolean;
+  } | null;
+  mcpPins?: Record<string, string> | null;
   actions: string[] | null;
   deniedActions: string[] | null;
   contextKeys: string[] | null;
   presetParameters: Record<string, unknown> | null;
   outputMapping: Record<string, unknown> | null;
   guardrailIds: string[] | null;
+  trustedOutput: boolean;
 };
 
 /**
@@ -1135,7 +1146,7 @@ const resolveUngatedToolByType = async (
     attribution: args.attribution,
     sender: {
       authority: args.authority,
-      agentPolicy: args.agentAuthority?.policy,
+      agentAuthority: args.agentAuthority,
     },
   };
 
@@ -1253,6 +1264,7 @@ const ephemeralDefinitionToRow = (
     // Inline tools are ephemeral and carry no persisted guardrail_ids; only the
     // project/agent base guardrails apply to them.
     guardrailIds: null,
+    trustedOutput: definition.trustedOutput === true,
   };
 };
 
@@ -1336,6 +1348,7 @@ export const resolveEphemeralAgentTool = async (args: {
       toolType: typedTool.type,
       toolName: typedTool.name,
       toolGuardrails: [],
+      trustedOutput: typedTool.trustedOutput,
       presetParameters: resolvePresetParametersForGate({
         presetParameters: typedTool.presetParameters,
         toolContext: args.toolContext,
@@ -1392,6 +1405,7 @@ const unreachableBinding = (args: { toolPublicId: string }): ToolBinding => {
       toolType: 'unknown',
       toolName: args.toolPublicId,
       toolGuardrails: [],
+      trustedOutput: false,
     },
   };
 };
@@ -1406,6 +1420,7 @@ const storedToolGate = (args: {
     toolType: args.typedTool.type,
     toolName: args.typedTool.name,
     toolGuardrails: args.toolGuardrails,
+    trustedOutput: args.typedTool.trustedOutput,
     // The gate classifies the *effective* arguments, so it must see the values
     // the dispatch will actually send — a guardrail comparing a pinned account
     // against `{{context:ocaAdAccountId}}` gates nothing.

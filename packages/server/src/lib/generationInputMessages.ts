@@ -1,5 +1,6 @@
 import type { AuthUser } from '../Context';
 import type { AgentAuthority } from './agentAuthority';
+import { countOf, type GenerationProvenance } from './generationProvenance';
 import {
   type ResolvableMessageContent,
   resolveMessageContent,
@@ -34,6 +35,8 @@ export const resolveGenerationInputMessages = async (args: {
   // resolves its tool's `{{context:}}` headers and presets from the same bag
   // the model's own tool calls use.
   toolContext?: Record<string, string>;
+  /** Where a `tool_output` or `document` block entering the turn is counted. */
+  provenance: GenerationProvenance;
 }): Promise<Array<{ role: string; content: unknown }>> => {
   const resolved = await Promise.all(
     args.messages.map(async (message) => {
@@ -51,6 +54,7 @@ export const resolveGenerationInputMessages = async (args: {
         agentAuthority: args.agentAuthority,
         toolContext: args.toolContext,
       });
+      args.provenance.record(countOf(resolvedContent.provenance ?? null));
 
       return {
         role: message.role,

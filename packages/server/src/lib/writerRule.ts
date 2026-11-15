@@ -40,6 +40,7 @@ type WriterRuleCarrier = {
  */
 export const WRITER_RULE_CARRIERS = {
   agents: { policies: 'agents' },
+  projects: { policies: 'projects' },
   triggers: {
     policies: 'triggers',
     policiesRequired:
@@ -80,6 +81,9 @@ export const WRITER_RULE_CARRIERS = {
     policiesRequired:
       'policy_ids must name at least one policy: the grant every execution of the version acts under.',
   },
+  tools: { models: ['Tool'] },
+  // A registered formation type's resources live behind its handler, no model.
+  registeredResources: { models: [] },
 } satisfies Record<string, WriterRuleCarrier>;
 
 export type WriterRuleCarrierName = keyof typeof WRITER_RULE_CARRIERS;
@@ -192,8 +196,12 @@ const assertPoliciesHeld = async (args: {
   });
 };
 
-const assertActionsHeld = async (args: {
-  writer: Writer;
+/**
+ * Throws `ACTION_NOT_HELD` for the first of `actions` the writer may not
+ * perform in its project.
+ */
+export const assertActionsHeld = async (args: {
+  isAllowed: IsAllowedFn;
   projectPublicId: string;
   actions: CarriedAction[];
 }): Promise<void> => {
@@ -203,7 +211,7 @@ const assertActionsHeld = async (args: {
       resourceType: carried.resourceType,
       resourceId: carried.resourceId,
     });
-    const allowed = await args.writer.isAllowed({
+    const allowed = await args.isAllowed({
       projectPublicId: args.projectPublicId,
       action: carried.action,
       resource,
@@ -252,7 +260,7 @@ export const assertWriterHolds = async (args: {
   });
   if (project) {
     await assertActionsHeld({
-      writer: args.writer,
+      isAllowed: args.writer.isAllowed,
       projectPublicId: project.publicId,
       actions: args.carried.actions ?? [],
     });

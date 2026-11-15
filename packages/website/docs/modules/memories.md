@@ -130,7 +130,7 @@ Every write to a memory store — REST, the agent tool, a post-turn rule, a form
 
 Every call records exactly one [assertion](#assertions), whatever the outcome.
 
-On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merged onto the replacement (incoming keys win), so a replacement stays inside every tag-scoped search and policy the original satisfied. [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
+On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merged onto the replacement (incoming keys win), so a replacement stays inside every tag-scoped search and policy the original satisfied. The project's [content-bound tag keys](./projects.md#content-bound-tag-keys) are the exception: they judged the retired text, so the replacement carries them only when the write sets them, and a `content` or `metadata` change through [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) removes them the same way. [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
 
 Below `supersede_threshold`, cosine covers both "same fact, changed" and "related but distinct" (*prefers email* vs *prefers Portuguese*), and embeddings sit close on negations. `created` is the outcome there because a near-duplicate stays searchable while a wrongly retired fact does not.
 
@@ -263,6 +263,18 @@ only ever matches a valid one.
 The write claims the memory's `version`, so it takes `expected_version` or `If-Match` like
 [any other write](#concurrent-writes). A memory that is already invalidated — retracted, or
 superseded by a later write — answers `409 MEMORY_ALREADY_INVALIDATED`.
+
+### Write events
+
+Every door that stores or changes a memory emits an event with the memory as `data`, so a [trigger](./triggers.md#event-triggers) reacts to a memory whichever door wrote it:
+
+| Event | Fires when |
+| --- | --- |
+| `memories.created` | A memory is stored: the API, the [`write_memory` tool](#write_memory-tool), a [memory rule](#memory-rules), a formation. A supersede announces its replacement |
+| `memories.updated` | A memory's content, metadata or tags change |
+| `memories.retracted` | A memory is [retracted](#retraction) |
+
+A deduplicated write (`skipped`) stores nothing and emits nothing. Payloads: [Webhook events](../webhook-events.md).
 
 ### Concurrent writes
 
@@ -407,7 +419,7 @@ Set `write_memory_store_id` in the agent's `knowledge_config` to inject a `write
 
 The agent's [`policy_ids`](./agents.md#execution-identity) gate the tool: it must allow `memories:CreateMemory` **and** `memories:UpdateMemory` (a write may supersede) on the target store's SRN, `srn:<project_id>:memory_store:<memory_store_id>`, with the store's tags as condition inputs. A boundary scoped to one store therefore holds even if `write_memory_store_id` is later pointed elsewhere.
 
-Project- and agent-scope [guardrails](./guardrails.md#attachment) gate every `write_memory` call like any other tool call, so a fact read from a document or tool output persists only past them. A held call files an [approval](./approvals.md) whose `proposed_action` is `{ "tool_id": "native:write_memory", "action": "write_memory", "arguments": { "content": "…" } }`. Approving it writes the fact as the agent, under the proposing generation and actor, to the store `write_memory_store_id` names at decision time, held to the agent's `policy_ids` at decision time; the write's output, or the denial, is the decision's `result`. Edited `arguments` must carry a non-empty string `content`, and editing them needs the memory-write actions on that store ([Approvals — Who may resolve](./approvals.md#who-may-resolve)). A `write_memory` call records no `tool_execution` [usage](./usage.md) event, so a guard reading `runtime.*.tool_calls` ([Guardrails — Guards and Guardrail Context](./guardrails.md#guards-and-guardrail-context)) does not count it.
+Project- and agent-scope [guardrails](./guardrails.md#attachment) gate every `write_memory` call like any other tool call, so a fact read from a document or tool output persists only past them. A held call files an [approval](./approvals.md) whose `proposed_action` is `{ "tool_id": "native:write_memory", "action": "write_memory", "arguments": { "content": "…" } }`. Approving it writes the fact as the agent, under the proposing generation and actor, to the store `write_memory_store_id` names at decision time, held to the agent's `policy_ids` at decision time; the write's output, or the denial, is the decision's `result`. Edited `arguments` must carry a non-empty string `content` (`400 APPROVAL_INVALID_EDIT` otherwise, the approval staying `pending`), and editing them needs the memory-write actions on that store ([Approvals — Who may resolve](./approvals.md#who-may-resolve)). Each executed `write_memory` call, an approved one included, records a `tool_execution` [usage](./usage.md#tool-executions) event with `tool_id` `native:write_memory`, so a guard reading `runtime.*.tool_calls` ([Guardrails — Guards and Guardrail Context](./guardrails.md#guards-and-guardrail-context)) counts it: `runtime.guardrails.tool_calls.1h` on a guardrail attached to the agent caps its memory writes, and `runtime.tools.tool_calls.*` counts every agent's writes in the project. A write the boundary or a guardrail refused records none.
 
 Memories written by the tool carry `source_type: "manual"`: `source_id` is a pointer a client supplies on a hand-written fact, and the tool has none to give. The turn behind the write is on its [assertion](#assertions), with `mechanism: "tool"` and the agent as principal.
 

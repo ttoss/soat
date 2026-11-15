@@ -18,6 +18,7 @@ import {
   normalizeToolChoice,
   resolveStepActiveTools,
 } from 'src/lib/agentStepRules';
+import { createGenerationProvenance } from 'src/lib/generationProvenance';
 
 describe('normalizeToolChoice', () => {
   test('passes through the string strategies the AI SDK accepts', () => {
@@ -111,17 +112,23 @@ describe('resolveStepActiveTools', () => {
 });
 
 describe('buildPrepareStep', () => {
-  test('buildPrepareStep returns undefined when stepRules are empty', () => {
+  test('buildPrepareStep snapshots the tally as each step starts, with no rules', () => {
+    const provenance = createGenerationProvenance();
     const prepareStep = buildPrepareStep({
       stepRules: [],
       logContext: 'non_stream',
+      provenance,
     });
+    provenance.record({ untrusted_tool_results: 1, knowledge_results: 0 });
+    expect(provenance.step().untrusted_tool_results).toBe(0);
 
-    expect(prepareStep).toBeUndefined();
+    expect(prepareStep({ stepNumber: 1, messages: [] })).toEqual({});
+    expect(provenance.step().untrusted_tool_results).toBe(1);
   });
 
   test('buildPrepareStep returns forced tool config for matching step', () => {
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         { step: 2, tool_choice: { type: 'tool', tool_name: 'lookup' } },
       ],
@@ -138,6 +145,7 @@ describe('buildPrepareStep', () => {
 
   test('buildPrepareStep ignores the retired camelCase rule keys', () => {
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         {
           step: 1,
@@ -158,6 +166,7 @@ describe('buildPrepareStep', () => {
     // `{ step: 1, tool_choice: "required" }` — agent-level "required" applies to
     // every step and never lets the run stop.
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [{ step: 1, tool_choice: 'required' }],
       logContext: 'non_stream',
     });
@@ -178,6 +187,7 @@ describe('buildPrepareStep', () => {
     // every step-1 rule on every resumption — a step-1 force on a client tool
     // would demand that tool for as long as the caller kept submitting.
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         { step: 1, tool_choice: { type: 'tool', tool_name: 'lookup' } },
         { step: 3, tool_choice: 'required' },
@@ -199,6 +209,7 @@ describe('buildPrepareStep', () => {
     // snake_case: { step, tool_choice: { type, tool_name } } is the documented
     // shape (see docs/modules/agents.md#step-rules).
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         { step: 2, tool_choice: { type: 'tool', tool_name: 'lookup' } },
       ],
@@ -216,6 +227,7 @@ describe('buildPrepareStep', () => {
     // The tool block is inside the cached prefix, so narrowing it to the forced
     // tool costs a cache entry to save tokens `toolChoice` already saves.
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         { step: 1, tool_choice: { type: 'tool', tool_name: 'lookup' } },
       ],
@@ -233,6 +245,7 @@ describe('buildPrepareStep', () => {
     // A restriction the author wrote is a capability decision, not a token
     // saving: it narrows whether or not it costs the prefix.
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         {
           step: 1,
@@ -258,6 +271,7 @@ describe('buildPrepareStep', () => {
     // takes tool names — the caller resolves the id→name map (via
     // `resolveToolIdsToNames`) and hands it in here.
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [{ step: 1, active_tool_ids: ['tool_abc'] }],
       logContext: 'non_stream',
       toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
@@ -273,6 +287,7 @@ describe('buildPrepareStep', () => {
 
   test('buildPrepareStep combines a forced tool_choice with a step rule active_tool_ids', () => {
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         {
           step: 1,
@@ -293,6 +308,7 @@ describe('buildPrepareStep', () => {
 
   test('buildPrepareStep combines a string tool_choice override with active_tool_ids', () => {
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [
         { step: 1, tool_choice: 'required', active_tool_ids: ['tool_abc'] },
       ],
@@ -309,6 +325,7 @@ describe('buildPrepareStep', () => {
 
   test('buildPrepareStep ignores active_tool_ids that resolve to no known tool', () => {
     const prepareStep = buildPrepareStep({
+      provenance: createGenerationProvenance(),
       stepRules: [{ step: 1, active_tool_ids: ['tool_doesNotExist'] }],
       logContext: 'non_stream',
       toolIdToName: {},

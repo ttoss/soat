@@ -32,11 +32,13 @@ export type AuthorityGrant =
 /**
  * What narrows the grant, each read live at every check: another holder's
  * grant (`narrowAuthority`), an API key's own `policy_ids`, an OAuth consent,
- * or a bound (an IAM token's, an `On-Behalf-Of` assertion's).
+ * a bound (an IAM token's, an `On-Behalf-Of` assertion's), or a project's
+ * `agent_policy_ids` over an agent's work.
  */
 export type AuthorityCap =
   | { kind: 'grant'; grant: AuthorityGrant }
   | { kind: 'key'; key: string }
+  | { kind: 'project_agents'; project: string }
   | { kind: 'scope'; scope: string | null }
   | { kind: 'bound'; bound: PrincipalBound; by: DeniedPrincipal };
 
@@ -145,6 +147,7 @@ const DENIED_TYPES = new Set<string>([
   'iam_token',
   'on_behalf_of',
   'generation',
+  'project',
   'agent',
   'trigger',
   ...RESOURCE_GRANT_PRINCIPAL_TYPES,
@@ -168,6 +171,11 @@ const CAP_READERS: Record<
   },
   key: (value) => {
     return str(value.key) ? { kind: 'key', key: value.key } : null;
+  },
+  project_agents: (value) => {
+    return str(value.project)
+      ? { kind: 'project_agents', project: value.project }
+      : null;
   },
   scope: (value) => {
     return value.scope === null || typeof value.scope === 'string'

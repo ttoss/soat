@@ -8,6 +8,7 @@ import { DomainError } from 'src/errors';
 import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import type { PendingGeneration } from 'src/lib/agentGenerationTypes';
 import { buildModel } from 'src/lib/agentModel';
+import { createGenerationProvenance } from 'src/lib/generationProvenance';
 import {
   createGenerationRecord,
   updateGenerationRecord,
@@ -666,6 +667,7 @@ describe('Agent Generation Routes', () => {
         project: projectPublicId,
       });
       const pending: PendingGeneration = {
+        provenance: createGenerationProvenance(),
         agentId,
         projectId: projectDbId,
         projectPublicId,
@@ -833,6 +835,7 @@ describe('Agent Generation Routes', () => {
         .send({ name: 'Foreign Probe Key', project_id: projectPublicId });
 
       pendingGenerations.set('gen_foreign_pending', {
+        provenance: createGenerationProvenance(),
         agentId,
         projectId: otherProject!.id as number,
         projectPublicId: otherProjectRes.body.id,
@@ -1200,6 +1203,7 @@ describe('Agent Generation Routes', () => {
         });
 
         const pending: PendingGeneration = {
+          provenance: createGenerationProvenance(),
           agentId: pausingAgentId,
           projectId: projectDbId,
           projectPublicId,

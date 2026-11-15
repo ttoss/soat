@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { pinCallerActorToolContext } from 'src/lib/generationAttribution';
 import { buildSrn } from 'src/lib/iam';
+import { toOptionalBoolean } from 'src/lib/resource-inputs/normalizers';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { listToolActions } from 'src/lib/toolActions';
 import { sanitizeCallerToolContext } from 'src/lib/toolContext';
@@ -164,7 +165,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
 
   requireAuth(ctx);
   const result = await createTool({
-    isAllowed: ctx.authUser.isAllowed,
+    writer: ctx.authUser,
     projectId: Number(targetProjectId),
     name,
     type: parseStringOrUndefined(type),
@@ -175,6 +176,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
       : undefined,
     contextKeys: parseNullableArray(contextKeys),
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
+    trustedOutput: toOptionalBoolean(body.trusted_output),
     ...jsonFields,
   });
 
@@ -265,6 +267,12 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   const outputMapping = body.output_mapping;
 
   const nextGuardrailIds = parseGuardrailIds(body.guardrail_ids);
+  if (body.mcp_pins !== undefined && body.mcp_pins !== null) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      '`mcp_pins` accepts only null, which clears the pins.'
+    );
+  }
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;
@@ -298,7 +306,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
 
   requireAuth(ctx);
   const result = await updateTool({
-    isAllowed: ctx.authUser.isAllowed,
+    writer: ctx.authUser,
     projectIds,
     id: ctx.params.tool_id,
     name: parseStringOrUndefined(name),
@@ -307,6 +315,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     parameters: parsedParameters,
     execute: parsedExecute,
     mcp: parsedMcp,
+    mcpPins: body.mcp_pins === null ? null : undefined,
     actions: parseNullableArray(actions),
     deniedActions: parseNullableArray(deniedActions),
     contextKeys: parseNullableArray(contextKeys),
@@ -314,6 +323,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     pipeline: parsedPipeline,
     outputMapping: parsedOutputMapping,
     guardrailIds: nextGuardrailIds,
+    trustedOutput: toOptionalBoolean(body.trusted_output),
   });
 
   ctx.body = redactToolSecrets(result);

@@ -35,17 +35,19 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `name`                  | `string`                                                         | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`builtin`)                                                                                                                                                                                                     |
 | `type`                  | `"http"` \| `"client"` \| `"mcp"` \| `"builtin"` \| `"pipeline"` | Tool type — determines execution behaviour                                                                                                                                                                                                                                                 |
 | `description`           | `string \| null`                                                 | Human-readable description sent to the model for tool selection                                                                                                                                                                                                                            |
-| `parameters`            | `object \| null`                                                 | JSON Schema describing the tool's input; on `http` and `pipeline` tools, every call must satisfy it ([Input Validation](#input-validation)). `null`: the model sees `{ "type": "object", "properties": {} }`.                                                                                                                                                                                  |
+| `parameters`            | `object \| null`                                                 | JSON Schema describing the tool's input; on `http` and `pipeline` tools, every call must satisfy it ([Input Validation](#input-validation)). `null`: the model sees `{ "type": "object", "properties": {} }`.                                                                              |
 | `execute`               | `object \| null`                                                 | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `response_mode`, `auth`). Required for `http` type, with `url`.                                                                                                                                                            |
 | `execute.url`           | `string`                                                         | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.                                                                                                                                                    |
 | `execute.method`        | `string`                                                         | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.                                                                                                                                                                                   |
 | `execute.headers`       | `object`                                                         | Additional headers sent with the execution request.                                                                                                                                                                                                                                        |
 | `execute.body_mode`     | `"json" \| "multipart"`                                          | How the request body is encoded for `POST`/`PUT`/`PATCH` (default: `json`). Use `multipart` for APIs that require `multipart/form-data`.                                                                                                                                                   |
 | `execute.response_mode` | `"json" \| "base64"`                                             | How a 2xx response body is returned (default: `json`). `base64` returns `{ content_type, filename, data_base64 }` for binary targets. See [Binary responses](#binary-responses-response_mode).                                                                                             |
-| `execute.auth`          | `object \| null`                                                 | Computed request credential, for targets whose `Authorization` value cannot be a static header. `type` is `aws_sigv4`, `gcp_service_account` or `oauth_connection`. See [Computed credentials](#computed-credentials-executeauth).                                                                             |
+| `execute.auth`          | `object \| null`                                                 | Computed request credential, for targets whose `Authorization` value cannot be a static header. `type` is `aws_sigv4`, `gcp_service_account` or `oauth_connection`. See [Computed credentials](#computed-credentials-executeauth).                                                         |
 | `mcp`                   | `object \| null`                                                 | MCP server config (`url`, `headers`). Required for `mcp` type.                                                                                                                                                                                                                             |
 | `mcp.url`               | `string`                                                         | URL of the MCP server (SSE or Streamable HTTP transport).                                                                                                                                                                                                                                  |
 | `mcp.headers`           | `object`                                                         | Additional headers sent when connecting to the MCP server.                                                                                                                                                                                                                                 |
+| `mcp.pin_definitions`   | `boolean`                                                        | Pin each action's definition and withhold any action that drifts from its pin (default `false`). See [Pinning MCP definitions](#pinning-mcp-definitions).                                                                                                                                 |
+| `mcp_pins`              | `object \| null`                                                 | Read-only: action name → SHA-256 digest of its pinned definition. `null` until the first listing pins; `PATCH` with `mcp_pins: null` clears it. See [Pinning MCP definitions](#pinning-mcp-definitions).                                                                                 |
 | `actions`               | `string[] \| null`                                               | Allowlist of actions to expose. `builtin`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `denied_actions`        | `string[] \| null`                                               | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions).                                                                              |
 | `context_keys`          | `string[] \| null`                                               | Allowlist of [`tool_context`](../advanced/tool-context.md) keys forwarded to this tool as context headers. `null` forwards every key (the default); `[]` forwards none. See [Scoping which context keys reach a tool](#scoping-which-context-keys-reach-a-tool).                           |
@@ -53,6 +55,7 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 | `pipeline`              | `object \| null`                                                 | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).                                                                                                                                                                                 |
 | `output_mapping`        | `object \| null`                                                 | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).                                                                                                                                                                           |
 | `guardrail_ids`         | `array \| null`                                                  | Guardrails attached at the tool scope, governing this tool wherever it is used — see [Guardrails — Attachment](./guardrails.md#attachment)                                                                                                                                                 |
+| `trusted_output`        | `boolean`                                                        | Whether the tool's results are content no attacker can write (default `false`). Setting `true` needs `guardrails:DetachGuardrail`. See [Trusted output](#trusted-output). |
 | `created_at`            | `string`                                                         | ISO 8601 creation timestamp                                                                                                                                                                                                                                                                |
 | `updated_at`            | `string`                                                         | ISO 8601 last-updated timestamp                                                                                                                                                                                                                                                            |
 
@@ -170,10 +173,10 @@ The allowlist is per tool, not per agent.
 
 `execute.auth` authenticates targets a static header cannot: AWS (per-request Signature Version 4 HMAC) and Google (short-lived OAuth 2.0 token from a signed service account assertion). It is a strategy on the `http` transport, not a tool type; `parameters`, path placeholders, `body_mode`, `output_mapping`, `preset_parameters`, guardrails, approvals, pipeline steps and `502 TOOL_HTTP_ERROR` mapping are unchanged.
 
-| `auth.type`           | Required fields                                                      | Optional fields | What is sent                                                                                                              |
-| --------------------- | -------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `aws_sigv4`           | `region`, `service`, `access_key_id`, `secret_access_key`            | `session_token` | `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, plus `X-Amz-Security-Token` and `X-Amz-Content-Sha256` when applicable |
-| `gcp_service_account` | `credentials` (service account key file JSON, as a string), `scopes` | —               | `Authorization: Bearer <access token>`                                                                                    |
+| `auth.type`           | Required fields                                                      | Optional fields | What is sent                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `aws_sigv4`           | `region`, `service`, `access_key_id`, `secret_access_key`            | `session_token` | `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, plus `X-Amz-Security-Token` and `X-Amz-Content-Sha256` when applicable                  |
+| `gcp_service_account` | `credentials` (service account key file JSON, as a string), `scopes` | —               | `Authorization: Bearer <access token>`                                                                                                     |
 | `oauth_connection`    | `oauth_client_id`                                                    | —               | `Authorization: Bearer <the call's actor's access token>` — see [OAuth Connections](./oauth-connections.md#using-a-connection-from-a-tool) |
 
 Credential values take [secret references](./secrets.md#secret-references-secret), stored and returned as-is, resolved only before signing:
@@ -333,6 +336,26 @@ Omitted or `null` exposes everything; `[]` nothing. MCP names are discovered at 
 
 A server that defers its tools behind `search` / `describe` / `call` (SOAT's own [MCP server](/docs/mcp) among them) lists only those three, so both lists name the tools behind `call`, never the proxies. With `actions`, the named tools are described and registered under their own names and the proxies are not exposed; with only `denied_actions`, the proxies are exposed and `call` refuses a denied tool before contacting the server. [`POST /tools/{id}/call`](/docs/api/tools/call-tool) takes the tool's own name as `action` and sends it through `call`; an `action` of `call` is held to the lists by the tool it names.
 
+#### Pinning MCP definitions
+
+An action's `description` and `inputSchema` reach the model as the server sends them on every turn, so a server can rewrite a description into an instruction, widen a schema, or add an action that `actions: null` exposes. `mcp.pin_definitions: true` makes that a withheld action instead of a changed one:
+
+```json
+{
+  "type": "mcp",
+  "name": "crm",
+  "mcp": { "url": "https://mcp.example.com/mcp", "pin_definitions": true }
+}
+```
+
+- **Pin.** The first listing an agent turn makes stores one digest per attached action in `mcp_pins`: SHA-256 over `name`, `title`, `description`, `inputSchema`, `outputSchema` and `annotations` (key order ignored, `_meta` excluded). The write is conditional, so concurrent first turns agree on one set.
+- **Drift.** An action whose live digest differs from its pin, or that has none (a new action, or one `actions` admits later), is left out of the turn; the model is told it is [unavailable](./agents.md#a-binding-that-cannot-be-resolved), and the other actions keep working.
+- **Report.** Each drift files one [`mcp_definition_drift`](./exceptions.md#producers) exception per tool, action and digest pair.
+- **Deferred servers.** Each tool behind `search` / `describe` / `call` is pinned the first time it is described. A `describe` answering a drifted tool returns the unavailable note in its place, and `call` answers the same note for a tool that drifted or was never described, without contacting the server.
+- **Re-pin.** [`PATCH /tools/{id}`](/docs/api/tools/update-tool) with `"mcp_pins": null` accepts the current definitions: the next listing pins again. A new `mcp.url` clears the pins too. Re-sending an unchanged `mcp`, as every formation apply does, keeps them.
+
+Drift is checked where a listing is already fetched for a model: [`POST /tools/{id}/call`](/docs/api/tools/call-tool), pipeline steps and [`GET /tools/{id}/actions`](/docs/api/tools/list-tool-actions) show no definition to a model and are not gated. An unreachable server is reported as it is without pins. Only a persisted tool pins; an inline `mcp` definition with `pin_definitions` is `400 VALIDATION_FAILED`.
+
 #### Listing an MCP tool's actions
 
 [`GET /tools/{id}/actions`](/docs/api/tools/list-tool-actions) answers the surface a model bound to the tool sees: each action's `name`, `description` and `input_schema`, with `actions` and `denied_actions` applied and [preset](#preset-parameters) keys removed from the schemas that declare them. The server is reached with `mcp.headers` resolved, so the route needs `tools:CallTool`; a header naming a `{{context:}}` key is `400 MISSING_TOOL_CONTEXT_KEY`, and a failed `tools/list` is `502 MCP_TOOL_ERROR`.
@@ -394,6 +417,17 @@ For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), whic
 
 **Validation.** [`POST /tools`](/docs/api/tools/create-tool), [`PATCH /tools/:id`](/docs/api/tools/update-tool) and `validate-formation` check the structure: every step needs a `tool_id` or an inline `tool` with a `name`, and a `tool_id` names a tool in the pipeline's own project (`400 PIPELINE_INVALID_STEP` otherwise), which is also where it resolves at call time, whoever calls the pipeline; a `{ "ref": … }` `tool_id` is accepted in a formation template only (direct `POST`/`PATCH` need a literal string). `validate-formation` also warns (not errors) on a `parameters` property no step `input` or `output` reads via `{ "var": "input.<name>" }`.
 
+### Who may write a tool
+
+Whoever creates or edits a tool holds what calling it performs ([the writer rule](./iam.md#the-writer-rule)), checked on the tool as the write leaves it, on REST and in a formation (after resolution):
+
+- **`builtin`**: each action in `actions`, on its whole resource type (`list-agents` → `agents:ListAgents` on `srn:<project_id>:agent:*`).
+- **`mcp`** on a [registered MCP server](./iam.md#registered-mcp-servers): what the server declares for each of `actions`, which is required and may name only tools it declares (`400 VALIDATION_FAILED` otherwise).
+- **`pipeline`**: what each step does: its inline tool's, by these rules, or `tools:CallTool` on the tool a `tool_id` step names.
+- Any other tool performs no runtime action.
+
+A missing action is `403 ACTION_NOT_HELD` with `meta.action` and `meta.resource`.
+
 ### Input Validation
 
 On an `http` or `pipeline` tool, `parameters` is the input contract: each call's input, `preset_parameters` merged in, must satisfy it, or the call is `400 VALIDATION_FAILED` naming the violated field, before any guardrail or dispatch. A model's call from an agent loop gets the same refusal as its tool result. A schema that does not compile is not checked. `mcp` actions declare their schemas on their server; `client` tools run on the caller's side.
@@ -416,7 +450,9 @@ A `pipeline` narrows the input of a tool it wraps: its `parameters` are what cal
         "tool_id": "tool_abc123",
         "action": "create-agent-generation",
         "input": {
-          "messages": [{ "role": "user", "content": { "var": "input.message" } }]
+          "messages": [
+            { "role": "user", "content": { "var": "input.message" } }
+          ]
         }
       }
     ]
@@ -499,6 +535,7 @@ When the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration), every r
 The JWT is signed with EdDSA (Ed25519). The public key is published, unauthenticated, at `GET /.well-known/tool-assertion-jwks.json` under the header's `kid` (the key's RFC 7638 thumbprint); with no key configured the set is empty and no header is sent.
 
 {/* single-client: the key set is a public well-known document, not an API operation */}
+
 ```bash
 curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 ```
@@ -512,7 +549,7 @@ curl "$SOAT_BASE_URL/.well-known/tool-assertion-jwks.json"
 | `tool_id`                                     | The tool's ID; absent for an inline definition                                                                           |
 | `project_id`                                  | The tool's own project                                                                                                   |
 | `agent_id`, `generation_id`                   | The agent and generation whose turn made the call, when one did                                                          |
-| `work_id`                                     | The durable work that made the call, when one did: a playbook case or execution, a task, or an orchestration run          |
+| `work_id`                                     | The durable work that made the call, when one did: a playbook case or execution, a task, or an orchestration run         |
 | `calling_project_id`                          | The caller's project, on a call through a [share](./shares.md)                                                           |
 | `session_id`, `actor_id`, `actor_external_id` | The [server-derived identity](../advanced/tool-context.md#auto-populated-keys-sessions), when the call runs in a session |
 | `ath`                                         | The authority the call was sent with, encrypted with a key only SOAT holds; opaque to the receiver                       |
@@ -546,6 +583,14 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped from it — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
 - `actor_id` runs the call for that actor of the calling project: the tool receives `actor_id` and `actor_external_id`, and an [`oauth_connection`](./oauth-connections.md#using-a-connection-from-a-tool) credential is the actor's. An actor outside the calling project is `400 ACTOR_NOT_FOUND`; one the caller may not read (`actors:GetActor`) is `403`.
+
+### Trusted output
+
+`trusted_output: false` (the default, every type) marks a tool's results as content an attacker could write. Each one that enters a generation's context counts toward `runtime.generations.untrusted_tool_results.total`, which a guardrail reads to require sign-off on a write once the turn has read such content ([What the turn has read](./guardrails.md#what-the-turn-has-read)). It changes nothing until a guardrail reads the key.
+
+- **Declared once, on the tool.** A `builtin` or `mcp` tool mixing trusted and attacker-writable actions is split into two tools with different `actions`. A `pipeline` declares its own flag: a quarantine pipeline (fetch, then a tool-less reader with a constrained output schema) may be declared trusted.
+- **Knowledge reads count as knowledge.** A `search-knowledge` or `get-document` result of a `builtin` tool counts toward `runtime.generations.knowledge_results.total` whatever the flag says.
+- **Setting `true` needs `guardrails:DetachGuardrail`** besides `tools:CreateTool` / `tools:UpdateTool`, on a stored tool, an agent's inline `tool_bindings` definition and a [formation](./formations.md) resource: it loosens every guardrail reading the key, as removing a guardrail does. Without it the write is `403 ACTION_NOT_HELD`.
 
 ### Sharing a tool
 
@@ -588,10 +633,10 @@ Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-t
 
 ## Configuration
 
-| Environment Variable         | Required | Description                                                                                                                                                                                                                   |
-| ---------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Environment Variable         | Required | Description                                                                                                                                                                                                                          |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `TOOL_RESPONSE_MAX_BYTES`    | No       | Ceiling on an http or mcp tool's response body, in bytes. Defaults to `FILE_UPLOAD_MAX_BYTES` (25 MB), so a downloaded file can be uploaded. A larger 2xx body is `502 TOOL_RESPONSE_TOO_LARGE`; a larger non-2xx body is cut to it. |
-| `TOOL_ASSERTION_PRIVATE_KEY` | No       | PEM (PKCS #8) Ed25519 private key that signs [tool assertions](#tool-assertions); `\n` escapes are accepted. Unset sends none. Any other key type fails the call before it is sent.                                           |
+| `TOOL_ASSERTION_PRIVATE_KEY` | No       | PEM (PKCS #8) Ed25519 private key that signs [tool assertions](#tool-assertions); `\n` escapes are accepted. Unset sends none. Any other key type fails the call before it is sent.                                                  |
 
 ## Examples
 

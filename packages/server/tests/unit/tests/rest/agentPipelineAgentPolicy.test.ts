@@ -95,7 +95,12 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
   test('a tool_id step is refused an action the boundary denies', async () => {
     const builtin = await getDocumentTool();
     const pipeline = await pipelineTool([
-      { id: 'list', tool_id: builtin.id, action: 'get-document', input: readDocument() },
+      {
+        id: 'list',
+        tool_id: builtin.id,
+        action: 'get-document',
+        input: readDocument(),
+      },
     ]);
 
     await expectRefused(pipeline);
@@ -121,7 +126,12 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
   test('a step of a nested pipeline is refused an action the boundary denies', async () => {
     const builtin = await getDocumentTool();
     const inner = await pipelineTool([
-      { id: 'list', tool_id: builtin.id, action: 'get-document', input: readDocument() },
+      {
+        id: 'list',
+        tool_id: builtin.id,
+        action: 'get-document',
+        input: readDocument(),
+      },
     ]);
     const outer = await pipelineTool([
       { id: 'inner', tool_id: inner.id, input: {} },
@@ -133,7 +143,12 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
   test('a step runs an action the boundary allows', async () => {
     const builtin = await getDocumentTool();
     const pipeline = await pipelineTool([
-      { id: 'list', tool_id: builtin.id, action: 'get-document', input: readDocument() },
+      {
+        id: 'list',
+        tool_id: builtin.id,
+        action: 'get-document',
+        input: readDocument(),
+      },
     ]);
 
     const { result } = await callThroughAgent({
@@ -147,7 +162,12 @@ describe("an agent's policy_ids bound the builtin steps of its pipeline tools", 
   test('a step runs unbounded for an agent with no boundary', async () => {
     const builtin = await getDocumentTool();
     const pipeline = await pipelineTool([
-      { id: 'list', tool_id: builtin.id, action: 'get-document', input: readDocument() },
+      {
+        id: 'list',
+        tool_id: builtin.id,
+        action: 'get-document',
+        input: readDocument(),
+      },
     ]);
 
     const { result } = await callThroughAgent({ tool: pipeline });

@@ -1,3 +1,4 @@
+import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   type ChatRequest,
   startChatCompletionStub,
@@ -53,7 +54,10 @@ describe('Agent memory per actor', () => {
     });
   };
 
-  const agentWith = (knowledgeConfig: Record<string, unknown>) => {
+  const agentWith = (
+    knowledgeConfig: Record<string, unknown>,
+    extra: Record<string, unknown> = {}
+  ) => {
     return create('/api/v1/agents', {
       project_id: projectId,
       ai_provider_id: providerId,
@@ -61,6 +65,7 @@ describe('Agent memory per actor', () => {
       instructions: 'Answer from what you are given.',
       max_steps: 3,
       knowledge_config: knowledgeConfig,
+      ...extra,
     });
   };
 
@@ -198,6 +203,56 @@ describe('Agent memory per actor', () => {
       expect(
         JSON.parse(toolResultsOf(requests[requests.length - 1])[0])
       ).toEqual(expect.objectContaining({ action: 'created' }));
+    });
+
+    test("approving one held write per actor writes each actor's memory", async () => {
+      const storeId = await newStore();
+      const guardrailId = await create('/api/v1/guardrails', {
+        project_id: projectId,
+        name: `hold-${crypto.randomUUID()}`,
+        document: { class: 'C' },
+      });
+      const agentId = await agentWith(
+        { write_memory_store_id: storeId },
+        { guardrail_ids: [guardrailId] }
+      );
+      rememberContent = 'Prefers email.';
+
+      const approvalIds = [];
+      for (const actorId of [actorA, actorB]) {
+        const requests = await turn({ agentId, actorId });
+        approvalIds.push(
+          JSON.parse(toolResultsOf(requests[requests.length - 1])[0])
+            .approval_id
+        );
+      }
+      expect(new Set(approvalIds).size).toBe(2);
+
+      // The continuation turns answer rather than propose the write again.
+      rememberContent = null;
+      for (const approvalId of approvalIds) {
+        const res = await asAdmin()
+          .post(`/api/v1/approvals/${approvalId}/approve`)
+          .send({});
+        expect(res.status).toBe(200);
+      }
+
+      const owners = await pollUntil({
+        read: async () => {
+          const res = await asAdmin().get(
+            `/api/v1/memories?memory_store_id=${storeId}`
+          );
+          return (res.body.data as Array<{ actor_id: string }>).map(
+            (memory) => {
+              return memory.actor_id;
+            }
+          );
+        },
+        done: (found) => {
+          return found.length >= 2;
+        },
+      });
+      expect(owners.sort()).toEqual([actorA, actorB].sort());
     });
 
     test('a turn of no actor writes a memory of no actor', async () => {

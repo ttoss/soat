@@ -3,12 +3,9 @@ import createDebug from 'debug';
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { authUserOfWork } from '../middleware/auth';
+import { type AgentAuthority, boundarySets } from './agentAuthority';
 import type { AssertionAuthority } from './assertionAuthority';
-import {
-  type PolicyDocument,
-  type PolicySets,
-  validatePolicyDocument,
-} from './iam';
+import type { PolicySets } from './iam';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:assertionSender');
@@ -25,21 +22,13 @@ export type SenderCredential = Pick<
  * Whose authority a tool call carries in its assertion. `caller` is the
  * request's own resolved credential, narrowings included; without one the
  * authority the work stores is resolved. A sender with neither sends nothing
- * (`meterToolExecution`). `agentPolicy` is
- * the calling agent's `policy_ids`, as every `builtin` call of the turn is
- * held to it.
+ * (`meterToolExecution`). `agentAuthority` is the calling agent's, as every
+ * `builtin` call of the turn is held to its boundary.
  */
 export type AssertionSender = {
   caller?: SenderCredential;
   authority: WorkAuthority | null;
-  agentPolicy?: unknown;
-};
-
-const agentPolicySets = (agentPolicy: unknown): PolicySets => {
-  if (!agentPolicy) return [];
-  return validatePolicyDocument(agentPolicy).valid
-    ? [[agentPolicy as PolicyDocument]]
-    : NOTHING;
+  agentAuthority?: AgentAuthority;
 };
 
 const credentialOf = async (
@@ -53,7 +42,7 @@ const credentialOf = async (
 
 /**
  * The authority a call's assertion seals: the sender's credential in the
- * tool's project ∩ the agent's `policy_ids`. A sender with no credential, or
+ * tool's project ∩ the agent's boundary. A sender with no credential, or
  * one reaching no further than another project, allows nothing. A
  * generation's stored identity is read when the assertion returns, since the
  * row may not exist yet when its tools are resolved.
@@ -77,7 +66,7 @@ export const resolveSenderAuthority = async (args: {
   return {
     sets: [
       ...(credentialSets.length > 0 ? credentialSets : NOTHING),
-      ...agentPolicySets(sender.agentPolicy),
+      ...boundarySets(sender.agentAuthority),
     ],
     ...(principal ? { principal } : {}),
   };

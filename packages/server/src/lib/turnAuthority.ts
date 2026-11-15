@@ -1,20 +1,35 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { authUserOfWork } from '../middleware/auth';
-import type { AgentAuthority } from './agentAuthority';
+import {
+  type AgentAuthority,
+  agentPolicyOf,
+  projectCapOf,
+} from './agentAuthority';
 import { authorizationDenied, callerDenied } from './authorizationDenial';
 import {
   agentHeldGrant,
+  type AuthorityCap,
   captureAuthority,
   narrowAuthority,
   sameWorkAuthority,
   type WorkAuthority,
 } from './workAuthority';
 
+/** The owner project's `agent_policy_ids` over `agentAuthority`'s turn. */
+const projectCaps = (agentAuthority: AgentAuthority): AuthorityCap[] => {
+  const project =
+    agentAuthority.runAs === 'agent'
+      ? agentAuthority.capProject
+      : projectCapOf(agentAuthority)?.by.id;
+  return project ? [{ kind: 'project_agents', project }] : [];
+};
+
 /**
- * The authority an agent turn acts under: under `run_as: agent`, the agent's
- * grant alone; under `run_as: caller`, the caller held to the agent's
- * `policy_ids` (no cap when it has none). Without an agent, the caller's own.
+ * The authority an agent turn acts under, capped by its owner project's
+ * `agent_policy_ids`: under `run_as: agent`, the agent's grant alone; under
+ * `run_as: caller`, the caller held to the agent's `policy_ids` (no cap when
+ * it has none). Without an agent, the caller's own.
  */
 export const turnAuthority = (args: {
   authority: WorkAuthority | null;
@@ -22,35 +37,49 @@ export const turnAuthority = (args: {
 }): WorkAuthority | null => {
   const { authority, agentAuthority } = args;
   if (!authority || !agentAuthority) return authority;
-  const grant = agentHeldGrant({
-    agent: agentAuthority.agentId ?? '',
-    policy: agentAuthority.policy,
-  });
+  const caps = projectCaps(agentAuthority);
   if (agentAuthority.runAs === 'agent') {
     // The work's principal, chain and work id carry on; its grant and caps do not.
     return {
       ...authority,
       project: agentAuthority.projectPublicId,
-      grant,
-      caps: [],
+      grant: agentHeldGrant({
+        agent: agentAuthority.agentId,
+        policy: agentAuthority.grant,
+      }),
+      caps,
     };
   }
-  if (!agentAuthority.policy) return authority;
-  return narrowAuthority({ authority, by: { grant, caps: [] } });
+  const policy = agentPolicyOf(agentAuthority);
+  return narrowAuthority({
+    authority,
+    by: {
+      grant: policy
+        ? agentHeldGrant({ agent: agentAuthority.agentId ?? '', policy })
+        : authority.grant,
+      caps,
+    },
+  });
 };
 
 /**
  * The authority what the caller names in a turn (a document, a `tool_output`,
  * a `knowledge_config` override) is read under: the caller's, capped by the
- * agent's `policy_ids` only when the agent runs as the caller.
+ * owner project's `agent_policy_ids`, and by the agent's `policy_ids` only
+ * when the agent runs as the caller.
  */
 export const callerNamedAuthority = (args: {
   authority: WorkAuthority | null;
   agentAuthority?: AgentAuthority;
 }): WorkAuthority | null => {
-  return args.agentAuthority?.runAs === 'agent'
-    ? args.authority
-    : turnAuthority(args);
+  const { authority, agentAuthority } = args;
+  if (agentAuthority?.runAs !== 'agent' || !authority) {
+    return turnAuthority(args);
+  }
+  return narrowAuthority({
+    authority,
+    by: { grant: authority.grant, caps: projectCaps(agentAuthority) },
+  });
 };
 
 /** The evaluator for `authority`; undefined when it holds none. */

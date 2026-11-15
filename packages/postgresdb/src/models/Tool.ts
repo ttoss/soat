@@ -63,6 +63,11 @@ export class Tool extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare mcp: object | null;
 
+  // One digest per action, written once by the first listing while
+  // `mcp.pin_definitions` is on; cleared to re-pin.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare mcpPins: Record<string, string> | null;
+
   @Column({ type: DataType.JSON, allowNull: true })
   declare actions: string[] | null;
 
@@ -86,6 +91,11 @@ export class Tool extends Model {
   // Governs this tool wherever it is used, by any agent.
   @Column({ type: DataType.JSON, allowNull: true })
   declare guardrailIds: string[] | null;
+
+  // Whether this tool's results are content no attacker can write; read when a
+  // result enters a generation's context (`runtime.generations.*`).
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare trustedOutput: boolean;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

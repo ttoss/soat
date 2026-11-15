@@ -8,8 +8,9 @@ import type { ActingPrincipal } from './workAuthority';
  * Whose policies refused: the request's credential (`user`, `api_key`, or
  * `caller` where the site holds its policies but not its id), what narrows it
  * (an `iam_token` bound, an `on_behalf_of` assertion's cap, a `generation`'s
- * execution identity), or a resource acting under its own `policy_ids`
- * (`agent`, `trigger`, or a `RESOURCE_GRANT_PRINCIPALS` type). `id` is `null` where the refusing site holds the policy
+ * execution identity, a `project`'s `agent_policy_ids`), or a resource acting
+ * under its own `policy_ids` (`agent`, `trigger`, or a
+ * `RESOURCE_GRANT_PRINCIPALS` type). `id` is `null` where the refusing site holds the policy
  * but not its owner's id.
  */
 export type DeniedPrincipal = {
@@ -20,6 +21,7 @@ export type DeniedPrincipal = {
     | 'iam_token'
     | 'on_behalf_of'
     | 'generation'
+    | 'project'
     | 'agent'
     | 'trigger'
     | ResourceGrantPrincipalType;
@@ -44,6 +46,7 @@ const PRINCIPAL_LABELS: Record<DeniedPrincipal['type'], string> = {
   iam_token: 'IAM token',
   on_behalf_of: 'On-Behalf-Of assertion',
   generation: 'generation',
+  project: 'project',
   agent: 'agent',
   trigger: 'trigger',
   eval: 'eval',

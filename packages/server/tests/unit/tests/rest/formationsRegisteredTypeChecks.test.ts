@@ -7,6 +7,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
   type FakeFormationHandler,
   startFakeFormationHandler,
+  TEST_CHANNEL_ACTIONS,
 } from '../../fixtures/formationHandler';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -101,6 +102,7 @@ beforeAll(async () => {
       'formations:GetFormation',
       'formations:DeleteFormation',
       'memories:CreateMemoryStore',
+      ...TEST_CHANNEL_ACTIONS,
     ],
     createNoPermUser: false,
   });

@@ -143,6 +143,7 @@ export const runDirectToolGate = async (args: {
     orchestrationRunId: null,
     run: { nodeAttempt: null },
     baseGuardrails: [],
+    provenance: null,
   };
 
   const action = args.action ?? args.toolName;

@@ -14,6 +14,7 @@ type ChatMessage = {
   role: string;
   content?: unknown;
   tool_call_id?: string;
+  tool_calls?: unknown[];
 };
 
 export type ChatRequest = {
@@ -33,6 +34,14 @@ export type ChatRequest = {
  */
 export const proposeCalls = (calls: ScriptedCall[]) => {
   return { role: 'user', content: JSON.stringify({ calls }) };
+};
+
+/**
+ * The user message that makes the scripted model propose `steps[n]` in its
+ * n-th step, then answer with every result the turn got back.
+ */
+export const proposeSteps = (steps: ScriptedCall[][]) => {
+  return { role: 'user', content: JSON.stringify({ steps }) };
 };
 
 const parseJson = (raw: unknown): unknown => {
@@ -72,6 +81,30 @@ const close = (server: http.Server): Promise<void> => {
   });
 };
 
+type Script = { calls?: ScriptedCall[]; steps?: ScriptedCall[][] };
+
+// What the model proposes next: a `steps` script's next step, or a `calls`
+// script's calls until the turn holds their results.
+const nextCalls = (args: {
+  script: Script | undefined;
+  turn: ChatMessage[];
+}): { calls: ScriptedCall[]; idPrefix: string } => {
+  const steps = args.script?.steps;
+  if (!steps) {
+    const answered = args.turn.some((message) => {
+      return message.role === 'tool';
+    });
+    return {
+      calls: answered ? [] : (args.script?.calls ?? []),
+      idPrefix: 'call_',
+    };
+  }
+  const taken = args.turn.filter((message) => {
+    return message.role === 'assistant' && message.tool_calls?.length;
+  }).length;
+  return { calls: steps[taken] ?? [], idPrefix: `call_${taken}_` };
+};
+
 const completion = (body: ChatRequest) => {
   const messages = body.messages ?? [];
   const lastUser = messages.reduce((found, message, index) => {
@@ -81,16 +114,15 @@ const completion = (body: ChatRequest) => {
   const content = messages[lastUser]?.content;
   const script = parseJson(
     typeof content === 'string' ? content.replace(/^\[[^\]]*\]: /, '') : content
-  ) as {
-    calls?: ScriptedCall[];
-  };
-  const results = messages.slice(lastUser + 1).filter((message) => {
+  ) as Script | undefined;
+  const turn = messages.slice(lastUser + 1);
+  const results = turn.filter((message) => {
     return message.role === 'tool';
   });
-  const calls = script?.calls ?? [];
+  const { calls, idPrefix } = nextCalls({ script, turn });
 
   const message =
-    results.length > 0 || calls.length === 0
+    calls.length === 0
       ? {
           role: 'assistant',
           content: JSON.stringify(
@@ -104,7 +136,7 @@ const completion = (body: ChatRequest) => {
           content: null,
           tool_calls: calls.map((call, index) => {
             return {
-              id: `call_${index}`,
+              id: `${idPrefix}${index}`,
               type: 'function',
               function: {
                 name: call.name,

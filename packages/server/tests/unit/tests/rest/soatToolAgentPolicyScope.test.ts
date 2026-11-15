@@ -51,7 +51,11 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       },
       authority: adminAuthority,
       projectPublicId: projectId,
-      agentAuthority: { runAs: 'caller', agentId: AGENT_ID, policy },
+      agentAuthority: {
+        runAs: 'caller',
+        agentId: AGENT_ID,
+        boundary: [{ by: { type: 'agent', id: AGENT_ID }, policy }],
+      },
       buildContextHeaders: () => {
         return {};
       },
@@ -179,9 +183,14 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
       agentAuthority: {
         runAs: 'caller',
         agentId: AGENT_ID,
-        policy: allowMemoriesOn(
-          `srn:${projectId}:memory_store:${allowedStoreId}`
-        ),
+        boundary: [
+          {
+            by: { type: 'agent', id: AGENT_ID },
+            policy: allowMemoriesOn(
+              `srn:${projectId}:memory_store:${allowedStoreId}`
+            ),
+          },
+        ],
       },
       buildContextHeaders: () => {
         return {};

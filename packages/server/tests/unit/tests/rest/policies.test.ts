@@ -564,6 +564,8 @@ describe('Policies', () => {
         memory_rule_sample: [],
         playbooks: 0,
         playbook_sample: [],
+        projects: 0,
+        project_sample: [],
       });
 
       const other = await client.post('/api/v1/policies').send(sendDoc());

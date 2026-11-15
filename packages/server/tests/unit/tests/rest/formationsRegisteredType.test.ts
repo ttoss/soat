@@ -13,6 +13,7 @@ import {
   type FakeFormationHandler,
   HANDLER_SECRET,
   startFakeFormationHandler,
+  TEST_CHANNEL_ACTIONS,
 } from '../../fixtures/formationHandler';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -122,6 +123,9 @@ beforeAll(async () => {
       'formations:DeleteFormation',
       'formations:GetFormation',
       'formations:ListFormationEvents',
+      ...TEST_CHANNEL_ACTIONS,
+      // The `agent_id` the dependency cases set carries it.
+      'agents:CreateAgentGeneration',
     ],
     createNoPermUser: false,
   });
@@ -158,9 +162,9 @@ describe('POST /api/v1/formations — a registration overriding a built-in', () 
     };
     const before = await db.Webhook.count();
 
-    // The caller holds only `formations:*` actions: the built-in would refuse
-    // it `webhooks:CreateWebhook`, so a 201 also shows the override carries
-    // the registered type's authorization, not the built-in's.
+    // The caller holds no `webhooks:CreateWebhook`: the built-in would refuse
+    // it, so a 201 also shows the override carries the registered type's
+    // authorization, not the built-in's.
     const res = await createFormation({
       resources: {
         Hook: {

@@ -7,6 +7,7 @@ import { type AgentAuthority, resolveAgentAuthority } from './agentAuthority';
 import {
   type ClientToolResult,
   type GenerationResult,
+  ownerProjectId,
   type PendingGeneration,
   toAgentConfig,
   type TypedAgent,
@@ -18,6 +19,10 @@ import {
   getGenerationPendingState,
   notAwaitingToolOutputs,
 } from './generationPendingState';
+import {
+  createGenerationProvenance,
+  trackGenerationProvenance,
+} from './generationProvenance';
 import { generations, updateGenerationRecord } from './generations';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
@@ -214,12 +219,20 @@ const buildPendingFromState = async (args: {
   agentAuthority: AgentAuthority;
   traceId: string;
   pendingState: PendingStateDb;
+  /** The counts the generation row stores, which the pause wrote. */
+  stored: { untrustedToolResults: number; knowledgeResults: number };
 }): Promise<PendingGeneration | undefined> => {
   // A route-only agent has no pinned provider, so the resumption path must
   // resolve the route too — otherwise this least-traveled consumer is the one
   // place routing silently breaks.
   const resolution = await resolveAgentModel(args.typedAgent);
   if (resolution.failure) return undefined;
+
+  const provenance = createGenerationProvenance({
+    untrusted_tool_results: args.stored.untrustedToolResults,
+    knowledge_results: args.stored.knowledgeResults,
+  });
+  trackGenerationProvenance({ generationId: args.generationId, provenance });
 
   const { tools, unavailableToolNames } = await resolveAgentToolSurface({
     agentId: args.agentId,
@@ -233,6 +246,7 @@ const buildPendingFromState = async (args: {
     // Trusted: `pendingState.toolContext` is persisted after the chokepoint
     // pin, so a caller-forged value never reaches it.
     sessionId: args.pendingState.toolContext?.sessionId ?? null,
+    provenance,
   });
 
   return {
@@ -267,6 +281,7 @@ const buildPendingFromState = async (args: {
     toolsAuthority: args.authority,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
+    provenance,
   };
 };
 
@@ -312,8 +327,10 @@ export const recoverPendingFromDb = async (args: {
       policyIds: typedAgent.policyIds,
       actorId: pendingState.toolContext?.actor_id,
       projectPublicId: typedAgent.project.publicId,
+      ownerProjectId: ownerProjectId(typedAgent),
     }),
     traceId: gen.trace.publicId,
     pendingState,
+    stored: gen,
   });
 };

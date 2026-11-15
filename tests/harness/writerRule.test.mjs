@@ -149,6 +149,31 @@ describe('writer rule', () => {
     }
   });
 
+  // A registered type's handler authorizes nothing: every call carrying the
+  // deployer's authority is preceded by the check of what it declares.
+  test('a registered handler acts only after the deployer is checked', () => {
+    const MODULE = 'lib/formation-modules/registeredFormationModule.ts';
+    const calling = serverFiles.filter((entry) => {
+      return /\bcallFormationHandler\(/.test(sourceOf(entry));
+    });
+    assert.deepEqual(calling, [MODULE]);
+    const source = sourceOf(MODULE);
+    const count = (pattern) => {
+      return [...source.matchAll(pattern)].length;
+    };
+    const writes = count(/assertion: await deployerAssertion\(/g);
+    assert.ok(writes > 0);
+    assert.equal(
+      count(/await assertDeployerHolds\(\{/g),
+      writes,
+      `every handler write in ${MODULE} goes through assertDeployerHolds`
+    );
+    assert.match(
+      source,
+      /assertWriterHolds\(\{\s*carrier: 'registeredResources'/
+    );
+  });
+
   test('only the writer rule attaches policies', () => {
     const calling = serverFiles.filter((entry) => {
       return /\bassertWriterMayAttach\(/.test(sourceOf(entry));

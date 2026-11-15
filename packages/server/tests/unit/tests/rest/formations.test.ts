@@ -134,6 +134,8 @@ describe('Formations', () => {
                 'tools:CreateTool',
                 'tools:UpdateTool',
                 'tools:DeleteTool',
+                // A `builtin` tool's action, held by whoever deploys it.
+                'tools:ListTools',
                 'webhooks:CreateWebhook',
                 'webhooks:UpdateWebhook',
                 'webhooks:DeleteWebhook',

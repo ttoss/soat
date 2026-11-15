@@ -9,6 +9,11 @@ const srcDir = path.join(repoRoot, 'packages/server/src');
 const modelsDir = path.join(repoRoot, 'packages/postgresdb/src/models');
 const registryFile = path.join(srcDir, 'lib/policyCarriers.ts');
 
+/** `policyIds`, or a column named for what its policies hold (`agentPolicyIds`). */
+const DECLARES_POLICY_IDS = /\bdeclare (?:policyIds|\w+PolicyIds)\b/;
+const DECLARES_POLICY_ID_LIST =
+  /\bdeclare (?:policyIds|\w+PolicyIds): string\[\]/;
+
 /** Source with comments dropped, so prose naming a symbol is not a hit. */
 const code = (file) => {
   return fs
@@ -59,7 +64,7 @@ describe('policy carriers', () => {
     const declaring = fs
       .readdirSync(modelsDir)
       .filter((file) => {
-        return /\bdeclare policyIds\b/.test(code(path.join(modelsDir, file)));
+        return DECLARES_POLICY_IDS.test(code(path.join(modelsDir, file)));
       })
       .map((file) => {
         return file.replace(/\.ts$/, '');
@@ -119,7 +124,7 @@ describe('policy carriers', () => {
     const carriers = fs
       .readdirSync(modelsDir)
       .filter((file) => {
-        return /declare policyIds: string\[\]/.test(
+        return DECLARES_POLICY_ID_LIST.test(
           fs.readFileSync(path.join(modelsDir, file), 'utf-8')
         );
       })

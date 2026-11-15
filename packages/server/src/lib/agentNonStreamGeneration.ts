@@ -36,6 +36,7 @@ import {
   meterTurnSegment,
   recordContinuationFailure,
 } from './generationLifecycle';
+import type { GenerationProvenance } from './generationProvenance';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   collectSystemInstructions,
@@ -240,6 +241,7 @@ const settlePartition = async (args: {
       toolsAuthority: args.pending.toolsAuthority,
       toolContext: args.pending.toolContext ?? null,
       remainingDepth: args.save.remainingDepth ?? null,
+      provenance: args.pending.provenance,
     });
   }
   // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutually recursive with resolveToolOutputsResult
@@ -267,6 +269,7 @@ const buildInitialResumePending = (args: {
   responseMessages: unknown[];
   initialSteps: unknown[];
   toolContext?: Record<string, string> | null;
+  provenance: GenerationProvenance;
 }): PendingGeneration => {
   return {
     agentId: args.agentId,
@@ -291,6 +294,7 @@ const buildInitialResumePending = (args: {
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
     toolContext: args.toolContext ?? undefined,
+    provenance: args.provenance,
   };
 };
 
@@ -320,6 +324,7 @@ export const settleInitialClientCalls = async (args: {
   result: SettleSaveArgs['result'];
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  provenance: GenerationProvenance;
 }): Promise<GenerationResult | null> => {
   const partition = await partitionClientCalls({
     steps: args.result.steps,
@@ -342,6 +347,7 @@ export const settleInitialClientCalls = async (args: {
       responseMessages: args.result.responseMessages,
       initialSteps: args.result.steps,
       toolContext: args.toolContext,
+      provenance: args.provenance,
     }),
     partition,
     save: {
@@ -369,6 +375,7 @@ const resolveGenerationResult = async (args: {
   result: AgentRunResult;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  provenance: GenerationProvenance;
 }): Promise<GenerationResult> => {
   const paused = await settleInitialClientCalls({
     ...args,
@@ -482,6 +489,20 @@ const resolveSpentGenerationResult = async (
   }
 };
 
+// The `prepareStep` of a turn's first segment.
+const turnPrepareStep = async (args: {
+  typedAgent: TypedAgent;
+  provenance: GenerationProvenance;
+}) => {
+  return buildPrepareStep({
+    stepRules: args.typedAgent.stepRules,
+    logContext: 'non_stream',
+    toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
+    promptCaching: args.typedAgent.promptCaching,
+    provenance: args.provenance,
+  });
+};
+
 export const runNonStreamGeneration = async (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
@@ -497,15 +518,11 @@ export const runNonStreamGeneration = async (args: {
   abortSignal?: AbortSignal;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  provenance: GenerationProvenance;
 }): Promise<GenerationResult> => {
   const system = collectSystemInstructions(args.allMessages);
   const nonSystemMessages = withoutSystemMessages(args.allMessages);
-  const prepareStep = buildPrepareStep({
-    stepRules: args.typedAgent.stepRules,
-    logContext: 'non_stream',
-    toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
-    promptCaching: args.typedAgent.promptCaching,
-  });
+  const prepareStep = await turnPrepareStep(args);
 
   log(
     'runNonStreamGeneration: calling callGenerateText agentId=%s maxSteps=%s',
@@ -628,6 +645,7 @@ export const runToolOutputsGeneration = async (args: {
         toolIdToName,
         stepsAlreadySpent,
         promptCaching: args.pending.agentConfig.promptCaching,
+        provenance: args.pending.provenance,
       }),
       // The turn is the agent's on both sides of the pause. What keeps a
       // forcing value from demanding the same tool forever is the budget above,

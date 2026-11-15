@@ -555,7 +555,7 @@ What was injected is recorded on the generation as [`retrieval`](./generations.m
 | `limit`                  | `number`   | Maximum number of results to inject (default: 10)                                                                                                                                                                                                                                                                             |
 | `write_memory_store_id`  | `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory store                                                                                                                                                                                                                                  |
 
-`knowledge_config` is the request [knowledge search](./knowledge.md) takes, minus the query — which the agent's own messages supply. `knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_store_ids`, `document_ids` and `document_paths` are unioned with the stored arrays; `tags` pairs are merged, the override winning per key; `min_score`, `rrf_k`, `recency_half_life_days` and `limit` take the per-generation value. The stored config reads under the turn's authority ([Execution Identity](#execution-identity)): its `knowledge:SearchKnowledge` policy decides what is injected, and with no document access nothing is. A result only the override reaches is read as the caller (capped by `policy_ids` under `run_as: caller`); with no document access there, the override adds nothing. `write_memory_store_id` is agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
+`knowledge_config` is the request [knowledge search](./knowledge.md) takes, minus the query — which the agent's own messages supply. `knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_store_ids`, `document_ids` and `document_paths` are unioned with the stored arrays; `tags` pairs are merged, the override winning per key; `min_score`, `rrf_k`, `recency_half_life_days` and `limit` take the per-generation value. The stored config reads under the turn's authority ([Execution Identity](#execution-identity)), which its project's [`agent_policy_ids`](./projects.md#project-agent-cap) cap: its `knowledge:SearchKnowledge` policy decides what is injected, and with no document access nothing is. A result only the override reaches is read as the caller, capped by that project cap and, under `run_as: caller`, by `policy_ids`; with no document access there, the override adds nothing. `write_memory_store_id` is agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
 
 Writing back from a _completed_ turn is not configured here. It is the destination store's own ingestion policy — a [memory rule](./memories.md#memory-rules) — so one store's writers are readable in one place and one agent can feed two stores under different rules.
 
@@ -660,11 +660,13 @@ Every tool call and knowledge read of the turn is checked under this authority: 
 
 A generation with no actor leaves the variable unbound, and a condition naming an unbound variable matches nothing ([IAM — Policy Variables](./iam.md#policy-variables)).
 
+**Project cap.** The owning project's [`agent_policy_ids`](./projects.md#project-agent-cap) cap every turn as well, in both modes and on every check above, what the caller names included. A refusal by it names `denied_by: { type: "project" }`. A shared agent is bounded by its owner's cap.
+
 The cap also gates the native **`write_memory`** tool (`knowledge_config.write_memory_store_id`): it needs `memories:CreateMemory` **and** `memories:UpdateMemory`, evaluated against the target store's SRN (`srn:<project_id>:memory_store:<memory_store_id>`) and its tags as [condition](./iam.md#condition-keys) inputs, so a policy can confine an agent to one store whatever `write_memory_store_id` later says. Project- and agent-scope [guardrails](./guardrails.md#attachment) gate it like any other tool call ([Memories — `write_memory` Tool](./memories.md#write_memory-tool)).
 
 ### Resource-scoped policies
 
-A `builtin` action that names a resource is evaluated against that resource's SRN and tags, the same pair its route checks the caller's policy against. So an agent's policy can confine it to named resources whatever the caller may reach:
+A `builtin` action is checked at its route under the turn's authority, so `policy_ids` and the project cap are evaluated against the SRN and tags the route checks, documents and files included. An agent's policy can confine it to named resources whatever the caller may reach:
 
 ```json
 {
@@ -682,25 +684,9 @@ A `builtin` action that names a resource is evaluated against that resource's SR
 
 The SRN is the one the route enforces, which is not always the id in the argument: a memory and a [memory rule](./memories.md#memory-rules) both authorize through their **memory store**, so a policy naming the store covers every operation on the memories and rules inside it.
 
-| Resource named by the action                                                                                | Scoped today                                  |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| Memory store, memory, memory rule                                                                           | ✅ against the store's SRN and tags           |
-| Actor, conversation, session                                                                                | ✅ against its own SRN and tags               |
-| Agent                                                                                                       | ✅ against its own SRN (agents carry no tags) |
-| Tool, guardrail, quota, model route, ingestion rule, chain, trace, generation, audit entry, usage threshold | ✅ against its own SRN                        |
-| Orchestration, and any run of one                                                                           | ✅ against the orchestration's SRN            |
-| Dataset, and any item in one                                                                                | ✅ against the dataset's SRN                  |
-| Eval, and any run of one                                                                                    | ✅ against the eval's SRN                     |
-| Everything else                                                                                             | evaluated against `*`                         |
+An action that names no resource (a listing, a create, anything project-scoped) is checked as its route checks it, and a listing returns only what the turn's authority may read. An id that resolves to nothing is answered as the route answers it.
 
-Two cases stay `*`, and both refuse rather than admit when a statement names a resource:
-
-- **An action that names no resource** — a listing, a create, anything project-scoped. `*` is the whole truth about it; scope those with the caller's policy.
-- **A module not yet scoped** (documents, files, tasks, triggers, webhooks, workflows and the rest). Their routes are still resource-checked for the caller; only the agent's policies are action-level there.
-
-An id that resolves to nothing is treated the same way: no SRN, so a scoped policy denies the call before it is made.
-
-Action strings are validated when the policy is written (`create-policy`, `update-policy`, `validate-formation`); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed; `http`, `client` and `mcp` tools run outside the permission model.
+Action strings are validated when the policy is written (`create-policy`, `update-policy`, `validate-formation`); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed per action; an `http`, `mcp` or `pipeline` tool is governed as `tools:CallTool` on the tool, and a `client` tool runs in the client.
 
 Example — a policy that lets the agent read and search documents only, whatever the caller may do:
 

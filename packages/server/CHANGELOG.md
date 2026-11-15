@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.111.0](https://github.com/ttoss/soat/compare/v0.110.0...v0.111.0) (2026-11-14)
+
+### Bug Fixes
+
+* **approvals:** refuse an invalid edit of a held native tool call ([#1932](https://github.com/ttoss/soat/issues/1932)) ([24840a4](https://github.com/ttoss/soat/commit/24840a4345a5c91413b52c920f8871f030b3e45b))
+* **server:** keep idle connections open past the load balancer idle timeout ([#1935](https://github.com/ttoss/soat/issues/1935)) ([3ac0e39](https://github.com/ttoss/soat/commit/3ac0e39f946601608814bedc7c55bab711af1327))
+
+### Features
+
+* **iam:** content-bound tag keys, iam:RequestTag and memory write events ([#1933](https://github.com/ttoss/soat/issues/1933)) ([6845413](https://github.com/ttoss/soat/commit/68454138af5d7ad69e1a00a231da4a83791a053b)), closes [#1913](https://github.com/ttoss/soat/issues/1913)
+* **projects:** agent_policy_ids caps every agent turn in a project ([#1931](https://github.com/ttoss/soat/issues/1931)) ([69fb66a](https://github.com/ttoss/soat/commit/69fb66aec56c568107bd4e0e684235d22b241a64)), closes [#1914](https://github.com/ttoss/soat/issues/1914)
+* **tools:** pin mcp tool definitions and withhold an action that drifts ([#1930](https://github.com/ttoss/soat/issues/1930)) ([9d3667b](https://github.com/ttoss/soat/commit/9d3667b3687e756dca357fcf59b7091da5aa1d00)), closes [#1915](https://github.com/ttoss/soat/issues/1915)
+* **usage:** meter native write_memory calls as tool_execution events ([#1929](https://github.com/ttoss/soat/issues/1929)) ([1adf714](https://github.com/ttoss/soat/commit/1adf71482470eabb7cb45bc838db121cfb7cef36)), closes [#1921](https://github.com/ttoss/soat/issues/1921)
+
 # [0.110.0](https://github.com/ttoss/soat/compare/v0.109.0...v0.110.0) (2026-11-14)
 
 * feat(iam)!: durable work stores its authority and refuses with none (#1920) ([d46395e](https://github.com/ttoss/soat/commit/d46395eea9d9f51ddf0616c396a64dad2a829f03)), closes [#1920](https://github.com/ttoss/soat/issues/1920)
