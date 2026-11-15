@@ -86,15 +86,3 @@ export const verifyTimestampedSignature = (args: {
   });
   return digestsEqual({ a: digest, b: expected }) ? digest : null;
 };
-
-/** Verifies `sha256=<hex>` over the bare body; carries no timestamp. */
-export const verifyBareBodySignature = (args: {
-  secret: string;
-  rawBody: string;
-  header: string;
-}): boolean => {
-  return digestsEqual({
-    a: args.header,
-    b: `sha256=${hmacHex({ secret: args.secret, value: args.rawBody })}`,
-  });
-};

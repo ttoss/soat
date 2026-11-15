@@ -1,11 +1,10 @@
 import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
-import { db } from '../db';
-import { authUserOfWork } from '../middleware/auth';
 import { type AgentAuthority, boundarySets } from './agentAuthority';
 import type { AssertionAuthority } from './assertionAuthority';
 import type { PolicySets } from './iam';
+import { authUserUnder, turnAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:assertionSender');
@@ -20,8 +19,9 @@ export type SenderCredential = Pick<
 
 /**
  * Whose authority a tool call carries in its assertion. `caller` is the
- * request's own resolved credential, narrowings included; without one the
- * authority the work stores is resolved. A sender with neither sends nothing
+ * request's own resolved credential, narrowings included; without one, or
+ * under `run_as: agent`, the authority the turn's calls run under is resolved
+ * (`turnAuthority`). A sender with neither sends nothing
  * (`meterToolExecution`). `agentAuthority` is the calling agent's, as every
  * `builtin` call of the turn is held to its boundary.
  */
@@ -34,10 +34,10 @@ export type AssertionSender = {
 const credentialOf = async (
   sender: AssertionSender
 ): Promise<SenderCredential | undefined> => {
-  if (sender.caller) return sender.caller;
-  return sender.authority
-    ? authUserOfWork({ db, authority: sender.authority })
-    : undefined;
+  if (sender.caller && sender.agentAuthority?.runAs !== 'agent') {
+    return sender.caller;
+  }
+  return authUserUnder(turnAuthority(sender));
 };
 
 /**

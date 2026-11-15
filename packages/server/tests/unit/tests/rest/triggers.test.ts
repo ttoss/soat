@@ -2491,11 +2491,17 @@ describe('Triggers', () => {
     let hookTriggerId: string;
     let hookSecret: string;
 
-    const sign = (secret: string, body: string) => {
-      return `sha256=${crypto
-        .createHmac('sha256', secret)
-        .update(body)
-        .digest('hex')}`;
+    const sign = (args: {
+      secret: string;
+      body: string;
+      timestamp?: number;
+    }) => {
+      const t = args.timestamp ?? Math.floor(Date.now() / 1000);
+      const v1 = crypto
+        .createHmac('sha256', args.secret)
+        .update(`${t}.${args.body}`)
+        .digest('hex');
+      return `t=${t},v1=${v1}`;
     };
 
     const pollFiring = async (firingId: string) => {
@@ -2536,7 +2542,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${hookTriggerId}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(hookSecret, body))
+        .set('X-Soat-Signature', sign({ secret: hookSecret, body }))
         .send(body);
 
       expect(res.status).toBe(202);
@@ -2584,7 +2590,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${trigger.body.id}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(trigger.body.secret, body))
+        .set('X-Soat-Signature', sign({ secret: trigger.body.secret, body }))
         .send(body);
       expect(res.status).toBe(202);
 
@@ -2599,23 +2605,10 @@ describe('Triggers', () => {
     // Clears the window even when the request lands seconds after signing.
     const OUTSIDE_WINDOW_MARGIN_SECONDS = 60;
 
-    const signTimestamped = (args: {
-      secret: string;
-      body: string;
-      timestamp?: number;
-    }) => {
-      const t = args.timestamp ?? Math.floor(Date.now() / 1000);
-      const v1 = crypto
-        .createHmac('sha256', args.secret)
-        .update(`${t}.${args.body}`)
-        .digest('hex');
-      return `t=${t},v1=${v1}`;
-    };
-
     describe('timestamped signature', () => {
       test('accepts t=,v1= within the tolerance window and keys the firing by its digest', async () => {
         const body = JSON.stringify({ event: 'timestamped' });
-        const signature = signTimestamped({ secret: hookSecret, body });
+        const signature = sign({ secret: hookSecret, body });
         const res = await testClient
           .post(`/hooks/triggers/${hookTriggerId}`)
           .set('Content-Type', 'application/json')
@@ -2636,7 +2629,7 @@ describe('Triggers', () => {
           .set('Content-Type', 'application/json')
           .set(
             'X-Soat-Signature',
-            signTimestamped({
+            sign({
               secret: hookSecret,
               body,
               timestamp:
@@ -2656,7 +2649,7 @@ describe('Triggers', () => {
           .set('Content-Type', 'application/json')
           .set(
             'X-Soat-Signature',
-            signTimestamped({
+            sign({
               secret: hookSecret,
               body,
               timestamp:
@@ -2671,7 +2664,7 @@ describe('Triggers', () => {
       test('a digest over another timestamp returns 401', async () => {
         const body = JSON.stringify({ event: 'forged' });
         const now = Math.floor(Date.now() / 1000);
-        const old = signTimestamped({
+        const old = sign({
           secret: hookSecret,
           body,
           timestamp: now - 1000,
@@ -2716,7 +2709,7 @@ describe('Triggers', () => {
 
       test('a replayed delivery returns 409 HOOK_DELIVERY_REPLAYED and fires nothing', async () => {
         const body = JSON.stringify({ event: 'replayed' });
-        const signature = signTimestamped({ secret: hookSecret, body });
+        const signature = sign({ secret: hookSecret, body });
         const send = () => {
           return testClient
             .post(`/hooks/triggers/${hookTriggerId}`)
@@ -2754,7 +2747,7 @@ describe('Triggers', () => {
             .set('Content-Type', 'application/json')
             .set(
               'X-Soat-Signature',
-              signTimestamped({ secret: hookSecret, body, timestamp })
+              sign({ secret: hookSecret, body, timestamp })
             )
             .send(body);
         };
@@ -2763,21 +2756,18 @@ describe('Triggers', () => {
       });
     });
 
-    test('the bare-body sha256= scheme stays accepted and is not deduplicated', async () => {
+    test('a bare-body sha256= signature with a valid HMAC returns 401', async () => {
       const body = JSON.stringify({ event: 'bare' });
-      const send = () => {
-        return testClient
-          .post(`/hooks/triggers/${hookTriggerId}`)
-          .set('Content-Type', 'application/json')
-          .set('X-Soat-Signature', sign(hookSecret, body))
-          .send(body);
-      };
-      const first = await send();
-      const second = await send();
-      expect(first.status).toBe(202);
-      expect(second.status).toBe(202);
-      const firing = await pollFiring(first.body.firing_id);
-      expect(firing.idempotency_key).toBeNull();
+      const digest = crypto
+        .createHmac('sha256', hookSecret)
+        .update(body)
+        .digest('hex');
+      const res = await testClient
+        .post(`/hooks/triggers/${hookTriggerId}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', `sha256=${digest}`)
+        .send(body);
+      expect(res.status).toBe(401);
     });
 
     test('wraps a non-object JSON body as { payload }', async () => {
@@ -2785,7 +2775,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${hookTriggerId}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(hookSecret, body))
+        .set('X-Soat-Signature', sign({ secret: hookSecret, body }))
         .send(body);
 
       expect(res.status).toBe(202);
@@ -2801,12 +2791,12 @@ describe('Triggers', () => {
         const prefixed = await testClient
           .post(`/hooks/triggers/${hookTriggerId}`)
           .set('Content-Type', 'application/json')
-          .set('X-Acme-Signature', sign(hookSecret, body))
+          .set('X-Acme-Signature', sign({ secret: hookSecret, body }))
           .send(body);
         const unprefixed = await testClient
           .post(`/hooks/triggers/${hookTriggerId}`)
           .set('Content-Type', 'application/json')
-          .set('X-Soat-Signature', sign(hookSecret, body))
+          .set('X-Soat-Signature', sign({ secret: hookSecret, body }))
           .send(body);
 
         expect(prefixed.status).toBe(202);
@@ -2831,7 +2821,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${hookTriggerId}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign('wrong-secret', body))
+        .set('X-Soat-Signature', sign({ secret: 'wrong-secret', body }))
         .send(body);
       expect(res.status).toBe(401);
     });
@@ -2841,7 +2831,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post('/hooks/triggers/trg_missing')
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(hookSecret, body))
+        .set('X-Soat-Signature', sign({ secret: hookSecret, body }))
         .send(body);
       expect(res.status).toBe(404);
     });
@@ -2861,7 +2851,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${manual.body.id}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(hookSecret, body))
+        .set('X-Soat-Signature', sign({ secret: hookSecret, body }))
         .send(body);
       expect(res.status).toBe(404);
     });
@@ -2885,7 +2875,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${created.body.id}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(created.body.secret, body))
+        .set('X-Soat-Signature', sign({ secret: created.body.secret, body }))
         .send(body);
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('TRIGGER_NOT_ACTIVE');
@@ -2896,7 +2886,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${hookTriggerId}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(hookSecret, body))
+        .set('X-Soat-Signature', sign({ secret: hookSecret, body }))
         .send(body);
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('HOOK_INVALID_JSON');
@@ -2907,7 +2897,7 @@ describe('Triggers', () => {
       const res = await testClient
         .post(`/hooks/triggers/${hookTriggerId}`)
         .set('Content-Type', 'application/json')
-        .set('X-Soat-Signature', sign(hookSecret, body))
+        .set('X-Soat-Signature', sign({ secret: hookSecret, body }))
         .send(body);
       expect(res.status).toBe(413);
     });
