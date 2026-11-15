@@ -1,10 +1,3 @@
-import type { AuthUser } from 'src/Context';
-
-import {
-  type AgentAuthority,
-  boundarySets,
-  projectCapOf,
-} from './agentAuthority';
 import type { KnowledgeConfig } from './agentKnowledgeConfig';
 import type { KnowledgeScope } from './knowledge';
 import {
@@ -12,17 +5,17 @@ import {
   type KnowledgeSearchPolicy,
 } from './knowledgeSearchPolicy';
 import { readScopePolicySets } from './scopePolicySets';
+import { authUserUnder } from './turnAuthority';
+import type { WorkAuthority } from './workAuthority';
 
 /**
  * Which rows a turn's knowledge retrieval may inject, and as whom.
  *
- * The agent's stored `knowledge_config` is the agent's own and reads as the
- * agent, bounded only by its owner project's `agent_policy_ids`. A
- * generation's `knowledge_config` override is named by the caller, so a row
- * only the override reaches is read under the caller's
- * `knowledge:SearchKnowledge` policy and the agent's boundary. The turn then
+ * The agent's stored `knowledge_config` reads under the turn's authority
+ * (`turnAuthority`). A generation's `knowledge_config` override is named by
+ * the caller, so it reads as the caller (`callerNamedAuthority`). The turn then
  * searches the merged config as two scopes: the part the stored config also
- * reaches, under the project cap, and the whole of it, under that policy.
+ * reaches under the turn's policy, and the whole of it under the caller's.
  */
 
 const anyLength = (arr: unknown[] | undefined): boolean => {
@@ -123,82 +116,50 @@ const underPolicy = (args: {
   };
 };
 
-const underCap = (args: {
-  scope: KnowledgeScope | null;
-  capPolicy: KnowledgeSearchPolicy | null;
-}): KnowledgeScope | null => {
-  if (!args.scope || !args.capPolicy) return args.scope;
-  return underPolicy({ scope: args.scope, policy: args.capPolicy });
-};
-
 /** The scopes a turn searches; empty when it searches none. */
 export const knowledgeScopes = (args: {
   merged: KnowledgeConfig;
   stored: KnowledgeConfig | null | undefined;
+  /** The turn's own policy, which the stored config reads under. */
+  storedPolicy: KnowledgeSearchPolicy;
   /** Absent when the request carried no override. */
   requestedPolicy?: KnowledgeSearchPolicy;
-  /** The owner project's `agent_policy_ids`; null when it sets none. */
-  capPolicy: KnowledgeSearchPolicy | null;
 }): KnowledgeScope[] => {
   const merged = scopeOf(args.merged);
-  const { capPolicy } = args;
-  if (!args.requestedPolicy) {
-    const scope = underCap({ scope: merged, capPolicy });
-    return scope ? [scope] : [];
-  }
+  const storedPart = !args.requestedPolicy
+    ? merged
+    : args.stored
+      ? withinStored({ merged, stored: scopeOf(args.stored) })
+      : null;
   const scopes = [
-    args.stored
-      ? underCap({
-          scope: withinStored({ merged, stored: scopeOf(args.stored) }),
-          capPolicy,
-        })
-      : null,
-    underPolicy({ scope: merged, policy: args.requestedPolicy }),
+    storedPart && underPolicy({ scope: storedPart, policy: args.storedPolicy }),
+    args.requestedPolicy &&
+      underPolicy({ scope: merged, policy: args.requestedPolicy }),
   ];
   return scopes.filter((scope): scope is KnowledgeScope => {
-    return scope !== null;
+    return !!scope;
   });
 };
 
 /**
- * The owner project's `agent_policy_ids` as the `knowledge:SearchKnowledge`
- * policy stored retrieval reads under; null when the project sets none.
+ * `authority`'s `knowledge:SearchKnowledge` policy over the projects the turn
+ * searches. No authority reads nothing.
  */
-export const resolveCapKnowledgePolicy = (args: {
-  agentAuthority: AgentAuthority;
-}): KnowledgeSearchPolicy | null => {
-  const cap = projectCapOf(args.agentAuthority);
-  if (!cap?.by.id) return null;
-  return compileKnowledgeSearchPolicy({
-    policySets: [{ projectPublicId: cap.by.id, policies: [[cap.policy]] }],
-  });
-};
-
-/**
- * The caller's `knowledge:SearchKnowledge` policy over the projects the turn
- * searches, each set bounded by every document of the agent's boundary as one
- * more set that must allow. With no caller, the override reads nothing.
- */
-export const resolveRequestedKnowledgePolicy = async (args: {
-  authUser?: AuthUser;
+export const resolveKnowledgePolicy = async (args: {
+  authority: WorkAuthority | null;
   projectIds?: number[];
   /** Names the project when `projectIds` is unrestricted. */
   knowledgeProjectPublicId: string;
-  agentAuthority: AgentAuthority;
 }): Promise<KnowledgeSearchPolicy> => {
-  if (!args.authUser) return { forbidden: true };
+  const authUser = await authUserUnder(args.authority);
+  if (!authUser) return { forbidden: true };
   const policySets = await readScopePolicySets({
-    getPolicies: args.authUser.getPolicies,
+    getPolicies: authUser.getPolicies,
     projectPublicId:
       args.projectIds === undefined ? args.knowledgeProjectPublicId : undefined,
     projectIds: args.projectIds,
   });
   // No set compiles to unrestricted access, which is no caller's policy.
   if (policySets.length === 0) return { forbidden: true };
-  const boundary = boundarySets(args.agentAuthority);
-  return compileKnowledgeSearchPolicy({
-    policySets: policySets.map((set) => {
-      return { ...set, policies: [...set.policies, ...boundary] };
-    }),
-  });
+  return compileKnowledgeSearchPolicy({ policySets });
 };

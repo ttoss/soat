@@ -8,20 +8,15 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
-import {
-  type AgentAuthority,
-  boundaryDenied,
-  boundaryRefusalOf,
-} from './agentAuthority';
+import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
-import { denialToolResult, readForwardedDenial } from './authorizationDenial';
+import { readForwardedDenial } from './authorizationDenial';
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
 } from './externalToolCall';
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
-import { resolveSoatActionAgentScope } from './soatActionScope';
 import { withoutAgentExcludedActions } from './soatAgentActions';
 import { buildSoatActionTarget, soatTools } from './soatTools';
 import {
@@ -29,11 +24,12 @@ import {
   stripPresetKeysFromSchema,
 } from './toolPresetParameters';
 import { resolvePresetParametersForCall } from './toolTemplates';
+import { turnAuthority } from './turnAuthority';
 import {
   meterToolExecution,
   type ToolExecutionMeter,
 } from './usageToolRecording';
-import { turnCallAuthority, type WorkAuthority } from './workAuthority';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
 
@@ -43,9 +39,9 @@ const log = createDebug('soat:tools');
  * Served in-process via `dispatchApiRequest` rather than over loopback:
  * the app's real middleware chain still runs, so permission checks, validation,
  * audit, metering and the response contract are unchanged — only the socket is
- * gone. The work's stored authority travels as a value, never a token; a
- * call without one is refused, since sharing a process never implies sharing
- * authority.
+ * gone. The turn's authority (`turnAuthority`) travels as a value, never a
+ * token, so the route's own check is the agent's gate; a call without one is
+ * refused, since sharing a process never implies sharing authority.
  */
 export const executeSoatTool = async (args: {
   toolName: string;
@@ -53,7 +49,6 @@ export const executeSoatTool = async (args: {
   rawArgs: Record<string, unknown>;
   meter: ToolExecutionMeter;
   authority: WorkAuthority | null;
-  /** Under `run_as: agent`, the call runs under the agent's grant, not `authority`'s. */
   agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
@@ -96,7 +91,7 @@ export const executeSoatTool = async (args: {
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
-            authority: turnCallAuthority(args),
+            authority: turnAuthority(args),
             actor: args.toolContext?.actor_id ?? null,
             headers: {
               ...args.buildContextHeaders({
@@ -134,45 +129,6 @@ export const executeSoatTool = async (args: {
     });
     throw error;
   }
-};
-
-/**
- * The refusal the agent's boundary gives one builtin call, or `null` when it
- * admits it. Every path that runs a builtin action for an agent asks here,
- * with the arguments the call will carry.
- */
-export const soatActionAgentRefusal = async (args: {
-  def: (typeof soatTools)[number];
-  rawArgs: Record<string, unknown>;
-  agentAuthority?: AgentAuthority;
-}): Promise<ReturnType<typeof denialToolResult> | null> => {
-  const { agentAuthority } = args;
-  if (!agentAuthority || agentAuthority.boundary.length === 0) return null;
-  const iamAction = args.def.iamAction ?? args.def.name;
-  // The SRN and tags of whatever this call names, so a boundary scoped to one
-  // resource means what it says. `null` leaves the resource-less `*`, which
-  // matches no scoped statement, so the unresolved case refuses.
-  const scope = await resolveSoatActionAgentScope({
-    resourceRef: args.def.resource,
-    toolArgs: args.rawArgs,
-    policies: agentAuthority.boundary.map(({ policy }) => {
-      return policy;
-    }),
-  });
-  const by = boundaryRefusalOf({
-    authority: agentAuthority,
-    action: iamAction,
-    ...(scope ?? {}),
-  });
-  return by
-    ? denialToolResult(
-        boundaryDenied({
-          by,
-          action: iamAction,
-          resource: scope?.resource ?? null,
-        })
-      )
-    : null;
 };
 
 /**
@@ -223,10 +179,6 @@ const buildSoatActionTool = (args: {
     description: args.toolDescription ?? args.def.description,
     inputSchema: jsonSchema(effectiveInputSchema),
     execute: async (toolArgs: unknown) => {
-      // Merged before the boundary check, not after: a preset or the pinned
-      // project can be what names the target, and a check run on the model's
-      // arguments alone would refuse a call whose resource the operator
-      // supplied.
       const rawArgs = mergePresetParameters({
         presetParameters: {
           ...resolvePresetParametersForCall({
@@ -239,12 +191,6 @@ const buildSoatActionTool = (args: {
         },
         input: toolArgs,
       });
-      const refusal = await soatActionAgentRefusal({
-        def: args.def,
-        rawArgs,
-        agentAuthority: args.agentAuthority,
-      });
-      if (refusal) return refusal;
       return executeSoatTool({
         toolName: args.toolName,
         def: args.def,

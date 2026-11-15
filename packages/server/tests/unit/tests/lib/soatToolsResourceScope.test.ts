@@ -220,7 +220,7 @@ describe('x-soat-resource covers the operations that name a resource', () => {
     }
   });
 
-  test('every declared kind has a scope resolver', () => {
+  test('every declared kind has a resource type', () => {
     const kinds = new Set(listResourceKinds());
     for (const operation of operations) {
       const ref = operation.operation['x-soat-resource'];

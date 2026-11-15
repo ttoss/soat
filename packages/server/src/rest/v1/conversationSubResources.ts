@@ -16,7 +16,9 @@ import {
   updateConversationTags,
 } from 'src/lib/conversations';
 import { mapGeneratedTurn } from 'src/lib/generatedTurn';
+import { buildSrn } from 'src/lib/iam';
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
+import { assertAllowedUnder } from 'src/lib/turnAuthority';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import { requireConversationAccess } from './conversationHelpers';
@@ -245,15 +247,30 @@ conversationSubResourcesRouter.post(
       authUser: ctx.authUser,
     };
 
-    // The agent is resolved first either way, so an unknown one is still a
-    // synchronous 404 rather than a failure the caller can only discover by
-    // polling.
-    if (ctx.query['wait'] !== 'true') {
-      await resolveConversationAndAgent({
-        conversationId: ctx.params.conversation_id,
-        agentId: body.agent_id,
-      });
+    // Resolved and checked first either way, so an unknown agent or one the
+    // caller may not run is a synchronous answer, not one found by polling.
+    const { generatingAgent } = await resolveConversationAndAgent({
+      conversationId: ctx.params.conversation_id,
+      agentId: body.agent_id,
+    });
+    const projectPublicId = conversation.project_id as string;
+    await assertAllowedUnder({
+      authority: turn.authority,
+      caller: ctx.authUser,
+      checks: [
+        {
+          projectPublicId,
+          action: 'agents:CreateAgentGeneration',
+          resource: buildSrn({
+            projectPublicId,
+            resourceType: 'agent',
+            resourceId: generatingAgent.publicId as string,
+          }),
+        },
+      ],
+    });
 
+    if (ctx.query['wait'] !== 'true') {
       generateConversationMessage(turn).catch(() => {
         // Fire-and-forget: the reply lands as a conversation message, and
         // failures surface on the generation record the caller polls.

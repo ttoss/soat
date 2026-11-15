@@ -464,6 +464,8 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
       ),
       actorId,
       projectId,
+      authority,
+      caller: ctx.authUser,
     }),
     attribution: {},
   });

@@ -45,6 +45,7 @@ import {
   mergeAuthHeaders,
   parseHttpToolAuthConfig,
 } from './toolAuth';
+import { gateToolCall } from './toolCallGate';
 import {
   assertValidToolContext,
   buildContextHeaderName,
@@ -145,8 +146,6 @@ export const resolveBodyParamInterpolations = (args: {
 // can validate caller-supplied keys without importing this module. Re-exported
 // here because this is where tool callers reach for it.
 export { assertValidToolContext, buildContextHeaderName, buildContextHeaders };
-
-// ── IAM Boundary Check ────────────────────────────────────────────────────
 
 // ── Per-type Tool Builders ────────────────────────────────────────────────
 
@@ -1102,7 +1101,39 @@ const isAgentToolType = (value: string): value is AgentToolType => {
   return AGENT_TOOL_TYPE_SET.has(value);
 };
 
-const resolveToolByType = async (
+/** Every call of a resolved tool crosses `gateToolCall` before it runs. */
+const gateEachCall = (args: {
+  tools: Record<string, Tool>;
+  typedTool: AgentToolRow;
+  args: ResolveToolByTypeArgs & { projectPublicId?: string };
+}): Record<string, Tool> => {
+  const { typedTool } = args;
+  const call = args.args;
+  const gated: Record<string, Tool> = {};
+  for (const [name, resolvedTool] of Object.entries(args.tools)) {
+    const { execute } = resolvedTool;
+    gated[name] = execute
+      ? {
+          ...resolvedTool,
+          execute: async (...executeArgs) => {
+            await gateToolCall({
+              type: typedTool.type,
+              tool: typedTool.publicId
+                ? { publicId: typedTool.publicId }
+                : 'inline',
+              callingProjectPublicId: call.projectPublicId ?? '',
+              authority: call.authority,
+              agentAuthority: call.agentAuthority,
+            });
+            return execute(...executeArgs);
+          },
+        }
+      : resolvedTool;
+  }
+  return gated;
+};
+
+const resolveUngatedToolByType = async (
   typedTool: AgentToolRow,
   args: ResolveToolByTypeArgs & { projectPublicId?: string }
 ): Promise<Record<string, Tool>> => {
@@ -1189,6 +1220,17 @@ const resolveToolByType = async (
       );
     }
   }
+};
+
+const resolveToolByType = async (
+  typedTool: AgentToolRow,
+  args: ResolveToolByTypeArgs & { projectPublicId?: string }
+): Promise<Record<string, Tool>> => {
+  return gateEachCall({
+    tools: await resolveUngatedToolByType(typedTool, args),
+    typedTool,
+    args,
+  });
 };
 
 const orNull = <T>(value: T | null | undefined): T | null => {

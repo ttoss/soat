@@ -1,7 +1,6 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { AgentAuthority } from './agentAuthority';
 import type { DeniedPrincipal } from './authorizationDenial';
 import { type PolicyDocument, validatePolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
@@ -429,25 +428,12 @@ export const triggerAuthority = (args: {
   };
 };
 
-/**
- * The authority a turn's tool calls run under, a builtin's dispatch and an
- * assertion's sealed authority alike. Under `run_as: agent`: the agent's grant
- * capped by its owner project's `agent_policy_ids`, pinned to the turn's
- * project, in place of the work's grant and caps; the work's principal, chain
- * and work id carry on. Else the work's own.
- */
-export const turnCallAuthority = (args: {
-  authority: WorkAuthority | null;
-  agentAuthority?: AgentAuthority;
-}): WorkAuthority | null => {
-  const { authority, agentAuthority: agent } = args;
-  if (!authority || agent?.runAs !== 'agent') return authority;
-  return {
-    ...authority,
-    project: agent.projectPublicId,
-    grant: { holder: 'agent', agent: agent.agentId, policy: agent.grant },
-    caps: [{ kind: 'project_agents', project: agent.capProject }],
-  };
+/** Agent `agent`'s grant: its resolved `policy_ids`; `null` grants nothing. */
+export const agentHeldGrant = (args: {
+  agent: string;
+  policy: PolicyDocument | null;
+}): AuthorityGrant => {
+  return { holder: 'agent', agent: args.agent, policy: args.policy };
 };
 
 /**

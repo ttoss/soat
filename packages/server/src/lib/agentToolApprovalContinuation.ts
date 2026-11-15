@@ -22,6 +22,7 @@ import {
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
+import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
 import { expireChainIfSettled } from './generationChains';
 import { countStoredToolResult } from './generationProvenance';
 import { isPlainObject } from './plainObject';
@@ -98,6 +99,7 @@ type NativeExecuteArgs = {
   item: MappedApproval;
   projectInternalId: number;
   input: Record<string, unknown>;
+  authority: WorkAuthority | null;
   markExecuted: () => void;
 };
 
@@ -117,6 +119,7 @@ const executeApprovedWriteMemory = async (
     agent,
     generationId: args.item.generation_id ?? null,
     projectId: args.projectInternalId,
+    authority: args.authority,
     agentAuthority: await proposingAgentAuthority({
       item: args.item,
       projectInternalId: args.projectInternalId,
@@ -193,6 +196,7 @@ const executeApprovedNativeAction = async (args: {
   item: MappedApproval;
   projectInternalId: number;
   input: Record<string, unknown>;
+  authority: WorkAuthority | null;
 }): Promise<object> => {
   const nativeTool = NATIVE_TOOLS[args.toolId];
   if (!nativeTool) {
@@ -213,6 +217,7 @@ const executeApprovedNativeAction = async (args: {
         item: args.item,
         projectInternalId: args.projectInternalId,
         input: args.input,
+        authority: args.authority,
         markExecuted,
       });
     },
@@ -249,6 +254,7 @@ const executeApprovedAction = async (args: {
       item: args.item,
       projectInternalId: args.projectInternalId,
       input,
+      authority: args.authority,
     });
   }
 
@@ -480,7 +486,10 @@ const runToolCallContinuation = async (args: {
         toolContext: args.toolContext,
       }).catch((error: unknown) => {
         log('executeApprovedAction failed id=%s %o', item.id, error);
-        return { error: errorMessage(error) };
+        // A refusal keeps the code, action and principal a model reads elsewhere.
+        return isAuthorizationDenial(error)
+          ? denialToolResult(error)
+          : { error: errorMessage(error) };
       });
     }
 

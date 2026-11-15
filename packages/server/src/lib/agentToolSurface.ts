@@ -135,9 +135,8 @@ export const resolveAgentToolSurface = async (args: {
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
     guardrail,
-    // Attributes a successful tool call to this agent/generation on the activity
-    // feed (approvals PRD Phase 4). A resumed generation's tool calls are as
-    // autonomous as a fresh one's, so they record under the same identity.
+    // Credits a successful call to this agent and generation on the activity
+    // feed; a resumed generation's calls record under the same identity.
     activity: {
       projectId,
       agentId: args.agentId,
@@ -152,11 +151,8 @@ export const resolveAgentToolSurface = async (args: {
   const knowledgeBindings =
     ownerId === projectId
       ? buildKnowledgeBindings({
-          agentId: args.agentId,
-          generationId: args.generationId,
+          ...args,
           projectId,
-          typedAgent: args.typedAgent,
-          agentAuthority: args.agentAuthority,
           actorId: args.toolContext?.actor_id,
           baseGuardrails: guardrail.baseGuardrails,
         })

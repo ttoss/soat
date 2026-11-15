@@ -34,16 +34,17 @@ import {
   resetLastSuccessfulDrain,
 } from 'src/lib/orchestrationWorker';
 import { checkWorkerHealth } from 'src/lib/orchestrationWorkerHealth';
+import type { WorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
   authenticatedTestClient,
   testClient,
-  workAuthorityOf,
+  workAuthorityOfToken,
 } from '../../testClient';
 
-/** No caller drives these runs: an orphan authority stands for any stored one. */
-const WORK_AUTHORITY = workAuthorityOf({ project: null, user: 'user_orphan' });
+/** No request drives these runs: the user's authority stands for a stored one. */
+let WORK_AUTHORITY: WorkAuthority;
 
 // The Postgres queue driver + run-scoped idempotency keys (orchestration-queue
 // P1). The in-process worker kick is disabled here so tasks are claimed/driven
@@ -89,6 +90,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
     userToken = setup.userToken;
     adminToken = setup.adminToken;
     projectId = setup.projectId;
+    WORK_AUTHORITY = await workAuthorityOfToken({
+      token: userToken,
+      project: null,
+    });
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });

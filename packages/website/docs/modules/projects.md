@@ -116,8 +116,8 @@ curl -X PATCH https://api.example.com/api/v1/projects/proj_… \
 </TabItem>
 </Tabs>
 
-- **One more cap.** Every turn of an agent the project owns must also satisfy these policies, under both `run_as` modes and on every path the agent's own [`policy_ids`](./agents.md#execution-identity) cap: `builtin` actions, approved actions, pipeline steps, resumption, `On-Behalf-Of` callbacks, `write_memory` and `knowledge_config` override retrieval.
-- **Stored knowledge too.** Unlike the agent's `policy_ids`, the cap also bounds the agent's stored [`knowledge_config`](./agents.md#knowledge-config) retrieval: whoever governs the project sets it, not the agent's author.
+- **One more cap.** Every turn of an agent the project owns must also satisfy these policies, under both `run_as` modes and on every path the agent's own [`policy_ids`](./agents.md#execution-identity) cap: `builtin` actions, `http`, `mcp` and `pipeline` tool calls, approved actions, pipeline steps, resumption, `On-Behalf-Of` callbacks, `write_memory`, and what the caller names (a `document` or `tool_output` message, a `knowledge_config` override).
+- **Stored knowledge too.** The agent's stored [`knowledge_config`](./agents.md#knowledge-config) retrieval reads under the turn's authority, so the cap bounds it: whoever governs the project sets it, not the agent's author.
 - **Shared agents** are bounded by their owner project's cap, wherever they run.
 - **Read live.** Each turn, approval and continuation reads the cap as it stands, and durable work an agent starts under `run_as: agent` stores it as a cap read at every later check, so tightening it reaches work already pending.
 - **Refusals name the project**: `meta.denied_by` is `{ "type": "project", "id": "proj_…" }`.

@@ -1,16 +1,8 @@
 import { db } from '../db';
 import { type AgentRunAs, readAgentRunAs } from './agentRunAs';
 import { resolveAttachedPolicies } from './attachedPolicies';
-import {
-  authorizationDenied,
-  type DeniedPrincipal,
-} from './authorizationDenial';
-import {
-  evaluatePolicies,
-  evaluatePoliciesMultiResource,
-  type PolicyDocument,
-  type PolicySets,
-} from './iam';
+import type { DeniedPrincipal } from './authorizationDenial';
+import type { PolicyDocument, PolicySets } from './iam';
 
 /** One document every call the agent boundary covers must satisfy. */
 export type BoundaryPolicy = { by: DeniedPrincipal; policy: PolicyDocument };
@@ -123,6 +115,17 @@ export const actingAgentOf = (authority: AgentAuthority): string | null => {
   return authority.runAs === 'agent' ? authority.agentId : null;
 };
 
+/** The agent's own `policy_ids`, when it carries any. */
+export const agentPolicyOf = (
+  authority: AgentAuthority
+): PolicyDocument | null => {
+  return (
+    authority.boundary.find(({ by }) => {
+      return by.type === 'agent';
+    })?.policy ?? null
+  );
+};
+
 /** The owner project's `agent_policy_ids`, when it sets any. */
 export const projectCapOf = (
   authority: AgentAuthority
@@ -140,64 +143,5 @@ export const boundarySets = (
 ): PolicySets => {
   return (authority?.boundary ?? []).map(({ policy }) => {
     return [policy];
-  });
-};
-
-/**
- * Whose boundary document refuses, by `allows` run on each; `null` when every
- * one allows.
- */
-export const boundaryRefusal = (args: {
-  authority: AgentAuthority | undefined;
-  allows: (policy: PolicyDocument) => boolean;
-}): DeniedPrincipal | null => {
-  const refusing = (args.authority?.boundary ?? []).find(({ policy }) => {
-    return !args.allows(policy);
-  });
-  return refusing?.by ?? null;
-};
-
-/**
- * Whose boundary document refuses `action` on `resource` (or on every one of
- * `resources`); `null` when the boundary admits it. A call naming no resource
- * is checked against `*`, which matches no statement scoped to an SRN.
- */
-export const boundaryRefusalOf = (args: {
-  authority: AgentAuthority | undefined;
-  action: string;
-  resource?: string;
-  resources?: string[];
-  context?: Record<string, string>;
-}): DeniedPrincipal | null => {
-  const { action, resources, context } = args;
-  return boundaryRefusal({
-    authority: args.authority,
-    allows: (policy) => {
-      return resources && resources.length > 0
-        ? evaluatePoliciesMultiResource({
-            policies: [policy],
-            action,
-            resources,
-            context,
-          })
-        : evaluatePolicies({
-            policies: [policy],
-            action,
-            resource: args.resource ?? '*',
-            context,
-          });
-    },
-  });
-};
-
-/** The boundary's refusal of `action` on `resource`, naming who refused. */
-export const boundaryDenied = (args: {
-  by: DeniedPrincipal;
-  action: string;
-  resource: string | null;
-}) => {
-  return authorizationDenied({
-    principal: args.by,
-    denied: [{ action: args.action, resource: args.resource }],
   });
 };

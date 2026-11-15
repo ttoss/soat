@@ -93,6 +93,7 @@ describe('Usage — embedding metering', () => {
         'knowledge:SearchKnowledge',
         'memories:CreateMemoryStore',
         'memories:CreateMemory',
+        'memories:UpdateMemory',
         'usage:ListEvents',
       ],
     });

@@ -212,7 +212,7 @@ describe('POST /api/v1/tools/:tool_id/call with actor_id', () => {
       adminToken: turn.adminToken,
       projectId: turn.projectId,
       username: turn.unique('actorcaller'),
-      actions: ['tools:CallTool'],
+      actions: ['tools:CallTool', 'actors:GetActor'],
     });
     const before = provider.state.apiAuthorizations.length;
 

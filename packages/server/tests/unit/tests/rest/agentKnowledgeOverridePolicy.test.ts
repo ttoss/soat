@@ -5,7 +5,8 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * A generation's `knowledge_config` override names documents and stores on the
  * caller's behalf, so what it adds is read under the caller's
  * `knowledge:SearchKnowledge` policy and the agent's boundary. The agent's
- * stored config is the agent's own and keeps reading as the agent.
+ * stored config reads under the turn's authority: the caller's under
+ * `run_as: caller`, the agent's grant under `run_as: agent`.
  */
 const stubPromise = startChatCompletionStub({
   reply: () => {
@@ -56,9 +57,11 @@ describe('POST /api/v1/agents/:agent_id/generate — the override is read as the
   const createAgent = async (args: {
     knowledgeConfig?: Record<string, unknown>;
     boundary?: Array<Record<string, unknown>>;
+    runAs?: 'agent';
   }): Promise<string> => {
     return create('/api/v1/agents', {
       project_id: projectId,
+      ...(args.runAs ? { run_as: args.runAs } : {}),
       ai_provider_id: providerId,
       name: `agent-${Math.random().toString(36).slice(2)}`,
       instructions: 'Answer from what you are given.',
@@ -191,9 +194,21 @@ describe('POST /api/v1/agents/:agent_id/generate — the override is read as the
       expect(text).not.toContain(MEMORY_TEXT);
     });
 
-    test("still gets the agent's stored config", async () => {
+    test("gets none of a run_as: caller agent's stored config", async () => {
       const agentId = await createAgent({
         knowledgeConfig: { document_paths: ['/secret/'] },
+      });
+
+      const text = await injectedAs({ token: noReadToken, agentId });
+
+      expect(text).not.toContain(SECRET_TEXT);
+    });
+
+    test("gets a run_as: agent agent's stored config, read on its grant", async () => {
+      const agentId = await createAgent({
+        runAs: 'agent',
+        knowledgeConfig: { document_paths: ['/secret/'] },
+        boundary: [{ effect: 'Allow', action: ['knowledge:SearchKnowledge'] }],
       });
 
       const text = await injectedAs({ token: noReadToken, agentId });
@@ -203,7 +218,9 @@ describe('POST /api/v1/agents/:agent_id/generate — the override is read as the
 
     test("gets the stored config beside an override, but not the override's additions", async () => {
       const agentId = await createAgent({
+        runAs: 'agent',
         knowledgeConfig: { document_paths: ['/open/'] },
+        boundary: [{ effect: 'Allow', action: ['knowledge:SearchKnowledge'] }],
       });
 
       const text = await injectedAs({

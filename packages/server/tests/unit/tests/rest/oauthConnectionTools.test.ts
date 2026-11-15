@@ -344,7 +344,7 @@ describe('http tool auth oauth_connection', () => {
       adminToken: turn.adminToken,
       projectId: turn.projectId,
       username: turn.unique('oauthcaller'),
-      actions: ['agents:*'],
+      actions: ['agents:*', 'tools:CallTool'],
     });
     const before = provider.state.apiAuthorizations.length;
 

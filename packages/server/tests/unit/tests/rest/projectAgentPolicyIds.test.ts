@@ -6,8 +6,8 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
 
 /**
  * A project's `agent_policy_ids` cap every turn of every agent it owns, on
- * every path the agent's own `policy_ids` cap and on its stored
- * `knowledge_config` retrieval, which `policy_ids` leave unbounded.
+ * every check the turn's authority makes, its stored `knowledge_config`
+ * retrieval included.
  */
 
 const OPEN_PATH = '/open/cafeteria.txt';
@@ -36,6 +36,7 @@ const projectRefusal = (args: { projectId: string; action: string }) => {
 
 describe("a project's agent_policy_ids", () => {
   let turn: AgentToolTurn;
+  let openDocumentId: string;
 
   const setCap = async (statement: object[] | null) => {
     const policyIds = statement
@@ -111,6 +112,7 @@ describe("a project's agent_policy_ids", () => {
         .post('/api/v1/documents')
         .send({ project_id: turn.projectId, content, path });
       expect(res.status).toBe(201);
+      if (path === OPEN_PATH) openDocumentId = res.body.id;
     }
   });
 
@@ -227,14 +229,15 @@ describe("a project's agent_policy_ids", () => {
       expect(text).not.toContain(SECRET_TEXT);
     });
 
-    test("the same deny in the agent's policy_ids leaves stored retrieval unbounded", async () => {
+    test("the same deny in the agent's policy_ids bounds stored retrieval too", async () => {
       const agentId = await storedKnowledgeAgent({
         policy_ids: [await turn.createPolicy({ statement: denySecret() })],
       });
 
       const text = await injected({ agentId });
 
-      expect(text).toContain(SECRET_TEXT);
+      expect(text).toContain(OPEN_TEXT);
+      expect(text).not.toContain(SECRET_TEXT);
     });
 
     test('a knowledge_config override is bounded by the cap', async () => {
@@ -250,7 +253,7 @@ describe("a project's agent_policy_ids", () => {
       expect(text).not.toContain(SECRET_TEXT);
     });
 
-    test("a shared agent run from another project is bounded by its owner's cap", async () => {
+    test("a shared agent's stored retrieval reads as a caller that cannot search its owner's project", async () => {
       const agentId = await storedKnowledgeAgent();
       const grantee = await turn
         .api()
@@ -277,12 +280,10 @@ describe("a project's agent_policy_ids", () => {
         `/api/v1/shares/${share.body.id}/accept`
       );
       expect(accepted.status).toBe(200);
-      await setCap(denySecret());
 
       const text = await injected({ agentId, token: granteeKey.body.key });
 
-      expect(text).toContain(OPEN_TEXT);
-      expect(text).not.toContain(SECRET_TEXT);
+      expect(text).toBe('');
     });
 
     test('lifting the cap restores the stored retrieval', async () => {
@@ -335,7 +336,12 @@ describe("a project's agent_policy_ids", () => {
     });
 
     test('a pipeline step is held to the cap', async () => {
-      const builtin = await listFiles();
+      const builtin = await turn.createTool({
+        type: 'builtin',
+        execute: undefined,
+        parameters: undefined,
+        actions: ['get-document'],
+      });
       const pipeline = await turn.createTool({
         type: 'pipeline',
         execute: undefined,
@@ -343,18 +349,23 @@ describe("a project's agent_policy_ids", () => {
         pipeline: {
           steps: [
             {
-              id: 'list',
+              id: 'read',
               tool_id: builtin.id,
-              action: 'list-files',
-              input: {},
+              action: 'get-document',
+              input: { document_id: openDocumentId },
             },
           ],
         },
       });
-      await setCap(DENY_GET_FILE);
+      await setCap([
+        ALLOW_ALL,
+        { effect: 'Deny', action: ['documents:GetDocument'], resource: ['*'] },
+      ]);
 
-      expect(await callThroughAgent(pipeline, pipeline.name)).toEqual(
-        projectRefusal({ projectId: turn.projectId, action: 'files:GetFile' })
+      expect(
+        JSON.stringify(await callThroughAgent(pipeline, pipeline.name))
+      ).toContain(
+        `Forbidden: project ${turn.projectId}'s policies deny documents:GetDocument`
       );
     });
 

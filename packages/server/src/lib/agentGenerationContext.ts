@@ -10,10 +10,7 @@ import { resolveAgentForGeneration } from './agentGenerationRecovery';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeMessages } from './agentKnowledge';
 import { readKnowledgeConfig } from './agentKnowledgeConfig';
-import {
-  resolveCapKnowledgePolicy,
-  resolveRequestedKnowledgePolicy,
-} from './agentKnowledgeScopes';
+import { resolveKnowledgePolicy } from './agentKnowledgeScopes';
 import { resolveAgentModel } from './agentModelResolution';
 import {
   resolveServedAgentVersion,
@@ -41,6 +38,7 @@ import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
 import type { ToolSurface } from './toolSurfaceMeasure';
 import { measureToolSurface } from './toolSurfaceMeasure';
+import { callerNamedAuthority, turnAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
@@ -130,8 +128,7 @@ const assembleContextMessages = async (args: {
   typedAgent: TypedAgent;
   resolvedMessages: Array<{ role: string; content: unknown }>;
   knowledgeConfig?: object;
-  /** Who named {@link knowledgeConfig}, and what bounds the agent. */
-  authUser?: AuthUser;
+  authority: WorkAuthority | null;
   agentAuthority: AgentAuthority;
   unavailableToolNames: string[];
   /** The turn's end user, from the identity-pinned `tool_context`. */
@@ -145,24 +142,23 @@ const assembleContextMessages = async (args: {
   // scope: a turn with no caller scope would otherwise search every project.
   const projectIds = [ownerProjectId(typedAgent)];
   const requestedConfig = readKnowledgeConfig(args.knowledgeConfig);
+  const policyUnder = (authority: WorkAuthority | null) => {
+    return resolveKnowledgePolicy({
+      authority,
+      projectIds,
+      knowledgeProjectPublicId: (typedAgent.ownerProject ?? typedAgent.project)
+        .publicId,
+    });
+  };
   const knowledge = await buildKnowledgeMessages({
     storedConfig: readKnowledgeConfig(typedAgent.knowledgeConfig),
+    storedPolicy: await policyUnder(turnAuthority(args)),
     requested: requestedConfig
       ? {
           config: requestedConfig,
-          policy: await resolveRequestedKnowledgePolicy({
-            authUser: args.authUser,
-            projectIds,
-            knowledgeProjectPublicId: (
-              typedAgent.ownerProject ?? typedAgent.project
-            ).publicId,
-            agentAuthority: args.agentAuthority,
-          }),
+          policy: await policyUnder(callerNamedAuthority(args)),
         }
       : undefined,
-    capPolicy: resolveCapKnowledgePolicy({
-      agentAuthority: args.agentAuthority,
-    }),
     projectIds,
     embeddingBilling: {
       projectId: args.typedAgent.project.id,
@@ -365,7 +361,7 @@ export const buildGenerationContext = async (
     typedAgent,
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
-    authUser: args.authUser,
+    authority: args.authority,
     agentAuthority,
     unavailableToolNames: toolSurface.unavailableToolNames,
     actorId: toolContext?.actor_id,

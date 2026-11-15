@@ -3,11 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import { resolveOwnerActorDbId } from './actorOwnership';
-import {
-  type AgentAuthority,
-  boundaryDenied,
-  boundaryRefusalOf,
-} from './agentAuthority';
+import type { AgentAuthority } from './agentAuthority';
 import type { TypedAgent } from './agentGenerationTypes';
 import {
   type KnowledgeConfig,
@@ -17,7 +13,7 @@ import {
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import { NATIVE_PROPOSAL_PREFIX } from './agentToolApproval';
 import type { ToolBinding } from './agentToolNames';
-import { denialToolResult } from './authorizationDenial';
+import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { buildSrn } from './iam';
@@ -31,11 +27,13 @@ import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
 import { agentReferences } from './resourceReferences';
 import { buildResourceTagContext } from './tags';
+import { assertAllowedUnder, turnAuthority } from './turnAuthority';
 import {
   meterNativeToolExecution,
   type ToolCallAttribution,
   withReleasingGuardrails,
 } from './usageToolRecording';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:knowledge');
 
@@ -108,13 +106,13 @@ const buildKnowledgeContent = (knowledgeText: string): string => {
 
 export const buildKnowledgeMessages = async (args: {
   storedConfig: KnowledgeConfig | null | undefined;
+  /** The turn's policy, which the stored config reads under. */
+  storedPolicy: KnowledgeSearchPolicy;
   /**
    * The generation's own `knowledge_config`, and the policy what it adds is
-   * read under (`resolveRequestedKnowledgePolicy`).
+   * read under (`resolveKnowledgePolicy`).
    */
   requested?: { config: KnowledgeConfig; policy: KnowledgeSearchPolicy };
-  /** The owner project's `agent_policy_ids`, which bound stored retrieval. */
-  capPolicy: KnowledgeSearchPolicy | null;
   projectIds?: number[];
   /**
    * The agent's own project and the turn — what the query embedding is billed
@@ -160,8 +158,8 @@ export const buildKnowledgeMessages = async (args: {
   const [scope, ...alsoScopes] = knowledgeScopes({
     merged: config,
     stored: args.storedConfig,
+    storedPolicy: args.storedPolicy,
     requestedPolicy: args.requested?.policy,
-    capPolicy: args.capPolicy,
   });
   if (!scope) return { messages: [], retrieval: null };
 
@@ -196,40 +194,14 @@ export const buildKnowledgeMessages = async (args: {
 };
 
 /**
- * The `write_memory` tool resolves a fact against the store — it may create a
- * new memory, supersede an existing one, or skip a duplicate. It is a
- * SOAT-native action, so the agent's `policy_ids` must gate it the same
- * way `buildSoatActionTool` gates REST-backed native tools. Because a
- * supersede retires an existing memory, the boundary must allow **both**
- * memory-write actions; a deny on either (including a wildcard
- * `Deny action:["*"]`) blocks the tool fail-closed.
- *
- * Both are evaluated against the target store's SRN and tags, the same pair
- * `rest/v1/memories.ts` checks a human against: this tool writes
- * in-process, so the boundary is the only IAM check there is, and an operator must
- * be able to say "this agent may write to this store only".
+ * A supersede retires an existing memory, so `write_memory` needs both
+ * memory-write actions on the target store, with its tags as condition inputs:
+ * the pair `rest/v1/memories.ts` checks.
  */
 const MEMORY_WRITE_ACTIONS = [
   'memories:CreateMemory',
   'memories:UpdateMemory',
 ] as const;
-
-const memoryWriteRefusal = (args: {
-  agentAuthority: AgentAuthority | undefined;
-  resource: string;
-  context: Record<string, string>;
-}): ReturnType<typeof boundaryDenied> | null => {
-  for (const action of MEMORY_WRITE_ACTIONS) {
-    const by = boundaryRefusalOf({
-      authority: args.agentAuthority,
-      action,
-      resource: args.resource,
-      context: args.context,
-    });
-    if (by) return boundaryDenied({ by, action, resource: args.resource });
-  }
-  return null;
-};
 
 /**
  * The `tool_id` a held `write_memory` call is proposed under. The tool has no
@@ -258,22 +230,23 @@ type WriteMemoryAsAgentArgs = {
   generationId: string | null;
   /** The agent's own project, the only one whose store it writes to. */
   projectId: number;
-  agentAuthority?: AgentAuthority;
+  authority: WorkAuthority | null;
+  agentAuthority: AgentAuthority;
   /** The turn's end user, whose memory every write is. */
   actorId?: string;
 };
 
 /**
- * One agent write, held to the boundary: the tool door and an approved held
- * call both run through it, so neither can write what the other could not.
+ * One agent write, under the turn's authority: the tool door and an approved
+ * held call both run through it, so neither can write what the other could not.
  * `markExecuted` is the native-tool meter's: a refused write is not counted.
  */
 const writeMemoryAsAgent = async (
   args: WriteMemoryAsAgentArgs & { content: string; markExecuted: () => void }
 ): Promise<Record<string, unknown>> => {
-  // The store is resolved before the boundary check because the check needs
-  // its SRN and tags. It leaks nothing a boundary would have hidden: the id
-  // comes from the agent's own `knowledge_config`, not from the model.
+  // The store is resolved before the check because the check needs its SRN
+  // and tags. It leaks nothing: the id comes from the agent's own
+  // `knowledge_config`, not from the model.
   const memoryStore = await findMemoryStoreIamScope({
     id: args.writeMemoryStoreId,
     projectId: args.projectId,
@@ -286,17 +259,26 @@ const writeMemoryAsAgent = async (
     resourceType: 'memory_store',
     resourceId: args.writeMemoryStoreId,
   });
-  const refusal = memoryWriteRefusal({
-    agentAuthority: args.agentAuthority,
-    resource,
-    context: buildResourceTagContext({
-      resourceType: 'memory_store',
-      tags: memoryStore.tags,
-    }),
+  const context = buildResourceTagContext({
+    resourceType: 'memory_store',
+    tags: memoryStore.tags,
   });
-  if (refusal) {
-    log('writeMemoryAsAgent: denied %o', refusal.meta);
-    return denialToolResult(refusal);
+  try {
+    await assertAllowedUnder({
+      authority: turnAuthority(args),
+      checks: MEMORY_WRITE_ACTIONS.map((action) => {
+        return {
+          projectPublicId: memoryStore.projectPublicId,
+          action,
+          resource,
+          context,
+        };
+      }),
+    });
+  } catch (error) {
+    if (!isAuthorizationDenial(error)) throw error;
+    log('writeMemoryAsAgent: denied %s', error.message);
+    return denialToolResult(error);
   }
   const actorId = await resolveOwnerActorDbId({
     actorId: args.actorId,
@@ -365,15 +347,16 @@ export const writeMemoryInputError = (
 
 /**
  * Runs a held `write_memory` call a human approved. The store is the one the
- * agent's `knowledge_config` names now, and the boundary is the agent's
- * as it resolves now — the approver decided whether the fact is written, not
- * where or past which cap.
+ * agent's `knowledge_config` names now, under the proposing turn's authority
+ * with the agent's `policy_ids` as they stand now — the approver decided
+ * whether the fact is written, not where or as whom.
  */
 export const runApprovedWriteMemory = async (args: {
   /** The proposing agent as it stands now; null once it is gone. */
   agent: { publicId: string; knowledgeConfig: unknown } | null;
   generationId: string | null;
   projectId: number;
+  authority: WorkAuthority | null;
   agentAuthority: AgentAuthority;
   actorId?: string;
   /** The frozen or edited arguments. */
@@ -396,6 +379,7 @@ export const runApprovedWriteMemory = async (args: {
     agentId: args.agent.publicId,
     generationId: args.generationId,
     projectId: args.projectId,
+    authority: args.authority,
     agentAuthority: args.agentAuthority,
     actorId: args.actorId,
     // Checked by `writeMemoryInputError` just above.
@@ -464,6 +448,7 @@ export const buildKnowledgeBindings = (args: {
   generationId: string;
   projectId: number;
   typedAgent: TypedAgent;
+  authority: WorkAuthority | null;
   agentAuthority: AgentAuthority;
   actorId?: string;
   /** The project and agent guardrails; the binding has no tool-scope ones. */
@@ -480,6 +465,7 @@ export const buildKnowledgeBindings = (args: {
           agentId: args.agentId,
           generationId: args.generationId,
           projectId: args.projectId,
+          authority: args.authority,
           agentAuthority: args.agentAuthority,
           actorId: args.actorId,
           // A call runs only once every guardrail gating it released it.

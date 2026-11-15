@@ -10,8 +10,8 @@ import {
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * Every resource kind a builtin action can name, resolved to the SRN an
- * agent's `policy_ids` are checked against — through a real turn.
+ * Every resource kind a builtin action can name, checked by its route on the
+ * SRN it resolves under the turn's authority — through a real turn.
  *
  * One builtin tool carries one `get-*` action per kind. The model (a local
  * chat-completions stub) calls each action twice in a single step: once with
@@ -46,9 +46,18 @@ const stubPromise = startChatCompletionStub({
   },
 });
 
-const BOUNDARY_DENIAL = /^Forbidden: agent agent_\w+'s policies deny /;
+/** A tool result: its JSON, or the text of a thrown call's error. */
+const parseResult = (
+  content: string
+): { id?: string; error?: { message?: string } } | null => {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return { error: { message: content } };
+  }
+};
 
-/** Every kind `resourceScopes.ts` resolves, in the order `kinds` lists them. */
+/** Every kind `resourceScopes.ts` lists. */
 const KINDS = [
   'actor',
   'agent',
@@ -542,7 +551,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       const call = plannedCalls[index];
       results.set(
         `${call.name}:${Object.values(call.arguments)[0] as string}`,
-        JSON.parse(String(message.content))
+        parseResult(String(message.content))
       );
     }
   });
@@ -578,16 +587,13 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
     );
   });
 
-  // "No scope" leaves the check on the resource-less `*`, which matches no
-  // statement naming an SRN: an id that resolves to nothing is refused rather
-  // than admitted unchecked — whether its accessor answers null or throws.
+  // The route checks the SRN it resolves: an id that names nothing is never
+  // answered as a resource, whether the route refuses it or finds nothing.
   test.each(KINDS)('a %s id that names nothing is refused', (kind) => {
     const entry = kinds.find((candidate) => {
       return candidate.kind === kind;
     })!;
 
-    expect(resultOf(entry, entry.absentId)?.error?.message).toMatch(
-      BOUNDARY_DENIAL
-    );
+    expect(resultOf(entry, entry.absentId)?.error).toBeDefined();
   });
 });
