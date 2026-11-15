@@ -1,5 +1,5 @@
 ---
-description: 'Defend an agent against indirect prompt injection with three layers: guardrails that read where the turn''s context came from, screened content that cannot outlive its verdict, and a project-wide agent cap.'
+description: 'Defend an agent against indirect prompt injection with provenance-aware guardrails, content screening and a project-wide agent cap.'
 keywords:
   - prompt injection
   - indirect prompt injection
