@@ -72,7 +72,7 @@ repeated parameter is `400 VALIDATION_FAILED`, with the accepted values in
 | `input`        | object \| null                                      | Effective (post-merge) input snapshot                                 |
 | `result`       | object \| null                                      | `{ target_type, result_id, status, output }` — `result_id` is the run/generation public ID; `output` truncated |
 | `error`        | object \| null                                      | `{ code, message, meta }` when the firing failed                      |
-| `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing (`event_id` is the `id` in `input`), null otherwise — one firing per pair |
+| `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing (`event_id` is the `id` in `input`), `<v1>:<trigger_id>` for a `webhook` firing, null otherwise — one firing per key |
 | `attempts`     | number                                              | Dispatch starts. Above 1 means an interrupted start was redelivered ([Delivery Guarantees](#delivery-guarantees)) |
 | `started_at`   | string \| null                                      | ISO 8601 timestamp when execution began                               |
 | `completed_at` | string \| null                                      | ISO 8601 timestamp when the firing reached a terminal status          |
@@ -201,8 +201,7 @@ X-Soat-Signature: t=<unix seconds>,v1=<hex(HMAC-SHA256(secret, "<t>.<body>"))>
 - Each signed delivery fires once: the same `t=,v1=` again is
   `409 HOOK_DELIVERY_REPLAYED`. A retry is signed at a new `t`. The firing's
   `idempotency_key` is `<v1>:<trigger_id>`.
-- `sha256=<hex(HMAC-SHA256(secret, body))>` is also accepted. It has no
-  timestamp, so it has no replay protection.
+- Any other scheme, `sha256=<hex>` included, is `401`.
 
 Responses:
 
