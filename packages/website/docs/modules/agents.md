@@ -915,7 +915,7 @@ Both write the winning version's config to the agent and clear the release (a mi
 
 #### Eval-gated promotion
 
-`promotion_gate` names an [eval](./evaluations.md); `promote` then requires a run of it that finished `completed`, reported `passed: true` and was pinned to the canary version.
+`promotion_gate` names an [eval](./evaluations.md); `promote` then requires a run of it that finished `completed`, reported `passed: true`, recorded this agent as its `agent_id` and was pinned to the canary version.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1002,7 +1002,7 @@ curl -X POST https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/releas
 </TabItem>
 </Tabs>
 
-Until then `promote` is `409 Conflict` with error code `PROMOTION_GATE_UNMET`. Fail-closed: a green run against another version, a failed run and a deleted gate eval all block; `abort` is never blocked; the gate does not run the eval. The clearing run is recorded as `eval_run_id` on the version that goes live; re-setting the release without `promotion_gate` drops the gate.
+Until then `promote` is `409 Conflict` with error code `PROMOTION_GATE_UNMET`. Fail-closed: a green run against another version or another agent (an eval pointed elsewhere when it ran), a run that recorded no `agent_id`, a failed run and a deleted gate eval all block; `abort` is never blocked; the gate does not run the eval. The clearing run is recorded as `eval_run_id` on the version that goes live; re-setting the release without `promotion_gate` drops the gate.
 
 #### Which version served a generation
 

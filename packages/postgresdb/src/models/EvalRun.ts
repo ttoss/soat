@@ -65,9 +65,26 @@ export class EvalRun extends Model {
   )
   declare eval: Eval;
 
+  /**
+   * Public id of the agent every item executes against, resolved at run
+   * start. A string rather than an FK so it survives the agent's deletion and
+   * the Eval being pointed elsewhere. Null on a run that recorded none, which
+   * satisfies no promotion gate.
+   */
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare agentPublicId: string | null;
+
   /** The one agent version every item in this run executed against. */
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare agentVersion: number;
+
+  /**
+   * The Eval's `scorers`, `pass_threshold` and `group_by` as they were when
+   * the run was created: every item is scored and the run settled by these,
+   * never by the Eval's current values. Null when not recorded.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare definition: Record<string, unknown> | null;
 
   /**
    * The decider version each `decider` scorer grades under, keyed by scorer

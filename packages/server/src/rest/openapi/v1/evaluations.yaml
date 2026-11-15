@@ -2189,10 +2189,22 @@ components:
         eval_id:
           type: string
           example: eval_V1StGXR8Z5jdHi6B
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          nullable: true
+          description: >-
+            The agent every item of this run executed against, resolved when
+            the run was created and kept after that agent is deleted or the
+            eval is pointed at another. Null for a run that recorded none,
+            which satisfies no promotion gate.
+          example: agent_V1StGXR8Z5jdHi6B
         agent_version:
           type: integer
           description: The one agent version every item in this run executed against
           example: 3
+        definition:
+          $ref: '#/components/schemas/EvalRunDefinition'
         decider_versions:
           type: object
           nullable: true
@@ -2255,6 +2267,26 @@ components:
         created_at:
           type: string
           format: date-time
+    EvalRunDefinition:
+      type: object
+      nullable: true
+      description: >-
+        The eval's scorers, pass threshold and grouping key as they were when
+        the run was created. Every item is scored and the run settled by
+        these; a later edit to the eval reaches only runs created after it.
+        Null when the run recorded none.
+      properties:
+        scorers:
+          $ref: '#/components/schemas/Scorers'
+        pass_threshold:
+          type: number
+          nullable: true
+          description: Null when the run reports without gating
+          example: 0.8
+        group_by:
+          type: string
+          nullable: true
+          example: kind
     EvalResult:
       type: object
       properties:

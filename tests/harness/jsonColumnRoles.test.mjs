@@ -55,6 +55,7 @@ const ROLES = {
     'EvalResult.scores',
     'EvalRun.aggregateScores',
     'EvalRun.deciderVersions',
+    'EvalRun.definition',
     'EvalRun.metadata',
     'EvalRun.authority',
     'EvalRun.toolContext',

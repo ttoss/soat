@@ -117,6 +117,7 @@ The flow they follow is
 | `2026-11-13-work-authority`                          | `authority` on `generations`, `orchestration_runs`, `tasks`, `playbook_executions`, `eval_runs` and `trigger_firings`, the stored authority the row's work runs under, not backfilled; `triggers.created_by_user_id`, `orchestration_runs.principal_kind`/`_id`/`_bound` and `generations.acted_as_principal_bound` dropped                                                                  |
 | `2026-11-14-resource-grants` | `policy_ids` (`jsonb`) on `evals`, `deciders`, `ingestion_rules`, `memory_rules` and `playbooks`, the grant their work runs under, not backfilled (a row without one grants nothing); `playbook_versions.principal_kind`/`_id`/`_bound` dropped |
 | `2026-11-14-generation-provenance` | `tools.trusted_output` (`NOT NULL`, default `false`), and `generations.untrusted_tool_results` and `knowledge_results` (`NOT NULL`, default `0`), the provenance counts `runtime.generations.*` reads |
+| `2026-11-15-eval-run-definition` | `eval_runs.agent_public_id` and `eval_runs.definition` (`json`), the agent a run executes against and the scorers, threshold and grouping key it is graded by; filled from the Eval for `queued` and `running` runs, left null on terminal ones |
 
 Run them from the server package, which owns the entrypoint:
 
