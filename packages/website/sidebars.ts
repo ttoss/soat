@@ -248,6 +248,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/tag-based-access-control',
         'tutorials/build-an-agent-harness',
         'tutorials/gate-a-tool-with-guardrails',
+        'tutorials/defend-an-agent-against-prompt-injection',
         'tutorials/per-user-credentials-with-tool-context',
         'tutorials/data-retention-and-zero-retention',
       ],
