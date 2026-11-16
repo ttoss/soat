@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.113.0](https://github.com/ttoss/soat/compare/v0.112.0...v0.113.0) (2026-11-16)
+
+### Bug Fixes
+
+* **iam:** one answer for work holding no authority; on-behalf-of generations keep their actor ([#1948](https://github.com/ttoss/soat/issues/1948))
+
+### BREAKING CHANGES
+
+* **iam:** work holding no authority (none stored, or naming a deleted user or key) answers 409 WORK_AUTHORITY_MISSING where in-process dispatch answered 401 and trigger firings 403; a run whose starting key or user was deleted records WORK_AUTHORITY_MISSING instead of TOOL_HTTP_ERROR.
+
 # [0.112.0](https://github.com/ttoss/soat/compare/v0.111.0...v0.112.0) (2026-11-15)
 
 * fix(evaluations)!: an eval run records its agent and definition; a promotion gate accepts only a run of the promoted agent (#1946) ([6c207da](https://github.com/ttoss/soat/commit/6c207dab3fc5c97da54f0680deff37dea692cb5e)), closes [#1946](https://github.com/ttoss/soat/issues/1946)
