@@ -305,7 +305,7 @@ Runs execute in a **queue-backed durable worker**, detached from the starting re
 - **Authority, not a snapshot.** Each grant and cap is read at every call; revoking access affects a run in flight.
 - **Never wider than the starting credential.** A key-started run is bounded by the key's policies; revoking the key stops it, with no fallback to the owner's access: every later call is refused.
 - **Attributed to its principal.** A key-started run names the key (`key_…`), a firing nobody called names the trigger, in [task history](./workflows.md#transition-history), the [audit log](./audit-log.md), and what a later automation hop inherits.
-- **No authority, no calls.** A run that stores none (one written before runs stored their authority) sends no tool call: each is refused with `409 WORK_AUTHORITY_MISSING`.
+- **No authority, no calls.** A run that stores none sends no tool call: each is refused with `409 WORK_AUTHORITY_MISSING`.
 
 Nested `loop` / `sub_orchestration` children inherit the parent's authority; a [workflow](./workflows.md)-dispatched agent runs under the task's.
 
