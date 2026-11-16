@@ -64,6 +64,7 @@ import { workAuthority } from './2026-11-13-workAuthority';
 import { generationProvenance } from './2026-11-14-generationProvenance';
 import { resourceGrants } from './2026-11-14-resourceGrants';
 import { evalRunDefinition } from './2026-11-15-evalRunDefinition';
+import { expireWorkWithoutAuthority } from './2026-11-16-expireWorkWithoutAuthority';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -149,4 +150,5 @@ export const MIGRATIONS: Migration[] = [
   resourceGrants,
   generationProvenance,
   evalRunDefinition,
+  expireWorkWithoutAuthority,
 ];
