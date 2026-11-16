@@ -154,6 +154,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/datasets/{dataset_id}:
@@ -278,6 +280,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
@@ -326,6 +330,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/datasets/{dataset_id}/items:
@@ -473,6 +479,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/datasets/{dataset_id}/items/from-generation:
@@ -595,6 +603,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/datasets/{dataset_id}/items/{item_id}:
@@ -679,6 +689,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
@@ -733,6 +745,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/evals:
@@ -902,6 +916,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/evals/{eval_id}:
@@ -1051,6 +1067,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
@@ -1096,6 +1114,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/evals/{eval_id}/runs:
@@ -1335,6 +1355,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/evals/{eval_id}/runs/{eval_run_id}:
@@ -1530,6 +1552,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:

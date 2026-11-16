@@ -34,6 +34,18 @@ export const REFUSAL: Reply = {
   },
 };
 
+/** A status no operation declares, under a lowercase code. */
+export const PAYMENT_REFUSAL: Reply = {
+  status: 402,
+  body: {
+    error: {
+      code: 'insufficient_credit',
+      message: 'The account has no credit left.',
+      meta: { balance: 0 },
+    },
+  },
+};
+
 export type AdmissionService = {
   /** Every question received since the last `declare`, oldest first. */
   asked: Asked[];

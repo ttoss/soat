@@ -89,6 +89,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     get:
@@ -219,6 +221,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
@@ -356,6 +360,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR) — the provider

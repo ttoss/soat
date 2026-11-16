@@ -214,6 +214,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:

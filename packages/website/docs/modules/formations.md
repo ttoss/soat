@@ -555,7 +555,7 @@ The check runs over the whole template **before anything is applied**: no format
 
 ### Admission
 
-A resource whose create or update action the deployment's [admission service](./iam.md#admission) is asked about is asked once per write, after its authorization and with its properties resolved, so a `ref`, `sub` or parameter value is seen as applied. A refusal fails that resource like any other failure: the deploy answers `2xx` with `status: failed` and the service's `code`, `message` and `meta` as its `error` (`ADMISSION_UNAVAILABLE` when the service did not answer), and the [rollback](#rollback-on-a-failed-deploy) runs. An operator-registered type is not asked: its handler decides its writes.
+A resource whose create or update action the deployment's [admission service](./iam.md#admission) is asked about is asked once per write, after its authorization and with its properties resolved, so a `ref`, `sub` or parameter value is seen as applied. A refusal fails that resource like any other failure: the deploy answers `2xx` with `status: failed` and the service's `code` (as sent, lowercase included), `message` and `meta` as its `error` (`ADMISSION_UNAVAILABLE` when the service did not answer), and the [rollback](#rollback-on-a-failed-deploy) runs. An operator-registered type is not asked: its handler decides its writes.
 
 ### Ids a Template Names Are Resolved Within Its Own Project
 

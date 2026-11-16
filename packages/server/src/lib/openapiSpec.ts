@@ -393,8 +393,6 @@ export const getDeclaredQueryParams = (args: {
 export type OperationIam = {
   action: string;
   resourceType: string | null;
-  /** The response statuses the operation declares. */
-  statuses: ReadonlySet<number>;
 };
 
 const readOperationIam = (operation: unknown): OperationIam | null => {
@@ -402,13 +400,9 @@ const readOperationIam = (operation: unknown): OperationIam | null => {
   const action = operation['x-iam-action'];
   if (typeof action !== 'string') return null;
   const resourceType = operation['x-iam-resource-type'];
-  const responses = isObjectRecord(operation.responses)
-    ? operation.responses
-    : {};
   return {
     action,
     resourceType: typeof resourceType === 'string' ? resourceType : null,
-    statuses: new Set(Object.keys(responses).map(Number)),
   };
 };
 

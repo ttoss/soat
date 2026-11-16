@@ -55,6 +55,17 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    AdmissionRefused:
+      description: >-
+        The deployment's admission service refused this write — answered under
+        the service's own `4xx` status, with its `code` (matching
+        `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, not necessarily an `ERROR_CODES` key),
+        `message` and `meta`; the write did not happen. A status this
+        operation also declares on its own is documented there
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     AdmissionUnavailable:
       description: >-
         The deployment's admission service is asked about this write and did

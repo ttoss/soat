@@ -265,7 +265,7 @@ A deployment that gates runtime writes for its own reasons (a plan limit, a cap)
 `resource_id` names the resource an edit targets (`null` on a create); `body` is the write as it will be applied: the request body, or a formation resource's properties once resolved.
 
 - A `2xx` admits the write.
-- A `4xx` with `{ "error": { "code", "message", "meta"? } }` refuses it: the caller receives that `code`, `message` and `meta`, under the service's status when the operation declares it, else `403`.
+- A `4xx` with `{ "error": { "code", "message", "meta"? } }` refuses it: the caller receives that status, `code`, `message` and `meta` as sent, on every write the service can be asked about (each documents it as its `4XX` response). `code` is any identifier matching `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, so a service's own lowercase codes pass unchanged.
 - Anything else (unreachable, timed out, `5xx`, a refusal outside that shape) refuses it with `502 ADMISSION_UNAVAILABLE`. An unanswered question is never a pass.
 
 It is asked where the write is decided, so every way in is covered: a REST call, a `builtin` tool call (which runs through the same stack, see [Tools](./tools.md#builtin)) and a formation's create or update ([Formations](./formations.md#admission)). A start is a declared action like any other (`agents:CreateAgentGeneration`, `orchestrations:StartRun`, `triggers:FireTrigger`, `tools:CallTool`): asked once where a caller starts the work, before a streamed answer opens, and not again for the steps the run takes or for a scheduled firing, which runs the trigger's own work. A read and an undeclared action never call it. Admission only refuses: it cannot allow what authorization refused.
