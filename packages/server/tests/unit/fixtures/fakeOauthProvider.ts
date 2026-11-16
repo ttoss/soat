@@ -18,6 +18,8 @@ type ProviderState = {
   refreshStatus: number;
   formEncoded: boolean;
   oversized: boolean;
+  /** Cuts the connection partway through the token answer's body. */
+  cutBody: boolean;
 };
 
 const readForm = async (req: http.IncomingMessage) => {
@@ -48,6 +50,13 @@ const issue = (state: ProviderState) => {
 /** Issues tokens the way the state asks: JSON, form-encoded or oversized. */
 const sendTokens = (state: ProviderState, res: http.ServerResponse) => {
   const tokens = issue(state);
+  if (state.cutBody) {
+    res.setHeader('Content-Type', 'application/json');
+    res.write('{"access_token":', () => {
+      res.destroy();
+    });
+    return;
+  }
   if (state.oversized) {
     res.setHeader('Content-Type', 'application/json');
     res.end('x'.repeat(9 * 1024 * 1024));
@@ -119,6 +128,7 @@ export const startFakeOauthProvider = async () => {
     refreshStatus: 200,
     formEncoded: false,
     oversized: false,
+    cutBody: false,
   };
 
   const server = http.createServer(async (req, res) => {

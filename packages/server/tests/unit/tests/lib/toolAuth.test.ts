@@ -44,6 +44,12 @@ const sha256Hex = (value: string): string => {
 
 const EMPTY_PAYLOAD_HASH = sha256Hex('');
 
+const cutMidBody = (res: http.ServerResponse) => {
+  res.write('{"access_token":', () => {
+    res.destroy();
+  });
+};
+
 describe('toolAuth', () => {
   describe('signAwsSigV4', () => {
     test('reproduces the published AWS worked example end to end', () => {
@@ -387,7 +393,7 @@ describe('toolAuth', () => {
     let tokenServer: http.Server;
     let tokenUri: string;
     let assertions: string[] = [];
-    let tokenResponse: { status: number; body: unknown } = {
+    let tokenResponse: { status: number; body: unknown; cut?: boolean } = {
       status: 200,
       body: { access_token: 'ya29.first', expires_in: 3600 },
     };
@@ -423,6 +429,10 @@ describe('toolAuth', () => {
           if (assertion) assertions.push(assertion);
           res.statusCode = tokenResponse.status;
           res.setHeader('Content-Type', 'application/json');
+          if (tokenResponse.cut) {
+            cutMidBody(res);
+            return;
+          }
           res.end(JSON.stringify(tokenResponse.body));
         });
       });
@@ -757,6 +767,15 @@ describe('toolAuth', () => {
       await expectAuthFailure({
         credentials: credentialsFor('big@p.iam.gserviceaccount.com'),
         message: `exceeds ${PROTOCOL_ANSWER_MAX_BYTES} bytes`,
+      });
+    });
+
+    test('refuses a token response cut mid-body', async () => {
+      tokenResponse = { status: 200, body: {}, cut: true };
+
+      await expectAuthFailure({
+        credentials: credentialsFor('cut@p.iam.gserviceaccount.com'),
+        message: 'The GCP token endpoint response could not be read.',
       });
     });
 

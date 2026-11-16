@@ -30,8 +30,11 @@ export type Recorded = {
   body: Record<string, unknown>;
 };
 
-/** What the handler answers next, per request type. */
-export type Reply = { status: number; body: unknown };
+/**
+ * What the handler answers next, per request type. `stall` sends the head and
+ * part of the body, then never finishes it.
+ */
+export type Reply = { status: number; body: unknown; stall?: boolean };
 
 /**
  * A reply may be computed from the request, so one deploy can answer a
@@ -136,8 +139,17 @@ const listenerFor = (handler: FakeFormationHandler): RequestListener => {
             });
 
       const respond = () => {
-        res.writeHead(reply.status, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(reply.body));
+        const text = JSON.stringify(reply.body);
+        if (reply.stall) {
+          res.writeHead(reply.status, { 'content-type': 'application/json' });
+          res.write(text.slice(0, 1));
+          return;
+        }
+        res.writeHead(reply.status, {
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(text),
+        });
+        res.end(text);
       };
 
       if (handler.holdMs > 0) {
@@ -192,6 +204,7 @@ export const startFakeFormationHandler =
     handler.close = async () => {
       unregisterIamModules({ modules: ['test-channels'] });
       await new Promise<void>((resolve) => {
+        server.closeAllConnections();
         server.close(() => {
           return resolve();
         });

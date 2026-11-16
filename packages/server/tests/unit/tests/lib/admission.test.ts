@@ -141,4 +141,24 @@ describe('assertAdmitted', () => {
         'The admission service did not answer for triggers:CreateTrigger: answer too large',
     });
   });
+
+  test('an answer body that stalls past the timeout is unavailable, never a pass', async () => {
+    service.declare({ actions: ['triggers:CreateTrigger'], timeoutMs: 100 });
+    service.reply = { status: 200, body: { admitted: true }, stall: true };
+
+    await expect(
+      assertAdmitted({
+        action: 'triggers:CreateTrigger',
+        projectPublicId: null,
+        resourceType: 'trigger',
+        targetId: null,
+        body: {},
+        principal: { principalType: 'user', principalId: 'usr_1' },
+      })
+    ).rejects.toMatchObject({
+      code: 'ADMISSION_UNAVAILABLE',
+      message:
+        'The admission service did not answer for triggers:CreateTrigger: timed out after 100ms',
+    });
+  });
 });

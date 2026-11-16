@@ -106,6 +106,7 @@ describe('OAuth connections', () => {
   beforeEach(() => {
     provider.state.formEncoded = false;
     provider.state.oversized = false;
+    provider.state.cutBody = false;
     provider.state.expiresIn = 7200;
   });
 
@@ -201,6 +202,16 @@ describe('OAuth connections', () => {
     test('an oversized token answer is 400', async () => {
       const id = await createClient({});
       provider.state.oversized = true;
+
+      const res = await connectThrough(id);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('OAUTH_CALLBACK_FAILED');
+    });
+
+    test('a token answer cut mid-body is 400', async () => {
+      const id = await createClient({});
+      provider.state.cutBody = true;
 
       const res = await connectThrough(id);
 
