@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import {
   DEFAULT_RESOLUTION,
   docsUrlFor,
@@ -7,6 +10,12 @@ import {
   resolutionFor,
   STATUS_RESOLUTIONS,
 } from 'src/errors';
+import {
+  buildErrorHintsExport,
+  ERROR_HINTS_EXPORT_PATH,
+} from 'src/errors/hintExport';
+import { hintRoutes, renderHint } from 'src/errors/hintRoutes';
+import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 
 /**
  * A direct test: the registry is a pure lookup over 120+ codes, and the
@@ -35,7 +44,7 @@ describe('error resolutions', () => {
 
   test('an explicit entry wins over the status-class fallback', () => {
     expect(resolutionFor({ code: 'UNAUTHORIZED' })).toBe(
-      ERROR_RESOLUTIONS.UNAUTHORIZED
+      renderHint({ template: ERROR_RESOLUTIONS.UNAUTHORIZED })
     );
     expect(resolutionFor({ code: 'UNAUTHORIZED' })).not.toBe(
       STATUS_RESOLUTIONS[401]
@@ -172,5 +181,40 @@ describe('error resolutions', () => {
       return /https?:\/\/soat\.ttoss\.dev/i.test(hint);
     });
     expect(hardcoded).toEqual([]);
+  });
+
+  test('every route a hint names is an operation the API serves', () => {
+    const { paths } = getMergedOpenApiSpec();
+    const unserved = [
+      ...Object.values(ERROR_RESOLUTIONS),
+      ...Object.values(STATUS_RESOLUTIONS),
+    ]
+      .flatMap((template) => {
+        return hintRoutes({ template });
+      })
+      .filter(({ method, path: route }) => {
+        const operations = paths[`/api/v1${route}`];
+        return !(
+          typeof operations === 'object' &&
+          operations !== null &&
+          method.toLowerCase() in operations
+        );
+      });
+
+    expect(unserved).toEqual([]);
+  });
+
+  test('the committed export lists every code and is current', () => {
+    const built = buildErrorHintsExport();
+    expect(Object.keys(built.codes)).toEqual([...codes].sort());
+
+    const committed: unknown = JSON.parse(
+      fs.readFileSync(
+        path.join(__dirname, '../../../..', ERROR_HINTS_EXPORT_PATH),
+        'utf-8'
+      )
+    );
+    // Regenerate with `pnpm generate-error-hints`.
+    expect(committed).toEqual(built);
   });
 });

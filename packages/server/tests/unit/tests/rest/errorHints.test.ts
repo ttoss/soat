@@ -1,33 +1,76 @@
+import * as fs from 'node:fs';
 import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 import { db } from 'src/db';
+import { initErrorHintOverrides, resolutionFor } from 'src/errors';
+import { initDeploymentRegistrations } from 'src/lib/deploymentRegistrations';
 import { drainQueueOnce } from 'src/lib/orchestrationWorker';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * `SOAT_OMIT_ERROR_HINTS` (`self-hosting/configuration.md`) holds on every
- * surface an error reaches, not only the REST body `errorBody` writes.
+ * `SOAT_OMIT_ERROR_HINTS` and `SOAT_OMIT_ERROR_DOCS_URL`
+ * (`self-hosting/configuration.md`) hold on every surface an error reaches,
+ * not only the REST body `errorBody` writes.
  */
 // Either key, also inside a relayed body serialised as a JSON string.
 const HINT_KEYS = /docs_url|\\*"hint\\*"/;
 
-const withHintsOmitted = async <T>(
-  omitted: boolean,
+const applyEnv = (values: Record<string, string | undefined>) => {
+  for (const [name, value] of Object.entries(values)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+};
+
+const snapshotEnv = (vars: Record<string, string | undefined>) => {
+  return Object.fromEntries(
+    Object.keys(vars).map((name) => {
+      return [name, process.env[name]];
+    })
+  );
+};
+
+const withEnv = async <T>(
+  vars: Record<string, string | undefined>,
   run: () => Promise<T>
 ): Promise<T> => {
-  const previous = process.env.SOAT_OMIT_ERROR_HINTS;
-  if (omitted) process.env.SOAT_OMIT_ERROR_HINTS = 'true';
-  else delete process.env.SOAT_OMIT_ERROR_HINTS;
+  const previous = snapshotEnv(vars);
+  applyEnv(vars);
   try {
     return await run();
   } finally {
-    if (previous === undefined) delete process.env.SOAT_OMIT_ERROR_HINTS;
-    else process.env.SOAT_OMIT_ERROR_HINTS = previous;
+    applyEnv(previous);
   }
+};
+
+const withEnvSync = (
+  vars: Record<string, string | undefined>,
+  run: () => void
+): void => {
+  const previous = snapshotEnv(vars);
+  applyEnv(vars);
+  try {
+    run();
+  } finally {
+    applyEnv(previous);
+  }
+};
+
+const withHintsOmitted = <T>(
+  omitted: boolean,
+  run: () => Promise<T>
+): Promise<T> => {
+  const value = omitted ? 'true' : undefined;
+  return withEnv(
+    { SOAT_OMIT_ERROR_HINTS: value, SOAT_OMIT_ERROR_DOCS_URL: value },
+    run
+  );
 };
 
 beforeAll(() => {
@@ -38,7 +81,7 @@ afterAll(() => {
   delete process.env.ORCHESTRATION_WORKER_DISABLED;
 });
 
-describe('SOAT_OMIT_ERROR_HINTS', () => {
+describe('error hints', () => {
   let adminToken: string;
   let projectId: string;
   let getAgentToolId: string;
@@ -193,7 +236,7 @@ describe('SOAT_OMIT_ERROR_HINTS', () => {
     return run!.error as { code: string; meta?: Record<string, unknown> };
   };
 
-  describe('unset', () => {
+  describe('both settings unset', () => {
     test('a REST 404 carries hint and docs_url', async () => {
       const response = await withHintsOmitted(false, restNotFound);
       expect(response.status).toBe(404);
@@ -217,7 +260,7 @@ describe('SOAT_OMIT_ERROR_HINTS', () => {
     });
   });
 
-  describe('true', () => {
+  describe('both settings true', () => {
     test('a REST 404 carries neither', async () => {
       const response = await withHintsOmitted(true, restNotFound);
       expect(response.status).toBe(404);
@@ -249,6 +292,132 @@ describe('SOAT_OMIT_ERROR_HINTS', () => {
       const error = await withHintsOmitted(true, failedRunError);
       expect(error.code).toBe('TOOL_HTTP_ERROR');
       expect(JSON.stringify(error)).not.toMatch(HINT_KEYS);
+    });
+  });
+
+  describe('each alone', () => {
+    test('SOAT_OMIT_ERROR_DOCS_URL keeps hint', async () => {
+      const response = await withEnv(
+        { SOAT_OMIT_ERROR_HINTS: undefined, SOAT_OMIT_ERROR_DOCS_URL: 'true' },
+        restNotFound
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.hint).toBe(
+        resolutionFor({ code: 'RESOURCE_NOT_FOUND' })
+      );
+      expect(response.body.error.docs_url).toBeUndefined();
+    });
+
+    test('SOAT_OMIT_ERROR_HINTS keeps docs_url', async () => {
+      const response = await withEnv(
+        { SOAT_OMIT_ERROR_HINTS: 'true', SOAT_OMIT_ERROR_DOCS_URL: undefined },
+        restNotFound
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.hint).toBeUndefined();
+      expect(response.body.error.docs_url).toEqual(expect.any(String));
+    });
+  });
+
+  describe('SOAT_ROUTE_PREFIX', () => {
+    test('a hint names the route under the deployment prefix', async () => {
+      const response = await withEnv(
+        { SOAT_ROUTE_PREFIX: '/v1/projects/{project_id}' },
+        () => {
+          return authenticatedTestClient('not-a-token').get('/api/v1/agents');
+        }
+      );
+      expect(response.status).toBe(401);
+      expect(response.body.error.hint).toContain(
+        '`POST /v1/projects/{project_id}/users/login`'
+      );
+      expect(response.body.error.hint).not.toContain('/api/v1/');
+    });
+
+    test('unset, a hint names the route under /api/v1', async () => {
+      const response = await withEnv({ SOAT_ROUTE_PREFIX: undefined }, () => {
+        return authenticatedTestClient('not-a-token').get('/api/v1/agents');
+      });
+      expect(response.status).toBe(401);
+      expect(response.body.error.hint).toContain('`POST /api/v1/users/login`');
+    });
+  });
+
+  describe('SOAT_ERROR_HINTS_CONFIG', () => {
+    let dir: string;
+
+    const writeConfig = (config: unknown): string => {
+      const file = path.join(dir, `hints-${Date.now()}-${Math.random()}.json`);
+      fs.writeFileSync(file, JSON.stringify(config));
+      return file;
+    };
+
+    beforeAll(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'error-hints-'));
+    });
+
+    afterEach(() => {
+      initErrorHintOverrides({ env: {} });
+    });
+
+    afterAll(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test("an override replaces the code's hint, routes rendered", async () => {
+      initErrorHintOverrides({
+        env: {
+          SOAT_ERROR_HINTS_CONFIG: writeConfig({
+            hints: { RESOURCE_NOT_FOUND: 'List them with `{{GET /agents}}`.' },
+          }),
+        },
+      });
+      const response = await withEnv(
+        { SOAT_ROUTE_PREFIX: '/v1/projects/{project_id}' },
+        () => {
+          return authenticatedTestClient(adminToken).get(
+            '/api/v1/agents/agent_nonexistent'
+          );
+        }
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.hint).toBe(
+        'List them with `GET /v1/projects/{project_id}/agents`.'
+      );
+    });
+
+    test('an override naming a code the runtime does not define fails boot', () => {
+      expect(() => {
+        return withEnvSync(
+          {
+            SOAT_ERROR_HINTS_CONFIG: writeConfig({
+              hints: { NOT_A_RUNTIME_CODE: 'Anything.' },
+            }),
+          },
+          initDeploymentRegistrations
+        );
+      }).toThrow(/NOT_A_RUNTIME_CODE.*does not define/);
+    });
+
+    test.each([
+      ['not an object', []],
+      ['an unknown top-level key', { hints: {}, extra: true }],
+      ['hints not an object', { hints: 'x' }],
+      ['an empty hint', { hints: { RESOURCE_NOT_FOUND: ' ' } }],
+    ])('a config with %s fails boot', (_label, config) => {
+      expect(() => {
+        return initErrorHintOverrides({
+          env: { SOAT_ERROR_HINTS_CONFIG: writeConfig(config) },
+        });
+      }).toThrow(/Error hints config/);
+    });
+
+    test('an unreadable config fails boot', () => {
+      expect(() => {
+        return initErrorHintOverrides({
+          env: { SOAT_ERROR_HINTS_CONFIG: path.join(dir, 'missing.json') },
+        });
+      }).toThrow(/Could not load error hints config/);
     });
   });
 });

@@ -273,6 +273,26 @@ const toIngestedRecord = async (args: { docId: number }) => {
 };
 
 /**
+ * The background run moves the document to `processing` as soon as it starts,
+ * so its `202` answer is read before the run is scheduled.
+ */
+const startDocumentIngestion = async (args: {
+  pipelineArgs: Parameters<typeof processDocumentIngestion>[0];
+  runAsync: boolean;
+}) => {
+  const { pipelineArgs } = args;
+  if (!args.runAsync) {
+    await processDocumentIngestion(pipelineArgs);
+    return toIngestedRecord({ docId: pipelineArgs.docId });
+  }
+  const answer = await toIngestedRecord({ docId: pipelineArgs.docId });
+  setImmediate(() => {
+    void processDocumentIngestion(pipelineArgs);
+  });
+  return answer;
+};
+
+/**
  * Validate the file and create a Document record. When `wait` is false
  * (default) processing is deferred to the next event loop tick and the
  * document is returned with `status=pending` (HTTP 202). When `wait` is
@@ -352,15 +372,7 @@ export const enqueueDocumentIngestion = async (args: {
     authority: args.authority,
   };
 
-  if (runAsync) {
-    setImmediate(() => {
-      void processDocumentIngestion(pipelineArgs);
-    });
-  } else {
-    await processDocumentIngestion(pipelineArgs);
-  }
-
-  return toIngestedRecord({ docId });
+  return startDocumentIngestion({ pipelineArgs, runAsync });
 };
 
 const ensureReingestibleFile = async (args: {
@@ -459,13 +471,5 @@ export const reingestDocument = async (args: {
     authority: args.authority,
   };
 
-  if (runAsync) {
-    setImmediate(() => {
-      void processDocumentIngestion(pipelineArgs);
-    });
-  } else {
-    await processDocumentIngestion(pipelineArgs);
-  }
-
-  return toIngestedRecord({ docId });
+  return startDocumentIngestion({ pipelineArgs, runAsync });
 };
