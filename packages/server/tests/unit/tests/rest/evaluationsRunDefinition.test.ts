@@ -362,6 +362,46 @@ describe('Evaluations — a run records its agent and definition', () => {
     expect((await readRun(evalId, runId)).status).toBe('failed');
   });
 
+  test('an item never moves back to running a run a sibling item settled', async () => {
+    const evalId = await createEval();
+    const runId = await startQueuedRun(evalId);
+    await db.EvalRun.update(
+      { definition: null },
+      { where: { publicId: runId } }
+    );
+
+    // A sibling item fails the run after this item read it as queued.
+    let siblingSettled = false;
+    const settleBySibling = async (status: unknown) => {
+      if (status !== 'running' || siblingSettled) return;
+      siblingSettled = true;
+      await db.EvalRun.update(
+        { status: 'failed', finishedAt: new Date() },
+        { where: { publicId: runId }, hooks: false }
+      );
+    };
+    db.EvalRun.addHook('beforeUpdate', 'siblingSettles', (run) => {
+      return settleBySibling(run.dataValues.status);
+    });
+    db.EvalRun.addHook('beforeBulkUpdate', 'siblingSettlesBulk', (options) => {
+      const attributes = 'attributes' in options ? options.attributes : null;
+      return settleBySibling(
+        attributes && typeof attributes === 'object' && 'status' in attributes
+          ? attributes.status
+          : undefined
+      );
+    });
+    try {
+      await drainEvalQueueOnce({ limit: 1 });
+    } finally {
+      db.EvalRun.removeHook('beforeUpdate', 'siblingSettles');
+      db.EvalRun.removeHook('beforeBulkUpdate', 'siblingSettlesBulk');
+    }
+
+    expect(siblingSettled).toBe(true);
+    expect((await readRun(evalId, runId)).status).toBe('failed');
+  });
+
   describe('authentication and authorization', () => {
     let evalId: string;
     let runId: string;

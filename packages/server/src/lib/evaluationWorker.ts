@@ -215,12 +215,15 @@ const handleEvalItemTask = async (args: {
     return;
   }
 
-  // First item of a queued run: the run is now genuinely under way.
+  // First item of a queued run: the run is now genuinely under way. Conditional
+  // on `queued`, since a sibling item may have settled the run since our read.
   if (run.status === 'queued') {
-    await run.update({
-      status: 'running',
-      startedAt: run.startedAt ?? new Date(),
-    });
+    await db.EvalRun.update(
+      { status: 'running', startedAt: run.startedAt ?? new Date() },
+      { where: { id: run.id as number, status: 'queued' } }
+    );
+    await run.reload();
+    if (!isLive(run.status)) return;
   }
 
   const runnable = await loadRunnable({ context });
