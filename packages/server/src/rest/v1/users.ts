@@ -26,12 +26,12 @@ usersRouter.get('/users/me', async (ctx: Context) => {
 });
 
 usersRouter.get('/users', async (ctx: Context) => {
-  requireAdmin(ctx, 'users:ListUsers');
+  await requireAdmin(ctx, 'users:ListUsers');
   ctx.body = await listUsers(parsePagination(ctx));
 });
 
 usersRouter.get('/users/:user_id', async (ctx: Context) => {
-  requireAdmin(ctx, 'users:GetUser');
+  await requireAdmin(ctx, 'users:GetUser');
   const user = await getUser({ id: ctx.params.user_id });
 
   if (!user) {
@@ -42,7 +42,7 @@ usersRouter.get('/users/:user_id', async (ctx: Context) => {
 });
 
 usersRouter.post('/users', async (ctx: Context) => {
-  requireAdmin(ctx, 'users:CreateUser');
+  await requireAdmin(ctx, 'users:CreateUser');
   const body = ctx.request.body as {
     username: string;
     password: string;
@@ -86,7 +86,7 @@ usersRouter.post('/users/login', async (ctx: Context) => {
 });
 
 usersRouter.delete('/users/:user_id', async (ctx: Context) => {
-  requireAdmin(ctx, 'users:DeleteUser');
+  await requireAdmin(ctx, 'users:DeleteUser');
   const deleted = await deleteUser({ id: ctx.params.user_id });
 
   if (!deleted) {
@@ -98,7 +98,7 @@ usersRouter.delete('/users/:user_id', async (ctx: Context) => {
 
 usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
   requireAuth(ctx);
-  requireAdmin(ctx, 'users:AttachUserPolicies');
+  await requireAdmin(ctx, 'users:AttachUserPolicies');
   const { policy_ids: policyIds } = ctx.request.body as {
     policy_ids: string[];
   };

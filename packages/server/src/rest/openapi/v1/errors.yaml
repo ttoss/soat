@@ -55,6 +55,14 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    AdmissionUnavailable:
+      description: >-
+        The deployment's admission service is asked about this write and did
+        not answer — `ADMISSION_UNAVAILABLE`; the write did not happen
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
       description: Insufficient permissions
       content:

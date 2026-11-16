@@ -228,6 +228,29 @@ A version restore or a release is an edit. A deployment's own resource deployed 
 
 A deployment serving an MCP server of its own declares, beside its modules, what each of its tools performs (`mcp_tools`, see [Configuration](#configuration)). An `mcp` tool whose `mcp.url` is such a server (compared without a trailing slash) must list its `actions`, each a tool the server declares, else `400 VALIDATION_FAILED`; its writer must hold every action they declare, on the declared type, else `403 ACTION_NOT_HELD`. Each declared action must be one `iam/check` answers on that type, or the boot fails.
 
+### Admission
+
+A deployment that gates runtime writes for its own reasons (a plan limit, a cap) registers an admission service (`admission`, see [Configuration](#configuration)) and the runtime writes it is asked about. Before a declared write executes, after its authorization allowed it, the runtime `POST`s the service a signed question (`X-Soat-Signature`, the [webhook scheme](./webhooks.md)):
+
+```json
+{
+  "action": "triggers:CreateTrigger",
+  "project_id": "proj_...",
+  "resource_type": "trigger",
+  "resource_id": null,
+  "body": { "name": "nightly", "type": "schedule", "cron": "0 3 * * *" },
+  "principal": { "type": "user", "id": "user_..." }
+}
+```
+
+`resource_id` names the resource an edit targets (`null` on a create); `body` is the write as it will be applied: the request body, or a formation resource's properties once resolved.
+
+- A `2xx` admits the write.
+- A `4xx` with `{ "error": { "code", "message", "meta"? } }` refuses it: the caller receives that `code`, `message` and `meta`, under the service's status when the operation declares it, else `403`.
+- Anything else (unreachable, timed out, `5xx`, a refusal outside that shape) refuses it with `502 ADMISSION_UNAVAILABLE`. An unanswered question is never a pass.
+
+It is asked where the write is decided, so every way in is covered: a REST call, a `builtin` tool call (which runs through the same stack, see [Tools](./tools.md#builtin)) and a formation's create or update ([Formations](./formations.md#admission)). A start is a declared action like any other (`agents:CreateAgentGeneration`, `orchestrations:StartRun`, `triggers:FireTrigger`, `tools:CallTool`): asked once where a caller starts the work, before a streamed answer opens, and not again for the steps the run takes or for a scheduled firing, which runs the trigger's own work. A read and an undeclared action never call it. Admission only refuses: it cannot allow what authorization refused.
+
 ## Conditions
 
 Conditions add attribute-based constraints: an operator mapped to key-value pairs that must all hold.
@@ -615,7 +638,7 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
 
 | Environment Variable       | Required | Description                                                                                                                                                                                    |
 | -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`) and [MCP servers](#registered-mcp-servers) (`mcp_tools`). Unset (the default) registers none. |
+| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`), [MCP servers](#registered-mcp-servers) (`mcp_tools`) and an [admission service](#admission) (`admission`). Unset (the default) registers none. |
 
 ```json
 {
@@ -644,8 +667,16 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
         ]
       }
     }
-  ]
+  ],
+  "admission": {
+    "handler": {
+      "url": "https://platform.internal/admission",
+      "secret_env": "ADMISSION_SIGNING_SECRET",
+      "timeout_seconds": 5
+    },
+    "actions": ["triggers:CreateTrigger", "triggers:UpdateTrigger"]
+  }
 }
 ```
 
-Read once at boot; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`.
+Read once at boot; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`. Each `admission.actions` entry is an action a runtime write operation declares; `secret_env` names the variable holding the signing secret, which must be set; `timeout_seconds` defaults to 30.

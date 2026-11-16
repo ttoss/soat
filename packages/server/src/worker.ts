@@ -4,6 +4,7 @@ import createDebug from 'debug';
 
 import { app } from './app';
 import { initializeDatabase, logDatabaseConnectionError } from './db';
+import { initDeploymentRegistrations } from './lib/deploymentRegistrations';
 import {
   EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV,
   embeddingPriceWarning,
@@ -63,6 +64,7 @@ const startWorker = async () => {
   // process metering every embedding at nothing while the API tier refuses to
   // start at all.
   try {
+    initDeploymentRegistrations();
     readEmbeddingInputTokenPriceUsd();
   } catch (error) {
     // eslint-disable-next-line no-console

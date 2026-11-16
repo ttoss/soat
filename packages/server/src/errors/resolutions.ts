@@ -57,6 +57,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Add `{ "type": "has_tool_call", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.',
   FORMATION_RESOURCE_TYPE_UNREGISTERED:
     'Register the resource type again so its handler can act on the resource, or remove the resource outside the formation.',
+  ADMISSION_REFUSED:
+    "Read the refusal's own `code` and `message`: the deployment's admission service decides this write, and its answer says what to change.",
+  ADMISSION_UNAVAILABLE:
+    'Retry later. The deployment operator has to bring its admission service back; the write is refused until it answers.',
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   DECIDER_AGENT_NOT_TOOL_LESS:

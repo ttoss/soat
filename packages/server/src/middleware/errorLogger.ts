@@ -223,12 +223,14 @@ const OPAQUE_MESSAGE = 'Internal Server Error';
  */
 const errorBody = (args: {
   code: ErrorCode;
+  /** A relayed refusal's own code; `code` still picks the hint and docs. */
+  wireCode?: string;
   message: string;
   meta?: Record<string, unknown>;
 }) => {
   return {
     error: {
-      code: args.code,
+      code: args.wireCode ?? args.code,
       message: args.message,
       // What to do about it, and where the code is documented. A caller that
       // has never seen this code before can act on the response without
@@ -246,6 +248,7 @@ const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
   if (error instanceof DomainError) {
     ctx.body = errorBody({
       code: error.code,
+      wireCode: error.wireCode,
       message: error.message,
       meta: error.meta,
     });

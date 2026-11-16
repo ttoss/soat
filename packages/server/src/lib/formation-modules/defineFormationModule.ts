@@ -18,6 +18,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../../errors';
+import { assertAdmitted, isAdmissionDeclared } from '../admission';
 import { normalizeDeclaredProperties } from '../formationsProperties';
 import type {
   FormationActor,
@@ -25,6 +26,7 @@ import type {
   FormationModuleAuthorization,
   ValidationError,
 } from '../formationsTypes';
+import { findProjectPublicId } from '../projects';
 import type { StoredError } from '../storedError';
 import type { ModuleOpenApiSpec } from './formationSpecLoader';
 import {
@@ -253,6 +255,32 @@ const buildReader = <TResource>(args: {
 };
 
 /**
+ * Asks the deployment's admission service about a create or update, with the
+ * properties as resolved for this apply, so a deferred value is seen resolved.
+ */
+const admitWrite = async (args: {
+  authorization: FormationModuleAuthorization;
+  operation: 'create' | 'update';
+  properties: Record<string, unknown>;
+  projectId: number;
+  resourceId: string | null;
+  actor: FormationActor;
+}): Promise<void> => {
+  const { authorization } = args;
+  if ('operatorRegistered' in authorization) return;
+  const action = authorization[args.operation];
+  if (action === undefined || !isAdmissionDeclared(action)) return;
+  await assertAdmitted({
+    action,
+    projectPublicId: await findProjectPublicId({ id: args.projectId }),
+    resourceType: authorization.srnResourceType,
+    targetId: args.resourceId,
+    body: args.properties,
+    principal: args.actor.author,
+  });
+};
+
+/**
  * The three write operations. Each re-validates first — `create`/`update` are
  * public entry points of their own, so a bad bag surfaces as the
  * `VALIDATION_FAILED` `formationsApply` records against the failing resource — then delegates to the
@@ -272,6 +300,14 @@ const buildOperations = <TResource>(args: {
   return {
     create: async ({ properties: raw, projectId, actor }) => {
       const properties = assertValid({ properties: raw, forUpdate: false });
+      await admitWrite({
+        authorization: definition.authorization,
+        operation: 'create',
+        properties,
+        projectId,
+        resourceId: null,
+        actor,
+      });
       const created = await definition.create({
         properties,
         projectId,
@@ -293,6 +329,14 @@ const buildOperations = <TResource>(args: {
       actor,
     }) => {
       const properties = assertValid({ properties: raw, forUpdate: true });
+      await admitWrite({
+        authorization: definition.authorization,
+        operation: 'update',
+        properties,
+        projectId,
+        resourceId: physicalResourceId,
+        actor,
+      });
       if (!definition.update) {
         log(
           'update %s from formation (no-op): id=%s',

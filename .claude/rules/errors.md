@@ -26,6 +26,9 @@ throw new DomainError('NAME_CONFLICT', `Formation '${name}' already exists.`, { 
 WIDGET_LOCKED: { httpStatus: 409, description: 'The widget is locked and cannot be modified.' },
 ```
 
+- A refusal another party decided (admission) passes `relayed: { code,
+  httpStatus }`: the response and a stored error carry that code (`wireCode`);
+  `code` still picks the hint and docs.
 - "Referenced entity not found" codes (e.g. `AGENT_NOT_FOUND`) are **400**
   (bad request field), not 404 (missing top-level resource).
 

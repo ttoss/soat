@@ -24,6 +24,7 @@ import {
 } from 'src/lib/principals';
 import { toStoredToolContext } from 'src/lib/toolContext';
 import { readWritePrecondition } from 'src/lib/writePrecondition';
+import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
@@ -232,7 +233,10 @@ export const scopeSrn = (args: {
  * without this call the request produces no audit entry at all, even on a
  * successful mutation.
  */
-export const requireAdmin = (ctx: Context, action: string): void => {
+export const requireAdmin = async (
+  ctx: Context,
+  action: string
+): Promise<void> => {
   requireAuth(ctx);
 
   const allowed = ctx.authUser.unrestricted;
@@ -241,6 +245,7 @@ export const requireAdmin = (ctx: Context, action: string): void => {
   if (!allowed) {
     throw callerDenied({ authUser: ctx.authUser, action, resource: null });
   }
+  await admitAuthorized(ctx, action);
 };
 
 /**
@@ -291,10 +296,10 @@ export const requireProjectAdmin = async (args: {
  *
  * Throws `UNAUTHORIZED`/`FORBIDDEN`.
  */
-export const requireOwnerOrAdmin = (
+export const requireOwnerOrAdmin = async (
   ctx: Context,
   args: { ownerPublicId: string | null | undefined; action: string }
-): void => {
+): Promise<void> => {
   requireAuth(ctx);
 
   const allowed =
@@ -308,6 +313,7 @@ export const requireOwnerOrAdmin = (
       resource: null,
     });
   }
+  await admitAuthorized(ctx, args.action);
 };
 
 /**

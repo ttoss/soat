@@ -66,7 +66,9 @@ describe('effective authority chokepoint', () => {
 
   test('no grant or cap is stated outside the credential resolvers', () => {
     assert.deepEqual(
-      filesMatching(/\b(holder:\s*'\w+'|kind:\s*'(key_policies|other)')( as const)?,/),
+      filesMatching(
+        /\b(holder:\s*'\w+'|kind:\s*'(key_policies|other)')( as const)?,/
+      ),
       [
         'lib/workAuthority.ts',
         'middleware/auth.ts',
@@ -81,8 +83,14 @@ describe('effective authority chokepoint', () => {
       filesMatching(
         /\b(isAllowed|getPolicies|resolveProjectIds)\s*[:=]\s*async\b|AuthUser\['(isAllowed|getPolicies|resolveProjectIds)'\]\s*=/
       ),
-      // Observers: they record and attribute the answer, never change it.
-      ['middleware/audit.ts', CHOKEPOINT, 'middleware/requestAttribution.ts']
+      // Observers: they record, attribute or refuse after an allowed answer,
+      // never turn a refusal into a pass.
+      [
+        'middleware/admission.ts',
+        'middleware/audit.ts',
+        CHOKEPOINT,
+        'middleware/requestAttribution.ts',
+      ]
     );
   });
 
