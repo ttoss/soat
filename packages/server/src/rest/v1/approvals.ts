@@ -17,10 +17,10 @@ import {
   type WireProposedAction,
 } from 'src/lib/approvals';
 import { callerDenied } from 'src/lib/authorizationDenial';
+import { findBuiltinAction } from 'src/lib/builtinActionCatalog';
 import { buildSrn } from 'src/lib/iam';
 import { isPlainObject } from 'src/lib/plainObject';
 import { toolReferences } from 'src/lib/resourceReferences';
-import { soatTools } from 'src/lib/soatTools';
 
 import type { ProjectOwned } from './helpers';
 import {
@@ -53,26 +53,32 @@ const approvalSrn = (approval: { id: string } & ProjectOwned): string => {
 };
 
 /**
- * The IAM action a `builtin` proposal would perform, or `undefined` when the
- * proposal is not one — an `http`/`mcp`/`client`/`pipeline` tool, a tool that
- * no longer exists, or a builtin naming an action the catalog does not know.
+ * The IAM actions a `builtin` proposal would perform: its native action's, or
+ * what the deployment declares for an action it adds. None when the proposal
+ * is not one — an `http`/`mcp`/`client`/`pipeline` tool, a tool that no
+ * longer exists, or a builtin naming an action the catalog does not offer.
  */
-const proposedBuiltinIamAction = async (args: {
+const proposedBuiltinIamActions = async (args: {
   projectId: number;
   proposed: NonNullable<WireProposedAction>;
-}): Promise<string | undefined> => {
-  if (!args.proposed.action) return undefined;
+}): Promise<string[]> => {
+  if (!args.proposed.action) return [];
 
   const tool = await toolReferences.find({
     id: args.proposed.tool_id,
     projectId: args.projectId,
     reach: 'project',
   });
-  if (tool?.type !== 'builtin') return undefined;
+  if (tool?.type !== 'builtin') return [];
 
-  return soatTools.find((def) => {
-    return def.name === args.proposed.action;
-  })?.iamAction;
+  const found = findBuiltinAction(args.proposed.action);
+  if (!found) return [];
+  if (found.kind === 'added') {
+    return found.declared.map(({ action }) => {
+      return action;
+    });
+  }
+  return found.def.iamAction ? [found.def.iamAction] : [];
 };
 
 /**
@@ -101,13 +107,12 @@ const underlyingEditChecks = async (args: {
     });
   }
 
-  const iamAction = await proposedBuiltinIamAction({
+  const iamActions = await proposedBuiltinIamActions({
     projectId: project.id as number,
     proposed: args.proposed,
   });
-  if (!iamAction) return [];
-  return [
-    {
+  return iamActions.map((iamAction) => {
+    return {
       action: iamAction,
       // The edit names its own target inside the arguments, so what is asked
       // is whether the approver may perform this action anywhere in the
@@ -118,8 +123,8 @@ const underlyingEditChecks = async (args: {
         resourceType: '*',
         resourceId: '*',
       }),
-    },
-  ];
+    };
+  });
 };
 
 /**

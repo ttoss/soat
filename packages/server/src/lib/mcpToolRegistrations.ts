@@ -61,6 +61,43 @@ const parseDeclaredActions = (args: {
   });
 };
 
+/**
+ * One server and what each tool it serves performs: an `mcp_tools` entry, and
+ * the server `builtin_actions.add` names (`builtinActionCatalog.ts`).
+ */
+export const parseMcpServerEntry = (args: {
+  value: unknown;
+  source: string;
+  at: string;
+}): McpToolRegistration => {
+  const { source, at } = args;
+  const record = isObjectRecord(args.value) ? args.value : {};
+  if (typeof record.url !== 'string' || !/^https?:\/\/\S+$/.test(record.url)) {
+    return fail({ source, message: `${at}.url must be an http(s) URL` });
+  }
+  if (!isObjectRecord(record.tools) || Object.keys(record.tools).length === 0) {
+    return fail({
+      source,
+      message: `${at}.tools must map each tool name to the actions it performs`,
+    });
+  }
+  return {
+    url: normalizeMcpUrl(record.url),
+    tools: new Map(
+      Object.entries(record.tools).map(([name, actions]) => {
+        return [
+          name,
+          parseDeclaredActions({
+            value: actions,
+            source,
+            at: `${at}.tools.${name}`,
+          }),
+        ];
+      })
+    ),
+  };
+};
+
 export const parseMcpToolRegistrations = (args: {
   config: unknown;
   source: string;
@@ -74,59 +111,35 @@ export const parseMcpToolRegistrations = (args: {
   const seen = new Set<string>();
   return value.map((entry, index) => {
     const at = `mcp_tools[${index}]`;
-    const record = isObjectRecord(entry) ? entry : {};
-    if (
-      typeof record.url !== 'string' ||
-      !/^https?:\/\/\S+$/.test(record.url)
-    ) {
-      return fail({ source, message: `${at}.url must be an http(s) URL` });
-    }
-    const url = normalizeMcpUrl(record.url);
-    if (seen.has(url)) {
+    const registration = parseMcpServerEntry({ value: entry, source, at });
+    if (seen.has(registration.url)) {
       return fail({
         source,
-        message: `${at}: '${url}' is declared more than once`,
+        message: `${at}: '${registration.url}' is declared more than once`,
       });
     }
-    seen.add(url);
-    if (
-      !isObjectRecord(record.tools) ||
-      Object.keys(record.tools).length === 0
-    ) {
-      return fail({
-        source,
-        message: `${at}.tools must map each tool name to the actions it performs`,
-      });
-    }
-    return {
-      url,
-      tools: new Map(
-        Object.entries(record.tools).map(([name, actions]) => {
-          return [
-            name,
-            parseDeclaredActions({
-              value: actions,
-              source,
-              at: `${at}.tools.${name}`,
-            }),
-          ];
-        })
-      ),
-    };
+    seen.add(registration.url);
+    return registration;
   });
 };
 
 const registered = new Map<string, McpToolRegistration>();
 
 /** Throws on an action `iam/check` would not answer, so call it after the IAM modules are registered. */
+export const assertMcpServerActionsCheckable = (
+  registration: McpToolRegistration
+): void => {
+  assertDeclaredActionsCheckable({
+    owner: `MCP server ${registration.url}`,
+    actions: [...registration.tools.values()].flat(),
+  });
+};
+
 export const registerMcpTools = (args: {
   registrations: McpToolRegistration[];
 }): void => {
   for (const registration of args.registrations) {
-    assertDeclaredActionsCheckable({
-      owner: `MCP server ${registration.url}`,
-      actions: [...registration.tools.values()].flat(),
-    });
+    assertMcpServerActionsCheckable(registration);
   }
   for (const registration of args.registrations) {
     registered.set(registration.url, registration);
