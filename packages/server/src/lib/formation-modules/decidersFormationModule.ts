@@ -28,8 +28,8 @@ export const decidersFormationModule = defineFormationModule({
   // unresolved expression is checked by the lib once it resolves.
   extraChecks: ({ properties, basePath, forUpdate, errors }) => {
     const namingError = deciderBackendNamingError({
-      namesAgent: properties.agent_id !== undefined,
-      namesTool: properties.tool_id !== undefined,
+      namesAgent: properties.agent_id != null,
+      namesTool: properties.tool_id != null,
       forUpdate,
     });
     if (namingError) errors.push({ path: basePath, message: namingError });

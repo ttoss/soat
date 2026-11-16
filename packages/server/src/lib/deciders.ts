@@ -146,10 +146,11 @@ export const resolveDeciderBackend = async (args: {
   agentId?: unknown;
   toolId?: unknown;
 }): Promise<DeciderBackend> => {
-  const namesAgent = args.agentId !== undefined;
+  // `null` names nothing: a write clearing one backend names the other.
+  const namesAgent = args.agentId != null;
   const namingError = deciderBackendNamingError({
     namesAgent,
-    namesTool: args.toolId !== undefined,
+    namesTool: args.toolId != null,
     forUpdate: false,
   });
   if (namingError) throw new DomainError('VALIDATION_FAILED', namingError);

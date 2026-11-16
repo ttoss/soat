@@ -24,7 +24,8 @@ const DOCUMENT_FIELDS = [
 // The formation resource flattens the REST `document` object to top-level
 // properties. Rebuilt from scratch on every create/update rather than merged:
 // a resource declaration is always full desired state, and `updateGuardrail`
-// replaces the stored document wholesale.
+// replaces the stored document wholesale. A `null` field (one the template
+// stopped declaring) is left out of the document.
 
 const hasExpressionField = (properties: Record<string, unknown>): boolean => {
   return DOCUMENT_FIELDS.some((key) => {
@@ -38,13 +39,13 @@ const buildGuardrailDocument = (
   if (properties.class === undefined) return undefined;
 
   const document: Record<string, unknown> = { class: properties.class };
-  if (properties.default_class !== undefined) {
+  if (properties.default_class != null) {
     document.default_class = properties.default_class;
   }
-  if (properties.guard !== undefined) {
+  if (properties.guard != null) {
     document.guard = properties.guard;
   }
-  if (properties.escalate !== undefined) {
+  if (properties.escalate != null) {
     document.escalate = properties.escalate;
   }
   return document;
