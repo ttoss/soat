@@ -87,13 +87,7 @@ const resolvePinnedCompletionModel = async (args: {
   );
 
   return {
-    model: await buildModel({
-      provider: resolved.provider,
-      secretValue: resolved.secretValue,
-      model: modelName,
-      baseUrl: resolved.baseUrl,
-      config: resolved.config as Record<string, unknown> | undefined,
-    }),
+    model: buildModel({ aiProvider: resolved, model: modelName }),
     attribution: {
       provider: resolved.provider,
       modelName,

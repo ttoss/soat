@@ -16,6 +16,11 @@ import { DomainError } from '../errors';
 import { assertNoConfigCredential } from './aiProviderConfigSecrets';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
 import {
+  answeringAs,
+  type ModelAliasing,
+  resolveVendorModel,
+} from './aiProviderModelAliases';
+import {
   assertAmbientCredentialsAllowed,
   usesAnthropicTenantEndpoint,
 } from './ambientCredentials';
@@ -469,10 +474,42 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   custom: buildSimpleOpenAiCompatModel,
 };
 
-export const buildModel = (args: BuildModelArgs): LanguageModel => {
-  const builder = PROVIDER_BUILDERS[args.provider];
+/** A provider row as `resolveAiProviderSecret` hands it out. */
+export type ModelProvider = ModelAliasing & {
+  provider: AiProviderSlug;
+  secretValue: string | null;
+  baseUrl?: string;
+  config?: Record<string, unknown>;
+};
+
+/**
+ * The one place a model name reaches a vendor client
+ * (`tests/harness/vendorModelChokepoint.test.mjs`): `model` is the name stored
+ * beside the provider, an alias resolves to its vendor id here, and the built
+ * model answers the alias.
+ */
+export const buildModel = (args: {
+  aiProvider: ModelProvider;
+  model: string;
+}): LanguageModel => {
+  const { aiProvider } = args;
+  const builder = PROVIDER_BUILDERS[aiProvider.provider];
   if (!builder) {
-    throw new Error(`Unsupported AI provider: ${args.provider}`);
+    throw new Error(`Unsupported AI provider: ${aiProvider.provider}`);
   }
-  return builder(args);
+  const vendorModel = resolveVendorModel(args);
+  const model = builder({
+    provider: aiProvider.provider,
+    secretValue: aiProvider.secretValue,
+    model: vendorModel,
+    baseUrl: aiProvider.baseUrl,
+    config: aiProvider.config,
+  });
+  if (vendorModel === args.model) return model;
+  if (typeof model === 'string') return model;
+  return wrapLanguageModel({
+    model,
+    middleware: answeringAs(args.model),
+    modelId: args.model,
+  });
 };

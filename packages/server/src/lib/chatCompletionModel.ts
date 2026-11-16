@@ -46,13 +46,7 @@ export const buildResolvedChatModel = (args: {
 }): ResolvedChatModel => {
   const { resolved } = args;
   return {
-    model: buildModel({
-      provider: resolved.provider,
-      secretValue: resolved.secretValue,
-      model: args.modelName,
-      baseUrl: resolved.baseUrl,
-      config: resolved.config as Record<string, unknown> | undefined,
-    }),
+    model: buildModel({ aiProvider: resolved, model: args.modelName }),
     modelName: args.modelName,
     projectId: resolved.projectId,
     attribution: {

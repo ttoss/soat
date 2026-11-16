@@ -30,6 +30,7 @@ const ROLES = {
     'Agent.toolChoice',
     'AgentVersion.config',
     'AiProvider.config',
+    'AiProvider.modelAliases',
     'ApprovalItem.editedArguments',
     'ApprovalItem.evidence',
     'ApprovalItem.proposedAction',

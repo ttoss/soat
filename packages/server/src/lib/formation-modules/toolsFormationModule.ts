@@ -14,6 +14,7 @@ import {
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { SECRET_USE_ACTION, toolSecretIds } from '../secretUse';
+import { validateSoatActions } from '../soatActionValidation';
 import { assertValidToolContextAllowlist } from '../toolContext';
 import { deleteTool, findToolDeletionBlocker } from '../toolDelete';
 import { createTool, getTool, updateTool } from '../tools';
@@ -141,6 +142,30 @@ const pushLiteralCredentialErrors = (args: {
   }
 };
 
+/** A `builtin` tool names only what the deployment's catalog offers, as on the REST write path. */
+const pushBuiltinActionErrors = (args: {
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+}): void => {
+  const { properties } = args;
+  if (properties.type !== 'builtin' || !Array.isArray(properties.actions)) {
+    return;
+  }
+  try {
+    validateSoatActions(
+      properties.actions.filter((action): action is string => {
+        return typeof action === 'string';
+      })
+    );
+  } catch (error) {
+    args.errors.push({
+      path: `${args.basePath}.actions`,
+      message: error instanceof DomainError ? error.message : String(error),
+    });
+  }
+};
+
 export const toolsFormationModule = defineFormationModule({
   resourceType: 'tool',
   authorization: {
@@ -175,6 +200,7 @@ export const toolsFormationModule = defineFormationModule({
 
     pushExecuteErrors({ properties, basePath, errors });
     pushLiteralCredentialErrors({ properties, basePath, errors });
+    pushBuiltinActionErrors({ properties, basePath, errors });
 
     // The same rule the REST write path enforces, from the same function, so a
     // template cannot author a tool the API would reject — and so the error

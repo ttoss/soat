@@ -75,12 +75,9 @@ export const resolveAgentModel = async (
   if (!resolved) return { failure: 'provider_unresolvable' };
 
   return {
-    model: await buildModel({
-      provider: resolved.provider,
-      secretValue: resolved.secretValue,
+    model: buildModel({
+      aiProvider: resolved,
       model: typedAgent.model ?? resolved.defaultModel,
-      baseUrl: resolved.baseUrl,
-      config: resolved.config as Record<string, unknown> | undefined,
     }),
     provider: resolved.provider,
   };

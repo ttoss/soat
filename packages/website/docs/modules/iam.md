@@ -238,6 +238,15 @@ A version restore or a release is an edit. A deployment's own resource deployed 
 
 A deployment serving an MCP server of its own declares, beside its modules, what each of its tools performs (`mcp_tools`, see [Configuration](#configuration)). An `mcp` tool whose `mcp.url` is such a server (compared without a trailing slash) must list its `actions`, each a tool the server declares, else `400 VALIDATION_FAILED`; its writer must hold every action they declare, on the declared type, else `403 ACTION_NOT_HELD`. Each declared action must be one `iam/check` answers on that type, or the boot fails.
 
+### The builtin catalog
+
+A deployment declares which actions a [`builtin` tool](./tools.md#builtin) may name (`builtin_actions`, see [Configuration](#configuration)):
+
+- **`allow`**: the native actions offered. Absent offers every one; a name that is not a native action fails the boot. Naming any other native action in a `builtin` tool's `actions` is `400 VALIDATION_FAILED`, over REST, inline on an agent and in a formation.
+- **`add`**: actions the deployment serves itself, on one MCP server: `url` and `tools`, shaped like an `mcp_tools` entry (each name → the actions calling it performs). A name that is also a native action fails the boot, and so does `add` without [`TOOL_ASSERTION_PRIVATE_KEY`](./tools.md#tool-assertions): an added action reaches its server only with the signed assertion.
+
+An added action is named in `actions` like a native one; its writer must hold every action it declares, else `403 ACTION_NOT_HELD`.
+
 ### Admission
 
 A deployment that gates runtime writes for its own reasons (a plan limit, a cap) registers an admission service (`admission`, see [Configuration](#configuration)) and the runtime writes it is asked about. Before a declared write executes, after its authorization allowed it, the runtime `POST`s the service a signed question (`X-Soat-Signature`, the [webhook scheme](./webhooks.md)):
@@ -648,7 +657,7 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
 
 | Environment Variable       | Required | Description                                                                                                                                                                                    |
 | -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`), [MCP servers](#registered-mcp-servers) (`mcp_tools`) and an [admission service](#admission) (`admission`). Unset (the default) registers none. |
+| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`), [MCP servers](#registered-mcp-servers) (`mcp_tools`), [the builtin catalog](#the-builtin-catalog) (`builtin_actions`) and an [admission service](#admission) (`admission`). Unset (the default) registers none and offers every native action. |
 
 ```json
 {
@@ -678,6 +687,17 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
       }
     }
   ],
+  "builtin_actions": {
+    "allow": ["list-agents", "search-knowledge"],
+    "add": {
+      "url": "https://platform.internal/mcp",
+      "tools": {
+        "send-note": [
+          { "action": "channels:CreateChannel", "resource_type": "channel" }
+        ]
+      }
+    }
+  },
   "admission": {
     "handler": {
       "url": "https://platform.internal/admission",
@@ -689,4 +709,4 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
 }
 ```
 
-Read once at boot; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`. Each `admission.actions` entry is an action a runtime write operation declares; `secret_env` names the variable holding the signing secret, which must be set; `timeout_seconds` defaults to 30.
+Read once at boot, by the API and the worker alike; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`. Each `admission.actions` entry is an action a runtime write operation declares; `secret_env` names the variable holding the signing secret, which must be set; `timeout_seconds` defaults to 30.

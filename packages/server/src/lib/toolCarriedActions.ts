@@ -1,15 +1,16 @@
 /**
  * What a tool performs when called, as the writer rule asks it of whoever
- * writes the tool: a `builtin` tool its runtime actions; an `mcp` tool on a
+ * writes the tool: a `builtin` tool its native actions, and what the
+ * deployment declares for each action it adds; an `mcp` tool on a
  * registered MCP server what that server declares for each of its `actions`;
  * a `pipeline` what each of its steps does.
  */
 import { DomainError } from '../errors';
+import { findBuiltinAction } from './builtinActionCatalog';
 import { BUILT_IN_ACTION_RESOURCE_TYPES } from './iamActionResourceTypes';
 import { findMcpToolRegistration } from './mcpToolRegistrations';
 import { validatePipelineConfig } from './pipelineTools';
 import { resourceTypeOfKind } from './resourceScopes';
-import { soatTools } from './soatTools';
 import { type CarriedAction, startOf } from './writerRule';
 
 export type CarriedTool = {
@@ -21,10 +22,14 @@ export type CarriedTool = {
 
 const builtinActions = (actions: string[]): CarriedAction[] => {
   return actions.flatMap((name) => {
-    const def = soatTools.find((tool) => {
-      return tool.name === name;
-    });
-    if (!def) return [];
+    const found = findBuiltinAction(name);
+    if (!found) return [];
+    if (found.kind === 'added') {
+      return found.declared.map(({ action, resourceType }) => {
+        return { action, resourceType, resourceId: '*' };
+      });
+    }
+    const { def } = found;
     const action = def.iamAction ?? name;
     const resourceType =
       (def.resource && resourceTypeOfKind({ kind: def.resource.kind })) ??

@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
-    "@ttoss/config": "^1.41.0",
+    "@ttoss/config": "^4.0.1",
     "@ttoss/openapi-codegen": "^0.10.1",
     "@types/node": "^26.6.4",
     "tsdown": "^0.23.0",

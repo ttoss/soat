@@ -16,6 +16,7 @@ import {
   readAgentToolBindings,
   splitToolBindings,
 } from './agentToolBindings';
+import { assertModelOfferedByProvider } from './aiProviders';
 import { assertGuardrailsExist } from './guardrails';
 import {
   assertModelBindingResolvable,
@@ -243,6 +244,7 @@ export const assertModelBinding = async (args: {
     modelRouteId: args.modelRouteId,
     resourceLabel: 'agent',
   });
+  await assertModelOfferedByProvider(args);
 };
 
 /**

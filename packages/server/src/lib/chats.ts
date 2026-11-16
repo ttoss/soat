@@ -1,7 +1,10 @@
 import type { ModelMessage } from 'ai';
 import { generateText, streamText } from 'ai';
 import type { AuthUser } from 'src/Context';
-import { resolveAiProviderSecret } from 'src/lib/aiProviders';
+import {
+  assertModelOfferedByProvider,
+  resolveAiProviderSecret,
+} from 'src/lib/aiProviders';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
@@ -118,6 +121,11 @@ export const createChat = async (args: {
     aiProviderId: args.aiProviderId,
     modelRouteId: null,
     resourceLabel: 'chat',
+  });
+  await assertModelOfferedByProvider({
+    projectId: args.projectId,
+    aiProviderId: args.aiProviderId,
+    model: args.model,
   });
 
   const aiProvider = args.aiProviderId

@@ -33,6 +33,8 @@ An AI provider is a named configuration that tells the system how to reach a spe
 | `default_model` | string           | Default model name sent to the provider API               |
 | `base_url`      | string \| null   | Override base URL (optional, useful for self-hosted LLMs) |
 | `config`        | object \| null   | Arbitrary provider-specific configuration object          |
+| `model_aliases` | object           | Alias → model id sent to the vendor; `{}` when none (see [Model aliases](#model-aliases)) |
+| `model_aliases_only` | boolean     | Refuse a model that is not one of `model_aliases` |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
 
@@ -265,6 +267,18 @@ curl https://api.example.com/api/v1/ai-providers/aip_01/models \
 </Tabs>
 
 The record supplies the region and the IAM scope; the credential comes from the server's instance role. Without that setting the record is refused at creation; give it a key that can call `ListFoundationModels` (or the Vertex publisher listing) and it lists against its own credential.
+
+### Model aliases
+
+`model_aliases` maps a name the provider is used under to the model id the vendor is called with:
+
+```json
+{ "default_model": "fast", "model_aliases": { "fast": "gpt-4o-mini", "smart": "gpt-4o" } }
+```
+
+Wherever a model is named beside the provider (its `default_model`, an agent's `model`, a [model route](./model-routes.md) target, a chat or chat completion `model`, a formation resource), an alias is accepted and stored as written. Reads, a generation's `output.model`, [usage](./usage.md) events, price rows and traces answer the alias; only the vendor call uses the id. A name that is not an alias reaches the vendor as written.
+
+`model_aliases_only: true` closes the catalog: a model that is not one of the aliases is `400 MODEL_NOT_OFFERED`, on the write that names it and on any call that would send it. Setting either field needs `ai-providers:UpdateAiProvider`.
 
 ### Price overrides
 

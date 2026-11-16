@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.0",
-    "@ttoss/config": "^1.41.0",
+    "@ttoss/config": "^4.0.1",
     "@ttoss/postgresdb-cli": "^0.5.1",
     "@ttoss/test-utils": "^4.4.0",
     "@types/jest": "^30.0.0",
