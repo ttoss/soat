@@ -149,6 +149,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/conversations/{conversation_id}:
     get:
       tags:
@@ -280,6 +282,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
       tags:
         - Conversations
@@ -326,6 +330,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/conversations/{conversation_id}/messages:
     get:
       tags:
@@ -501,6 +507,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/conversations/{conversation_id}/generate:
     post:
       tags:
@@ -646,6 +654,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/conversations/{conversation_id}/messages/{document_id}:
     delete:
       tags:
@@ -700,6 +710,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/conversations/{conversation_id}/tags:
     get:
       tags:
@@ -809,6 +821,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     patch:
       tags:
         - Conversations
@@ -867,6 +881,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:
   securitySchemes:
     bearerAuth:

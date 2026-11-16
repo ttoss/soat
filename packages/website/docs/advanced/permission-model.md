@@ -270,6 +270,14 @@ An assertion that does not verify, names another project or carries no readable 
 
 A request narrowed beyond its credential's own grant creates no API key and consents to no OAuth client, because a key cannot carry the narrowing: an OAuth access token, an IAM token, an `On-Behalf-Of` assertion and every call durable work makes under its stored authority. [`POST /api/v1/api-keys`](/docs/api/api-keys/create-api-key), [`PUT /api/v1/api-keys/{id}`](/docs/api/api-keys/update-api-key) and an `api_key` formation resource answer `403 CREDENTIAL_NARROWED`. Reading, listing and deleting keys are unaffected. See [A project-scoped token writes no key](../modules/api-keys.md#a-project-scoped-token-writes-no-key).
 
+## What an admission service may add
+
+A deployment may register an [admission service](../modules/iam.md#admission) for runtime writes it gates for its own reasons. It is asked after authorization allowed the write, before it executes, on every way in: REST, a `builtin` tool call and a formation create or update. A start (a generation, a run, a manual fire) is asked once, where a caller starts it; the run's own steps and a scheduled firing are not asked again.
+
+- It may refuse: the caller receives the service's `code`, `message` and `meta`.
+- It may not allow: a write authorization refused is never asked about, and a service that does not answer refuses (`502 ADMISSION_UNAVAILABLE`).
+- It sees the write (action, project, resource, body as applied) and the principal; it grants nothing and its answer is not a policy.
+
 ## Refusals
 
 | Status and code                   | Means                                                                |
@@ -283,5 +291,6 @@ A request narrowed beyond its credential's own grant creates no API key and cons
 | `400 ON_BEHALF_OF_INVALID`        | The assertion does not verify, names another project or has no `ath` |
 | `409 WORK_AUTHORITY_MISSING`      | Durable work stores no authority, or one that no longer resolves     |
 | `409 POLICY_HAS_DEPENDENTS`       | A policy a resource still names cannot be deleted                    |
+| `502 ADMISSION_UNAVAILABLE`       | The admission service asked about the write did not answer           |
 
 The denial shape and the `403`/`404` split: [What a Denial Looks Like](../modules/iam.md#what-a-denial-looks-like).

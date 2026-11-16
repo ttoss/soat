@@ -52,7 +52,7 @@ const authorizePolicy = async (args: {
   requireAuth(ctx);
   const policyId = ctx.params.policy_id;
   if (ctx.authUser.unrestricted) {
-    requireAdmin(ctx, args.action);
+    await requireAdmin(ctx, args.action);
     return;
   }
   const found = await findPolicyScope({ policyId });
@@ -60,7 +60,7 @@ const authorizePolicy = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Policy not found');
   }
   if (found.scope === null) {
-    requireAdmin(ctx, args.action);
+    await requireAdmin(ctx, args.action);
     return;
   }
   await authorizeResource({
@@ -92,7 +92,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
   requireAuth(ctx);
 
   if (userId !== undefined || !targetsProject({ ctx, projectPublicId })) {
-    requireAdmin(ctx, action);
+    await requireAdmin(ctx, action);
   }
   const projectIds =
     projectPublicId !== undefined || !ctx.authUser.unrestricted
@@ -103,7 +103,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
           resourceType: 'policy',
         })
       : undefined;
-  if (projectIds === undefined) requireAdmin(ctx, action);
+  if (projectIds === undefined) await requireAdmin(ctx, action);
 
   ctx.body = await listPolicies({
     userId,
@@ -137,7 +137,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
       }),
     };
   } else {
-    requireAdmin(ctx, action);
+    await requireAdmin(ctx, action);
   }
 
   ctx.status = 201;

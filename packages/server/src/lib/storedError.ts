@@ -3,10 +3,14 @@ import { ERROR_CODES, type ErrorCode } from '../errors/codes';
 
 /** The `error` a resource records when its work fails, as its `GET` answers it. */
 export type StoredError = {
-  code: ErrorCode;
+  /** An `ERROR_CODES` key, or the code of a refusal relayed verbatim. */
+  code: string;
   message: string;
   meta?: Record<string, unknown>;
 };
+
+/** A failure this server states itself, re-throwable as a `DomainError`. */
+export type OwnStoredError = StoredError & { code: ErrorCode };
 
 /** What an unexpected failure records: the request layer's own answer to one. */
 export const INTERNAL_FAILURE: StoredError = {
@@ -21,7 +25,7 @@ export const isErrorCode = (code: string): code is ErrorCode => {
 
 const fromDomainError = (error: DomainError): StoredError => {
   return {
-    code: error.code,
+    code: error.wireCode,
     message: error.message,
     ...(error.meta !== undefined && { meta: error.meta }),
   };

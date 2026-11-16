@@ -9,7 +9,7 @@ import { isPlainObject } from './plainObject';
 import { registerResourceFieldMap } from './policyCompiler';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
-import type { StoredError } from './storedError';
+import type { OwnStoredError } from './storedError';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:metadataSchemas');
@@ -421,7 +421,7 @@ const findViolation = async (
 type Violation = NonNullable<Awaited<ReturnType<typeof findViolation>>>;
 
 /** The error a write breaking a declaration is refused with. */
-const violationError = (violation: Violation): StoredError => {
+const violationError = (violation: Violation): OwnStoredError => {
   return {
     code: 'VALIDATION_FAILED',
     message: `metadata does not satisfy the schema declared for '${violation.declaration.selector}': ${violation.detail}`,

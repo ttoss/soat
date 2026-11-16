@@ -101,11 +101,15 @@ export type FormationResourceTypeRegistration = {
  * an empty key. Failing to start names the problem while someone is still
  * looking at the deploy.
  */
-const fail = (args: { source: string; message: string }): never => {
+type ConfigFailure = (args: { source: string; message: string }) => never;
+
+const failFormationConfig: ConfigFailure = (args) => {
   throw new Error(
     `Invalid formation resource type config (${args.source}): ${args.message}`
   );
 };
+
+const fail = failFormationConfig;
 
 /**
  * The signing secret, read from the variable the config file *names*. Resolved
@@ -117,8 +121,9 @@ const resolveSecret = (args: {
   env: Record<string, string | undefined>;
   source: string;
   at: string;
+  fail: ConfigFailure;
 }): string => {
-  const { secretEnv, env, source, at } = args;
+  const { secretEnv, env, source, at, fail } = args;
   if (typeof secretEnv !== 'string' || secretEnv.length === 0) {
     return fail({
       source,
@@ -136,13 +141,17 @@ const resolveSecret = (args: {
   return secret;
 };
 
-const parseHandler = (args: {
+/** A signed outbound endpoint: `{ url, secret_env, timeout_seconds? }`. */
+export const parseHandler = (args: {
   handler: unknown;
   env: Record<string, string | undefined>;
   source: string;
   at: string;
+  /** Names the file a rejection is about. */
+  fail?: ConfigFailure;
 }): FormationHandlerConfig => {
   const { handler, env, source, at } = args;
+  const fail = args.fail ?? failFormationConfig;
   if (!isObjectRecord(handler)) {
     return fail({ source, message: `${at}\`handler\` must be an object` });
   }
@@ -160,6 +169,7 @@ const parseHandler = (args: {
     env,
     source,
     at,
+    fail,
   });
 
   const timeoutSeconds = handler.timeout_seconds ?? DEFAULT_TIMEOUT_SECONDS;

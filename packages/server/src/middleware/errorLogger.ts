@@ -212,6 +212,7 @@ const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
   if (error instanceof DomainError) {
     ctx.body = errorBody({
       code: error.code,
+      wireCode: error.wireCode,
       message: error.message,
       meta: error.meta,
     });

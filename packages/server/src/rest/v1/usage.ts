@@ -392,7 +392,7 @@ usageRouter.get('/usage/prices', async (ctx: Context) => {
  * first price may be dated now or earlier.
  */
 usageRouter.put('/usage/prices', async (ctx: Context) => {
-  requireAdmin(ctx, 'usage:ManagePriceBook');
+  await requireAdmin(ctx, 'usage:ManagePriceBook');
   const body = ctx.request.body as UpsertPricesBody;
   ctx.body = await upsertPrices({
     prices: (body.prices ?? []).map((price) => {

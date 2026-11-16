@@ -23,12 +23,14 @@ export const errorHintsOmitted = (): boolean => {
  */
 export const errorBody = (args: {
   code: ErrorCode;
+  /** A relayed refusal's own code; `code` still picks the hint and docs. */
+  wireCode?: string;
   message: string;
   meta?: Record<string, unknown>;
 }) => {
   return {
     error: {
-      code: args.code,
+      code: args.wireCode ?? args.code,
       message: args.message,
       ...(!errorHintsOmitted() && {
         hint: resolutionFor({ code: args.code }),

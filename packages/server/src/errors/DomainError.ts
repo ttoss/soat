@@ -7,8 +7,14 @@ const camelCaseKeys = (meta: Record<string, unknown> | undefined): string[] => {
   });
 };
 
+/** A refusal another party decided, answered with its own status and code. */
+export type RelayedRefusal = { code: string; httpStatus: number };
+
 export class DomainError extends Error {
+  /** The registry entry: hint, docs page and, unless relayed, the status. */
   public readonly code: ErrorCode;
+  /** What the response and a stored error carry: `code`, or a relayed one. */
+  public readonly wireCode: string;
   public readonly httpStatus: number;
   public readonly meta: Record<string, unknown> | undefined;
 
@@ -16,12 +22,14 @@ export class DomainError extends Error {
     code: ErrorCode,
     message: string,
     meta?: Record<string, unknown>,
-    options?: { cause?: unknown }
+    options?: { cause?: unknown; relayed?: RelayedRefusal }
   ) {
     super(message, options);
     this.name = 'DomainError';
     this.code = code;
-    this.httpStatus = ERROR_CODES[code].httpStatus;
+    this.wireCode = options?.relayed?.code ?? code;
+    this.httpStatus =
+      options?.relayed?.httpStatus ?? ERROR_CODES[code].httpStatus;
     this.meta = meta;
 
     // `meta` reaches the wire as-is (error bodies, MCP results, stored
