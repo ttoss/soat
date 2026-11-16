@@ -182,6 +182,24 @@ describe('schemaRunnerOptions', () => {
     expect(options.sync).toBeDefined();
     await expect(options.sync?.()).resolves.toBeUndefined();
   });
+
+  test('keeps a column no model declares, which the previous release may still read', async () => {
+    await sequelize.query(
+      'ALTER TABLE agents ADD COLUMN IF NOT EXISTS contract_pending text'
+    );
+    try {
+      await schemaRunnerOptions({ sequelize }).sync?.();
+
+      const [rows] = await sequelize.query(
+        "SELECT 1 FROM information_schema.columns WHERE table_name = 'agents' AND column_name = 'contract_pending'"
+      );
+      expect(rows).toHaveLength(1);
+    } finally {
+      await sequelize.query(
+        'ALTER TABLE agents DROP COLUMN IF EXISTS contract_pending'
+      );
+    }
+  });
 });
 
 describe('prepareSchema', () => {

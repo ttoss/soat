@@ -1,4 +1,4 @@
-import { models } from '@soat/postgresdb';
+import { models, SCHEMA_SYNC_OPTIONS } from '@soat/postgresdb';
 import type { App } from '@ttoss/http-server';
 import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize, syncWithAdvisoryLock } from '@ttoss/postgresdb';
@@ -43,7 +43,7 @@ export const getSchemaSyncLockTimeoutMs = (): number => {
 };
 
 /**
- * Serializes `sync({ alter: true })` behind a Postgres advisory lock so
+ * Serializes the schema sync behind a Postgres advisory lock so
  * concurrent runs don't race the DDL. Bounded by `lockTimeoutMs`: a lock held
  * by a SIGKILLed peer can outlive it by minutes, and an unbounded wait would
  * deadlock the whole deploy instead of failing fast.
@@ -60,7 +60,7 @@ export const syncSchemaWithAdvisoryLock = async (args: {
   await syncWithAdvisoryLock({
     sequelize: args.sequelize,
     key: SCHEMA_SYNC_LOCK_KEY,
-    sync: { alter: true },
+    sync: SCHEMA_SYNC_OPTIONS,
     lockTimeoutMs,
   });
 };

@@ -1,4 +1,4 @@
-import { MIGRATIONS } from '@soat/postgresdb';
+import { MIGRATIONS, SCHEMA_SYNC_OPTIONS } from '@soat/postgresdb';
 import type { MigrationRunnerOptions, Sequelize } from '@ttoss/postgresdb';
 import { createMigrationRunner, DEFAULT_LEDGER_TABLE } from '@ttoss/postgresdb';
 import createDebug from 'debug';
@@ -122,7 +122,7 @@ export const schemaRunnerOptions = (args: {
     migrations: MIGRATIONS,
     sequelize: args.sequelize,
     sync: async () => {
-      await args.sequelize.sync({ alter: true });
+      await args.sequelize.sync(SCHEMA_SYNC_OPTIONS);
     },
     version: pkg.version,
     lockTimeoutMs: getSchemaSyncLockTimeoutMs(),
