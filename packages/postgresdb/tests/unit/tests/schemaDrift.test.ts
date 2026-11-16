@@ -1,5 +1,3 @@
-import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize } from '@ttoss/postgresdb';
 
@@ -8,6 +6,11 @@ import { initialize } from '@ttoss/postgresdb';
 // also what `initialize()` loads in production. `turbo run test` depends on
 // `build`.
 import { models } from '../../../dist/index.cjs';
+import {
+  createEmptyDatabase,
+  databaseConnection,
+  dropDatabase,
+} from './migrationFixtures';
 
 /**
  * What `modelIndexes.test.ts` structurally cannot see.
@@ -24,8 +27,11 @@ import { models } from '../../../dist/index.cjs';
  */
 jest.setTimeout(180_000);
 
+// `TEST_DB_NAME` audits a long-lived database in place; otherwise a fresh one.
+const EXISTING_DATABASE = process.env.TEST_DB_NAME;
+const DATABASE = EXISTING_DATABASE ?? `soat_schema_drift_${process.pid}`;
+
 let sequelize: Sequelize;
-let container: StartedPostgreSqlContainer | undefined;
 
 const modelList = Object.values(models);
 
@@ -75,43 +81,16 @@ const listCatalogIndexes = async (): Promise<CatalogIndex[]> => {
 };
 
 beforeAll(async () => {
-  let config: {
-    username: string;
-    password: string;
-    database: string;
-    host: string;
-    port: number;
-  };
-
-  // Same escape hatch the server suite uses: point at an already-running
-  // Postgres with TEST_DB_HOST, otherwise start a container.
-  if (process.env.TEST_DB_HOST) {
-    config = {
-      username: process.env.TEST_DB_USERNAME ?? 'postgres',
-      password: process.env.TEST_DB_PASSWORD ?? '',
-      database: process.env.TEST_DB_NAME ?? 'soat_test',
-      host: process.env.TEST_DB_HOST,
-      port: Number(process.env.TEST_DB_PORT ?? 5432),
-    };
-  } else {
-    container = await new PostgreSqlContainer(
-      'pgvector/pgvector:0.8.2-pg18-trixie'
-    ).start();
-
-    config = {
-      username: container.getUsername(),
-      password: container.getPassword(),
-      database: container.getDatabase(),
-      host: container.getHost(),
-      port: container.getPort(),
-    };
+  if (!EXISTING_DATABASE) {
+    await createEmptyDatabase(DATABASE);
   }
 
   const db = await initialize({
     models,
     createVectorExtension: true,
     logging: false,
-    ...config,
+    ...databaseConnection(),
+    database: DATABASE,
   });
 
   sequelize = db.sequelize;
@@ -129,7 +108,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await sequelize?.close();
-  await container?.stop();
+
+  if (!EXISTING_DATABASE) {
+    await dropDatabase(DATABASE);
+  }
 });
 
 describe('schema drift after sync({ alter: true })', () => {

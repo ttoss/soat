@@ -8,8 +8,6 @@ import {
   createDatabase,
   dropDatabase,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
 } from './migrationFixtures';
 
 jest.setTimeout(180_000);
@@ -43,7 +41,6 @@ describe(NAME, () => {
   };
 
   beforeAll(async () => {
-    await startDatabaseServer();
     client = await createDatabase(DATABASE);
 
     await client.query(`
@@ -88,9 +85,8 @@ describe(NAME, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
     await dropDatabase(DATABASE);
-    await stopDatabaseServer();
   });
 
   test('a document carries the object in error, and failure_reason is gone', async () => {

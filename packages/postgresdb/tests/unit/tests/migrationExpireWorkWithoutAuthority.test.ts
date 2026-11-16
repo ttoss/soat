@@ -3,13 +3,7 @@ import { createMigrationRunner } from '@ttoss/postgresdb';
 
 // The built output, not `src`: Babel rejects a decorated `declare` field.
 import { MIGRATIONS } from '../../../dist/index.cjs';
-import {
-  createDatabase,
-  dropDatabase,
-  selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
-} from './migrationFixtures';
+import { createDatabase, dropDatabase, selectRows } from './migrationFixtures';
 
 jest.setTimeout(180_000);
 
@@ -34,13 +28,8 @@ type Row = {
   finished: boolean;
 };
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   await dropDatabase(DATABASE);
-  await stopDatabaseServer();
 });
 
 describe(NAME, () => {
@@ -138,7 +127,7 @@ describe(NAME, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('an open generation without authority fails with WORK_AUTHORITY_MISSING', async () => {

@@ -8,8 +8,6 @@ import {
   createDatabase,
   dropDatabase,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
 } from './migrationFixtures';
 
 jest.setTimeout(180_000);
@@ -42,13 +40,8 @@ const pairsOf = async (args: {
   });
 };
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   await dropDatabase(DATABASE);
-  await stopDatabaseServer();
 });
 
 describe(NAME, () => {
@@ -93,7 +86,7 @@ describe(NAME, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('a user id becomes a user principal; no user stays null', async () => {

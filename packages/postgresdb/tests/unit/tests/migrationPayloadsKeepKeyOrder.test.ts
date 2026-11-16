@@ -8,8 +8,6 @@ import {
   createDatabase,
   dropDatabase,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
 } from './migrationFixtures';
 
 jest.setTimeout(180_000);
@@ -28,14 +26,9 @@ const runnerFor = (args: { client: Sequelize }) => {
   });
 };
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   await dropDatabase(DATABASE);
   await dropDatabase(PENDING_DATABASE);
-  await stopDatabaseServer();
 });
 
 describe(NAME, () => {
@@ -63,7 +56,7 @@ describe(NAME, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   describe('after it runs', () => {
@@ -128,7 +121,7 @@ describe(`${NAME} before a migration that adds a listed column as jsonb`, () => 
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('it is not recognised as applied, so it runs after that one', async () => {
