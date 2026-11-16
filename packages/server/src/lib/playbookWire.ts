@@ -16,6 +16,7 @@ import {
   type PlaybookUpstream,
   type PlaybookUpstreamRef,
 } from './playbookDefinition';
+import { readRequired } from './playbookRequired';
 import type { PlaybookDefinitionProblem } from './playbookValidation';
 import { throwValidationProblems } from './validationProblems';
 
@@ -98,9 +99,6 @@ const readInput = (args: { path: string; input: unknown }): PlaybookInput => {
   if (!isPlainObject(input.schema)) {
     throw invalid(`${path}.schema must be a JSON Schema object.`);
   }
-  if (typeof input.required !== 'boolean') {
-    throw invalid(`${path}.required must be a boolean.`);
-  }
   const description = readOptionalString({
     path: `${path}.description`,
     value: input.description,
@@ -108,7 +106,7 @@ const readInput = (args: { path: string; input: unknown }): PlaybookInput => {
   return {
     name: readIdentifier({ path: `${path}.name`, value: input.name }),
     schema: input.schema as JsonSchema,
-    required: input.required,
+    required: readRequired({ path: `${path}.required`, value: input.required }),
     ...(description !== undefined && { description }),
     source: readSource({ path: `${path}.source`, source: input.source }),
   };

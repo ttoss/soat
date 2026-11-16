@@ -24,8 +24,8 @@ type FormationResource = {
   physical_resource_id: string;
 };
 
-/** One `execute` node calling `tool` on a manual `amount`. */
-const definitionCalling = (tool: unknown) => {
+/** One `execute` node calling `tool` on a manual `amount`, then `more`. */
+const definitionCalling = (tool: unknown, more: object[] = []) => {
   return {
     nodes: [
       {
@@ -39,6 +39,7 @@ const definitionCalling = (tool: unknown) => {
             required: true,
             source: 'manual',
           },
+          ...more,
         ],
         executor: { type: 'tool', id: tool },
       },
@@ -176,6 +177,28 @@ describe('Formations — playbook resources', () => {
         type: 'tool',
         id: physicalId(res.body, 'Quote'),
       });
+    });
+
+    test('deploys an input required on a condition and reads it back', async () => {
+      const required = { '>': [{ var: 'amount' }, 100] };
+      const approval = {
+        name: 'approval',
+        schema: { type: 'string' },
+        required,
+        source: 'manual',
+      };
+      const template = { resources: resources() };
+      template.resources.Pricing.properties.definition = definitionCalling(
+        { ref: 'Quote' },
+        [approval]
+      );
+
+      const res = await deploy(userToken, template);
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      const playbook = await getPlaybook(physicalId(res.body, 'Pricing'));
+      expect(playbook.body.definition.nodes[0].inputs[1]).toEqual(approval);
     });
 
     test('an upstream names a playbook of the same template by ref', async () => {

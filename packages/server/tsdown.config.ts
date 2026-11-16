@@ -53,6 +53,10 @@ export default {
   ],
   format: ['esm'],
   sourcemap: true,
+  // The preset's formatjs and React-import plugins rewrite each chunk without
+  // a source map, so stack frames resolve to the wrong files. The server ships
+  // neither i18n messages nor React (scripts/checkSourceMaps.mjs).
+  plugins: [],
   onSuccess: () => {
     copyOpenApiFiles();
     copyPermissionFiles();

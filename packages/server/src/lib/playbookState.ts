@@ -1,14 +1,13 @@
-import { isPlainObject } from './plainObject';
-import {
-  type JsonValue,
-  parseField,
-  type PlaybookDefinition,
-  type PlaybookFieldRef,
-  type PlaybookInput,
-  type PlaybookNode,
-  type PlaybookUpstreamRef,
+import type {
+  JsonValue,
+  PlaybookDefinition,
+  PlaybookInput,
+  PlaybookNode,
+  PlaybookUpstreamRef,
 } from './playbookDefinition';
 import { nodesByKey, sourcesOf, topologicalWaves } from './playbookGraph';
+import { readInputs, type Reads } from './playbookInputReads';
+import { resolveRequired } from './playbookRequired';
 
 /**
  * Revisions are one counter per case, so a revision names one entry: an input
@@ -67,6 +66,8 @@ export type PlaybookNodeView = {
   values: Record<string, JsonValue>;
   /** Required inputs that are unset or that their schema refuses. */
   missing: string[];
+  /** Whether each input is required in this case, by name. */
+  resolvedRequired: Record<string, boolean>;
   /** Nodes it reads that must reach `done` first. */
   blockedBy: string[];
   /** Will produce a value without anyone filling an input. */
@@ -112,107 +113,7 @@ export const samePlaybookBasis = (args: {
   );
 };
 
-/** The value at a dotted path; `''` is the value itself. */
-const valueAt = (args: {
-  value: JsonValue | undefined;
-  path: string;
-}): JsonValue | undefined => {
-  if (args.path === '') return args.value;
-
-  let current = args.value;
-
-  for (const segment of args.path.split('.')) {
-    if (Array.isArray(current) && /^\d+$/.test(segment)) {
-      current = current[Number(segment)];
-    } else if (isPlainObject(current) && Object.hasOwn(current, segment)) {
-      current = current[segment];
-    } else {
-      return undefined;
-    }
-  }
-
-  return current;
-};
-
-type Read =
-  | { held: true }
-  | { held: false; revision: number | null; value: JsonValue | undefined };
-
-const HELD: Read = { held: true };
-
-const UNSET: Read = { held: false, revision: null, value: undefined };
-
 const IN_FLIGHT = new Set<PlaybookExecutionStatus>(['queued', 'running']);
-
-const readManual = (args: { field?: PlaybookFieldValue }): Read => {
-  const { field } = args;
-
-  return field
-    ? { held: false, revision: field.revision, value: field.value }
-    : UNSET;
-};
-
-const readField = (args: {
-  field: PlaybookFieldRef;
-  view: PlaybookNodeView;
-  output?: PlaybookFieldValue;
-}): Read => {
-  const { field, view, output } = args;
-
-  if (field.root === 'input') {
-    const read = view.basis[field.name];
-
-    return {
-      held: false,
-      revision: read ? read.revision : null,
-      value: valueAt({ value: view.values[field.name], path: field.path }),
-    };
-  }
-
-  return output
-    ? {
-        held: false,
-        revision: output.revision,
-        value: valueAt({ value: output.value, path: field.path }),
-      }
-    : UNSET;
-};
-
-const readSourced = (args: {
-  input: PlaybookInput;
-  source: { node_id: string; field: string };
-  snapshot: PlaybookCaseSnapshot;
-  views: Map<string, PlaybookNodeView>;
-}): Read => {
-  const { input, source, snapshot, views } = args;
-
-  const view = views.get(source.node_id);
-
-  // A required input waits for its node. An optional one waits only for a
-  // node about to produce a value; one waiting on a person reads as unset.
-  if (view?.state !== 'done') {
-    return input.required || view?.settling ? HELD : UNSET;
-  }
-
-  const field = parseField({ field: source.field });
-
-  return field
-    ? readField({ field, view, output: snapshot[source.node_id]?.output })
-    : UNSET;
-};
-
-const readInput = (args: {
-  node: PlaybookNode;
-  input: PlaybookInput;
-  snapshot: PlaybookCaseSnapshot;
-  views: Map<string, PlaybookNodeView>;
-}): Read => {
-  const { node, input, snapshot, views } = args;
-
-  return input.source === 'manual'
-    ? readManual({ field: snapshot[node.id]?.inputs?.[input.name] })
-    : readSourced({ input, source: input.source, snapshot, views });
-};
 
 const isCurrent = (args: {
   read?: { basis: PlaybookBasis };
@@ -262,54 +163,6 @@ const stateOf = (args: {
   }
 
   return blocked ? 'blocked' : 'ready';
-};
-
-type Reads = Pick<PlaybookNodeView, 'basis' | 'values' | 'missing'> & {
-  blockedBy: Set<string>;
-};
-
-const readInputs = (args: {
-  node: PlaybookNode;
-  snapshot: PlaybookCaseSnapshot;
-  views: Map<string, PlaybookNodeView>;
-  conforms: PlaybookConforms;
-}): Reads => {
-  const { node, conforms } = args;
-
-  const reads: Reads = {
-    basis: {},
-    values: {},
-    missing: [],
-    blockedBy: new Set(),
-  };
-
-  for (const input of node.inputs) {
-    const read = readInput({ ...args, input });
-
-    if (read.held) {
-      if (input.source !== 'manual') reads.blockedBy.add(input.source.node_id);
-      continue;
-    }
-
-    reads.basis[input.name] = {
-      from:
-        input.source === 'manual'
-          ? 'manual'
-          : `${input.source.node_id}.${input.source.field}`,
-      revision: read.revision,
-    };
-
-    if (
-      read.value !== undefined &&
-      conforms({ node, input, value: read.value })
-    ) {
-      reads.values[input.name] = read.value;
-    } else if (input.required) {
-      reads.missing.push(input.name);
-    }
-  }
-
-  return reads;
 };
 
 const settles = (args: {
@@ -390,6 +243,7 @@ const upstreamViewOf = (args: {
     basis,
     values: {},
     missing: [],
+    resolvedRequired: {},
     blockedBy: pulled ? [] : [from],
     settling: upstreamSettles({ state, read, pulled }),
     ...(output && { pulled: output.value }),
@@ -426,6 +280,7 @@ const viewOf = (args: {
     basis: reads.basis,
     values: reads.values,
     missing: reads.missing,
+    resolvedRequired: reads.resolvedRequired,
     blockedBy: [...reads.blockedBy],
     settling: settles({ state, reads, views }),
   };
@@ -463,6 +318,7 @@ export const playbookNodeStates = (args: {
         basis: {},
         values: {},
         missing: [],
+        resolvedRequired: resolveRequired({ node, values: {} }),
         blockedBy: sourcesOf({ node }),
         settling: false,
       };

@@ -89,7 +89,9 @@ some codes.
 | Rejected by the HTTP layer before routing | varies | `code: "REQUEST_REJECTED"`                          |
 | Unhandled server failure                  | `500`  | `code: "INTERNAL_ERROR"`, `message: "Internal Server Error"`        |
 
-Each also carries `hint` and `docs_url`.
+Each also carries `hint` and `docs_url`, unless the deployment sets
+[`SOAT_OMIT_ERROR_HINTS`](/docs/self-hosting/configuration#server): then no
+error carries either, on any surface.
 
 The full catalog (every `error.code`, its HTTP status, meaning and remedy) is
 generated from the server source and published at [/errors.json](/errors.json),

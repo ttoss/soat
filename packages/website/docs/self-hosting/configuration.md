@@ -127,6 +127,7 @@ constraint owns the index.
 | ------------------------- | ------- | ------------------------------------------------------------ |
 | `PORT`                    | `5047`  | HTTP port the server listens on                              |
 | `SOAT_ERROR_LOGS_ENABLED` | `true`  | Controls request error logs from the global error middleware |
+| `SOAT_OMIT_ERROR_HINTS`   | `false` | `true` leaves `hint` and `docs_url` out of every error: REST bodies, `builtin` tool results, recorded failures, webhook payloads. For a deployment fronting the API under its own name |
 
 ### Header Prefix
 

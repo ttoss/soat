@@ -1842,8 +1842,20 @@ components:
           example:
             type: number
         required:
-          type: boolean
-          description: The node cannot run until a required input is set
+          description: >-
+            The node cannot run until a required input is set. A boolean, or a
+            JSON Logic expression over the node's other inputs by name, resolved
+            for each case: a sibling unset, held or refused by its schema reads
+            `null`, and an expression that fails to evaluate makes the input
+            required.
+          oneOf:
+            - type: boolean
+            - type: object
+              description: A JSON Logic expression
+              example:
+                '==':
+                  - var: married
+                  - true
         description:
           type: string
           description: What to ask for; shown with the input when it is missing
@@ -2501,8 +2513,9 @@ components:
         required:
           type: boolean
           description: >-
-            Whether the node waits for this input; an optional one never blocks
-            it
+            Whether the node waits for this input in this case, with a
+            conditional `required` resolved over the case's values; an optional
+            one never blocks it
     PlaybookCaseMissing:
       type: object
       properties:

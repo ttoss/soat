@@ -101,7 +101,9 @@ components:
           description: >-
             Structured error. Every error response uses this shape — 401, 403
             and the 500 catch-all included — so `code` can be read without
-            first checking the type of `error`.
+            first checking the type of `error`. `hint` and `docs_url` are
+            absent on a deployment that sets `SOAT_OMIT_ERROR_HINTS`, which
+            publishes its own contract.
           required:
             - code
             - message

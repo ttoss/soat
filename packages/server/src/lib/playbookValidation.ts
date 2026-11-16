@@ -5,6 +5,7 @@ import {
   type PlaybookNode,
 } from './playbookDefinition';
 import { nodesByKey, topologicalWaves } from './playbookGraph';
+import { requiredProblems } from './playbookRequired';
 import type { ValidationProblem } from './validationProblems';
 
 export type PlaybookDefinitionProblem = ValidationProblem;
@@ -211,7 +212,8 @@ export const validatePlaybookDefinition = (args: {
     const path = nodePath(index);
     problems.push(
       ...nodeProblems({ node, path }),
-      ...inputProblems({ node, path, byKey })
+      ...inputProblems({ node, path, byKey }),
+      ...requiredProblems({ node, path })
     );
   }
 
