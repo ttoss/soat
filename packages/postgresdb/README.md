@@ -272,14 +272,12 @@ Use the name **Postgres actually stored**, which is not always the one you wrote
 | `indexes` entry with no `name:` | `<table>_<field>_<field>…`, truncated at 63 chars |
 | `indexes` entry with `name:`    | the name as written                               |
 
-`tests/unit/tests/schemaDrift.test.ts` is what finds the leftovers. Run against a **real, long-lived** database it reports every index no model declares — which is exactly the set someone still has to drop. Against a fresh database it passes trivially, since the abandoned predecessor never existed there, so a rename is not something CI can catch for you. It syncs, then asserts no index is undeclared, no two indexes are exact duplicates, a second sync adds nothing, and every index covers the columns its model declares. It starts a container by default, or reuses a running server when `TEST_DB_HOST` is set:
+`tests/unit/tests/schemaDrift.test.ts` is what finds the leftovers. Run against a **real, long-lived** database it reports every index no model declares — which is exactly the set someone still has to drop. Against a fresh database it passes trivially, since the abandoned predecessor never existed there, so a rename is not something CI can catch for you. It syncs, then asserts no index is undeclared, no two indexes are exact duplicates, a second sync adds nothing, and every index covers the columns its model declares. The suites share one Postgres: the Jest `globalSetup` starts a container, or reuses a running server when `TEST_DB_HOST` is set, and each suite creates databases of its own on it. `TEST_DB_NAME` points this suite at an existing database instead:
 
 ```bash
 TEST_DB_HOST=127.0.0.1 TEST_DB_USERNAME=postgres TEST_DB_PASSWORD=postgres \
-  TEST_DB_NAME=soat_drift pnpm test
+  TEST_DB_NAME=soat_drift pnpm test --testPathPatterns=schemaDrift
 ```
-
-The other suites in this package need neither, so they still run with no database available.
 
 ### JSON or JSONB
 

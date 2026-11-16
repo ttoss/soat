@@ -3,13 +3,7 @@ import { createMigrationRunner } from '@ttoss/postgresdb';
 
 // The built output, not `src`: Babel rejects a decorated `declare` field.
 import { MIGRATIONS } from '../../../dist/index.cjs';
-import {
-  createDatabase,
-  dropDatabase,
-  selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
-} from './migrationFixtures';
+import { createDatabase, dropDatabase, selectRows } from './migrationFixtures';
 
 jest.setTimeout(180_000);
 
@@ -42,13 +36,8 @@ const rules = async (client: Sequelize) => {
   });
 };
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   await dropDatabase(DATABASE);
-  await stopDatabaseServer();
 });
 
 describe(NAME, () => {
@@ -76,7 +65,7 @@ describe(NAME, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test("backfills each rule's converter public id", async () => {

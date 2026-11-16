@@ -1,5 +1,3 @@
-import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { Sequelize } from '@ttoss/postgresdb';
 
 const ADMIN_DATABASE = 'postgres';
@@ -11,56 +9,22 @@ type DatabaseConnection = {
   port: number;
 };
 
-let connection: DatabaseConnection | undefined;
-let container: StartedPostgreSqlContainer | undefined;
-
-/**
- * Same escape hatch the rest of the package uses: point at an already-running
- * Postgres with `TEST_DB_HOST`, otherwise start a container. Without the
- * container branch this suite passes locally and fails in CI, which sets no
- * `TEST_DB_HOST` and has nothing on 127.0.0.1:5432.
- */
-export const startDatabaseServer = async (): Promise<void> => {
-  if (connection) {
-    return;
-  }
-
-  if (process.env.TEST_DB_HOST) {
-    connection = {
-      username: process.env.TEST_DB_USERNAME ?? 'postgres',
-      password: process.env.TEST_DB_PASSWORD ?? '',
-      host: process.env.TEST_DB_HOST,
-      port: Number(process.env.TEST_DB_PORT ?? 5432),
-    };
-
-    return;
-  }
-
-  container = await new PostgreSqlContainer(
-    'pgvector/pgvector:0.8.2-pg18-trixie'
-  ).start();
-
-  connection = {
-    username: container.getUsername(),
-    password: container.getPassword(),
-    host: container.getHost(),
-    port: container.getPort(),
-  };
-};
-
-export const stopDatabaseServer = async (): Promise<void> => {
-  await container?.stop();
-
-  container = undefined;
-  connection = undefined;
-};
-
+/** The server `globalSetup.ts` started or was pointed at. */
 export const databaseConnection = (): DatabaseConnection => {
-  if (!connection) {
-    throw new Error('startDatabaseServer() must run before the first test.');
+  const host = process.env.TEST_DB_HOST;
+
+  if (!host) {
+    throw new Error(
+      'TEST_DB_HOST is unset: run the suite through its Jest config so globalSetup executes.'
+    );
   }
 
-  return connection;
+  return {
+    username: process.env.TEST_DB_USERNAME ?? 'postgres',
+    password: process.env.TEST_DB_PASSWORD ?? '',
+    host,
+    port: Number(process.env.TEST_DB_PORT ?? 5432),
+  };
 };
 
 export const connectTo = (database: string): Sequelize => {

@@ -8,8 +8,6 @@ import {
   createDatabase,
   dropDatabase,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
 } from './migrationFixtures';
 
 jest.setTimeout(180_000);
@@ -55,7 +53,6 @@ const rowOf = async (idempotencyKey: string) => {
 };
 
 beforeAll(async () => {
-  await startDatabaseServer();
   client = await createDatabase(DATABASE);
 
   await client.query(`
@@ -87,9 +84,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await client.close();
+  await client?.close();
   await dropDatabase(DATABASE);
-  await stopDatabaseServer();
 });
 
 describe(NAME, () => {

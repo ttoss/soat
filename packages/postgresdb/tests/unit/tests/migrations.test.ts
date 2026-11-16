@@ -17,8 +17,6 @@ import {
   dropDatabase,
   indexNames,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
   tableExists,
 } from './migrationFixtures';
 
@@ -54,16 +52,10 @@ const runnerFor = (args: { client: Sequelize; sync?: () => Promise<void> }) => {
   });
 };
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   for (const name of databases) {
     await dropDatabase(name);
   }
-
-  await stopDatabaseServer();
 });
 
 describe('the migration list', () => {
@@ -139,7 +131,7 @@ describe('2026-09-11-memory-tags-to-jsonb', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('both tag columns become jsonb', async () => {
@@ -236,7 +228,7 @@ describe('2026-09-16-memories-rename-and-provenance', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('the container vacates the name and the item takes it', async () => {
@@ -379,7 +371,7 @@ describe('2026-09-16-memory-assertions-and-shared-content', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('identical texts in one store collapse to a single content row', async () => {
@@ -502,7 +494,7 @@ describe('2026-09-16-memory-rules-from-agent-extraction', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('each enabled extraction config becomes one rule on its write store', async () => {
@@ -635,7 +627,7 @@ describe('a database that already carries every change', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('a second run applies nothing', async () => {
@@ -687,7 +679,7 @@ describe('a database `sync` has just built', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('every migration records itself without running', async () => {
@@ -747,7 +739,7 @@ describe('2026-09-21-durable-event-firings', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('the durability columns exist', async () => {
@@ -842,7 +834,7 @@ describe('2026-09-21-document-metadata-jsonb', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   const metadataOf = async (publicId: string) => {
@@ -935,7 +927,7 @@ describe('2026-09-21-document-versions', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('the counter column exists', async () => {
@@ -999,7 +991,7 @@ describe('2026-09-22-tag-bag-gin-indexes', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('each tagged table the database holds gains the index', async () => {
@@ -1084,7 +1076,7 @@ describe('2026-09-24-generation-idempotency-key', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('the key and digest columns exist', async () => {
@@ -1146,7 +1138,7 @@ describe('2026-09-24-api-key-sha256', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('the SHA-256 column exists', async () => {
@@ -1218,7 +1210,7 @@ describe('2026-11-10-generation-acted-as', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('a recorded generation acted as the principal that started it', async () => {

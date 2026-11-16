@@ -8,8 +8,6 @@ import {
   createDatabase,
   dropDatabase,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
 } from './migrationFixtures';
 
 jest.setTimeout(180_000);
@@ -44,13 +42,8 @@ const runnerFor = (args: { client: Sequelize }) => {
   });
 };
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   await dropDatabase(DATABASE);
-  await stopDatabaseServer();
 });
 
 describe(NAME, () => {
@@ -144,7 +137,7 @@ describe(NAME, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('an admin creator with no policy acts under a new allow-all policy', async () => {
@@ -249,7 +242,7 @@ describe(`${NAME} on a database that predates the tables`, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
     await dropDatabase(EMPTY);
   });
 

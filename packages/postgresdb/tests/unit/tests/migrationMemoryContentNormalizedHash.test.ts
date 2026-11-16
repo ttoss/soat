@@ -6,13 +6,7 @@ import {
   hashNormalizedMemoryContent,
   MIGRATIONS,
 } from '../../../dist/index.cjs';
-import {
-  createDatabase,
-  dropDatabase,
-  selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
-} from './migrationFixtures';
+import { createDatabase, dropDatabase, selectRows } from './migrationFixtures';
 
 jest.setTimeout(180_000);
 
@@ -35,13 +29,8 @@ const CONTENTS = [
   'Fiscal year ends in December',
 ];
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   await dropDatabase(DATABASE);
-  await stopDatabaseServer();
 });
 
 describe(NAME, () => {
@@ -67,7 +56,7 @@ describe(NAME, () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('every row keeps its own text and gets the normalized hash', async () => {

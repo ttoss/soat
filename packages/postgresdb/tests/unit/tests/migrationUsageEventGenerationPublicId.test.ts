@@ -8,8 +8,6 @@ import {
   createDatabase,
   dropDatabase,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
 } from './migrationFixtures';
 
 jest.setTimeout(180_000);
@@ -30,13 +28,8 @@ const freshDatabase = async (): Promise<{ client: Sequelize }> => {
   return { client: await createDatabase(DATABASE) };
 };
 
-beforeAll(async () => {
-  await startDatabaseServer();
-});
-
 afterAll(async () => {
   await dropDatabase(DATABASE);
-  await stopDatabaseServer();
 });
 
 describe('2026-09-25-usage-event-generation-public-id', () => {
@@ -85,7 +78,7 @@ describe('2026-09-25-usage-event-generation-public-id', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
   });
 
   test('the column exists', async () => {

@@ -8,8 +8,6 @@ import {
   createDatabase,
   dropDatabase,
   selectRows,
-  startDatabaseServer,
-  stopDatabaseServer,
   tableExists,
 } from './migrationFixtures';
 
@@ -188,7 +186,6 @@ describe('2026-09-24-foreign-key-nullability', () => {
   };
 
   beforeAll(async () => {
-    await startDatabaseServer();
     client = await createDatabase(DATABASE);
 
     await client.query(`
@@ -219,9 +216,8 @@ describe('2026-09-24-foreign-key-nullability', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
     await dropDatabase(DATABASE);
-    await stopDatabaseServer();
   });
 
   test('every relaxed column the database holds accepts a null', async () => {
