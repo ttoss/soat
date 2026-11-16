@@ -1054,7 +1054,7 @@ export const ERROR_CODES = {
   REQUEST_REJECTED: {
     httpStatus: 400,
     description:
-      'The HTTP framework rejected the request before it reached a handler — a payload over the size limit, an unsupported method, a malformed request line. The accompanying message carries the specific reason, and the response status is the one the framework chose rather than this default.',
+      'The HTTP framework rejected the request before it reached a handler — a path no route matches, an unsupported method, a payload over the size limit, a malformed request line. The accompanying message carries the specific reason, and the response status is the one the framework chose rather than this default.',
   },
   INTERNAL_ERROR: {
     httpStatus: 500,

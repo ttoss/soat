@@ -2,6 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { app } from 'src/app';
+import request from 'supertest';
+
 import { testClient } from '../../testClient';
 
 let distDir: string;
@@ -83,5 +86,29 @@ describe('SPA static serving at /app', () => {
     const res = await testClient.get('/app');
     process.env.APP_DIST_PATH = saved;
     expect(res.status).toBe(404);
+  });
+});
+
+describe('an unanswered /api request answers the JSON error envelope', () => {
+  test('an unknown /api/v1 path is a 404 with a registry code', async () => {
+    const res = await testClient.get('/api/v1/no-such-module');
+    expect(res.status).toBe(404);
+    expect(res.type).toBe('application/json');
+    expect(res.body.error.code).toBe('REQUEST_REJECTED');
+  });
+
+  test('a method the route does not serve is a 405 naming the allowed ones', async () => {
+    const res = await testClient.patch('/api/v1/projects');
+    expect(res.status).toBe(405);
+    expect(res.type).toBe('application/json');
+    expect(res.body.error.code).toBe('REQUEST_REJECTED');
+    expect(res.headers.allow).toMatch(/GET/);
+  });
+
+  test('a method nothing implements is a 501', async () => {
+    const res = await request(app.callback()).copy('/api/v1/projects');
+    expect(res.status).toBe(501);
+    expect(res.type).toBe('application/json');
+    expect(res.body.error.code).toBe('REQUEST_REJECTED');
   });
 });
