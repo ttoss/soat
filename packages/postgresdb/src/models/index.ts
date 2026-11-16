@@ -64,6 +64,7 @@ export { PlaybookUpgrade } from './PlaybookUpgrade';
 export { PlaybookVersion } from './PlaybookVersion';
 export { Policy } from './Policy';
 export { PriceBook } from './PriceBook';
+export { PrincipalRevocation } from './PrincipalRevocation';
 export { Project } from './Project';
 export { Quota } from './Quota';
 export { QuotaWindowCounter } from './QuotaWindowCounter';

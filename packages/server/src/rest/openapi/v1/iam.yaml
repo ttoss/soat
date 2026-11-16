@@ -116,6 +116,49 @@ paths:
           $ref: './errors.yaml#/components/responses/InternalError'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/iam/principal-revocations:
+    post:
+      tags:
+        - IAM
+      summary: Revoke a principal
+      description: >-
+        Revokes, for good, a `principal` the caller's IAM tokens or
+        `On-Behalf-Of` assertions act for in the project. Work started for it
+        (a generation, a session turn, a task dispatch, an orchestration run,
+        a trigger firing) resolves no caller from then on: its next step,
+        a resume included, fails `WORK_AUTHORITY_MISSING`. Revoking a principal
+        already revoked is `204` too.
+      operationId: revokeIamPrincipal
+      x-iam-action: iam:RevokePrincipal
+      x-iam-resource-type: iam_principal
+      x-soat-agent-exclude: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IamPrincipalRevocationRequest'
+      responses:
+        '204':
+          description: The principal is revoked
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:
   securitySchemes:
     bearerAuth:
@@ -169,7 +212,8 @@ components:
       additionalProperties: false
       description: >-
         Exactly one of `policy` and `policy_ids`; neither or both is `400
-        VALIDATION_FAILED`.
+        VALIDATION_FAILED`. `principal` is who the caller issues the token for,
+        recorded in the audit log; it grants nothing.
       properties:
         policy:
           type: object
@@ -201,31 +245,48 @@ components:
             type: string
           example: ['pol_V1StGXR8Z5jdHi6B']
         principal:
-          type: object
-          description: >-
-            Who the caller issues the token for, opaque to the runtime and
-            recorded in the audit log; it grants nothing.
-          additionalProperties: false
-          required:
-            - type
-            - id
-          properties:
-            type:
-              type: string
-              maxLength: 255
-              description: The caller's own kind of principal.
-              example: service
-            id:
-              type: string
-              maxLength: 255
-              description: The caller's own id for it.
-              example: billing-sync
+          $ref: '#/components/schemas/IamPrincipal'
         ttl_seconds:
           type: integer
           minimum: 30
           maximum: 900
           default: 300
           description: Seconds until the token expires.
+    IamPrincipal:
+      type: object
+      description: >-
+        A principal of the caller's own, opaque to the runtime.
+      additionalProperties: false
+      required:
+        - type
+        - id
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: The caller's own kind of principal.
+          example: service
+        id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: The caller's own id for it.
+          example: billing-sync
+    IamPrincipalRevocationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - principal
+      properties:
+        project_id:
+          type: string
+          description: >-
+            The project to revoke it in; defaults to the calling credential's
+            project.
+          example: proj_V1StGXR8Z5jdHi6B
+        principal:
+          $ref: '#/components/schemas/IamPrincipal'
     IamToken:
       type: object
       required:

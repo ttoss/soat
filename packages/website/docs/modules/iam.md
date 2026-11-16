@@ -66,6 +66,16 @@ It answers `201 { "token", "expires_at" }`.
 - An `mcp` tool called on the token carries the bound and `principal` encrypted in its [assertion](./tools.md#tool-assertions); a tool server calling back with that assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) is capped by them, and its audit entries record `principal` under `detail.on_behalf_of_principal`.
 - A request on the token may itself carry [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a call made in the token's project: it is held to the token's bound ∩ the assertion's authority, and so is work it starts.
 
+### Revoking a principal
+
+Work stores the `principal` it acts for. When the caller's own principal goes away (its user deleted, its key revoked), [`POST /api/v1/iam/principal-revocations`](/docs/api/iam/revoke-iam-principal) revokes it in the project, for good; it needs `iam:RevokePrincipal` on `srn:<project_id>:iam_principal:*`:
+
+```json
+{ "principal": { "type": "service", "id": "billing-sync" } }
+```
+
+It answers `204`, also for a principal already revoked. `project_id` defaults to the credential's project. From then on every work acting for that principal in the project (a generation and its `tool-outputs` resumes, a session turn, a task dispatch, an orchestration run, a trigger firing) resolves no caller: its next step fails `WORK_AUTHORITY_MISSING`, whoever resumes it. Work for another principal on the same key runs.
+
 ## Policy Documents
 
 A policy document is a JSON object of statements:

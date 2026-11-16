@@ -166,6 +166,19 @@ describe('work holding no authority has one answer', () => {
     ]);
   });
 
+  test('a stored authority becomes a caller only in resolveWork, which asks whether its actsFor is revoked', () => {
+    assert.deepEqual(srcFilesMatching(/\bworkTerms\(/), ['middleware/auth.ts']);
+    const source = code(path.join(serverDir, 'src/middleware/auth.ts'));
+    const start = source.indexOf('const resolveWork = ');
+    assert.ok(start >= 0, 'resolveWork not found');
+    const body = source.slice(start, source.indexOf('\n};', start));
+    assert.match(body, /\bworkTerms\(/);
+    assert.match(
+      body,
+      /isPrincipalRevoked\(\{[\s\S]*principal:\s*authority\.actsFor/
+    );
+  });
+
   test('only dispatchApiRequest attaches work to an in-process request', () => {
     assert.deepEqual(srcFilesMatching(/\battachWork\(/), [
       'lib/inProcessApi.ts',
