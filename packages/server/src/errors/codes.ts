@@ -315,7 +315,7 @@ export const ERROR_CODES = {
   IAM_TOKEN_ISSUER_NOT_ALLOWED: {
     httpStatus: 403,
     description:
-      'Only an API key scoped to one project issues an IAM token. A user token, an unscoped key, a project-scoped token (OAuth, trigger, run or IAM) and a request carrying `On-Behalf-Of` are refused.',
+      'Only an API key scoped to one project issues an IAM token. A user token, an unscoped key, a project-scoped token (OAuth or IAM) and a request carrying `On-Behalf-Of` are refused.',
   },
   CREDENTIAL_NARROWED: {
     httpStatus: 403,

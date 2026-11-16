@@ -193,7 +193,7 @@ paths:
       tags:
         - API Keys
       summary: Update an API key
-      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an unrestricted admin (a login, or a key bound to no project and narrowed by no policy) can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise). A request narrowed beyond its credential's own grant (OAuth, trigger, run or IAM token, or `On-Behalf-Of`) never updates a key (`403 CREDENTIAL_NARROWED`).
+      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an unrestricted admin (a login, or a key bound to no project and narrowed by no policy) can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise). A request narrowed beyond its credential's own grant (an OAuth or IAM token, `On-Behalf-Of`, or a call durable work makes under its stored authority) never updates a key (`403 CREDENTIAL_NARROWED`).
       operationId: updateApiKey
       x-iam-action: api-keys:UpdateApiKey
       x-iam-resource-type: apiKey

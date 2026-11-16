@@ -34,7 +34,7 @@ type Issuer = {
 /**
  * Only an API key scoped to one project issues a token: the token is that key
  * held to a bound, so a user login, an unscoped key and every project-scoped
- * token (OAuth, trigger, run, IAM) are refused. A key narrowed by
+ * token (OAuth, IAM) are refused. A key narrowed by
  * `On-Behalf-Of` is refused too: the token would not carry that narrowing.
  */
 export const assertIamTokenIssuer = (args: {
