@@ -12,6 +12,7 @@ import {
   updateApiKey,
 } from 'src/lib/apiKeys';
 import { buildSrn } from 'src/lib/iam';
+import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
@@ -199,19 +200,21 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     },
   });
 
-  const apiKey = await createApiKey({
-    userId: requireCallerUser(ctx, 'api-keys:CreateApiKey').id,
-    name,
-    projectId: projectResult.id,
-    policyIds: boundedPolicyIds,
-  });
-
   // Self-service — any authenticated caller may create a key for themselves,
   // so there is no allow/deny branch to record; this is the one point that
   // makes the mutation visible to the audit log at all.
+  const userId = requireCallerUser(ctx, 'api-keys:CreateApiKey').id;
   recordAuthorizationDecision(ctx, {
     action: 'api-keys:CreateApiKey',
     allowed: true,
+  });
+  await admitAuthorized(ctx, 'api-keys:CreateApiKey');
+
+  const apiKey = await createApiKey({
+    userId,
+    name,
+    projectId: projectResult.id,
+    policyIds: boundedPolicyIds,
   });
 
   ctx.status = 201;
@@ -232,7 +235,7 @@ apiKeysRouter.get('/api-keys/:api_key_id', async (ctx: Context) => {
     action: 'api-keys:GetApiKey',
   });
 
-  requireOwnerOrAdmin(ctx, {
+  await requireOwnerOrAdmin(ctx, {
     ownerPublicId: apiKey.user_id,
     action: 'api-keys:GetApiKey',
   });
@@ -275,7 +278,7 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     });
   }
 
-  requireOwnerOrAdmin(ctx, {
+  await requireOwnerOrAdmin(ctx, {
     ownerPublicId: existing.user_id,
     action: 'api-keys:UpdateApiKey',
   });
@@ -333,7 +336,7 @@ apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
     action: 'api-keys:DeleteApiKey',
   });
 
-  requireOwnerOrAdmin(ctx, {
+  await requireOwnerOrAdmin(ctx, {
     ownerPublicId: existing.user_id,
     action: 'api-keys:DeleteApiKey',
   });

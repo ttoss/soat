@@ -382,6 +382,16 @@ export const ERROR_CODES = {
     description:
       "A deploy replaced a resource — the handler answered a new `physical_resource_id` — and the superseded resource could not be deleted, so it is still live while the formation's ledger already points at the replacement. The deploy itself succeeded: the desired state is realised, and this is carried on the formation (and on its operation) rather than thrown, so it never appears as a response status. `meta.failures` names each un-deleted resource as `{ logical_id, resource_type, physical_resource_id, error }`. Each one stays on the formation as pending cleanup and is retried on the next deploy and on teardown; resolve whatever refused the delete and deploy again.",
   },
+  ADMISSION_REFUSED: {
+    httpStatus: 403,
+    description:
+      "The deployment's registered admission service refused this write. The response carries the service's own status, `code`, `message` and `meta`, not this code; this entry documents where such an answer comes from.",
+  },
+  ADMISSION_UNAVAILABLE: {
+    httpStatus: 502,
+    description:
+      "The deployment's registered admission service is asked about this write and did not answer: it was unreachable, timed out, answered a status outside 2xx and 4xx, or refused with a body outside the protocol. The write did not happen. `meta.action` names the write.",
+  },
   FORMATION_HANDLER_FAILED: {
     httpStatus: 502,
     description:

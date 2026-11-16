@@ -389,3 +389,51 @@ export const getDeclaredQueryParams = (args: {
     ...queryParamNames(operation.parameters),
   ]);
 };
+
+export type OperationIam = {
+  action: string;
+  resourceType: string | null;
+  /** The response statuses the operation declares. */
+  statuses: ReadonlySet<number>;
+};
+
+const readOperationIam = (operation: unknown): OperationIam | null => {
+  if (!isObjectRecord(operation)) return null;
+  const action = operation['x-iam-action'];
+  if (typeof action !== 'string') return null;
+  const resourceType = operation['x-iam-resource-type'];
+  const responses = isObjectRecord(operation.responses)
+    ? operation.responses
+    : {};
+  return {
+    action,
+    resourceType: typeof resourceType === 'string' ? resourceType : null,
+    statuses: new Set(Object.keys(responses).map(Number)),
+  };
+};
+
+/** The action and resource type a route's operation declares, if any. */
+export const getOperationIam = (args: {
+  method: string;
+  path: string;
+}): OperationIam | null => {
+  const method = args.method.toLowerCase();
+  if (!HTTP_METHODS.has(method)) return null;
+  const pathItem = getMergedOpenApiSpec().paths[normalizeRoutePath(args.path)];
+  return isObjectRecord(pathItem) ? readOperationIam(pathItem[method]) : null;
+};
+
+const WRITE_METHODS = ['post', 'put', 'patch', 'delete'];
+
+/** Every action a write operation (`POST`/`PUT`/`PATCH`/`DELETE`) declares. */
+export const listWriteActions = (): Set<string> => {
+  const actions = new Set<string>();
+  for (const pathItem of Object.values(getMergedOpenApiSpec().paths)) {
+    if (!isObjectRecord(pathItem)) continue;
+    for (const method of WRITE_METHODS) {
+      const iam = readOperationIam(pathItem[method]);
+      if (iam) actions.add(iam.action);
+    }
+  }
+  return actions;
+};

@@ -28,7 +28,7 @@ import {
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { toResourceRef } from './resourceVersions';
-import type { StoredError } from './storedError';
+import type { OwnStoredError, StoredError } from './storedError';
 import type { VersionedWrite } from './writePrecondition';
 import type { Writer } from './writerRule';
 
@@ -334,7 +334,7 @@ const casesOf = (playbook: PlaybookRow): Promise<number> => {
  */
 const deletionBlocker = async (
   playbook: PlaybookRow
-): Promise<StoredError | null> => {
+): Promise<OwnStoredError | null> => {
   const cases = await casesOf(playbook);
   if (cases > 0) {
     return {

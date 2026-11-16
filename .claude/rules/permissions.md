@@ -89,6 +89,17 @@ test that fails when a new site skips it.
   agent reads or writes is checked by the gate; `agentRunAs.test.ts` › a
   document the caller names is checked as the caller.
 
+## Admission only refuses
+
+- A declared write asks the deployment's admission service through
+  `assertAdmitted` (`lib/admission.ts`), after its authorization allowed it, at
+  two chokepoints: `admissionMiddleware` (`middleware/admission.ts`, REST and
+  `builtin`) and `defineFormationModule` (create, update). A route authorizing
+  outside `isAllowed`/`resolveProjectIds` asks through `admitAuthorized`.
+  `tests/harness/admissionChokepoint.test.mjs`.
+- A refusal or no answer refuses; never turn either into a pass.
+  `tests/unit/tests/rest/admission.test.ts`.
+
 ## Agents, tokens, keys
 
 - An agent's `run_as` (`AGENT_RUN_AS`, `lib/agentRunAs.ts`) states what its
