@@ -135,7 +135,7 @@ const underlyingEditChecks = async (args: {
  * `tools:CallTool` on the tool, and whatever the call performs in-process
  * (`underlyingEditChecks`) — a `builtin` action, or a held `write_memory`
  * call's memory writes. That work runs under the proposer's credential or the
- * agent's boundary, so nothing else on this path asks whether the approver
+ * agent's caps, so nothing else on this path asks whether the approver
  * could have performed it.
  *
  * The tool row is consulted only for the second half; `tools:CallTool` is

@@ -162,7 +162,7 @@ const buildGenerationArgs = (args: {
     authority: captureAuthority({ authUser: ctx.authUser }),
     authUser: ctx.authUser,
     toolContext: parseToolContextBody(body.tool_context),
-    actorId: ctx.authUser?.work?.actor ?? undefined,
+    actorId: ctx.authUser?.actor ?? undefined,
     knowledgeConfig: toObjectOrUndefined(body.knowledge_config),
     actionId: typeof body.action_id === 'string' ? body.action_id : undefined,
     metadata: isRecord(body.metadata) ? body.metadata : undefined,

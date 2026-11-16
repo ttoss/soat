@@ -55,7 +55,7 @@ Ingestion path: [Files](/docs/modules/files) → [Documents](/docs/modules/docum
 Three independent scopes:
 
 - **[IAM](/docs/modules/iam) and [Policies](/docs/modules/policies)** — the caller's `resource:Action` permissions, enforced identically across REST, MCP, CLI, and SDK.
-- **`policy_ids` on the agent** — a ceiling on which `builtin` actions the agent may perform; a generation runs as the caller ∩ these, so an agent can never exceed either.
+- **`policy_ids` on the agent** — a ceiling on every tool call the agent makes (each `builtin` action, and `tools:CallTool` on an `http`, `mcp` or `pipeline` tool); a generation runs as the caller ∩ these, so an agent can never exceed either.
 - **[Secrets](/docs/modules/secrets)** — encrypted provider credentials referenced by [AI Providers](/docs/modules/ai-providers); no key travels in a request body or instructions.
 
 ### Making the harness reproducible
@@ -177,10 +177,10 @@ Whether a wording change improved anything is an eval, not a judgment.
 
 Promote by itself. The platform owns the *queue*, the *recurrence signal*, and the *verdict*; a human owns the judgment: rewording an instruction, encoding a guardrail `deny`, and promoting a canary stay human-gated.
 
-The pieces for a self-modifying loop exist: a [`builtin` tool](/docs/modules/tools#builtin) can expose `update-agent`, `update-guardrail`, `set-agent-release`, `start-eval-run`, `promote-agent-release`, so an agent with those actions and a permitting credential can propose changes to its own definitions, with [eval-gated promotion](/docs/modules/agents#eval-gated-promotion) as the deterministic brake. Two boundaries mark where platform enforcement ends:
+The pieces for a self-modifying loop exist: a [`builtin` tool](/docs/modules/tools#builtin) can expose `update-agent`, `update-guardrail`, `set-agent-release`, `start-eval-run`, `promote-agent-release`, so an agent with those actions and a permitting credential can propose changes to its own definitions, with [eval-gated promotion](/docs/modules/agents#eval-gated-promotion) as the deterministic brake. Two limits mark where platform enforcement ends:
 
 - **The promotion gate verifies evidence; it does not produce it.** `promote` fails closed (`409 PROMOTION_GATE_UNMET`) until a passing run pinned to the canary exists; running the eval is an explicit call outside the gate, only as trustworthy as its scorers and dataset.
-- **`policy_ids` ceiling only `builtin` actions.** An agent reaching the platform through an `http` or `mcp` tool is outside that boundary; only a [guardrail](/docs/modules/guardrails) at tool, agent, or project scope reaches those calls.
+- **`policy_ids` gate every call, not what an external tool does with it.** A `builtin` action is checked per action; an `http`, `mcp` or `pipeline` tool as `tools:CallTool` on the tool ([Resource-scoped policies](/docs/modules/agents#resource-scoped-policies)). What the target then does is its own: it reaches the platform under the agent's `policy_ids` only when it calls back with the call's [`On-Behalf-Of` assertion](/docs/modules/tools#writing-on-behalf-of-a-tool-call). A [guardrail](/docs/modules/guardrails) at tool, agent, or project scope reaches every call.
 
 Deciding what the system should optimize is not a layer SOAT automates.
 

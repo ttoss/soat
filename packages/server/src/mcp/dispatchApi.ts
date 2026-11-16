@@ -47,7 +47,7 @@ export const dispatchMcpApiRequest = async (args: {
     // The caller's credential for this MCP request, with no default: a call
     // that arrives without one is refused by the same auth middleware that
     // refuses it over the wire. Sharing a process never implies sharing authority.
-    headers: { authorization: getApiHeaders().authorization ?? '' },
+    as: { authorization: getApiHeaders().authorization ?? '' },
     body: args.body,
     wrapError: (response) => {
       const denial = readForwardedDenial({ body: response.body });

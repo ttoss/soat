@@ -12,7 +12,11 @@ import {
   type VerifiedToken,
   verifyToken,
 } from '../lib/signedTokens';
-import type { CredentialTerms, WorkAuthority } from '../lib/workAuthority';
+import {
+  type CredentialTerms,
+  type WorkAuthority,
+  workAuthorityMissing,
+} from '../lib/workAuthority';
 import {
   type BoundClaims,
   boundIdentityFields,
@@ -316,6 +320,22 @@ export const authUserOfWork = async (args: {
   });
 };
 
+/**
+ * The caller stored work acts as, or the one refusal of work holding no
+ * authority: none stored, or one naming a user or key that is gone.
+ */
+export const workCaller = async (args: {
+  db: Context['db'];
+  authority: WorkAuthority | null;
+  work: string;
+}): Promise<AuthUser> => {
+  const authUser =
+    args.authority &&
+    (await authUserOfWork({ db: args.db, authority: args.authority }));
+  if (!authUser) throw workAuthorityMissing({ work: args.work });
+  return authUser;
+};
+
 const resolveBearer = async (args: {
   db: Context['db'];
   authHeader: string | undefined;
@@ -346,17 +366,15 @@ export const verifyApiKeyToken = async (
 export const authMiddleware = async (ctx: Context, next: Next) => {
   const work = attachedWork(ctx.req);
   if (work) {
-    const authUser = await authUserOfWork({
+    const authUser = await workCaller({
       db: ctx.db,
       authority: work.authority,
+      work: `The call to ${ctx.method} ${ctx.path}`,
     });
-    ctx.authUser = authUser && {
+    ctx.authUser = {
       ...authUser,
-      work: {
-        trigger: work.authority.trigger,
-        work: work.authority.work,
-        actor: work.actor,
-      },
+      work: { trigger: work.authority.trigger, work: work.authority.work },
+      actor: work.actor,
     };
     await next();
     return;

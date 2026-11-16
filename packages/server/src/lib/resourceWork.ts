@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { authUserOfWork } from '../middleware/auth';
+import { workCaller } from '../middleware/auth';
 import { buildSrn } from './iam';
 import {
   RESOURCE_GRANT_PRINCIPALS,
@@ -27,9 +27,10 @@ type ResourceWork = {
 const assertGrantStarts = async (
   args: ResourceWork & { starts: CarriedAction[] }
 ) => {
-  const authUser = await authUserOfWork({
+  const authUser = await workCaller({
     db,
     authority: resourceGrantAuthority(args),
+    work: `The ${RESOURCE_GRANT_PRINCIPALS[args.carrier]} '${args.id}'`,
   });
   for (const start of args.starts) {
     const resource = buildSrn({
@@ -37,7 +38,7 @@ const assertGrantStarts = async (
       resourceType: start.resourceType,
       resourceId: start.resourceId,
     });
-    const allowed = await authUser?.isAllowed({
+    const allowed = await authUser.isAllowed({
       projectPublicId: args.projectPublicId,
       action: start.action,
       resource,

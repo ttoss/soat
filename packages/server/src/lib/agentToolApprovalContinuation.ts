@@ -69,7 +69,7 @@ const proposingActorId = async (
 };
 
 /**
- * The proposing agent's boundary as it stands now, the same cap the agent's
+ * The proposing agent's caps as they stand now, the same the agent's
  * own calls are held to.
  */
 const proposingAgentAuthority = async (args: {

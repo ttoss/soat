@@ -88,9 +88,14 @@ export type AuthUser = {
   oauthScope?: string;
   /**
    * Set when stored work makes the request in-process: the trigger whose
-   * firing began its chain, the work it drives, and the end user it serves.
+   * firing began its chain and the work it drives.
    */
-  work?: { trigger: string | null; work: string | null; actor?: string | null };
+  work?: { trigger: string | null; work: string | null };
+  /**
+   * The end user the request serves, from the in-process work or the
+   * `On-Behalf-Of` assertion that names one; never caller-written.
+   */
+  actor?: string | null;
   /** Set for an IAM token (`POST /iam/tokens`): what the audit log records. */
   iamToken?: { jti: string; principal?: { type: string; id: string } };
   /**

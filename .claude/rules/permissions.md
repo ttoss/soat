@@ -48,8 +48,11 @@ test that fails when a new site skips it.
   it, written through `storedAuthority`. Add a new durable model to
   `DURABLE_MODELS`. `tests/harness/workAuthority.test.mjs`.
 - Work storing none refuses through `requireWorkAuthority`
-  (`WORK_AUTHORITY_MISSING`); never fall back to another identity.
-  `tests/unit/tests/rest/workAuthority.test.ts` › work holding no authority.
+  (`WORK_AUTHORITY_MISSING`); never fall back to another identity. Work acts
+  as a caller only through `workCaller` (`middleware/auth.ts`), which answers
+  the same for an authority that no longer resolves.
+  `tests/unit/tests/rest/workAuthority.test.ts` › work holding no authority,
+  `workAuthority.test.mjs` › work acts as a caller only through workCaller.
 - Work calls the API in process with its authority as a value
   (`dispatchApiRequest` → `attachWork`), never a minted token or an
   `Authorization` header. `workAuthority.test.mjs` › only the auth middleware

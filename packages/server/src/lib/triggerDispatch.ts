@@ -3,7 +3,7 @@ import { db } from 'src/db';
 
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
-import { authUserOfWork } from '../middleware/auth';
+import { workCaller } from '../middleware/auth';
 import { authorizationDenied } from './authorizationDenial';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { principalOfAuthority } from './principals';
@@ -161,25 +161,17 @@ const resolveFiringIdentity = async (args: {
   authority: WorkAuthority | null;
 }): Promise<{ authority: WorkAuthority; actedAs: FiringPrincipal }> => {
   const { trigger } = args;
-  const authority = requireWorkAuthority({
-    authority: args.authority,
-    work: `Firing of trigger '${trigger.publicId as string}'`,
-  });
+  const work = `Firing of trigger '${trigger.publicId as string}'`;
+  const authority = requireWorkAuthority({ authority: args.authority, work });
   const projectPublicId = authority.project;
-  if (!projectPublicId) {
-    throw workAuthorityMissing({
-      work: `Firing of trigger '${trigger.publicId as string}'`,
-    });
-  }
-  const identity = await authUserOfWork({ db, authority });
-  const canStart =
-    identity !== undefined &&
-    (await mayStart({
-      isAllowed: identity.isAllowed,
-      projectPublicId,
-      type: readTargetType(trigger.targetType as string),
-      id: trigger.targetId as string,
-    }));
+  if (!projectPublicId) throw workAuthorityMissing({ work });
+  const identity = await workCaller({ db, authority, work });
+  const canStart = await mayStart({
+    isAllowed: identity.isAllowed,
+    projectPublicId,
+    type: readTargetType(trigger.targetType as string),
+    id: trigger.targetId as string,
+  });
   if (!canStart) {
     throw authorizationDenied({
       principal: { type: 'trigger', id: trigger.publicId as string },

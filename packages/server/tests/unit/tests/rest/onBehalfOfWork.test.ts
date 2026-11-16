@@ -196,6 +196,24 @@ describe('work a capped callback starts', () => {
       expect(capped.status).toBe(403);
     });
 
+    test('records the actor the callback serves', async () => {
+      const actor = await turn
+        .api()
+        .post('/api/v1/actors')
+        .send({ project_id: turn.projectId, name: 'obo end user' });
+      expect(actor.status).toBe(201);
+      const call = await authenticatedTestClient(projectKey)
+        .post(`/api/v1/tools/${mcpToolId}/call`)
+        .send({ action: 'echo', input: {}, actor_id: actor.body.id });
+      expect(call.status).toBe(200);
+
+      const { id } = await readThroughTurn(mcpAssertions().at(-1) as string);
+
+      const gen = await turn.api().get(`/api/v1/generations/${id}`);
+      expect(gen.status).toBe(200);
+      expect(gen.body.actor_id).toBe(actor.body.id);
+    });
+
     test('stores the cap, so its work later is capped', async () => {
       const { id } = await readThroughTurn(await cappedAssertion());
       const gen = await db.Generation.findOne({ where: { publicId: id } });

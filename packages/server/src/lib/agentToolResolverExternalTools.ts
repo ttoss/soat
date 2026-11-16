@@ -91,14 +91,14 @@ export const executeSoatTool = async (args: {
           promise: dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
-            authority: turnAuthority(args),
-            actor: args.toolContext?.actor_id ?? null,
-            headers: {
-              ...args.buildContextHeaders({
-                toolContext: args.toolContext,
-                contextKeys: args.contextKeys,
-              }),
+            as: {
+              authority: turnAuthority(args),
+              actor: args.toolContext?.actor_id ?? null,
             },
+            headers: args.buildContextHeaders({
+              toolContext: args.toolContext,
+              contextKeys: args.contextKeys,
+            }),
             body,
             wrapError: (response) => {
               log('soat tool result: %s status=%d', toolId, response.status);

@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
-import { type AgentAuthority, boundarySets } from './agentAuthority';
+import { type AgentAuthority, agentCapSets } from './agentAuthority';
 import type { AssertionAuthority } from './assertionAuthority';
 import type { PolicySets } from './iam';
 import { authUserUnder, turnAuthority } from './turnAuthority';
@@ -23,7 +23,7 @@ export type SenderCredential = Pick<
  * under `run_as: agent`, the authority the turn's calls run under is resolved
  * (`turnAuthority`). A sender with neither sends nothing
  * (`meterToolExecution`). `agentAuthority` is the calling agent's, as every
- * `builtin` call of the turn is held to its boundary.
+ * `builtin` call of the turn is held to its caps.
  */
 export type AssertionSender = {
   caller?: SenderCredential;
@@ -42,7 +42,7 @@ const credentialOf = async (
 
 /**
  * The authority a call's assertion seals: the sender's credential in the
- * tool's project ∩ the agent's boundary. A sender with no credential, or
+ * tool's project ∩ the agent's caps. A sender with no credential, or
  * one reaching no further than another project, allows nothing. A
  * generation's stored identity is read when the assertion returns, since the
  * row may not exist yet when its tools are resolved.
@@ -66,7 +66,7 @@ export const resolveSenderAuthority = async (args: {
   return {
     sets: [
       ...(credentialSets.length > 0 ? credentialSets : NOTHING),
-      ...boundarySets(sender.agentAuthority),
+      ...agentCapSets(sender.agentAuthority),
     ],
     ...(principal ? { principal } : {}),
   };

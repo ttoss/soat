@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 SOAT forwards the caller's credential into every `builtin` action an agent performs, so a chain is capped by the caller's token. That cap is not least privilege: a read-only summarizer running under a caller who may write documents executes at the caller's ceiling.
 
-An agent's `policy_ids` name stored policies that limit which `builtin` actions that agent may perform, whoever calls it. Every generation runs as the caller ∩ those policies, as with [API keys](/docs/modules/api-keys#permission-inheritance).
+An agent's `policy_ids` name stored policies that limit what that agent may do, whoever calls it: each `builtin` action, and every `http`, `mcp` or `pipeline` tool as `tools:CallTool`. Every generation runs as the caller ∩ those policies, as with [API keys](/docs/modules/api-keys#permission-inheritance).
 
 You give alice broad document permissions, bind an agent to a document-writing tool, watch the agent's write be refused by a read-only policy, then perform the same write directly as alice.
 
@@ -103,7 +103,7 @@ A [project](/docs/modules/projects#examples) and a local Ollama [AI provider](/d
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-PROJECT_ID=$(soat create-project --name "Boundary Project" | jq -r '.id')
+PROJECT_ID=$(soat create-project --name "Agent Policies Project" | jq -r '.id')
 
 PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
@@ -120,7 +120,7 @@ echo "Provider: $PROVIDER_ID"
 
 ```ts
 const { data: project } = await adminSoat.projects.createProject({
-  body: { name: 'Boundary Project' },
+  body: { name: 'Agent Policies Project' },
 });
 const projectId = project!.id;
 
@@ -142,7 +142,7 @@ const providerId = provider!.id;
 PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Boundary Project"}' | jq -r '.id')
+  -d '{"name":"Agent Policies Project"}' | jq -r '.id')
 
 PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -218,10 +218,10 @@ Alice may read and write every document in the project. See [Users](/docs/module
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-ALICE_ID=$(soat create-user --username alice-boundary --password Alice1234! | jq -r '.id')
+ALICE_ID=$(soat create-user --username alice-agent-policies --password Alice1234! | jq -r '.id')
 
 POLICY_ID=$(soat create-policy \
-  --name "alice-boundary-full-documents" \
+  --name "alice-agent-policies-full-documents" \
   --document '{
     "statement": [
       {
@@ -243,7 +243,7 @@ soat attach-user-policies \
   --user-id "$ALICE_ID" \
   --policy-ids '["'"$POLICY_ID"'"]'
 
-soat login-user --username alice-boundary --password Alice1234!
+soat login-user --username alice-agent-policies --password Alice1234!
 soat configure --profile alice
 ```
 
@@ -252,12 +252,12 @@ soat configure --profile alice
 
 ```ts
 const { data: alice } = await adminSoat.users.createUser({
-  body: { username: 'alice-boundary', password: 'Alice1234!' },
+  body: { username: 'alice-agent-policies', password: 'Alice1234!' },
 });
 
 const { data: policy } = await adminSoat.policies.createPolicy({
   body: {
-    name: 'alice-boundary-full-documents',
+    name: 'alice-agent-policies-full-documents',
     document: {
       statement: [
         {
@@ -283,7 +283,7 @@ await adminSoat.users.attachUserPolicies({
 });
 
 const { data: aliceSession } = await soat.users.loginUser({
-  body: { username: 'alice-boundary', password: 'Alice1234!' },
+  body: { username: 'alice-agent-policies', password: 'Alice1234!' },
 });
 
 const aliceSoat = new SoatClient({
@@ -299,13 +299,13 @@ const aliceSoat = new SoatClient({
 ALICE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"username":"alice-boundary","password":"Alice1234!"}' | jq -r '.id')
+  -d '{"username":"alice-agent-policies","password":"Alice1234!"}' | jq -r '.id')
 
 POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"name\": \"alice-boundary-full-documents\",
+    \"name\": \"alice-agent-policies-full-documents\",
     \"document\": {
       \"statement\": [
         {
@@ -331,7 +331,7 @@ curl -s -X PUT "$SOAT_BASE_URL/api/v1/users/$ALICE_ID/policies" \
 
 ALICE_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
-  -d '{"username":"alice-boundary","password":"Alice1234!"}' | jq -r '.token')
+  -d '{"username":"alice-agent-policies","password":"Alice1234!"}' | jq -r '.token')
 ```
 
 </TabItem>

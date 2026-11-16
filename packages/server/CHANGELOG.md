@@ -7,6 +7,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 * fix(evaluations)!: an eval run records its agent and definition; a promotion gate accepts only a run of the promoted agent (#1946) ([6c207da](https://github.com/ttoss/soat/commit/6c207dab3fc5c97da54f0680deff37dea692cb5e)), closes [#1946](https://github.com/ttoss/soat/issues/1946)
 * feat(triggers)!: inbound trigger hook accepts only the timestamped signature (#1940) ([ac75c1d](https://github.com/ttoss/soat/commit/ac75c1d879eeec4cc31a34803b2dbe1ef8cb3989)), closes [#1940](https://github.com/ttoss/soat/issues/1940)
+* feat(iam)!: one gate for every agent tool call; what the caller names is checked as the caller (#1936) ([33946f7](https://github.com/ttoss/soat/commit/33946f72736d36420ea5b6970a25e233eb2a197d)), closes [#1936](https://github.com/ttoss/soat/issues/1936)
 
 ### Bug Fixes
 
@@ -24,8 +25,13 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 * the inbound trigger hook refuses `X-Soat-Signature:
   sha256=<hex>` with `401`; sign `t=<unix>,v1=<hex(HMAC-SHA256(secret,
   "<t>.<body>"))>` instead.
+* every agent tool call, `write_memory`, the stored knowledge search and an OAuth connection's use are checked under the turn's authority; what the caller names (a `document` or `tool_output` message, a `knowledge_config` override, a conversation turn's `agent_id`, a tools/call `actor_id`) is checked as the caller.
 
 # [0.111.0](https://github.com/ttoss/soat/compare/v0.110.0...v0.111.0) (2026-11-14)
+
+* feat(iam)!: tools and registered formation types hold their writer to what they perform (#1934) ([13853f5](https://github.com/ttoss/soat/commit/13853f50b80229d728d1b9e4b073ed2b5c071081)), closes [#1934](https://github.com/ttoss/soat/issues/1934)
+* feat(iam)!: evals, deciders, ingestion and memory rules and playbooks run under their own policy_ids (#1928) ([bd62817](https://github.com/ttoss/soat/commit/bd6281777a1fecadb4535ad903f641e577230069)), closes [#1928](https://github.com/ttoss/soat/issues/1928)
+* feat(iam)!: a resume only narrows a generation's authority (#1926) ([3b69f41](https://github.com/ttoss/soat/commit/3b69f4137e3ab2a418d2e342443df953aab70d13)), closes [#1926](https://github.com/ttoss/soat/issues/1926)
 
 ### Bug Fixes
 
@@ -39,9 +45,17 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 * **tools:** pin mcp tool definitions and withhold an action that drifts ([#1930](https://github.com/ttoss/soat/issues/1930)) ([9d3667b](https://github.com/ttoss/soat/commit/9d3667b3687e756dca357fcf59b7091da5aa1d00)), closes [#1915](https://github.com/ttoss/soat/issues/1915)
 * **usage:** meter native write_memory calls as tool_execution events ([#1929](https://github.com/ttoss/soat/issues/1929)) ([1adf714](https://github.com/ttoss/soat/commit/1adf71482470eabb7cb45bc838db121cfb7cef36)), closes [#1921](https://github.com/ttoss/soat/issues/1921)
 
+### BREAKING CHANGES
+
+* a tool's writer holds each action calling it performs; a registered formation type declares `writer` (required).
+* evals, deciders, ingestion rules, memory rules and playbooks require non-empty `policy_ids` and their work runs under them; a start the grant does not allow is `403 ACTION_NOT_HELD`; playbook versions drop their author.
+* a `tool-outputs` resume needs `generations:ResumeGeneration` on the generation and runs under its stored authority held to the submitter's; a task resume and a manual trigger fire narrow the same way.
+
 # [0.110.0](https://github.com/ttoss/soat/compare/v0.109.0...v0.110.0) (2026-11-14)
 
 * feat(iam)!: durable work stores its authority and refuses with none (#1920) ([d46395e](https://github.com/ttoss/soat/commit/d46395eea9d9f51ddf0616c396a64dad2a829f03)), closes [#1920](https://github.com/ttoss/soat/issues/1920)
+* fix(agents)!: gate write_memory through the guardrail gate (#1909) ([12cda30](https://github.com/ttoss/soat/commit/12cda30047eaba5694d8df9400b0f851162bce6a)), closes [#1909](https://github.com/ttoss/soat/issues/1909)
+* feat(agents)!: agents declare run_as; as agent, policy_ids is its own grant (#1919) ([a5c754a](https://github.com/ttoss/soat/commit/a5c754a264f008ffb37da9bbf938923418a3ed27)), closes [#1919](https://github.com/ttoss/soat/issues/1919)
 
 ### BREAKING CHANGES
 
@@ -49,11 +63,14 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
   SOAT_RUN_TOKEN_TTL and TRIGGER_CREATOR_UNAVAILABLE are removed; a firing
   acts as its trigger and survives its creator; OAuth- and trigger-started
   work keeps its identity; work stored before this change runs no tool.
+* project- and agent-scope guardrails gate `write_memory`; a held call files an approval with `tool_id` `native:write_memory`, and editing it needs the memory-write actions on the store.
+* agents declare `run_as`; under `agent`, `policy_ids` is the agent's own grant. The API key error meta `boundary_policy_ids` is `key_policy_ids`.
 
 # [0.109.0](https://github.com/ttoss/soat/compare/v0.108.0...v0.109.0) (2026-11-13)
 
 * feat(iam)!: authority is grant ∩ caps, each absent value stated (#1908) ([93a8a91](https://github.com/ttoss/soat/commit/93a8a9142cdc39b8828bc070c3e0342eca100a5e)), closes [#1908](https://github.com/ttoss/soat/issues/1908)
 * feat(iam)!: one builder for every authorization denial, relayed by every forwarder (#1901) ([48bed07](https://github.com/ttoss/soat/commit/48bed073abadae62b492f8a755e5dc97516d82ce)), closes [#1901](https://github.com/ttoss/soat/issues/1901)
+* feat(memories)!: actor ownership for memories, one mechanism shared with playbook cases (#1897) ([687c257](https://github.com/ttoss/soat/commit/687c257c02e96b74b71e58763417d3a01e84cc84)), closes [#1897](https://github.com/ttoss/soat/issues/1897)
 
 ### Bug Fixes
 
@@ -82,10 +99,14 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
   a key write under On-Behalf-Of and an OAuth consent from a narrowed
   credential; an admin's pinned or capped key is held to its pin and policies;
   a policy a user or key names cannot be deleted.
+* a memory belongs to the actor it is written for; listing, by-id routes, knowledge search, export and the store ledger narrow to `actor_id`.
 
 # [0.108.0](https://github.com/ttoss/soat/compare/v0.107.0...v0.108.0) (2026-11-12)
 
 * feat(tools)!: cap every tool callback by the authority sealed in its assertion (#1888) ([73b9004](https://github.com/ttoss/soat/commit/73b90041e088fced4480e126d0767be052ed3b23)), closes [#1888](https://github.com/ttoss/soat/issues/1888)
+* feat(iam)!: deciders, evals, guardrails, ingestion rules, memory rules and playbook versions go through the writer rule (#1892) ([fd4396c](https://github.com/ttoss/soat/commit/fd4396c73d7567aa8c2e8d0850991f1f99b0603d)), closes [#1892](https://github.com/ttoss/soat/issues/1892)
+* feat(iam)!: one writer rule for every resource that acts later, edits included (#1890) ([c72a570](https://github.com/ttoss/soat/commit/c72a57013b2f6f7b86ce76f7ff883793e7f50367)), closes [#1890](https://github.com/ttoss/soat/issues/1890)
+* feat(iam)!: each JWT kind states its typ; a verifier accepts only its own (#1889) ([19a8bc8](https://github.com/ttoss/soat/commit/19a8bc84e6b643f720e864cba8a41504153d7816)), closes [#1889](https://github.com/ttoss/soat/issues/1889)
 
 ### Bug Fixes
 
@@ -100,6 +121,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### BREAKING CHANGES
 
 * an On-Behalf-Of assertion with no readable `ath` is 400 ON_BEHALF_OF_INVALID (reason bound); every callback is capped by the credential the call was made on, including direct calls and generations that record no caller.
+* deciders, evals, guardrails, ingestion rules, memory rules and playbook versions ask the writer rule on create, every update, version restore and formation apply; a playbook definition write refused for an executor is `403 ACTION_NOT_HELD`.
+* whoever creates or edits an agent, trigger, webhook, user, API key, orchestration or share must hold the policies it carries, the targets it starts and the secrets it sends.
+* login, OAuth, trigger and run tokens issued before this change carry no `typ` and are refused (`401`); sign in again.
 
 # [0.107.0](https://github.com/ttoss/soat/compare/v0.106.1...v0.107.0) (2026-11-12)
 

@@ -29,6 +29,7 @@ export const withOnBehalfOf = (args: {
     authUser: {
       ...authUser,
       onBehalfOf: asserted.onBehalfOf,
+      actor: asserted.onBehalfOf.actor_id,
       ...(principal ? { onBehalfOfPrincipal: principal } : {}),
       terms: {
         ...authUser.terms,
