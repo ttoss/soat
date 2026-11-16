@@ -930,7 +930,7 @@
     },
     "REQUEST_REJECTED": {
       "http_status": 400,
-      "hint": "The HTTP layer rejected the request before it reached a route — method, content type, or size. The message names the reason.",
+      "hint": "The HTTP layer rejected the request before it reached a handler — path, method, content type, or size. The message names the reason; `/openapi.json` lists every path and method.",
       "routes": []
     },
     "RESERVED_PATH": {

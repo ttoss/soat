@@ -24,6 +24,7 @@ import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { hookRawBodyMiddleware } from './middleware/hookRawBody';
 import { requestAttributionMiddleware } from './middleware/requestAttribution';
 import { requestIdMiddleware } from './middleware/requestId';
+import { unansweredApiRequestMiddleware } from './middleware/unansweredApiRequest';
 import { oauthAuthorizationServer } from './oauth/server';
 import { hooksRouter } from './rest/hooks';
 import { restRouter } from './rest/router';
@@ -68,6 +69,7 @@ app.use(auditMiddleware);
 // work is wasted on a request a quota will reject. Mounted after `audit` so the
 // admitting check is audited even on a 429.
 app.use(requestAttributionMiddleware);
+app.use(unansweredApiRequestMiddleware);
 
 // OAuth 2.1 authorization server (issuer side): /authorize, /token, /register,
 // and discovery metadata. Public — the routes do their own validation. The

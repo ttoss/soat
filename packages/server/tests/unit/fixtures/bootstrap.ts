@@ -1,25 +1,61 @@
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
-/**
- * Drives the repeated bootstrap→admin→user→project→policy→noPerm sequence that
- * was copy-pasted across ~12 REST test files. Each call uses `prefix` to keep
- * usernames/project names unique per test file (test DB is shared per file
- * within a run, so collisions across files are avoided by prefixing).
- */
-export const setupProjectWithUsers = async (args: {
+type SetupProjectWithUsersArgs = {
   prefix: string;
   policyActions: string[];
   createOtherProject?: boolean;
   createNoPermUser?: boolean;
-}): Promise<{
+};
+
+type SetupProjectWithUsersResult = {
   adminToken: string;
   userToken: string;
   userId: string;
   projectId: string;
   otherProjectId?: string;
-  policyId: string;
   noPermToken?: string;
-}> => {
+};
+
+const grantPolicy = async (args: {
+  adminToken: string;
+  userId: string;
+  actions: string[];
+}): Promise<string> => {
+  const policyRes = await authenticatedTestClient(args.adminToken)
+    .post('/api/v1/policies')
+    .send({
+      document: { statement: [{ effect: 'Allow', action: args.actions }] },
+    });
+  if (policyRes.status !== 201) {
+    throw new Error(
+      `setupProjectWithUsers: policy ${policyRes.status} ${JSON.stringify(policyRes.body)}`
+    );
+  }
+  const attachRes = await authenticatedTestClient(args.adminToken)
+    .put(`/api/v1/users/${args.userId}/policies`)
+    .send({ policy_ids: [policyRes.body.id] });
+  if (attachRes.status < 200 || attachRes.status >= 300) {
+    throw new Error(`setupProjectWithUsers: attach ${attachRes.status}`);
+  }
+  return policyRes.body.id as string;
+};
+
+/**
+ * Drives the bootstrap→admin→user→project→policy→noPerm sequence. `prefix`
+ * keeps usernames and project names unique per test file.
+ *
+ * `policyActions: []` grants the user nothing: no policy is created, since the
+ * server refuses an empty `action` list.
+ */
+export function setupProjectWithUsers(
+  args: SetupProjectWithUsersArgs & { policyActions: [] }
+): Promise<SetupProjectWithUsersResult & { policyId?: undefined }>;
+export function setupProjectWithUsers(
+  args: SetupProjectWithUsersArgs
+): Promise<SetupProjectWithUsersResult & { policyId: string }>;
+export async function setupProjectWithUsers(
+  args: SetupProjectWithUsersArgs
+): Promise<SetupProjectWithUsersResult & { policyId?: string }> {
   const {
     prefix,
     policyActions,
@@ -54,18 +90,10 @@ export const setupProjectWithUsers = async (args: {
     otherProjectId = otherProjectRes.body.id;
   }
 
-  const policyRes = await authenticatedTestClient(adminToken)
-    .post('/api/v1/policies')
-    .send({
-      document: {
-        statement: [{ effect: 'Allow', action: policyActions }],
-      },
-    });
-  const policyId = policyRes.body.id;
-
-  await authenticatedTestClient(adminToken)
-    .put(`/api/v1/users/${userId}/policies`)
-    .send({ policy_ids: [policyId] });
+  const policyId =
+    policyActions.length === 0
+      ? undefined
+      : await grantPolicy({ adminToken, userId, actions: policyActions });
 
   let noPermToken: string | undefined;
 
@@ -85,7 +113,7 @@ export const setupProjectWithUsers = async (args: {
     policyId,
     noPermToken,
   };
-};
+}
 
 /**
  * Provisions a principal whose policy is SRN-scoped to a single project

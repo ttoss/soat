@@ -81,13 +81,15 @@ some codes.
 **Every** error response uses this shape (`error` is always an object with a
 `code` and a `message`), including:
 
-| Situation                                 | Status | Body                                                                |
-| ----------------------------------------- | ------ | ------------------------------------------------------------------- |
-| Missing or invalid credentials            | `401`  | `code: "UNAUTHORIZED"`, `message: "Unauthorized"`                   |
-| Insufficient permissions                  | `403`  | `code: "FORBIDDEN"`, `meta`: `action`, `resource`, `denied_by`      |
-| Unparseable request body                  | `400`  | `code: "VALIDATION_FAILED"`, `message: "Malformed request body: …"` |
-| Rejected by the HTTP layer before routing | varies | `code: "REQUEST_REJECTED"`                                          |
-| Unhandled server failure                  | `500`  | `code: "INTERNAL_ERROR"`, `message: "Internal Server Error"`        |
+| Situation                                 | Status | Body                                                                    |
+| ----------------------------------------- | ------ | ----------------------------------------------------------------------- |
+| Missing or invalid credentials            | `401`  | `code: "UNAUTHORIZED"`, `message: "Unauthorized"`                       |
+| Insufficient permissions                  | `403`  | `code: "FORBIDDEN"`, `meta`: `action`, `resource`, `denied_by`          |
+| Unparseable request body                  | `400`  | `code: "VALIDATION_FAILED"`, `message: "Malformed request body: …"`     |
+| No route matches the path                 | `404`  | `code: "REQUEST_REJECTED"`, `message: "No route matches GET /api/v1/…"` |
+| Method the path does not serve            | `405`  | `code: "REQUEST_REJECTED"`, with an `Allow` header                      |
+| Rejected by the HTTP layer before routing | varies | `code: "REQUEST_REJECTED"`                                              |
+| Unhandled server failure                  | `500`  | `code: "INTERNAL_ERROR"`, `message: "Internal Server Error"`            |
 
 Each also carries `hint` and `docs_url`, unless the deployment sets
 [`SOAT_OMIT_ERROR_HINTS` or `SOAT_OMIT_ERROR_DOCS_URL`](/docs/self-hosting/configuration#server):
