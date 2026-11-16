@@ -1,16 +1,15 @@
 import { DomainError } from '../errors';
+import { findBuiltinAction, isNativeAction } from './builtinActionCatalog';
 import { isAgentExcludedAction } from './soatAgentActions';
-import { soatTools } from './soatTools';
 
 /**
- * What a `builtin` tool's `actions` array may name, refused at the write so a
- * binding that could never resolve is reported where the author can fix it.
+ * What a `builtin` tool's `actions` array may name (`findBuiltinAction`),
+ * refused at the write so a binding that could never resolve is reported
+ * where the author can fix it.
  */
-const KNOWN_SOAT_ACTIONS = new Set(
-  soatTools.map((tool) => {
-    return tool.name;
-  })
-);
+const isOffered = (action: string): boolean => {
+  return findBuiltinAction(action) !== undefined;
+};
 
 // Action names are kebab-case, matching the MCP tool name derived from the
 // operationId. Passing the camelCase operationId itself is a common mistake, so
@@ -40,13 +39,24 @@ export const validateSoatActions = (actions: string[] | null | undefined) => {
   }
 
   const unknown = actions.filter((action) => {
-    return !KNOWN_SOAT_ACTIONS.has(action);
+    return !isOffered(action);
   });
+  const withheld = unknown.filter(isNativeAction);
+  if (withheld.length > 0) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `SOAT action(s) not offered by this deployment: ${withheld
+        .map((action) => {
+          return `"${action}"`;
+        })
+        .join(', ')}.`
+    );
+  }
   if (unknown.length === 0) return;
   const details = unknown
     .map((action) => {
       const suggestion = camelToKebab(action);
-      return KNOWN_SOAT_ACTIONS.has(suggestion)
+      return isOffered(suggestion)
         ? `"${action}" (did you mean "${suggestion}"?)`
         : `"${action}"`;
     })

@@ -12,11 +12,12 @@ import {
 } from './agentToolResolver';
 import { executeSoatTool } from './agentToolResolverExternalTools';
 import { buildMcpToolExecute } from './agentToolResolverMcp';
+import { findBuiltinAction } from './builtinActionCatalog';
+import { callAddedBuiltinAction } from './builtinAddedActions';
 import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
 import { McpToolError } from './mcpProtocol';
 import { fetchMcpToolListing } from './mcpToolListing';
 import { type McpTransport, openMcpTransport } from './mcpTransport';
-import { soatTools } from './soatTools';
 import { buildContextHeaders } from './toolContext';
 import type { CallableToolDefinition } from './toolsCall';
 import type { ToolExecutionMeter } from './usageToolRecording';
@@ -112,15 +113,27 @@ export const callSoatTool = async (
       `action "${action}" is not available on this tool.`
     );
   }
-  const def = soatTools.find((t) => {
-    return t.name === action;
-  });
-  if (!def) {
+  const found = findBuiltinAction(action);
+  if (!found) {
     throw new DomainError(
       'VALIDATION_FAILED',
       `action "${action}" is not a known SOAT action.`
     );
   }
+  if (found.kind === 'added') {
+    return callAddedBuiltinAction({
+      url: found.url,
+      action,
+      input: mergedInput,
+      meter: args.meter,
+      toolContext: args.toolContext,
+      contextKeys: tool.contextKeys,
+      logToolCallingError: noopLogToolCallingError,
+    }).catch((error: unknown) => {
+      throw toMcpToolDomainError(error) ?? error;
+    });
+  }
+  const { def } = found;
   return executeSoatTool({
     toolName: tool.name,
     def,

@@ -104,6 +104,8 @@ An agent, trigger, webhook, playbook version, decider, eval, ingestion rule or m
 | starts a target                 | the target's start action                                     | `403 ACTION_NOT_HELD`       |
 | names a secret                  | `secrets:UseSecret` on it                                     | `403 FORBIDDEN`             |
 
+A `builtin` tool may name only what the deployment's [builtin catalog](../modules/iam.md#the-builtin-catalog) offers: the native actions it allows, and the actions it adds. An added action holds its writer to the actions the deployment declares for it, and its server receives the call only with the signed assertion ([What a tool server receives](#what-a-tool-server-receives)).
+
 Start actions: `agents:CreateAgentGeneration`, `tools:CallTool`, `deciders:CreateDecision`, `tasks:CreateTask`, `orchestrations:StartRun`, `evaluations:RunEval`. Editing a policy a resource carries is attaching it again, and deleting one it names is `409 POLICY_HAS_DEPENDENTS`. Full table: [The writer rule](../modules/iam.md#the-writer-rule).
 
 An empty `policy_ids` allows nothing; a create without one is `400 VALIDATION_FAILED` where it is required.
@@ -258,7 +260,7 @@ Full reference: [IAM Tokens](../modules/iam.md#iam-tokens).
 
 ## What a tool server receives
 
-An `mcp` tool call carries a signed assertion in `X-Soat-Tool-Assertion`. It names the tool, project, agent, generation and durable work that made the call, and carries the call's authority encrypted in `ath`: the receiver can read the identity claims and cannot read or alter the authority.
+An `mcp` tool call, and a call of an action the deployment [adds to `builtin`](../modules/iam.md#the-builtin-catalog), carries a signed assertion in `X-Soat-Tool-Assertion`. It names the tool, project, agent, generation and durable work that made the call, and carries the call's authority encrypted in `ath`: the receiver can read the identity claims and cannot read or alter the authority.
 
 A tool server that writes back sends the assertion unchanged in `X-Soat-On-Behalf-Of`, with its project's API key or an IAM token that key issued. The request is then held to the key ∩ the authority the call was sent with ∩ the calling agent's `policy_ids` (and the generation's execution identity), and so is any work it starts. The assertion never widens: the principal stays the key.
 

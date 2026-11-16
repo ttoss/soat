@@ -78,6 +78,12 @@ test that fails when a new site skips it.
 - An agent turn's authority is `turnAuthority` (`lib/turnAuthority.ts`);
   every check against it goes through `assertAllowedUnder`. Never evaluate an
   agent's `policy_ids` on their own. `tests/harness/agentTurnGate.test.mjs`.
+- Which actions a `builtin` tool may name is the deployment's catalog's one
+  answer, `findBuiltinAction` (`lib/builtinActionCatalog.ts`). An added action
+  holds its writer to its declared actions (`carriedActionsOfTool`) and
+  reaches its server only through `postMcp`, with the runtime's assertion.
+  `tests/harness/builtinActionCatalog.test.mjs`,
+  `tests/unit/tests/rest/builtinActionCatalog.test.ts`.
 - A stored tool's call crosses `gateToolCall` (`lib/toolCallGate.ts`) on both
   surfaces; classify a new tool type in `TOOL_CALL_AUTHORIZATION` (typecheck
   fails until you do; an unclassified type is checked as a call). Every

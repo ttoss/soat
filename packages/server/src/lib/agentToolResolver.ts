@@ -19,6 +19,7 @@ import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
 import { readForwardedDenial } from './authorizationDenial';
+import { resolveAddedBuiltinActions } from './builtinAddedActions';
 import { HttpToolError, toToolUnreachableError } from './httpToolError';
 import {
   parseResponseMode,
@@ -1133,6 +1134,48 @@ const gateEachCall = (args: {
   return gated;
 };
 
+/** A `builtin` binding: its native actions in-process, its added ones on their server. */
+const resolveBuiltinToolEntry = async (params: {
+  typedTool: AgentToolRow;
+  meter: ToolExecutionMeter;
+  args: ResolveToolByTypeArgs & { projectPublicId?: string };
+}): Promise<Record<string, Tool>> => {
+  const { typedTool, meter, args } = params;
+  return {
+    ...resolveSoatTools({
+      typedTool,
+      meter,
+      agentAuthority: args.agentAuthority,
+      authority: args.authority,
+      projectPublicId: args.projectPublicId,
+      toolContext: args.toolContext,
+      traceId: args.traceId,
+      parentTraceId: args.parentTraceId,
+      rootTraceId: args.rootTraceId,
+      remainingDepth: args.remainingDepth,
+      buildContextHeaders,
+      logToolCallingError,
+    }),
+    ...(await resolveAddedBuiltinActions({
+      toolName: typedTool.name,
+      actions: typedTool.actions ?? [],
+      meter,
+      presetParameters: typedTool.presetParameters,
+      toolContext: args.toolContext,
+      contextKeys: typedTool.contextKeys,
+      logToolCallingError,
+      reportResolutionFailure: ({ reason }) => {
+        reportBindingUnavailable({
+          typedTool,
+          reason,
+          activity: args.activity,
+          unavailable: args.unavailable,
+        });
+      },
+    })),
+  };
+};
+
 const resolveUngatedToolByType = async (
   typedTool: AgentToolRow,
   args: ResolveToolByTypeArgs & { projectPublicId?: string }
@@ -1194,20 +1237,7 @@ const resolveUngatedToolByType = async (
         unavailable: args.unavailable,
       });
     case 'builtin':
-      return resolveSoatTools({
-        typedTool,
-        meter,
-        agentAuthority: args.agentAuthority,
-        authority: args.authority,
-        projectPublicId: args.projectPublicId,
-        toolContext: args.toolContext,
-        traceId: args.traceId,
-        parentTraceId: args.parentTraceId,
-        rootTraceId: args.rootTraceId,
-        remainingDepth: args.remainingDepth,
-        buildContextHeaders,
-        logToolCallingError,
-      });
+      return resolveBuiltinToolEntry({ typedTool, meter, args });
     default: {
       /* A new entry in AGENT_TOOL_TYPES is a type error here until it is
          dispatched. The guard above already handled every unrecognised runtime

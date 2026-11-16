@@ -366,7 +366,16 @@ Drift is checked where a listing is already fetched for a model: [`POST /tools/{
 
 A `builtin` tool exposes the SOAT platform actions listed in `actions`, named as the platform's MCP tools (`get-document`, `search-knowledge`, `create-file`), not REST operationIds (`search-knowledge`, not `searchKnowledge`). Worked example: [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 
-Create/update validates every entry against the registry: an unknown name is `400 VALIDATION_FAILED`; a camelCase name matching a kebab-cased action gets a suggestion (`"searchKnowledge" (did you mean "search-knowledge"?)`).
+Create/update validates every entry against the deployment's [builtin catalog](./iam.md#the-builtin-catalog), on REST, inline on an agent and in a formation: an unknown name, or a native action the deployment does not offer, is `400 VALIDATION_FAILED`; a camelCase name matching a kebab-cased action gets a suggestion (`"searchKnowledge" (did you mean "search-knowledge"?)`).
+
+#### Who serves an action
+
+| Action                   | Served by                                                                                         | Input schema                |
+| ------------------------ | ------------------------------------------------------------------------------------------------- | --------------------------- |
+| Native (`allow`, or all) | The runtime, in-process ([How a builtin action is executed](#how-a-builtin-action-is-executed))   | The operation's REST schema |
+| Added (`add`)            | The deployment's registered MCP server, called with the signed [tool assertion](#tool-assertions) | That server's `tools/list`  |
+
+Both are named `{name}_{action}`, take `preset_parameters`, `tool_context`, `context_keys` and guardrails alike, and are called directly with `action`. A stored tool naming an action the catalog no longer offers keeps it; the agent's surface leaves it out and a direct call is `400`.
 
 A non-2xx action response is `502 TOOL_HTTP_ERROR` with the real status in `meta.tool_status_code`. A `204 No Content` answer (every `delete-*`) yields `null`.
 
@@ -423,7 +432,7 @@ For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), whic
 
 Whoever creates or edits a tool holds what calling it performs ([the writer rule](./iam.md#the-writer-rule)), checked on the tool as the write leaves it, on REST and in a formation (after resolution):
 
-- **`builtin`**: each action in `actions`, on its whole resource type (`list-agents` → `agents:ListAgents` on `srn:<project_id>:agent:*`).
+- **`builtin`**: each native action in `actions`, on its whole resource type (`list-agents` → `agents:ListAgents` on `srn:<project_id>:agent:*`), and what the deployment declares for each [added](./iam.md#the-builtin-catalog) one.
 - **`mcp`** on a [registered MCP server](./iam.md#registered-mcp-servers): what the server declares for each of `actions`, which is required and may name only tools it declares (`400 VALIDATION_FAILED` otherwise).
 - **`pipeline`**: what each step does: its inline tool's, by these rules, or `tools:CallTool` on the tool a `tool_id` step names.
 - Any other tool performs no runtime action.

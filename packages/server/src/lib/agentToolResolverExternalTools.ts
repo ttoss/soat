@@ -11,6 +11,7 @@ import createDebug from 'debug';
 import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import { readForwardedDenial } from './authorizationDenial';
+import { findBuiltinAction } from './builtinActionCatalog';
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
@@ -18,7 +19,7 @@ import {
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
 import { withoutAgentExcludedActions } from './soatAgentActions';
-import { buildSoatActionTarget, soatTools } from './soatTools';
+import { buildSoatActionTarget, type ToolDefinition } from './soatTools';
 import {
   mergePresetParameters,
   stripPresetKeysFromSchema,
@@ -45,7 +46,7 @@ const log = createDebug('soat:tools');
  */
 export const executeSoatTool = async (args: {
   toolName: string;
-  def: (typeof soatTools)[number];
+  def: ToolDefinition;
   rawArgs: Record<string, unknown>;
   meter: ToolExecutionMeter;
   authority: WorkAuthority | null;
@@ -152,7 +153,7 @@ const pinnedProjectParameters = (
 const buildSoatActionTool = (args: {
   toolName: string;
   toolDescription: string | null;
-  def: (typeof soatTools)[number];
+  def: ToolDefinition;
   meter: ToolExecutionMeter;
   presetParameters?: Record<string, unknown>;
   projectPublicId?: string;
@@ -210,6 +211,7 @@ const buildSoatActionTool = (args: {
   });
 };
 
+/** The native actions of a `builtin` tool; `resolveAddedBuiltinActions` resolves the added ones. */
 export const resolveSoatTools = (args: {
   typedTool: {
     name: string;
@@ -244,10 +246,11 @@ export const resolveSoatTools = (args: {
     toolName: args.typedTool.name,
   });
   for (const action of actions) {
-    const def = soatTools.find((t) => {
-      return t.name === action;
-    });
-    if (!def) continue;
+    // A stored row keeps a name the deployment no longer offers; it resolves
+    // to nothing rather than to the action the catalog withholds.
+    const found = findBuiltinAction(action);
+    if (found?.kind !== 'native') continue;
+    const { def } = found;
     const resolvedToolName = `${args.typedTool.name}_${action}`;
     result[resolvedToolName] = buildSoatActionTool({
       toolName: args.typedTool.name,

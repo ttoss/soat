@@ -1,4 +1,4 @@
-import type { soatTools } from './soatTools';
+import type { ToolDefinition } from './soatTools';
 import { filterToolContext } from './toolContext';
 
 /**
@@ -69,7 +69,7 @@ const withMaxCallDepth = (args: {
  * invisible from the outside once the body has been sent.
  */
 export const buildSoatRequestBody = (args: {
-  def: (typeof soatTools)[number];
+  def: ToolDefinition;
   rawArgs: Record<string, unknown>;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
