@@ -185,9 +185,6 @@ paths:
       operationId: getMemoryStore
       x-iam-action: memories:GetMemoryStore
       x-iam-resource-type: memory_store
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       parameters:
         - name: memory_store_id
           in: path
@@ -238,9 +235,6 @@ paths:
       operationId: updateMemoryStore
       x-iam-action: memories:UpdateMemoryStore
       x-iam-resource-type: memory_store
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       parameters:
         - name: memory_store_id
           in: path
@@ -349,9 +343,6 @@ paths:
       operationId: deleteMemoryStore
       x-iam-action: memories:DeleteMemoryStore
       x-iam-resource-type: memory_store
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       parameters:
         - name: memory_store_id
           in: path
@@ -403,9 +394,6 @@ paths:
         store?" is asked — a question no column on a memory row could answer,
         because a skipped write produced no memory at all.
       operationId: listMemoryStoreAssertions
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       x-iam-action: memories:ListMemoryAssertions
       x-iam-resource-type: memory_store
       parameters:
@@ -523,9 +511,6 @@ paths:
       operationId: exportMemories
       x-iam-action: memories:ExportMemories
       x-iam-resource-type: memory_store
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       # Not a tool: the response is a stream with no JSON projection, and an
       # export is deliberately unbounded, so the callable form of "read the
       # memories" is `listMemories`, which is paged.
@@ -593,9 +578,6 @@ paths:
       summary: Get memory store tags
       description: Returns all tags attached to the memory store
       operationId: getMemoryStoreTags
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       x-iam-action: memories:GetMemoryStore
       x-iam-resource-type: memory_store
       parameters:
@@ -643,9 +625,6 @@ paths:
       summary: Replace memory store tags
       description: Replaces all tags on the memory store with the provided tags (not merged)
       operationId: replaceMemoryStoreTags
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       x-iam-action: memories:UpdateMemoryStore
       x-iam-resource-type: memory_store
       parameters:
@@ -707,9 +686,6 @@ paths:
       summary: Merge memory store tags
       description: Merges provided tags into the memory store's existing tags (existing tags are preserved unless overridden)
       operationId: mergeMemoryStoreTags
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       x-iam-action: memories:UpdateMemoryStore
       x-iam-resource-type: memory_store
       parameters:

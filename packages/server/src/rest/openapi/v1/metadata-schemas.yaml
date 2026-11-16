@@ -300,9 +300,6 @@ paths:
       summary: Get a metadata schema
       description: Returns one declaration by id.
       operationId: getMetadataSchema
-      x-soat-resource:
-        kind: metadata_schema
-        from: metadata_schema_id
       x-iam-action: metadata-schemas:GetMetadataSchema
       x-iam-resource-type: metadata_schema
       parameters:
@@ -353,9 +350,6 @@ paths:
         the row, so changing it would silently repoint the declaration at a
         different door — delete it and declare again instead.
       operationId: updateMetadataSchema
-      x-soat-resource:
-        kind: metadata_schema
-        from: metadata_schema_id
       x-iam-action: metadata-schemas:UpdateMetadataSchema
       x-iam-resource-type: metadata_schema
       parameters:
@@ -439,9 +433,6 @@ paths:
         Removes the declaration. Documents already stored keep the metadata they
         hold — the rule governed writes, not rows.
       operationId: deleteMetadataSchema
-      x-soat-resource:
-        kind: metadata_schema
-        from: metadata_schema_id
       x-iam-action: metadata-schemas:DeleteMetadataSchema
       x-iam-resource-type: metadata_schema
       parameters:

@@ -281,9 +281,6 @@ paths:
       operationId: getOrchestration
       x-iam-action: orchestrations:GetOrchestration
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration
-        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
       responses:
@@ -326,9 +323,6 @@ paths:
       operationId: updateOrchestration
       x-iam-action: orchestrations:UpdateOrchestration
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration
-        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
@@ -388,9 +382,6 @@ paths:
       operationId: deleteOrchestration
       x-iam-action: orchestrations:DeleteOrchestration
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration
-        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
       responses:
@@ -438,9 +429,6 @@ paths:
       operationId: listOrchestrationVersions
       x-iam-action: orchestrations:ListOrchestrationVersions
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration
-        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - $ref: './pagination.yaml#/components/parameters/Limit'
@@ -496,9 +484,6 @@ paths:
       operationId: getOrchestrationVersion
       x-iam-action: orchestrations:GetOrchestrationVersion
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration
-        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - name: version
@@ -567,9 +552,6 @@ paths:
       operationId: restoreOrchestrationVersion
       x-iam-action: orchestrations:RestoreOrchestrationVersion
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration
-        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - name: version
@@ -841,9 +823,6 @@ paths:
       operationId: cancelOrchestrationRun
       x-iam-action: orchestrations:CancelRun
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration_run
-        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       responses:
@@ -916,9 +895,6 @@ paths:
       operationId: pauseOrchestrationRun
       x-iam-action: orchestrations:PauseRun
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration_run
-        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       requestBody:
@@ -978,9 +954,6 @@ paths:
       operationId: submitHumanInput
       x-iam-action: orchestrations:SubmitHumanInput
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration_run
-        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       requestBody:
@@ -1054,9 +1027,6 @@ paths:
       operationId: resumeOrchestrationRun
       x-iam-action: orchestrations:ResumeRun
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration_run
-        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       responses:
@@ -1108,9 +1078,6 @@ paths:
       operationId: getOrchestrationRun
       x-iam-action: orchestrations:GetRun
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration_run
-        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       responses:
@@ -1159,9 +1126,6 @@ paths:
       operationId: listOrchestrationRunNodeExecutions
       x-iam-action: orchestrations:GetRun
       x-iam-resource-type: orchestration
-      x-soat-resource:
-        kind: orchestration_run
-        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
         - $ref: './pagination.yaml#/components/parameters/Limit'

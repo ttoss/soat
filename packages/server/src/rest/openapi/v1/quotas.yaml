@@ -252,9 +252,6 @@ paths:
       operationId: getQuota
       x-iam-action: quotas:GetQuota
       x-iam-resource-type: quota
-      x-soat-resource:
-        kind: quota
-        from: quota_id
       parameters:
         - name: quota_id
           in: path
@@ -302,9 +299,6 @@ paths:
       operationId: updateQuota
       x-iam-action: quotas:UpdateQuota
       x-iam-resource-type: quota
-      x-soat-resource:
-        kind: quota
-        from: quota_id
       parameters:
         - name: quota_id
           in: path
@@ -384,9 +378,6 @@ paths:
       operationId: deleteQuota
       x-iam-action: quotas:DeleteQuota
       x-iam-resource-type: quota
-      x-soat-resource:
-        kind: quota
-        from: quota_id
       parameters:
         - name: quota_id
           in: path

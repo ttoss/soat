@@ -145,9 +145,6 @@ paths:
       operationId: getDecider
       x-iam-action: deciders:GetDecider
       x-iam-resource-type: decider
-      x-soat-resource:
-        kind: decider
-        from: decider_id
       parameters:
         - $ref: '#/components/parameters/DeciderId'
       responses:
@@ -191,9 +188,6 @@ paths:
       operationId: updateDecider
       x-iam-action: deciders:UpdateDecider
       x-iam-resource-type: decider
-      x-soat-resource:
-        kind: decider
-        from: decider_id
       parameters:
         - $ref: '#/components/parameters/DeciderId'
         - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
@@ -254,9 +248,6 @@ paths:
       operationId: deleteDecider
       x-iam-action: deciders:DeleteDecider
       x-iam-resource-type: decider
-      x-soat-resource:
-        kind: decider
-        from: decider_id
       parameters:
         - $ref: '#/components/parameters/DeciderId'
       responses:
@@ -300,9 +291,6 @@ paths:
       operationId: listDeciderVersions
       x-iam-action: deciders:ListDeciderVersions
       x-iam-resource-type: decider
-      x-soat-resource:
-        kind: decider
-        from: decider_id
       parameters:
         - $ref: '#/components/parameters/DeciderId'
         - $ref: './pagination.yaml#/components/parameters/Limit'
@@ -351,9 +339,6 @@ paths:
       operationId: getDeciderVersion
       x-iam-action: deciders:GetDeciderVersion
       x-iam-resource-type: decider
-      x-soat-resource:
-        kind: decider
-        from: decider_id
       parameters:
         - $ref: '#/components/parameters/DeciderId'
         - $ref: '#/components/parameters/Version'
@@ -399,9 +384,6 @@ paths:
       operationId: restoreDeciderVersion
       x-iam-action: deciders:RestoreDeciderVersion
       x-iam-resource-type: decider
-      x-soat-resource:
-        kind: decider
-        from: decider_id
       parameters:
         - $ref: '#/components/parameters/DeciderId'
         - $ref: '#/components/parameters/Version'
@@ -486,9 +468,6 @@ paths:
       operationId: createDecision
       x-iam-action: deciders:CreateDecision
       x-iam-resource-type: decider
-      x-soat-resource:
-        kind: decider
-        from: decider_id
       parameters:
         - $ref: '#/components/parameters/DeciderId'
       requestBody:
@@ -695,9 +674,6 @@ paths:
       operationId: getDecision
       x-iam-action: deciders:GetDecision
       x-iam-resource-type: decision
-      x-soat-resource:
-        kind: decision
-        from: decision_id
       parameters:
         - name: decision_id
           in: path

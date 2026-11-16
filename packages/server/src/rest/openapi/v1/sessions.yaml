@@ -173,9 +173,6 @@ paths:
       operationId: getSession
       x-iam-action: agents:GetSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       responses:
@@ -205,9 +202,6 @@ paths:
       operationId: updateSession
       x-iam-action: agents:UpdateSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -254,9 +248,6 @@ paths:
       operationId: deleteSession
       x-iam-action: agents:DeleteSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       responses:
@@ -291,9 +282,6 @@ paths:
       operationId: addSessionMessage
       x-iam-action: agents:SendSessionMessage
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
@@ -371,9 +359,6 @@ paths:
       operationId: generateSessionResponse
       x-iam-action: agents:SendSessionMessage
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - name: wait
@@ -471,9 +456,6 @@ paths:
       operationId: submitSessionToolOutputs
       x-iam-action: agents:SubmitSessionToolOutputs
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -543,9 +525,6 @@ paths:
       operationId: forkSession
       x-iam-action: agents:CreateSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -604,9 +583,6 @@ paths:
       operationId: listSessionForks
       x-iam-action: agents:GetSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: './pagination.yaml#/components/parameters/Limit'
@@ -646,9 +622,6 @@ paths:
       operationId: getSessionTags
       x-iam-action: agents:GetSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       responses:
@@ -678,9 +651,6 @@ paths:
       operationId: replaceSessionTags
       x-iam-action: agents:UpdateSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -720,9 +690,6 @@ paths:
       operationId: mergeSessionTags
       x-iam-action: agents:UpdateSession
       x-iam-resource-type: session
-      x-soat-resource:
-        kind: session
-        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:

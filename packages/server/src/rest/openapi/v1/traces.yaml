@@ -95,9 +95,6 @@ paths:
       operationId: getTrace
       x-iam-action: traces:GetTrace
       x-iam-resource-type: trace
-      x-soat-resource:
-        kind: trace
-        from: trace_id
       parameters:
         - name: trace_id
           in: path
@@ -152,9 +149,6 @@ paths:
       operationId: getTraceTree
       x-iam-action: traces:GetTraceTree
       x-iam-resource-type: trace
-      x-soat-resource:
-        kind: trace
-        from: trace_id
       parameters:
         - name: trace_id
           in: path
@@ -219,9 +213,6 @@ paths:
       operationId: purgeTraceContent
       x-iam-action: traces:PurgeTraceContent
       x-iam-resource-type: trace
-      x-soat-resource:
-        kind: trace
-        from: trace_id
       parameters:
         - name: trace_id
           in: path

@@ -199,9 +199,6 @@ paths:
       operationId: getActor
       x-iam-action: actors:GetActor
       x-iam-resource-type: actor
-      x-soat-resource:
-        kind: actor
-        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -249,9 +246,6 @@ paths:
       operationId: deleteActor
       x-iam-action: actors:DeleteActor
       x-iam-resource-type: actor
-      x-soat-resource:
-        kind: actor
-        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -304,9 +298,6 @@ paths:
       operationId: updateActor
       x-iam-action: actors:UpdateActor
       x-iam-resource-type: actor
-      x-soat-resource:
-        kind: actor
-        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -389,9 +380,6 @@ paths:
       operationId: getActorTags
       x-iam-action: actors:GetActor
       x-iam-resource-type: actor
-      x-soat-resource:
-        kind: actor
-        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -439,9 +427,6 @@ paths:
       operationId: replaceActorTags
       x-iam-action: actors:UpdateActor
       x-iam-resource-type: actor
-      x-soat-resource:
-        kind: actor
-        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -499,9 +484,6 @@ paths:
       operationId: mergeActorTags
       x-iam-action: actors:UpdateActor
       x-iam-resource-type: actor
-      x-soat-resource:
-        kind: actor
-        from: actor_id
       parameters:
         - name: actor_id
           in: path

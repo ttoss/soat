@@ -132,9 +132,6 @@ paths:
       summary: Get a collection
       description: Returns one collection.
       operationId: getCollection
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:GetCollection
       x-iam-resource-type: collection
       parameters:
@@ -166,9 +163,6 @@ paths:
         Renames the collection or replaces its `schema`. A new schema governs
         the next write of each item; items already stored are not re-judged.
       operationId: updateCollection
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:UpdateCollection
       x-iam-resource-type: collection
       parameters:
@@ -222,9 +216,6 @@ paths:
       summary: Delete a collection
       description: Deletes the collection and every item in it.
       operationId: deleteCollection
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:DeleteCollection
       x-iam-resource-type: collection
       parameters:
@@ -256,9 +247,6 @@ paths:
         `tags`. The listing is bounded by `limit` (at most 100) and a statement
         timeout; a query past it is `422 QUERY_TIMEOUT`.
       operationId: listCollectionItems
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:ListCollectionItems
       x-iam-resource-type: collection
       parameters:
@@ -305,9 +293,6 @@ paths:
       summary: Get an item
       description: Returns the item at `key`.
       operationId: getCollectionItem
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:GetCollectionItem
       x-iam-resource-type: collection
       parameters:
@@ -344,9 +329,6 @@ paths:
         `expected_version`) names a version of an existing item, so it is
         `404` for a free key.
       operationId: putCollectionItem
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:PutCollectionItem
       x-iam-resource-type: collection
       parameters:
@@ -421,9 +403,6 @@ paths:
         object merges key by key, `null` removes a key, any other value
         replaces it. The merged `data` is judged as a put's is.
       operationId: updateCollectionItem
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
       parameters:
@@ -489,9 +468,6 @@ paths:
       summary: Delete an item
       description: Deletes the item at `key`.
       operationId: deleteCollectionItem
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:DeleteCollectionItem
       x-iam-resource-type: collection
       parameters:
@@ -521,9 +497,6 @@ paths:
       summary: Get item tags
       description: Returns the item's tags.
       operationId: getCollectionItemTags
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:GetCollectionItem
       x-iam-resource-type: collection
       parameters:
@@ -554,9 +527,6 @@ paths:
       summary: Replace item tags
       description: Replaces every tag on the item. Bumps the item's `version`.
       operationId: replaceCollectionItemTags
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
       parameters:
@@ -609,9 +579,6 @@ paths:
         Merges the given tags into the item's; a key not sent is kept. Bumps
         the item's `version`.
       operationId: mergeCollectionItemTags
-      x-soat-resource:
-        kind: collection
-        from: collection_id
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
       parameters:

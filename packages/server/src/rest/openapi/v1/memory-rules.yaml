@@ -100,9 +100,6 @@ paths:
         `tool_id` the built-in extractor runs, configurable through `prompt`,
         `ai_provider_id` and `model`.
       operationId: createMemoryRule
-      x-soat-resource:
-        kind: memory_store
-        from: memory_store_id
       x-iam-action: memories:CreateMemoryRule
       x-iam-resource-type: memory_store
       requestBody:
@@ -232,9 +229,6 @@ paths:
       summary: Get a memory rule
       description: Returns a specific memory rule
       operationId: getMemoryRule
-      x-soat-resource:
-        kind: memory_rule
-        from: memory_rule_id
       x-iam-action: memories:GetMemoryRule
       x-iam-resource-type: memory_store
       parameters:
@@ -285,9 +279,6 @@ paths:
         stand after the change, so a one-field update cannot pair a handler with
         a stored extractor override from the side.
       operationId: updateMemoryRule
-      x-soat-resource:
-        kind: memory_rule
-        from: memory_rule_id
       x-iam-action: memories:UpdateMemoryRule
       x-iam-resource-type: memory_store
       parameters:
@@ -391,9 +382,6 @@ paths:
         Deletes a memory rule. The assertions it wrote are kept; their `rule_id`
         becomes null.
       operationId: deleteMemoryRule
-      x-soat-resource:
-        kind: memory_rule
-        from: memory_rule_id
       x-iam-action: memories:DeleteMemoryRule
       x-iam-resource-type: memory_store
       parameters:

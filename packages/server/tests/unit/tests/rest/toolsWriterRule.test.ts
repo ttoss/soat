@@ -4,7 +4,7 @@ import {
 } from 'src/lib/mcpToolRegistrations';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, loginAs } from '../../testClient';
 
 /**
  * Whoever writes a tool holds what calling it performs: a `builtin` tool's
@@ -116,6 +116,129 @@ describe('a builtin tool', () => {
       .patch(`/api/v1/tools/${created.body.id}`)
       .send({ actions: ['list-agents', 'list-secrets'] });
     expectNotHeld(res, 'secrets:ListSecrets');
+  });
+});
+
+/**
+ * Actions of a multi-type module whose route authorizes on a type other than
+ * the module's first: the writer holds each on its route's type.
+ */
+const ROUTE_TYPED_ACTIONS = [
+  ['list-decisions', 'deciders:ListDecisions', 'decider', 'decision'],
+  [
+    'create-inline-decision',
+    'deciders:CreateInlineDecision',
+    'decider',
+    'decision',
+  ],
+  ['list-datasets', 'evaluations:ListDatasets', 'eval', 'dataset'],
+  ['create-dataset', 'evaluations:CreateDataset', 'eval', 'dataset'],
+  ['list-memory-rules', 'memories:ListMemoryRules', 'memory', 'memory_store'],
+  ['list-memory-stores', 'memories:ListMemoryStores', 'memory', 'memory_store'],
+  [
+    'create-memory-store',
+    'memories:CreateMemoryStore',
+    'memory',
+    'memory_store',
+  ],
+  [
+    'list-playbook-cases',
+    'playbooks:ListPlaybookCases',
+    'playbook',
+    'playbook_case',
+  ],
+  ['list-sessions', 'agents:ListSessions', 'agent', 'session'],
+  ['create-session', 'agents:CreateSession', 'agent', 'session'],
+  [
+    'get-trigger-firing',
+    'triggers:GetTriggerFiring',
+    'trigger',
+    'triggerFiring',
+  ],
+] as const;
+
+describe('a builtin action is held on the type its route authorizes on', () => {
+  let onModuleType: string;
+  let onRouteType: string;
+
+  const principal = async (args: { username: string; type: 2 | 3 }) => {
+    const admin = authenticatedTestClient(adminToken);
+    const created = await admin
+      .post('/api/v1/users')
+      .send({ username: args.username, password: 'supersecret' });
+    const policy = await admin.post('/api/v1/policies').send({
+      document: {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['tools:CreateTool'],
+            resource: [`srn:${projectId}:*:*`],
+          },
+          ...ROUTE_TYPED_ACTIONS.map((entry) => {
+            return {
+              effect: 'Allow',
+              action: [entry[1]],
+              resource: [`srn:${projectId}:${entry[args.type]}:*`],
+            };
+          }),
+        ],
+      },
+    });
+    expect(policy.status).toBe(201);
+    await admin
+      .put(`/api/v1/users/${created.body.id}/policies`)
+      .send({ policy_ids: [policy.body.id] });
+    return loginAs(args.username, 'supersecret');
+  };
+
+  const write = (token: string, action: string) => {
+    return authenticatedTestClient(token)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: name(),
+        type: 'builtin',
+        actions: [action],
+      });
+  };
+
+  beforeAll(async () => {
+    onModuleType = await principal({ username: 'wrmoduletype', type: 2 });
+    onRouteType = await principal({ username: 'wrroutetype', type: 3 });
+  });
+
+  test.each(ROUTE_TYPED_ACTIONS)(
+    '%s is refused to a writer holding %s on %s only',
+    async (action, iamAction, _moduleType, routeType) => {
+      const res = await write(onModuleType, action);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatchObject({
+        code: 'ACTION_NOT_HELD',
+        meta: {
+          action: iamAction,
+          resource: `srn:${projectId}:${routeType}:*`,
+        },
+      });
+    }
+  );
+
+  test.each(ROUTE_TYPED_ACTIONS)(
+    '%s is written by a writer holding %s on its route type',
+    async (action) => {
+      const res = await write(onRouteType, action);
+      expect(res.status).toBe(201);
+    }
+  );
+
+  test('an action declaring no type is refused, even to the admin', async () => {
+    const res = await write(adminToken, 'check-iam-permission');
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('declares no resource type');
+  });
+
+  test('revoke-iam-principal is not a builtin action an agent may carry', async () => {
+    const res = await write(adminToken, 'revoke-iam-principal');
+    expect(res.status).toBe(400);
   });
 });
 

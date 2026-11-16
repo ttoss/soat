@@ -208,9 +208,6 @@ paths:
       operationId: getIngestionRule
       x-iam-action: ingestion-rules:GetIngestionRule
       x-iam-resource-type: ingestionRule
-      x-soat-resource:
-        kind: ingestionRule
-        from: ingestion_rule_id
       parameters:
         - name: ingestion_rule_id
           in: path
@@ -258,9 +255,6 @@ paths:
       operationId: updateIngestionRule
       x-iam-action: ingestion-rules:UpdateIngestionRule
       x-iam-resource-type: ingestionRule
-      x-soat-resource:
-        kind: ingestionRule
-        from: ingestion_rule_id
       parameters:
         - name: ingestion_rule_id
           in: path
@@ -372,9 +366,6 @@ paths:
       operationId: deleteIngestionRule
       x-iam-action: ingestion-rules:DeleteIngestionRule
       x-iam-resource-type: ingestionRule
-      x-soat-resource:
-        kind: ingestionRule
-        from: ingestion_rule_id
       parameters:
         - name: ingestion_rule_id
           in: path

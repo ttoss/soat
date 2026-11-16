@@ -225,9 +225,6 @@ paths:
       operationId: getPlaybook
       x-iam-action: playbooks:GetPlaybook
       x-iam-resource-type: playbook
-      x-soat-resource:
-        kind: playbook
-        from: playbook_id
       parameters:
         - $ref: '#/components/parameters/PlaybookId'
       responses:
@@ -280,9 +277,6 @@ paths:
       operationId: updatePlaybook
       x-iam-action: playbooks:UpdatePlaybook
       x-iam-resource-type: playbook
-      x-soat-resource:
-        kind: playbook
-        from: playbook_id
       parameters:
         - $ref: '#/components/parameters/PlaybookId'
         - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
@@ -345,9 +339,6 @@ paths:
       operationId: deletePlaybook
       x-iam-action: playbooks:DeletePlaybook
       x-iam-resource-type: playbook
-      x-soat-resource:
-        kind: playbook
-        from: playbook_id
       parameters:
         - $ref: '#/components/parameters/PlaybookId'
       responses:
@@ -397,9 +388,6 @@ paths:
       operationId: listPlaybookVersions
       x-iam-action: playbooks:ListPlaybookVersions
       x-iam-resource-type: playbook
-      x-soat-resource:
-        kind: playbook
-        from: playbook_id
       parameters:
         - $ref: '#/components/parameters/PlaybookId'
         - $ref: './pagination.yaml#/components/parameters/Limit'
@@ -447,9 +435,6 @@ paths:
       operationId: getPlaybookVersion
       x-iam-action: playbooks:GetPlaybookVersion
       x-iam-resource-type: playbook
-      x-soat-resource:
-        kind: playbook
-        from: playbook_id
       parameters:
         - $ref: '#/components/parameters/PlaybookId'
         - $ref: '#/components/parameters/Version'
@@ -497,9 +482,6 @@ paths:
       operationId: restorePlaybookVersion
       x-iam-action: playbooks:RestorePlaybookVersion
       x-iam-resource-type: playbook
-      x-soat-resource:
-        kind: playbook
-        from: playbook_id
       parameters:
         - $ref: '#/components/parameters/PlaybookId'
         - $ref: '#/components/parameters/Version'
@@ -567,9 +549,6 @@ paths:
       operationId: createPlaybookCase
       x-iam-action: playbooks:CreatePlaybookCase
       x-iam-resource-type: playbook
-      x-soat-resource:
-        kind: playbook
-        from: playbook_id
       parameters:
         - $ref: '#/components/parameters/PlaybookId'
       requestBody:
@@ -720,9 +699,6 @@ paths:
       operationId: getPlaybookCase
       x-iam-action: playbooks:GetPlaybookCase
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -764,9 +740,6 @@ paths:
       operationId: deletePlaybookCase
       x-iam-action: playbooks:DeletePlaybookCase
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -830,9 +803,6 @@ paths:
       operationId: writePlaybookCaseInputs
       x-iam-action: playbooks:WritePlaybookCaseInputs
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -904,9 +874,6 @@ paths:
       operationId: getPlaybookCaseMissing
       x-iam-action: playbooks:GetPlaybookCaseMissing
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -958,9 +925,6 @@ paths:
       operationId: listPlaybookCaseEntries
       x-iam-action: playbooks:ListPlaybookCaseEntries
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1045,9 +1009,6 @@ paths:
       operationId: runPlaybookCaseNode
       x-iam-action: playbooks:RunPlaybookCaseNode
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1113,9 +1074,6 @@ paths:
       operationId: listPlaybookCaseExecutions
       x-iam-action: playbooks:ListPlaybookCaseExecutions
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1168,9 +1126,6 @@ paths:
       operationId: getPlaybookCaseExecution
       x-iam-action: playbooks:GetPlaybookCaseExecution
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1230,9 +1185,6 @@ paths:
       operationId: exportPlaybookCaseNode
       x-iam-action: playbooks:ExportPlaybookCaseNode
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1309,9 +1261,6 @@ paths:
       operationId: listPlaybookCaseExports
       x-iam-action: playbooks:ListPlaybookCaseExports
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1370,9 +1319,6 @@ paths:
       operationId: getPlaybookCaseExport
       x-iam-action: playbooks:GetPlaybookCaseExport
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1436,9 +1382,6 @@ paths:
       operationId: upgradePlaybookCase
       x-iam-action: playbooks:UpgradePlaybookCase
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1507,9 +1450,6 @@ paths:
       operationId: listPlaybookCaseUpgrades
       x-iam-action: playbooks:ListPlaybookCaseUpgrades
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1560,9 +1500,6 @@ paths:
       operationId: pausePlaybookCase
       x-iam-action: playbooks:PausePlaybookCase
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1613,9 +1550,6 @@ paths:
       operationId: resumePlaybookCase
       x-iam-action: playbooks:ResumePlaybookCase
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'
@@ -1686,9 +1620,6 @@ paths:
       operationId: confirmPlaybookCaseNode
       x-iam-action: playbooks:ConfirmPlaybookCaseNode
       x-iam-resource-type: playbook_case
-      x-soat-resource:
-        kind: playbook_case
-        from: case_id
       parameters:
         - $ref: '#/components/parameters/CaseId'
         - $ref: './actor-ownership.yaml#/components/parameters/ActorPin'

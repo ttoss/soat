@@ -434,7 +434,7 @@ For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), whic
 
 Whoever creates or edits a tool holds what calling it performs ([the writer rule](./iam.md#the-writer-rule)), checked on the tool as the write leaves it, on REST and in a formation (after resolution):
 
-- **`builtin`**: each native action in `actions`, on its whole resource type (`list-agents` → `agents:ListAgents` on `srn:<project_id>:agent:*`), and what the deployment declares for each [added](./iam.md#the-builtin-catalog) one.
+- **`builtin`**: each native action in `actions`, on every resource of the type its route authorizes on, its operation's `x-iam-resource-type` (`list-sessions` → `agents:ListSessions` on `srn:<project_id>:session:*`), or on `srn:<project_id>:*:*` for a `projects:*` action; and what the deployment declares for each [added](./iam.md#the-builtin-catalog) one. An action whose operation declares no type (`check-iam-permission`) is `400 VALIDATION_FAILED`.
 - **`mcp`** on a [registered MCP server](./iam.md#registered-mcp-servers): what the server declares for each of `actions`, which is required and may name only tools it declares (`400 VALIDATION_FAILED` otherwise).
 - **`pipeline`**: what each step does: its inline tool's, by these rules, or `tools:CallTool` on the tool a `tool_id` step names.
 - Any other tool performs no runtime action.
