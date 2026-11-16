@@ -153,6 +153,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/files/upload:
@@ -233,6 +235,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/files/upload/base64:
@@ -283,6 +287,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/files/presigned-url:
@@ -330,6 +336,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/files/upload/{token}:
@@ -505,6 +513,8 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/files/{file_id}/download:
@@ -630,6 +640,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/files/{file_id}/download/base64:
@@ -778,6 +790,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     patch:
@@ -826,6 +840,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:

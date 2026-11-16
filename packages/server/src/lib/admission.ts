@@ -114,8 +114,6 @@ export type AdmissionRequest = {
   /** The write as it will be applied. */
   body: unknown;
   principal: RequestPrincipal;
-  /** Statuses the caller's contract declares; a refusal in another one is a `403`. */
-  answerable?: ReadonlySet<number>;
 };
 
 const unavailable = (args: { action: string; detail: string }): DomainError => {
@@ -126,7 +124,8 @@ const unavailable = (args: { action: string; detail: string }): DomainError => {
   );
 };
 
-const CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+/** The grammar `AdmissionRefused` documents for a relayed `code`. */
+const CODE_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 
 type ServiceRefusal = {
   code: string;
@@ -151,14 +150,13 @@ const readRefusal = (raw: string): ServiceRefusal | null => {
   return { code, message, ...(meta === undefined ? {} : { meta }) };
 };
 
-/** A 4xx refusal is relayed as sent; anything else is a 502. */
+/** A 4xx refusal is relayed under its own status and code; anything else is a 502. */
 const refusalFrom = (args: {
   action: string;
   status: number;
   raw: string;
-  answerable?: ReadonlySet<number>;
 }): DomainError => {
-  const { action, status, answerable } = args;
+  const { action, status } = args;
   const refusal = status >= 400 && status < 500 ? readRefusal(args.raw) : null;
   if (!refusal) {
     return unavailable({
@@ -167,10 +165,7 @@ const refusalFrom = (args: {
     });
   }
   return new DomainError('ADMISSION_REFUSED', refusal.message, refusal.meta, {
-    relayed: {
-      code: refusal.code,
-      httpStatus: !answerable || answerable.has(status) ? status : 403,
-    },
+    relayed: { code: refusal.code, httpStatus: status },
   });
 };
 
@@ -257,6 +252,5 @@ export const assertAdmitted = async (
     action: request.action,
     status: response.status,
     raw,
-    answerable: request.answerable,
   });
 };

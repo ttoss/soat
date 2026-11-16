@@ -26,7 +26,6 @@ const buildGate = (args: {
   authUser: AuthUser;
   action: string;
   resourceType: string | null;
-  statuses: ReadonlySet<number>;
 }): AdmissionGate => {
   let asked = false;
   return async (allowed) => {
@@ -39,7 +38,6 @@ const buildGate = (args: {
       targetId: resourceIdOf(allowed.resource),
       body: args.ctx.request.body ?? null,
       principal: principalFromAuthUser(args.authUser),
-      answerable: args.statuses,
     });
   };
 };
@@ -98,7 +96,6 @@ export const admissionMiddleware = async (ctx: Context, next: Next) => {
     authUser: ctx.authUser,
     action: iam.action,
     resourceType: iam.resourceType,
-    statuses: iam.statuses,
   });
   gates.set(ctx, gate);
   instrument({ authUser: ctx.authUser, gate });

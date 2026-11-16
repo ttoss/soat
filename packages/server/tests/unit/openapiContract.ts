@@ -151,6 +151,17 @@ const escapePointerToken = (token: string): string => {
   return token.replace(/~/g, '~0').replace(/\//g, '~1');
 };
 
+/** The response an operation declares for `status`: its own key, else its `4XX`-style range. */
+const declaredResponse = (args: {
+  responses: Record<string, unknown>;
+  status: number;
+}): unknown => {
+  return (
+    args.responses[String(args.status)] ??
+    args.responses[`${Math.floor(args.status / 100)}XX`]
+  );
+};
+
 /**
  * Returns the raw `application/json` response schema node for this
  * `(template, method, status)`, or `undefined` when none is documented.
@@ -166,7 +177,7 @@ const getRawResponseSchema = (args: {
   if (!isRecord(operation)) return undefined;
   const responses = operation.responses;
   if (!isRecord(responses)) return undefined;
-  const response = responses[String(args.status)];
+  const response = declaredResponse({ responses, status: args.status });
   if (!isRecord(response)) return undefined;
   const content = response.content;
   if (!isRecord(content)) return undefined;
@@ -290,7 +301,12 @@ const assertStatusDeclared = (args: {
   const operation = isRecord(pathItem) ? pathItem[args.method] : undefined;
   if (!isRecord(operation) || !isRecord(operation.responses)) return;
   const responses = operation.responses;
-  if (String(args.status) in responses || 'default' in responses) return;
+  if (
+    declaredResponse({ responses, status: args.status }) !== undefined ||
+    'default' in responses
+  ) {
+    return;
+  }
 
   const message = `OpenAPI contract violation: ${args.method.toUpperCase()} ${args.template} answered ${args.status}, which its operation does not declare`;
   if (!AUDIT_FILE) throw new Error(message);

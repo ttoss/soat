@@ -2,6 +2,7 @@ import {
   type AdmissionService,
   ADMIT,
   DOWN_URL,
+  PAYMENT_REFUSAL,
   REFUSAL,
   startAdmissionService,
 } from '../../fixtures/admissionService';
@@ -164,13 +165,30 @@ describe('admission — a declared write is asked about before it executes', () 
       expect(res.body.error.meta).toEqual({ limit: 3 });
     });
 
-    test('answers 403 for a refusal status the operation does not declare', async () => {
-      service.reply = { ...REFUSAL, status: 402 };
+    test('answers a refusal under its own status and lowercase code', async () => {
+      service.reply = PAYMENT_REFUSAL;
 
       const res = await createOverRest();
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAN_LIMIT_REACHED');
+      expect(res.status).toBe(402);
+      expect(res.body.error.code).toBe('insufficient_credit');
+      expect(res.body.error.meta).toEqual({ balance: 0 });
+    });
+
+    test.each([
+      ['a code with a hyphen', 'insufficient-credit'],
+      ['a code over 64 characters', `a${'_'.repeat(64)}`],
+      ['an empty code', ''],
+    ])('is a 502 for %s', async (_, code) => {
+      service.reply = {
+        status: 402,
+        body: { error: { code, message: 'x' } },
+      };
+
+      const res = await createOverRest();
+
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe('ADMISSION_UNAVAILABLE');
     });
 
     test('is a 502 when the service is down', async () => {
@@ -269,6 +287,17 @@ describe('admission — a declared write is asked about before it executes', () 
       expect(refused.error.code).toBe('PLAN_LIMIT_REACHED');
     });
 
+    test('carries a refusal under its own status and lowercase code', async () => {
+      service.reply = PAYMENT_REFUSAL;
+
+      const { generationId } = await createTriggerByBuiltin();
+
+      const refused = await refusedCall(generationId);
+      expect(refused.status).toBe(402);
+      expect(refused.error.code).toBe('insufficient_credit');
+      expect(refused.error.meta).toEqual({ balance: 0 });
+    });
+
     test('is ADMISSION_UNAVAILABLE when the service is down', async () => {
       service.declare({ actions: ['triggers:CreateTrigger'], url: DOWN_URL });
 
@@ -303,6 +332,16 @@ describe('admission — a declared write is asked about before it executes', () 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
       expect(res.body.error.code).toBe('PLAN_LIMIT_REACHED');
+    });
+
+    test('fails the deploy with a lowercase code the service sent', async () => {
+      service.reply = PAYMENT_REFUSAL;
+
+      const res = await createByFormation();
+
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error.code).toBe('insufficient_credit');
+      expect(res.body.error.meta).toMatchObject({ balance: 0 });
     });
 
     test('fails the deploy with ADMISSION_UNAVAILABLE when the service is down', async () => {
@@ -341,6 +380,17 @@ describe('admission — a declared write is asked about before it executes', () 
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('PLAN_LIMIT_REACHED');
+    });
+
+    test('answers a 402 refusal with its lowercase code and meta', async () => {
+      service.reply = PAYMENT_REFUSAL;
+
+      const res = await generate(hello);
+
+      expect(res.status).toBe(402);
+      expect(res.body.error.code).toBe('insufficient_credit');
+      expect(res.body.error.message).toBe('The account has no credit left.');
+      expect(res.body.error.meta).toEqual({ balance: 0 });
     });
 
     test('streamed, refuses before the stream opens', async () => {

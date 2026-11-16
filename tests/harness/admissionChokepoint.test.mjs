@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,31 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const srcDir = path.join(repoRoot, 'packages/server/src');
 const formationModulesDir = path.join(srcDir, 'lib/formation-modules');
+const specDir = path.join(srcDir, 'rest/openapi/v1');
+const { load } = createRequire(
+  path.join(repoRoot, 'packages/server/package.json')
+)('js-yaml');
+
+const WRITE_METHODS = ['post', 'put', 'patch', 'delete'];
+const ADMISSION_REFUSED_REF =
+  './errors.yaml#/components/responses/AdmissionRefused';
+
+/** Every operation admission can be declared for, as `METHOD path` → its responses. */
+const declarableWrites = () => {
+  const writes = new Map();
+  for (const file of fs.readdirSync(specDir)) {
+    if (!file.endsWith('.yaml')) continue;
+    const spec = load(fs.readFileSync(path.join(specDir, file), 'utf-8'));
+    for (const [route, item] of Object.entries(spec.paths ?? {})) {
+      for (const method of WRITE_METHODS) {
+        const operation = item[method];
+        if (!operation?.['x-iam-action']) continue;
+        writes.set(`${method.toUpperCase()} ${route}`, operation.responses);
+      }
+    }
+  }
+  return writes;
+};
 
 /** Source with comments dropped, so prose naming a symbol is not a hit. */
 const code = (file) => {
@@ -81,6 +107,22 @@ const REACHED_ONLY_FROM_A_ROUTE = new Set([
  * create or update around both executes with no question asked.
  */
 describe('admission chokepoints', () => {
+  test('every declarable write documents the refusal under 4XX and the 502', () => {
+    const writes = declarableWrites();
+    assert.ok(writes.has('POST /api/v1/agents/{agent_id}/generate'));
+    const undocumented = [...writes]
+      .filter(([, responses]) => {
+        return (
+          responses?.['4XX']?.$ref !== ADMISSION_REFUSED_REF ||
+          responses?.['502'] === undefined
+        );
+      })
+      .map(([operation]) => {
+        return operation;
+      });
+    assert.deepEqual(undocumented, []);
+  });
+
   test('the REST router mounts the admission middleware', () => {
     assert.match(
       code(path.join(srcDir, 'rest/router.ts')),
