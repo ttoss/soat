@@ -1,26 +1,15 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Verification of the signature on a payload the local `soat listen` listener
- * receives. The listener takes two kinds, both under `X-Soat-Signature`,
- * distinguished by the value's own prefix rather than by header name:
- *
- * - A **webhook delivery** carries `t=<unix>,v1=<hex>` — a digest over
- *   `<t>.<raw body>`, so the timestamp is authenticated and a subscriber can
- *   bound a replay by age.
- * - A **trigger** payload carries `sha256=<hex>`, a digest over the bare
- *   body, which is the scheme a webhook-type trigger's sender signs with.
+ * Verification of the `X-Soat-Signature` on a payload the local `soat listen`
+ * listener receives. Webhook deliveries and triggers alike carry
+ * `t=<unix>,v1=<hex>`, a digest over `<t>.<raw body>`; any other value is
+ * invalid.
  */
-
-/** Only the timestamped scheme starts this way; everything else is bare-body. */
-const TIMESTAMPED_PREFIX = 't=';
-
-export type SignatureScheme = 'v1' | 'v2';
 
 export type SignatureInspection = {
   /** The header value that was checked, or `''` when the header is absent. */
   signature: string;
-  scheme: SignatureScheme;
   /** `null` when no secret was supplied, so nothing was verified. */
   valid: boolean | null;
 };
@@ -34,21 +23,7 @@ const digestMatches = (args: { expected: string; actual: string }) => {
   return timingSafeEqual(expectedBuffer, actualBuffer);
 };
 
-/** The trigger scheme: `sha256=<hex>` over the bare body. */
-const verifyBareBodySignature = (args: {
-  secret: string;
-  payload: string;
-  header: string;
-}) => {
-  const expected = createHmac('sha256', args.secret)
-    .update(args.payload)
-    .digest('hex');
-  return digestMatches({ expected, actual: args.header });
-};
-
 /**
- * Timestamped scheme: `t=<unix>,v1=<hex>` over `<t>.<body>`.
- *
  * The timestamp must be present, but its age is deliberately not enforced here:
  * this is a local debugging listener, and rejecting a delivery over clock skew
  * would read as a signing bug. A real subscriber should enforce a tolerance
@@ -81,35 +56,23 @@ const headerValue = (value: string | string[] | undefined): string => {
   return value ?? '';
 };
 
-/**
- * Picks the scheme a delivery used and verifies it, when a secret is supplied.
- */
+/** Verifies a delivery's signature, when a secret is supplied. */
 export const inspectDeliverySignature = (args: {
   secret?: string;
   payload: string;
   headers: Record<string, string | string[] | undefined>;
 }): SignatureInspection => {
   const signature = headerValue(args.headers['x-soat-signature']);
-  const scheme: SignatureScheme = signature.startsWith(TIMESTAMPED_PREFIX)
-    ? 'v2'
-    : 'v1';
 
   if (!args.secret) {
-    return { signature, scheme, valid: null };
+    return { signature, valid: null };
   }
 
-  const valid =
-    scheme === 'v2'
-      ? verifyTimestampedSignature({
-          secret: args.secret,
-          payload: args.payload,
-          header: signature,
-        })
-      : verifyBareBodySignature({
-          secret: args.secret,
-          payload: args.payload,
-          header: signature,
-        });
+  const valid = verifyTimestampedSignature({
+    secret: args.secret,
+    payload: args.payload,
+    header: signature,
+  });
 
-  return { signature, scheme, valid };
+  return { signature, valid };
 };
