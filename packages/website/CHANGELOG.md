@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.114.0](https://github.com/ttoss/soat/compare/v0.113.0...v0.114.0) (2026-11-16)
+
+### Features
+
+* **playbooks:** an input required on a condition ([#1945](https://github.com/ttoss/soat/issues/1945)) ([49d5cdb](https://github.com/ttoss/soat/commit/49d5cdb6752ea648e16820dd326eafb89a0da735))
+* **server:** a deployment declares its builtin catalog ([#1954](https://github.com/ttoss/soat/issues/1954)) ([f95c33a](https://github.com/ttoss/soat/commit/f95c33a9657e8ab2ebcbc20be9bce0221641fb69))
+* **server:** ask a registered admission service before a declared write ([#1952](https://github.com/ttoss/soat/issues/1952)) ([a4de63f](https://github.com/ttoss/soat/commit/a4de63fc5c820fb9e2143a434f85840821e91b8e))
+* **server:** model aliases on an AI provider ([#1953](https://github.com/ttoss/soat/issues/1953)) ([7cc6265](https://github.com/ttoss/soat/commit/7cc6265e6a570e9730eedc8628f243f30101fb67))
+* **server:** SOAT_OMIT_ERROR_HINTS leaves hint and docs_url out of every error ([#1951](https://github.com/ttoss/soat/issues/1951)) ([092ff31](https://github.com/ttoss/soat/commit/092ff310dddcb0db3635928f062b5296396b8cb4))
+
 # [0.113.0](https://github.com/ttoss/soat/compare/v0.112.0...v0.113.0) (2026-11-16)
 
 ### Bug Fixes
