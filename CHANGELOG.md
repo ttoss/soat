@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.115.0](https://github.com/ttoss/soat/compare/v0.114.0...v0.115.0) (2026-11-16)
+
+### Bug Fixes
+
+* **postgresdb:** expire unfinished work that holds no stored authority ([#1959](https://github.com/ttoss/soat/issues/1959)) ([ae16dd6](https://github.com/ttoss/soat/commit/ae16dd6cca3f38ce08e8583ef32d5d283dd580d8))
+
+### Features
+
+* **server:** a registered type's writer carries actions keyed by a value ([#1960](https://github.com/ttoss/soat/issues/1960)) ([02e4022](https://github.com/ttoss/soat/commit/02e402271e318a10c61629dfd85486cd7ecfbe6a))
+* **server:** refuse work acting for a revoked principal ([#1956](https://github.com/ttoss/soat/issues/1956)) ([65f643b](https://github.com/ttoss/soat/commit/65f643b7ded485f20a2f3c3cc7b6bdcd67891003))
+
 # [0.114.0](https://github.com/ttoss/soat/compare/v0.113.0...v0.114.0) (2026-11-16)
 
 ### Bug Fixes
