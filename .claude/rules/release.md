@@ -75,7 +75,9 @@ Before the real run, lerna's "current project version" must equal
 
 `--conventional-commits` bumps major on a `BREAKING CHANGE:` footer. Use the
 footer, not `feat!:`: that needs the `conventionalcommits` preset and lerna.json
-uses `angular`.
+uses `angular`, whose parser reads no `!`. A `!` subject with no footer in the
+squash body is dropped from every CHANGELOG, not listed as a feature. Before
+squash-merging a breaking PR, confirm a commit in it carries the footer.
 
 ## Flags
 

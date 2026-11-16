@@ -18,15 +18,22 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [0.111.0](https://github.com/ttoss/soat/compare/v0.110.0...v0.111.0) (2026-11-14)
 
+* feat(iam)!: evals, deciders, ingestion and memory rules and playbooks run under their own policy_ids (#1928) ([bd62817](https://github.com/ttoss/soat/commit/bd6281777a1fecadb4535ad903f641e577230069)), closes [#1928](https://github.com/ttoss/soat/issues/1928)
+
 ### Features
 
 * **iam:** content-bound tag keys, iam:RequestTag and memory write events ([#1933](https://github.com/ttoss/soat/issues/1933)) ([6845413](https://github.com/ttoss/soat/commit/68454138af5d7ad69e1a00a231da4a83791a053b)), closes [#1913](https://github.com/ttoss/soat/issues/1913)
 * **projects:** agent_policy_ids caps every agent turn in a project ([#1931](https://github.com/ttoss/soat/issues/1931)) ([69fb66a](https://github.com/ttoss/soat/commit/69fb66aec56c568107bd4e0e684235d22b241a64)), closes [#1914](https://github.com/ttoss/soat/issues/1914)
 * **tools:** pin mcp tool definitions and withhold an action that drifts ([#1930](https://github.com/ttoss/soat/issues/1930)) ([9d3667b](https://github.com/ttoss/soat/commit/9d3667b3687e756dca357fcf59b7091da5aa1d00)), closes [#1915](https://github.com/ttoss/soat/issues/1915)
 
+### BREAKING CHANGES
+
+* evals, deciders, ingestion rules, memory rules and playbooks require non-empty `policy_ids` and their work runs under them; a start the grant does not allow is `403 ACTION_NOT_HELD`; playbook versions drop their author.
+
 # [0.110.0](https://github.com/ttoss/soat/compare/v0.109.0...v0.110.0) (2026-11-14)
 
 * feat(iam)!: durable work stores its authority and refuses with none (#1920) ([d46395e](https://github.com/ttoss/soat/commit/d46395eea9d9f51ddf0616c396a64dad2a829f03)), closes [#1920](https://github.com/ttoss/soat/issues/1920)
+* feat(agents)!: agents declare run_as; as agent, policy_ids is its own grant (#1919) ([a5c754a](https://github.com/ttoss/soat/commit/a5c754a264f008ffb37da9bbf938923418a3ed27)), closes [#1919](https://github.com/ttoss/soat/issues/1919)
 
 ### BREAKING CHANGES
 
@@ -34,10 +41,12 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
   SOAT_RUN_TOKEN_TTL and TRIGGER_CREATOR_UNAVAILABLE are removed; a firing
   acts as its trigger and survives its creator; OAuth- and trigger-started
   work keeps its identity; work stored before this change runs no tool.
+* agents declare `run_as`; under `agent`, `policy_ids` is the agent's own grant. The API key error meta `boundary_policy_ids` is `key_policy_ids`.
 
 # [0.109.0](https://github.com/ttoss/soat/compare/v0.108.0...v0.109.0) (2026-11-13)
 
 * feat(iam)!: authority is grant ∩ caps, each absent value stated (#1908) ([93a8a91](https://github.com/ttoss/soat/commit/93a8a9142cdc39b8828bc070c3e0342eca100a5e)), closes [#1908](https://github.com/ttoss/soat/issues/1908)
+* feat(memories)!: actor ownership for memories, one mechanism shared with playbook cases (#1897) ([687c257](https://github.com/ttoss/soat/commit/687c257c02e96b74b71e58763417d3a01e84cc84)), closes [#1897](https://github.com/ttoss/soat/issues/1897)
 
 ### BREAKING CHANGES
 
@@ -45,6 +54,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
   a key write under On-Behalf-Of and an OAuth consent from a narrowed
   credential; an admin's pinned or capped key is held to its pin and policies;
   a policy a user or key names cannot be deleted.
+* a memory belongs to the actor it is written for; listing, by-id routes, knowledge search, export and the store ledger narrow to `actor_id`.
 
 # [0.108.0](https://github.com/ttoss/soat/compare/v0.107.0...v0.108.0) (2026-11-12)
 
