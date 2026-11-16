@@ -568,6 +568,7 @@ A tool server that writes back into SOAT with its project's API key, or an [IAM 
 - What the request names as content is resolved under that cap: a `document` message, a `tool_output` message and the `builtin` action it runs.
 - A tool the request calls carries the cap on in its own assertion.
 - Work the request starts keeps the authority the assertion carried: a generation, a session or conversation turn, an orchestration run, a decision, a guardrail evaluation or a tool call runs its `builtin` calls and the assertions of its `mcp` calls on the key held to it, and a generation, task, orchestration run or playbook execution stores it beside its principal, so a later drive or [approved](./approvals.md#continuation-identity) continuation holds it too, as for an [IAM token](./iam.md#iam-tokens)'s bound.
+- A generation the request starts is attributed to the assertion's `actor_id`, the end user the call served; the caller cannot name another.
 - Refusals are the route's own (`403`, `404` where the caller may not read the resource).
 - A playbook case refuses a write carrying the assertion of a call its own work made ([own work](./playbooks.md#writes-from-a-cases-own-work)).
 

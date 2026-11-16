@@ -373,11 +373,8 @@ export const authMiddleware = async (ctx: Context, next: Next) => {
     });
     ctx.authUser = {
       ...authUser,
-      work: {
-        trigger: work.authority.trigger,
-        work: work.authority.work,
-        actor: work.actor,
-      },
+      work: { trigger: work.authority.trigger, work: work.authority.work },
+      actor: work.actor,
     };
     await next();
     return;
