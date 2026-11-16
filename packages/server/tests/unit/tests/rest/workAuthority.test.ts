@@ -3,11 +3,16 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
+import { dispatchApiRequest } from 'src/lib/inProcessApi';
 import { callTool } from 'src/lib/tools';
-import { parseWorkAuthority } from 'src/lib/workAuthority';
+import { parseWorkAuthority, type WorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import {
+  authenticatedTestClient,
+  testClient,
+  workAuthorityOf,
+} from '../../testClient';
 
 /**
  * Durable work runs under the authority stored on its row: a firing nobody
@@ -250,6 +255,64 @@ describe('stored work authority', () => {
           input: {},
           authority: null,
         })
+      ).rejects.toMatchObject({ code: 'WORK_AUTHORITY_MISSING' });
+      expect(hits).toBe(0);
+    });
+
+    /** Work whose stored authority names a user that no longer exists. */
+    const goneUserAuthority = () => {
+      return workAuthorityOf({
+        project: projectId,
+        user: 'usr_gonegonegone00',
+      });
+    };
+
+    const callAs = async (args: {
+      id: string;
+      action?: string;
+      authority: WorkAuthority | null;
+    }) => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      return callTool({
+        attribution: {},
+        guardrails: 'apply',
+        projectId: project!.id as number,
+        reach: 'project',
+        id: args.id,
+        action: args.action,
+        input: {},
+        authority: args.authority,
+      });
+    };
+
+    test('an in-process call it makes is refused, not served unauthenticated', async () => {
+      await expect(
+        dispatchApiRequest({
+          method: 'GET',
+          path: '/api/v1/tools',
+          as: { authority: null, actor: null },
+        })
+      ).rejects.toMatchObject({ code: 'WORK_AUTHORITY_MISSING' });
+    });
+
+    test('a builtin call under an authority that no longer resolves answers WORK_AUTHORITY_MISSING', async () => {
+      await expect(
+        callAs({
+          id: listToolId,
+          action: 'list-tools',
+          authority: goneUserAuthority(),
+        })
+      ).rejects.toMatchObject({
+        code: 'WORK_AUTHORITY_MISSING',
+        httpStatus: 409,
+      });
+    });
+
+    test('a gated call under an authority that no longer resolves answers WORK_AUTHORITY_MISSING', async () => {
+      await expect(
+        callAs({ id: httpToolId, authority: goneUserAuthority() })
       ).rejects.toMatchObject({ code: 'WORK_AUTHORITY_MISSING' });
       expect(hits).toBe(0);
     });

@@ -212,7 +212,7 @@ describe('SOAT in-process dispatch', () => {
       dispatchApiRequest({
         method: 'GET',
         path: `/api/v1/files/${uploadRes.body.id}/download`,
-        headers: { Authorization: `Bearer ${userToken}` },
+        as: { authorization: `Bearer ${userToken}` },
       })
     ).rejects.toMatchObject({
       code: 'TOOL_CALL_NOT_SUPPORTED',

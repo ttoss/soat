@@ -6,7 +6,8 @@ import createDebug from 'debug';
 import type { Context } from '../Context';
 import { DomainError } from '../errors';
 import { attachWork } from './inProcessAuthority';
-import type { WorkAuthority } from './workAuthority';
+import { isPlainObject } from './plainObject';
+import { type WorkAuthority, workAuthorityMissing } from './workAuthority';
 
 const log = createDebug('soat:inprocess');
 
@@ -166,17 +167,22 @@ const toWireBody = (args: {
  * Each call gets a fresh context, so a self-call is metered, audited and
  * authorized as its own request.
  */
+/**
+ * Who a dispatched request runs as: stored work's authority (`null` when it
+ * holds none) and the end user it serves, or a caller's `Authorization` value.
+ */
+export type DispatchAs =
+  | { authority: WorkAuthority | null; actor: string | null }
+  | { authorization: string };
+
 export const dispatchApiRequest = async (args: {
   method: string;
   /** Path plus any query string, e.g. `/api/v1/agents/agt_1`. */
   path: string;
+  as: DispatchAs;
   headers?: Record<string, string | undefined>;
   /** Serialized as a JSON request body. `undefined` sends none. */
   body?: unknown;
-  /** The stored authority the request runs under, in place of a credential header. */
-  authority?: WorkAuthority | null;
-  /** The end user the work serves, which work the request starts serves too. */
-  actor?: string | null;
 }): Promise<InProcessApiResponse> => {
   // Imported at call time: `app` mounts the REST router, which reaches this
   // module through the tool layer, so a static import would close that cycle at
@@ -184,12 +190,21 @@ export const dispatchApiRequest = async (args: {
   const { app } = await import('../app');
 
   const method = args.method.toUpperCase();
-  const req = buildRequest(args);
-  if (args.authority) {
-    attachWork({
-      req,
-      work: { authority: args.authority, actor: args.actor ?? null },
-    });
+  const { as } = args;
+  const req = buildRequest({
+    ...args,
+    headers: {
+      ...args.headers,
+      authorization: 'authorization' in as ? as.authorization : undefined,
+    },
+  });
+  if ('authority' in as) {
+    if (!as.authority) {
+      throw workAuthorityMissing({
+        work: `The call to ${method} ${args.path}`,
+      });
+    }
+    attachWork({ req, work: { authority: as.authority, actor: as.actor } });
   }
   const ctx: Context = app.createContext(req, new ServerResponse(req));
 
@@ -211,6 +226,22 @@ export const dispatchApiRequest = async (args: {
 };
 
 /**
+ * Work's own refusal, raised as itself rather than as the action's failure:
+ * one answer for work holding no authority, whichever path reaches it.
+ */
+const workRefusalOf = (response: InProcessApiResponse): DomainError | null => {
+  const error = isPlainObject(response.body) ? response.body.error : undefined;
+  if (!isPlainObject(error) || error.code !== 'WORK_AUTHORITY_MISSING') {
+    return null;
+  }
+  return new DomainError(
+    'WORK_AUTHORITY_MISSING',
+    String(error.message),
+    isPlainObject(error.meta) ? error.meta : undefined
+  );
+};
+
+/**
  * Dispatches an API request and resolves with its body **only** when the status
  * says the action succeeded.
  *
@@ -228,22 +259,23 @@ export const dispatchApiRequestOrThrow = async (args: {
   path: string;
   headers?: Record<string, string | undefined>;
   body?: unknown;
-  authority?: WorkAuthority | null;
-  actor?: string | null;
+  as: DispatchAs;
   /** Builds the error thrown for a non-2xx response, in the caller's own vocabulary. */
   wrapError: (response: InProcessApiResponse) => Error;
 }): Promise<unknown> => {
   const response = await dispatchApiRequest({
     method: args.method,
     path: args.path,
+    as: args.as,
     headers: args.headers,
     body: args.body,
-    authority: args.authority,
-    actor: args.actor,
   });
 
   if (response.status < 200 || response.status >= 300) {
-    throw args.wrapError(response);
+    throw (
+      ('authority' in args.as && workRefusalOf(response)) ||
+      args.wrapError(response)
+    );
   }
 
   return response.body;

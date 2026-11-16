@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { authUserOfWork } from '../middleware/auth';
+import { workCaller } from '../middleware/auth';
 import {
   caseDefinition,
   caseNodeStates,
@@ -20,7 +20,6 @@ import {
   parseWorkAuthority,
   requireWorkAuthority,
   type WorkAuthority,
-  workAuthorityMissing,
 } from './workAuthority';
 
 const log = createDebug('soat:playbookExecutions');
@@ -69,11 +68,7 @@ export const resolveRunAs = async (args: {
         : args.authority,
     work,
   });
-  const authUser = await authUserOfWork({ db, authority });
-  if (!authUser) {
-    log('resolveRunAs: unresolved for %s', work);
-    throw workAuthorityMissing({ work });
-  }
+  const authUser = await workCaller({ db, authority, work });
   const runAs = {
     authority: forWork({ authority, work }),
     isAllowed: authUser.isAllowed,

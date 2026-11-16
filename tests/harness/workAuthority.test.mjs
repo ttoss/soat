@@ -142,3 +142,33 @@ describe('durable work stores its authority', () => {
     assert.deepEqual(offenders, []);
   });
 });
+
+/** Server source files, relative to `src/`, whose code matches `pattern`. */
+const srcFilesMatching = (pattern) => {
+  const src = path.join(serverDir, 'src');
+  return tsFiles(src)
+    .filter((file) => {
+      return pattern.test(code(file));
+    })
+    .map((file) => {
+      return path.relative(src, file);
+    })
+    .sort();
+};
+
+describe('work holding no authority has one answer', () => {
+  test('work acts as a caller only through workCaller', () => {
+    // authUserUnder (turnAuthority.ts) reads a credential that allows nothing
+    // when there is none; it never refuses.
+    assert.deepEqual(srcFilesMatching(/\bauthUserOfWork\(/), [
+      'lib/turnAuthority.ts',
+      'middleware/auth.ts',
+    ]);
+  });
+
+  test('only dispatchApiRequest attaches work to an in-process request', () => {
+    assert.deepEqual(srcFilesMatching(/\battachWork\(/), [
+      'lib/inProcessApi.ts',
+    ]);
+  });
+});

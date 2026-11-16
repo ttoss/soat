@@ -10,7 +10,8 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  * drives it. When the principal it names is gone by then — the API key
  * revoked, the user deleted — the run must not act at all: falling back to the
  * key's owning user would widen the run's reach to everything that user may
- * do. Its `soat` self-calls resolve no caller and fail.
+ * do. Its `soat` self-calls resolve no caller and are refused
+ * `WORK_AUTHORITY_MISSING`.
  *
  * Each run lists the project's tools through a `soat` tool node, which an
  * owner-scoped credential would answer successfully.
@@ -124,7 +125,7 @@ describe('a background run whose starting principal is gone', () => {
 
     const settled = await driveAndRead(runId);
     expect(settled.status).toBe('failed');
-    expect(settled.error?.code).toBe('TOOL_HTTP_ERROR');
+    expect(settled.error?.code).toBe('WORK_AUTHORITY_MISSING');
   });
 
   test('a user deleted before the drive leaves the run with no caller', async () => {
@@ -146,6 +147,6 @@ describe('a background run whose starting principal is gone', () => {
 
     const settled = await driveAndRead(runId);
     expect(settled.status).toBe('failed');
-    expect(settled.error?.code).toBe('TOOL_HTTP_ERROR');
+    expect(settled.error?.code).toBe('WORK_AUTHORITY_MISSING');
   });
 });

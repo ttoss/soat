@@ -1,12 +1,12 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
-import { authUserOfWork } from '../middleware/auth';
+import { authUserOfWork, workCaller } from '../middleware/auth';
 import {
   type AgentAuthority,
   agentPolicyOf,
   projectCapOf,
 } from './agentAuthority';
-import { authorizationDenied, callerDenied } from './authorizationDenial';
+import { callerDenied } from './authorizationDenial';
 import {
   agentHeldGrant,
   type AuthorityCap,
@@ -99,17 +99,11 @@ export type GateCheck = {
 };
 
 const assertEach = async (args: {
-  authUser: AuthUser | undefined;
+  authUser: AuthUser;
   checks: GateCheck[];
 }): Promise<void> => {
   for (const check of args.checks) {
     const resource = check.resource ?? check.resources?.[0] ?? null;
-    if (!args.authUser) {
-      throw authorizationDenied({
-        principal: { type: 'caller', id: null },
-        denied: [{ action: check.action, resource }],
-      });
-    }
     if (!(await args.authUser.isAllowed(check))) {
       throw callerDenied({
         authUser: args.authUser,
@@ -123,9 +117,10 @@ const assertEach = async (args: {
 /**
  * The one check every agent tool call and content read crosses: each of
  * `checks` must be allowed under `authority`, else the denial names the set
- * that refused. No authority allows nothing. With `caller`, the request whose
- * authority `authority` is or narrows, its own audited authorizer checks
- * first, and `authority` only when it narrows the caller.
+ * that refused; work holding no authority is refused (`workCaller`). With
+ * `caller`, the request whose authority `authority` is or narrows, its own
+ * audited authorizer checks first, and `authority` only when it narrows the
+ * caller.
  */
 export const assertAllowedUnder = async (args: {
   authority: WorkAuthority | null;
@@ -139,7 +134,15 @@ export const assertAllowedUnder = async (args: {
     if (sameWorkAuthority({ a: args.authority, b: own })) return;
   }
   await assertEach({
-    authUser: await authUserUnder(args.authority),
+    authUser: await workCaller({
+      db,
+      authority: args.authority,
+      work: `The call to ${args.checks
+        .map((check) => {
+          return check.action;
+        })
+        .join(', ')}`,
+    }),
     checks: args.checks,
   });
 };

@@ -135,7 +135,7 @@ export const workRequest = (args: {
     method: args.method,
     path: args.path,
     body: args.body,
-    authority: args.authority,
+    as: { authority: args.authority, actor: null },
   });
 };
 

@@ -182,7 +182,7 @@ Rules that hold for all of it:
 
 - **A resume only narrows.** Whoever resumes work holds the stored authority to their own: it can do only what both allow, and a wider resumer adds nothing. Under `run_as: agent` the agent's grant applies either way.
 - **Revoking stops it.** Deleting the starting key, or removing its permission, refuses the work's next call. Deleting a trigger refuses every call of work under it (`403 FORBIDDEN`).
-- **Fail closed.** Work that stores no authority sends no tool call: `409 WORK_AUTHORITY_MISSING`.
+- **Fail closed.** Work that stores no authority, or whose authority names a user or API key that no longer exists, makes no call: `409 WORK_AUTHORITY_MISSING`, on every path (a tool call, an in-process API call, a firing, a playbook execution).
 - **Attribution.** Records name the principal that acted (`key_…`, a trigger, a playbook version, a memory rule); [`acted_as`](../modules/generations.md#acting-principal) on a generation says whose authority its tool calls ran as.
 
 ## What the caller names
@@ -279,7 +279,7 @@ A request narrowed beyond its credential's own grant creates no API key and cons
 | `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`| The caller may not issue an IAM token                                |
 | `400 AGENT_RUN_AS_REQUIRES_POLICIES` | `run_as: agent` without `policy_ids`                              |
 | `400 ON_BEHALF_OF_INVALID`        | The assertion does not verify, names another project or has no `ath` |
-| `409 WORK_AUTHORITY_MISSING`      | Durable work stores no authority                                     |
+| `409 WORK_AUTHORITY_MISSING`      | Durable work stores no authority, or one that no longer resolves     |
 | `409 POLICY_HAS_DEPENDENTS`       | A policy a resource still names cannot be deleted                    |
 
 The denial shape and the `403`/`404` split: [What a Denial Looks Like](../modules/iam.md#what-a-denial-looks-like).

@@ -63,8 +63,8 @@ describe('stored work whose boundary source is gone', () => {
     expect(deleted.status).toBe(204);
 
     const res = await listTools();
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('UNAUTHORIZED');
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('WORK_AUTHORITY_MISSING');
   });
 
   test('a firing whose trigger was deleted is refused', async () => {
