@@ -96,6 +96,7 @@ const NOT_NULL_FOREIGN_KEYS = [
   'playbook_upgrades.case_id',
   'playbook_versions.playbook_id',
   'playbooks.project_id',
+  'principal_revocations.project_id',
   'quota_window_counters.quota_id',
   'quotas.project_id',
   'secrets.project_id',

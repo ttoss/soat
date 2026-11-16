@@ -27,7 +27,7 @@ export const BUILT_IN_ACTION_RESOURCE_TYPES: Readonly<
   formations: ['formation'],
   generations: ['generation'],
   guardrails: ['guardrail'],
-  iam: ['iam_token'],
+  iam: ['iam_token', 'iam_principal'],
   'ingestion-rules': ['ingestionRule'],
   knowledge: ['document', 'memory_store', 'memory'],
   memories: ['memory', 'memory_store'],

@@ -16,8 +16,6 @@ import { signToken } from './signedTokens';
 
 const log = createDebug('soat:iamTokens');
 
-export const IAM_TOKEN_ACTION = 'iam:CreateToken';
-
 /** Seconds an IAM token lives: `ttl_seconds` is held to this range. */
 export const IAM_TOKEN_TTL = { min: 30, max: 900, default: 300 } as const;
 
@@ -153,10 +151,10 @@ const parseBoundBody = async (args: {
     : parsePolicy({ policy });
 };
 
-const parsePrincipal = (
+/** An opaque `{ type, id }` principal from a request body; absent is invalid. */
+export const requirePrincipal = (
   value: unknown
-): { type: string; id: string } | undefined => {
-  if (value === undefined) return undefined;
+): { type: string; id: string } => {
   const valid = (field: unknown): field is string => {
     return (
       typeof field === 'string' &&
@@ -171,6 +169,13 @@ const parsePrincipal = (
     );
   }
   return { type: value.type, id: value.id };
+};
+
+/** An opaque `{ type, id }` principal from a request body; absent is undefined. */
+export const parsePrincipal = (
+  value: unknown
+): { type: string; id: string } | undefined => {
+  return value === undefined ? undefined : requirePrincipal(value);
 };
 
 const parseTtl = (value: unknown): number => {

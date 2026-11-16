@@ -5,6 +5,7 @@ import type { AuthUser, Context } from '../Context';
 import { AUTH_USER_ATTRIBUTES, verifyApiKey } from '../lib/apiKeyVerifier';
 import { attachedWork } from '../lib/inProcessAuthority';
 import { parseBound } from '../lib/principalBound';
+import { isPrincipalRevoked } from '../lib/principalRevocations';
 import {
   BEARER_TOKEN_TYPES,
   type BearerTokenType,
@@ -272,7 +273,8 @@ const workUser = async (args: {
 
 /**
  * Stored work's authority as the caller it acts as. Undefined when it no
- * longer resolves: the user or key its principal names is gone.
+ * longer resolves: the user or key its principal names is gone, or the
+ * principal it acts for is revoked in its project.
  */
 const resolveWork = async (args: {
   db: Context['db'];
@@ -280,6 +282,15 @@ const resolveWork = async (args: {
 }): Promise<Resolved | undefined> => {
   const { authority } = args;
   const { principal } = authority;
+  if (
+    authority.actsFor &&
+    (await isPrincipalRevoked({
+      projectPublicId: authority.project,
+      principal: authority.actsFor,
+    }))
+  ) {
+    return;
+  }
   const user = await workUser({ db: args.db, principal });
   if (user === undefined) return;
   return {
