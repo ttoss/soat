@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.114.0](https://github.com/ttoss/soat/compare/v0.113.0...v0.114.0) (2026-11-16)
+
+### Features
+
+* **server:** model aliases on an AI provider ([#1953](https://github.com/ttoss/soat/issues/1953)) ([7cc6265](https://github.com/ttoss/soat/commit/7cc6265e6a570e9730eedc8628f243f30101fb67))
+
 # [0.113.0](https://github.com/ttoss/soat/compare/v0.112.0...v0.113.0) (2026-11-16)
 
 ### Bug Fixes
