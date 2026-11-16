@@ -223,9 +223,6 @@ paths:
       summary: Get an OAuth connection
       description: Returns the connection's status, without tokens.
       operationId: getOauthConnection
-      x-soat-resource:
-        kind: oauth_connection
-        from: oauth_connection_id
       x-iam-action: oauth-connections:GetOauthConnection
       x-iam-resource-type: oauth_connection
       responses:
@@ -254,9 +251,6 @@ paths:
         has one, and deletes the connection. A failed revocation does not stop
         the deletion.
       operationId: deleteOauthConnection
-      x-soat-resource:
-        kind: oauth_connection
-        from: oauth_connection_id
       x-iam-action: oauth-connections:DeleteOauthConnection
       x-iam-resource-type: oauth_connection
       responses:

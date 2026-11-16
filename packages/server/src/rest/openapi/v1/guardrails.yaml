@@ -161,9 +161,6 @@ paths:
       operationId: getGuardrail
       x-iam-action: guardrails:GetGuardrail
       x-iam-resource-type: guardrail
-      x-soat-resource:
-        kind: guardrail
-        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -214,9 +211,6 @@ paths:
       operationId: updateGuardrail
       x-iam-action: guardrails:UpdateGuardrail
       x-iam-resource-type: guardrail
-      x-soat-resource:
-        kind: guardrail
-        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -279,9 +273,6 @@ paths:
       operationId: deleteGuardrail
       x-iam-action: guardrails:DeleteGuardrail
       x-iam-resource-type: guardrail
-      x-soat-resource:
-        kind: guardrail
-        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -339,9 +330,6 @@ paths:
       operationId: listGuardrailVersions
       x-iam-action: guardrails:ListGuardrailVersions
       x-iam-resource-type: guardrail
-      x-soat-resource:
-        kind: guardrail
-        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -401,9 +389,6 @@ paths:
       operationId: getGuardrailVersion
       x-iam-action: guardrails:GetGuardrailVersion
       x-iam-resource-type: guardrail
-      x-soat-resource:
-        kind: guardrail
-        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -470,9 +455,6 @@ paths:
       operationId: restoreGuardrailVersion
       x-iam-action: guardrails:RestoreGuardrailVersion
       x-iam-resource-type: guardrail
-      x-soat-resource:
-        kind: guardrail
-        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -550,9 +532,6 @@ paths:
       operationId: evaluateGuardrail
       x-iam-action: guardrails:EvaluateGuardrail
       x-iam-resource-type: guardrail
-      x-soat-resource:
-        kind: guardrail
-        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path

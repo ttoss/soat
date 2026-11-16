@@ -7,7 +7,8 @@ import {
   UNTYPED_BUILT_IN_MODULES,
 } from 'src/lib/iamActionResourceTypes';
 import { listAllActions } from 'src/lib/permissionCatalog';
-import { resourceTypeOfKind } from 'src/lib/resourceScopes';
+import { soatTools } from 'src/lib/soatTools';
+import { carriedActionsOfTool } from 'src/lib/toolCarriedActions';
 
 const routesDir = path.resolve(__dirname, '../../../../src/rest/v1');
 const specDir = path.resolve(__dirname, '../../../../src/rest/openapi/v1');
@@ -91,8 +92,12 @@ type SpecOperation = {
   action: string;
   module: string;
   resourceType?: unknown;
-  kind?: string;
+  /** The operation names its resource by a path id. */
+  item: boolean;
 };
+
+/** Operations naming the resource they authorize on by a body id. */
+const BODY_ITEM_OPERATIONS = new Set(['createMemory', 'createMemoryRule']);
 
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'patch'];
 
@@ -106,20 +111,20 @@ const specOperations = (): SpecOperation[] => {
       const spec = load(fs.readFileSync(path.join(specDir, file), 'utf-8')) as {
         paths?: Record<string, Record<string, Record<string, unknown>>>;
       };
-      return Object.values(spec.paths ?? {}).flatMap((item) => {
+      return Object.entries(spec.paths ?? {}).flatMap(([route, item]) => {
         return HTTP_METHODS.flatMap((method) => {
           const op = item[method];
           const action = op?.['x-iam-action'];
           if (typeof action !== 'string') return [];
-          const resource = op['x-soat-resource'] as
-            { kind?: string } | undefined;
           return [
             {
               operationId: String(op.operationId),
               action,
               module: action.split(':')[0],
               resourceType: op['x-iam-resource-type'],
-              kind: resource?.kind,
+              item:
+                route.includes('{') ||
+                BODY_ITEM_OPERATIONS.has(String(op.operationId)),
             },
           ];
         });
@@ -192,25 +197,60 @@ describe('x-iam-resource-type', () => {
     expect(wrong).toEqual([]);
   });
 
-  test('an operation naming its resource declares the type that resource authorizes on', () => {
-    const wrong = operations.filter(({ kind, resourceType }) => {
-      return (
-        kind !== undefined && resourceType !== resourceTypeOfKind({ kind })
-      );
-    });
-
-    expect(wrong).toEqual([]);
-  });
-
-  test('any other operation of a multi-type module declares a type its route checks', () => {
+  // An item operation resolves its SRN from the id it names;
+  // `soatToolResourceKinds.test.ts` checks those through a real turn.
+  test('every collection operation of a multi-type module declares a type its route checks', () => {
     const wrong = operations.filter(
-      ({ module, action, kind, resourceType }) => {
+      ({ module, action, resourceType, item }) => {
         const types = BUILT_IN_ACTION_RESOURCE_TYPES[module] ?? [];
-        if (kind !== undefined || types.length < 2) return false;
+        if (item || types.length < 2) return false;
         return !routeTypes.get(action)?.has(String(resourceType));
       }
     );
 
     expect(wrong).toEqual([]);
+  });
+});
+
+/**
+ * The writer rule asks a `builtin` tool's writer for each native action on
+ * the type its route authorizes on, `x-iam-resource-type`, and nothing else.
+ */
+describe('the writer rule on a native builtin action', () => {
+  const carried = (name: string) => {
+    return carriedActionsOfTool({
+      type: 'builtin',
+      mcp: null,
+      actions: [name],
+    });
+  };
+
+  test('holds each action on its x-iam-resource-type', () => {
+    const wrong = soatTools.flatMap((def) => {
+      if (!def.iamResourceType) return [];
+      const [{ resourceType }] = carried(def.name);
+      return resourceType === def.iamResourceType
+        ? []
+        : [`${def.name}: ${resourceType} ≠ ${def.iamResourceType}`];
+    });
+
+    expect(wrong).toEqual([]);
+  });
+
+  test("holds an untyped module's action on the whole project", () => {
+    const def = soatTools.find((tool) => {
+      return tool.name === 'get-project';
+    });
+
+    expect(def?.iamResourceType).toBeUndefined();
+    expect(carried('get-project')).toEqual([
+      { action: 'projects:GetProject', resourceType: '*', resourceId: '*' },
+    ]);
+  });
+
+  test('refuses an action declaring no type, never a module default', () => {
+    expect(() => {
+      return carried('check-iam-permission');
+    }).toThrow('declares no resource type');
   });
 });

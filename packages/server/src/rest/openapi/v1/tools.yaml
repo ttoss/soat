@@ -285,9 +285,6 @@ paths:
       operationId: getTool
       x-iam-action: tools:GetTool
       x-iam-resource-type: tool
-      x-soat-resource:
-        kind: tool
-        from: tool_id
       parameters:
         - name: tool_id
           in: path
@@ -333,9 +330,6 @@ paths:
       operationId: updateTool
       x-iam-action: tools:UpdateTool
       x-iam-resource-type: tool
-      x-soat-resource:
-        kind: tool
-        from: tool_id
       parameters:
         - name: tool_id
           in: path
@@ -397,9 +391,6 @@ paths:
       operationId: deleteTool
       x-iam-action: tools:DeleteTool
       x-iam-resource-type: tool
-      x-soat-resource:
-        kind: tool
-        from: tool_id
       parameters:
         - name: tool_id
           in: path
@@ -499,9 +490,6 @@ paths:
       operationId: callTool
       x-iam-action: tools:CallTool
       x-iam-resource-type: tool
-      x-soat-resource:
-        kind: tool
-        from: tool_id
       parameters:
         - name: tool_id
           in: path
@@ -644,9 +632,6 @@ paths:
       operationId: listToolActions
       x-iam-action: tools:CallTool
       x-iam-resource-type: tool
-      x-soat-resource:
-        kind: tool
-        from: tool_id
       parameters:
         - name: tool_id
           in: path

@@ -158,9 +158,6 @@ paths:
       operationId: getAgent
       x-iam-action: agents:GetAgent
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
       responses:
@@ -202,9 +199,6 @@ paths:
       operationId: updateAgent
       x-iam-action: agents:UpdateAgent
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
@@ -259,9 +253,6 @@ paths:
       operationId: patchAgent
       x-iam-action: agents:UpdateAgent
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
@@ -321,9 +312,6 @@ paths:
       operationId: deleteAgent
       x-iam-action: agents:DeleteAgent
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - name: force
@@ -400,9 +388,6 @@ paths:
       operationId: createAgentGeneration
       x-iam-action: agents:CreateAgentGeneration
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: './idempotency.yaml#/components/parameters/IdempotencyKey'
@@ -574,9 +559,6 @@ paths:
       operationId: submitAgentToolOutputs
       x-iam-action: generations:ResumeGeneration
       x-iam-resource-type: generation
-      x-soat-resource:
-        kind: generation
-        from: generation_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/GenerationId'
@@ -658,9 +640,6 @@ paths:
       operationId: listAgentVersions
       x-iam-action: agents:ListAgentVersions
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: './pagination.yaml#/components/parameters/Limit'
@@ -714,9 +693,6 @@ paths:
       operationId: getAgentVersion
       x-iam-action: agents:GetAgentVersion
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/AgentVersionNumber'
@@ -775,9 +751,6 @@ paths:
       operationId: restoreAgentVersion
       x-iam-action: agents:RestoreAgentVersion
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/AgentVersionNumber'
@@ -851,9 +824,6 @@ paths:
       operationId: setAgentRelease
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
       requestBody:
@@ -922,9 +892,6 @@ paths:
       operationId: promoteAgentRelease
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
       responses:
@@ -983,9 +950,6 @@ paths:
       operationId: abortAgentRelease
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
-      x-soat-resource:
-        kind: agent
-        from: agent_id
       parameters:
         - $ref: '#/components/parameters/AgentId'
       responses:

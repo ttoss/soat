@@ -236,9 +236,6 @@ paths:
       operationId: getAuditEntry
       x-iam-action: audit:GetAuditEntry
       x-iam-resource-type: audit
-      x-soat-resource:
-        kind: audit
-        from: entry_id
       parameters:
         - name: entry_id
           in: path

@@ -116,9 +116,6 @@ paths:
       operationId: getChain
       x-iam-action: chains:GetChain
       x-iam-resource-type: chain
-      x-soat-resource:
-        kind: chain
-        from: chain_id
       parameters:
         - $ref: '#/components/parameters/chain_id'
       responses:

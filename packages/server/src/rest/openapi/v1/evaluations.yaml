@@ -165,9 +165,6 @@ paths:
       operationId: getDataset
       x-iam-action: evaluations:GetDataset
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -215,9 +212,6 @@ paths:
       operationId: updateDataset
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -297,9 +291,6 @@ paths:
       operationId: deleteDataset
       x-iam-action: evaluations:DeleteDataset
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -346,9 +337,6 @@ paths:
       operationId: listDatasetItems
       x-iam-action: evaluations:ListDatasets
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -406,9 +394,6 @@ paths:
       operationId: createDatasetItem
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -523,9 +508,6 @@ paths:
       operationId: createDatasetItemFromGeneration
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -626,9 +608,6 @@ paths:
       operationId: updateDatasetItem
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -712,9 +691,6 @@ paths:
       operationId: deleteDatasetItem
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
-      x-soat-resource:
-        kind: dataset
-        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -937,9 +913,6 @@ paths:
       operationId: getEval
       x-iam-action: evaluations:GetEval
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -990,9 +963,6 @@ paths:
       operationId: updateEval
       x-iam-action: evaluations:CreateEval
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1091,9 +1061,6 @@ paths:
       operationId: deleteEval
       x-iam-action: evaluations:DeleteEval
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1140,9 +1107,6 @@ paths:
       operationId: listEvalRuns
       x-iam-action: evaluations:ListEvals
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1227,9 +1191,6 @@ paths:
       operationId: startEvalRun
       x-iam-action: evaluations:RunEval
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1385,9 +1346,6 @@ paths:
       operationId: getEvalRun
       x-iam-action: evaluations:GetEval
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1443,9 +1401,6 @@ paths:
       operationId: listEvalResults
       x-iam-action: evaluations:ListEvals
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1521,9 +1476,6 @@ paths:
       operationId: cancelEvalRun
       x-iam-action: evaluations:RunEval
       x-iam-resource-type: eval
-      x-soat-resource:
-        kind: eval
-        from: eval_id
       parameters:
         - name: eval_id
           in: path

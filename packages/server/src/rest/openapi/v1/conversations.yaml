@@ -160,9 +160,6 @@ paths:
       operationId: getConversation
       x-iam-action: conversations:GetConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -210,9 +207,6 @@ paths:
       operationId: updateConversation
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -292,9 +286,6 @@ paths:
       operationId: deleteConversation
       x-iam-action: conversations:DeleteConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -341,9 +332,6 @@ paths:
       operationId: listConversationMessages
       x-iam-action: conversations:GetConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -407,9 +395,6 @@ paths:
       operationId: addConversationMessage
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -527,9 +512,6 @@ paths:
       operationId: generateConversationMessage
       x-iam-action: conversations:GenerateConversationMessage
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -665,9 +647,6 @@ paths:
       operationId: removeConversationMessage
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -721,9 +700,6 @@ paths:
       operationId: getConversationTags
       x-iam-action: conversations:GetConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -771,9 +747,6 @@ paths:
       operationId: replaceConversationTags
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -831,9 +804,6 @@ paths:
       operationId: mergeConversationTags
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
-      x-soat-resource:
-        kind: conversation
-        from: conversation_id
       parameters:
         - name: conversation_id
           in: path

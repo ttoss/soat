@@ -148,9 +148,6 @@ paths:
       summary: Get an OAuth client
       description: Returns the client; `client_secret` is its secret reference.
       operationId: getOauthClient
-      x-soat-resource:
-        kind: oauth_client
-        from: oauth_client_id
       x-iam-action: oauth-clients:GetOauthClient
       x-iam-resource-type: oauth_client
       responses:
@@ -176,9 +173,6 @@ paths:
       summary: Update an OAuth client
       description: Changes only the fields sent; `null` clears a nullable one.
       operationId: updateOauthClient
-      x-soat-resource:
-        kind: oauth_client
-        from: oauth_client_id
       x-iam-action: oauth-clients:UpdateOauthClient
       x-iam-resource-type: oauth_client
       requestBody:
@@ -241,9 +235,6 @@ paths:
       summary: Delete an OAuth client
       description: Deletes the client and every connection made through it.
       operationId: deleteOauthClient
-      x-soat-resource:
-        kind: oauth_client
-        from: oauth_client_id
       x-iam-action: oauth-clients:DeleteOauthClient
       x-iam-resource-type: oauth_client
       responses:

@@ -7,10 +7,9 @@
  */
 import { DomainError } from '../errors';
 import { findBuiltinAction } from './builtinActionCatalog';
-import { BUILT_IN_ACTION_RESOURCE_TYPES } from './iamActionResourceTypes';
+import { UNTYPED_BUILT_IN_MODULES } from './iamActionResourceTypes';
 import { findMcpToolRegistration } from './mcpToolRegistrations';
 import { validatePipelineConfig } from './pipelineTools';
-import { resourceTypeOfKind } from './resourceScopes';
 import { type CarriedAction, startOf } from './writerRule';
 
 export type CarriedTool = {
@@ -18,6 +17,25 @@ export type CarriedTool = {
   mcp: object | null | undefined;
   actions: string[] | null | undefined;
   pipeline?: object | null;
+};
+
+/**
+ * The type the action's route authorizes on; an untyped module's routes check
+ * the whole project. Anything else declaring none is refused, never guessed.
+ */
+const writerResourceType = (args: {
+  name: string;
+  action: string;
+  def: { iamResourceType?: string };
+}): string => {
+  if (args.def.iamResourceType) return args.def.iamResourceType;
+  if (Object.hasOwn(UNTYPED_BUILT_IN_MODULES, args.action.split(':')[0])) {
+    return '*';
+  }
+  throw new DomainError(
+    'VALIDATION_FAILED',
+    `\`${args.name}\` declares no resource type its route authorizes on.`
+  );
 };
 
 const builtinActions = (actions: string[]): CarriedAction[] => {
@@ -31,11 +49,13 @@ const builtinActions = (actions: string[]): CarriedAction[] => {
     }
     const { def } = found;
     const action = def.iamAction ?? name;
-    const resourceType =
-      (def.resource && resourceTypeOfKind({ kind: def.resource.kind })) ??
-      BUILT_IN_ACTION_RESOURCE_TYPES[action.split(':')[0]]?.[0] ??
-      '*';
-    return [{ action, resourceType, resourceId: '*' }];
+    return [
+      {
+        action,
+        resourceType: writerResourceType({ name, action, def }),
+        resourceId: '*',
+      },
+    ];
   });
 };
 

@@ -617,9 +617,6 @@ paths:
       operationId: deleteUsageThreshold
       x-iam-action: usage:ManageThresholds
       x-iam-resource-type: usage
-      x-soat-resource:
-        kind: usage
-        from: threshold_id
       parameters:
         - name: threshold_id
           in: path

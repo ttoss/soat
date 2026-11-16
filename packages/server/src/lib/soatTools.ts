@@ -2,7 +2,7 @@
  * SOAT Tools - the platform actions agents and MCP clients can invoke, one per
  * REST operation, derived from the OpenAPI specs by
  * `@ttoss/http-server-mcp-openapi`. This module adds only what is SOAT's: the
- * IAM action, the resource an argument names, and the agent exclusion.
+ * IAM action, the SRN type its route authorizes on, and the agent exclusion.
  */
 
 import * as fs from 'node:fs';
@@ -20,7 +20,6 @@ import { load } from 'js-yaml';
 import { DomainError } from '../errors';
 import { getActionForOperation } from './permissionCatalog';
 import { deriveToolDefinitions } from './soatToolsDerivation';
-import { readResourceRef, type SoatResourceRef } from './soatToolsResource';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -37,8 +36,8 @@ export interface ToolDefinition {
   query?: (args: Record<string, unknown>) => string;
   body?: (args: Record<string, unknown>) => Record<string, unknown>;
   iamAction?: string;
-  /** See `x-soat-resource` in `soatToolsResource.ts`. */
-  resource?: SoatResourceRef;
+  /** `x-iam-resource-type`: the SRN type the operation's route authorizes on. */
+  iamResourceType?: string;
   /** snake_case names of every top-level request body property this operation's schema declares, including server-managed ones. */
   acceptedBodyFields: string[];
   /** The operation's path, as the spec writes it (`/api/v1/agents/{agent_id}`). */
@@ -85,6 +84,7 @@ export const buildSoatActionTarget = (args: {
 const toSoatTool = (tool: OpenApiToolDefinition): ToolDefinition => {
   const { extensions } = tool;
   const iamAction = extensions['x-iam-action'];
+  const iamResourceType = extensions['x-iam-resource-type'];
   return {
     name: tool.name,
     description: tool.description,
@@ -100,7 +100,7 @@ const toSoatTool = (tool: OpenApiToolDefinition): ToolDefinition => {
       typeof iamAction === 'string'
         ? iamAction
         : getActionForOperation(tool.operationId),
-    resource: readResourceRef(extensions['x-soat-resource']),
+    ...(typeof iamResourceType === 'string' ? { iamResourceType } : {}),
     acceptedBodyFields: tool.acceptedBodyFields,
     pathTemplate: tool.pathTemplate,
     tags: tool.tags,

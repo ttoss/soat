@@ -11,7 +11,8 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
  * Every resource kind a builtin action can name, checked by its route on the
- * SRN it resolves under the turn's authority — through a real turn.
+ * SRN it resolves under the turn's authority — through a real turn. What the
+ * tool's writer holds is `toolsWriterRule.test.ts`'s.
  *
  * One builtin tool carries one `get-*` action per kind. The model (a local
  * chat-completions stub) calls each action twice in a single step: once with
@@ -57,7 +58,7 @@ const parseResult = (
   }
 };
 
-/** Every kind `resourceScopes.ts` lists. */
+/** Every resource a `get-*` (or, for a usage threshold, `delete-*`) action names by id. */
 const KINDS = [
   'actor',
   'agent',

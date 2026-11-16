@@ -192,9 +192,6 @@ paths:
       operationId: getModelRoute
       x-iam-action: model-routes:GetModelRoute
       x-iam-resource-type: model_route
-      x-soat-resource:
-        kind: model_route
-        from: route_id
       parameters:
         - name: route_id
           in: path
@@ -244,9 +241,6 @@ paths:
       operationId: updateModelRoute
       x-iam-action: model-routes:UpdateModelRoute
       x-iam-resource-type: model_route
-      x-soat-resource:
-        kind: model_route
-        from: route_id
       parameters:
         - name: route_id
           in: path
@@ -336,9 +330,6 @@ paths:
       operationId: deleteModelRoute
       x-iam-action: model-routes:DeleteModelRoute
       x-iam-resource-type: model_route
-      x-soat-resource:
-        kind: model_route
-        from: route_id
       parameters:
         - name: route_id
           in: path

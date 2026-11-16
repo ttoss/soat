@@ -172,9 +172,6 @@ paths:
       operationId: getGeneration
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
-      x-soat-resource:
-        kind: generation
-        from: generation_id
       parameters:
         - name: generation_id
           in: path
@@ -229,9 +226,6 @@ paths:
       operationId: updateGeneration
       x-iam-action: generations:UpdateGeneration
       x-iam-resource-type: generation
-      x-soat-resource:
-        kind: generation
-        from: generation_id
       parameters:
         - name: generation_id
           in: path
@@ -321,9 +315,6 @@ paths:
       operationId: purgeGenerationContent
       x-iam-action: generations:PurgeGenerationContent
       x-iam-resource-type: generation
-      x-soat-resource:
-        kind: generation
-        from: generation_id
       parameters:
         - name: generation_id
           in: path
@@ -378,9 +369,6 @@ paths:
       operationId: listGenerationMemoryAssertions
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
-      x-soat-resource:
-        kind: generation
-        from: generation_id
       parameters:
         - name: generation_id
           in: path
@@ -450,9 +438,6 @@ paths:
       operationId: getGenerationTranscript
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
-      x-soat-resource:
-        kind: generation
-        from: generation_id
       parameters:
         - name: generation_id
           in: path
