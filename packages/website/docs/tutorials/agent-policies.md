@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 SOAT forwards the caller's credential into every `builtin` action an agent performs, so a chain is capped by the caller's token. That cap is not least privilege: a read-only summarizer running under a caller who may write documents executes at the caller's ceiling.
 
-An agent's `policy_ids` name stored policies that limit which `builtin` actions that agent may perform, whoever calls it. Every generation runs as the caller ∩ those policies, as with [API keys](/docs/modules/api-keys#permission-inheritance).
+An agent's `policy_ids` name stored policies that limit what that agent may do, whoever calls it: each `builtin` action, and every `http`, `mcp` or `pipeline` tool as `tools:CallTool`. Every generation runs as the caller ∩ those policies, as with [API keys](/docs/modules/api-keys#permission-inheritance).
 
 You give alice broad document permissions, bind an agent to a document-writing tool, watch the agent's write be refused by a read-only policy, then perform the same write directly as alice.
 
