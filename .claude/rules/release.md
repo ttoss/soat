@@ -10,8 +10,9 @@ paths:
 ## Flow
 
 1. Open a release PR (`release/vX.Y.Z` → `main`) titled `chore(release): …`.
-   `pr.yml` skips build/smoke/tutorials on that title: never put unreviewed
-   non-release code on it. It still runs `Release Lockfile` (frozen install);
+   `pr.yml` skips build/smoke/tutorials on that title (its merge-queue run
+   reads no title and runs them): never put unreviewed non-release code on
+   it. It still runs `Release Lockfile` (frozen install);
    `main.yml` refuses to tag on a lockfile a frozen install rejects.
 2. **Squash-merge.** Every `main.yml` job gates on
    `startsWith(head_commit.message, 'chore(release):')`; a merge commit
