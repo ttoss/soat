@@ -113,13 +113,7 @@ const buildRoutedTarget = async (args: {
         : null,
     maxRetries: args.target.max_retries ?? DEFAULT_TARGET_MAX_RETRIES,
     model: asInnerModel(
-      buildModel({
-        provider: resolved.provider,
-        secretValue: resolved.secretValue,
-        model: args.target.model,
-        baseUrl: resolved.baseUrl,
-        config: resolved.config as Record<string, unknown> | undefined,
-      }),
+      buildModel({ aiProvider: resolved, model: args.target.model }),
       `${args.index}`
     ),
   };

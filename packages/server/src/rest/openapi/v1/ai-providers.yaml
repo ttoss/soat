@@ -84,6 +84,14 @@ paths:
                             config:
                               type: object
                               description: 'Additional provider-specific configuration. Absent when the record sets none. Never carries a credential.'
+                            model_aliases:
+                              type: object
+                              additionalProperties:
+                                type: string
+                              description: 'Alias → the model id sent to the vendor. A model named beside this provider may be an alias; reads, usage and traces answer the alias, and only the vendor call uses the id. Empty when the provider has none.'
+                            model_aliases_only:
+                              type: boolean
+                              description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
                             project_id:
                               x-soat-ref: projects
                               type: string
@@ -190,6 +198,17 @@ paths:
                 config:
                   type: object
                   description: 'Additional provider-specific configuration. `apiKey` is refused: the credential goes in the linked secret.'
+                model_aliases:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: 'Alias → the model id sent to the vendor.'
+                  example:
+                    fast: gpt-4o-mini
+                model_aliases_only:
+                  type: boolean
+                  default: false
+                  description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
       responses:
         '201':
           description: AI provider created successfully
@@ -206,6 +225,14 @@ paths:
                     type: string
                   default_model:
                     type: string
+                  model_aliases:
+                    type: object
+                    additionalProperties:
+                      type: string
+                    description: 'Alias → the model id sent to the vendor. A model named beside this provider may be an alias; reads, usage and traces answer the alias, and only the vendor call uses the id. Empty when the provider has none.'
+                  model_aliases_only:
+                    type: boolean
+                    description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
                   project_id:
                     x-soat-ref: projects
                     type: string
@@ -290,6 +317,14 @@ paths:
                   config:
                     type: object
                     description: 'Additional provider-specific configuration. Never carries a credential.'
+                  model_aliases:
+                    type: object
+                    additionalProperties:
+                      type: string
+                    description: 'Alias → the model id sent to the vendor. A model named beside this provider may be an alias; reads, usage and traces answer the alias, and only the vendor call uses the id. Empty when the provider has none.'
+                  model_aliases_only:
+                    type: boolean
+                    description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
                   created_at:
                     type: string
                     format: date-time
@@ -374,6 +409,17 @@ paths:
                 config:
                   type: object
                   description: 'Replaces the whole configuration. `apiKey` is refused: the credential goes in the linked secret.'
+                model_aliases:
+                  type: object
+                  nullable: true
+                  additionalProperties:
+                    type: string
+                  description: 'Alias → the model id sent to the vendor. Replaces the whole map; `null` clears it.'
+                  example:
+                    fast: gpt-4o-mini
+                model_aliases_only:
+                  type: boolean
+                  description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
       responses:
         '200':
           description: AI provider updated successfully

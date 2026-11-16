@@ -125,6 +125,9 @@ describe('Playbook inputs required on a condition', () => {
       .post(`/api/v1/playbooks/${playbookId}/cases`)
       .send({ subject: `conditional-${seq}` });
     expect(res.status).toBe(201);
+    // Creating a case queues its runnable nodes in the background; a write
+    // racing that run supersedes it, so the case settles first.
+    await flushPlaybookExecutions();
     return res.body.id as string;
   };
 

@@ -1044,6 +1044,15 @@ components:
           type: object
           nullable: true
           description: Provider-specific extra configuration
+        model_aliases:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          description: Alias → the model id sent to the vendor.
+        model_aliases_only:
+          type: boolean
+          description: When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).
 
     ToolResourceProperties:
       description: >-

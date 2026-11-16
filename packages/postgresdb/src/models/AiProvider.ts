@@ -91,6 +91,14 @@ export class AiProvider extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare config: Record<string, unknown> | null;
 
+  /** Alias → the model id sent to the vendor. */
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare modelAliases: Record<string, string> | null;
+
+  /** Refuse a model that is not one of `modelAliases`. */
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare modelAliasesOnly: boolean;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

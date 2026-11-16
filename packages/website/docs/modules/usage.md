@@ -245,7 +245,7 @@ Set by the platform at the metering choke point; a caller cannot bill eval spend
 
 ### Provider attribution
 
-An event bills against the provider that served it: the target a [model route](./model-routes.md) picked (read from what the turn did, so a failed-over generation meters against the target that answered), or the agent's pinned provider. Its `model` is the model that provider served — a routed target's own model, else the id the provider answered with (a versioned id included), else the configured one — because that pair is the price-book key, on success and failure alike. An event with no provider resolves no price row and reports the `unknown` provider slug.
+An event bills against the provider that served it: the target a [model route](./model-routes.md) picked (read from what the turn did, so a failed-over generation meters against the target that answered), or the agent's pinned provider. Its `model` is the model that provider served — a routed target's own model, else the id the provider answered with (a versioned id included), else the configured one — because that pair is the price-book key, on success and failure alike. A model named by one of the provider's [model aliases](./ai-providers.md#model-aliases) meters, and is priced, as the alias, never the vendor id it maps to. An event with no provider resolves no price row and reports the `unknown` provider slug.
 
 ### Attribution outlives deletion
 

@@ -209,7 +209,7 @@ Caller-supplied system content could replace the operator's prompt (the AI SDK's
 
 ### AI Provider Resolution
 
-Exactly one of `ai_provider_id` or `model_route_id` is set; both or neither is `400`. With a provider, `model` falls back to its `default_model` ([AI Providers](./ai-providers.md)). The provider must belong to the agent's project: another project's provider is `400 AI_PROVIDER_NOT_FOUND`, same as a nonexistent id, even for a caller who can read both; likewise a [model route](./model-routes.md)'s targets and a [chat](./chats.md)'s pinned provider.
+Exactly one of `ai_provider_id` or `model_route_id` is set; both or neither is `400`. With a provider, `model` falls back to its `default_model` ([AI Providers](./ai-providers.md)). `model` may be one of the provider's [model aliases](./ai-providers.md#model-aliases): the agent stores and answers the alias and generates on the vendor id it maps to; on a provider with `model_aliases_only`, any other name is `400 MODEL_NOT_OFFERED`. The provider must belong to the agent's project: another project's provider is `400 AI_PROVIDER_NOT_FOUND`, same as a nonexistent id, even for a caller who can read both; likewise a [model route](./model-routes.md)'s targets and a [chat](./chats.md)'s pinned provider.
 
 With a model route the model resolves through the route's ordered provider+model targets; a retryable failure fails over to the next target per LLM call, so executed tool calls are never repeated. `model` cannot accompany a route. To switch a pinned agent to a route, send `model_route_id` with `ai_provider_id: null` in one request.
 

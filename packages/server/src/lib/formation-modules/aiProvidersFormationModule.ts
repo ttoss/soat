@@ -14,6 +14,7 @@ import { lookupSecretInternalId } from '../formationLookups';
 import {
   toNullableObject,
   toNullableString,
+  toOptionalBoolean,
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { SECRET_USE_ACTION } from '../secretUse';
@@ -73,6 +74,12 @@ export const aiProvidersFormationModule = defineFormationModule({
       config:
         (toNullableObject(properties.config) as Record<string, unknown>) ??
         undefined,
+      modelAliases:
+        (toNullableObject(properties.model_aliases) as Record<
+          string,
+          string
+        >) ?? undefined,
+      modelAliasesOnly: toOptionalBoolean(properties.model_aliases_only),
       isAllowed: actor.isAllowed,
     });
   },
@@ -100,6 +107,9 @@ export const aiProvidersFormationModule = defineFormationModule({
       baseUrl: toNullableString(properties.base_url),
       config: toNullableObject(properties.config) as
         Record<string, unknown> | null | undefined,
+      modelAliases: toNullableObject(properties.model_aliases) as
+        Record<string, string> | null | undefined,
+      modelAliasesOnly: toOptionalBoolean(properties.model_aliases_only),
       isAllowed: actor.isAllowed,
     });
   },
