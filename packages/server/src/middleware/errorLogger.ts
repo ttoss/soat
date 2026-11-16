@@ -4,12 +4,7 @@ import { DatabaseError } from '@ttoss/postgresdb';
 import { APICallError } from 'ai';
 
 import type { Context } from '../Context';
-import {
-  docsUrlFor,
-  DomainError,
-  type ErrorCode,
-  resolutionFor,
-} from '../errors';
+import { DomainError, errorBody } from '../errors';
 
 type Next = () => Promise<void>;
 
@@ -210,35 +205,6 @@ const RETRY_AFTER_CODES: ReadonlySet<string> = new Set([
 
 /** The message returned whenever the real one must not leave the server. */
 const OPAQUE_MESSAGE = 'Internal Server Error';
-
-/**
- * The response body, in the one shape the API has: `{ error: { code, message,
- * hint, docs_url, meta? } }`.
- *
- * Every branch below routes through here, the catch-all included. A response a
- * caller cannot parse the same way as every other response has no place in the
- * API, and the catch-all is the worst place to leave one — it is the response
- * that arrives unannounced, so it is the one a client is least likely to have
- * special-cased.
- */
-const errorBody = (args: {
-  code: ErrorCode;
-  message: string;
-  meta?: Record<string, unknown>;
-}) => {
-  return {
-    error: {
-      code: args.code,
-      message: args.message,
-      // What to do about it, and where the code is documented. A caller that
-      // has never seen this code before can act on the response without
-      // leaving it — which is the whole point of a machine-readable error.
-      hint: resolutionFor({ code: args.code }),
-      docs_url: docsUrlFor({ code: args.code }),
-      ...(args.meta !== undefined && { meta: args.meta }),
-    },
-  };
-};
 
 const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
   ctx.status = status;

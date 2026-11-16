@@ -36,8 +36,9 @@ route handlers.
 
 ## Response shape
 
-`middleware/errorLogger.ts` sets every error response, always
-`{ error: { code, message, hint, docs_url, meta? } }`:
+`middleware/errorLogger.ts` sets every error response through `errorBody`
+(`src/errors/errorBody.ts`): `{ error: { code, message, hint, docs_url, meta? } }`,
+without `hint` and `docs_url` when `SOAT_OMIT_ERROR_HINTS` is on:
 
 | Error | Status | `code` |
 |---|---|---|
@@ -45,8 +46,9 @@ route handlers.
 | exposed Koa error | its status | `REQUEST_REJECTED` |
 | anything else | 500 | `INTERNAL_ERROR`, message `Internal Server Error` (raw message never forwarded) |
 
-- Never write `hint` or `docs_url` in a handler; `errorBody` resolves them
-  from the code (`resolutionFor` / `docsUrlFor`, `src/errors/resolutions.ts`).
+- Never write `hint` or `docs_url` outside `errorBody`, which resolves them
+  from the code (`resolutionFor` / `docsUrlFor`, `src/errors/resolutions.ts`);
+  `tests/harness/errorHintChokepoint.test.mjs`.
 - Add an `ERROR_RESOLUTIONS` entry when "what to do" is more specific than the
   status class.
 - Enforced by `lib/errorResolutions.test.ts` (every code has a hint) and
