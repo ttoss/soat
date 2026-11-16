@@ -151,11 +151,10 @@ const parseBoundBody = async (args: {
     : parsePolicy({ policy });
 };
 
-/** An opaque `{ type, id }` principal from a request body; absent is undefined. */
-export const parsePrincipal = (
+/** An opaque `{ type, id }` principal from a request body; absent is invalid. */
+export const requirePrincipal = (
   value: unknown
-): { type: string; id: string } | undefined => {
-  if (value === undefined) return undefined;
+): { type: string; id: string } => {
   const valid = (field: unknown): field is string => {
     return (
       typeof field === 'string' &&
@@ -170,6 +169,13 @@ export const parsePrincipal = (
     );
   }
   return { type: value.type, id: value.id };
+};
+
+/** An opaque `{ type, id }` principal from a request body; absent is undefined. */
+export const parsePrincipal = (
+  value: unknown
+): { type: string; id: string } | undefined => {
+  return value === undefined ? undefined : requirePrincipal(value);
 };
 
 const parseTtl = (value: unknown): number => {
