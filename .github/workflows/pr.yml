@@ -2,6 +2,7 @@ name: PR
 
 on:
   pull_request:
+  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,12 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     if: "!startsWith(github.event.pull_request.title, 'chore(release):')"
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      # The queue's branch has no PR diff to filter: every test job runs.
+      code: ${{ github.event_name == 'merge_group' || steps.filter.outputs.code }}
       knowledge_docs: ${{ steps.filter.outputs.knowledge_docs }}
 
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
+        if: github.event_name == 'pull_request'
         with:
           # `code` is true when the PR touches any file other than Markdown.
           # When only `*.md` files change, `code` is false and the build,
@@ -108,15 +111,20 @@ jobs:
       # would schedule `@soat/server#test` as a dependency and run the whole
       # suite here anyway. `@soat/server` has no deploy script and nothing
       # deployable depends on it, so excluding it drops nothing.
-      - name: Build, test and deploy
+      - name: Build and test
         run: |
           pnpm turbo run build typecheck lint
           pnpm turbo run test --filter='!@soat/server'
-          pnpm turbo run deploy --filter='!@soat/server'
+
+      # A preview is per PR branch; the queue's branch has none.
+      - name: Deploy
+        if: github.event_name == 'pull_request'
+        run: pnpm turbo run deploy --filter='!@soat/server'
         env:
           CARLIN_BRANCH: ${{ github.event.pull_request.head.ref }}
 
       - name: Deploy report
+        if: github.event_name == 'pull_request'
         run: pnpm carlin deploy report --channel=github-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
