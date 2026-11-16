@@ -44,7 +44,10 @@ contract runs.
   overdue), when a marker and the registry disagree, and when a sync in `src`
   does not use `SCHEMA_SYNC_OPTIONS`. Run it from the workspace root:
   `node --test tests/harness/pendingContractions.test.mjs` (or
-  `pnpm run test:harness`).
+  `pnpm run test:harness`). The `previous-release-smoke` job in `pr.yml`
+  boots the latest published image on its own schema, runs this checkout's
+  `migrate.mjs run` against it, then runs that release's smoke tests; locally
+  `pnpm run smoke-tests:previous-release`.
 
 ## Docs
 
