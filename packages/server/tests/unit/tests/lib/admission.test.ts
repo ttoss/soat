@@ -1,4 +1,21 @@
-import { parseAdmissionRegistration } from 'src/lib/admission';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+import {
+  assertAdmitted,
+  initAdmission,
+  isAdmissionDeclared,
+  parseAdmissionRegistration,
+  registerAdmission,
+} from 'src/lib/admission';
+import { IAM_REGISTRATIONS_CONFIG_ENV } from 'src/lib/iamRegistrations';
+import { PROTOCOL_ANSWER_MAX_BYTES } from 'src/lib/requestBounds';
+
+import {
+  type AdmissionService,
+  startAdmissionService,
+} from '../../fixtures/admissionService';
 
 const ENV = { ADMISSION_SECRET: 'shh' };
 
@@ -55,5 +72,73 @@ describe('parseAdmissionRegistration', () => {
     }).toThrow(
       /Invalid IAM registrations config \(test\): admission: environment variable `ADMISSION_SECRET` is not set/
     );
+  });
+});
+
+describe('initAdmission', () => {
+  afterEach(() => {
+    delete process.env[IAM_REGISTRATIONS_CONFIG_ENV];
+    delete process.env.ADMISSION_SECRET;
+    registerAdmission({ registration: null });
+  });
+
+  test('declares nothing when no file is named', () => {
+    initAdmission();
+    expect(isAdmissionDeclared('triggers:CreateTrigger')).toBe(false);
+  });
+
+  test('declares the actions the IAM registrations file names', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admission-reg-'));
+    const file = path.join(dir, 'iam.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        modules: [],
+        admission: { handler, actions: ['triggers:CreateTrigger'] },
+      })
+    );
+    process.env[IAM_REGISTRATIONS_CONFIG_ENV] = file;
+    process.env.ADMISSION_SECRET = 'shh';
+
+    initAdmission();
+
+    expect(isAdmissionDeclared('triggers:CreateTrigger')).toBe(true);
+    expect(isAdmissionDeclared('triggers:UpdateTrigger')).toBe(false);
+  });
+});
+
+describe('assertAdmitted', () => {
+  let service: AdmissionService;
+
+  beforeAll(async () => {
+    service = await startAdmissionService();
+  });
+
+  afterAll(async () => {
+    service.undeclare();
+    await service.close();
+  });
+
+  test('an answer over PROTOCOL_ANSWER_MAX_BYTES is unavailable, never a pass', async () => {
+    service.declare({ actions: ['triggers:CreateTrigger'] });
+    service.reply = {
+      status: 200,
+      body: { padding: 'x'.repeat(PROTOCOL_ANSWER_MAX_BYTES) },
+    };
+
+    await expect(
+      assertAdmitted({
+        action: 'triggers:CreateTrigger',
+        projectPublicId: null,
+        resourceType: 'trigger',
+        targetId: null,
+        body: {},
+        principal: { principalType: 'user', principalId: 'usr_1' },
+      })
+    ).rejects.toMatchObject({
+      code: 'ADMISSION_UNAVAILABLE',
+      message:
+        'The admission service did not answer for triggers:CreateTrigger: answer too large',
+    });
   });
 });
