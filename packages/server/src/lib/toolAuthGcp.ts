@@ -123,6 +123,12 @@ const exchangeAssertionForToken = async (args: {
         meta: { upstream_status: response.status },
       });
     },
+    onReadError: () => {
+      return authFailed({
+        message: 'The GCP token endpoint response could not be read.',
+        meta: { upstream_status: response.status },
+      });
+    },
   });
 
   if (!response.ok) {

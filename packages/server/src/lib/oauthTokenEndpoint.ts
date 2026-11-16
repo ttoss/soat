@@ -109,6 +109,11 @@ const readAnswer = async (response: Response) => {
       refusal: () => {
         return new Error('the token endpoint answer is too large');
       },
+      onReadError: ({ error }) => {
+        return new Error('the token endpoint answer could not be read', {
+          cause: error,
+        });
+      },
     })
   );
 };

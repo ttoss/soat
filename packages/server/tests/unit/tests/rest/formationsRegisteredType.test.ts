@@ -462,10 +462,25 @@ describe('POST /api/v1/formations — handler transport failures', () => {
       );
 
       expect(res.body.status).toBe('failed');
-      // Under jest the abort's DOMException comes from another realm, so it is
-      // reported through the generic transport branch rather than as a timeout.
-      expect(res.body.error.message).toMatch(
-        /^Formation handler for 'test_channel' failed on create: request (timed out after 50ms|failed: TimeoutError)/
+      expect(res.body.error.message).toBe(
+        "Formation handler for 'test_channel' failed on create: request timed out after 50ms"
+      );
+    });
+
+    test('fails the operation when the answer body stalls', async () => {
+      handler.replies.create = {
+        status: 200,
+        body: { physical_resource_id: 'ext_slow' },
+        stall: true,
+      };
+
+      const res = await createFormation(
+        channelTemplate({ name: 'A', kind: 'whatsapp' })
+      );
+
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error.message).toBe(
+        "Formation handler for 'test_channel' failed on create: request timed out after 50ms"
       );
     });
   });

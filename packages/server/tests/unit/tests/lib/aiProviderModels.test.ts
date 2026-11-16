@@ -76,6 +76,12 @@ describe('enumerateProviderModels — against a real HTTP server', () => {
     server = createServer((req, res) => {
       seenAuthorization = req.headers.authorization;
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (req.url?.startsWith('/cut/')) {
+        res.write('{"data":', () => {
+          res.destroy();
+        });
+        return;
+      }
       const padding = req.url?.startsWith('/oversized/')
         ? 'x'.repeat(PROTOCOL_ANSWER_MAX_BYTES)
         : '';
@@ -127,6 +133,19 @@ describe('enumerateProviderModels — against a real HTTP server', () => {
     await expect(listing).rejects.toMatchObject({
       code: 'MODEL_LISTING_FAILED',
       message: `The custom provider answered the model listing request with more than ${PROTOCOL_ANSWER_MAX_BYTES} bytes.`,
+    });
+  });
+
+  test('refuses a listing cut mid-body', async () => {
+    const listing = enumerateProviderModels({
+      provider: 'custom',
+      baseUrl: baseUrl.replace('/v1', '/cut/v1'),
+      secretValue: 'sk-local',
+    });
+
+    await expect(listing).rejects.toMatchObject({
+      code: 'MODEL_LISTING_FAILED',
+      message: "The custom provider's model listing answer could not be read.",
     });
   });
 });

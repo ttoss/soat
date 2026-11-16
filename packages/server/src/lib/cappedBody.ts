@@ -1,3 +1,5 @@
+type ReadErrorMapper = (args: { error: unknown }) => Error;
+
 const declaredLength = (args: { response: Response }): number => {
   const declared = Number(args.response.headers.get('content-length'));
   return Number.isFinite(declared) ? declared : 0;
@@ -10,14 +12,26 @@ const declaredLength = (args: { response: Response }): number => {
  *
  * `onOverflow` is required so each caller states what an oversized body is:
  * `'cut'` keeps its first `maxBytes`, a function returns the error to throw.
+ * `onReadError` is required so each caller states what a body that fails
+ * mid-read is (the request's timeout still runs while the body streams):
+ * `'rethrow'` leaves it to an enclosing handler, a function maps it.
  */
 export const readCappedBody = async (args: {
   response: Response;
   maxBytes: number;
   onOverflow: 'cut' | (() => Error);
+  onReadError: 'rethrow' | ReadErrorMapper;
 }): Promise<Buffer> => {
-  const { response, maxBytes, onOverflow } = args;
+  const { response, maxBytes, onOverflow, onReadError } = args;
   const refusal = onOverflow === 'cut' ? null : onOverflow;
+  const read = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+    try {
+      return await reader.read();
+    } catch (error) {
+      if (onReadError === 'rethrow') throw error;
+      throw onReadError({ error });
+    }
+  };
 
   if (refusal && declaredLength({ response }) > maxBytes) {
     await response.body?.cancel();
@@ -29,7 +43,7 @@ export const readCappedBody = async (args: {
   const chunks: Buffer[] = [];
   let total = 0;
   for (;;) {
-    const { done, value } = await reader.read();
+    const { done, value } = await read(reader);
     if (done) break;
     const room = maxBytes - total;
     total += value.byteLength;
@@ -47,16 +61,20 @@ export const readCappedBody = async (args: {
 /**
  * A body as text, read within `maxBytes`. A 2xx over it is refused with
  * `refusal`; any other status's body only explains the status, so it is cut.
+ * A text answer is the protocol reply itself, so its read failure is always
+ * mapped to the caller's own error.
  */
 export const readCappedText = async (args: {
   response: Response;
   maxBytes: number;
   refusal: () => Error;
+  onReadError: ReadErrorMapper;
 }): Promise<string> => {
   const body = await readCappedBody({
     response: args.response,
     maxBytes: args.maxBytes,
     onOverflow: args.response.ok ? args.refusal : 'cut',
+    onReadError: args.onReadError,
   });
   return new TextDecoder().decode(body);
 };

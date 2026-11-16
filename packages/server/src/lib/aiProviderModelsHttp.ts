@@ -77,6 +77,14 @@ export const readJson = async (args: {
         `The ${args.provider} provider answered the model listing request with more than ${PROTOCOL_ANSWER_MAX_BYTES} bytes.`
       );
     },
+    onReadError: ({ error }) => {
+      return new DomainError(
+        'MODEL_LISTING_FAILED',
+        `The ${args.provider} provider's model listing answer could not be read.`,
+        undefined,
+        { cause: error }
+      );
+    },
   });
 
   if (!response.ok) {

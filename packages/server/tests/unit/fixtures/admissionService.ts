@@ -18,7 +18,8 @@ export const DOWN_URL = 'http://127.0.0.1:1/admit';
 
 export type Asked = { body: Record<string, unknown>; signed: boolean };
 
-export type Reply = { status: number; body: unknown };
+/** `stall` sends the head and part of the body, then never finishes it. */
+export type Reply = { status: number; body: unknown; stall?: boolean };
 
 export const ADMIT: Reply = { status: 204, body: null };
 
@@ -39,7 +40,11 @@ export type AdmissionService = {
   /** What the service answers, or a function of how many it was asked before. */
   reply: Reply | ((index: number) => Reply);
   /** Registers the service for `actions`, at its own URL unless `url` names another. */
-  declare: (args: { actions: string[]; url?: string }) => void;
+  declare: (args: {
+    actions: string[];
+    url?: string;
+    timeoutMs?: number;
+  }) => void;
   /** Unregisters; call it after every test that declared. */
   undeclare: () => void;
   close: () => Promise<void>;
@@ -70,8 +75,17 @@ const answer = (args: { state: State }) => {
         typeof state.reply === 'function'
           ? state.reply(state.asked.length - 1)
           : state.reply;
-      res.writeHead(reply.status, { 'content-type': 'application/json' });
-      res.end(reply.body === null ? '' : JSON.stringify(reply.body));
+      const text = reply.body === null ? '' : JSON.stringify(reply.body);
+      if (reply.stall) {
+        res.writeHead(reply.status, { 'content-type': 'application/json' });
+        res.write(text.slice(0, 1));
+        return;
+      }
+      res.writeHead(reply.status, {
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(text),
+      });
+      res.end(text);
     });
   });
 };
@@ -86,14 +100,18 @@ export const startAdmissionService = async (): Promise<AdmissionService> => {
   const baseUrl = `http://127.0.0.1:${port}/admit`;
 
   return Object.assign(state, {
-    declare: (args: { actions: string[]; url?: string }) => {
+    declare: (args: {
+      actions: string[];
+      url?: string;
+      timeoutMs?: number;
+    }) => {
       state.asked.length = 0;
       registerAdmission({
         registration: {
           handler: {
             url: args.url ?? baseUrl,
             secret: SECRET,
-            timeoutMs: 2000,
+            timeoutMs: args.timeoutMs ?? 2000,
           },
           actions: new Set(args.actions),
         },
@@ -105,6 +123,7 @@ export const startAdmissionService = async (): Promise<AdmissionService> => {
     },
     close: () => {
       return new Promise<void>((resolve) => {
+        server.closeAllConnections();
         server.close(() => {
           resolve();
         });

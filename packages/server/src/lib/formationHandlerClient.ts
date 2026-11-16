@@ -28,6 +28,7 @@ import {
 } from './hmacSignature';
 import { isObjectRecord } from './openapiSchemaFields';
 import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
+import { isTimeoutError } from './timeoutError';
 import { toolAssertionHeaders } from './toolAssertion';
 
 const log = createDebug('soat:formations:handler');
@@ -131,6 +132,7 @@ const parseResponse = async (args: {
   response: Response;
   resourceType: string;
   requestType: HandlerRequestType;
+  requestFailed: (args: { error: unknown }) => DomainError;
 }): Promise<Record<string, unknown>> => {
   const { response, resourceType, requestType } = args;
   const raw = await readCappedText({
@@ -143,6 +145,7 @@ const parseResponse = async (args: {
         detail: `response body exceeds ${PROTOCOL_ANSWER_MAX_BYTES} bytes`,
       });
     },
+    onReadError: args.requestFailed,
   });
 
   if (!response.ok) {
@@ -230,6 +233,14 @@ export const callFormationHandler = async (args: {
     request.logicalId
   );
 
+  const requestFailed = (failure: { error: unknown }) => {
+    const { error } = failure;
+    const detail = isTimeoutError(failure)
+      ? `request timed out after ${registration.handler.timeoutMs}ms`
+      : `request failed: ${error instanceof Error ? error.message : String(error)}`;
+    return handlerError({ resourceType, requestType, detail });
+  };
+
   let response: Response;
   try {
     response = await fetch(registration.handler.url, {
@@ -251,14 +262,10 @@ export const callFormationHandler = async (args: {
       signal: AbortSignal.timeout(registration.handler.timeoutMs),
     });
   } catch (error) {
-    const detail =
-      error instanceof Error && error.name === 'TimeoutError'
-        ? `request timed out after ${registration.handler.timeoutMs}ms`
-        : `request failed: ${error instanceof Error ? error.message : String(error)}`;
-    throw handlerError({ resourceType, requestType, detail });
+    throw requestFailed({ error });
   }
 
-  return parseResponse({ response, resourceType, requestType });
+  return parseResponse({ response, resourceType, requestType, requestFailed });
 };
 
 /**

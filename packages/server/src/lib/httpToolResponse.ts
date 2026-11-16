@@ -78,6 +78,7 @@ export const readToolResponseBody = (args: {
     onOverflow: () => {
       return tooLarge({ url: args.url, maxBytes });
     },
+    onReadError: 'rethrow',
   });
 };
 
@@ -89,6 +90,7 @@ export const readToolErrorBody = async (args: {
     response: args.response,
     maxBytes: getToolResponseMaxBytes(),
     onOverflow: 'cut',
+    onReadError: 'rethrow',
   });
   return new TextDecoder().decode(body);
 };

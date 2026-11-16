@@ -19,6 +19,7 @@ import { isObjectRecord } from './openapiSchemaFields';
 import { listWriteActions } from './openapiSpec';
 import type { RequestPrincipal } from './principals';
 import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
+import { isTimeoutError } from './timeoutError';
 
 const log = createDebug('soat:admission');
 
@@ -206,6 +207,14 @@ export const assertAdmitted = async (
   );
 
   const payload = wireBody(request);
+  const unanswered = (failure: { error: unknown }) => {
+    return unavailable({
+      action: request.action,
+      detail: isTimeoutError(failure)
+        ? `timed out after ${handler.timeoutMs}ms`
+        : 'unreachable',
+    });
+  };
   let response: Response;
   try {
     response = await fetch(handler.url, {
@@ -221,13 +230,7 @@ export const assertAdmitted = async (
       signal: AbortSignal.timeout(handler.timeoutMs),
     });
   } catch (error) {
-    throw unavailable({
-      action: request.action,
-      detail:
-        error instanceof Error && error.name === 'TimeoutError'
-          ? `timed out after ${handler.timeoutMs}ms`
-          : 'unreachable',
-    });
+    throw unanswered({ error });
   }
 
   const raw = await readCappedText({
@@ -239,6 +242,7 @@ export const assertAdmitted = async (
         detail: 'answer too large',
       });
     },
+    onReadError: unanswered,
   });
   if (response.ok) {
     log('assertAdmitted: admitted action=%s', request.action);

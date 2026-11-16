@@ -268,6 +268,7 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
       response,
       maxBytes: 4 * MAX_RESPONSE_BODY_CHARS,
       onOverflow: 'cut',
+      onReadError: 'rethrow',
     })
       .then((body) => {
         return new TextDecoder().decode(body).slice(0, MAX_RESPONSE_BODY_CHARS);
