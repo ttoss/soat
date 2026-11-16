@@ -2,6 +2,7 @@ import { appendFileSync } from 'node:fs';
 
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
+import { errorHintsOmitted } from 'src/errors';
 import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
 
 // Audit mode: validate EVERY response against its full schema and append
@@ -102,28 +103,45 @@ const sanitizeSchema = (node: unknown): unknown => {
   return out;
 };
 
-let ajv: Ajv | null = null;
+const ajvs = new Map<boolean, Ajv>();
 const validatorCache = new Map<string, ValidateFunction[]>();
 
 // The whole merged spec is registered under this base id so a response schema's
 // internal `$ref: '#/components/schemas/X'` resolves against the spec root.
 const SPEC_ID = 'openapi';
 
-const getAjv = (): Ajv => {
-  if (ajv) return ajv;
+// A deployment setting `SOAT_OMIT_ERROR_HINTS` serves the published contract
+// without these two in `ErrorResponse.error.required`.
+const OMITTABLE_ERROR_FIELDS = new Set(['hint', 'docs_url']);
+
+const omitErrorHintsFromContract = (spec: Record<string, unknown>): void => {
+  const components = spec.components as {
+    schemas: Record<string, { properties: { error: { required: string[] } } }>;
+  };
+  const error = components.schemas.ErrorResponse.properties.error;
+  error.required = error.required.filter((field) => {
+    return !OMITTABLE_ERROR_FIELDS.has(field);
+  });
+};
+
+const getAjv = (hintsOmitted: boolean): Ajv => {
+  const cached = ajvs.get(hintsOmitted);
+  if (cached) return cached;
 
   const sanitized = sanitizeSchema(getMergedOpenApiSpec()) as Record<
     string,
     unknown
   >;
+  if (hintsOmitted) omitErrorHintsFromContract(sanitized);
 
-  ajv = new Ajv({
+  const ajv = new Ajv({
     strict: false,
     allErrors: true,
     validateFormats: false,
   });
   addFormats(ajv);
   ajv.addSchema(sanitized, SPEC_ID);
+  ajvs.set(hintsOmitted, ajv);
 
   return ajv;
 };
@@ -167,7 +185,8 @@ const getResponseValidators = (args: {
   method: string;
   status: number;
 }): ValidateFunction[] => {
-  const cacheKey = `${args.method} ${args.template} ${args.status}`;
+  const hintsOmitted = errorHintsOmitted();
+  const cacheKey = `${args.method} ${args.template} ${args.status} ${hintsOmitted}`;
   const cached = validatorCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -187,7 +206,9 @@ const getResponseValidators = (args: {
       escapePointerToken('application/json'),
       'schema',
     ].join('/');
-    validators.push(getAjv().compile({ $ref: `${SPEC_ID}#/${pointer}` }));
+    validators.push(
+      getAjv(hintsOmitted).compile({ $ref: `${SPEC_ID}#/${pointer}` })
+    );
   }
 
   validatorCache.set(cacheKey, validators);
