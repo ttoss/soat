@@ -1,9 +1,10 @@
+import { db } from '../db';
 import { DomainError } from '../errors';
-import { resolveAttachedPolicySet } from './attachedPolicies';
+import { buildAuthority } from '../middleware/authority';
+import { ownPoliciesGrant } from '../middleware/authScopedBoundary';
 import { recordDroppedEvent, type SoatEvent } from './eventBus';
 import { EVENT_READ_ACTIONS } from './eventReadActions';
 import { matchesPattern } from './iam';
-import { createPolicySetsIsAllowed } from './permissions';
 import { SOAT_EVENT_TYPES } from './soatEvents';
 import {
   matchesStructuredFilter,
@@ -215,16 +216,19 @@ export const mayReadEventResource = (args: {
   event: SoatEvent;
 }): Promise<boolean> => {
   const { event } = args;
-  const isAllowed = createPolicySetsIsAllowed({
-    projectPublicId: event.projectPublicId,
-    getSets: async () => {
-      return [
-        {
-          principal: { type: 'caller', id: null },
-          sets: [await resolveAttachedPolicySet({ policyIds: args.policyIds })],
+  const { isAllowed } = buildAuthority({
+    terms: {
+      pinned: event.projectPublicId,
+      grant: ownPoliciesGrant({
+        principal: { type: 'caller', id: null },
+        policyIds: async () => {
+          return args.policyIds === null ? null : [...args.policyIds];
         },
-      ];
+      }),
+      caps: [],
+      replayed: false,
     },
+    db,
   });
   return isAllowed({
     projectPublicId: event.projectPublicId,
