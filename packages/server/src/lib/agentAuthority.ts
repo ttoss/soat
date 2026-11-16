@@ -4,14 +4,14 @@ import { resolveAttachedPolicies } from './attachedPolicies';
 import type { DeniedPrincipal } from './authorizationDenial';
 import type { PolicyDocument, PolicySets } from './iam';
 
-/** One document every call the agent boundary covers must satisfy. */
-export type BoundaryPolicy = { by: DeniedPrincipal; policy: PolicyDocument };
+/** One document capping every call of an agent's turn. */
+export type AgentCap = { by: DeniedPrincipal; policy: PolicyDocument };
 
 /**
  * An agent's `policy_ids` resolved for one turn, carried with the agent's
  * public id so a refusal names whose policies denied, and what they are
  * (`runAs`). Under `agent`, `grant` is the turn's whole grant inside
- * `projectPublicId` and `null` grants nothing. `boundary` caps every call in
+ * `projectPublicId` and `null` grants nothing. `caps` hold every call in
  * both modes: the agent's `policy_ids` and its owner project's
  * `agent_policy_ids`, read through the helpers below. `agentId: null` only
  * where the agent no longer resolves.
@@ -20,13 +20,13 @@ export type AgentAuthority =
   | {
       runAs: 'caller';
       agentId: string | null;
-      boundary: BoundaryPolicy[];
+      caps: AgentCap[];
     }
   | {
       runAs: 'agent';
       agentId: string;
       grant: PolicyDocument | null;
-      boundary: BoundaryPolicy[];
+      caps: AgentCap[];
       projectPublicId: string;
       /** The owner project whose `agent_policy_ids` cap the turn. */
       capProject: string;
@@ -70,23 +70,23 @@ export const resolveAgentAuthority = async (args: {
     }),
     resolveProjectCap(args),
   ]);
-  const boundary: BoundaryPolicy[] = [];
+  const caps: AgentCap[] = [];
   if (policy) {
-    boundary.push({ by: { type: 'agent', id: args.agentId }, policy });
+    caps.push({ by: { type: 'agent', id: args.agentId }, policy });
   }
   if (cap?.policy) {
-    boundary.push({
+    caps.push({
       by: { type: 'project', id: cap.project },
       policy: cap.policy,
     });
   }
   const runAs: AgentRunAs = readAgentRunAs(args.runAs);
-  if (runAs === 'caller') return { runAs, agentId: args.agentId, boundary };
+  if (runAs === 'caller') return { runAs, agentId: args.agentId, caps };
   return {
     runAs,
     agentId: args.agentId,
     grant: policy,
-    boundary,
+    caps,
     projectPublicId: args.projectPublicId,
     capProject: cap?.project ?? args.projectPublicId,
   };
@@ -99,7 +99,7 @@ export const unresolvedAgentAuthority = (
   return {
     runAs: 'caller',
     agentId,
-    boundary: [
+    caps: [
       {
         by: { type: 'agent', id: agentId },
         policy: {
@@ -120,28 +120,26 @@ export const agentPolicyOf = (
   authority: AgentAuthority
 ): PolicyDocument | null => {
   return (
-    authority.boundary.find(({ by }) => {
+    authority.caps.find(({ by }) => {
       return by.type === 'agent';
     })?.policy ?? null
   );
 };
 
 /** The owner project's `agent_policy_ids`, when it sets any. */
-export const projectCapOf = (
-  authority: AgentAuthority
-): BoundaryPolicy | null => {
+export const projectCapOf = (authority: AgentAuthority): AgentCap | null => {
   return (
-    authority.boundary.find(({ by }) => {
+    authority.caps.find(({ by }) => {
       return by.type === 'project';
     }) ?? null
   );
 };
 
-/** The boundary's documents, each one more set every check must satisfy. */
-export const boundarySets = (
+/** The caps' documents, each one more set every check must satisfy. */
+export const agentCapSets = (
   authority: AgentAuthority | undefined
 ): PolicySets => {
-  return (authority?.boundary ?? []).map(({ policy }) => {
+  return (authority?.caps ?? []).map(({ policy }) => {
     return [policy];
   });
 };
