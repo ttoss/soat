@@ -60,6 +60,8 @@ and recorded in a `schema_migrations` table it maintains itself.
 
 The flow they follow is
 [PostgreSQL Migrations](https://ttoss.dev/docs/engineering/guidelines/postgres-migrations).
+A drop, rename, type change or in-place conversion is an expand and a
+contract one release apart: `.claude/rules/postgresdb.md`, first section.
 
 | Migration                                            | Change                                                                                                                                                                                                                                                                                                                                                                                       |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -18,7 +18,9 @@ ttoss ecosystem conventions: https://ttoss.dev/ttoss-instructions.txt
   inline. Existing offenders are in `MAX_LINES_EXEMPT` there;
   `tests/harness/moduleCeiling.test.mjs` keeps the list shrinking.
 - Schema changes: follow `packages/postgresdb/README.md`; a dev database that
-  will not `--alter` may be dropped and recreated.
+  will not `--alter` may be dropped and recreated. **Every migration keeps the
+  previous release working, and every expand is contracted in the next
+  release:** `.claude/rules/postgresdb.md`, first section.
 - Docs are English, for developers: concise, code over prose.
 
 ## Implementation checklist
