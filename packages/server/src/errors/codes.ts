@@ -1012,6 +1012,11 @@ export const ERROR_CODES = {
     description:
       'The project runs with `require_priced_model` and no price-book row covers a billable token component of the model this generation would run on, so the spend it would incur could not be measured. The check runs before the provider is called: nothing is sent, spent or metered. `meta.unpriced_rows` names each `(provider, model, component)` to price. An agent bound to a model route is held to every target it may fail over to, not just the first. Price the rows, or clear `require_priced_model` on the project to accept unmeasurable spend.',
   },
+  MODEL_NOT_OFFERED: {
+    httpStatus: 400,
+    description:
+      'The AI provider is set to `model_aliases_only` and the model is not one of its `model_aliases`. `meta.ai_provider_id` names the provider and `meta.model` the refused name.',
+  },
   MODEL_ROUTE_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced model route does not exist in the project.',

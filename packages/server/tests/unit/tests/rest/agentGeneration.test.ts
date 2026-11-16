@@ -7,13 +7,13 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import type { PendingGeneration } from 'src/lib/agentGenerationTypes';
-import { buildModel } from 'src/lib/agentModel';
 import { createGenerationProvenance } from 'src/lib/generationProvenance';
 import {
   createGenerationRecord,
   updateGenerationRecord,
 } from 'src/lib/generations';
 
+import { buildUnaliasedModel } from '../../fixtures/unaliasedModel';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import {
   authenticatedTestClient,
@@ -679,7 +679,7 @@ describe('Agent Generation Routes', () => {
         pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
         messages: [{ role: 'user', content: 'hello' }],
         steps: [],
-        resolvedModel: buildModel({
+        resolvedModel: buildUnaliasedModel({
           provider: 'ollama',
           secretValue: null,
           model: 'stub-model',
@@ -847,7 +847,7 @@ describe('Agent Generation Routes', () => {
         pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
         messages: [{ role: 'user', content: 'hello' }],
         steps: [],
-        resolvedModel: buildModel({
+        resolvedModel: buildUnaliasedModel({
           provider: 'ollama',
           secretValue: null,
           model: 'stub-model',
@@ -1217,7 +1217,7 @@ describe('Agent Generation Routes', () => {
           ],
           messages: [{ role: 'user', content: 'hello' }],
           steps: [],
-          resolvedModel: buildModel({
+          resolvedModel: buildUnaliasedModel({
             provider: 'ollama',
             secretValue: null,
             model: 'stub-model',

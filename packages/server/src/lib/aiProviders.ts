@@ -9,6 +9,10 @@ import type { IsAllowedFn } from 'src/middleware/authProjectResolvers';
 
 import { assertLinkedSecretUsable } from './agentModel';
 import { assertAiProviderConfig } from './aiProviderConfigValidation';
+import {
+  assertModelAliases,
+  assertModelOffered,
+} from './aiProviderModelAliases';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { assertSecretUseAllowed } from './secretUse';
@@ -43,6 +47,8 @@ const mapAiProvider = (instance: AiProviderRow) => {
     default_model: instance.defaultModel,
     base_url: instance.baseUrl ?? undefined,
     config: instance.config ?? undefined,
+    model_aliases: instance.modelAliases ?? {},
+    model_aliases_only: instance.modelAliasesOnly,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
@@ -131,9 +137,19 @@ export const createAiProvider = async (args: {
   defaultModel: string;
   baseUrl?: string;
   config?: Record<string, unknown>;
+  modelAliases?: Record<string, string>;
+  modelAliasesOnly?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   await assertEndpointSecretUse(args);
+  assertModelAliases(args.modelAliases);
+  assertModelOffered({
+    aiProvider: {
+      modelAliases: args.modelAliases ?? null,
+      modelAliasesOnly: args.modelAliasesOnly ?? false,
+    },
+    model: args.defaultModel,
+  });
   assertAiProviderConfig({
     provider: args.provider,
     baseUrl: args.baseUrl,
@@ -152,8 +168,41 @@ export const createAiProvider = async (args: {
     defaultModel: args.defaultModel,
     baseUrl: args.baseUrl ?? null,
     config: args.config ?? null,
+    modelAliases: args.modelAliases ?? null,
+    modelAliasesOnly: args.modelAliasesOnly ?? false,
   });
   return mapAiProvider(await aiProviders.reload(instance));
+};
+
+type AiProviderFieldUpdates = {
+  secretId?: number;
+  name?: string;
+  provider?: AiProviderSlug;
+  defaultModel?: string;
+  baseUrl?: string | null;
+  config?: Record<string, unknown> | null;
+  modelAliases?: Record<string, string> | null;
+  modelAliasesOnly?: boolean;
+};
+
+const applyAiProviderFields = (args: {
+  instance: AiProviderRow;
+  fields: AiProviderFieldUpdates;
+}): void => {
+  const { instance } = args;
+  if (args.fields.name !== undefined) instance.name = args.fields.name;
+  if (args.fields.provider !== undefined)
+    instance.provider = args.fields.provider;
+  if (args.fields.defaultModel !== undefined)
+    instance.defaultModel = args.fields.defaultModel;
+  if (args.fields.baseUrl !== undefined) instance.baseUrl = args.fields.baseUrl;
+  if (args.fields.config !== undefined) instance.config = args.fields.config;
+  if (args.fields.secretId !== undefined)
+    instance.secretId = args.fields.secretId;
+  if (args.fields.modelAliases !== undefined)
+    instance.modelAliases = args.fields.modelAliases;
+  if (args.fields.modelAliasesOnly !== undefined)
+    instance.modelAliasesOnly = args.fields.modelAliasesOnly;
 };
 
 export const updateAiProvider = async (args: {
@@ -164,18 +213,16 @@ export const updateAiProvider = async (args: {
   defaultModel?: string;
   baseUrl?: string | null;
   config?: Record<string, unknown> | null;
+  modelAliases?: Record<string, string> | null;
+  modelAliasesOnly?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   const instance = await aiProviders.findByPublicId({ id: args.id });
   if (!instance) return null;
+  assertModelAliases(args.modelAliases);
 
-  if (args.name !== undefined) instance.name = args.name;
-  if (args.provider !== undefined) instance.provider = args.provider;
-  if (args.defaultModel !== undefined)
-    instance.defaultModel = args.defaultModel;
-  if (args.baseUrl !== undefined) instance.baseUrl = args.baseUrl;
-  if (args.config !== undefined) instance.config = args.config;
-  if (args.secretId !== undefined) instance.secretId = args.secretId;
+  applyAiProviderFields({ instance, fields: args });
+  assertModelOffered({ aiProvider: instance, model: instance.defaultModel });
 
   if (args.secretId !== undefined || args.baseUrl !== undefined) {
     await assertEndpointSecretUse({
@@ -201,6 +248,30 @@ export const updateAiProvider = async (args: {
 
   await instance.save();
   return mapAiProvider(await aiProviders.reload(instance));
+};
+
+/**
+ * Refuses, at write time, a model a closed provider does not offer.
+ * `aiProviderId` is a public id, or the internal one a stored row holds; one
+ * that does not resolve is left to the caller's own not-found guard.
+ */
+export const assertModelOfferedByProvider = async (args: {
+  projectId: number;
+  aiProviderId: unknown;
+  model: unknown;
+}): Promise<void> => {
+  if (typeof args.model !== 'string' || args.model === '') return;
+  const key =
+    typeof args.aiProviderId === 'string'
+      ? { publicId: args.aiProviderId }
+      : typeof args.aiProviderId === 'number'
+        ? { id: args.aiProviderId }
+        : null;
+  if (!key) return;
+  const row = await db.AiProvider.findOne({
+    where: { ...key, projectId: args.projectId },
+  });
+  if (row) assertModelOffered({ aiProvider: row, model: args.model });
 };
 
 // A single provider can power many chats, so the 409 lists a workable sample
@@ -353,6 +424,9 @@ export const resolveAiProviderSecret = async (args: {
     defaultModel: instance.defaultModel,
     baseUrl: instance.baseUrl ?? undefined,
     config: instance.config ?? undefined,
+    publicId: instance.publicId,
+    modelAliases: instance.modelAliases,
+    modelAliasesOnly: instance.modelAliasesOnly,
     secretValue: decryptedValue,
   };
 };

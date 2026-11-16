@@ -103,13 +103,7 @@ export const resolveProjectScopedModel = async (args: {
     modelName
   );
 
-  const model = await buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: modelName,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
-  });
+  const model = buildModel({ aiProvider: resolved, model: modelName });
 
   return {
     model,

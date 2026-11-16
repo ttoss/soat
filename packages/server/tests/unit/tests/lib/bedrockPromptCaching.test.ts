@@ -1,9 +1,10 @@
 import { generateText } from 'ai';
-import { buildModel } from 'src/lib/agentModel';
 import {
   buildStepCacheBreakpoint,
   withPromptCacheBreakpoint,
 } from 'src/lib/promptCaching';
+
+import { buildUnaliasedModel } from '../../fixtures/unaliasedModel';
 
 /**
  * What a caching agent's turn puts on the wire to Bedrock. Asserted on the
@@ -43,7 +44,7 @@ const sentBody = async (model: string): Promise<string> => {
   });
 
   await generateText({
-    model: buildModel({
+    model: buildUnaliasedModel({
       provider: 'bedrock',
       secretValue: 'ABSKexample',
       model,

@@ -1,10 +1,11 @@
 import { DomainError } from 'src/errors';
 import {
-  buildModel,
   resolveBedrockCredentials,
   resolveVertexSettings,
 } from 'src/lib/agentModel';
 import { egressGuardedFetch } from 'src/lib/egressFetch';
+
+import { buildUnaliasedModel } from '../../fixtures/unaliasedModel';
 
 // The returned model exposes enough (`modelId`, `config.provider`, `config.url`)
 // to assert the wiring landed, rather than only that `buildModel` didn't throw.
@@ -54,7 +55,7 @@ const withAmbientCredentials = (
 describe('buildModel', () => {
   test('throws for unsupported provider', () => {
     expect(() => {
-      buildModel({
+      buildUnaliasedModel({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         provider: 'unsupported_provider' as any,
         secretValue: null,
@@ -65,7 +66,7 @@ describe('buildModel', () => {
 
   test('builds openai model wired to the default OpenAI endpoint', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'openai',
         secretValue: 'test-key',
         model: 'gpt-4o',
@@ -80,7 +81,7 @@ describe('buildModel', () => {
 
   test('builds anthropic model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'anthropic',
         secretValue: 'test-key',
         model: 'claude-3-5-sonnet-20241022',
@@ -92,7 +93,7 @@ describe('buildModel', () => {
 
   test('builds google model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'google',
         secretValue: 'test-key',
         model: 'gemini-2.0-flash',
@@ -104,7 +105,7 @@ describe('buildModel', () => {
 
   test('builds xai model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'xai',
         secretValue: 'test-key',
         model: 'grok-2-latest',
@@ -116,7 +117,7 @@ describe('buildModel', () => {
 
   test('builds groq model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'groq',
         secretValue: 'test-key',
         model: 'llama-3.3-70b-versatile',
@@ -128,7 +129,7 @@ describe('buildModel', () => {
 
   test('builds azure model wired to the configured resource name', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'azure',
         secretValue: 'test-key',
         model: 'gpt-4o',
@@ -143,7 +144,7 @@ describe('buildModel', () => {
 
   test('builds azure model without a resourceName and refuses to resolve a URL for it', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'azure',
         secretValue: null,
         model: 'gpt-4o',
@@ -157,7 +158,7 @@ describe('buildModel', () => {
 
   test('builds ollama model wired to the default local base URL', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'ollama',
         secretValue: null,
         model: 'qwen2.5:0.5b',
@@ -171,7 +172,7 @@ describe('buildModel', () => {
 
   test('builds gateway model wired to the configured base URL', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'gateway',
         secretValue: 'test-key',
         model: 'gpt-4o',
@@ -186,7 +187,7 @@ describe('buildModel', () => {
 
   test('builds custom model wired to the configured base URL', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'custom',
         secretValue: 'test-key',
         model: 'my-custom-model',
@@ -204,7 +205,7 @@ describe('buildModel', () => {
 
   test('builds bedrock model with the requested model id and region', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'bedrock',
         secretValue: 'ABSKexample',
         model: 'anthropic.claude-sonnet-4-20250514-v1:0',
@@ -219,7 +220,7 @@ describe('buildModel', () => {
 
   test('builds vertex model wired to the configured project and location', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'vertex',
         secretValue: SERVICE_ACCOUNT_SECRET,
         model: 'gemini-2.0-flash',
@@ -235,7 +236,7 @@ describe('buildModel', () => {
 
   test('builds vertex model taking the project from the service-account secret', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'vertex',
         secretValue: SERVICE_ACCOUNT_SECRET,
         model: 'gemini-2.0-flash',
@@ -249,7 +250,7 @@ describe('buildModel', () => {
 
   test('builds vertex model in express mode from a plain API-key secret', () => {
     const model = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'vertex',
         secretValue: 'AIzaSyExpressModeKey',
         model: 'gemini-2.0-flash',
@@ -269,14 +270,14 @@ describe('buildModel', () => {
       private_key: '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END',
     });
     expect(() => {
-      buildModel({
+      buildUnaliasedModel({
         provider: 'vertex',
         secretValue: projectlessKey,
         model: 'gemini-2.0-flash',
       });
     }).toThrow(DomainError);
     expect(() => {
-      buildModel({
+      buildUnaliasedModel({
         provider: 'vertex',
         secretValue: projectlessKey,
         model: 'gemini-2.0-flash',
@@ -508,7 +509,7 @@ describe('config values spliced into a provider URL', () => {
 
   test('refuses an azure resource name that would move the host', () => {
     expect(() => {
-      return buildModel({
+      return buildUnaliasedModel({
         provider: 'azure',
         secretValue: 'test-key',
         model: 'gpt-4o',
@@ -527,7 +528,7 @@ describe('outbound provider requests go through the egress guard', () => {
     ['groq', 'llama-3.3-70b-versatile'],
   ])('%s is built with the guarded fetch', (provider, model) => {
     const built = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         provider: provider as any,
         secretValue: 'test-key',
@@ -539,7 +540,7 @@ describe('outbound provider requests go through the egress guard', () => {
 
   test('vertex is built with the guarded fetch', () => {
     const built = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'vertex',
         secretValue: SERVICE_ACCOUNT_SECRET,
         model: 'gemini-2.0-flash',
@@ -551,7 +552,7 @@ describe('outbound provider requests go through the egress guard', () => {
 
   test('ollama is built with the guarded fetch', () => {
     const built = asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'ollama',
         secretValue: null,
         model: 'llama3',
@@ -630,7 +631,7 @@ describe('a record that links no credential of its own', () => {
     (provider, secretValue) => {
       withAmbientCredentials('true', () => {
         expect(() => {
-          return buildModel({
+          return buildUnaliasedModel({
             provider,
             secretValue,
             model: 'some-model',
@@ -648,7 +649,7 @@ describe('a record that links no credential of its own', () => {
     (provider) => {
       withAmbientCredentials('true', () => {
         expect(() => {
-          return buildModel({
+          return buildUnaliasedModel({
             provider,
             secretValue: null,
             model: 'some-model',
@@ -681,7 +682,7 @@ describe('a record that links no credential of its own', () => {
     (provider) => {
       withAmbientCredentials(undefined, () => {
         expect(() => {
-          return buildModel({
+          return buildUnaliasedModel({
             provider,
             secretValue:
               provider === 'bedrock' ? 'ABSKexample' : SERVICE_ACCOUNT_SECRET,
@@ -726,7 +727,7 @@ const withEnv = (
 describe('buildModel — anthropic with no linked secret', () => {
   const build = (args: { baseUrl?: string } = {}) => {
     return asConfigured(
-      buildModel({
+      buildUnaliasedModel({
         provider: 'anthropic',
         secretValue: null,
         model: 'claude-sonnet-4-5',

@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { assertModelOffered } from './aiProviderModelAliases';
 import {
   mapModelRoute,
   type MappedModelRoute,
@@ -100,7 +101,6 @@ const assertTargetProvidersInProject = async (args: {
 
   const found = await db.AiProvider.findAll({
     where: { publicId: publicIds, projectId: args.projectId },
-    attributes: ['publicId'],
   });
   const foundIds = new Set(
     found.map((provider) => {
@@ -115,6 +115,12 @@ const assertTargetProvidersInProject = async (args: {
         `AI provider '${publicId}' not found in this project.`
       );
     }
+  }
+  for (const target of args.targets) {
+    const aiProvider = found.find((provider) => {
+      return provider.publicId === target.ai_provider_id;
+    });
+    if (aiProvider) assertModelOffered({ aiProvider, model: target.model });
   }
 };
 
