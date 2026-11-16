@@ -101,6 +101,25 @@ describe('Memory write events', () => {
     });
   };
 
+  /**
+   * A setup write that returns once its own `memories.created` is on the bus,
+   * so it cannot land inside a later test window.
+   */
+  const seed = async (body: Record<string, unknown>) => {
+    let id = '';
+    await memoryEventsDuring({
+      act: async () => {
+        id = (await write(body)).id;
+      },
+      until: (seen) => {
+        return seen.some((event) => {
+          return event.type === 'memories.created' && event.resourceId === id;
+        });
+      },
+    });
+    return { id };
+  };
+
   describe('POST /api/v1/memories', () => {
     test('a created memory emits memories.created with the memory', async () => {
       const storeId = await createStore();
@@ -132,7 +151,7 @@ describe('Memory write events', () => {
 
     test('a supersede emits memories.created for the replacement', async () => {
       const storeId = await createStore();
-      const original = await write({
+      const original = await seed({
         memory_store_id: storeId,
         content: 'The office is in Lisbon',
       });
@@ -166,7 +185,7 @@ describe('Memory write events', () => {
 
     test('a deduplicated write emits nothing', async () => {
       const storeId = await createStore();
-      const original = await write({
+      const original = await seed({
         memory_store_id: storeId,
         content: 'The API rate limit is 60',
       });
@@ -204,7 +223,7 @@ describe('Memory write events', () => {
   describe('PUT /api/v1/memories/:memory_id', () => {
     test('an update emits memories.updated with the updated memory', async () => {
       const storeId = await createStore();
-      const original = await write({
+      const original = await seed({
         memory_store_id: storeId,
         content: 'The office is in Lisbon',
       });
@@ -233,7 +252,7 @@ describe('Memory write events', () => {
   describe('PATCH /api/v1/memories/:memory_id/tags', () => {
     test('a tag write emits memories.updated carrying the new tags', async () => {
       const storeId = await createStore();
-      const original = await write({
+      const original = await seed({
         memory_store_id: storeId,
         content: 'The office is in Lisbon',
       });
