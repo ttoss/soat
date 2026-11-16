@@ -292,7 +292,7 @@ It answers the one question the meter cannot. A provider reports totals, and the
 `estimated_tokens` is an estimate and is never priced. `usage` and the [usage events](./usage.md) are the billing record.
 :::
 
-`null` means the surface was never measured — a generation from before the field, or a path that resolves none. That is **not** `{"tools": 0}`, which is a measured agent with nothing bound. Reading the two as one would make every older row look tool-less.
+`null` means the surface was never measured: the path resolves none. That is **not** `{"tools": 0}`, which is a measured agent with nothing bound; reading the two as one would make an unmeasured row look tool-less.
 
 Being three integers and no text, `tool_surface` is not content: it survives a [purge](#content-purge) and is written even on a zero-retention agent.
 
