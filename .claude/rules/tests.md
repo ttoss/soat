@@ -100,6 +100,7 @@ const setup = await setupProjectWithUsers({
   createNoPermUser: true,     // default
 });
 // { adminToken, userToken, userId, projectId, otherProjectId?, policyId, noPermToken? }
+// policyActions: [] creates no policy (policyId undefined); a refused policy throws
 ```
 
 ## Writing tests
