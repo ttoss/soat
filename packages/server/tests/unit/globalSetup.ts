@@ -1,6 +1,8 @@
 import {
+  assertPgvectorFloor,
   createTemplateDatabaseName,
   publishTestDatabaseConnection,
+  readPgvectorVersion,
   type TestDatabaseConnection,
   withAdminClient,
 } from './testDatabase';
@@ -76,6 +78,14 @@ const globalSetup = async () => {
   applyTestEnv();
 
   const connection = await startPostgres();
+
+  const pgvectorVersion = await withAdminClient({
+    connection,
+    run: (client) => {
+      return readPgvectorVersion({ client });
+    },
+  });
+  assertPgvectorFloor({ version: pgvectorVersion });
 
   const template = createTemplateDatabaseName();
 
