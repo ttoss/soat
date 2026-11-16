@@ -3,24 +3,17 @@
  * Handles resource creation, update, and deletion during formation application.
  */
 
-import createDebug from 'debug';
 import type { db } from 'src/db';
 import { DomainError } from 'src/errors';
 
 import { getFormationModule } from './formationsRegistry';
-import {
-  applyCreateResource,
-  applyDeleteResource,
-} from './formationsResourceHandlers';
+import { applyCreateResource } from './formationsResourceHandlers';
 import {
   buildFormationError,
   type FormationActor,
   type FormationEvent,
-  formationFailure,
 } from './formationsTypes';
 import type { StoredError } from './storedError';
-
-const log = createDebug('soat:formations');
 
 type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
@@ -124,89 +117,6 @@ export const applyCreateChange = async (args: {
     status: 'completed',
     physicalResourceId: physicalId,
   });
-};
-
-/**
- * Walks back the resources this operation created, newest first.
- *
- * An apply that stopped at the first failure left everything it had already
- * created live and unmanaged, so a corrected re-apply could collide with
- * it. Reversing `sortedOrder` is the order `deleteFormation` uses, so a
- * dependency is only removed after its dependents.
- *
- * Only creates are unwound — an update has no prior state to restore without a
- * snapshot. A `deletion_policy: 'retain'` resource is skipped entirely rather
- * than tombstoned: keeping its row pointing at the surviving resource is what
- * lets a corrected re-apply adopt it instead of duplicating it.
- */
-export const rollbackCreatedResources = async (args: {
-  created: ResourceRow[];
-  projectId: number;
-  actor: FormationActor;
-}): Promise<FormationEvent[]> => {
-  const events: FormationEvent[] = [];
-
-  for (const resource of [...args.created].reverse()) {
-    // A row joins `created` only once its create returned, so it carries the
-    // id that create recorded.
-    const physicalResourceId = resource.physicalResourceId!;
-    if (resource.deletionPolicy === 'retain') {
-      events.push({
-        timestamp: new Date().toISOString(),
-        logicalId: resource.logicalId,
-        resourceType: resource.resourceType,
-        action: 'rollback-skipped',
-        status: 'completed',
-        physicalResourceId,
-      });
-      continue;
-    }
-    try {
-      await applyDeleteResource({
-        resourceType: resource.resourceType,
-        physicalResourceId,
-        projectId: args.projectId,
-        actor: args.actor,
-        logicalId: resource.logicalId,
-        resourceKey: resource.publicId,
-      });
-    } catch (error) {
-      if (!isResourceAlreadyGone(error)) {
-        // Reported, never thrown: the original failure is the one the operator
-        // needs to see, and re-throwing here would bury it.
-        const failure = formationFailure(error);
-        log(
-          'rollbackCreatedResources: failed logicalId=%s error=%s',
-          resource.logicalId,
-          failure.message
-        );
-        events.push({
-          timestamp: new Date().toISOString(),
-          logicalId: resource.logicalId,
-          resourceType: resource.resourceType,
-          action: 'rollback',
-          status: 'failed',
-          physicalResourceId,
-          error: failure,
-        });
-        continue;
-      }
-    }
-    // The row is tombstoned rather than dropped, so the failed operation's
-    // history still names what was created and then walked back. A tombstone
-    // also makes the next apply treat the logical id as a fresh create.
-    await resource.update({ status: 'deleted' });
-    events.push({
-      timestamp: new Date().toISOString(),
-      logicalId: resource.logicalId,
-      resourceType: resource.resourceType,
-      action: 'rollback',
-      status: 'completed',
-      physicalResourceId,
-    });
-  }
-
-  return events;
 };
 
 export const failFormationOperation = async (args: {
