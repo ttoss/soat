@@ -1,3 +1,4 @@
+import { initErrorHintOverrides } from '../errors';
 import { initAdmission } from './admission';
 import { initBuiltinActionCatalog } from './builtinActionCatalog';
 import { initFormationResourceTypes } from './formationsRegistry';
@@ -16,4 +17,5 @@ export const initDeploymentRegistrations = (): void => {
   initBuiltinActionCatalog();
   initFormationResourceTypes();
   initAdmission();
+  initErrorHintOverrides({ env: process.env });
 };

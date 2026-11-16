@@ -123,28 +123,31 @@ constraint owns the index.
 
 ### Server
 
-| Variable                  | Default | Description                                                  |
-| ------------------------- | ------- | ------------------------------------------------------------ |
-| `PORT`                    | `5047`  | HTTP port the server listens on                              |
-| `SOAT_ERROR_LOGS_ENABLED` | `true`  | Controls request error logs from the global error middleware |
-| `SOAT_OMIT_ERROR_HINTS`   | `false` | `true` leaves `hint` and `docs_url` out of every error: REST bodies, `builtin` tool results, recorded failures, webhook payloads. For a deployment fronting the API under its own name |
+| Variable                   | Default   | Description                                                                                                                                                                                                                                                             |
+| -------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                     | `5047`    | HTTP port the server listens on                                                                                                                                                                                                                                         |
+| `SOAT_ERROR_LOGS_ENABLED`  | `true`    | Controls request error logs from the global error middleware                                                                                                                                                                                                            |
+| `SOAT_OMIT_ERROR_HINTS`    | `false`   | `true` leaves `hint` out of every error: REST bodies, MCP and in-turn tool results, recorded failures, webhook payloads. For a deployment fronting the API under its own name                                                                                           |
+| `SOAT_OMIT_ERROR_DOCS_URL` | `false`   | `true` leaves `docs_url` out of every error, on the same surfaces; `hint` stays unless `SOAT_OMIT_ERROR_HINTS` is also set                                                                                                                                              |
+| `SOAT_ROUTE_PREFIX`        | `/api/v1` | The prefix routes named in a `hint` are rendered under, e.g. `/v1/projects/{project_id}` for a deployment serving the API under its own paths                                                                                                                           |
+| `SOAT_ERROR_HINTS_CONFIG`  | —         | Path to a JSON file `{ "hints": { "<CODE>": "<hint>" } }` whose entries replace the runtime's hint for that code. A route in a hint is written `{{PATCH /agents/{agent_id}}}`, relative to the prefix. A code the runtime does not define, or an empty hint, fails boot |
 
 ### Header Prefix
 
-| Variable             | Default   | Description                                    |
-| -------------------- | --------- | ---------------------------------------------- |
+| Variable             | Default   | Description                                |
+| -------------------- | --------- | ------------------------------------------ |
 | `SOAT_HEADER_PREFIX` | `X-Soat-` | Prefix on every header SOAT sends or reads |
 
 Every header SOAT names is `<SOAT_HEADER_PREFIX><name>` (e.g. to hide the SOAT name from tool providers and webhook subscribers):
 
-| Header | Sent to | With `X-Acme-` |
-| --- | --- | --- |
-| [Context headers](../advanced/tool-context.md#configuring-the-header-prefix) `Context-<key>` | `http`, `mcp` tools | `X-Acme-Context-userId` |
-| [Tool assertion](../modules/tools.md#tool-assertions) `Tool-Assertion` | `mcp` tools | `X-Acme-Tool-Assertion` |
-| [Webhook](../modules/webhooks.md) `Event`, `Delivery`, `Signature` | webhook subscribers | `X-Acme-Signature` |
-| [Formation handler](../modules/formations.md) `Signature`, `Idempotency-Key` | registered resource-type handlers | `X-Acme-Idempotency-Key` |
-| [On-behalf-of](../modules/tools.md#writing-on-behalf-of-a-tool-call) `On-Behalf-Of` | read from a tool server writing back with its project's key | `X-Acme-On-Behalf-Of` |
-| [Inbound trigger hook](../modules/triggers.md) `Signature` | read from the caller of `/hooks/triggers/{trigger_id}` | `X-Acme-Signature` |
+| Header                                                                                       | Sent to                                                     | With `X-Acme-`           |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ |
+| [Context headers](../advanced/tool-context.md#configuring-the-header-prefix) `Context-<key>` | `http`, `mcp` tools                                         | `X-Acme-Context-userId`  |
+| [Tool assertion](../modules/tools.md#tool-assertions) `Tool-Assertion`                       | `mcp` tools                                                 | `X-Acme-Tool-Assertion`  |
+| [Webhook](../modules/webhooks.md) `Event`, `Delivery`, `Signature`                           | webhook subscribers                                         | `X-Acme-Signature`       |
+| [Formation handler](../modules/formations.md) `Signature`, `Idempotency-Key`                 | registered resource-type handlers                           | `X-Acme-Idempotency-Key` |
+| [On-behalf-of](../modules/tools.md#writing-on-behalf-of-a-tool-call) `On-Behalf-Of`          | read from a tool server writing back with its project's key | `X-Acme-On-Behalf-Of`    |
+| [Inbound trigger hook](../modules/triggers.md) `Signature`                                   | read from the caller of `/hooks/triggers/{trigger_id}`      | `X-Acme-Signature`       |
 
 Prepended verbatim, so include the trailing `-`. Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the request with an error naming the variable. Empty or unset keeps the default. Changing it breaks every receiver and sender already using these names: set it before wiring anything up, or update both sides together.
 
@@ -305,10 +308,10 @@ Mount a persistent volume here in Docker.
 
 ### Agent Generation
 
-| Variable                     | Default           | Description                                                                                     |
-| ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
-| `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000`          | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
-| `TOOL_ASSERTION_PRIVATE_KEY` | — | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
+| Variable                     | Default  | Description                                                                                                      |
+| ---------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000` | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools)                  |
+| `TOOL_ASSERTION_PRIVATE_KEY` | —        | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
 
 A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation.
 
@@ -330,15 +333,15 @@ Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of
 
 [Ollama](https://ollama.com) by default; [OpenAI](https://platform.openai.com/docs/guides/embeddings) and [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) are supported.
 
-| Variable                             | Default                  | Description                                                                                          |
-| ------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `EMBEDDING_PROVIDER`                 | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                                 |
-| `EMBEDDING_MODEL`                    | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                                 |
-| `EMBEDDING_DIMENSIONS`               | `1024`                   | Embedding vector dimensions (must match the model; at most `2000`)                                   |
-| `OLLAMA_BASE_URL`                    | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                                      |
-| `EMBEDDING_API_KEY`                  | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY`           |
-| `EMBEDDING_BASE_URL`                 | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                                  |
-| `EMBEDDING_REGION`                   | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                                  |
+| Variable                             | Default                  | Description                                                                                                              |
+| ------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `EMBEDDING_PROVIDER`                 | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                                                     |
+| `EMBEDDING_MODEL`                    | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                                                     |
+| `EMBEDDING_DIMENSIONS`               | `1024`                   | Embedding vector dimensions (must match the model; at most `2000`)                                                       |
+| `OLLAMA_BASE_URL`                    | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                                                          |
+| `EMBEDDING_API_KEY`                  | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY`                               |
+| `EMBEDDING_BASE_URL`                 | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                                                      |
+| `EMBEDDING_REGION`                   | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                                                      |
 | `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | _(unset)_                | USD per **million** input tokens. Unset meters embeddings unpriced (`0` on `ollama`); the price book does not price them |
 
 Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not the price book (no AI provider record configures the embedding stack). Unset meters every embedding unpriced (`cost_usd` `null`; `0` on `ollama`, a local model) and logs a startup warning. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).

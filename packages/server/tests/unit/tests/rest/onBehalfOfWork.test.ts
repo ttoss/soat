@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { db } from 'src/db';
 import { parseWorkAuthority } from 'src/lib/workAuthority';
 
+import { forbiddenHints } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -167,6 +168,7 @@ describe('work a capped callback starts', () => {
       expect(JSON.parse(capped.output)[0]).toEqual({
         error: {
           code: 'FORBIDDEN',
+          ...forbiddenHints(),
           message: expect.stringMatching(
             /^Forbidden: the On-Behalf-Of assertion's policies deny documents:GetDocument on /
           ),

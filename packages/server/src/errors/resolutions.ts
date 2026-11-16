@@ -1,5 +1,7 @@
 import { ERROR_CODES } from './codes';
 import { docsBaseUrl } from './docsBaseUrl';
+import { errorHintOverride } from './hintOverrides';
+import { renderHint } from './hintRoutes';
 
 /**
  * The resolution hint carried by every error response, alongside `code` and
@@ -24,19 +26,21 @@ export const errorCodesDocsUrl = (): string => {
 
 /**
  * What to do about a specific code, where the status class alone is too vague
- * to act on. Codes not listed here fall back to `STATUS_RESOLUTIONS`.
+ * to act on. Codes not listed here fall back to `STATUS_RESOLUTIONS`. A route
+ * is a token, `{{PATCH /agents/{agent_id}}}`, never a literal path
+ * (`hintRoutes.ts`).
  */
 export const ERROR_RESOLUTIONS: Record<string, string> = {
   OAUTH_CALLBACK_FAILED:
-    'Start the connection again with POST /api/v1/oauth-connections and send the person to the new authorize_url; each state is single-use and expires in 10 minutes.',
+    'Start the connection again with {{POST /oauth-connections}} and send the person to the new authorize_url; each state is single-use and expires in 10 minutes.',
   OAUTH_CONNECTION_REQUIRED:
     'Have the actor reconnect: start an OAuth connection for the `meta` oauth_client_id and actor_id and send the person to its authorize_url.',
   OAUTH_CONNECTION_REFRESH_FAILED:
-    'Have the actor reconnect: POST /api/v1/oauth-connections for the same oauth_client_id and actor_id.',
+    'Have the actor reconnect: {{POST /oauth-connections}} for the same oauth_client_id and actor_id.',
   LITERAL_CREDENTIAL:
-    'Create the value with `POST /secrets` and write `{{secret:<secret_id>}}` where the literal was (for example `Authorization: Bearer {{secret:sec_...}}`); `meta.paths` names every field to change.',
+    'Create the value with `{{POST /secrets}}` and write `{{secret:<secret_id>}}` where the literal was (for example `Authorization: Bearer {{secret:sec_...}}`); `meta.paths` names every field to change.',
   UNAUTHORIZED:
-    'Send `Authorization: Bearer <token>` — a user token from `POST /api/v1/users/login`, a project API key (`sk_…`), or an OAuth access token. Discovery metadata for the OAuth flow is at `/.well-known/oauth-authorization-server`.',
+    'Send `Authorization: Bearer <token>` — a user token from `{{POST /users/login}}`, a project API key (`sk_…`), or an OAuth access token. Discovery metadata for the OAuth flow is at `/.well-known/oauth-authorization-server`.',
   FORBIDDEN:
     'The credential authenticated but is not allowed this action. Attach an IAM policy granting the action to the caller, or use a credential that has it.',
   API_KEY_POLICY_BOUNDARY:
@@ -64,13 +68,13 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   DECIDER_AGENT_NOT_TOOL_LESS:
-    "Point the decider at an agent with no `tool_bindings` and no `knowledge_config.write_memory_store_id`, or remove them from this one with `PATCH /api/v1/agents/{agent_id}`. The agent's `instructions` and knowledge retrieval remain the place for domain context.",
+    "Point the decider at an agent with no `tool_bindings` and no `knowledge_config.write_memory_store_id`, or remove them from this one with `{{PATCH /agents/{agent_id}}}`. The agent's `instructions` and knowledge retrieval remain the place for domain context.",
   DECIDER_TOOL_NOT_CALLABLE:
     'Point the decider at an `http`, `pipeline` or `builtin` tool with no `input` or `questions` in its `preset_parameters`; a `builtin` tool names its `action` there. Reach an `mcp` tool through a `pipeline` step, which names its own `action`.',
   DECISION_ANSWER_INVALID:
     "Make the tool answer `{ answers: [{ name, probability | choice | score, probabilities?, confidence? }] }`, one per question, as OpenAI's Decisions API does; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
   TOOL_HAS_DEPENDENTS:
-    'Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.',
+    'Delete the deciders that name the tool, or point them at another backend with `{{PATCH /deciders/{decider_id}}}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `{{PATCH /ingestion-rules/{ingestion_rule_id}}}`, or left without a converter by `force=true`.',
   ACTION_NOT_HELD:
     'Name a target or action you may perform yourself (`meta.action` on `meta.resource`), or have a caller who holds it make the change.',
   AGENT_RUN_AS_REQUIRES_POLICIES:
@@ -80,7 +84,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   POLICY_OUTSIDE_PROJECT:
     "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
   POLICY_HAS_DEPENDENTS:
-    'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}`), the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}`) the webhooks `meta.webhook_sample` lists (`PUT /api/v1/webhooks/{webhook_id}`), the users `meta.user_sample` lists (`PUT /api/v1/users/{user_id}/policies`) and the API keys `meta.api_key_sample` lists (`PUT /api/v1/api-keys/{api_key_id}`), or delete them, then delete the policy.',
+    'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`{{PATCH /triggers/{trigger_id}}}`), the agents `meta.agent_sample` lists (`{{PATCH /agents/{agent_id}}}`) the webhooks `meta.webhook_sample` lists (`{{PUT /webhooks/{webhook_id}}}`), the users `meta.user_sample` lists (`{{PUT /users/{user_id}/policies}}`) and the API keys `meta.api_key_sample` lists (`{{PUT /api-keys/{api_key_id}}}`), or delete them, then delete the policy.',
   SHARE_CAP_EXCEEDED:
     "Wait `retry_after` seconds for the share's window to reset, or ask the publisher to raise its cap.",
   SHARE_IN_USE:
@@ -90,19 +94,19 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PUBLIC_SHARES_DISABLED:
     'Create the share with a project id as `grantee`, or ask the operator to set `SHARES_ALLOW_PUBLIC=true`.',
   DECISION_INTERRUPTED:
-    'Request a new decision with `POST /api/v1/deciders/{decider_id}/decisions` or `POST /api/v1/decisions`; nothing about the interrupted one can be resumed.',
+    'Request a new decision with `{{POST /deciders/{decider_id}/decisions}}` or `{{POST /decisions}}`; nothing about the interrupted one can be resumed.',
   PROJECT_PAUSED:
-    'Resume the project with `POST /api/v1/projects/{project_id}/resume` once whatever paused it is resolved; `meta.pause_reason` says why it was paused. Nothing is queued while paused — retry the request after resuming.',
+    'Resume the project with `{{POST /projects/{project_id}/resume}}` once whatever paused it is resolved; `meta.pause_reason` says why it was paused. Nothing is queued while paused — retry the request after resuming.',
   PROJECT_NOT_PAUSED:
-    'Nothing to do: the project is already running. Read `paused_at` on `GET /api/v1/projects/{project_id}` before resuming.',
+    'Nothing to do: the project is already running. Read `paused_at` on `{{GET /projects/{project_id}}}` before resuming.',
   QUOTA_EXCEEDED:
-    'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.',
+    'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `{{PATCH /quotas/{quota_id}}}`.',
   QUOTA_UNENFORCEABLE:
-    'Add price book entries covering the models this project runs (`POST /api/v1/prices`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, set `on_unpriced: "allow"` on the quota with `PATCH /api/v1/quotas/{quota_id}` (or switch it to `monitor` mode to stop blocking entirely).',
+    'Add price book entries covering the models this project runs (`{{PUT /usage/prices}}`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, set `on_unpriced: "allow"` on the quota with `{{PATCH /quotas/{quota_id}}}` (or switch it to `monitor` mode to stop blocking entirely).',
   MODEL_NOT_PRICED:
-    'Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `PUT /api/v1/usage/prices`, or for one provider instance with `PUT /api/v1/ai-providers/{ai_provider_id}/prices`. To run unpriced models again, set `require_priced_model` to `false` with `PATCH /api/v1/projects/{project_id}`.',
+    'Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `{{PUT /usage/prices}}`, or for one provider instance with `{{PUT /ai-providers/{ai_provider_id}/prices}}`. To run unpriced models again, set `require_priced_model` to `false` with `{{PATCH /projects/{project_id}}}`.',
   QUOTA_STORAGE_EXCEEDED:
-    'Delete stored content — files, documents, or memories — until the project is back under the cap; `meta.current_bytes` and `meta.limit` say by how much. Waiting does not help: a storage quota caps a stored total, not a rate. Alternatively raise the cap with `PATCH /api/v1/quotas/{quota_id}`, or switch it to `monitor` mode to stop blocking while you measure.',
+    'Delete stored content — files, documents, or memories — until the project is back under the cap; `meta.current_bytes` and `meta.limit` say by how much. Waiting does not help: a storage quota caps a stored total, not a rate. Alternatively raise the cap with `{{PATCH /quotas/{quota_id}}}`, or switch it to `monitor` mode to stop blocking while you measure.',
   TOOL_EGRESS_BLOCKED:
     'The deployment only makes outbound requests to publicly routable addresses, and this destination is not one — `meta.tool_url` names it and `meta.tool_address` the address it resolved to. Point the tool, webhook or provider `base_url` at a public host, or have the operator list this destination in TOOL_EGRESS_ALLOWED_HOSTS. It is not a permissions problem: no policy grants it.',
   TOOL_RESPONSE_TOO_LARGE:
@@ -174,7 +178,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   IDEMPOTENCY_KEY_REUSED:
     'Send the changed request under a new `idempotency_key`; repeating the original body under this key replays what it already names.',
   PLAYBOOK_VALIDATION_FAILED:
-    'Fix every problem `meta.problems` lists and retry. `POST /api/v1/playbooks/validate` answers the same check without writing.',
+    'Fix every problem `meta.problems` lists and retry. `{{POST /playbooks/validate}}` answers the same check without writing.',
   PLAYBOOK_HAS_CASES:
     'Delete the playbook’s cases first, or keep the playbook and stop creating cases from it.',
   PLAYBOOK_HAS_DEPENDENTS:
@@ -196,9 +200,9 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PLAYBOOK_NODE_NOT_RUNNABLE:
     'Read the case: fill what `missing` names, wait for the nodes `blocked_by` names, or confirm a `confirm` node instead of running it. A `running` node settles on its own; a `waiting` one settles when the task or run its `run` names closes or ends.',
   PLAYBOOK_EXECUTION_INTERRUPTED:
-    'Run the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run` once whatever its executor called is known not to need undoing.',
+    'Run the node again with `{{POST /playbook-cases/{case_id}/nodes/{node}/run}}` once whatever its executor called is known not to need undoing.',
   PLAYBOOK_CASE_PAUSED:
-    'Resume the case with `POST /api/v1/playbook-cases/{case_id}/resume`, then retry.',
+    'Resume the case with `{{POST /playbook-cases/{case_id}/resume}}`, then retry.',
   PLAYBOOK_CASE_NOT_PAUSED: 'Nothing to do: the case is already running.',
   PLAYBOOK_SELF_WRITE:
     "Return the value as the executor's result instead: it becomes the node's output, which the nodes reading it take as input.",
@@ -211,17 +215,17 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   PLAYBOOK_EXPORT_FORMAT_MISMATCH:
     "Make the tool answer the content type of the transformation's `format`, or declare the format it produces, and export the node again.",
   PLAYBOOK_EXPORT_INTERRUPTED:
-    'Export the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/exports`.',
+    'Export the node again with `{{POST /playbook-cases/{case_id}/nodes/{node}/exports}}`.',
   PLAYBOOK_CASE_BUSY:
     'Wait for the executions `meta.executions` names to settle — close a workflow task, or let an orchestration run end — then retry the upgrade.',
   PLAYBOOK_EXECUTION_FAILED:
     "Read the execution's `error` and the run it names in `run_id`, fix the executor, and run the node again.",
   ORCHESTRATION_VALIDATION_FAILED:
-    'The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `POST /api/v1/orchestrations/{orchestration_id}/validate` reports every problem at once.',
+    'The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `{{POST /orchestrations/validate}}` reports every problem at once.',
   ORCHESTRATION_CYCLE_DETECTED:
     'The graph has a cycle, so no topological order exists. Break the cycle named in `meta` — a loop belongs in a workflow, not a DAG.',
   ORCHESTRATION_RUN_DEPTH_LIMIT:
-    'Nesting is recursing: follow `parent_orchestration_run_id` up from the failed run to find the `sub_orchestration` (or `loop`) node that names a graph already in the chain, and repoint it. If the composition is legitimately this deep, raise the project bound with `PATCH /api/v1/projects/{project_id}` (`max_orchestration_run_depth`) — `meta.limit_source` says whether the project or the deployment set the number that refused it.',
+    'Nesting is recursing: follow `parent_orchestration_run_id` up from the failed run to find the `sub_orchestration` (or `loop`) node that names a graph already in the chain, and repoint it. If the composition is legitimately this deep, raise the project bound with `{{PATCH /projects/{project_id}}}` (`max_orchestration_run_depth`) — `meta.limit_source` says whether the project or the deployment set the number that refused it.',
   UPLOAD_TOKEN_EXPIRED:
     'Request a fresh upload token; tokens are single-use and short-lived by design.',
   UPLOAD_TOKEN_USED:
@@ -233,7 +237,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   FILE_TOO_LARGE_FOR_SYNC:
     'The file is too large to parse inside the request. Call the same operation without `wait=true` and poll the handle it returns.',
   BOOTSTRAP_ALREADY_COMPLETED:
-    'The first admin already exists, so bootstrap is closed for good. Sign in instead, and create further users with `POST /api/v1/users`.',
+    'The first admin already exists, so bootstrap is closed for good. Sign in instead, and create further users with `{{POST /users}}`.',
 };
 
 /**
@@ -277,19 +281,25 @@ const STATUS_BY_CODE = new Map<string, number>(
   })
 );
 
-/**
- * What a caller should do about `code`. Never empty — an explicit entry, else
- * the status-class fallback, else `DEFAULT_RESOLUTION`.
- */
-export const resolutionFor = (args: { code: string }): string => {
-  const explicit = ERROR_RESOLUTIONS[args.code];
-  if (explicit) return explicit;
+const hintTemplateFor = (args: { code: string }): string => {
+  const chosen =
+    errorHintOverride({ code: args.code }) ?? ERROR_RESOLUTIONS[args.code];
+  if (chosen) return chosen;
 
   const status = STATUS_BY_CODE.get(args.code);
   return (
     (status !== undefined ? STATUS_RESOLUTIONS[status] : undefined) ??
     DEFAULT_RESOLUTION()
   );
+};
+
+/**
+ * What a caller should do about `code`, rendered under the deployment's route
+ * prefix. Never empty — the deployment's override, else an explicit entry,
+ * else the status-class fallback, else `DEFAULT_RESOLUTION`.
+ */
+export const resolutionFor = (args: { code: string }): string => {
+  return renderHint({ template: hintTemplateFor(args) });
 };
 
 /** The reference-page anchor for `code`, as an absolute URL. */
