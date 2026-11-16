@@ -605,6 +605,17 @@ The runtime authorizes a registered type's writes; the handler authorizes nothin
 
 - **`resource_type`**, and the **`create`**, **`update`** and **`delete`** actions: each request takes its action, on `srn:<project_id>:<resource_type>:*` for a create and on the resource's physical id otherwise.
 - **`carries`**: for each property naming a resource, the action it carries on it (`{ "property": "default.agent_id", "action": "agents:CreateAgentGeneration", "resource_type": "agent" }`). `[]` descends into a list (`tools[]`). Checked on the values after resolution, as sent to the handler; a value that is not an id is `VALIDATION_FAILED`.
+  A property whose values are names rather than ids carries actions keyed by value instead, each on `srn:<project_id>:<resource_type>:*`; a value with no key is `VALIDATION_FAILED`, and a key mapped to `[]` carries nothing:
+
+  ```json
+  {
+    "property": "events[]",
+    "by_value": {
+      "task.created": [{ "action": "tasks:GetTask", "resource_type": "task" }],
+      "*": [{ "action": "tasks:GetTask", "resource_type": "task" }]
+    }
+  }
+  ```
 
 The deployer must hold all of them, else the resource fails with `ACTION_NOT_HELD` and the handler is never called. Every declared action must be one [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission) answers on its type (a built-in one, or one a [registered IAM module](./iam.md#deployment-registered-actions) declares), or the boot fails; a deployment's own routes ask `iam/check` the same actions from the same declaration.
 
