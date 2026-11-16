@@ -435,6 +435,79 @@ describe('parseFormationResourceTypeConfig', () => {
       );
     });
 
+    const withKeyedCarries = (byValue: unknown) => {
+      return {
+        resource_types: [
+          {
+            ...VALID_ENTRY,
+            writer: {
+              ...VALID_ENTRY.writer,
+              carries: [{ property: 'kind', by_value: byValue }],
+            },
+          },
+        ],
+      };
+    };
+
+    test('reads a carried property keyed by value', () => {
+      const [registration] = parse(
+        withKeyedCarries({
+          whatsapp: [{ action: 'agents:GetAgent', resource_type: 'agent' }],
+          email: [],
+        })
+      );
+      expect(registration.writer.carries).toEqual([
+        {
+          property: 'kind',
+          byValue: new Map([
+            [
+              'whatsapp',
+              [{ action: 'agents:GetAgent', resourceType: 'agent' }],
+            ],
+            ['email', []],
+          ]),
+        },
+      ]);
+    });
+
+    test('rejects a keyed carry with no values or a malformed entry', () => {
+      rejects(withKeyedCarries({}), /`writer.carries\[0\]`.by_value must map/);
+      rejects(
+        withKeyedCarries({ whatsapp: { action: 'agents:GetAgent' } }),
+        /`writer.carries\[0\]`.by_value.whatsapp must be an array/
+      );
+      rejects(
+        withKeyedCarries({
+          whatsapp: [{ action: 'GetAgent', resource_type: 'agent' }],
+        }),
+        /`writer.carries\[0\]`.by_value.whatsapp\[0\].action must be an IAM action/
+      );
+    });
+
+    test('rejects a carry declaring both an action and by_value', () => {
+      rejects(
+        {
+          resource_types: [
+            {
+              ...VALID_ENTRY,
+              writer: {
+                ...VALID_ENTRY.writer,
+                carries: [
+                  {
+                    property: 'kind',
+                    action: 'agents:GetAgent',
+                    resource_type: 'agent',
+                    by_value: {},
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        /`writer.carries\[0\]` declares either `action` and `resource_type` or `by_value`/
+      );
+    });
+
     test('rejects a schema that is not an object schema with properties', () => {
       const { schema: _dropped, ...noSchema } = VALID_ENTRY;
       rejects(

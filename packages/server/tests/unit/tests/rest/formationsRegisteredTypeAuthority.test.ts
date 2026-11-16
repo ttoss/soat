@@ -247,4 +247,71 @@ describe('the runtime asserts what the registration declares, before the handler
     expect(body.status).toBe('active');
     expect(creates()).toHaveLength(1);
   });
+
+  describe('a property carrying actions keyed by its value', () => {
+    beforeEach(() => {
+      unregisterFormationResourceTypes({ names: ['test_channel'] });
+      const registration = handler.registration({ capabilities: ['validate'] });
+      registerFormationResourceTypes({
+        registrations: [
+          {
+            ...registration,
+            writer: {
+              ...registration.writer,
+              carries: [
+                {
+                  property: 'kind',
+                  byValue: new Map([
+                    [
+                      'held',
+                      [
+                        {
+                          action: 'test-channels:UpdateTestChannel',
+                          resourceType: 'test_channel',
+                        },
+                      ],
+                    ],
+                    [
+                      'unheld',
+                      [{ action: 'agents:GetAgent', resourceType: 'agent' }],
+                    ],
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      });
+    });
+
+    const deployKind = (kind: string) => {
+      return deployAsUser({
+        Chan: { type: 'test_channel', properties: { name: 'A', kind } },
+      });
+    };
+
+    test('a deployer without the keyed action is refused', async () => {
+      const body = await deployKind('unheld');
+
+      expect(body.status).toBe('failed');
+      expect(JSON.stringify(body)).toContain('ACTION_NOT_HELD');
+      expect(JSON.stringify(body)).toContain('agents:GetAgent');
+      expect(creates()).toHaveLength(0);
+    });
+
+    test('a deployer holding the keyed action reaches the handler', async () => {
+      const body = await deployKind('held');
+
+      expect(body.status).toBe('active');
+      expect(creates()).toHaveLength(1);
+    });
+
+    test('a value the declaration does not key is refused', async () => {
+      const body = await deployKind('x');
+
+      expect(body.status).toBe('failed');
+      expect(JSON.stringify(body)).toContain('VALIDATION_FAILED');
+      expect(creates()).toHaveLength(0);
+    });
+  });
 });
