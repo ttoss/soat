@@ -42,11 +42,9 @@ const CHOKEPOINT = 'middleware/authority.ts';
  */
 describe('effective authority chokepoint', () => {
   test('only the chokepoint builds a request authorizer', () => {
-    assert.deepEqual(
-      filesMatching(/\bcreatePolicySetsIsAllowed\(/),
-      // A subscriber's read guard: an identity with no request behind it.
-      ['lib/eventMatching.ts', CHOKEPOINT]
-    );
+    assert.deepEqual(filesMatching(/\bcreatePolicySetsIsAllowed\(/), [
+      CHOKEPOINT,
+    ]);
   });
 
   test('only the chokepoint builds a project resolver', () => {
