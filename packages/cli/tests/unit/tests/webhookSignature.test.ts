@@ -3,11 +3,8 @@ import { createHmac } from 'node:crypto';
 import { inspectDeliverySignature } from '../../../src/webhookSignature';
 
 /**
- * `soat listen` is the tool the docs point users at before they aim a webhook
- * at a real endpoint, so it has to verify the schemes it actually receives. A
- * webhook delivery signs `<t>.<body>` and a trigger payload signs the bare
- * body, both under `X-Soat-Signature`. The listener tells them apart by the
- * value's own prefix and says which one it checked.
+ * Every sender, webhook delivery and trigger alike, signs `<t>.<body>` as
+ * `X-Soat-Signature: t=<unix>,v1=<hex>`; any other value is invalid.
  */
 
 const SECRET = 'whsec_test_secret';
@@ -25,10 +22,8 @@ const timestampedHeader = (args: {
   return `t=${timestamp},v1=${digest}`;
 };
 
-const bareBodyHeader = (args: { secret?: string; body?: string }) => {
-  return createHmac('sha256', args.secret ?? SECRET)
-    .update(args.body ?? BODY)
-    .digest('hex');
+const bareBodyDigest = () => {
+  return createHmac('sha256', SECRET).update(BODY).digest('hex');
 };
 
 describe('inspectDeliverySignature', () => {
@@ -39,11 +34,7 @@ describe('inspectDeliverySignature', () => {
       headers: { 'x-soat-signature': timestampedHeader({}) },
     });
 
-    expect(result).toEqual({
-      signature: timestampedHeader({}),
-      scheme: 'v2',
-      valid: true,
-    });
+    expect(result).toEqual({ signature: timestampedHeader({}), valid: true });
   });
 
   test('rejects a timestamped signature computed with the wrong secret', () => {
@@ -59,8 +50,6 @@ describe('inspectDeliverySignature', () => {
   });
 
   test('rejects a timestamped signature whose timestamp was tampered with', () => {
-    // The digest covers `<t>.<body>`, so swapping the timestamp alone must
-    // break verification — that is the whole point of signing it.
     const tampered = timestampedHeader({}).replace(
       't=1769865600',
       't=1769999999'
@@ -85,30 +74,17 @@ describe('inspectDeliverySignature', () => {
     expect(result.valid).toBe(false);
   });
 
-  test('checks the bare-body scheme when the value carries no timestamp prefix', () => {
+  test.each([
+    ['a bare-body hex digest', bareBodyDigest()],
+    ['a sha256= bare-body digest', `sha256=${bareBodyDigest()}`],
+  ])('rejects %s', (_label, header) => {
     const result = inspectDeliverySignature({
       secret: SECRET,
       payload: BODY,
-      headers: { 'x-soat-signature': bareBodyHeader({}) },
+      headers: { 'x-soat-signature': header },
     });
 
-    expect(result).toEqual({
-      signature: bareBodyHeader({}),
-      scheme: 'v1',
-      valid: true,
-    });
-  });
-
-  test('rejects a bare-body signature computed with the wrong secret', () => {
-    const result = inspectDeliverySignature({
-      secret: SECRET,
-      payload: BODY,
-      headers: {
-        'x-soat-signature': bareBodyHeader({ secret: 'wrong-secret' }),
-      },
-    });
-
-    expect(result.valid).toBe(false);
+    expect(result).toEqual({ signature: header, valid: false });
   });
 
   test('reports nothing verified when no secret is supplied', () => {
@@ -118,7 +94,6 @@ describe('inspectDeliverySignature', () => {
     });
 
     expect(result.valid).toBeNull();
-    expect(result.scheme).toBe('v2');
   });
 
   test('reports an unsigned delivery as invalid rather than throwing', () => {
@@ -128,6 +103,6 @@ describe('inspectDeliverySignature', () => {
       headers: {},
     });
 
-    expect(result).toEqual({ signature: '', scheme: 'v1', valid: false });
+    expect(result).toEqual({ signature: '', valid: false });
   });
 });

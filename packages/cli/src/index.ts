@@ -200,7 +200,6 @@ program
           event_type: eventType,
           delivery_id: deliveryId,
           signature: inspected.signature,
-          signature_scheme: inspected.scheme,
           signature_valid: inspected.valid,
           payload: parsedPayload,
         };
