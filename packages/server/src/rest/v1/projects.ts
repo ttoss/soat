@@ -69,7 +69,7 @@ const authorizeProjectAction = async (args: {
 };
 
 projectsRouter.post('/projects', async (ctx: Context) => {
-  requireAdmin(ctx, 'projects:CreateProject');
+  await requireAdmin(ctx, 'projects:CreateProject');
   const { name } = ctx.request.body as { name?: string };
 
   if (!name || typeof name !== 'string') {

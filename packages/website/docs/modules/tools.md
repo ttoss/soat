@@ -370,6 +370,8 @@ Create/update validates every entry against the registry: an unknown name is `40
 
 A non-2xx action response is `502 TOOL_HTTP_ERROR` with the real status in `meta.tool_status_code`. A `204 No Content` answer (every `delete-*`) yields `null`.
 
+An action runs through the same request stack as its REST route, so a write the deployment's [admission service](./iam.md#admission) is asked about is asked here too; its refusal is the action's non-2xx response.
+
 Operations whose response cannot be a tool result are `400 VALIDATION_FAILED` at create: `download-file` (raw bytes; use `download-file-base64`) and `export-audit-entries` (unbounded NDJSON; use `list-audit-entries`); both remain over REST, SDK and CLI. `create-agent-generation` has no `stream` and returns the completed generation.
 
 #### Actions an agent may not be given

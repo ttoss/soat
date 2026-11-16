@@ -123,6 +123,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/collections/{collection_id}:
     get:
       tags:
@@ -212,6 +214,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
       tags:
         - Collections
@@ -240,6 +244,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/collections/{collection_id}/items:
     get:
       tags:
@@ -404,6 +410,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     patch:
       tags:
         - Collections
@@ -473,6 +481,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
       tags:
         - Collections
@@ -502,6 +512,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/collections/{collection_id}/items/{key}/tags:
     get:
       tags:
@@ -587,6 +599,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     patch:
       tags:
         - Collections
@@ -640,6 +654,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:
   securitySchemes:
     bearerAuth:

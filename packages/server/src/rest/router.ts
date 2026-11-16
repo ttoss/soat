@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 
+import { admissionMiddleware } from '../middleware/admission';
 import { responseContractMiddleware } from '../middleware/responseContract';
 import { strictFieldsMiddleware } from '../middleware/strictFields';
 import { v1Router } from './v1';
@@ -12,6 +13,7 @@ restRouter.use(responseContractMiddleware);
 // Rejects unknown request-body fields against the OpenAPI spec. Runs after the
 // app-level authMiddleware (ctx.authUser resolved), before any route handler.
 restRouter.use(strictFieldsMiddleware);
+restRouter.use(admissionMiddleware);
 restRouter.use('/api/v1', v1Router.routes());
 
 export { restRouter };

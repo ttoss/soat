@@ -553,6 +553,10 @@ The check runs over the whole template **before anything is applied**: no format
 - A `trigger` resource acts under its `policy_ids` ([execution identity](./triggers.md#execution-identity)), which the deploying caller must hold, so a firing never exceeds who declared it.
 - A [custom resource type](#custom-resource-types) has no SOAT action, so it is gated on the request's `formations:*` action alone.
 
+### Admission
+
+A resource whose create or update action the deployment's [admission service](./iam.md#admission) is asked about is asked once per write, after its authorization and with its properties resolved, so a `ref`, `sub` or parameter value is seen as applied. A refusal fails that resource like any other failure: the deploy answers `2xx` with `status: failed` and the service's `code`, `message` and `meta` as its `error` (`ADMISSION_UNAVAILABLE` when the service did not answer), and the [rollback](#rollback-on-a-failed-deploy) runs. An operator-registered type is not asked: its handler decides its writes.
+
 ### Ids a Template Names Are Resolved Within Its Own Project
 
 A property naming an existing resource by id (an `ai_provider`'s `secret_id`, a `session`'s `agent_id`, an `ingestion_rule`'s `tool_id`) resolves only within the deployment project. Another project's id fails the apply as though it did not exist, so the lookup cannot probe other projects. The exception is a tool or agent another project [shares](./shares.md#using-a-shared-tool) with the deployment project: an `ingestion_rule`'s `tool_id` or `agent_id` names it like one of the project's own while the share is accepted, and fails the apply with `Tool not found: <tool_id>` or `Agent not found: <agent_id>` once it is not. A `session`'s `agent_id` names one of the project's own agents only.

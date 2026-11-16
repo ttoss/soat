@@ -1,4 +1,3 @@
-import type { ErrorCode } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { SenderCredential } from './assertionSender';
 import type { DeniedPrincipal } from './authorizationDenial';
@@ -432,7 +431,7 @@ export const formationFailure = (error: unknown): StoredError => {
 };
 
 export const buildFormationError = (args: {
-  code: ErrorCode;
+  code: string;
   message: string;
   meta?: Record<string, unknown>;
 }): FormationError => {

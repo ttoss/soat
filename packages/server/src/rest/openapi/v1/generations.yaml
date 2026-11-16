@@ -289,6 +289,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
   /api/v1/generations/{generation_id}/content:
     delete:
@@ -360,6 +362,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
   /api/v1/generations/{generation_id}/memory-assertions:
     get:

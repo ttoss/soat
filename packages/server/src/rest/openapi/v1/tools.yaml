@@ -222,6 +222,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     get:
       tags:
         - Tools
@@ -379,6 +381,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
       tags:
         - Tools
@@ -447,6 +451,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
   /api/v1/tools/{tool_id}/call:
     post:

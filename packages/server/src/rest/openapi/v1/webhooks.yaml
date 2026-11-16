@@ -112,6 +112,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
   /api/v1/webhooks/{webhook_id}:
     get:
@@ -216,6 +218,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
       description: Deletes a webhook and stops all event deliveries
       tags:
@@ -257,6 +261,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
   /api/v1/webhook-deliveries:
     get:
@@ -407,6 +413,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
   /api/v1/webhooks/{webhook_id}/secret:
     get:
@@ -503,6 +511,8 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
 components:
   securitySchemes:
