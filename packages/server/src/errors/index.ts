@@ -1,6 +1,7 @@
 export { ERROR_CODES, type ErrorCode } from './codes';
 export { docsBaseUrl } from './docsBaseUrl';
 export { DomainError } from './DomainError';
+export { errorBody, errorHintsOmitted } from './errorBody';
 export {
   DEFAULT_RESOLUTION,
   docsUrlFor,
