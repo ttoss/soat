@@ -6,7 +6,8 @@ import {
   conversationMessageTags,
   ownerActorPublicId,
 } from './conversationSystemTags';
-import { createDocument, deleteDocument } from './documents';
+import { destroyConversationMessage } from './conversationTurnDocuments';
+import { createDocument } from './documents';
 import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
@@ -371,11 +372,7 @@ export const removeConversationMessage = async (args: {
   // Mapped before the delete: the event carries the message as it stood.
   const mapped = await mapMessage(message);
 
-  await message.destroy();
-
-  if (document.publicId) {
-    await deleteDocument({ id: document.publicId });
-  }
+  await destroyConversationMessage({ message });
 
   emitResourceEvent({
     type: 'conversation_messages.deleted',
