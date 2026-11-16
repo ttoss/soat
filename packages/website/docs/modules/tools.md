@@ -393,7 +393,7 @@ On every action that takes `project_id` the server pins it to the agent's own pr
 
 #### How a builtin action is executed
 
-The action runs in-process through the same middleware stack and route handler as a client request (no network hop): per-call permission check against the caller's policies, strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply. No ambient authority: an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call not settled within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. From an orchestration the tool acts as the run's own identity — [Run identity](./orchestrations.md#durable-background-execution).
+The action runs in-process through the same middleware stack and route handler as a client request (no network hop): per-call permission check against the caller's policies, strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply. No ambient authority: an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call not settled within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. From an orchestration the tool acts as the run's own identity — [Run identity](./orchestrations.md#durable-background-execution). Work that stores no authority, or whose authority names a user or key that no longer exists, makes no tool call of any type: each is refused `409 WORK_AUTHORITY_MISSING`.
 
 Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` and `max_call_depth` only for actions whose REST schema declares them (currently only `create-agent-generation`).
 
