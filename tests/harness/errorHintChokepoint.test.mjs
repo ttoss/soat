@@ -44,4 +44,17 @@ describe('error hint chokepoint', () => {
       });
     assert.deepEqual(hits, [CHOKEPOINT]);
   });
+
+  /**
+   * A deployment renders hints under its own route prefix only while hints
+   * name routes as tokens (`errors/hintRoutes.ts`); a literal path would name
+   * a route the deployment does not serve.
+   */
+  test('no hint names a route as a literal /api/v1/ path', () => {
+    const hints = code(path.join(srcDir, 'errors/resolutions.ts'));
+    const literal = hints.split('\n').filter((line) => {
+      return line.includes('/api/v1/');
+    });
+    assert.deepEqual(literal, []);
+  });
 });

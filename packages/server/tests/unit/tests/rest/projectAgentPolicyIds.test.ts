@@ -1,3 +1,4 @@
+import { forbiddenHints } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -21,6 +22,7 @@ const projectRefusal = (args: { projectId: string; action: string }) => {
   return {
     error: {
       code: 'FORBIDDEN',
+      ...forbiddenHints(),
       message: expect.stringMatching(
         new RegExp(
           `^Forbidden: project ${args.projectId}'s policies deny ${args.action}`

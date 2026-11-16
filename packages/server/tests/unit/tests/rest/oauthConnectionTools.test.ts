@@ -1,3 +1,4 @@
+import { forbiddenHints } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -326,6 +327,7 @@ describe('http tool auth oauth_connection', () => {
     expect(result).toEqual({
       error: {
         code: 'FORBIDDEN',
+        ...forbiddenHints(),
         message: `Forbidden: agent ${bounded}'s policies deny oauth-connections:UseOauthConnection on ${resource}`,
         meta: {
           action: 'oauth-connections:UseOauthConnection',
@@ -357,6 +359,7 @@ describe('http tool auth oauth_connection', () => {
     expect(result).toEqual({
       error: {
         code: 'FORBIDDEN',
+        ...forbiddenHints(),
         message: `Forbidden: user ${caller.body.id}'s policies deny oauth-connections:UseOauthConnection on ${resource}`,
         meta: {
           action: 'oauth-connections:UseOauthConnection',

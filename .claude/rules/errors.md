@@ -41,7 +41,8 @@ route handlers.
 
 `middleware/errorLogger.ts` sets every error response through `errorBody`
 (`src/errors/errorBody.ts`): `{ error: { code, message, hint, docs_url, meta? } }`,
-without `hint` and `docs_url` when `SOAT_OMIT_ERROR_HINTS` is on:
+without `hint` when `SOAT_OMIT_ERROR_HINTS` is on and without `docs_url` when
+`SOAT_OMIT_ERROR_DOCS_URL` is on:
 
 | Error | Status | `code` |
 |---|---|---|
@@ -53,7 +54,9 @@ without `hint` and `docs_url` when `SOAT_OMIT_ERROR_HINTS` is on:
   from the code (`resolutionFor` / `docsUrlFor`, `src/errors/resolutions.ts`);
   `tests/harness/errorHintChokepoint.test.mjs`.
 - Add an `ERROR_RESOLUTIONS` entry when "what to do" is more specific than the
-  status class.
+  status class. Name a route as a token, `{{PATCH /agents/{agent_id}}}`
+  (`errors/hintRoutes.ts`), never a literal `/api/v1/` path; then run
+  `pnpm --filter @soat/server generate-error-hints`.
 - Enforced by `lib/errorResolutions.test.ts` (every code has a hint) and
   `@soat/website` `errorCodesPage.test.ts` (every `docs_url` anchor exists on
   the generated Error Codes page).

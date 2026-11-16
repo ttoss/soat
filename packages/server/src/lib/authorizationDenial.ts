@@ -1,4 +1,4 @@
-import { DomainError } from '../errors';
+import { DomainError, errorBody } from '../errors';
 import { isPlainObject } from './plainObject';
 import { principalFromAuthUser } from './principals';
 import type { ResourceGrantPrincipalType } from './resourceGrantCarriers';
@@ -151,20 +151,14 @@ export const isAuthorizationDenial = (error: unknown): error is DomainError => {
   return error instanceof DomainError && error.code === 'FORBIDDEN';
 };
 
-/**
- * A denial as a tool result the model reads: the error body a REST call
- * answers, without the request-only `hint` and `docs_url`.
- */
-export const denialToolResult = (
-  denial: DomainError
-): { error: { code: string; message: string; meta?: unknown } } => {
-  return {
-    error: {
-      code: denial.code,
-      message: denial.message,
-      ...(denial.meta === undefined ? {} : { meta: denial.meta }),
-    },
-  };
+/** A denial as a tool result the model reads: the body a REST call answers. */
+export const denialToolResult = (denial: DomainError) => {
+  return errorBody({
+    code: denial.code,
+    wireCode: denial.wireCode,
+    message: denial.message,
+    meta: denial.meta,
+  });
 };
 
 const PRINCIPAL_TYPES = Object.keys(PRINCIPAL_LABELS);

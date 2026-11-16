@@ -1,3 +1,4 @@
+import { forbiddenHints } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -98,6 +99,7 @@ describe('authorization denials', () => {
     expect(JSON.parse(res.body.result.content[0].text)).toEqual({
       error: {
         code: 'FORBIDDEN',
+        ...forbiddenHints(),
         message: `Forbidden: user ${userId}'s policies deny tools:DeleteTool on ${resource}`,
         meta: {
           action: 'tools:DeleteTool',
@@ -169,6 +171,7 @@ describe('authorization denials', () => {
     expect(results[0]).toEqual({
       error: {
         code: 'FORBIDDEN',
+        ...forbiddenHints(),
         message: `Forbidden: agent ${agentId}'s policies deny files:GetFile on srn:${turn.projectId}:file:*`,
         meta: {
           action: 'files:GetFile',
@@ -238,6 +241,7 @@ describe('authorization denials', () => {
     expect(results[0]).toEqual({
       error: {
         ...remoteDenial,
+        ...forbiddenHints(),
         meta: { ...remoteDenial.meta, mcp_tool: 'create_memory', mcp_url: url },
       },
     });

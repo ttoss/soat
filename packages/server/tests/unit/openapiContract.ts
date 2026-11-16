@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs';
 
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
-import { errorHintsOmitted } from 'src/errors';
+import { errorDocsUrlOmitted, errorHintsOmitted } from 'src/errors';
 import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
 
 // Audit mode: validate EVERY response against its full schema and append
@@ -103,36 +103,45 @@ const sanitizeSchema = (node: unknown): unknown => {
   return out;
 };
 
-const ajvs = new Map<boolean, Ajv>();
+const ajvs = new Map<string, Ajv>();
 const validatorCache = new Map<string, ValidateFunction[]>();
 
 // The whole merged spec is registered under this base id so a response schema's
 // internal `$ref: '#/components/schemas/X'` resolves against the spec root.
 const SPEC_ID = 'openapi';
 
-// A deployment setting `SOAT_OMIT_ERROR_HINTS` serves the published contract
-// without these two in `ErrorResponse.error.required`.
-const OMITTABLE_ERROR_FIELDS = new Set(['hint', 'docs_url']);
-
-const omitErrorHintsFromContract = (spec: Record<string, unknown>): void => {
+// A deployment omitting `hint` or `docs_url` serves the published contract
+// without that field in `ErrorResponse.error.required`.
+const omitErrorFieldsFromContract = (
+  spec: Record<string, unknown>,
+  omitted: ReadonlySet<string>
+): void => {
   const components = spec.components as {
     schemas: Record<string, { properties: { error: { required: string[] } } }>;
   };
   const error = components.schemas.ErrorResponse.properties.error;
   error.required = error.required.filter((field) => {
-    return !OMITTABLE_ERROR_FIELDS.has(field);
+    return !omitted.has(field);
   });
 };
 
-const getAjv = (hintsOmitted: boolean): Ajv => {
-  const cached = ajvs.get(hintsOmitted);
+/** The error fields this deployment leaves out, as a cache key. */
+const omittedErrorFields = (): string => {
+  return [
+    ...(errorHintsOmitted() ? ['hint'] : []),
+    ...(errorDocsUrlOmitted() ? ['docs_url'] : []),
+  ].join(',');
+};
+
+const getAjv = (omitted: string): Ajv => {
+  const cached = ajvs.get(omitted);
   if (cached) return cached;
 
   const sanitized = sanitizeSchema(getMergedOpenApiSpec()) as Record<
     string,
     unknown
   >;
-  if (hintsOmitted) omitErrorHintsFromContract(sanitized);
+  omitErrorFieldsFromContract(sanitized, new Set(omitted.split(',')));
 
   const ajv = new Ajv({
     strict: false,
@@ -141,7 +150,7 @@ const getAjv = (hintsOmitted: boolean): Ajv => {
   });
   addFormats(ajv);
   ajv.addSchema(sanitized, SPEC_ID);
-  ajvs.set(hintsOmitted, ajv);
+  ajvs.set(omitted, ajv);
 
   return ajv;
 };
@@ -196,8 +205,8 @@ const getResponseValidators = (args: {
   method: string;
   status: number;
 }): ValidateFunction[] => {
-  const hintsOmitted = errorHintsOmitted();
-  const cacheKey = `${args.method} ${args.template} ${args.status} ${hintsOmitted}`;
+  const omitted = omittedErrorFields();
+  const cacheKey = `${args.method} ${args.template} ${args.status} ${omitted}`;
   const cached = validatorCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -218,7 +227,7 @@ const getResponseValidators = (args: {
       'schema',
     ].join('/');
     validators.push(
-      getAjv(hintsOmitted).compile({ $ref: `${SPEC_ID}#/${pointer}` })
+      getAjv(omitted).compile({ $ref: `${SPEC_ID}#/${pointer}` })
     );
   }
 

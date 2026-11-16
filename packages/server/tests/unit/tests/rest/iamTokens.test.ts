@@ -11,6 +11,7 @@ import {
 } from 'src/lib/workAuthority';
 import { authUserOfWork } from 'src/middleware/auth';
 
+import { forbiddenHints } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
   startAgentToolTurn,
@@ -453,6 +454,7 @@ describe('IAM tokens', () => {
       expect(await readThroughTurn(token)).toEqual({
         error: {
           code: 'FORBIDDEN',
+          ...forbiddenHints(),
           message: expect.stringMatching(
             /^Forbidden: IAM token \S+'s policies deny documents:GetDocument on srn:/
           ),

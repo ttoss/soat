@@ -1,0 +1,1300 @@
+{
+  "route_prefix": "/api/v1",
+  "codes": {
+    "ACTION_NOT_HELD": {
+      "http_status": 403,
+      "hint": "Name a target or action you may perform yourself (`meta.action` on `meta.resource`), or have a caller who holds it make the change.",
+      "routes": []
+    },
+    "ACTOR_HAS_MESSAGES": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "ACTOR_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "ADMISSION_REFUSED": {
+      "http_status": 403,
+      "hint": "Read the refusal's own `code` and `message`: the deployment's admission service decides this write, and its answer says what to change.",
+      "routes": []
+    },
+    "ADMISSION_UNAVAILABLE": {
+      "http_status": 502,
+      "hint": "Retry later. The deployment operator has to bring its admission service back; the write is refused until it answers.",
+      "routes": []
+    },
+    "AGENT_AND_CHAT_EXCLUSIVE": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "AGENT_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "AGENT_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "AGENT_RUN_AS_REQUIRES_POLICIES": {
+      "http_status": 400,
+      "hint": "Give the agent the policies it acts under in `policy_ids`, or set `run_as: caller` so the agent runs as its caller.",
+      "routes": []
+    },
+    "AI_PROVIDER_ERROR": {
+      "http_status": 502,
+      "hint": "The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.",
+      "routes": []
+    },
+    "AI_PROVIDER_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "AI_PROVIDER_MISCONFIGURED": {
+      "http_status": 400,
+      "hint": "The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment's own, which only an operator may allow. Update the AI provider and retry.",
+      "routes": []
+    },
+    "AI_PROVIDER_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "API_KEY_POLICY_BOUNDARY": {
+      "http_status": 403,
+      "hint": "This API key is narrowed by `policy_ids`. Omit `policy_ids` on create to inherit the key's own boundary, or name a subset of `key_policy_ids`; a wider key requires a credential that carries that permission.",
+      "routes": []
+    },
+    "API_KEY_PROJECT_SCOPE": {
+      "http_status": 403,
+      "hint": "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use an unscoped credential.",
+      "routes": []
+    },
+    "APPROVAL_ALREADY_RESOLVED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "APPROVAL_EXPIRED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "APPROVAL_INVALID_EDIT": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "APPROVAL_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "APPROVAL_REASON_REQUIRED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "BOOTSTRAP_ALREADY_COMPLETED": {
+      "http_status": 409,
+      "hint": "The first admin already exists, so bootstrap is closed for good. Sign in instead, and create further users with `POST /api/v1/users`.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/users"
+        }
+      ]
+    },
+    "CHAIN_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "CHAT_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "CONVERSATION_POSITION_CONFLICT": {
+      "http_status": 409,
+      "hint": "Retry the write unchanged: nothing was stored, and the retry resolves its position again.",
+      "routes": []
+    },
+    "CONVERSION_TIMEOUT": {
+      "http_status": 500,
+      "hint": "Check that the converter calls back to the document's callback URL, then ingest the document again. Raise `CONVERSION_STALL_TIMEOUT_MS` for a converter that legitimately takes longer.",
+      "routes": []
+    },
+    "CONVERTER_FAILED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "CONVERTER_OUTPUT_INVALID": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "CREDENTIAL_NARROWED": {
+      "http_status": 403,
+      "hint": "Write the key, or consent, with a user token or an API key and no `On-Behalf-Of` header; to consent, use a key with no `policy_ids` of its own.",
+      "routes": []
+    },
+    "DECIDER_AGENT_NOT_TOOL_LESS": {
+      "http_status": 400,
+      "hint": "Point the decider at an agent with no `tool_bindings` and no `knowledge_config.write_memory_store_id`, or remove them from this one with `PATCH /api/v1/agents/{agent_id}`. The agent's `instructions` and knowledge retrieval remain the place for domain context.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/agents/{agent_id}"
+        }
+      ]
+    },
+    "DECIDER_TOOL_NOT_CALLABLE": {
+      "http_status": 400,
+      "hint": "Point the decider at an `http`, `pipeline` or `builtin` tool with no `input` or `questions` in its `preset_parameters`; a `builtin` tool names its `action` there. Reach an `mcp` tool through a `pipeline` step, which names its own `action`.",
+      "routes": []
+    },
+    "DECISION_ANSWER_INVALID": {
+      "http_status": 502,
+      "hint": "Make the tool answer `{ answers: [{ name, probability | choice | score, probabilities?, confidence? }] }`, one per question, as OpenAI's Decisions API does; map an engine's own fields with the tool's `output_mapping` or a `pipeline` tool's `output`. Then request a new decision.",
+      "routes": []
+    },
+    "DECISION_INTERRUPTED": {
+      "http_status": 500,
+      "hint": "Request a new decision with `POST /api/v1/deciders/{decider_id}/decisions` or `POST /api/v1/decisions`; nothing about the interrupted one can be resumed.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/deciders/{decider_id}/decisions"
+        },
+        {
+          "method": "POST",
+          "path": "/decisions"
+        }
+      ]
+    },
+    "DOCUMENT_ALREADY_WITHDRAWN": {
+      "http_status": 409,
+      "hint": "The document is already out of every default read. To bring it back, restore the version before the withdrawal.",
+      "routes": []
+    },
+    "DOCUMENT_PATH_OUTSIDE_PREFIX": {
+      "http_status": 400,
+      "hint": "Give a `path` under `meta.path_prefix`; a create without one lands at the project root, outside every narrower pin.",
+      "routes": []
+    },
+    "DOCUMENT_RELATION_EXISTS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "EMBEDDING_NOT_CONFIGURED": {
+      "http_status": 503,
+      "hint": "Knowledge search needs an embedding model. Configure one on the project or the AI provider before ingesting or searching.",
+      "routes": []
+    },
+    "EVAL_SCORING_FAILED": {
+      "http_status": 500,
+      "hint": "Read the message for the scorer's failure, fix the scorer's configuration, and run the eval again.",
+      "routes": []
+    },
+    "EXCEPTION_ALREADY_RESOLVED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "EXCEPTION_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "EXPRESSION_FAILED": {
+      "http_status": 422,
+      "hint": "Fix the JSON Logic expression the message names: an unknown operator, or a `throw` the expression reached with the data it was given.",
+      "routes": []
+    },
+    "FILE_ALREADY_INGESTED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "FILE_DOWNLOAD_URL_NOT_CONFIGURED": {
+      "http_status": 500,
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "FILE_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "FILE_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "FILE_PARSE_FAILED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "FILE_STORAGE_MISCONFIGURED": {
+      "http_status": 500,
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "FILE_TOO_LARGE_FOR_SYNC": {
+      "http_status": 413,
+      "hint": "The file is too large to parse inside the request. Call the same operation without `wait=true` and poll the handle it returns.",
+      "routes": []
+    },
+    "FORBIDDEN": {
+      "http_status": 403,
+      "hint": "The credential authenticated but is not allowed this action. Attach an IAM policy granting the action to the caller, or use a credential that has it.",
+      "routes": []
+    },
+    "FORCED_TOOL_CHOICE_CANNOT_STOP": {
+      "http_status": 400,
+      "hint": "Add `{ \"type\": \"has_tool_call\", \"tool_name\": \"<your done tool>\" }` to `stop_conditions`, or set `tool_choice` to `\"auto\"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.",
+      "routes": []
+    },
+    "FORMATION_DELETE_FAILED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "FORMATION_HANDLER_FAILED": {
+      "http_status": 502,
+      "hint": "A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).",
+      "routes": []
+    },
+    "FORMATION_INVALID_METADATA": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "FORMATION_MISSING_PARAMETERS": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "FORMATION_REPLACE_CLEANUP_FAILED": {
+      "http_status": 500,
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "FORMATION_RESOURCE_TYPE_UNREGISTERED": {
+      "http_status": 409,
+      "hint": "Register the resource type again so its handler can act on the resource, or remove the resource outside the formation.",
+      "routes": []
+    },
+    "GENERATION_ALREADY_IN_PROGRESS": {
+      "http_status": 409,
+      "hint": "A generation is already running for this target. Poll it to completion, or cancel it, before starting another.",
+      "routes": []
+    },
+    "GENERATION_CONTENT_UNAVAILABLE": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "GENERATION_FAILED": {
+      "http_status": 500,
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "GENERATION_NOT_AWAITING_TOOL_OUTPUTS": {
+      "http_status": 409,
+      "hint": "Read the generation for its current status. A generation that pauses again answers `requires_action` with new tool call ids; submit outputs for those.",
+      "routes": []
+    },
+    "GENERATION_NOT_COMPLETED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "GENERATION_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "GUARDRAIL_HAS_REFERENCES": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "GUARDRAIL_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "HOOK_DELIVERY_REPLAYED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "HOOK_INVALID_JSON": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "HOOK_PAYLOAD_TOO_LARGE": {
+      "http_status": 413,
+      "hint": "The payload exceeds the accepted size. Send less in one request, or use the upload flow for large bodies.",
+      "routes": []
+    },
+    "IAM_TOKEN_ISSUER_NOT_ALLOWED": {
+      "http_status": 403,
+      "hint": "Issue the token with an API key scoped to the project, never with a user token, an unscoped key or another token.",
+      "routes": []
+    },
+    "IAM_TOKEN_POLICY_INVALID": {
+      "http_status": 400,
+      "hint": "Send `policy` as a valid policy document naming known actions, or `policy_ids` naming policies of the key's project or global ones.",
+      "routes": []
+    },
+    "IDEMPOTENCY_KEY_REUSED": {
+      "http_status": 409,
+      "hint": "Send the changed request under a new `idempotency_key`; repeating the original body under this key replays what it already names.",
+      "routes": []
+    },
+    "INGESTION_CALLBACK_CONFLICT": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "INGESTION_CALLBACK_INVALID_TOKEN": {
+      "http_status": 401,
+      "hint": "This endpoint reads no `Authorization` header. Post to `callback.url` from the converter's latest input as given: it carries `callback.token` as the `token` query parameter. A re-ingest issues a new token, and one older than `CONVERSION_STALL_TIMEOUT_MS` is refused.",
+      "routes": []
+    },
+    "INGESTION_FAILED": {
+      "http_status": 500,
+      "hint": "Read the message for the cause, fix the file or its ingestion rule, and ingest the document again.",
+      "routes": []
+    },
+    "INGESTION_RULE_GLOB_CONFLICT": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "INGESTION_RULE_VALIDATION_FAILED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "INGESTION_TIMEOUT": {
+      "http_status": 500,
+      "hint": "Ingest the document again. A large file or a busy worker can outlast the window; raise `INGESTION_STALL_TIMEOUT_MS` when it does so repeatedly.",
+      "routes": []
+    },
+    "INTERNAL_ERROR": {
+      "http_status": 500,
+      "hint": "Retry with backoff. The underlying exception is logged server-side and deliberately never forwarded, so the response carries nothing further to act on.",
+      "routes": []
+    },
+    "INVALID_CRON_EXPRESSION": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "INVALID_CURSOR": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "INVALID_EVENT_PATTERN": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "INVALID_OUTPUT_SCHEMA": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "INVALID_TEMPLATE_TOKEN": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "INVALID_TOOL_CONTEXT_KEY": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "LITERAL_CREDENTIAL": {
+      "http_status": 400,
+      "hint": "Create the value with `POST /api/v1/secrets` and write `{{secret:<secret_id>}}` where the literal was (for example `Authorization: Bearer {{secret:sec_...}}`); `meta.paths` names every field to change.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/secrets"
+        }
+      ]
+    },
+    "LOOP_ITEM_TOOL_CONTEXT_INVALID": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "MCP_TOOL_ERROR": {
+      "http_status": 502,
+      "hint": "The MCP server answered the call with a failure rather than a result — `meta.mcp_tool` names the tool and `meta.mcp_url` the server. The message carries what the server said; fix the arguments or the server-side condition it names, then retry. The call reached the server, so this is not a connectivity or allowlist problem.",
+      "routes": []
+    },
+    "MEMORY_ALREADY_INVALIDATED": {
+      "http_status": 409,
+      "hint": "The fact is already out of every read. Read the memory by id to see whether a supersede replaced it, and retract the memory that replaced it if that is the one that no longer holds.",
+      "routes": []
+    },
+    "MEMORY_RULE_VALIDATION_FAILED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "MEMORY_STORE_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "MISSING_TOOL_CONTEXT_KEY": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "MODEL_LISTING_FAILED": {
+      "http_status": 502,
+      "hint": "An upstream dependency failed rather than this server itself. Retry with backoff and check that dependency.",
+      "routes": []
+    },
+    "MODEL_LISTING_UNSUPPORTED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "MODEL_NOT_OFFERED": {
+      "http_status": 400,
+      "hint": "Name one of the provider's `model_aliases` (read the AI provider), or have someone who may update it add the alias or clear `model_aliases_only`.",
+      "routes": []
+    },
+    "MODEL_NOT_PRICED": {
+      "http_status": 409,
+      "hint": "Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `PUT /api/v1/usage/prices`, or for one provider instance with `PUT /api/v1/ai-providers/{ai_provider_id}/prices`. To run unpriced models again, set `require_priced_model` to `false` with `PATCH /api/v1/projects/{project_id}`.",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "/usage/prices"
+        },
+        {
+          "method": "PUT",
+          "path": "/ai-providers/{ai_provider_id}/prices"
+        },
+        {
+          "method": "PATCH",
+          "path": "/projects/{project_id}"
+        }
+      ]
+    },
+    "MODEL_ROUTE_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "MODEL_ROUTE_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "NAME_CONFLICT": {
+      "http_status": 409,
+      "hint": "A resource with this name already exists in the project. Pick another name, or update the existing resource instead of creating a second one.",
+      "routes": []
+    },
+    "NOT_IMPLEMENTED": {
+      "http_status": 501,
+      "hint": "The operation exists in the contract but is not implemented on this deployment. Retrying will not change the outcome.",
+      "routes": []
+    },
+    "NO_ACTIVE_RELEASE": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "OAUTH_CALLBACK_FAILED": {
+      "http_status": 400,
+      "hint": "Start the connection again with POST /api/v1/oauth-connections and send the person to the new authorize_url; each state is single-use and expires in 10 minutes.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/oauth-connections"
+        }
+      ]
+    },
+    "OAUTH_CLIENT_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "OAUTH_CONNECTION_REFRESH_FAILED": {
+      "http_status": 502,
+      "hint": "Have the actor reconnect: POST /api/v1/oauth-connections for the same oauth_client_id and actor_id.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/oauth-connections"
+        }
+      ]
+    },
+    "OAUTH_CONNECTION_REQUIRED": {
+      "http_status": 409,
+      "hint": "Have the actor reconnect: start an OAuth connection for the `meta` oauth_client_id and actor_id and send the person to its authorize_url.",
+      "routes": []
+    },
+    "ON_BEHALF_OF_INVALID": {
+      "http_status": 400,
+      "hint": "Forward the tool assertion of the call being served unchanged, within its lifetime, with the API key of the project it names; or drop the header to write as the key.",
+      "routes": []
+    },
+    "ORCHESTRATION_CYCLE_DETECTED": {
+      "http_status": 422,
+      "hint": "The graph has a cycle, so no topological order exists. Break the cycle named in `meta` — a loop belongs in a workflow, not a DAG.",
+      "routes": []
+    },
+    "ORCHESTRATION_DISPATCH_FAILED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "ORCHESTRATION_HUMAN_NODE_MISMATCH": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "ORCHESTRATION_MAX_ITERATIONS_EXCEEDED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "ORCHESTRATION_NESTED_RUN_FAILED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "ORCHESTRATION_NODE_FAILED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "ORCHESTRATION_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "ORCHESTRATION_POLL_EXHAUSTED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "ORCHESTRATION_RUN_DEPTH_LIMIT": {
+      "http_status": 409,
+      "hint": "Nesting is recursing: follow `parent_orchestration_run_id` up from the failed run to find the `sub_orchestration` (or `loop`) node that names a graph already in the chain, and repoint it. If the composition is legitimately this deep, raise the project bound with `PATCH /api/v1/projects/{project_id}` (`max_orchestration_run_depth`) — `meta.limit_source` says whether the project or the deployment set the number that refused it.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/projects/{project_id}"
+        }
+      ]
+    },
+    "ORCHESTRATION_RUN_NOT_AWAITING_INPUT": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "ORCHESTRATION_RUN_NOT_CANCELLABLE": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "ORCHESTRATION_RUN_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "ORCHESTRATION_RUN_NOT_PAUSABLE": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "ORCHESTRATION_RUN_PAUSED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "ORCHESTRATION_VALIDATION_FAILED": {
+      "http_status": 400,
+      "hint": "The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `POST /api/v1/orchestrations/validate` reports every problem at once.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/orchestrations/validate"
+        }
+      ]
+    },
+    "OUTPUT_SCHEMA_STREAMING_UNSUPPORTED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "OUTPUT_SCHEMA_VALIDATION_FAILED": {
+      "http_status": 502,
+      "hint": "The model answered and the answer does not satisfy `output_schema` — the violated field is named in the message. Retrying the same request bills a second call to reach the same answer; loosen the schema, or make the instructions name the shape the model keeps missing.",
+      "routes": []
+    },
+    "PDF_PARSE_FAILED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "PIPELINE_DEPTH_EXCEEDED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "PIPELINE_INVALID_STEP": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "PIPELINE_STEP_FAILED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "PLAYBOOK_CASE_BUSY": {
+      "http_status": 409,
+      "hint": "Wait for the executions `meta.executions` names to settle — close a workflow task, or let an orchestration run end — then retry the upgrade.",
+      "routes": []
+    },
+    "PLAYBOOK_CASE_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "Delete the cases `meta.cases` lists first; a binding is fixed for the life of the dependent case.",
+      "routes": []
+    },
+    "PLAYBOOK_CASE_NOT_PAUSED": {
+      "http_status": 409,
+      "hint": "Nothing to do: the case is already running.",
+      "routes": []
+    },
+    "PLAYBOOK_CASE_PAUSED": {
+      "http_status": 409,
+      "hint": "Resume the case with `POST /api/v1/playbook-cases/{case_id}/resume`, then retry.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/playbook-cases/{case_id}/resume"
+        }
+      ]
+    },
+    "PLAYBOOK_CASE_UPSTREAM_INVALID": {
+      "http_status": 400,
+      "hint": "Read the target version's `definition.upstreams` and pass `upstreams` with one case id per declared name the case does not already bind (all of them at create), each a case of that playbook belonging to the same actor.",
+      "routes": []
+    },
+    "PLAYBOOK_EXECUTION_FAILED": {
+      "http_status": 422,
+      "hint": "Read the execution's `error` and the run it names in `run_id`, fix the executor, and run the node again.",
+      "routes": []
+    },
+    "PLAYBOOK_EXECUTION_INTERRUPTED": {
+      "http_status": 500,
+      "hint": "Run the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/run` once whatever its executor called is known not to need undoing.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/playbook-cases/{case_id}/nodes/{node}/run"
+        }
+      ]
+    },
+    "PLAYBOOK_EXECUTOR_FORBIDDEN": {
+      "http_status": 403,
+      "hint": "Add a policy allowing the start action `meta.action` names to the playbook's `policy_ids`; cases created on the new version run under it.",
+      "routes": []
+    },
+    "PLAYBOOK_EXPORT_FAILED": {
+      "http_status": 422,
+      "hint": "Read the export's `error`, make the transformation's tool answer a file (`execute.response_mode: base64`), and export the node again.",
+      "routes": []
+    },
+    "PLAYBOOK_EXPORT_FORMAT_MISMATCH": {
+      "http_status": 422,
+      "hint": "Make the tool answer the content type of the transformation's `format`, or declare the format it produces, and export the node again.",
+      "routes": []
+    },
+    "PLAYBOOK_EXPORT_INTERRUPTED": {
+      "http_status": 500,
+      "hint": "Export the node again with `POST /api/v1/playbook-cases/{case_id}/nodes/{node}/exports`.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/playbook-cases/{case_id}/nodes/{node}/exports"
+        }
+      ]
+    },
+    "PLAYBOOK_HAS_CASES": {
+      "http_status": 409,
+      "hint": "Delete the playbook’s cases first, or keep the playbook and stop creating cases from it.",
+      "routes": []
+    },
+    "PLAYBOOK_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "Remove the upstream from every playbook `meta.playbooks` lists, or delete those playbooks, then retry.",
+      "routes": []
+    },
+    "PLAYBOOK_INPUT_CONFLICT": {
+      "http_status": 409,
+      "hint": "Re-read the case, decide each conflicting field against its current value, and retry with the revisions `meta.conflicts` names.",
+      "routes": []
+    },
+    "PLAYBOOK_INPUT_INVALID": {
+      "http_status": 400,
+      "hint": "Read the case's `nodes` for the inputs its version declares and which of them are filled by a person; correct the value to its input's schema.",
+      "routes": []
+    },
+    "PLAYBOOK_NODE_NOT_CONFIRMABLE": {
+      "http_status": 409,
+      "hint": "Read the case: confirm only a `confirm` node, after filling what `missing` names and once the nodes `blocked_by` names are `done`.",
+      "routes": []
+    },
+    "PLAYBOOK_NODE_NOT_EXPORTABLE": {
+      "http_status": 409,
+      "hint": "Wait for the node to settle, or run it again if it `failed`; to export an earlier output, name its `revision` from the case's entries.",
+      "routes": []
+    },
+    "PLAYBOOK_NODE_NOT_RUNNABLE": {
+      "http_status": 409,
+      "hint": "Read the case: fill what `missing` names, wait for the nodes `blocked_by` names, or confirm a `confirm` node instead of running it. A `running` node settles on its own; a `waiting` one settles when the task or run its `run` names closes or ends.",
+      "routes": []
+    },
+    "PLAYBOOK_SELF_WRITE": {
+      "http_status": 403,
+      "hint": "Return the value as the executor's result instead: it becomes the node's output, which the nodes reading it take as input.",
+      "routes": []
+    },
+    "PLAYBOOK_VALIDATION_FAILED": {
+      "http_status": 400,
+      "hint": "Fix every problem `meta.problems` lists and retry. `POST /api/v1/playbooks/validate` answers the same check without writing.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/playbooks/validate"
+        }
+      ]
+    },
+    "POLICY_GRANT_NOT_HELD": {
+      "http_status": 403,
+      "hint": "Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.",
+      "routes": []
+    },
+    "POLICY_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}`), the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}`) the webhooks `meta.webhook_sample` lists (`PUT /api/v1/webhooks/{webhook_id}`), the users `meta.user_sample` lists (`PUT /api/v1/users/{user_id}/policies`) and the API keys `meta.api_key_sample` lists (`PUT /api/v1/api-keys/{api_key_id}`), or delete them, then delete the policy.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/triggers/{trigger_id}"
+        },
+        {
+          "method": "PATCH",
+          "path": "/agents/{agent_id}"
+        },
+        {
+          "method": "PUT",
+          "path": "/webhooks/{webhook_id}"
+        },
+        {
+          "method": "PUT",
+          "path": "/users/{user_id}/policies"
+        },
+        {
+          "method": "PUT",
+          "path": "/api-keys/{api_key_id}"
+        }
+      ]
+    },
+    "POLICY_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "POLICY_OUTSIDE_PROJECT": {
+      "http_status": 400,
+      "hint": "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
+      "routes": []
+    },
+    "PROJECT_DEFAULT_ROUTE_INHERITED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "PROJECT_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "PROJECT_NOT_PAUSED": {
+      "http_status": 409,
+      "hint": "Nothing to do: the project is already running. Read `paused_at` on `GET /api/v1/projects/{project_id}` before resuming.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/projects/{project_id}"
+        }
+      ]
+    },
+    "PROJECT_PAUSED": {
+      "http_status": 409,
+      "hint": "Resume the project with `POST /api/v1/projects/{project_id}/resume` once whatever paused it is resolved; `meta.pause_reason` says why it was paused. Nothing is queued while paused — retry the request after resuming.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/projects/{project_id}/resume"
+        }
+      ]
+    },
+    "PROMOTION_GATE_UNMET": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "PUBLIC_SHARES_DISABLED": {
+      "http_status": 403,
+      "hint": "Create the share with a project id as `grantee`, or ask the operator to set `SHARES_ALLOW_PUBLIC=true`.",
+      "routes": []
+    },
+    "QUERY_TIMEOUT": {
+      "http_status": 422,
+      "hint": "Add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on, or lower `limit`. Retrying the same query times out again.",
+      "routes": []
+    },
+    "QUEUE_DRIVER_MISCONFIGURED": {
+      "http_status": 500,
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "QUOTA_CONFLICT": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "QUOTA_EXCEEDED": {
+      "http_status": 429,
+      "hint": "Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/quotas/{quota_id}"
+        }
+      ]
+    },
+    "QUOTA_STORAGE_EXCEEDED": {
+      "http_status": 409,
+      "hint": "Delete stored content — files, documents, or memories — until the project is back under the cap; `meta.current_bytes` and `meta.limit` say by how much. Waiting does not help: a storage quota caps a stored total, not a rate. Alternatively raise the cap with `PATCH /api/v1/quotas/{quota_id}`, or switch it to `monitor` mode to stop blocking while you measure.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/quotas/{quota_id}"
+        }
+      ]
+    },
+    "QUOTA_UNENFORCEABLE": {
+      "http_status": 409,
+      "hint": "Add price book entries covering the models this project runs (`PUT /api/v1/usage/prices`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, set `on_unpriced: \"allow\"` on the quota with `PATCH /api/v1/quotas/{quota_id}` (or switch it to `monitor` mode to stop blocking entirely).",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "/usage/prices"
+        },
+        {
+          "method": "PATCH",
+          "path": "/quotas/{quota_id}"
+        }
+      ]
+    },
+    "REQUEST_REJECTED": {
+      "http_status": 400,
+      "hint": "The HTTP layer rejected the request before it reached a route — method, content type, or size. The message names the reason.",
+      "routes": []
+    },
+    "RESERVED_PATH": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "RESERVED_TAG_KEY": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "RESOURCE_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id, and check that the credential can see the project that owns the resource — a resource in another project is indistinguishable from one that does not exist. List the collection to confirm.",
+      "routes": []
+    },
+    "SECRET_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "SECRET_NOT_DECRYPTABLE": {
+      "http_status": 500,
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "SECRET_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "SESSION_CLOSED": {
+      "http_status": 409,
+      "hint": "The session is closed and accepts no further messages. Open a new one, or fork this one to keep its history.",
+      "routes": []
+    },
+    "SESSION_EXPIRED": {
+      "http_status": 410,
+      "hint": "Open a new session; an expired one cannot be revived. Raise the agent's session TTL if this happens sooner than the workload needs.",
+      "routes": []
+    },
+    "SESSION_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "SHARE_CAP_EXCEEDED": {
+      "http_status": 429,
+      "hint": "Wait `retry_after` seconds for the share's window to reset, or ask the publisher to raise its cap.",
+      "routes": []
+    },
+    "SHARE_IN_USE": {
+      "http_status": 409,
+      "hint": "Repoint or remove the resources `meta.references` lists, or pass `force=true` to revoke anyway and let them degrade.",
+      "routes": []
+    },
+    "SHARE_REVOKED": {
+      "http_status": 403,
+      "hint": "A revoked share cannot be used again: ask the publisher for a new share. If the publisher revoked only your acceptance, it must delete that acceptance before you can accept again.",
+      "routes": []
+    },
+    "SINGLE_SESSION_CONFLICT": {
+      "http_status": 409,
+      "hint": "The agent allows one open session per actor. Reuse the session named in `meta.session_id`, or close it first.",
+      "routes": []
+    },
+    "SYSTEM_MESSAGE_NOT_ALLOWED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TASK_AUTOMATION_CHAIN_LIMIT": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "TASK_AUTOMATION_PROVENANCE_MISSING": {
+      "http_status": 500,
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "TASK_GUARD_REJECTED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TASK_MIGRATION_CONFLICT": {
+      "http_status": 409,
+      "hint": "Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.",
+      "routes": []
+    },
+    "TASK_MIGRATION_STATE_UNMAPPED": {
+      "http_status": 400,
+      "hint": "Add `state_map: { \"<meta.state>\": \"<a state the target version declares>\" }` to the migration.",
+      "routes": []
+    },
+    "TASK_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "TASK_NOT_PAUSABLE": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "TASK_NOT_PAUSED": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "TASK_PAYLOAD_INVALID": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TASK_STATE_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TASK_TRANSITION_CONFLICT": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "TASK_TRANSITION_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TEXT_ENCODED_TOOL_CALL": {
+      "http_status": 502,
+      "hint": "An upstream dependency failed rather than this server itself. Retry with backoff and check that dependency.",
+      "routes": []
+    },
+    "TOOL_AUTH_FAILED": {
+      "http_status": 502,
+      "hint": "An upstream dependency failed rather than this server itself. Retry with backoff and check that dependency.",
+      "routes": []
+    },
+    "TOOL_CALL_FAILED": {
+      "http_status": 500,
+      "hint": "Read `meta` for what the tool raised. The turn went on with the failure as the call result, so fix the tool or its target for the next turn.",
+      "routes": []
+    },
+    "TOOL_CALL_NOT_SUPPORTED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "TOOL_DISPATCH_FAILED": {
+      "http_status": 422,
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "TOOL_EGRESS_BLOCKED": {
+      "http_status": 403,
+      "hint": "The deployment only makes outbound requests to publicly routable addresses, and this destination is not one — `meta.tool_url` names it and `meta.tool_address` the address it resolved to. Point the tool, webhook or provider `base_url` at a public host, or have the operator list this destination in TOOL_EGRESS_ALLOWED_HOSTS. It is not a permissions problem: no policy grants it.",
+      "routes": []
+    },
+    "TOOL_HAS_DEPENDENTS": {
+      "http_status": 409,
+      "hint": "Delete the deciders that name the tool, or point them at another backend with `PATCH /api/v1/deciders/{decider_id}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `PATCH /api/v1/ingestion-rules/{ingestion_rule_id}`, or left without a converter by `force=true`.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/deciders/{decider_id}"
+        },
+        {
+          "method": "PATCH",
+          "path": "/ingestion-rules/{ingestion_rule_id}"
+        }
+      ]
+    },
+    "TOOL_HTTP_ERROR": {
+      "http_status": 502,
+      "hint": "An upstream dependency failed rather than this server itself. Retry with backoff and check that dependency.",
+      "routes": []
+    },
+    "TOOL_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TOOL_RESPONSE_TOO_LARGE": {
+      "http_status": 502,
+      "hint": "The target's answer is over this deployment's ceiling (`meta.max_bytes`). Ask the target for less (a page, a filter, a smaller file), or ask the operator to raise `TOOL_RESPONSE_MAX_BYTES`.",
+      "routes": []
+    },
+    "TOOL_UNREACHABLE": {
+      "http_status": 502,
+      "hint": "Check the tool's URL and that its host is reachable from the server; the message names the network failure. A timeout or a dropped connection may succeed on retry.",
+      "routes": []
+    },
+    "TRIGGER_ACTION_NOT_ALLOWED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TRIGGER_CAUSATION_LIMIT": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "TRIGGER_FIRING_ABANDONED": {
+      "http_status": 500,
+      "hint": "The dispatch did not survive long enough to record an outcome. Check the target named by the trigger for work that ends the process, then re-fire the trigger manually.",
+      "routes": []
+    },
+    "TRIGGER_INPUT_INVALID": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TRIGGER_NOT_ACTIVE": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "TRIGGER_RECURSION_FORBIDDEN": {
+      "http_status": 403,
+      "hint": "The credential is authenticated but lacks this action, or is scoped to another project. Grant the action in an IAM policy, or use a credential that has it.",
+      "routes": []
+    },
+    "TRIGGER_TARGET_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "TRIGGER_TYPE_IMMUTABLE": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "UNAUTHORIZED": {
+      "http_status": 401,
+      "hint": "Send `Authorization: Bearer <token>` — a user token from `POST /api/v1/users/login`, a project API key (`sk_…`), or an OAuth access token. Discovery metadata for the OAuth flow is at `/.well-known/oauth-authorization-server`.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/users/login"
+        }
+      ]
+    },
+    "UNSUPPORTED_FILE_TYPE": {
+      "http_status": 400,
+      "hint": "The file's media type has no parser on this deployment. Convert it to a supported type, or add an ingestion rule that does.",
+      "routes": []
+    },
+    "UPLOAD_TOKEN_EXPIRED": {
+      "http_status": 410,
+      "hint": "Request a fresh upload token; tokens are single-use and short-lived by design.",
+      "routes": []
+    },
+    "UPLOAD_TOKEN_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "UPLOAD_TOKEN_USED": {
+      "http_status": 409,
+      "hint": "This upload token has already been redeemed. Request a new one for another upload.",
+      "routes": []
+    },
+    "UPLOAD_TOO_LARGE": {
+      "http_status": 413,
+      "hint": "The upload is over this deployment's byte ceiling. Send a smaller file, or ask the operator to raise `FILE_UPLOAD_MAX_BYTES`.",
+      "routes": []
+    },
+    "VALIDATION_FAILED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.",
+      "routes": []
+    },
+    "VERSION_CONFLICT": {
+      "http_status": 409,
+      "hint": "Re-read the resource, re-apply the change on top of the version `meta.current_version` names, and retry with that version. A retry of the same body against the same stale version conflicts again.",
+      "routes": []
+    },
+    "WORKFLOW_HAS_OPEN_TASKS": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "WORKFLOW_MIGRATION_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "WORKFLOW_NOT_FOUND": {
+      "http_status": 404,
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "WORKFLOW_VALIDATION_FAILED": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "WORKFLOW_VERSION_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "WORK_AUTHORITY_MISSING": {
+      "http_status": 409,
+      "hint": "Start the work again with a credential that can run it; work runs only under the authority stored when it started.",
+      "routes": []
+    }
+  },
+  "status_fallbacks": {
+    "400": {
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "routes": []
+    },
+    "401": {
+      "hint": "Authenticate the request: send a valid bearer token or project API key in the `Authorization` header.",
+      "routes": []
+    },
+    "403": {
+      "hint": "The credential is authenticated but lacks this action, or is scoped to another project. Grant the action in an IAM policy, or use a credential that has it.",
+      "routes": []
+    },
+    "404": {
+      "hint": "Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.",
+      "routes": []
+    },
+    "409": {
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
+    "410": {
+      "hint": "The resource existed and is gone for good. Create a new one; retrying against this id will keep failing.",
+      "routes": []
+    },
+    "413": {
+      "hint": "The payload exceeds the accepted size. Send less in one request, or use the upload flow for large bodies.",
+      "routes": []
+    },
+    "422": {
+      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "routes": []
+    },
+    "429": {
+      "hint": "Back off and retry after the window named by `Retry-After`.",
+      "routes": []
+    },
+    "500": {
+      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "501": {
+      "hint": "Not implemented on this deployment. Retrying will not change the outcome.",
+      "routes": []
+    },
+    "502": {
+      "hint": "An upstream dependency failed rather than this server itself. Retry with backoff and check that dependency.",
+      "routes": []
+    },
+    "503": {
+      "hint": "A capability this operation needs is not configured on this deployment. Configure it — the message names which — rather than retrying.",
+      "routes": []
+    }
+  }
+}
