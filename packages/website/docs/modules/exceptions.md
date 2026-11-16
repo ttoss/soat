@@ -65,7 +65,7 @@ Severity is keyed to actionability. Each `kind` has a default a producer may ove
 
 ### Occurrence dedup
 
-Identical failures fold into one **open** item: a partial unique index keys at most one open exception per dedup key; recurrences bump `occurrence_count` and `last_seen_at` (only the first emits `exceptions.created`). Resolving frees the key, so a later recurrence opens a fresh item. `manual` items are never deduped.
+Identical failures fold into one **open** item: a partial unique index keys at most one open exception per dedup key; recurrences bump `occurrence_count` and `last_seen_at` in one statement, so concurrent recurrences each count (only the first emits `exceptions.created`). Resolving frees the key, so a later recurrence opens a fresh item. `manual` items are never deduped.
 
 ### Triage lifecycle
 

@@ -676,26 +676,64 @@ describe('Exceptions', () => {
       }
     });
 
+    const fileConcurrently = async (args: {
+      dedupKey: string;
+      count: number;
+    }) => {
+      return Promise.all(
+        Array.from({ length: args.count }, () => {
+          return fileException({
+            projectId: projectInternalId,
+            kind: 'manual',
+            title: 'Race',
+            dedupKey: args.dedupKey,
+          });
+        })
+      );
+    };
+
+    const sortedCounts = (items: { occurrence_count: number }[]) => {
+      return items
+        .map((item) => {
+          return item.occurrence_count;
+        })
+        .sort((x, y) => {
+          return x - y;
+        });
+    };
+
     test('concurrent files with the same fresh dedup key fold via the unique-violation path', async () => {
-      const dedupKey = 'excrace:concurrent:1';
-      const [a, b] = await Promise.all([
-        fileException({
-          projectId: projectInternalId,
-          kind: 'manual',
-          title: 'Race',
-          dedupKey,
-        }),
-        fileException({
-          projectId: projectInternalId,
-          kind: 'manual',
-          title: 'Race',
-          dedupKey,
-        }),
-      ]);
-      // The partial unique index on (dedup_key WHERE status = 'open') guarantees
-      // one insert wins and the other folds into it — same item, occurrence 2.
-      expect(a.id).toBe(b.id);
-      expect([a.occurrence_count, b.occurrence_count].sort()).toEqual([1, 2]);
+      const filed = await fileConcurrently({
+        dedupKey: 'excrace:concurrent:1',
+        count: 5,
+      });
+      // Each file answers the occurrence its own write recorded, whatever the
+      // other writers did after it.
+      expect(
+        new Set(
+          filed.map((item) => {
+            return item.id;
+          })
+        ).size
+      ).toBe(1);
+      expect(sortedCounts(filed)).toEqual([1, 2, 3, 4, 5]);
+    });
+
+    test('concurrent recurrences of an open item lose no occurrence', async () => {
+      const dedupKey = 'excrace:recurrence:1';
+      const first = await fileException({
+        projectId: projectInternalId,
+        kind: 'manual',
+        title: 'Race',
+        dedupKey,
+      });
+      const recurrences = await fileConcurrently({ dedupKey, count: 5 });
+      expect(sortedCounts(recurrences)).toEqual([2, 3, 4, 5, 6]);
+      const stored = await authenticatedTestClient(userToken).get(
+        `/api/v1/exceptions/${first.id}`
+      );
+      expect(stored.status).toBe(200);
+      expect(stored.body.occurrence_count).toBe(6);
     });
   });
 });

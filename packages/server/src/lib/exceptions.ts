@@ -203,21 +203,35 @@ export type FileExceptionArgs = {
   guardrailVersion?: string | null;
 };
 
-// Folds a recurrence into the existing open item: bumps the occurrence count and
-// last-seen timestamp. No event — the exception already exists and callers only
-// want a fresh signal on the first occurrence.
+// The item as this file's own write left it, never re-read: a concurrent file
+// landing after it must not change what this one answers.
+const mapOwnWrite = (args: {
+  written: ExceptionInstance;
+  project: ExceptionInstance['project'];
+}): MappedException => {
+  args.written.project = args.project;
+  return mapException(args.written);
+};
+
+// Folds a recurrence into the existing open item in one statement, so
+// concurrent recurrences each count. No event — callers only want a fresh
+// signal on the first occurrence.
 const recordRecurrence = async (
   existing: ExceptionInstance
 ): Promise<MappedException> => {
-  existing.occurrenceCount += 1;
-  existing.lastSeenAt = new Date();
-  await existing.save();
+  const [, [written]] = await db.ExceptionItem.update(
+    {
+      occurrenceCount: db.sequelize.literal('occurrence_count + 1'),
+      lastSeenAt: new Date(),
+    },
+    { where: { id: existing.id }, returning: true }
+  );
   log(
     'fileException: dedup hit id=%s occurrences=%d',
-    existing.publicId,
-    existing.occurrenceCount
+    written.publicId,
+    written.occurrenceCount
   );
-  return reload(existing);
+  return mapOwnWrite({ written, project: existing.project });
 };
 
 const insertException = async (
@@ -281,7 +295,10 @@ export const fileException = async (
   const created = await insertException(args);
   if ('winner' in created) return created.winner;
 
-  const item = await reload(created.instance);
+  const item = mapOwnWrite({
+    written: created.instance,
+    project: await db.Project.findByPk(args.projectId, { rejectOnEmpty: true }),
+  });
   log('fileException: created id=%s', item.id);
   await emitExceptionEvent({
     type: EXCEPTION_EVENT_TYPES.created,
