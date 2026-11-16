@@ -32,7 +32,7 @@
     "@lerna-lite/cli": "^5.6.2",
     "@lerna-lite/list": "^5.6.2",
     "@lerna-lite/version": "^5.6.2",
-    "@ttoss/config": "^1.41.0",
+    "@ttoss/config": "^4.0.1",
     "@ttoss/eslint-config": "^3.0.0",
     "@ttoss/monorepo": "^1.31.0",
     "carlin": "^3.0.2",
