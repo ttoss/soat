@@ -188,8 +188,8 @@ importers:
         specifier: ^5.6.2
         version: 5.6.2(@lerna-lite/list@5.6.2)(@types/node@26.6.4)(conventional-commits-filter@6.0.1)
       '@ttoss/config':
-        specifier: ^1.41.0
-        version: 1.41.0(supports-color@8.1.1)
+        specifier: ^4.0.1
+        version: 4.0.1(supports-color@8.1.1)
       '@ttoss/eslint-config':
         specifier: ^3.0.0
         version: 3.0.0(@testing-library/dom@10.4.2)(@typescript-eslint/utils@8.71.2(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(jest@30.5.2(@types/node@26.6.4)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.6.4)(typescript@6.0.3)))(prettier@3.9.9)(supports-color@8.1.1)
@@ -340,8 +340,8 @@ importers:
         version: 5.4.2
     devDependencies:
       '@ttoss/config':
-        specifier: ^1.41.0
-        version: 1.41.0(supports-color@8.1.1)
+        specifier: ^4.0.1
+        version: 4.0.1(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
         specifier: ^0.10.1
         version: 0.10.1
@@ -380,8 +380,8 @@ importers:
         specifier: ^12.2.0
         version: 12.2.0(supports-color@8.1.1)
       '@ttoss/config':
-        specifier: ^1.41.0
-        version: 1.41.0(supports-color@8.1.1)
+        specifier: ^4.0.1
+        version: 4.0.1(supports-color@8.1.1)
       '@ttoss/postgresdb-cli':
         specifier: ^0.5.1
         version: 0.5.1(@types/node@26.6.4)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
@@ -410,8 +410,8 @@ importers:
         specifier: ^0.99.0
         version: 0.99.0(magicast@0.5.5)(typescript@6.0.3)
       '@ttoss/config':
-        specifier: ^1.41.0
-        version: 1.41.0(supports-color@8.1.1)
+        specifier: ^4.0.1
+        version: 4.0.1(supports-color@8.1.1)
       '@ttoss/openapi-codegen':
         specifier: ^0.10.1
         version: 0.10.1
@@ -534,8 +534,8 @@ importers:
         specifier: ^12.2.0
         version: 12.2.0(supports-color@8.1.1)
       '@ttoss/config':
-        specifier: ^1.41.0
-        version: 1.41.0(supports-color@8.1.1)
+        specifier: ^4.0.1
+        version: 4.0.1(supports-color@8.1.1)
       '@ttoss/test-utils':
         specifier: ^4.4.0
         version: 4.4.0(@types/jest@30.0.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(encoding@0.1.13)(jest@30.5.2(@types/node@26.6.4)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.6.4)(typescript@6.0.3)))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)
@@ -4860,6 +4860,10 @@ packages:
 
   '@ttoss/config@1.41.0':
     resolution: {integrity: sha512-r/9qE83n2NO31J6gL1VMc6StzoWjkT4EzbO15kGQhSG4MPeI3m5ngsbBNflHqmm6TgxpD1uAmt4tehzlUrZrTg==}
+    hasBin: true
+
+  '@ttoss/config@4.0.1':
+    resolution: {integrity: sha512-Z3eCsqiQavgHemt5q1kpCS/1KFyAD6WMY1fssSop+nO/O3pXnpLVf9TaMrrn+CYo4S/UC3ylPlL4Z4dHS3rXcA==}
     hasBin: true
 
   '@ttoss/errors@0.5.0':
@@ -11597,10 +11601,6 @@ packages:
   regjsgen@0.8.0:
     resolution: {integrity: sha512-RvwtGe3d7LvWiDQXeQw8p5asZUmfU1G/l6WbUXeHta7Y2PEIvBTwH6E2EfmYUK8pxcxEdEmaomqyp0vZZ7C+3Q==}
 
-  regjsparser@0.13.2:
-    resolution: {integrity: sha512-NgRBy2Nx/bE+9F27nVHnqcN5HjyLmecqsqx2PJHu3/IEtADD4WuxuXIVExD5PoSDFVrl78dOonfcOe5O+5nbzQ==}
-    hasBin: true
-
   regjsparser@0.13.4:
     resolution: {integrity: sha512-EWV80YgFaVgFrjGCAsV7oybp4GOxbls5RzBg8OB0nKEVXsBJR1JlV8Di1JhCROg3MzTfe1RI8yitIm1eOs68iA==}
     hasBin: true
@@ -12151,6 +12151,11 @@ packages:
   sort-package-json@3.7.1:
     resolution: {integrity: sha512-ssk1HG7whF8N/T1IsNAQrtHG5Cbdi0rAgRJZXYBr9hF5xaHnBNzUx/W6LcthEW7FhOwvZssbESZuO+GxssqAyA==}
     engines: {node: '>=20'}
+    hasBin: true
+
+  sort-package-json@4.1.0:
+    resolution: {integrity: sha512-CI7HgkV5rCE5dbYYJMuXkxgiSLc3uJczff9ic3kHuY5QRYKUbfsDSKN4DjTpvqejdJEkKLusQ64ykTte5ypr1A==}
+    engines: {node: '>=22'}
     hasBin: true
 
   source-map-js@1.2.1:
@@ -14427,7 +14432,7 @@ snapshots:
     dependencies:
       '@babel/compat-data': 7.29.7
       '@babel/helper-validator-option': 7.29.7
-      browserslist: 4.28.9
+      browserslist: 4.29.3
       lru-cache: 5.1.1
       semver: 6.3.1
 
@@ -19519,6 +19524,25 @@ snapshots:
       - supports-color
       - ts-jest
 
+  '@ttoss/config@4.0.1(supports-color@8.1.1)':
+    dependencies:
+      '@babel/core': 7.29.7(supports-color@8.1.1)
+      '@babel/plugin-proposal-decorators': 7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1)
+      '@babel/preset-env': 7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1)
+      '@babel/preset-react': 7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1)
+      '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1)
+      '@commitlint/config-conventional': 21.2.3
+      '@formatjs/ts-transformer': 4.5.0
+      babel-plugin-formatjs: 11.3.16(supports-color@8.1.1)
+      babel-plugin-transform-import-meta: 2.3.3(@babel/core@7.29.7(supports-color@8.1.1))
+      deepmerge: 4.3.1
+      identity-obj-proxy: 3.0.0
+      magic-string: 0.30.21
+      sort-package-json: 4.1.0
+    transitivePeerDependencies:
+      - supports-color
+      - ts-jest
+
   '@ttoss/errors@0.5.0': {}
 
   '@ttoss/eslint-config@3.0.0(@testing-library/dom@10.4.2)(@typescript-eslint/utils@8.71.2(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(jest@30.5.2(@types/node@26.6.4)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.6.4)(typescript@6.0.3)))(prettier@3.9.9)(supports-color@8.1.1)':
@@ -21676,7 +21700,7 @@ snapshots:
 
   core-js-compat@3.50.0:
     dependencies:
-      browserslist: 4.28.9
+      browserslist: 4.29.3
 
   core-js@3.50.0: {}
 
@@ -27572,7 +27596,7 @@ snapshots:
       regenerate: 1.4.2
       regenerate-unicode-properties: 10.2.2
       regjsgen: 0.8.0
-      regjsparser: 0.13.2
+      regjsparser: 0.13.4
       unicode-match-property-ecmascript: 2.0.0
       unicode-match-property-value-ecmascript: 2.2.1
 
@@ -27585,10 +27609,6 @@ snapshots:
       rc: 1.2.8
 
   regjsgen@0.8.0: {}
-
-  regjsparser@0.13.2:
-    dependencies:
-      jsesc: 3.1.0
 
   regjsparser@0.13.4:
     dependencies:
@@ -28227,6 +28247,16 @@ snapshots:
   sort-object-keys@2.1.0: {}
 
   sort-package-json@3.7.1:
+    dependencies:
+      detect-indent: 7.0.2
+      detect-newline: 4.0.1
+      git-hooks-list: 4.2.1
+      is-plain-obj: 4.1.0
+      semver: 7.8.5
+      sort-object-keys: 2.1.0
+      tinyglobby: 0.2.17
+
+  sort-package-json@4.1.0:
     dependencies:
       detect-indent: 7.0.2
       detect-newline: 4.0.1
