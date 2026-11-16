@@ -21,4 +21,12 @@ and those parameters, started by `/flow` or not:
   `.claude/flow-validation.md`, usually `merged`. Every soat code change is
   also validated on the real naturali API: at handoff the child writes an
   API-validation task behind naturali's bump (`.claude/flow-release.md`).
+- A change that leaves anything to remove later (a shim, fallback or dual read,
+  deprecated route or field, column or table kept a release, feature flag,
+  migration-only path, workaround awaiting an upstream fix) files one removal
+  task at its handoff: tags the repo, `removal` and the area; the title names
+  what goes; the body lists the files, symbols, columns and tests to delete;
+  `blocks`-held by what must happen first, else `active`; `derived_from` the
+  task that created it. The change's description names its URL. A removal task
+  is never `incubated` and never closes before the code is gone.
 - Friction with a skill, GTF or a Flow tool → `flow-friction`, then continue.
