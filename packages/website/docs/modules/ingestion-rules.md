@@ -76,7 +76,7 @@ Exactly one of:
 - **Tool converter** (`tool_id`): ingestion calls the tool with the JSON contract below and reads text from its response. Suits audio, specialized OCR APIs and long async jobs (the tool can defer via the callback). The tool may be another project's, reached through an accepted [share](./shares.md#using-a-shared-tool); once the share is suspended or revoked, the document fails with `CONVERTER_FAILED`.
 - **Agent converter** (`agent_id`): ingestion sends the file as multimodal input with a fixed "extract all text / transcribe" instruction; the agent's text output becomes the content. The model must support the modality (**vision** for images and scanned PDFs, **audio-capable** for audio). The generation is awaited inline; no deferral/callback.
 
-A converter runs under the authority of the ingest request: the converter tool call, and every tool call an agent converter's turn makes, is authorized as the caller who ingested or re-ingested the document.
+A converter runs under the rule's `policy_ids` capped by the authority of the ingest request: the converter tool call, and every tool call an agent converter's turn makes, must be allowed by both the rule and the caller who ingested or re-ingested the document ([Who may write a converter](#who-may-write-a-converter)).
 
 ### When the converter is deleted
 
