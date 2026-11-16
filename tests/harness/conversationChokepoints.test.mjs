@@ -52,6 +52,19 @@ describe('conversation chokepoints', () => {
     );
   });
 
+  test('a conversation or its messages are deleted only through releaseTurnDocuments', () => {
+    assert.deepEqual(
+      filesMatching(
+        /\b(Conversation|ConversationMessage|conversation|message)\.destroy\(/
+      ),
+      [
+        'lib/conversationTurnDocuments.ts',
+        // A project delete takes every document in the project with it.
+        'lib/projectDependents.ts',
+      ]
+    );
+  });
+
   test('a generated turn is stored only inside conversationGeneration', () => {
     assert.deepEqual(filesMatching(/\bstoreGeneratedTurn\b/), [
       'lib/conversationGeneration.ts',

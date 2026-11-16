@@ -68,7 +68,7 @@ Messages are ordered Document references with a `role` and optional `actor_id`. 
 
 Listed messages carry the document's full `content`, `role`, `actor_id`, `idempotency_key`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). They come in `position` order, ascending by default; `?order=desc` reads the transcript from its end. Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 
-Removing a message also deletes its Document and File, and deleting a conversation deletes every turn it holds.
+Removing a message also deletes its Document and File, and deleting a conversation deletes every turn it holds. A document a [forked session](./sessions.md#forking) still references stays until the last message referencing it goes.
 
 Each message emits a [webhook event](./webhooks.md) named by its `document_id`: `conversation_messages.created` when added, `conversation_messages.generated` when an agent's reply is saved, and `conversation_messages.deleted` when removed. `data` is the message as [listed](/docs/api/conversations/list-conversation-messages), with `conversation_id` beside it; a generated reply adds `generation_id` and `trace_id`, and a deletion carries the message as it stood.
 

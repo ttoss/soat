@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { destroyConversation } from './conversationTurnDocuments';
 import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
@@ -421,17 +422,8 @@ export const deleteSession = async (args: {
   // Read before the delete: the event carries the session as it stood.
   const record = await readSessionRecord(await sessions.reload(session));
 
-  const sequelize = db.sequelize;
-
-  await sequelize.transaction(async (t) => {
-    // Delete the session record first
-    await session.destroy({ transaction: t });
-    // Delete underlying conversation (cascades messages)
-    await db.Conversation.destroy({
-      where: { id: session.conversationId },
-      transaction: t,
-    });
-  });
+  // The session cascades with its conversation.
+  await destroyConversation({ conversationId: session.conversationId });
 
   emitResourceEvent({
     type: 'sessions.deleted',

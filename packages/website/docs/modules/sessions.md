@@ -114,12 +114,11 @@ A key or OAuth token scoped to a project that accepted a [share](./shares.md#usi
 
 ### Deletion
 
-`DELETE .../sessions/:session_id` removes the session row and its underlying [Conversation](./conversations.md) row in the same transaction; the conversation cascades at the database level to every [message](#message-within-a-session) in it.
+`DELETE .../sessions/:session_id` deletes the session with its underlying [Conversation](./conversations.md), as deleting that conversation does: every [message](#message-within-a-session) and the [Document](./documents.md) behind each go with it, except a document a [fork](#forking) still references.
 
 Deletion does **not** remove:
 
 - **The session's actor.** The [Actor](./actors.md) referenced by `actor_id` is left untouched.
-- **Documents backing message content.** Each message's content is a [Document](./documents.md) row; those documents (and their underlying files) remain.
 - **Generations and traces.** A session's [generations and traces](./traces.md#debugging-joins-trace-generation-session) are not linked to the session or conversation record and remain queryable via [`GET /api/v1/traces/{trace_id}`](/docs/api/traces/get-trace).
 
 Delete these explicitly beforehand for a full cleanup.

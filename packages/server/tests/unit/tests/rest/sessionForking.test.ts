@@ -76,6 +76,8 @@ describe('Session forking', () => {
         'agents:DeleteSession',
         'agents:SendSessionMessage',
         'conversations:GetConversation',
+        'conversations:UpdateConversation',
+        'conversations:DeleteConversation',
         'documents:GetDocument',
       ],
       createOtherProject: true,
@@ -421,6 +423,77 @@ describe('Session forking', () => {
       // The referenced documents outlive the parent conversation, so the fork
       // keeps its context.
       expect(await listMessages(fork.body.id)).toHaveLength(2);
+    });
+
+    test('deleting the fork after its parent deletes the shared turn documents', async () => {
+      const parentId = await seedSession({ name: 'Fork Last Owner', count: 2 });
+      const fork = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${parentId}/fork`)
+        .send({});
+      const shared = (await listMessages(fork.body.id)).map((message) => {
+        return message.document_id;
+      });
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/sessions/${parentId}`
+      );
+      const deleted = await authenticatedTestClient(userToken).delete(
+        `/api/v1/sessions/${fork.body.id}`
+      );
+      expect(deleted.status).toBe(204);
+
+      for (const documentId of shared) {
+        const document = await authenticatedTestClient(userToken).get(
+          `/api/v1/documents/${documentId}`
+        );
+        expect(document.status).toBe(404);
+      }
+    });
+
+    test('deleting the parent conversation keeps the turns its fork shares', async () => {
+      const parentId = await seedSession({
+        name: 'Fork Parent Conv',
+        count: 2,
+      });
+      const fork = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${parentId}/fork`)
+        .send({});
+      const parent = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${parentId}`
+      );
+
+      const deleted = await authenticatedTestClient(userToken).delete(
+        `/api/v1/conversations/${parent.body.conversation_id}`
+      );
+      expect(deleted.status).toBe(204);
+
+      const messages = await listMessages(fork.body.id);
+      expect(messages).toHaveLength(2);
+      const document = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${messages[0].document_id}`
+      );
+      expect(document.status).toBe(200);
+    });
+
+    test('removing a parent message keeps the turn its fork shares', async () => {
+      const parentId = await seedSession({ name: 'Fork Parent Msg', count: 1 });
+      const fork = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${parentId}/fork`)
+        .send({});
+      const parent = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${parentId}`
+      );
+      const [shared] = await listMessages(fork.body.id);
+
+      const removed = await authenticatedTestClient(userToken).delete(
+        `/api/v1/conversations/${parent.body.conversation_id}/messages/${shared.document_id}`
+      );
+      expect(removed.status).toBe(204);
+
+      const document = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${shared.document_id}`
+      );
+      expect(document.status).toBe(200);
     });
 
     test('a position outside the parent history returns 400', async () => {

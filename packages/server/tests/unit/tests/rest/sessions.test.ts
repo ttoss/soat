@@ -654,6 +654,36 @@ describe('Sessions', () => {
       expect(response.status).toBe(404);
     });
 
+    test('deleting a session deletes its turn documents', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Delete Turns Test' });
+      for (const message of ['First turn', 'Second turn']) {
+        await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${created.body.id}/messages`)
+          .send({ message });
+      }
+      const messages = await listSessionMessages(userToken, created.body.id);
+      const documentIds = (
+        messages.body.data as Array<{ document_id: string }>
+      ).map((message) => {
+        return message.document_id;
+      });
+      expect(documentIds).toHaveLength(2);
+
+      const deleted = await authenticatedTestClient(userToken).delete(
+        `/api/v1/sessions/${created.body.id}`
+      );
+      expect(deleted.status).toBe(204);
+
+      for (const documentId of documentIds) {
+        const document = await authenticatedTestClient(userToken).get(
+          `/api/v1/documents/${documentId}`
+        );
+        expect(document.status).toBe(404);
+      }
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.delete(
         `/api/v1/sessions/sess_doesnotmatter`
