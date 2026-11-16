@@ -26,6 +26,7 @@ import type {
   FormationModuleAuthorization,
   ValidationError,
 } from '../formationsTypes';
+import { nullableFields } from '../openapiSchemaFields';
 import { findProjectPublicId } from '../projects';
 import type { StoredError } from '../storedError';
 import type { ModuleOpenApiSpec } from './formationSpecLoader';
@@ -491,6 +492,10 @@ export const defineFormationModule = <TResource>(
     ...buildOperations({ definition, assertValid, log }),
 
     read: buildReader({ definition, schemaName }),
+
+    clearableProperties: () => {
+      return nullableFields(loadModuleSpec({ schemaName }));
+    },
 
     ...buildOptionalMembers(definition),
   };

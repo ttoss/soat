@@ -5,7 +5,10 @@ import {
   mergeWithPrevious,
   normalizeDeclaredProperties,
 } from './formationsProperties';
-import { getFormationModule } from './formationsRegistry';
+import {
+  clearablePropertiesOf,
+  getFormationModule,
+} from './formationsRegistry';
 import type { PlanChange, ResourceDeclaration } from './formationsTypes';
 
 // A ref to a not-yet-created resource is left unresolved rather than thrown, so
@@ -48,6 +51,7 @@ const buildComparedChange = (args: {
   existingMap: Map<string, string>;
   templateResourceKeys: Set<string>;
   current: Record<string, unknown>;
+  lastApplied: Record<string, unknown>;
 }): PlanChange => {
   const {
     logicalId,
@@ -57,6 +61,7 @@ const buildComparedChange = (args: {
     existingMap,
     templateResourceKeys,
     current,
+    lastApplied,
   } = args;
   const resolvedProperties = resolveParamExpressionsForDiff({
     decl,
@@ -69,6 +74,8 @@ const buildComparedChange = (args: {
   const { merged: desired, changed } = mergeWithPrevious({
     resolved: resolvedProperties,
     previous: current,
+    lastApplied,
+    clearable: clearablePropertiesOf(decl.type),
   });
   return {
     logicalId,
@@ -114,6 +121,15 @@ export const planResourceChange = async (args: {
     };
   }
 
+  const compare = (current: Record<string, unknown>): PlanChange => {
+    return buildComparedChange({
+      ...args,
+      physicalResourceId,
+      current,
+      lastApplied: lastAppliedProperties ?? {},
+    });
+  };
+
   // Attempt a property-level diff using the module's read method.
   const module = getFormationModule({ resourceType: decl.type });
   if (module?.read) {
@@ -122,31 +138,13 @@ export const planResourceChange = async (args: {
         physicalResourceId,
         projectId: args.projectId,
       });
-      if (liveProperties !== null) {
-        return buildComparedChange({
-          logicalId,
-          decl,
-          physicalResourceId,
-          resolvedParams,
-          existingMap,
-          templateResourceKeys,
-          current: liveProperties,
-        });
-      }
+      if (liveProperties !== null) return compare(liveProperties);
 
       // For a write-only resource a null `read` is expected on every call, not
       // external deletion — diff against the last-applied snapshot instead,
       // the same source of truth `applyUpdateChange` uses.
       if (module.writeOnly && lastAppliedProperties) {
-        return buildComparedChange({
-          logicalId,
-          decl,
-          physicalResourceId,
-          resolvedParams,
-          existingMap,
-          templateResourceKeys,
-          current: lastAppliedProperties,
-        });
+        return compare(lastAppliedProperties);
       }
     } catch {
       // read failed — fall through to 'update'

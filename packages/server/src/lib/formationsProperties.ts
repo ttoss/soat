@@ -42,16 +42,26 @@ export const normalizeDeclaredProperties = (
  * resource preserves what it has (a secret's encrypted value is never
  * re-applied).
  *
+ * A property `lastApplied` declared that the template no longer declares is
+ * removed: `null` when `clearable` names it (left out of `snapshot`, the
+ * `lastAppliedProperties` to persist), else kept at its `previous` value so the
+ * plan shows it.
+ *
  * `plan-formation` and apply both need this verdict, so it is defined once: two
  * implementations disagree, and comparing `JSON.stringify` of the whole object
- * reports a change on differing key order alone. The per-declared-key deep
- * comparison here is the definition — only declared keys can change.
+ * reports a change on differing key order alone.
  */
 export const mergeWithPrevious = (args: {
   resolved: Record<string, unknown>;
   previous: Record<string, unknown>;
-}): { merged: Record<string, unknown>; changed: boolean } => {
-  const { resolved, previous } = args;
+  lastApplied: Record<string, unknown>;
+  clearable: ReadonlySet<string>;
+}): {
+  merged: Record<string, unknown>;
+  changed: boolean;
+  snapshot: Record<string, unknown>;
+} => {
+  const { resolved, previous, lastApplied, clearable } = args;
   const merged: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(resolved)) {
     if (value === undefined) {
@@ -60,8 +70,23 @@ export const mergeWithPrevious = (args: {
       merged[key] = value;
     }
   }
+  const cleared = new Set<string>();
+  for (const key of Object.keys(lastApplied)) {
+    if (key in resolved) continue;
+    if (clearable.has(key)) {
+      merged[key] = null;
+      cleared.add(key);
+    } else if (key in previous) {
+      merged[key] = previous[key];
+    }
+  }
   const changed = Object.entries(merged).some(([key, value]) => {
     return !isDeepStrictEqual(previous[key], value);
   });
-  return { merged, changed };
+  const snapshot = Object.fromEntries(
+    Object.entries(merged).filter(([key]) => {
+      return !cleared.has(key);
+    })
+  );
+  return { merged, changed, snapshot };
 };

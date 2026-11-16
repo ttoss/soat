@@ -331,6 +331,11 @@ export type FormationModule = {
    */
   writeOnlyProperties?: readonly string[];
   /**
+   * Properties whose `update` takes `null` as "clear". One dropped from the
+   * template is sent as `null`; any other dropped property keeps its value.
+   */
+  clearableProperties?: () => ReadonlySet<string>;
+  /**
    * Masks credential material nested inside a property every read must
    * return — a tool's `execute`/`mcp` headers, an agent's inline bindings —
    * where naming the property whole in `writeOnlyProperties` would hide it.

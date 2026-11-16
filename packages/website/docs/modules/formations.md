@@ -515,7 +515,8 @@ The `formation_id` a plan compares against is looked up in the plan's project on
 
 Plan and apply share one change rule:
 
-- Only properties **the template declares** are compared; a field the resource carries but the template omits is not a change.
+- Only properties **the template declares** are compared; a field the resource carries but the template never declared is not a change.
+- A property the last apply declared and the template now omits is **removed**: a nullable one is cleared (`null` in `diff.desired`, an `update`); any other keeps its value, shown in `diff.desired`. Operator-registered types keep every omitted property.
 - Comparison is **structural**; key order in a nested value bag is not a change.
 - A property resolving to `undefined` (a kept `use_previous_value` parameter) reuses the previous value, or is dropped when there is none.
 
