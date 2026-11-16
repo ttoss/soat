@@ -54,6 +54,31 @@ const errorCode = (error: unknown): string | undefined => {
   return typeof code === 'string' ? code : undefined;
 };
 
+/** Searches run `SET LOCAL hnsw.iterative_scan`, which pgvector adds in 0.8. */
+const PGVECTOR_FLOOR = { major: 0, minor: 8 };
+
+export const assertPgvectorFloor = (args: { version: string | undefined }) => {
+  const [major = NaN, minor = 0] = (args.version ?? '').split('.').map(Number);
+  const meetsFloor =
+    major > PGVECTOR_FLOOR.major ||
+    (major === PGVECTOR_FLOOR.major && minor >= PGVECTOR_FLOOR.minor);
+  if (!meetsFloor) {
+    throw new Error(
+      `needs pgvector >= ${PGVECTOR_FLOOR.major}.${PGVECTOR_FLOOR.minor}, found ${args.version ?? 'none'}`
+    );
+  }
+};
+
+/** The version `CREATE EXTENSION vector` installs on this server. */
+export const readPgvectorVersion = async (args: {
+  client: Client;
+}): Promise<string | undefined> => {
+  const result = await args.client.query<{ default_version: string }>(
+    `SELECT default_version FROM pg_available_extensions WHERE name = 'vector'`
+  );
+  return result.rows[0]?.default_version;
+};
+
 export const withAdminClient = async <T>(args: {
   connection: TestDatabaseConnection;
   run: (client: Client) => Promise<T>;
