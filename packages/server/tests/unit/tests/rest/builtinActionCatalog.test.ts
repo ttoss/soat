@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { db } from 'src/db';
+import { emitApproval } from 'src/lib/approvals';
 import {
   registerBuiltinActionCatalog,
   resetBuiltinActionCatalog,
@@ -243,6 +245,32 @@ describe('POST /api/v1/tools/:tool_id/call — added action', () => {
     });
     expect(call?.headers[ASSERTION_HEADER]).toEqual(expect.any(String));
   });
+
+  test('a failure its server answers is 502 MCP_TOOL_ERROR', async () => {
+    const tool = await createTool({
+      token: turn.adminToken,
+      projectId: turn.projectId,
+      actions: ['send-note'],
+    });
+    expect(tool.status).toBe(201);
+    turn.target.reply(NOTE_PATH, (body) => {
+      return {
+        body: {
+          jsonrpc: '2.0',
+          id: body.id,
+          error: { code: -32000, message: 'note refused' },
+        },
+      };
+    });
+
+    const res = await authenticatedTestClient(turn.adminToken)
+      .post(`/api/v1/tools/${tool.body.id}/call`)
+      .send({ action: 'send-note', input: { text: 'direct' } });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe('MCP_TOOL_ERROR');
+    expect(res.body.error.meta.mcp_tool).toBe('send-note');
+  });
 });
 
 describe('POST /api/v1/agents/:agent_id/generate — added action', () => {
@@ -287,5 +315,93 @@ describe('POST /api/v1/agents/:agent_id/generate — added action', () => {
     const claims = JSON.parse(Buffer.from(payload, 'base64url').toString());
     expect(claims.tool_id).toBe(tool.body.id);
     expect(claims.generation_id).toBe(generation.id);
+  });
+});
+
+describe('POST /api/v1/agents/:agent_id/generate — added action unreachable', () => {
+  test('a server that cannot list its tools is named to the model as unavailable', async () => {
+    const tool = await createTool({
+      token: turn.adminToken,
+      projectId: turn.projectId,
+      actions: ['send-note'],
+    });
+    expect(tool.status).toBe(201);
+    const agentId = await turn.createAgent({
+      tool_bindings: [{ tool_id: tool.body.id }],
+    });
+    turn.target.reply(NOTE_PATH, { status: 500, body: { error: 'down' } });
+
+    await turn.generate({ agentId, calls: [] });
+
+    const system = (turn.model.requests.at(-1)?.messages ?? [])
+      .filter((message) => {
+        return message.role === 'system';
+      })
+      .map((message) => {
+        return JSON.stringify(message.content);
+      })
+      .join('\n');
+    expect(system).toContain(tool.body.name);
+    expect(system).toContain('unavailable');
+  });
+});
+
+describe('POST /api/v1/approvals/:approval_id/approve — added action', () => {
+  let approverToken: string;
+  let toolId: string;
+  let projectInternalId: number;
+
+  const seedProposal = async () => {
+    return emitApproval({
+      projectId: projectInternalId,
+      proposedAction: {
+        toolId,
+        action: 'send-note',
+        arguments: { text: 'proposed' },
+      },
+      reasoning: 'Sends a note',
+      expiresInSeconds: 3600,
+    });
+  };
+
+  beforeAll(async () => {
+    approverToken = await createScopedPrincipal({
+      adminToken: turn.adminToken,
+      projectId: turn.projectId,
+      username: 'catalogapprover',
+      actions: ['approvals:ResolveApproval', 'tools:CallTool'],
+    });
+    const tool = await createTool({
+      token: turn.adminToken,
+      projectId: turn.projectId,
+      actions: ['send-note'],
+    });
+    expect(tool.status).toBe(201);
+    toolId = tool.body.id;
+    const project = await db.Project.findOne({
+      where: { publicId: turn.projectId },
+    });
+    projectInternalId = project!.id as number;
+  });
+
+  test("editing needs send-note's declared action", async () => {
+    const seeded = await seedProposal();
+
+    const res = await authenticatedTestClient(approverToken)
+      .post(`/api/v1/approvals/${seeded.id}/approve`)
+      .send({ arguments: { text: 'edited' } });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+
+  test('an approver holding the declared action may edit', async () => {
+    const seeded = await seedProposal();
+
+    const res = await authenticatedTestClient(turn.adminToken)
+      .post(`/api/v1/approvals/${seeded.id}/approve`)
+      .send({ arguments: { text: 'edited' } });
+
+    expect(res.status).toBe(200);
   });
 });

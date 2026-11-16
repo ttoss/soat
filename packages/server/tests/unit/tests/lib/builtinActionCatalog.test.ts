@@ -1,11 +1,16 @@
 import crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 import {
   findBuiltinAction,
+  initBuiltinActionCatalog,
   parseBuiltinActionCatalog,
   registerBuiltinActionCatalog,
   resetBuiltinActionCatalog,
 } from 'src/lib/builtinActionCatalog';
+import { IAM_REGISTRATIONS_CONFIG_ENV } from 'src/lib/iamRegistrations';
 
 /** Boot config: no request reaches the parser, so it is tested here. */
 const parse = (builtinActions: unknown) => {
@@ -106,6 +111,35 @@ describe('registerBuiltinActionCatalog', () => {
 
   test('withholds a native action outside allow', () => {
     registerBuiltinActionCatalog(parse({ allow: ['list-agents'] }));
+    expect(findBuiltinAction('list-agents')?.kind).toBe('native');
+    expect(findBuiltinAction('get-agent')).toBeUndefined();
+  });
+});
+
+describe('initBuiltinActionCatalog', () => {
+  afterEach(() => {
+    delete process.env[IAM_REGISTRATIONS_CONFIG_ENV];
+  });
+
+  test('offers every native action when no file is named', () => {
+    initBuiltinActionCatalog();
+    expect(findBuiltinAction('get-agent')?.kind).toBe('native');
+  });
+
+  test('registers the catalog the IAM registrations file declares', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'builtin-catalog-'));
+    const file = path.join(dir, 'iam.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        modules: [],
+        builtin_actions: { allow: ['list-agents'] },
+      })
+    );
+    process.env[IAM_REGISTRATIONS_CONFIG_ENV] = file;
+
+    initBuiltinActionCatalog();
+
     expect(findBuiltinAction('list-agents')?.kind).toBe('native');
     expect(findBuiltinAction('get-agent')).toBeUndefined();
   });
