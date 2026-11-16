@@ -21,7 +21,7 @@
   "license": "Apache-2.0",
   "main": "dist/server.mjs",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/checkSourceMaps.mjs dist",
     "db-dev:logs": "docker compose -f docker-compose.db.yml logs -f",
     "db-dev:rm": "docker compose -f docker-compose.db.yml down -v",
     "db-dev:start": "docker compose -f docker-compose.db.yml up -d",
