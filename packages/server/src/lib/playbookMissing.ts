@@ -32,12 +32,15 @@ export const playbookMissingInputs = (args: {
           return upstream.has(key);
         })
         .flatMap((key) => {
-          const values = views.get(key)?.values ?? {};
+          const node = byKey.get(key);
+          const view = views.get(key);
+          if (!node || !view) return [];
 
-          return (byKey.get(key)?.inputs ?? [])
+          return node.inputs
             .filter((input) => {
               return (
-                input.source === 'manual' && !Object.hasOwn(values, input.name)
+                input.source === 'manual' &&
+                !Object.hasOwn(view.values, input.name)
               );
             })
             .map((input) => {
@@ -48,7 +51,7 @@ export const playbookMissingInputs = (args: {
                 ...(input.description !== undefined && {
                   description: input.description,
                 }),
-                required: input.required,
+                required: view.resolvedRequired[input.name],
               };
             });
         });

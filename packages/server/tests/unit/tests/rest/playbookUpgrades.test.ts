@@ -305,6 +305,63 @@ describe('Playbook case upgrades', () => {
       });
     });
 
+    test('lists a required expression as changed only when it differs', async () => {
+      const intake = (required: object, title = 'Intake') => {
+        return {
+          nodes: [
+            {
+              id: 'intake',
+              title,
+              kind: 'collect',
+              inputs: [
+                {
+                  name: 'married',
+                  schema: { type: 'boolean' },
+                  required: false,
+                  source: 'manual',
+                },
+                {
+                  name: 'spouse',
+                  schema: { type: 'string' },
+                  required,
+                  source: 'manual',
+                },
+              ],
+            },
+          ],
+        };
+      };
+      const playbookId = await newPlaybook(intake({ var: 'married' }));
+      const caseId = await newCase(playbookId);
+      await redefine(playbookId, intake({ var: 'married' }, 'Renamed'));
+      await upgrade(caseId);
+      await redefine(playbookId, intake({ '!': [{ var: 'married' }] }));
+      await upgrade(caseId);
+
+      const upgrades = await authenticatedTestClient(userToken).get(
+        `/api/v1/playbook-cases/${caseId}/upgrades`
+      );
+
+      expect(
+        upgrades.body.data.map((row: { diff: object }) => {
+          return row.diff;
+        })
+      ).toEqual([
+        {
+          added: [],
+          removed: [],
+          changed: [
+            {
+              node_id: 'intake',
+              executor: false,
+              inputs: [{ name: 'spouse', change: 'required' }],
+            },
+          ],
+        },
+        { added: [], removed: [], changed: [] },
+      ]);
+    });
+
     test('keeps the values of a removed node in the entries', async () => {
       const playbookId = await newPlaybook();
       const caseId = await newCase(playbookId);

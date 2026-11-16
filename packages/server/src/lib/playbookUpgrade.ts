@@ -4,6 +4,7 @@ import type {
   PlaybookInputSource,
 } from './playbookDefinition';
 import { nodesByKey } from './playbookGraph';
+import { sameRequired } from './playbookRequired';
 import { stableDigest } from './stableDigest';
 
 export type PlaybookInputChange =
@@ -77,7 +78,7 @@ export const playbookUpgradeDiff = (args: {
             ? 'source'
             : stableDigest(was.schema) !== stableDigest(input.schema)
               ? 'schema'
-              : was.required !== input.required
+              : !sameRequired({ left: was, right: input })
                 ? 'required'
                 : undefined;
 

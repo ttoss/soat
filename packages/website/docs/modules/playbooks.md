@@ -23,17 +23,17 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 
 ### Playbook
 
-| Field         | Type           | Description                                                                          |
-| ------------- | -------------- | ------------------------------------------------------------------------------------ |
-| `id`          | string         | Public identifier (`pbk_…`)                                                          |
-| `project_id`  | string         | Owning project                                                                       |
-| `name`        | string         | Human-readable name, unique per project                                              |
-| `description` | string \| null | Optional                                                                             |
-| `version`     | integer        | The definition's version; see [Versions](#versions)                                  |
-| `definition`  | object         | `{ upstreams?, nodes }`: up to 20 [upstreams](#upstream) and 1 to 200 [nodes](#node) |
+| Field         | Type           | Description                                                                                                     |
+| ------------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `id`          | string         | Public identifier (`pbk_…`)                                                                                     |
+| `project_id`  | string         | Owning project                                                                                                  |
+| `name`        | string         | Human-readable name, unique per project                                                                         |
+| `description` | string \| null | Optional                                                                                                        |
+| `version`     | integer        | The definition's version; see [Versions](#versions)                                                             |
+| `definition`  | object         | `{ upstreams?, nodes }`: up to 20 [upstreams](#upstream) and 1 to 200 [nodes](#node)                            |
 | `policy_ids`  | string[]       | Required on create. The policies every node of a case acts under; see [Who a node runs as](#who-a-node-runs-as) |
-| `created_at`  | string         | ISO 8601 creation timestamp                                                          |
-| `updated_at`  | string         | ISO 8601 last-update timestamp                                                       |
+| `created_at`  | string         | ISO 8601 creation timestamp                                                                                     |
+| `updated_at`  | string         | ISO 8601 last-update timestamp                                                                                  |
 
 ### Node
 
@@ -51,13 +51,13 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 
 ### Input
 
-| Field         | Type             | Description                                                                                                |
-| ------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `name`        | string           | Unique in its node; same character rules as `id`                                                           |
-| `schema`      | object           | The JSON Schema a value must satisfy                                                                       |
-| `required`    | boolean          | The node cannot be reached while a required input is unset                                                 |
-| `description` | string           | What to ask for; returned with the input when it is [missing](#what-a-node-still-needs)                    |
-| `source`      | string \| object | `manual`, or `{ node_id, field }` with `field` `output[.path]` or `input.<name>[.path]` of an earlier node |
+| Field         | Type              | Description                                                                                                 |
+| ------------- | ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| `name`        | string            | Unique in its node; same character rules as `id`                                                            |
+| `schema`      | object            | The JSON Schema a value must satisfy                                                                        |
+| `required`    | boolean \| object | The node cannot be reached while a required input is unset; an object is a [condition](#conditional-inputs) |
+| `description` | string            | What to ask for; returned with the input when it is [missing](#what-a-node-still-needs)                     |
+| `source`      | string \| object  | `manual`, or `{ node_id, field }` with `field` `output[.path]` or `input.<name>[.path]` of an earlier node  |
 
 ### Upstream
 
@@ -176,7 +176,26 @@ Computed from the case's entries and executions on each read, never stored:
 | `failed`   | The last execution failed on the current inputs                                                                                                                                      |
 | `rejected` | A `confirm` node's inputs were rejected and have not changed since                                                                                                                   |
 
-`missing` names the required inputs a node lacks; `blocked_by` names the nodes it reads that are not `done`, and on an `upstream` node the `<upstream>.<node_id>` it pulls.
+`missing` names the required inputs a node lacks; `blocked_by` names the nodes it reads that are not `done`, and on an `upstream` node the `<upstream>.<node_id>` it pulls. A [conditional](#conditional-inputs) input counts as required when its condition holds on that read.
+
+### Conditional inputs
+
+`required` is a boolean, or a [JSON Logic](/docs/advanced/expressions-and-templating) expression over the node's other inputs, by name, resolved on every read of a case:
+
+```json
+{
+  "name": "spouse",
+  "schema": { "type": "string" },
+  "required": { "==": [{ "var": "married" }, true] },
+  "source": "manual"
+}
+```
+
+- A sibling unset, waiting on its source, or refused by its schema reads `null`.
+- A truthy result makes the input required; an expression that fails to evaluate makes it required too.
+- One answer per read decides `missing`, `blocked_by`, the node's state, [what a node still needs](#what-a-node-still-needs) and [confirmation](#confirming-a-node). On a sourced input it decides whether the node waits for that source.
+- A sibling write that makes the input required while it is unset takes a `done` node to `stale`, with the input in `missing`, until it is set.
+- An expression reading a name that is not another input of the node is `400 PLAYBOOK_VALIDATION_FAILED`, `UNKNOWN_FIELD` at `…inputs[i].required`; a `required` that is neither a boolean nor an expression is `400 VALIDATION_FAILED`.
 
 A `waiting` node names what it waits on in `run`, read live on every case read and null in every other state: `{ "type": "task", "id", "state", "automation_status" }` for a workflow task, `{ "type": "orchestration_run", "id", "status" }` for a run. A task whose state's dispatch failed with no `on_failure` reads `automation_status: "failed"`: it waits on a person to move it, and the node settles when it closes.
 
@@ -191,7 +210,7 @@ A `waiting` node names what it waits on in `run`, read live on every case read a
 
 ### What a node still needs
 
-[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a `node_id` and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one's required inputs are filled. Each carries its `schema` and `description`, which is what an agent asks for, and `required`: an optional input is listed so the agent asks for it too, but it never blocks a node. Every item names the `case_id` to write it to: an `upstream` node before `node_id` adds the missing inputs of its bound case, so one read lists everything to ask.
+[`GET /api/v1/playbook-cases/{case_id}/missing`](/docs/api/playbooks/get-playbook-case-missing) takes a `node_id` and returns the manual inputs still unset or refused upstream of it, grouped in waves: nothing in a later wave can be reached before an earlier one's required inputs are filled. Each carries its `schema` and `description`, which is what an agent asks for, and `required`, a boolean resolved for the case when the input is [conditional](#conditional-inputs): an optional input is listed so the agent asks for it too, but it never blocks a node. Every item names the `case_id` to write it to: an `upstream` node before `node_id` adds the missing inputs of its bound case, so one read lists everything to ask.
 
 ### The cascade
 
@@ -321,6 +340,7 @@ Without `wait` the request answers `201` with every export `running`; poll [`GET
 | Node removed                     | Leaves the structure; its [entries](#entries) stay    |
 | An input now reads another field | The node is `stale`, and the cascade runs it again    |
 | Input schema changed             | A value it refuses is `missing` again                 |
+| Input `required` changed         | `missing` follows the new answer                      |
 | Executor, title or description   | None; [run the node](#running-a-node) to recompute it |
 
 The cascade then runs what became runnable, unless the case is [paused](#pausing-a-case). An execution running answers `409 PLAYBOOK_CASE_BUSY`, `meta.executions` naming each; one queued but not started settles `superseded`. Each upgrade is recorded as an [upgrade](#upgrade), listed by [`GET /api/v1/playbook-cases/{case_id}/upgrades`](/docs/api/playbooks/list-playbook-case-upgrades), newest first; the version the case is already on records nothing. A version the playbook does not have is `400 VALIDATION_FAILED`, and an upgrade from the case's own work is `403 PLAYBOOK_SELF_WRITE`.
@@ -855,7 +875,7 @@ curl -X POST https://api.example.com/api/v1/playbook-cases/pbk_case_…/resume \
 | `PLAYBOOK_CASE_HAS_DEPENDENTS`    | 409    | A delete of a case other cases are bound to as their upstream                                                                                                                                                                               |
 | `PLAYBOOK_INPUT_CONFLICT`         | 409    | An input write's `expected_revision` is not the field's current one                                                                                                                                                                         |
 | `ACTION_NOT_HELD`                 | 403    | A definition write names an executor or transformation tool the writer may not start                                                                                                                                                        |
-| `PLAYBOOK_EXECUTOR_FORBIDDEN`     | 403    | A run or an export whose version's `policy_ids` do not allow starting the executor or tool                                                                                                                                                   |
+| `PLAYBOOK_EXECUTOR_FORBIDDEN`     | 403    | A run or an export whose version's `policy_ids` do not allow starting the executor or tool                                                                                                                                                  |
 | `PLAYBOOK_NODE_NOT_RUNNABLE`      | 409    | The node is a `confirm` node, blocked, `running` or `waiting`                                                                                                                                                                               |
 | `PLAYBOOK_CASE_PAUSED`            | 409    | A run of a node in a paused case                                                                                                                                                                                                            |
 | `PLAYBOOK_CASE_NOT_PAUSED`        | 409    | A resume of a case that is not paused                                                                                                                                                                                                       |

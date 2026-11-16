@@ -59,6 +59,14 @@ describe('playbook case chokepoints', () => {
     );
   });
 
+  test("an input's required is read only by playbookRequired.ts", () => {
+    // `playbookWire.ts` reads it off the request body to parse it.
+    assert.deepEqual(filesMatching(/\.required\b/, 'playbook'), [
+      'playbookRequired.ts',
+      'playbookWire.ts',
+    ]);
+  });
+
   test('an entry is written only by appendEntries', () => {
     assert.deepEqual(filesMatching(/PlaybookEntry\.(create|bulkCreate)\(/), [
       'playbookCaseStore.ts',
