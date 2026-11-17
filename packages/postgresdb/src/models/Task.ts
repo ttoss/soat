@@ -156,6 +156,10 @@ export class Task extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare assignee: string | null;
 
+  // A person's assertion, never derived; `TASK_PRIORITIES` (server) is the set.
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare priority: string | null;
+
   // Provenance of the current state's automation: { kind, id, status }.
   @Column({ type: DataType.JSON, allowNull: true })
   declare activeDispatch: Record<string, unknown> | null;
