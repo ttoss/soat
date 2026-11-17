@@ -163,7 +163,7 @@ export const denialToolResult = (denial: DomainError) => {
 
 const PRINCIPAL_TYPES = Object.keys(PRINCIPAL_LABELS);
 
-const isDeniedPrincipal = (value: unknown): value is DeniedPrincipal => {
+export const isDeniedPrincipal = (value: unknown): value is DeniedPrincipal => {
   return (
     isPlainObject(value) &&
     typeof value.type === 'string' &&

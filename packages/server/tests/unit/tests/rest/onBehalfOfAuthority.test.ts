@@ -361,21 +361,22 @@ describe('On-Behalf-Of authority', () => {
           .send({ messages: [proposeCalls([{ name: 'echo', args: {} }])] });
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('completed');
-        return lastAssertion();
+        return { agentId, assertion: lastAssertion() };
       };
       const runOnly = await mintKey(['agents:CreateAgentGeneration']);
 
-      const narrowCaller = await readDocument(
-        await callbackOf({ actions: ['documents:GetDocument'], key: runOnly })
-      );
-      const wideCaller = await readDocument(
-        await callbackOf({ actions: ['tools:*'], key: projectKey })
-      );
+      const narrow = await callbackOf({
+        actions: ['documents:GetDocument'],
+        key: runOnly,
+      });
+      const wide = await callbackOf({ actions: ['tools:*'], key: projectKey });
+      const narrowCaller = await readDocument(narrow.assertion);
+      const wideCaller = await readDocument(wide.assertion);
 
       expect(narrowCaller.status).toBe(200);
       expect(wideCaller.status).toBe(403);
       expect(wideCaller.body.error.meta).toMatchObject({
-        denied_by: { type: 'on_behalf_of', id: null },
+        denied_by: { type: 'agent', id: wide.agentId },
       });
     });
 

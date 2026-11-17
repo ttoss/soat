@@ -3,19 +3,23 @@ import zlib from 'node:zlib';
 
 import createDebug from 'debug';
 
+import { type DeniedPrincipal, isDeniedPrincipal } from './authorizationDenial';
 import type { PolicySets } from './iam';
 import { isPlainObject } from './plainObject';
 import { isPolicySets } from './principalBound';
 import { deriveSecretKey } from './signedTokens';
 
+/** One cap a callback is held to: its policy sets and whom a refusal by them names. */
+export type AssertionCap = { by: DeniedPrincipal; sets: PolicySets };
+
 /**
- * The authority of the work a tool assertion was sent for: the policy sets a
- * callback presenting it is capped by, and the opaque principal it acts for.
+ * The authority of the work a tool assertion was sent for: the caps a
+ * callback presenting it is held to, and the opaque principal it acts for.
  * Sealed with a key only this deployment derives, so a tool server that
  * verifies the assertion reads neither.
  */
 export type AssertionAuthority = {
-  sets: PolicySets;
+  caps: AssertionCap[];
   principal?: { type: string; id: string };
 };
 
@@ -33,8 +37,8 @@ export const sealAssertionAuthority = (args: {
   authority: AssertionAuthority;
 }): string => {
   const { authority } = args;
-  if (authority.sets.length === 0) {
-    throw new Error('An assertion authority holds at least one policy set.');
+  if (authority.caps.length === 0) {
+    throw new Error('An assertion authority holds at least one cap.');
   }
   const iv = crypto.randomBytes(IV_BYTES);
   const cipher = crypto.createCipheriv('aes-256-gcm', sealingKey(), iv);
@@ -48,6 +52,20 @@ const isPrincipal = (value: unknown): value is { type: string; id: string } => {
     isPlainObject(value) &&
     typeof value.type === 'string' &&
     typeof value.id === 'string'
+  );
+};
+
+const isCaps = (value: unknown): value is AssertionCap[] => {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((cap) => {
+      return (
+        isPlainObject(cap) &&
+        isDeniedPrincipal(cap.by) &&
+        isPolicySets(cap.sets)
+      );
+    })
   );
 };
 
@@ -70,7 +88,7 @@ const decrypt = (sealed: string): unknown => {
 
 /**
  * The authority a sealed claim holds, or `null` when it is absent, was not
- * sealed by this deployment, or holds no policy set: a callback is never left
+ * sealed by this deployment, or holds no cap: a callback is never left
  * uncapped by a claim that cannot be read.
  */
 export const openAssertionAuthority = (args: {
@@ -81,14 +99,14 @@ export const openAssertionAuthority = (args: {
   const opened = decrypt(value);
   if (
     !isPlainObject(opened) ||
-    !isPolicySets(opened.sets) ||
+    !isCaps(opened.caps) ||
     (opened.principal !== undefined && !isPrincipal(opened.principal))
   ) {
     log('openAssertionAuthority: unreadable');
     return null;
   }
   return {
-    sets: opened.sets,
+    caps: opened.caps,
     ...(opened.principal ? { principal: opened.principal } : {}),
   };
 };

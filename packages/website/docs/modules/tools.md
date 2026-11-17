@@ -583,7 +583,7 @@ A tool server that writes back into SOAT with its project's API key, or an [IAM 
 - Refusals are the route's own (`403`, `404` where the caller may not read the resource).
 - A playbook case refuses a write carrying the assertion of a call its own work made ([own work](./playbooks.md#writes-from-a-cases-own-work)).
 
-SOAT verifies the assertion against its own key, `iss` and `exp`, and requires an API key scoped to the project the assertion names, or an IAM token that key issued, and an `ath` it can read. On an IAM token the request, and work it starts, is held to the key ∩ the token's bound ∩ the assertion's authority; a refusal names `iam_token` or `on_behalf_of` for the set that refused. Anything else is `400 ON_BEHALF_OF_INVALID`, `meta.reason` `unverified`, `project` or `bound`, and nothing is written. A deployment that configures no [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration) signs nothing, so it verifies nothing.
+SOAT verifies the assertion against its own key, `iss` and `exp`, and requires an API key scoped to the project the assertion names, or an IAM token that key issued, and an `ath` it can read. On an IAM token the request, and work it starts, is held to the key ∩ the token's bound ∩ the assertion's authority; a refusal names `iam_token` or `on_behalf_of` for the set that refused, and `agent` or `project` for the calling agent's `policy_ids` or its project's `agent_policy_ids`. Anything else is `400 ON_BEHALF_OF_INVALID`, `meta.reason` `unverified`, `project` or `bound`, and nothing is written. A deployment that configures no [`TOOL_ASSERTION_PRIVATE_KEY`](#configuration) signs nothing, so it verifies nothing.
 
 ### Calling a Tool Directly
 
