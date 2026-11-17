@@ -321,7 +321,7 @@ A playbook declared in a [formation](./formations.md) (`type: playbook`, [proper
 | `txt`    | `text/plain`                                                                |
 | `xlsx`   | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`         |
 
-The file is kept in the project's [files](./files.md) under `/.system/playbooks/` and is never deleted by the case. An export never feeds a node: whatever a file shows is in the node's output, so every format of one revision agrees.
+The file is kept in the project's [files](./files.md) under `/.system/playbooks/<case_id>/` until the case is deleted, which deletes it. An export never feeds a node: whatever a file shows is in the node's output, so every format of one revision agrees.
 
 - Without `revision`, the node's current output is exported, which needs the node `done`: otherwise `409 PLAYBOOK_NODE_NOT_EXPORTABLE`, `meta` carrying its `state`. A `revision` names any earlier output or confirmation of the node (an [entry](#entries)); another is `400 VALIDATION_FAILED`.
 - An export is `stale` once its revision is not the node's current output, or the node is not `done`.

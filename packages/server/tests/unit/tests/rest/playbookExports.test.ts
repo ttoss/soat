@@ -1,3 +1,5 @@
+import { Op } from '@ttoss/postgresdb';
+import { db } from 'src/db';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
@@ -61,6 +63,7 @@ describe('Playbook exports', () => {
   let jsonToolId: string;
   let plainToolId: string;
   let downToolId: string;
+  let deletingToolId: string;
   let seq = 0;
 
   const asAdmin = () => {
@@ -143,6 +146,13 @@ describe('Playbook exports', () => {
         '/down': () => {
           return { status: 500, body: { message: 'down' } };
         },
+        '/deleting': async (request) => {
+          const deleted = await asAdmin().delete(
+            `/api/v1/playbook-cases/${request.body.case_id}`
+          );
+          expect(deleted.status).toBe(204);
+          return { body: PDF, contentType: 'application/pdf' };
+        },
       },
     });
 
@@ -189,6 +199,7 @@ describe('Playbook exports', () => {
     jsonToolId = await httpTool('/json', 'base64');
     plainToolId = await httpTool('/plain');
     downToolId = await httpTool('/down', 'base64');
+    deletingToolId = await httpTool('/deleting', 'base64');
   });
 
   afterAll(async () => {
@@ -703,6 +714,49 @@ describe('Playbook exports', () => {
         `/api/v1/playbook-cases/${caseId}/exports/pbk_exp_missing`
       );
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('DELETE /api/v1/playbook-cases/{case_id}', () => {
+    const caseFiles = (caseId: string) => {
+      return db.File.count({
+        where: { path: { [Op.like]: `/.system/playbooks/${caseId}/%` } },
+      });
+    };
+
+    test('deletes the files its exports rendered', async () => {
+      const caseId = await newCase({});
+      await writeAmount(caseId, 6);
+      const exported = await exportNode(caseId);
+      expect(exported.status).toBe(201);
+      expect(await caseFiles(caseId)).toBe(2);
+
+      const res = await asAdmin().delete(`/api/v1/playbook-cases/${caseId}`);
+
+      expect(res.status).toBe(204);
+      expect(await caseFiles(caseId)).toBe(0);
+      const file = await asAdmin().get(
+        `/api/v1/files/${exported.body.data[0].file_id}`
+      );
+      expect(file.status).toBe(404);
+    });
+
+    test('deletes the file of a render that settles after the case is gone', async () => {
+      const caseId = await newCase({
+        transformations: [
+          { name: 'proposal', format: 'pdf', tool: deletingToolId },
+        ],
+      });
+      await writeAmount(caseId, 8);
+
+      await exportNode(caseId);
+
+      expect(
+        stub.routeRequests.some((request) => {
+          return request.body.case_id === caseId;
+        })
+      ).toBe(true);
+      expect(await caseFiles(caseId)).toBe(0);
     });
   });
 });
