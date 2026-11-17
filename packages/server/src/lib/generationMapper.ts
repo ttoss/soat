@@ -1,6 +1,7 @@
 import type { db } from '../db';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import type { UsageTotals } from './usageTotals';
+import { parseWorkAuthority } from './workAuthority';
 
 export type PersistedGeneration = {
   id: string;
@@ -15,6 +16,7 @@ export type PersistedGeneration = {
   started_by_principal_type: string | null;
   started_by_principal_id: string | null;
   acted_as: { principal_type: string; principal_id: string } | null;
+  acts_for: { type: string; id: string } | null;
   status: string;
   started_at: Date;
   completed_at: Date | null;
@@ -77,6 +79,16 @@ const actedAs = (gen: {
   };
 };
 
+/**
+ * The opaque principal the work acts for, read off its stored authority: a
+ * resume narrows that authority but keeps the starter's.
+ */
+const actsFor = (gen: {
+  authority: object | null;
+}): PersistedGeneration['acts_for'] => {
+  return parseWorkAuthority(gen.authority)?.actsFor ?? null;
+};
+
 export const mapGeneration = (
   gen: InstanceType<(typeof db)['Generation']> & {
     project?: InstanceType<(typeof db)['Project']>;
@@ -113,6 +125,7 @@ export const mapGeneration = (
     started_by_principal_type: gen.startedByPrincipalType,
     started_by_principal_id: gen.startedByPrincipalId,
     acted_as: actedAs(gen),
+    acts_for: actsFor(gen),
     status: gen.status,
     started_at: gen.startedAt,
     completed_at: gen.completedAt,

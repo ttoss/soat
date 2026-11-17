@@ -40,6 +40,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `started_by_principal_type`          | string \| null | [Principal](./audit-log.md#principals) that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal))                                        |
 | `started_by_principal_id`            | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…`                                                                                          |
 | `acted_as`                           | object \| null | `{ principal_type, principal_id }` the latest segment's tool calls ran as (see [Acting principal](#acting-principal)); `null` when it ran with none                             |
+| `acts_for`                           | object \| null | `{ type, id }` the starter acted for, from its IAM token or `On-Behalf-Of` assertion (see [Starting principal](#starting-principal)); `null` when none                          |
 | `status`                             | string         | Lifecycle status: `running`, `requires_action`, `completed`, or `failed`                                                                                                        |
 | `started_at`                         | string         | When the generation started                                                                                                                                                     |
 | `completed_at`                       | string \| null | When the generation reached a terminal state                                                                                                                                    |
@@ -72,6 +73,14 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 An API-key request records the **key itself** (`key_…`), so the generation names which key
 acted rather than only the owning user; a JWT-authenticated request records the user
 (`user_…`).
+
+`acts_for` records the opaque principal the starter acted for: the `principal` an
+[IAM token](./iam.md#iam-tokens) was minted with, or the one an
+[`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) assertion carried. A
+generation started on an IAM token names the minting key in `started_by_principal_*` and
+the principal it serves (a channel contact, an MCP server, a narrower key of the caller's
+own) in `acts_for`, as the [audit log](./audit-log.md) entry for the request does. A
+resume keeps the starter's.
 
 A generation also stores the authority it was started under (the starter's grant and
 every cap on it: a key's `policy_ids`, an OAuth consent, an IAM token's bound, a
