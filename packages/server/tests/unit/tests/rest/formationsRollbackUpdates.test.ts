@@ -221,6 +221,86 @@ describe('PUT /api/v1/formations/:formation_id — a deploy that fails after an 
     expect(row.lastAppliedProperties).toEqual({ name: 'A', kind: 'k' });
   });
 
+  test('a retained replacement is kept, not deleted', async () => {
+    const retained = {
+      resources: {
+        Chan: {
+          type: 'test_channel',
+          deletion_policy: 'retain',
+          properties: { name: 'A', kind: 'k' },
+        },
+      },
+    };
+    handler.replies.create = {
+      status: 200,
+      body: { physical_resource_id: 'chn_k0' },
+    };
+    const created = await createFormation(retained);
+
+    handler.replies.create = {
+      status: 422,
+      body: { message: 'broken refused' },
+    };
+    handler.replies.update = {
+      status: 200,
+      body: { physical_resource_id: 'chn_k1' },
+    };
+    handler.replies.delete = { status: 200, body: {} };
+
+    const res = await updateFormation(created.body.id, {
+      resources: {
+        ...failingAfter({ name: 'A', kind: 'other' }).resources,
+        Chan: {
+          ...retained.resources.Chan,
+          properties: { name: 'A', kind: 'other' },
+        },
+      },
+    });
+
+    expect(res.body.status).toBe('failed');
+    expect(deletedPhysicalIds(handler)).toEqual([]);
+    expect(await latestOperationEvents(res.body.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          logical_id: 'Chan',
+          action: 'rollback-skipped',
+          physical_resource_id: 'chn_k1',
+        }),
+      ])
+    );
+  });
+
+  test('a restore that replaces the resource moves the row to the replacement', async () => {
+    handler.replies.create = {
+      status: 200,
+      body: { physical_resource_id: 'chn_t0' },
+    };
+    const created = await createFormation(original);
+
+    handler.replies.create = {
+      status: 422,
+      body: { message: 'broken refused' },
+    };
+    let updates = 0;
+    handler.replies.update = (request) => {
+      updates += 1;
+      return updates === 1
+        ? echoUpdate(request)
+        : { status: 200, body: { physical_resource_id: 'chn_t1' } };
+    };
+
+    const res = await updateFormation(
+      created.body.id,
+      failingAfter({ name: 'A2', kind: 'k' })
+    );
+
+    expect(res.body.status).toBe('failed');
+    const row = await chanRow(created.body.id);
+    expect(row.physicalResourceId).toBe('chn_t1');
+    expect(row.pendingCleanupPhysicalResourceIds).toEqual(['chn_t0']);
+    expect(row.lastAppliedProperties).toEqual({ name: 'A', kind: 'k' });
+  });
+
   test('a restore the handler refuses is recorded without replacing the original failure', async () => {
     handler.replies.create = {
       status: 200,
