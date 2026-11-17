@@ -3,8 +3,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { systemPath } from './filePaths';
-import { upsertFileByPath } from './files';
+import { pathPrefixPattern, systemPath } from './filePaths';
+import { deleteFile, upsertFileByPath } from './files';
 import { isPlainObject } from './plainObject';
 import { PLAYBOOK_EXPORT_FORMATS } from './playbookDefinition';
 import {
@@ -18,6 +18,9 @@ import type { WorkAuthority } from './workAuthority';
 const log = createDebug('soat:playbookExports');
 
 type ExportRow = InstanceType<(typeof db)['PlaybookExport']>;
+
+/** Every export file sits under `/.system/playbooks/<case>/`. */
+const EXPORT_MODULE = 'playbooks';
 
 /** The case an export renders, as the render needs it. */
 export type ExportCase = {
@@ -99,7 +102,7 @@ const renderFile = async (args: {
     projectId: exportCase.projectId,
     projectPublicId: exportCase.projectPublicId,
     path: systemPath({
-      module: 'playbooks',
+      module: EXPORT_MODULE,
       leaf: `${exportCase.publicId}/${exported.node}/${exported.revision}/${exported.publicId}.${exported.format}`,
     }),
     fileBuffer: Buffer.from(file.dataBase64, 'base64'),
@@ -122,7 +125,9 @@ export const renderPlaybookExport = async (args: {
   exportCase: ExportCase;
   authority: WorkAuthority;
 }): Promise<void> => {
-  const exported = (await db.PlaybookExport.findByPk(args.exportId))!;
+  const exported = await db.PlaybookExport.findByPk(args.exportId);
+  // Its case was deleted before the render started.
+  if (!exported) return;
   log('renderPlaybookExport: %s', exported.publicId);
   let settlement: { fileId: number } | { error: StoredError };
   try {
@@ -137,7 +142,7 @@ export const renderPlaybookExport = async (args: {
       }),
     };
   }
-  await db.PlaybookExport.update(
+  const [settled] = await db.PlaybookExport.update(
     {
       ...settlement,
       status: 'fileId' in settlement ? 'completed' : 'failed',
@@ -146,6 +151,37 @@ export const renderPlaybookExport = async (args: {
     },
     { where: { id: exported.id as number, status: 'running' } }
   );
+  // Recovered as interrupted, or its case deleted, while rendering: no export
+  // holds the file, and nothing else would reach it.
+  if (settled === 0 && 'fileId' in settlement) {
+    const file = await db.File.findByPk(settlement.fileId, {
+      attributes: ['publicId'],
+    });
+    if (file) await deleteFile({ id: file.publicId });
+  }
+};
+
+/**
+ * Deletes the files a case's exports rendered; called once the case is gone,
+ * since `playbook_exports.file_id` does not take the file with the export.
+ */
+export const releaseCaseExportFiles = async (args: {
+  projectId: number;
+  casePublicId: string;
+}): Promise<void> => {
+  const directory = systemPath({
+    module: EXPORT_MODULE,
+    leaf: args.casePublicId,
+  });
+  log('releaseCaseExportFiles: %s', directory);
+  const files = await db.File.findAll({
+    where: {
+      projectId: args.projectId,
+      path: { [Op.like]: pathPrefixPattern(directory) },
+    },
+    attributes: ['publicId'],
+  });
+  for (const file of files) await deleteFile({ id: file.publicId });
 };
 
 /**
