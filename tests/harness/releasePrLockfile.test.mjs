@@ -4,7 +4,8 @@ import { describe, test } from 'node:test';
 
 /**
  * `main.yml` needs a lockfile a frozen install accepts before tagging, so a
- * job of its own checks it on every PR, and `All Checks Passed` waits on it. `lerna version` rewrites the lockfile, which is how one can arrive broken.
+ * job of its own checks it on every PR, and `All Checks Passed` waits on it.
+ * `lerna version` rewrites the lockfile, which is how one can arrive broken.
  */
 
 const ROOT = new URL('../..', import.meta.url).pathname;

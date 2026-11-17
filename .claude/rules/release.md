@@ -11,7 +11,8 @@ paths:
 
 1. Open a release PR (`release/vX.Y.Z` → `main`) titled `chore(release): …`.
    `pr.yml` runs the same jobs on it as on any PR, including `Release
-   Lockfile` (frozen install); `main.yml` refuses to tag on a lockfile a frozen install rejects.
+   Lockfile` (frozen install); `main.yml` refuses to tag on a lockfile a
+   frozen install rejects.
 2. **Squash-merge.** Every `main.yml` job gates on
    `startsWith(head_commit.message, 'chore(release):')`; a merge commit
    (`Merge pull request …`) silently skips the release. Confirm the `main.yml`

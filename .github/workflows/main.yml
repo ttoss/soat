@@ -11,9 +11,9 @@ concurrency:
 
 jobs:
   # The release commit is usually the previous PR's tree plus version bumps,
-  # tested a minute earlier. The gate proves that
-  # (see `scripts/releaseTestGate.mjs`) and, when it can, skips the test jobs
-  # below; when it cannot, or errors, they run as before.
+  # tested a minute earlier. The gate proves that (`scripts/releaseTestGate.mjs`)
+  # and, when it can, skips the test jobs below; when it cannot, or errors,
+  # they run.
   release-test-gate:
     name: Release Test Gate
     runs-on: ubuntu-latest
