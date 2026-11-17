@@ -410,7 +410,7 @@ Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` a
 
 ### pipeline
 
-A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`compute → persist`) server-side, with no model reasoning between steps; callable by orchestration `tool` nodes and directly via the API. Each `tool_id` step that is an `http`, `mcp` or `pipeline` tool needs `tools:CallTool` on it as well, under the authority the pipeline runs under, and a `builtin` step's action is checked at its route; a step refused is `403 FORBIDDEN` before it runs.
+A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`compute → persist`) server-side, with no model reasoning between steps; callable by orchestration `tool` nodes and directly via the API. Each `tool_id` step needs `tools:CallTool` on it as well, whatever its type, under the authority the pipeline runs under, and a `builtin` step's action is also checked at its route; a step refused is `403 FORBIDDEN` before it runs.
 
 `pipeline` has `steps` and an optional `output`:
 
@@ -640,6 +640,8 @@ therefore name the tools it covers:
 This is the same check [approvals](./approvals.md) have always made for
 `tools:CallTool`, so a per-tool grant now means the same thing whether the call
 arrives directly or through an approval.
+
+Every call, whatever starts it (an agent turn, an orchestration node, a trigger, a playbook, a scorer, a decider, a converter or a memory rule) and whatever the tool's type, needs `tools:CallTool` on the tool under the authority the work runs under, checked before the call reaches anything.
 
 Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a tool it may not see does not announce itself), a write or a call is `403`. A resource outside a scoped credential's project is `404` to it on every route unless an accepted [share](./shares.md) reaches it there, and `403 API_KEY_PROJECT_SCOPE` only answers a request that names another project. A write on a resource in a project none of the caller's policies name is `404` too — the same answer their read would get, so a refusal never confirms existence across a tenant boundary.
 

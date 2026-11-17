@@ -258,8 +258,7 @@ describe('Resource grants', () => {
         `/api/v1/playbook-cases/${caseId}/executions?limit=100`
       );
       expect(executions.body.data[0].error).toMatchObject({
-        code: 'PLAYBOOK_EXECUTOR_FORBIDDEN',
-        meta: { node_id: 'pricing', action: 'tools:CallTool' },
+        code: 'FORBIDDEN',
       });
     });
   });

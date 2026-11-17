@@ -2133,6 +2133,36 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
+    test("a firing fails when the trigger's policy_ids cannot start its agent", async () => {
+      const narrow = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['triggers:GetTrigger'] }],
+          },
+        });
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/triggers')
+        .send({
+          policy_ids: [narrow.body.id],
+          project_id: projectId,
+          name: 'fire-narrow-agent',
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { prompt: 'hello' },
+        });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
     test('empty agent input returns 400 TRIGGER_INPUT_INVALID', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/triggers/${agentTriggerId}/fire`)

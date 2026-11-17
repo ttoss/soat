@@ -1118,7 +1118,6 @@ const gateEachCall = (args: {
           ...resolvedTool,
           execute: async (...executeArgs) => {
             await gateToolCall({
-              type: typedTool.type,
               tool: typedTool.publicId
                 ? { publicId: typedTool.publicId }
                 : 'inline',

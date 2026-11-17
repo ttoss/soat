@@ -484,7 +484,7 @@ describe('Playbook exports', () => {
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_PAUSED');
     });
 
-    test("returns 403 when the version's grant does not allow the tool", async () => {
+    test("fails an export whose tool the version's grant does not allow", async () => {
       const grant = await asAdmin()
         .post('/api/v1/policies')
         .send({
@@ -497,11 +497,11 @@ describe('Playbook exports', () => {
 
       const res = await exportNode(caseId);
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
-      expect(res.body.error.meta).toEqual({
-        node_id: 'pricing',
-        action: 'tools:CallTool',
+      expect(res.status).toBe(201);
+      expect(res.body.data[0]).toMatchObject({
+        status: 'failed',
+        file_id: null,
+        error: { code: 'FORBIDDEN' },
       });
     });
 

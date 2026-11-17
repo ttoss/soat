@@ -756,6 +756,18 @@ describe('Decisions', () => {
       expect(res.status).toBe(403);
     });
 
+    test('a caller who may not start the agent fails the decision with FORBIDDEN', async () => {
+      const key = await createRestrictedApiKey('agents:CreateAgentGeneration');
+      const calls = received.length;
+
+      const res = await decide({ token: key });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(received).toHaveLength(calls);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const res = await testClient
         .post(`/api/v1/deciders/${deciderId}/decisions`)

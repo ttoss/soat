@@ -15,6 +15,7 @@ import { nodesByKey } from './playbookGraph';
 import { assertExecutorStartable } from './playbookStarts';
 import { samePlaybookBasis } from './playbookState';
 import { resourceWorkAuthority } from './resourceWork';
+import { callerChecksStart } from './startActions';
 import {
   forWork,
   parseWorkAuthority,
@@ -37,7 +38,7 @@ export const caseAuthority = async (args: {
     attributes: ['publicId'],
     rejectOnEmpty: true,
   });
-  // Each node's starts are checked as it runs, by `resolveRunAs`.
+  // Each node's starts are checked as it runs: `resolveRunAs` or its entry point.
   return resourceWorkAuthority({
     carrier: 'playbookVersions',
     id: version.publicId as string,
@@ -49,8 +50,9 @@ export const caseAuthority = async (args: {
 
 /**
  * Work's authority (the case's when none is given), resolved as a request
- * would be and checked against what a node starts before it runs. Work
- * holding none, or whose authority no longer resolves, is refused.
+ * would be and checked against what a node starts before it runs, unless the
+ * start's own entry point checks it. Work holding none, or whose authority no
+ * longer resolves, is refused.
  */
 export const resolveRunAs = async (args: {
   row: PlaybookCaseRow;
@@ -74,6 +76,7 @@ export const resolveRunAs = async (args: {
     isAllowed: authUser.isAllowed,
   };
   for (const executor of args.executors) {
+    if (!callerChecksStart(executor.type)) continue;
     await assertExecutorStartable({
       node: args.node,
       executor,

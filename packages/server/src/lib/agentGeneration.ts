@@ -25,6 +25,7 @@ import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { provenanceForNewRow } from './generationProvenance';
 import { createGenerationRecord } from './generations';
+import { gateGenerationStart } from './generationStartGate';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { assertGenerationProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
@@ -301,6 +302,7 @@ const prepareGeneration = async (
   // Rejects a key that could not become a header before any provider call or
   // metering happens, covering every path but the session's own write-time check.
   assertValidToolContext(args.toolContext);
+  await gateGenerationStart(args);
 
   // A run node's, an eval item's or a decision's turn was admitted with its
   // run or decision; the pause was checked there, before the record existed.
