@@ -111,6 +111,7 @@ One agent execution; its steps are on its [trace](./traces.md).
 | `started_by_principal_type` | string/null | Type of the principal that triggered the generation                                                                                   |
 | `started_by_principal_id`   | string/null | Public id of that principal                                                                                                           |
 | `acted_as`                  | object/null | `{ principal_type, principal_id }` the latest segment's tool calls ran as — see [Acting principal](./generations.md#acting-principal) |
+| `acts_for`                  | object/null | `{ type, id }` the starter acted for — see [Starting principal](./generations.md#starting-principal)                                  |
 | `idempotency_key`           | string/null | Key the generation was started under — see [Running a generation at most once](#running-a-generation-at-most-once)                    |
 | `created_at`                | string      | ISO 8601 creation timestamp                                                                                                           |
 

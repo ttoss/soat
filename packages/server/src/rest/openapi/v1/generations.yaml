@@ -566,10 +566,12 @@ components:
           type: object
           nullable: true
           description: >-
-            The principal the latest segment's tool calls ran as: the starter,
-            or the caller who resumed the generation by submitting its tool
-            outputs. A tool call an approval held runs, once approved, as this
-            principal. Null when the segment ran with no principal.
+            The principal the latest segment's tool calls ran as: the
+            starter, or the agent when it runs under its own grant
+            (`run_as: agent`). A caller who resumes the generation by
+            submitting its tool outputs only narrows what it may do. A tool
+            call an approval held runs, once approved, as this principal. Null
+            when the segment ran with no principal.
           required: [principal_type, principal_id]
           properties:
             principal_type:
@@ -577,6 +579,23 @@ components:
             principal_id:
               type: string
               example: user_V1StGXR8Z5jdHi6B
+        acts_for:
+          type: object
+          nullable: true
+          description: >-
+            The opaque principal the starter acted for: the `principal` of the
+            IAM token that started the generation, or the one an `On-Behalf-Of`
+            assertion carried. `started_by_principal_*` names the key that
+            minted the token. A resume keeps the starter's. Null when the
+            starter named none.
+          required: [type, id]
+          properties:
+            type:
+              type: string
+              example: channel
+            id:
+              type: string
+              example: discord-dm-42
         status:
           type: string
           description: Lifecycle status of the generation
