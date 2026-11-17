@@ -2853,9 +2853,10 @@ components:
           type: string
           description: >-
             What the deploy did to the resource: `create`, `update`, `delete`,
-            `no-op`, `rollback` (a resource created earlier in this deploy that
-            was walked back after a later failure), or `rollback-skipped` (a
-            `deletion_policy: retain` resource left standing by that unwind).
+            `no-op`, `rollback` (a resource created, updated or replaced
+            earlier in this deploy that was walked back after a later failure),
+            or `rollback-skipped` (a `deletion_policy: retain` resource left
+            standing by that unwind).
           example: rollback
         status:
           type: string
