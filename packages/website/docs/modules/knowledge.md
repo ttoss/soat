@@ -259,7 +259,7 @@ Retrieved knowledge is partly **user-derived** (a memory a [memory rule](./memor
 
 This does not make retrieved content safe to act on: a tool call made after reading it is still authorized only by the agent's [`policy_ids`](./agents.md#execution-identity) and [guardrails](./guardrails.md). Scope those policies assuming anything in reachable memory stores and documents may influence the agent.
 
-What an agent's retrieval reaches at all is bounded by its project's [`agent_policy_ids`](./projects.md#project-agent-cap): a `Deny` on `knowledge:SearchKnowledge` there keeps unscreened documents out of every agent's injection, stored config and override alike. Its `builtin` calls are capped too, each on the SRN and tags its route checks ([Resource-scoped policies](./agents.md#resource-scoped-policies)), so a `Deny` scoped to a document reaches `get-document`.
+What an agent's stored retrieval reaches is bounded by the agent's own [`policy_ids`](./agents.md#execution-identity) and its project's [`agent_policy_ids`](./projects.md#project-agent-cap): a `Deny` on `knowledge:SearchKnowledge` for a document in either keeps it out of injection. The project's reaches every agent it owns, stored config and override alike. Its `builtin` calls are capped too, each on the SRN and tags its route checks ([Resource-scoped policies](./agents.md#resource-scoped-policies)), so a `Deny` scoped to a document reaches `get-document`.
 
 ### Project Scoping
 
