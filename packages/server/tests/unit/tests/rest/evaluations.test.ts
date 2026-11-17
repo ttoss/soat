@@ -1945,6 +1945,38 @@ describe('Evaluations', () => {
       expect(res.body.error.message).toMatch(/already finished/);
     });
 
+    test('a cancel never overwrites a run a worker settled after the cancel read it', async () => {
+      const run = await startQueued();
+      const runRow = (await db.EvalRun.findOne({
+        where: { publicId: run.id },
+      }))!;
+
+      // A worker settles the run between the cancel's read and its write.
+      let settled = false;
+      db.EvalRunTask.addHook('beforeBulkDestroy', 'workerSettles', async () => {
+        if (settled) return;
+        settled = true;
+        await db.EvalRun.update(
+          { status: 'completed', finishedAt: new Date() },
+          { where: { id: runRow.id as number }, hooks: false }
+        );
+      });
+      let res;
+      try {
+        res = await asUser().post(
+          `/api/v1/evals/${evalId}/runs/${run.id}/cancel`
+        );
+      } finally {
+        db.EvalRunTask.removeHook('beforeBulkDestroy', 'workerSettles');
+      }
+
+      expect(settled).toBe(true);
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/already finished/);
+      await runRow.reload();
+      expect(runRow.status).toBe('completed');
+    });
+
     test('an unknown run returns 404', async () => {
       const res = await asUser().post(
         `/api/v1/evals/${evalId}/runs/evrun_missing/cancel`

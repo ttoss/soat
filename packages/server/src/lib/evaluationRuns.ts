@@ -20,6 +20,7 @@ import {
   storedEvalRunDefinition,
 } from './evaluationRunDefinition';
 import {
+  claimRunFinalization,
   executeAndRecordItem,
   failEvalRun,
   finalizeEvalRun,
@@ -467,20 +468,23 @@ export const cancelEvalRun = async (args: {
       `Eval run '${args.runId}' not found.`
     );
   }
-  if (TERMINAL_EVAL_RUN_STATUSES.includes(run.status)) {
-    throw new DomainError(
+  const alreadyFinished = () => {
+    return new DomainError(
       'VALIDATION_FAILED',
       `Eval run '${args.runId}' has already finished (status '${run.status}').`
     );
-  }
+  };
+  if (TERMINAL_EVAL_RUN_STATUSES.includes(run.status)) throw alreadyFinished();
 
   await discardEvalItemTasks({ evalRunId: run.id as number });
 
-  await run.update({
-    status: 'cancelled',
-    finishedAt: new Date(),
-    toolContext: null,
-  });
+  // The settle claim every terminal write takes: a worker may have settled the
+  // run since the read above.
+  if (!(await claimRunFinalization({ runDbId: run.id as number }))) {
+    await run.reload();
+    throw alreadyFinished();
+  }
+  await run.update({ status: 'cancelled', toolContext: null });
 
   // Items already claimed are past their liveness check and keep writing after
   // this point; each late write recounts, so the numbers converge on what
