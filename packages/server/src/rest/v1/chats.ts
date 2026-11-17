@@ -34,15 +34,11 @@ export const chatsRouter = new Router<Context>();
 const CHAT_SYSTEM_MESSAGE_REMEDY =
   'Send system content in the `instructions` field instead.';
 
-/**
- * Checks whether the caller can perform `action` on `chat`.
- * Sets ctx.status = 403 and returns false when not allowed.
- */
-const checkChatPermission = async (
+const assertChatPermission = async (
   ctx: Context,
   chat: MappedChat,
   action: string
-): Promise<boolean> => {
+): Promise<void> => {
   const resource = buildSrn({
     projectPublicId: chat.project_id,
     resourceType: 'chat',
@@ -65,7 +61,6 @@ const checkChatPermission = async (
       resource,
     });
   }
-  return allowed;
 };
 
 /**
@@ -155,7 +150,7 @@ chatsRouter.get('/chats/:chat_id', async (ctx: Context) => {
 
   const chat = await getChat({ id: chatId });
 
-  if (!(await checkChatPermission(ctx, chat, 'chats:GetChat'))) return;
+  await assertChatPermission(ctx, chat, 'chats:GetChat');
 
   ctx.body = chat;
 });
@@ -167,7 +162,7 @@ chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
 
   const chat = await getChat({ id: chatId });
 
-  if (!(await checkChatPermission(ctx, chat, 'chats:DeleteChat'))) return;
+  await assertChatPermission(ctx, chat, 'chats:DeleteChat');
 
   await deleteChat({ id: chatId });
 
@@ -325,11 +320,8 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     // established 400 / SSE-error behavior for a missing chat. Only a chat that
     // exists is permission-checked.
     const chat = await findChat({ id: chatId });
-    if (
-      chat &&
-      !(await checkChatPermission(ctx, chat, 'chats:CreateChatCompletion'))
-    ) {
-      return;
+    if (chat) {
+      await assertChatPermission(ctx, chat, 'chats:CreateChatCompletion');
     }
   } else {
     await requireStatelessCompletionAccess({
