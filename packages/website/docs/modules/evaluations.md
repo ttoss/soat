@@ -676,7 +676,7 @@ The usual `tool_context` rules apply: each key is forwarded as one `X-Soat-Conte
 
 [`POST /evals/{eval_id}/runs/{eval_run_id}/cancel`](/docs/api/evaluations/cancel-eval-run) drops a queued or running run's
 outstanding tasks and settles it `cancelled`; a run that has already finished is rejected
-with `400`. Results already written are **kept**, and `completed_count` /
+with `400`, including one a worker settles while the cancel is in flight: a run settles once. Results already written are **kept**, and `completed_count` /
 `errored_count` report what ran — an item a worker had already claimed runs to completion
 and recounts the run after it settles. `aggregate_scores` is left `null` (a partial
 roll-up would read as a whole-dataset verdict), and no lifecycle event fires. The run's

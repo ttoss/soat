@@ -402,6 +402,56 @@ describe('Evaluations — a run records its agent and definition', () => {
     expect((await readRun(evalId, runId)).status).toBe('failed');
   });
 
+  test('two items of a run whose agent was deleted, drained in parallel, leave it failed', async () => {
+    const doomedAgentId = await createAgent('Definition Parallel Doomed Agent');
+    const evalId = await createEval({ agent_id: doomedAgentId });
+    const runId = await startQueuedRun(evalId);
+    await authenticatedTestClient(adminToken).delete(
+      `/api/v1/agents/${doomedAgentId}`
+    );
+
+    // Hold the first item's `running` write until the other item failed the run.
+    let releaseHeld: () => void = () => {};
+    const failedWritten = new Promise<void>((resolve) => {
+      releaseHeld = resolve;
+      setTimeout(resolve, 5_000);
+    });
+    let held = false;
+    const holdFirstStart = async (status: unknown) => {
+      if (status !== 'running' || held) return;
+      held = true;
+      await failedWritten;
+    };
+    const statusOf = (options: object): unknown => {
+      const attributes = 'attributes' in options ? options.attributes : null;
+      return attributes &&
+        typeof attributes === 'object' &&
+        'status' in attributes
+        ? attributes.status
+        : undefined;
+    };
+    db.EvalRun.addHook('beforeUpdate', 'holdStart', (run) => {
+      return holdFirstStart(run.dataValues.status);
+    });
+    db.EvalRun.addHook('beforeBulkUpdate', 'holdStartBulk', (options) => {
+      return holdFirstStart(statusOf(options));
+    });
+    db.EvalRun.addHook('afterUpdate', 'releaseOnFailed', (run) => {
+      if (run.dataValues.status === 'failed') releaseHeld();
+    });
+    try {
+      expect(await drainEvalQueueOnce({ limit: 2 })).toBe(2);
+    } finally {
+      db.EvalRun.removeHook('beforeUpdate', 'holdStart');
+      db.EvalRun.removeHook('beforeBulkUpdate', 'holdStartBulk');
+      db.EvalRun.removeHook('afterUpdate', 'releaseOnFailed');
+    }
+
+    expect(held).toBe(true);
+    expect(mockCreateGeneration).not.toHaveBeenCalled();
+    expect((await readRun(evalId, runId)).status).toBe('failed');
+  });
+
   describe('authentication and authorization', () => {
     let evalId: string;
     let runId: string;
