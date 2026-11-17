@@ -473,12 +473,12 @@ soat update-formation --formation-id "$F" --template "$T" && echo "deployed"
 
 ### Rollback on a Failed Deploy
 
-A deploy stops at the first failing resource and walks back every resource it **created** in that deploy, in reverse dependency order (a dependency after its dependents). The stack ends `failed` with nothing new standing, so a corrected re-deploy re-creates those resources from scratch.
+A deploy stops at the first failing resource and walks back every change it applied, newest first (a dependent before what it references), so the stack ends `failed` as it stood before the deploy:
 
-Left alone:
-
-- An **updated** resource keeps its new state (no pre-update snapshot is taken).
-- A `deletion_policy: retain` resource survives; its record keeps pointing at it, so the next deploy adopts it rather than provisioning a duplicate.
+- A **created** resource is deleted; a corrected re-deploy re-creates it from scratch.
+- An **updated** resource is re-applied with the properties it had before. A write-only property is never stored, so it keeps the value the deploy sent.
+- A **replaced** resource's replacement is deleted and the record points back at the resource it superseded.
+- A `deletion_policy: retain` resource that was created or replaced survives; its record keeps pointing at it, so the next deploy adopts it rather than provisioning a duplicate.
 
 Each unwind is an entry in the operation's `events` after the triggering failure: `rollback` (`completed` or `failed`) for a walked-back resource, `rollback-skipped` for a retained one. A failed `rollback` is reported, never thrown; the original error stays in the operation's `error`, and the record keeps pointing at the physical resource for manual cleanup.
 

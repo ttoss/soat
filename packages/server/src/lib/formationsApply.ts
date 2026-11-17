@@ -7,7 +7,6 @@ import {
   isCreateChange,
   isResourceAlreadyGone,
   markResourceDeleted,
-  rollbackCreatedResources,
 } from './formationsApplyHelpers';
 import {
   applyUpdateChange,
@@ -29,6 +28,10 @@ import {
   resolveFormationOutputs,
 } from './formationsResolve';
 import { applyDeleteResource } from './formationsResourceHandlers';
+import {
+  type AppliedChange,
+  rollbackAppliedChanges,
+} from './formationsRollback';
 import {
   buildFormationError,
   type FormationActor,
@@ -127,7 +130,7 @@ export const processResourceChange = async (args: {
   actor: FormationActor;
   formationId: number;
   pendingCleanups: PendingCleanup[];
-}): Promise<ResourceRow> => {
+}): Promise<AppliedChange | null> => {
   const {
     logicalId,
     decl,
@@ -168,23 +171,24 @@ export const processResourceChange = async (args: {
         resolvedIds,
         events,
       });
-    } else {
-      const existingWithId = existing as ResourceRow & {
-        physicalResourceId: string;
-      };
-      await applyUpdateChange({
-        resourceRow,
-        existing: existingWithId,
-        resourceType: decl.type,
-        resolvedProperties,
-        logicalId,
-        projectId: args.projectId,
-        actor: args.actor,
-        resolvedIds,
-        events,
-        pendingCleanups: args.pendingCleanups,
-      });
+      return { kind: 'create', resourceRow };
     }
+    const existingWithId = existing as ResourceRow & {
+      physicalResourceId: string;
+    };
+    const update = await applyUpdateChange({
+      resourceRow,
+      existing: existingWithId,
+      resourceType: decl.type,
+      resolvedProperties,
+      logicalId,
+      projectId: args.projectId,
+      actor: args.actor,
+      resolvedIds,
+      events,
+      pendingCleanups: args.pendingCleanups,
+    });
+    return update ? { kind: 'update', resourceRow, update } : null;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log(
@@ -197,12 +201,10 @@ export const processResourceChange = async (args: {
     });
     throw error;
   }
-
-  return resourceRow;
 };
 
 // In dependency order. On the first failure it unwinds what this operation
-// created and returns false, so the caller stops before finalizing.
+// applied and returns false, so the caller stops before finalizing.
 const runResourceChanges = async (args: {
   sortedOrder: string[];
   workingTemplate: FormationTemplate;
@@ -217,13 +219,12 @@ const runResourceChanges = async (args: {
   pendingCleanups: PendingCleanup[];
 }): Promise<boolean> => {
   const { sortedOrder, workingTemplate, existingMap, events } = args;
-  const created: ResourceRow[] = [];
+  const applied: AppliedChange[] = [];
   for (const logicalId of sortedOrder) {
     const decl = workingTemplate.resources[logicalId];
     const existing = existingMap.get(logicalId);
-    const isCreate = isCreateChange(existing);
     try {
-      const resourceRow = await processResourceChange({
+      const change = await processResourceChange({
         logicalId,
         decl,
         existing,
@@ -234,7 +235,7 @@ const runResourceChanges = async (args: {
         formationId: args.formationId,
         pendingCleanups: args.pendingCleanups,
       });
-      if (isCreate) created.push(resourceRow);
+      if (change) applied.push(change);
     } catch (error) {
       const failure = formationFailure(error);
       log(
@@ -242,8 +243,8 @@ const runResourceChanges = async (args: {
         logicalId,
         failure.message
       );
-      const rollbackEvents = await rollbackCreatedResources({
-        created,
+      const rollbackEvents = await rollbackAppliedChanges({
+        applied,
         projectId: args.projectId,
         actor: args.actor,
       });

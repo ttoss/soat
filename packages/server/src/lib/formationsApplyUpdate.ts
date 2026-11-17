@@ -2,9 +2,9 @@
  * The update half of a formation apply: the in-place update, the replacement it
  * may turn into, and the disposal of what a replacement superseded.
  *
- * Split from `formationsApplyHelpers.ts`, which owns create, delete and the
- * failure unwind — the disposal is a phase of its own, deferred to the end of
- * the operation, and the two halves share only the ledger predicates.
+ * Apart from `formationsApplyHelpers.ts` (create, delete) and
+ * `formationsRollback.ts` (the failure unwind): the disposal is a phase of its
+ * own, deferred to the end of the operation.
  */
 
 import createDebug from 'debug';
@@ -20,6 +20,7 @@ import {
   applyDeleteResource,
   applyUpdateResource,
 } from './formationsResourceHandlers';
+import type { AppliedUpdate } from './formationsRollback';
 import {
   type FormationActor,
   type FormationEvent,
@@ -235,17 +236,31 @@ const mergeWithLastApplied = (args: {
   existing: ResourceRow;
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
-}): ReturnType<typeof mergeWithPrevious> => {
+}): ReturnType<typeof mergeWithPrevious> & {
+  lastApplied: Record<string, unknown>;
+} => {
   const lastApplied = (args.existing.lastAppliedProperties ?? {}) as Record<
     string,
     unknown
   >;
-  return mergeWithPrevious({
+  const merge = mergeWithPrevious({
     resolved: args.resolvedProperties,
     previous: lastApplied,
     lastApplied,
     clearable: clearablePropertiesOf(args.resourceType),
   });
+  return { ...merge, lastApplied };
+};
+
+const deferDisposal = async (args: {
+  pendingCleanups: PendingCleanup[];
+  cleanup: PendingCleanup;
+}): Promise<void> => {
+  await recordPendingCleanup({
+    resourceRow: args.cleanup.resourceRow,
+    physicalResourceId: args.cleanup.physicalResourceId,
+  });
+  args.pendingCleanups.push(args.cleanup);
 };
 
 export const applyUpdateChange = async (args: {
@@ -260,18 +275,9 @@ export const applyUpdateChange = async (args: {
   events: FormationEvent[];
   /** Collects the disposal a replacement here defers to the end of the apply. */
   pendingCleanups: PendingCleanup[];
-}): Promise<void> => {
-  const {
-    resourceRow,
-    existing,
-    resourceType,
-    resolvedProperties,
-    logicalId,
-    projectId,
-    actor,
-    resolvedIds,
-    events,
-  } = args;
+}): Promise<AppliedUpdate | null> => {
+  const { resourceRow, existing, resourceType, logicalId } = args;
+  const { resolvedProperties, projectId, actor, resolvedIds, events } = args;
   const { merged: mergedProperties, ...merge } = mergeWithLastApplied({
     existing,
     resourceType,
@@ -281,6 +287,7 @@ export const applyUpdateChange = async (args: {
   // the previous id afterwards would hand the replacement's own id to the
   // disposal meant to remove what it superseded.
   const previousPhysicalResourceId = existing.physicalResourceId;
+  const previousStatus = existing.status;
 
   resolvedIds.set(logicalId, previousPhysicalResourceId);
   if (merge.changed) {
@@ -315,25 +322,32 @@ export const applyUpdateChange = async (args: {
     });
 
     if (replaced) {
-      await recordPendingCleanup({
-        resourceRow,
-        physicalResourceId: previousPhysicalResourceId,
-      });
-      args.pendingCleanups.push({
-        resourceRow,
-        logicalId,
-        resourceType,
-        physicalResourceId: previousPhysicalResourceId,
+      await deferDisposal({
+        pendingCleanups: args.pendingCleanups,
+        cleanup: {
+          resourceRow,
+          logicalId,
+          resourceType,
+          physicalResourceId: previousPhysicalResourceId,
+        },
       });
     }
-  } else {
-    events.push({
-      timestamp: new Date().toISOString(),
-      logicalId,
-      resourceType,
-      action: 'no-op',
-      status: 'completed',
-      physicalResourceId: previousPhysicalResourceId,
-    });
+    return {
+      previousPhysicalResourceId,
+      previousStatus,
+      previousProperties: merge.lastApplied,
+      ...(replaced
+        ? { replacementPhysicalResourceId: physicalResourceId }
+        : {}),
+    };
   }
+  events.push({
+    timestamp: new Date().toISOString(),
+    logicalId,
+    resourceType,
+    action: 'no-op',
+    status: 'completed',
+    physicalResourceId: previousPhysicalResourceId,
+  });
+  return null;
 };
