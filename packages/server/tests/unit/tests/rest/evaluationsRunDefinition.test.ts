@@ -403,12 +403,17 @@ describe('Evaluations — a run records its agent and definition', () => {
   });
 
   test('two items of a run whose agent was deleted, drained in parallel, leave it failed', async () => {
+    // An earlier run's leftover task would take a slot of the two-task claim.
+    await db.EvalRunTask.destroy({ where: {} });
     const doomedAgentId = await createAgent('Definition Parallel Doomed Agent');
     const evalId = await createEval({ agent_id: doomedAgentId });
     const runId = await startQueuedRun(evalId);
-    await authenticatedTestClient(adminToken).delete(
+    // Deleting the agent the Eval still names would cascade the run away.
+    await updateEval(evalId, { agent_id: secondAgentId });
+    const deleted = await authenticatedTestClient(adminToken).delete(
       `/api/v1/agents/${doomedAgentId}`
     );
+    expect(deleted.status).toBe(204);
 
     // Hold the first item's `running` write until the other item failed the run.
     let releaseHeld: () => void = () => {};
