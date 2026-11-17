@@ -190,7 +190,9 @@ components:
             `srn:<project_id>:<resource_type>:<id>`, where the type is one the
             action's module registered, or for a built-in action one its
             module's routes check it on, and `<id>` may be `*` for an action on
-            no single resource (a create or a list).
+            no single resource (a create or a list). A `projects:*` action is
+            checked on the whole project, `srn:<project_id>:*:*`, which takes
+            no `context.tags`.
           example: srn:proj_V1StGXR8Z5jdHi6B:channel:ch_1
         context:
           type: object

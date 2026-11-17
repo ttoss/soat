@@ -275,6 +275,10 @@ describe('the runtime asserts what the registration declares, before the handler
                       'unheld',
                       [{ action: 'agents:GetAgent', resourceType: 'agent' }],
                     ],
+                    [
+                      'project',
+                      [{ action: 'projects:GetProject', resourceType: '*' }],
+                    ],
                   ]),
                 },
               ],
@@ -296,6 +300,17 @@ describe('the runtime asserts what the registration declares, before the handler
       expect(body.status).toBe('failed');
       expect(JSON.stringify(body)).toContain('ACTION_NOT_HELD');
       expect(JSON.stringify(body)).toContain('agents:GetAgent');
+      expect(creates()).toHaveLength(0);
+    });
+
+    test('a deployer without a keyed project-wide action is refused', async () => {
+      const body = await deployKind('project');
+
+      expect(body.status).toBe('failed');
+      expect(JSON.stringify(body)).toContain('ACTION_NOT_HELD');
+      expect(JSON.stringify(body)).toContain(
+        `projects:GetProject on srn:${projectId}:*:*`
+      );
       expect(creates()).toHaveLength(0);
     });
 

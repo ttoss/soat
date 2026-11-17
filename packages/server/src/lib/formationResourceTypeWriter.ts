@@ -5,6 +5,7 @@
  * deployer before calling the handler, which does no authorization of its own.
  */
 import { DomainError } from '../errors';
+import { WHOLE_PROJECT } from './iamActionResourceTypes';
 import { isObjectRecord } from './openapiSchemaFields';
 import type { CarriedAction } from './writerRule';
 
@@ -22,7 +23,8 @@ export type KeyedAction = { action: string; resourceType: string };
 
 /**
  * A property naming a resource carries `action` on it; one keyed `byValue`
- * carries each key's actions on the whole type, and accepts no other value.
+ * carries each key's actions on the whole type (`*`: the whole project), and
+ * accepts no other value.
  */
 export type CarriedProperty =
   | { property: string; action: string; resourceType: string }
@@ -73,11 +75,16 @@ const readKeyedActions = (args: {
         at: `${at}.action`,
         fail: args.fail,
       }),
-      resourceType: readResourceType({
-        value: record.resource_type,
-        at: `${at}.resource_type`,
-        fail: args.fail,
-      }),
+      // A keyed action names no resource, so it may be checked on the whole
+      // project; registration still refuses one `iam/check` does not answer.
+      resourceType:
+        record.resource_type === WHOLE_PROJECT
+          ? WHOLE_PROJECT
+          : readResourceType({
+              value: record.resource_type,
+              at: `${at}.resource_type`,
+              fail: args.fail,
+            }),
     };
   });
 };

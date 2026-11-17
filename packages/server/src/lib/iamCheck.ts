@@ -2,15 +2,23 @@ import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
-import { BUILT_IN_ACTION_RESOURCE_TYPES } from './iamActionResourceTypes';
+import {
+  BUILT_IN_ACTION_RESOURCE_TYPES,
+  UNTYPED_BUILT_IN_MODULES,
+  WHOLE_PROJECT,
+} from './iamActionResourceTypes';
 import { findIamActionRegistration } from './iamRegistrations';
 import { listAllActions } from './permissionCatalog';
 import { buildResourceTagContext, readTagBag } from './tags';
 
 const log = createDebug('soat:iam:check');
 
-/** One project and one type; the id may be `*` (a create or list). */
-const SRN_PATTERN = /^srn:([^:*?]+):([a-z][A-Za-z0-9_]*):([^:*?]+|\*)$/;
+/**
+ * One project and one type, the id `*` for a create or list; or the whole
+ * project, `srn:<project_id>:*:*`.
+ */
+const SRN_PATTERN =
+  /^srn:([^:*?]+):(?:([a-z][A-Za-z0-9_]*):([^:*?]+|\*)|(\*):\*)$/;
 
 const invalid = (message: string): DomainError => {
   return new DomainError('VALIDATION_FAILED', message);
@@ -29,9 +37,14 @@ const checkableResourceTypes = (
   }
   if (!listAllActions().has(action)) return null;
   const module = action.split(':')[0];
+  const untyped = Object.hasOwn(UNTYPED_BUILT_IN_MODULES, module)
+    ? UNTYPED_BUILT_IN_MODULES[module].checkedOn
+    : null;
   return {
     owner: `module '${module}' checks its actions on`,
-    types: new Set(BUILT_IN_ACTION_RESOURCE_TYPES[module] ?? []),
+    types: new Set(
+      BUILT_IN_ACTION_RESOURCE_TYPES[module] ?? (untyped ? [untyped] : [])
+    ),
   };
 };
 
@@ -84,23 +97,32 @@ export const checkIamPermission = async (args: {
   const match = SRN_PATTERN.exec(args.resource);
   if (!match) {
     throw invalid(
-      `resource '${args.resource}' must be srn:<project_id>:<resource_type>:<id|*>`
+      `resource '${args.resource}' must be srn:<project_id>:<resource_type>:<id|*> or srn:<project_id>:*:*`
     );
   }
-  const [, projectPublicId, resourceType] = match;
+  const projectPublicId = match[1];
+  const resourceType = match[2] ?? match[4];
   if (!checkable.types.has(resourceType)) {
     throw invalid(
       `resource type '${resourceType}' is not one ${checkable.owner}`
     );
   }
+  // The project's own routes evaluate with no context: no resource carries tags.
+  if (resourceType === WHOLE_PROJECT && args.tags !== undefined) {
+    throw invalid('the whole project carries no tags');
+  }
   const allowed = await args.isAllowed({
     projectPublicId,
     action: args.action,
     resource: args.resource,
-    context: buildResourceTagContext({
-      resourceType,
-      tags: readTagBag(args.tags),
-    }),
+    ...(resourceType === WHOLE_PROJECT
+      ? {}
+      : {
+          context: buildResourceTagContext({
+            resourceType,
+            tags: readTagBag(args.tags),
+          }),
+        }),
   });
   log(
     'checkIamPermission: action=%s resource=%s allowed=%s',

@@ -50,8 +50,16 @@ export const BUILT_IN_ACTION_RESOURCE_TYPES: Readonly<
   workflows: ['workflow'],
 };
 
-/** Built-in modules whose actions no typed SRN carries, with why. */
-export const UNTYPED_BUILT_IN_MODULES: Readonly<Record<string, string>> = {
-  projects: 'checked on the whole project, srn:<project_id>:*:*',
-  users: 'an admin role gate, not a policy',
+/** The SRN resource type of a check on the whole project, `srn:<project_id>:*:*`. */
+export const WHOLE_PROJECT = '*';
+
+/**
+ * Built-in modules whose actions no typed SRN carries: the type `iam/check`
+ * answers them on, `null` for none, and why.
+ */
+export const UNTYPED_BUILT_IN_MODULES: Readonly<
+  Record<string, { checkedOn: typeof WHOLE_PROJECT | null; why: string }>
+> = {
+  projects: { checkedOn: WHOLE_PROJECT, why: 'checked on the whole project' },
+  users: { checkedOn: null, why: 'an admin role gate, not a policy' },
 };

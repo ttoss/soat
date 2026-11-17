@@ -607,7 +607,7 @@ The runtime authorizes a registered type's writes; the handler authorizes nothin
 
 - **`resource_type`**, and the **`create`**, **`update`** and **`delete`** actions: each request takes its action, on `srn:<project_id>:<resource_type>:*` for a create and on the resource's physical id otherwise.
 - **`carries`**: for each property naming a resource, the action it carries on it (`{ "property": "default.agent_id", "action": "agents:CreateAgentGeneration", "resource_type": "agent" }`). `[]` descends into a list (`tools[]`). Checked on the values after resolution, as sent to the handler; a value that is not an id is `VALIDATION_FAILED`.
-  A property whose values are names rather than ids carries actions keyed by value instead, each on `srn:<project_id>:<resource_type>:*`; a value with no key is `VALIDATION_FAILED`, and a key mapped to `[]` carries nothing:
+  A property whose values are names rather than ids carries actions keyed by value instead, each on `srn:<project_id>:<resource_type>:*`, or on the whole project, `srn:<project_id>:*:*`, for `"resource_type": "*"` (`projects:GetProject`); a value with no key is `VALIDATION_FAILED`, and a key mapped to `[]` carries nothing:
 
   ```json
   {
