@@ -10,9 +10,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # `pr.yml` skips every job on a `chore(release):` PR, so this workflow is the
-  # only one to see the release commit. That commit is usually the previous
-  # PR's tree plus version bumps, tested a minute earlier. The gate proves that
+  # The release commit is usually the previous PR's tree plus version bumps,
+  # tested a minute earlier. The gate proves that
   # (see `scripts/releaseTestGate.mjs`) and, when it can, skips the test jobs
   # below; when it cannot, or errors, they run as before.
   release-test-gate:

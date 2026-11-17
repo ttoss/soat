@@ -3,10 +3,8 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 /**
- * A `chore(release):` PR skips every build and test job, so the one thing
- * `main.yml` needs from it before tagging — a lockfile a frozen install
- * accepts — is checked by a job of its own, and `All Checks Passed` waits on
- * it. `lerna version` rewrites the lockfile, which is how one can arrive broken.
+ * `main.yml` needs a lockfile a frozen install accepts before tagging, so a
+ * job of its own checks it on every PR, and `All Checks Passed` waits on it. `lerna version` rewrites the lockfile, which is how one can arrive broken.
  */
 
 const ROOT = new URL('../..', import.meta.url).pathname;

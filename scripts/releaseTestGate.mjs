@@ -1,10 +1,9 @@
 /**
  * Decide whether a release commit on `main` needs the test suite again.
  *
- * `pr.yml` skips every job on a `chore(release):` PR, so `main.yml` used to
- * re-run the whole suite on the release commit — code whose PR had gone green
- * a minute earlier, plus version bumps. This gate skips that re-run only when
- * it can prove both halves:
+ * The release commit is code whose PR had gone green a minute earlier, plus
+ * version bumps. This gate skips the `main.yml` re-run only when it can prove
+ * both halves:
  *
  *   1. the release commit changes nothing but `version` fields, `lerna.json`
  *      and changelogs, and

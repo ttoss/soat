@@ -12,7 +12,6 @@ jobs:
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):')"
     outputs:
       # The queue's branch has no PR diff to filter: every test job runs.
       code: ${{ github.event_name == 'merge_group' || steps.filter.outputs.code }}
@@ -44,7 +43,6 @@ jobs:
   docs-lint:
     name: Docs Lint
     runs-on: ubuntu-latest
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):')"
 
     steps:
       - uses: actions/checkout@v6
@@ -69,7 +67,7 @@ jobs:
     name: Build, Test and Deploy
     runs-on: ubuntu-latest
     needs: changes
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+    if: "needs.changes.outputs.code == 'true'"
     permissions:
       pull-requests: write
 
@@ -135,7 +133,7 @@ jobs:
     name: Server Tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     needs: changes
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+    if: "needs.changes.outputs.code == 'true'"
 
     strategy:
       # Every shard should report, so one failure does not hide the others.
@@ -183,7 +181,7 @@ jobs:
     name: Server Coverage
     runs-on: ubuntu-latest
     needs: [changes, server-tests]
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+    if: "needs.changes.outputs.code == 'true'"
 
     steps:
       - uses: actions/checkout@v6
@@ -224,7 +222,7 @@ jobs:
     needs: changes
     # Also on a Markdown-only PR that edits the module docs: the corpus is
     # seeded from them, so those edits move the numbers this job gates on.
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && (needs.changes.outputs.code == 'true' || needs.changes.outputs.knowledge_docs == 'true')"
+    if: "needs.changes.outputs.code == 'true' || needs.changes.outputs.knowledge_docs == 'true'"
 
     steps:
       - uses: actions/checkout@v6
@@ -255,7 +253,7 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     needs: changes
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+    if: "needs.changes.outputs.code == 'true'"
 
     steps:
       - uses: actions/checkout@v6
@@ -297,7 +295,7 @@ jobs:
     name: Previous Release Smoke Tests
     runs-on: ubuntu-latest
     needs: changes
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+    if: "needs.changes.outputs.code == 'true'"
 
     steps:
       - uses: actions/checkout@v6
@@ -330,7 +328,7 @@ jobs:
     name: Tutorials Tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     needs: changes
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+    if: "needs.changes.outputs.code == 'true'"
 
     # Each shard brings its own server and Ollama: the tutorials already run in
     # parallel inside one container, where the shared Ollama is the bottleneck.
@@ -377,10 +375,8 @@ jobs:
   release-lockfile:
     name: Release Lockfile
     runs-on: ubuntu-latest
-    # Every other job skips a release PR, but `lerna version` rewrites the
-    # lockfile and `main.yml` installs frozen before it tags anything. It runs
-    # on every PR: `scripts/releaseTestGate.mjs` reuses a PR run for the
-    # release commit only when none of its jobs was skipped.
+    # `lerna version` rewrites the lockfile and `main.yml` installs frozen
+    # before it tags anything. It runs on every PR.
 
     steps:
       - uses: actions/checkout@v6
