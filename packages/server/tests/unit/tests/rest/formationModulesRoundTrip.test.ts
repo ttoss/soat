@@ -513,8 +513,8 @@ const CASES: RoundTripCase[] = [
         type: 'event',
         target_type: 'agent',
         target_id: fx.agentId,
-        policy_ids: [fx.policyA],
-        events: ['documents.ingested'],
+        policy_ids: [fx.policyA, fx.policyB],
+        events: ['agents.updated'],
         event_resources: ['*'],
         event_data: { status: 'ready' },
       };

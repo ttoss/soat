@@ -6,7 +6,10 @@ import { agentReferences, toolReferences } from './resourceReferences';
 import { secretRefIds } from './secretUse';
 import type { StartableType } from './startActions';
 import { serverSideToolProblem } from './toolsCallDispatch';
-import { validateTriggerEventFilter } from './triggerEventFilter';
+import {
+  assertTriggerReadsEvents,
+  validateTriggerEventFilter,
+} from './triggerEventFilter';
 import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 export const TRIGGER_TYPES = [
@@ -277,14 +280,15 @@ export const resolveAndValidateTarget = async (args: {
 };
 
 /**
- * Runs the full config validation for a trigger (shape → cron → target). Shared
- * by create and update so the rules live in one place.
+ * Runs the full config validation for a trigger (shape → cron → target →
+ * event reads). Shared by create and update so the rules live in one place.
  */
 export const assertTriggerConfigValid = async (args: {
   type: string;
   targetType: string;
   targetId: string;
   projectId: number;
+  policyIds: string[] | null;
   action?: string | null;
   cron?: string | null;
   events?: unknown;
@@ -312,4 +316,11 @@ export const assertTriggerConfigValid = async (args: {
       action: args.action,
     });
   }
+  await assertTriggerReadsEvents({
+    type: args.type,
+    projectId: args.projectId,
+    policyIds: args.policyIds,
+    events: args.events,
+    eventResources: args.eventResources,
+  });
 };
