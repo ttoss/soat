@@ -6757,6 +6757,8 @@ if ! $SOAT_CLI get-task --task-id "$WAITING_TASK_ID" | jq -e '.readiness.blocked
   echo "ERROR: removing the last dependency left the task blocked" >&2
   exit 1
 fi
+$SOAT_CLI delete-task --task-id "$WAITING_TASK_ID" >/dev/null
+$SOAT_CLI delete-task --task-id "$BLOCKER_TASK_ID" >/dev/null
 echo "Task dependencies: OK (blocked, cycle refused, freed)"
 
 # ── on_enter tool dispatch ──
