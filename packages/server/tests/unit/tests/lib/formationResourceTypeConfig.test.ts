@@ -470,6 +470,56 @@ describe('parseFormationResourceTypeConfig', () => {
       ]);
     });
 
+    test('reads a keyed action on the whole project as resource type `*`', () => {
+      const [registration] = parse(
+        withKeyedCarries({
+          project: [{ action: 'projects:GetProject', resource_type: '*' }],
+        })
+      );
+      expect(registration.writer.carries).toEqual([
+        {
+          property: 'kind',
+          byValue: new Map([
+            ['project', [{ action: 'projects:GetProject', resourceType: '*' }]],
+          ]),
+        },
+      ]);
+    });
+
+    test('accepts `*` only on a keyed action', () => {
+      rejects(
+        {
+          resource_types: [
+            {
+              ...VALID_ENTRY,
+              writer: { ...VALID_ENTRY.writer, resource_type: '*' },
+            },
+          ],
+        },
+        /`writer.resource_type` must be an SRN resource type/
+      );
+      rejects(
+        {
+          resource_types: [
+            {
+              ...VALID_ENTRY,
+              writer: {
+                ...VALID_ENTRY.writer,
+                carries: [
+                  {
+                    property: 'kind',
+                    action: 'projects:GetProject',
+                    resource_type: '*',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        /`writer.carries\[0\]`.resource_type must be an SRN resource type/
+      );
+    });
+
     test('rejects a keyed carry with no values or a malformed entry', () => {
       rejects(withKeyedCarries({}), /`writer.carries\[0\]`.by_value must map/);
       rejects(
@@ -676,6 +726,45 @@ describe('registerFormationResourceTypes — overriding a built-in', () => {
     expect(
       getFormationModule({ resourceType: 'webhook' })?.authorization
     ).not.toHaveProperty('operatorRegistered');
+  });
+
+  const keyedOn = (
+    actions: Array<{ action: string; resourceType: string }>
+  ) => {
+    const registration = webhookOverride();
+    return {
+      ...registration,
+      writer: {
+        ...registration.writer,
+        carries: [{ property: 'kind', byValue: new Map([['k', actions]]) }],
+      },
+    };
+  };
+
+  test('a keyed project-wide action boots', () => {
+    try {
+      registerFormationResourceTypes({
+        registrations: [
+          keyedOn([{ action: 'projects:GetProject', resourceType: '*' }]),
+        ],
+      });
+      expect(
+        getFormationModule({ resourceType: 'webhook' })?.authorization
+      ).toHaveProperty('operatorRegistered', true);
+    } finally {
+      unregisterFormationResourceTypes({ names: ['webhook'] });
+    }
+  });
+
+  test.each([
+    ['a typed action', 'agents:GetAgent'],
+    ['an admin-gated action', 'users:GetUser'],
+  ])('%s on the whole project is refused', (_label, action) => {
+    expect(() => {
+      registerFormationResourceTypes({
+        registrations: [keyedOn([{ action, resourceType: '*' }])],
+      });
+    }).toThrow(`declares ${action} on '*'`);
   });
 
   test('an override of a name no built-in has is refused by the registry', () => {

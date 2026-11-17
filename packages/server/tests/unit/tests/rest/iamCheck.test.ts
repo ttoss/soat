@@ -161,6 +161,32 @@ describe('POST /api/v1/iam/check', () => {
     ]);
   });
 
+  test("evaluates an untyped module's action on the whole project", async () => {
+    const policyId = await createPolicy([
+      {
+        effect: 'Allow',
+        action: ['projects:GetProject'],
+        resource: [`srn:${projectId}:*:*`],
+      },
+    ]);
+    const key = await mintKey({ policyIds: [policyId] });
+
+    const answers = await Promise.all(
+      ['projects:GetProject', 'projects:UpdateProject'].map((action) => {
+        return check(key, { action, resource: `srn:${projectId}:*:*` });
+      })
+    );
+
+    expect(
+      answers.map((res) => {
+        return [res.status, res.body.allowed];
+      })
+    ).toEqual([
+      [200, true],
+      [200, false],
+    ]);
+  });
+
   test('a caller with no policies is denied', async () => {
     const res = await check(noPermToken, {
       action: 'channels:GetChannel',
@@ -316,6 +342,43 @@ describe('POST /api/v1/iam/check', () => {
           return {
             action: 'projects:UpdateProject',
             resource: `srn:${projectId}:project:${projectId}`,
+          };
+        },
+      ],
+      [
+        'a typed action on the whole project',
+        () => {
+          return {
+            action: 'agents:GetAgent',
+            resource: `srn:${projectId}:*:*`,
+          };
+        },
+      ],
+      [
+        'an admin-gated action on the whole project',
+        () => {
+          return {
+            action: 'users:GetUser',
+            resource: `srn:${projectId}:*:*`,
+          };
+        },
+      ],
+      [
+        'an id under no resource type',
+        () => {
+          return {
+            action: 'projects:GetProject',
+            resource: `srn:${projectId}:*:prj_1`,
+          };
+        },
+      ],
+      [
+        'tags on the whole project',
+        () => {
+          return {
+            action: 'projects:GetProject',
+            resource: `srn:${projectId}:*:*`,
+            context: { tags: { team: 'a' } },
           };
         },
       ],
