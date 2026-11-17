@@ -2438,7 +2438,8 @@ components:
             - type: object
         default_class:
           type: string
-          enum: [A, B, C, D]
+          enum: [A, B, C, D, null]
+          nullable: true
           description: >-
             Applied when the `class` expression returns anything other than a
             valid class. Defaults to `C` (fail-closed).
@@ -2500,10 +2501,12 @@ components:
         agent_id:
           x-soat-ref: agents
           type: string
+          nullable: true
           description: The tool-less agent that answers
         tool_id:
           x-soat-ref: tools
           type: string
+          nullable: true
           description: The tool that answers, run with no action
         questions:
           type: array

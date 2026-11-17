@@ -112,6 +112,15 @@ export const getFormationModule = (args: {
   return registeredModules.get(args.resourceType);
 };
 
+/** What a template may clear on this type by dropping the property. */
+export const clearablePropertiesOf = (
+  resourceType: string
+): ReadonlySet<string> => {
+  return (
+    registeredModules.get(resourceType)?.clearableProperties?.() ?? new Set()
+  );
+};
+
 /**
  * The resource types a formation template may declare — derived from the
  * registry rather than restated, so registering a module is the single step

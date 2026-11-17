@@ -116,6 +116,18 @@ const ARTICLES: Record<string, string> = {
   object: 'an object',
 };
 
+export const nullableFields = (spec: SchemaFields): ReadonlySet<string> => {
+  return new Set(
+    Object.entries(spec.fieldSpecs)
+      .filter(([, field]) => {
+        return field.nullable;
+      })
+      .map(([name]) => {
+        return name;
+      })
+  );
+};
+
 /**
  * Why `value` does not match the field's declared `type`, or null when it does
  * — or when the field declares no single type (a `$ref`, a union) to read it

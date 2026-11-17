@@ -15,6 +15,7 @@ import {
   sanitizeAppliedProperties,
 } from './formationsApplyHelpers';
 import { mergeWithPrevious } from './formationsProperties';
+import { clearablePropertiesOf } from './formationsRegistry';
 import {
   applyDeleteResource,
   applyUpdateResource,
@@ -229,6 +230,28 @@ const recordAppliedUpdate = async (args: {
   });
 };
 
+// Shared with `plan-formation`, so the preview and the apply it previews can
+// no longer disagree about whether a resource changed.
+const mergeWithLastApplied = (args: {
+  existing: ResourceRow;
+  resourceType: string;
+  resolvedProperties: Record<string, unknown>;
+}): ReturnType<typeof mergeWithPrevious> & {
+  lastApplied: Record<string, unknown>;
+} => {
+  const lastApplied = (args.existing.lastAppliedProperties ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const merge = mergeWithPrevious({
+    resolved: args.resolvedProperties,
+    previous: lastApplied,
+    lastApplied,
+    clearable: clearablePropertiesOf(args.resourceType),
+  });
+  return { ...merge, lastApplied };
+};
+
 const deferDisposal = async (args: {
   pendingCleanups: PendingCleanup[];
   cleanup: PendingCleanup;
@@ -255,14 +278,11 @@ export const applyUpdateChange = async (args: {
 }): Promise<AppliedUpdate | null> => {
   const { resourceRow, existing, resourceType, logicalId } = args;
   const { resolvedProperties, projectId, actor, resolvedIds, events } = args;
-  const lastProps = (existing.lastAppliedProperties ?? {}) as Record<
-    string,
-    unknown
-  >;
-  // Shared with `plan-formation`, so the preview and the apply it previews can
-  // no longer disagree about whether a resource changed.
-  const { merged: mergedProperties, changed: propertiesChanged } =
-    mergeWithPrevious({ resolved: resolvedProperties, previous: lastProps });
+  const { merged: mergedProperties, ...merge } = mergeWithLastApplied({
+    existing,
+    resourceType,
+    resolvedProperties,
+  });
   // `resourceRow` is `existing` here, so the update below mutates it — reading
   // the previous id afterwards would hand the replacement's own id to the
   // disposal meant to remove what it superseded.
@@ -270,7 +290,7 @@ export const applyUpdateChange = async (args: {
   const previousStatus = existing.status;
 
   resolvedIds.set(logicalId, previousPhysicalResourceId);
-  if (propertiesChanged) {
+  if (merge.changed) {
     const outcome = await applyUpdateResource({
       resourceType,
       physicalResourceId: previousPhysicalResourceId,
@@ -295,7 +315,7 @@ export const applyUpdateChange = async (args: {
       resourceRow,
       resourceType,
       logicalId,
-      mergedProperties,
+      mergedProperties: merge.snapshot,
       physicalResourceId,
       replaced,
       events,
@@ -315,7 +335,7 @@ export const applyUpdateChange = async (args: {
     return {
       previousPhysicalResourceId,
       previousStatus,
-      previousProperties: lastProps,
+      previousProperties: merge.lastApplied,
       ...(replaced
         ? { replacementPhysicalResourceId: physicalResourceId }
         : {}),

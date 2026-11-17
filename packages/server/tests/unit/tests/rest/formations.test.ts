@@ -2849,6 +2849,75 @@ resources:
       expect(change.diff.current.context_keys).toEqual(['ocaToken']);
     });
 
+    test('a property removed from the template is cleared, not kept', async () => {
+      const declared = {
+        name: `formation-cleared-tool-${Date.now()}`,
+        type: 'http',
+        execute: { url: 'https://api.example.com/cleared' },
+      };
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `cleared-prop-formation-${Date.now()}`,
+          template: {
+            resources: {
+              ClearedTool: {
+                type: 'tool',
+                properties: { ...declared, context_keys: ['ocaToken'] },
+              },
+            },
+          },
+        });
+      expect(created.status).toBe(201);
+      const template = {
+        resources: { ClearedTool: { type: 'tool', properties: declared } },
+      };
+      const findChange = (body: {
+        changes: {
+          logical_id: string;
+          action: string;
+          diff: {
+            desired: Record<string, unknown>;
+            current: Record<string, unknown>;
+          };
+        }[];
+      }) => {
+        return body.changes.find((c) => {
+          return c.logical_id === 'ClearedTool';
+        })!;
+      };
+
+      const plan = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: created.body.id,
+          template,
+        });
+      expect(plan.status).toBe(200);
+      expect(findChange(plan.body).action).toBe('update');
+      expect(findChange(plan.body).diff.desired.context_keys).toBeNull();
+
+      const updated = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${created.body.id}`)
+        .send({ template });
+      expect(updated.status).toBe(200);
+      expect(updated.body.status).toBe('active');
+
+      const replan = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: created.body.id,
+          template,
+        });
+      expect(findChange(replan.body).action).toBe('no-op');
+      expect(findChange(replan.body).diff.current.context_keys ?? []).toEqual(
+        []
+      );
+    });
+
     test('rejects a tool resource whose context_keys entry is not a valid key', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')

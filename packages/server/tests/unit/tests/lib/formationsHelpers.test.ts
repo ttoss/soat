@@ -828,18 +828,36 @@ describe('formationsHelpers', () => {
   // apply's whole-object `JSON.stringify` comparison reported a change
   // for both, plan's per-key comparison for neither.
   describe('mergeWithPrevious', () => {
+    const merge = (args: {
+      resolved: Record<string, unknown>;
+      previous: Record<string, unknown>;
+      lastApplied?: Record<string, unknown>;
+      clearable?: string[];
+    }) => {
+      return mergeWithPrevious({
+        resolved: args.resolved,
+        previous: args.previous,
+        lastApplied: args.lastApplied ?? {},
+        clearable: new Set(args.clearable),
+      });
+    };
+
     test('a previous key the template omits is not a change', () => {
       expect(
-        mergeWithPrevious({
+        merge({
           resolved: { name: 'kept' },
           previous: { name: 'kept', description: 'set out of band' },
         })
-      ).toEqual({ merged: { name: 'kept' }, changed: false });
+      ).toEqual({
+        merged: { name: 'kept' },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
     });
 
     test('key order is not a change', () => {
       expect(
-        mergeWithPrevious({
+        merge({
           resolved: { name: 'a', description: 'b' },
           previous: { description: 'b', name: 'a' },
         }).changed
@@ -848,34 +866,46 @@ describe('formationsHelpers', () => {
 
     test('an undefined property reuses the previous value', () => {
       expect(
-        mergeWithPrevious({
+        merge({
           resolved: { name: 'a', value: undefined },
           previous: { name: 'a', value: 'kept' },
         })
-      ).toEqual({ merged: { name: 'a', value: 'kept' }, changed: false });
+      ).toEqual({
+        merged: { name: 'a', value: 'kept' },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
     });
 
     test('an undefined property with no previous value is dropped entirely', () => {
       expect(
-        mergeWithPrevious({
+        merge({
           resolved: { name: 'a', value: undefined },
           previous: { name: 'a' },
         })
-      ).toEqual({ merged: { name: 'a' }, changed: false });
+      ).toEqual({
+        merged: { name: 'a' },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
     });
 
     test('a differing declared value is a change', () => {
       expect(
-        mergeWithPrevious({
+        merge({
           resolved: { name: 'new' },
           previous: { name: 'old' },
         })
-      ).toEqual({ merged: { name: 'new' }, changed: true });
+      ).toEqual({
+        merged: { name: 'new' },
+        changed: true,
+        snapshot: expect.any(Object),
+      });
     });
 
     test('a newly declared key is a change', () => {
       expect(
-        mergeWithPrevious({
+        merge({
           resolved: { name: 'a', description: 'added' },
           previous: { name: 'a' },
         }).changed
@@ -884,11 +914,55 @@ describe('formationsHelpers', () => {
 
     test('compares nested values structurally, not by identity', () => {
       expect(
-        mergeWithPrevious({
+        merge({
           resolved: { document: { statement: [{ effect: 'allow' }] } },
           previous: { document: { statement: [{ effect: 'allow' }] } },
         }).changed
       ).toBe(false);
+    });
+
+    test('a removed clearable key is cleared with null', () => {
+      expect(
+        merge({
+          resolved: { name: 'a' },
+          previous: { name: 'a', guardrail_ids: ['guard_1'] },
+          lastApplied: { name: 'a', guardrail_ids: ['guard_1'] },
+          clearable: ['guardrail_ids'],
+        })
+      ).toEqual({
+        merged: { name: 'a', guardrail_ids: null },
+        changed: true,
+        snapshot: { name: 'a' },
+      });
+    });
+
+    test('a removed key the module cannot clear is kept and shown', () => {
+      expect(
+        merge({
+          resolved: { name: 'a' },
+          previous: { name: 'a', trusted_output: true },
+          lastApplied: { name: 'a', trusted_output: true },
+        })
+      ).toEqual({
+        merged: { name: 'a', trusted_output: true },
+        changed: false,
+        snapshot: { name: 'a', trusted_output: true },
+      });
+    });
+
+    test('a key never declared is not cleared', () => {
+      expect(
+        merge({
+          resolved: { name: 'a' },
+          previous: { name: 'a', guardrail_ids: ['guard_1'] },
+          lastApplied: { name: 'a' },
+          clearable: ['guardrail_ids'],
+        })
+      ).toEqual({
+        merged: { name: 'a' },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
     });
   });
 

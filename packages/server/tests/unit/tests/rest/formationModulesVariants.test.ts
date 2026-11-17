@@ -232,11 +232,27 @@ const CASES: RoundTripCase[] = [
       return {
         create: { name: 'Declared-Only Suite', description: 'keep me' },
         expectRead: { description: 'keep me' },
-        // An omitted nullable field is left alone, not cleared.
+        // A nullable field the template stops declaring is cleared.
         update: { name: 'Declared-Only Suite v2' },
         expectAfterUpdate: {
           name: 'Declared-Only Suite v2',
-          description: 'keep me',
+          description: null,
+        },
+      };
+    },
+  },
+  {
+    name: 'dataset never declaring a description',
+    type: 'dataset',
+    route: 'datasets',
+    build: () => {
+      return {
+        create: { name: 'Undescribed Suite' },
+        expectRead: { name: 'Undescribed Suite', description: null },
+        update: { name: 'Undescribed Suite v2' },
+        expectAfterUpdate: {
+          name: 'Undescribed Suite v2',
+          description: null,
         },
       };
     },
@@ -287,8 +303,27 @@ const CASES: RoundTripCase[] = [
         update: { ...withoutThreshold, name: 'Declared-Only Eval v2' },
         expectAfterUpdate: {
           name: 'Declared-Only Eval v2',
-          pass_threshold: 0.9,
+          pass_threshold: null,
         },
+      };
+    },
+  },
+  {
+    name: 'eval never declaring a pass_threshold',
+    type: 'eval',
+    route: 'evals',
+    build: () => {
+      const declared = {
+        name: 'Ungated Eval',
+        agent_id: fx.agentId,
+        dataset_id: fx.datasetId,
+        scorers: [{ type: 'exact_match' }],
+      };
+      return {
+        create: declared,
+        expectRead: { pass_threshold: null },
+        update: { ...declared, name: 'Ungated Eval v2' },
+        expectAfterUpdate: { name: 'Ungated Eval v2', pass_threshold: null },
       };
     },
   },
@@ -310,7 +345,7 @@ const CASES: RoundTripCase[] = [
           expected_output: 'Paris',
           metadata: { topic: 'geography' },
         },
-        // Omitted nullable fields are left alone; an explicit null clears.
+        // An omitted nullable field is cleared, the same as an explicit null.
         update: {
           dataset_id: fx.datasetId,
           input: [{ role: 'user', content: 'capital of Italy?' }],
@@ -318,7 +353,7 @@ const CASES: RoundTripCase[] = [
         },
         expectAfterUpdate: {
           input: [{ role: 'user', content: 'capital of Italy?' }],
-          expected_output: 'Paris',
+          expected_output: null,
         },
         absentAfterUpdate: ['metadata'],
       };
