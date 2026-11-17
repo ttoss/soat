@@ -8,7 +8,7 @@ import { authorizationDenied } from './authorizationDenial';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { principalOfAuthority } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
-import { mayStart, startCheck } from './startActions';
+import { callerChecksStart, mayStart, startCheck } from './startActions';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { resolveStoredToolContext } from './toolContextCarrier';
 import {
@@ -153,8 +153,8 @@ const firingAuthority = (args: {
 };
 
 /**
- * Checks that a firing's authority can start the trigger's target, and names
- * who it acts as.
+ * Checks that a firing's authority can start the trigger's target, unless the
+ * target's own entry point checks it, and names who it acts as.
  */
 const resolveFiringIdentity = async (args: {
   trigger: InstanceType<(typeof db)['Trigger']>;
@@ -166,19 +166,22 @@ const resolveFiringIdentity = async (args: {
   const projectPublicId = authority.project;
   if (!projectPublicId) throw workAuthorityMissing({ work });
   const identity = await workCaller({ db, authority, work });
-  const canStart = await mayStart({
-    isAllowed: identity.isAllowed,
-    projectPublicId,
-    type: readTargetType(trigger.targetType as string),
-    id: trigger.targetId as string,
-  });
+  const targetType = readTargetType(trigger.targetType as string);
+  const canStart =
+    !callerChecksStart(targetType) ||
+    (await mayStart({
+      isAllowed: identity.isAllowed,
+      projectPublicId,
+      type: targetType,
+      id: trigger.targetId as string,
+    }));
   if (!canStart) {
     throw authorizationDenied({
       principal: { type: 'trigger', id: trigger.publicId as string },
       denied: [
         startCheck({
           projectPublicId,
-          type: readTargetType(trigger.targetType as string),
+          type: targetType,
           id: trigger.targetId as string,
         }),
       ],

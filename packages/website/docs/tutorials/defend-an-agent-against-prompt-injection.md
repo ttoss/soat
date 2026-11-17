@@ -246,7 +246,7 @@ echo "Draft: $DRAFT_ID"
 
 ## Step 4 — Create alice, an ordinary caller
 
-Alice holds broad document permissions and may create tools, but not `guardrails:DetachGuardrail`. A `Deny` on `iam:RequestTag/screened` stops her writing `screened: clean` on any resource: see [Request tags](/docs/modules/iam#request-tags), [Users](/docs/modules/users#examples) and [Policies](/docs/modules/policies#examples).
+Alice holds broad document permissions and may create and call tools, but not `guardrails:DetachGuardrail`. A `Deny` on `iam:RequestTag/screened` stops her writing `screened: clean` on any resource: see [Request tags](/docs/modules/iam#request-tags), [Users](/docs/modules/users#examples) and [Policies](/docs/modules/policies#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -263,6 +263,7 @@ ALICE_POLICY_ID=$(soat create-policy \
         "action": [
           "documents:*",
           "tools:CreateTool",
+          "tools:CallTool",
           "agents:CreateAgentGeneration",
           "agents:GetAgent"
         ],
@@ -302,6 +303,7 @@ const { data: alicePolicy } = await adminSoat.policies.createPolicy({
           action: [
             'documents:*',
             'tools:CreateTool',
+            'tools:CallTool',
             'agents:CreateAgentGeneration',
             'agents:GetAgent',
           ],
@@ -353,6 +355,7 @@ ALICE_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
           \"action\": [
             \"documents:*\",
             \"tools:CreateTool\",
+            \"tools:CallTool\",
             \"agents:CreateAgentGeneration\",
             \"agents:GetAgent\"
           ],

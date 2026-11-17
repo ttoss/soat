@@ -32,7 +32,12 @@ import {
  */
 
 const GENERATE_ONLY: PolicyDocument = {
-  statement: [{ effect: 'Allow', action: ['agents:CreateAgentGeneration'] }],
+  statement: [
+    {
+      effect: 'Allow',
+      action: ['agents:CreateAgentGeneration', 'tools:CallTool'],
+    },
+  ],
 };
 
 describe('IAM tokens', () => {
@@ -109,6 +114,7 @@ describe('IAM tokens', () => {
             'agents:*',
             'documents:*',
             'orchestrations:*',
+            'tools:CallTool',
             'iam:CreateToken',
           ],
         },

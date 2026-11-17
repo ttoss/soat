@@ -824,7 +824,7 @@ export const ERROR_CODES = {
   PLAYBOOK_EXECUTOR_FORBIDDEN: {
     httpStatus: 403,
     description:
-      "The playbook version's `policy_ids` do not allow starting an executor the definition names, checked when a node runs or exports. `meta` names the `node` and the IAM `action`.",
+      "The playbook version's `policy_ids` do not allow starting an executor the definition names, checked when a node runs a decider, workflow or orchestration. `meta` names the `node` and the IAM `action`.",
   },
   PLAYBOOK_NODE_NOT_RUNNABLE: {
     httpStatus: 409,

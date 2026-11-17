@@ -342,14 +342,12 @@ const meterOf = (args: CallResolvedToolArgs): ToolExecutionMeter => {
 
 const gateResolvedCall = async (args: {
   call: CallResolvedToolArgs;
-  type: string;
 }): Promise<void> => {
   const { call } = args;
   const calling = await db.Project.findByPk(call.callerProjectId, {
     attributes: ['publicId'],
   });
   await gateToolCall({
-    type: args.type,
     tool: call.toolPublicId ? { publicId: call.toolPublicId } : 'inline',
     callingProjectPublicId: (calling?.publicId as string | undefined) ?? '',
     authority: call.authority,
@@ -363,7 +361,7 @@ const runResolvedTool = async (
   const type = args.tool.type ?? 'http';
   // First, so a call its authority refuses reaches neither an MCP server
   // (`resolveCallPresets` reads its schema) nor a pipeline's first step.
-  await gateResolvedCall({ call: args, type });
+  await gateResolvedCall({ call: args });
   const meter = meterOf(args);
   const { presetParameters, mcp } = await resolveCallPresets({
     call: args,

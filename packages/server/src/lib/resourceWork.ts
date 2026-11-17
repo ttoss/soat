@@ -57,8 +57,9 @@ const assertGrantStarts = async (
  * The authority a resource's work runs under, refused before anything starts
  * unless the resource's own grant allows every one of `starts`. Work a request
  * started runs under that request's authority held to the grant, so it never
- * widens, and its starter needs only its own start action on the resource;
- * work the system started (`startedBy` null) runs under the grant alone.
+ * widens, and an agent or tool it starts is checked again under it at its
+ * entry point; work the system started (`startedBy` null) runs under the
+ * grant alone.
  */
 export const resourceWorkAuthority = async (args: {
   carrier: ResourceGrantCarrier;

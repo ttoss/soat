@@ -999,7 +999,9 @@ paths:
         its executor with the node's input values mapped through the
         executor's `input`. The executor runs under the
         `policy_ids` of the case's playbook version, which must allow starting
-        it (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). Only a `ready`,
+        it: a decider, workflow or orchestration it may not start is `403
+        PLAYBOOK_EXECUTOR_FORBIDDEN`, and an agent or tool fails the execution
+        (`FORBIDDEN`). Only a `ready`,
         `stale`, `failed` or `done` node with every required input set runs;
         anything else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
         PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
@@ -1191,8 +1193,8 @@ paths:
         Without `revision` the node's current output is exported, which needs
         the node `done` (`409 PLAYBOOK_NODE_NOT_EXPORTABLE`); a `revision`
         names an earlier output or confirmation of the node. Each tool runs
-        under the `policy_ids` of the case's playbook version, which must allow
-        calling it (`403 PLAYBOOK_EXECUTOR_FORBIDDEN`). A paused case is
+        under the `policy_ids` of the case's playbook version: an export whose
+        tool it may not call fails (`FORBIDDEN`). A paused case is
         `409 PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
         PROJECT_PAUSED`.
 

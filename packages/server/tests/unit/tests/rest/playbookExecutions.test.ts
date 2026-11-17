@@ -598,13 +598,10 @@ describe('Playbook executions', () => {
 
       await write(caseId, [{ node_id: 'pricing', name: 'amount', value: 1 }]);
 
-      expect((await executionsOf(caseId))[0].error).toMatchObject({
-        code: 'PLAYBOOK_EXECUTOR_FORBIDDEN',
-        meta: { node_id: 'pricing', action: 'tools:CallTool' },
+      expect((await executionsOf(caseId))[0]).toMatchObject({
+        status: 'failed',
+        error: { code: 'FORBIDDEN' },
       });
-      const res = await run(caseId, 'pricing', { wait: true }, adminToken);
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAYBOOK_EXECUTOR_FORBIDDEN');
     });
   });
 

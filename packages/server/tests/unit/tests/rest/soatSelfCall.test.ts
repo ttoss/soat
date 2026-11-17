@@ -81,6 +81,7 @@ describe('SOAT self-call', () => {
         'tools:CallTool',
         'agents:GetAgent',
         'agents:CreateAgentGeneration',
+        'agents:SendSessionMessage',
         'orchestrations:CreateOrchestration',
         'orchestrations:GetOrchestration',
         'orchestrations:StartRun',
@@ -904,6 +905,8 @@ describe('SOAT self-call', () => {
                 effect: 'Allow',
                 action: [
                   'tools:ListTools',
+                  'tools:CallTool',
+                  'agents:CreateAgentGeneration',
                   'tasks:CreateTask',
                   'tasks:GetTask',
                 ],
@@ -1190,7 +1193,11 @@ describe('SOAT self-call', () => {
             statement: [
               {
                 effect: 'Allow',
-                action: ['tools:ListTools', 'agents:CreateAgentGeneration'],
+                action: [
+                  'tools:ListTools',
+                  'tools:CallTool',
+                  'agents:CreateAgentGeneration',
+                ],
               },
             ],
           },

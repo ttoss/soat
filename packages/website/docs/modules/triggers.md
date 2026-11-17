@@ -139,7 +139,9 @@ The server mints a short-lived token with that grant, confined to the
 trigger's project, and the target runs with the trigger as its caller: an
 agent target's generation runs as that grant ∩ the agent's own
 [`policy_ids`](./agents.md#execution-identity). The grant must allow starting
-the target at every fire, else the firing is refused with `403 FORBIDDEN`.
+the target at every fire: an orchestration or eval it may not start is refused
+with `403 FORBIDDEN`, and an agent or tool, checked where the generation or the
+call starts, fails the firing with `FORBIDDEN` in its `error`.
 Policies are read at every fire and every call, so editing one takes effect
 immediately.
 

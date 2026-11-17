@@ -85,10 +85,14 @@ test that fails when a new site skips it.
   `tests/harness/builtinActionCatalog.test.mjs`,
   `tests/unit/tests/rest/builtinActionCatalog.test.ts`.
 - A stored tool's call crosses `gateToolCall` (`lib/toolCallGate.ts`) on both
-  surfaces; classify a new tool type in `TOOL_CALL_AUTHORIZATION` (typecheck
-  fails until you do; an unclassified type is checked as a call). Every
-  binding declares its `gate`. `agentTurnGate.test.mjs`,
+  surfaces: `tools:CallTool` on the tool, for every type. Every binding
+  declares its `gate`. `agentTurnGate.test.mjs`,
   `tests/harness/toolSurfaceGate.test.mjs`.
+- A tool or generation start is checked at its entry point, under the
+  authority the work runs under: `gateToolCall` and `gateGenerationStart`
+  (`lib/generationStartGate.ts`). A caller starting one for someone else does
+  not check it again (`START_ACTIONS[type].entryChecked`).
+  `tests/harness/startChokepoint.test.mjs`.
 - What the caller names in the call (a document or `tool_output` message, a
   `knowledge_config`, an `agent_id`, an actor) is read under
   `callerNamedAuthority`, as the caller. `agentTurnGate.test.mjs` › content an

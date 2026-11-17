@@ -158,7 +158,10 @@ describe('authorization denials', () => {
       tool_bindings: [{ tool_id: tool.id }],
       policy_ids: [
         await turn.createPolicy({
-          statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
+          statement: [
+            { effect: 'Deny', action: ['files:GetFile'] },
+            { effect: 'Allow', action: ['tools:CallTool'] },
+          ],
         }),
       ],
     });

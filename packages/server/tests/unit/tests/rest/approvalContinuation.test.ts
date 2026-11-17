@@ -297,7 +297,11 @@ describe('Tool-call approval continuation', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'aprcont',
-      policyActions: ['agents:CreateAgentGeneration', 'tools:CallTool'],
+      policyActions: [
+        'agents:CreateAgentGeneration',
+        'agents:SendSessionMessage',
+        'tools:CallTool',
+      ],
       createNoPermUser: false,
     });
     adminToken = setup.adminToken;
@@ -541,9 +545,6 @@ describe('Tool-call approval continuation', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('approved');
-      expect(await continuationMessageFor(item.id)).toContain(
-        'has no stored authority to run under'
-      );
       expect(
         toolRequests.some((body) => {
           return body.amount === 28;

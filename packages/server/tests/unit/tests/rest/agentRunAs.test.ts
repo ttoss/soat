@@ -72,7 +72,12 @@ describe('Agent run_as', () => {
       actions: ['get-document'],
     });
     readDocumentsPolicy = await turn.createPolicy({
-      statement: [{ effect: 'Allow', action: ['documents:GetDocument'] }],
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['documents:GetDocument', 'tools:CallTool'],
+        },
+      ],
     });
 
     const runner = await turn
@@ -167,7 +172,9 @@ describe('Agent run_as', () => {
         actions: ['create-task'],
       });
       const createsTasks = await turn.createPolicy({
-        statement: [{ effect: 'Allow', action: ['tasks:CreateTask'] }],
+        statement: [
+          { effect: 'Allow', action: ['tasks:CreateTask', 'tools:CallTool'] },
+        ],
       });
       const taskAgent = await turn.createAgent({
         run_as: 'agent',

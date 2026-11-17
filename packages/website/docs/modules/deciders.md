@@ -392,7 +392,7 @@ The output names each answer field, which is what leaves the engine's own extras
 
 ### Decision authority
 
-A decision's backend runs under the decider's `policy_ids`, capped by the caller who requests it: a decision whose backend the decider's grant may not start (`agents:CreateAgentGeneration` or `tools:CallTool`) is refused `403 ACTION_NOT_HELD` before it is recorded, even when the caller may start it. The caller needs only `deciders:CreateDecision`; every nested action stays capped by both. `policy_ids` are not part of the question set: changing them leaves `version` alone, and the next decision reads them. A decider with empty `policy_ids` is allowed nothing, so its decisions fail until a write gives it some. An [inline decision](#inline-questions) has no decider and runs as its caller.
+A decision's backend runs under the decider's `policy_ids`, capped by the caller who requests it: a decision whose backend the decider's grant may not start (`agents:CreateAgentGeneration` or `tools:CallTool`) is refused `403 ACTION_NOT_HELD` before it is recorded, even when the caller may start it. Starting the backend is then checked under the grant capped by the caller, so the caller needs `deciders:CreateDecision` and the backend's start action, else the decision fails `FORBIDDEN`; every nested action stays capped by both. `policy_ids` are not part of the question set: changing them leaves `version` alone, and the next decision reads them. A decider with empty `policy_ids` is allowed nothing, so its decisions fail until a write gives it some. An [inline decision](#inline-questions) has no decider and runs as its caller.
 
 Every create, update, restore and formation apply needs the backend's start action (`agents:CreateAgentGeneration` or `tools:CallTool`): the [writer rule](./iam.md#the-writer-rule). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
 
@@ -572,7 +572,7 @@ curl -X POST https://api.example.com/api/v1/decisions \
 </TabItem>
 </Tabs>
 
-The IAM action is `deciders:CreateInlineDecision`, on the `decision` resource type.
+The IAM action is `deciders:CreateInlineDecision`, on the `decision` resource type. Its agent runs as the caller, so the caller also needs `agents:CreateAgentGeneration` on it, else the decision fails `FORBIDDEN`.
 
 ### Interrupted decisions
 

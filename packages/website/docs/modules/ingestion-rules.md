@@ -159,7 +159,7 @@ Converter-related `error.code` values on a failed document (alongside `FILE_PARS
 
 ### Who may write a converter
 
-A rule runs its converter on every matching document, under the rule's `policy_ids` capped by whoever ingests the document: a converter the rule's grant may not start (`tools:CallTool` or `agents:CreateAgentGeneration`) is never called and the ingest fails, and every tool call a converter agent makes is refused what the grant does not allow. A rule with empty `policy_ids` is allowed nothing, so its conversions fail until a write gives it some.
+A rule runs its converter on every matching document, under the rule's `policy_ids` capped by whoever ingests the document: a converter the rule's grant may not start (`tools:CallTool` or `agents:CreateAgentGeneration`) is never called and the ingest fails, as is one whoever ingests the document may not start, and every tool call a converter agent makes is refused what the grant does not allow. A rule with empty `policy_ids` is allowed nothing, so its conversions fail until a write gives it some.
 
 Every create, update and formation apply needs the converter's start action (`tools:CallTool` on the tool, `agents:CreateAgentGeneration` on the agent), even when the write leaves the converter as it is: the [writer rule](./iam.md#the-writer-rule). One the writer lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`). Attaching a policy needs a writer who holds every grant it carries inside the project, else `403 POLICY_GRANT_NOT_HELD` (`meta.ungranted`); a create without `policy_ids` is `400 VALIDATION_FAILED`, and deleting a policy one still names is `409 POLICY_HAS_DEPENDENTS`.
 

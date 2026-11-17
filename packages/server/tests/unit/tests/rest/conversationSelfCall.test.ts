@@ -53,6 +53,7 @@ describe('Conversation self-call', () => {
         'conversations:GenerateConversationMessage',
         'agents:CreateAgentGeneration',
         'tools:ListTools',
+        'tools:CallTool',
       ],
       createNoPermUser: false,
     });
