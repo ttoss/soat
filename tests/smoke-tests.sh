@@ -6519,6 +6519,16 @@ fi
 $SOAT_CLI delete-task --task-id "$(printf '%s\n' "$ALT_ENTRY_RESP" | jq -r '.id')" >/dev/null
 echo "Alternate entry point: OK (task created directly in 'drafting')"
 
+# The CLI reads `null` as JSON null, which is how a priority is cleared.
+PRIO=$($SOAT_CLI set-task-priority --task-id "$TASK_ID" --priority high | jq -r '.priority')
+PRIO_LISTED=$($SOAT_CLI list-tasks --workflow-id "$WORKFLOW_ID" --priority high | jq -r --arg id "$TASK_ID" '[.data[].id] | index($id) != null')
+PRIO_CLEARED=$($SOAT_CLI set-task-priority --task-id "$TASK_ID" --priority null | jq -r '.priority')
+if [ "$PRIO" != "high" ] || [ "$PRIO_LISTED" != "true" ] || [ "$PRIO_CLEARED" != "null" ]; then
+  echo "ERROR: task priority set=$PRIO listed=$PRIO_LISTED cleared=$PRIO_CLEARED" >&2
+  exit 1
+fi
+echo "Task priority: OK (set, filtered, cleared)"
+
 # A create retried under one idempotency key replays the first task; the
 # same key with a different body is refused.
 TASK_IDEM_KEY="smoke-task-create-$(date +%s)"

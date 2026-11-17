@@ -18,6 +18,7 @@ import {
   EMBEDDING_SPEND,
   firstProjectByPublicId,
 } from 'src/lib/embeddingSpend';
+import { FILTER_NONE } from 'src/lib/nullableFilter';
 import {
   principalFromAuthUser,
   type RequestPrincipal,
@@ -567,6 +568,24 @@ export const parseEnumListQuery = <T extends string>(args: {
   }
 
   return [...new Set(values.filter(isAllowed))];
+};
+
+/**
+ * `parseEnumListQuery` for a nullable column: {@link FILTER_NONE} asks for the
+ * rows holding `null`, a value they really hold, so it is a value of the filter.
+ */
+export const parseNullableEnumListQuery = <T extends string>(args: {
+  ctx: Context;
+  name: string;
+  allowed: readonly T[];
+}): (T | null)[] | undefined => {
+  return parseEnumListQuery<T | typeof FILTER_NONE>({
+    ctx: args.ctx,
+    name: args.name,
+    allowed: [...args.allowed, FILTER_NONE],
+  })?.map((value) => {
+    return value === FILTER_NONE ? null : value;
+  });
 };
 
 /**
