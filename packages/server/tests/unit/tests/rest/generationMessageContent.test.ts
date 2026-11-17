@@ -438,6 +438,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
               action: ['memories:*'],
               resource: [`srn:${projectId}:memory_store:${scopedStoreId}`],
             },
+            { effect: 'Allow', action: ['tools:CallTool'], resource: ['*'] },
           ],
         };
       };

@@ -57,6 +57,7 @@ describe('Session self-call', () => {
         'agents:SubmitSessionToolOutputs',
         'generations:ResumeGeneration',
         'tools:ListTools',
+        'tools:CallTool',
       ],
       createNoPermUser: false,
     });

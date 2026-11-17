@@ -8,6 +8,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 const ACTIONS = [
   'deciders:CreateInlineDecision',
+  'agents:CreateAgentGeneration',
   'deciders:GetDecision',
   'deciders:ListDecisions',
   'tools:CallTool',

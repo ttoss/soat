@@ -416,7 +416,10 @@ describe('POST /api/v1/agents/:agent_id/generate — mcp and builtin tools', () 
       const agentId = await bindAgent([tool.id], {
         policy_ids: [
           await turn.createPolicy({
-            statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
+            statement: [
+              { effect: 'Deny', action: ['files:GetFile'] },
+              { effect: 'Allow', action: ['tools:CallTool'] },
+            ],
           }),
         ],
       });
@@ -438,6 +441,7 @@ describe('POST /api/v1/agents/:agent_id/generate — mcp and builtin tools', () 
           await turn.createPolicy({
             statement: [
               { effect: 'Allow', action: ['files:GetFile'], resource: ['*'] },
+              { effect: 'Allow', action: ['tools:CallTool'] },
             ],
           }),
         ],

@@ -572,7 +572,7 @@ curl -X POST https://api.example.com/api/v1/decisions \
 </TabItem>
 </Tabs>
 
-The IAM action is `deciders:CreateInlineDecision`, on the `decision` resource type.
+The IAM action is `deciders:CreateInlineDecision`, on the `decision` resource type. Its agent runs as the caller, so the caller also needs `agents:CreateAgentGeneration` on it, else the decision fails `FORBIDDEN`.
 
 ### Interrupted decisions
 

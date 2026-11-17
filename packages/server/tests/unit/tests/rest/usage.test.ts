@@ -28,6 +28,7 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { userAuthority } from '../../fixtures/workAuthority';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const TURN = {
@@ -58,6 +59,12 @@ describe('Usage', () => {
   let sessionGenerationId: string;
   let stubServer: Server;
   let stubBaseUrl: string;
+
+  const adminAuthority = async () => {
+    const me =
+      await authenticatedTestClient(adminToken).get('/api/v1/users/me');
+    return userAuthority({ user: me.body.id as string });
+  };
 
   const startStubServer = async (): Promise<string> => {
     stubServer = createServer((req, res) => {
@@ -966,7 +973,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'from trigger' }],
         stream: false,
-        authority: null,
+        authority: await adminAuthority(),
         triggerId: triggerPublicId,
       })) as { id: string };
 
@@ -3342,7 +3349,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'replayed node' }],
         stream: false,
-        authority: null,
+        authority: await adminAuthority(),
         orchestrationRunId,
         nodeId,
       });
@@ -3375,7 +3382,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'retried node' }],
         stream: false,
-        authority: null,
+        authority: await adminAuthority(),
         orchestrationRunId,
         nodeId,
         nodeAttempt: 2,
@@ -3412,7 +3419,7 @@ describe('Usage', () => {
         projectIds: [project?.id as number],
         messages: [{ role: 'user', content: 'redelivered retry' }],
         stream: false,
-        authority: null,
+        authority: await adminAuthority(),
         orchestrationRunId,
         nodeId,
         nodeAttempt: 2,
@@ -3444,7 +3451,7 @@ describe('Usage', () => {
         orchestrationPublicId: createRes.body.id,
         projectIds: [project?.id as number],
         input: {},
-        authority: null,
+        authority: await adminAuthority(),
         wait: true,
         triggerId: triggerPublicId,
       });

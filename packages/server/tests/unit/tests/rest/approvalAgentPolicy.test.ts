@@ -121,6 +121,7 @@ describe("an approved builtin action is held to the agent's boundary", () => {
       policyActions: [
         'agents:CreateAgentGeneration',
         'memories:GetMemoryStore',
+        'tools:CallTool',
       ],
       createNoPermUser: false,
     });
@@ -199,7 +200,7 @@ describe("an approved builtin action is held to the agent's boundary", () => {
         statement: [
           {
             effect: 'Allow',
-            action: ['memories:ListMemoryStores'],
+            action: ['memories:ListMemoryStores', 'tools:CallTool'],
             resource: ['*'],
           },
         ],

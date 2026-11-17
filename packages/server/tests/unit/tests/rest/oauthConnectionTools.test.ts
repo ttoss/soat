@@ -283,6 +283,7 @@ describe('http tool auth oauth_connection', () => {
                 `srn:${turn.projectId}:oauth_connection:${connectionId}`,
               ],
             },
+            { effect: 'Allow', action: ['tools:CallTool'] },
           ],
         }),
       ],

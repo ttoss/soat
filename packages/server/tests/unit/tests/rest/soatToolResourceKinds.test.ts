@@ -521,6 +521,11 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
                   ),
                 ],
               },
+              {
+                effect: 'Allow',
+                action: ['tools:CallTool'],
+                resource: [`srn:${projectId}:tool:${builtinToolId}`],
+              },
             ],
           },
         }),
