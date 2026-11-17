@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.116.0](https://github.com/ttoss/soat/compare/v0.115.0...v0.116.0) (2026-11-17)
+
+* fix(cli)!: soat listen verifies only the t=,v1= signature scheme (#1978) ([cee3eca](https://github.com/ttoss/soat/commit/cee3eca58be93519b1ace8470c1283027711d78e)), closes [#1978](https://github.com/ttoss/soat/issues/1978)
+
+### BREAKING CHANGES
+
+* soat listen --json no longer emits signature_scheme, and a
+  bare-body X-Soat-Signature is rejected with 401.
+
 # [0.115.0](https://github.com/ttoss/soat/compare/v0.114.0...v0.115.0) (2026-11-16)
 
 **Note:** Version bump only for package @soat/cli

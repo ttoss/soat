@@ -1,6 +1,6 @@
 {
   "name": "@soat/cli",
-  "version": "0.115.0",
+  "version": "0.116.0",
   "description": "CLI for SOAT — open-source infrastructure for production-ready AI agents.",
   "keywords": [
     "ai-agents",

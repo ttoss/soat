@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.116.0](https://github.com/ttoss/soat/compare/v0.115.0...v0.116.0) (2026-11-17)
+
+* feat(server)!: error hints render under the deployment's route prefix, take per-code overrides and are exported (#1974) ([5c6386c](https://github.com/ttoss/soat/commit/5c6386cd917be43978cb184c866cffdb60201158)), closes [#1974](https://github.com/ttoss/soat/issues/1974)
+
+### Bug Fixes
+
+* **conversations:** delete turn documents on every conversation delete ([#1976](https://github.com/ttoss/soat/issues/1976)) ([60ffa96](https://github.com/ttoss/soat/commit/60ffa965814aef81c550e1f804e52a12c15589ba))
+* **exceptions:** count concurrent recurrences and answer each file's own write ([#1968](https://github.com/ttoss/soat/issues/1968)) ([03554f4](https://github.com/ttoss/soat/commit/03554f4ee960bc38ed86257b3d4bcbc3e3901b36))
+* **formations:** a failed deploy restores the resources it updated ([#1980](https://github.com/ttoss/soat/issues/1980)) ([426f1e9](https://github.com/ttoss/soat/commit/426f1e9307a2a88ddeae27b1dc6073eb1089210b))
+* **server:** a protocol answer that fails mid-read maps to its caller's error ([#1969](https://github.com/ttoss/soat/issues/1969)) ([10579a3](https://github.com/ttoss/soat/commit/10579a3e19aea8c02be9e271ef6dabc3ee783601))
+* **server:** answer an unmatched /api route or method with the JSON error envelope ([#1972](https://github.com/ttoss/soat/issues/1972)) ([464f4fe](https://github.com/ttoss/soat/commit/464f4fe3dc9ebe6d6dfd785e2c76caa19e49a8b3))
+* **usage:** bucket a provider's vendor-id events under its alias ([#1981](https://github.com/ttoss/soat/issues/1981)) ([b5ab1ea](https://github.com/ttoss/soat/commit/b5ab1ea5ed486737949e0630cf6bfc54d7166463))
+
+### Features
+
+* **server:** an admission refusal answers the service's own 4xx status and code ([#1970](https://github.com/ttoss/soat/issues/1970)) ([0ab48a7](https://github.com/ttoss/soat/commit/0ab48a733d35c1c7037a4884a31353b06d2f01c5))
+
+### BREAKING CHANGES
+
+* `SOAT_OMIT_ERROR_HINTS` omits only `hint`; set
+  `SOAT_OMIT_ERROR_DOCS_URL` too to keep omitting `docs_url`.
+
 # [0.115.0](https://github.com/ttoss/soat/compare/v0.114.0...v0.115.0) (2026-11-16)
 
 ### Features
