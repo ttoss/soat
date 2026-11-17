@@ -50,6 +50,23 @@ export type GroupRow = {
 const EVENT_TABLE = 'usage_events';
 const COMPONENT_TABLE = 'usage_components';
 const ORCHESTRATION_RUN_TABLE = 'orchestration_runs';
+const AI_PROVIDER_TABLE = 'ai_providers';
+
+/**
+ * The model an event's spend is bucketed and filtered under: the alias its
+ * provider serves the recorded vendor id as, so events recorded before the
+ * alias existed join the alias's bucket. A vendor id two aliases share, or a
+ * value that is itself an alias, is kept as recorded.
+ */
+const MODEL_EXPR = `COALESCE((
+    SELECT MIN(a."key")
+      FROM "${AI_PROVIDER_TABLE}" p
+     CROSS JOIN LATERAL json_each_text(p."model_aliases") a
+     WHERE p."id" = e."ai_provider_id"
+       AND a."value" = e."model"
+       AND p."model_aliases" -> e."model" IS NULL
+    HAVING COUNT(*) = 1
+  ), e."model")`;
 
 /**
  * How each dimension is bucketed in SQL: the grouped expression.
@@ -62,7 +79,7 @@ const ORCHESTRATION_RUN_TABLE = 'orchestration_runs';
 // Exhaustive over `UsageGroupBy`, so a new dimension without a bucketing rule
 // is a type error rather than a silent `null` bucket.
 const GROUP_KEYS: { [K in UsageGroupBy]: string } = {
-  model: 'e."model"',
+  model: MODEL_EXPR,
   meter_type: 'e."meter_type"',
   // What the spend was incurred *for*: `eval` / `eval_judge` mark verification
   // spend, so it can be priced apart from the traffic serving real users.
@@ -159,31 +176,31 @@ export type EventFilter = {
 } & IdNarrowings &
   ValueNarrowings;
 
-// Every narrowing that compares one event column to one value, and the column
-// it compares. Exhaustive over both narrowing types, so a field added there
-// without a column here is a type error rather than a filter silently ignored.
-const NARROWING_COLUMNS: {
+// Every narrowing that compares one value, and the expression it compares.
+// Exhaustive over both narrowing types, so a field added there without an
+// expression here is a type error rather than a filter silently ignored.
+const NARROWING_EXPRS: {
   [K in keyof (IdNarrowings & ValueNarrowings)]-?: string;
 } = {
-  meterType: 'meter_type',
-  model: 'model',
-  source: 'source',
-  triggerId: 'trigger_id',
-  actionId: 'action_id',
-  outcome: 'outcome',
-  sessionId: 'session_id',
-  actorId: 'actor_id',
-  agentId: 'agent_id',
-  aiProviderId: 'ai_provider_id',
-  orchestrationRunId: 'orchestration_run_id',
-  generationId: 'generation_id',
-  traceId: 'trace_id',
-  toolId: 'tool_id',
-  publisherProjectId: 'publisher_project_id',
+  meterType: 'e."meter_type"',
+  model: MODEL_EXPR,
+  source: 'e."source"',
+  triggerId: 'e."trigger_id"',
+  actionId: 'e."action_id"',
+  outcome: 'e."outcome"',
+  sessionId: 'e."session_id"',
+  actorId: 'e."actor_id"',
+  agentId: 'e."agent_id"',
+  aiProviderId: 'e."ai_provider_id"',
+  orchestrationRunId: 'e."orchestration_run_id"',
+  generationId: 'e."generation_id"',
+  traceId: 'e."trace_id"',
+  toolId: 'e."tool_id"',
+  publisherProjectId: 'e."publisher_project_id"',
 };
 
-const NARROWING_KEYS = Object.keys(NARROWING_COLUMNS) as Array<
-  keyof typeof NARROWING_COLUMNS
+const NARROWING_KEYS = Object.keys(NARROWING_EXPRS) as Array<
+  keyof typeof NARROWING_EXPRS
 >;
 
 // The `[from, to]` window and the narrowings, as a WHERE fragment plus the
@@ -208,7 +225,7 @@ const eventFilter = (
   for (const key of NARROWING_KEYS) {
     const value = filter[key];
     if (value === undefined) continue;
-    clauses.push(`e."${NARROWING_COLUMNS[key]}" = :${key}`);
+    clauses.push(`${NARROWING_EXPRS[key]} = :${key}`);
     replacements[key] = value;
   }
 

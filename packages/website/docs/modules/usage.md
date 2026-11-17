@@ -447,6 +447,8 @@ For platform meter types `group_by=model` mixes model ids with SKUs; add `meter_
 
 Under `group_by=model` every group also carries `ai_provider_id`, the [AI provider](./ai-providers.md) that served it (`null` on every other dimension), because one project can hold two providers serving byte-identical model names: the dimension buckets on model id **and** provider, so one name served by two providers is two groups with the same `key` and different `ai_provider_id`. Groups still sum to `totals`.
 
+A provider's events bucket under the [alias](./ai-providers.md#model-aliases) it serves the recorded model id as, so spend recorded under a vendor id before the alias existed joins the alias's group, and the `model` filter matches the same value. A model id two aliases share, or one that is itself an alias, keeps its recorded value.
+
 ### Spend guards
 
 Metered usage feeds the [guardrail](./guardrails.md) evaluator's `runtime.*` context, so a limit is enforced deterministically at the tool boundary:
