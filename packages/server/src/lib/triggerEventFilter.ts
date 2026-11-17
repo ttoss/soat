@@ -1,7 +1,9 @@
+import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   type EventFilterArgs,
   isEventPatternList,
+  unreadEventNamespaces,
   validateEventFilter,
 } from './eventMatching';
 
@@ -63,6 +65,43 @@ export const validateTriggerEventFilter = (args: {
     );
   }
   validateEventFilter(args);
+};
+
+/**
+ * An event trigger never subscribes wider than its `policy_ids` read: the
+ * delivery read guard would drop those events without a trace.
+ */
+export const assertTriggerReadsEvents = async (args: {
+  type: string;
+  projectId: number;
+  policyIds: string[] | null;
+  events?: unknown;
+  eventResources?: unknown;
+}): Promise<void> => {
+  if (args.type !== 'event' || !isEventPatternList(args.events)) return;
+  const project = await db.Project.findByPk(args.projectId, {
+    attributes: ['publicId'],
+    rejectOnEmpty: true,
+  });
+  const unread = await unreadEventNamespaces({
+    projectPublicId: project.publicId,
+    policyIds: args.policyIds,
+    events: args.events,
+    eventResources: isEventPatternList(args.eventResources)
+      ? args.eventResources
+      : null,
+  });
+  if (unread.length === 0) return;
+  const namespaces = unread
+    .map((entry) => {
+      return entry.namespace;
+    })
+    .join(', ');
+  throw new DomainError(
+    'TRIGGER_EVENTS_UNREADABLE',
+    `policy_ids cannot read the events subscribed to in: ${namespaces}.`,
+    { unread }
+  );
 };
 
 /** The event filter an update leaves: each field sent, else the stored one. */

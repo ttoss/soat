@@ -5,7 +5,12 @@ import { ownPoliciesGrant } from '../middleware/authScopedBoundary';
 import { recordDroppedEvent, type SoatEvent } from './eventBus';
 import { EVENT_READ_ACTIONS } from './eventReadActions';
 import { matchesPattern } from './iam';
-import { SOAT_EVENT_TYPES } from './soatEvents';
+import { globCovers, globOverlaps } from './policyGrantCoverage';
+import {
+  SOAT_EVENT_TYPES,
+  SOAT_EVENTS,
+  type SoatResourceType,
+} from './soatEvents';
 import {
   matchesStructuredFilter,
   readStructuredFilter,
@@ -208,17 +213,18 @@ export const matchesEventFilter = (args: {
 };
 
 /**
- * Whether `policyIds` may read the resource the event is about: a subscriber
- * never learns of a resource its identity cannot see.
+ * Whether `policyIds` allow `action` on `resource` inside one project: the one
+ * reading of a subscriber's grant, at delivery and when it is written.
  */
-export const mayReadEventResource = (args: {
+const policiesAllow = (args: {
   policyIds: readonly string[] | null;
-  event: SoatEvent;
+  projectPublicId: string;
+  action: string;
+  resource: string;
 }): Promise<boolean> => {
-  const { event } = args;
   const { isAllowed } = buildAuthority({
     terms: {
-      pinned: event.projectPublicId,
+      pinned: args.projectPublicId,
       grant: ownPoliciesGrant({
         principal: { type: 'caller', id: null },
         policyIds: async () => {
@@ -231,10 +237,102 @@ export const mayReadEventResource = (args: {
     db,
   });
   return isAllowed({
+    projectPublicId: args.projectPublicId,
+    action: args.action,
+    resource: args.resource,
+  });
+};
+
+/**
+ * Whether `policyIds` may read the resource the event is about: a subscriber
+ * never learns of a resource its identity cannot see.
+ */
+export const mayReadEventResource = (args: {
+  policyIds: readonly string[] | null;
+  event: SoatEvent;
+}): Promise<boolean> => {
+  const { event } = args;
+  return policiesAllow({
+    policyIds: args.policyIds,
     projectPublicId: event.projectPublicId,
     action: EVENT_READ_ACTIONS[event.resourceType],
     resource: eventSrn(event),
   });
+};
+
+/** Each registered namespace and the one resource type its events are about. */
+const NAMESPACE_RESOURCE_TYPES: ReadonlyMap<string, SoatResourceType> = new Map(
+  (Object.keys(SOAT_EVENTS) as SoatResourceType[]).flatMap((resourceType) => {
+    return Object.keys(SOAT_EVENTS[resourceType]).map((type) => {
+      return [type.split('.')[0], resourceType] as const;
+    });
+  })
+);
+
+/**
+ * The SRNs of one resource type a filter subscribes to: the whole type, or
+ * each `event_resources` item reaching into it, narrowed to it.
+ */
+const subscribedSrns = (args: {
+  typeScope: string;
+  eventResources: readonly string[] | null;
+}): string[] => {
+  if (args.eventResources === null) return [args.typeScope];
+  const srns = args.eventResources.flatMap((pattern) => {
+    if (globCovers({ outer: pattern, inner: args.typeScope })) {
+      return [args.typeScope];
+    }
+    return globOverlaps({ a: pattern, b: args.typeScope }) ? [pattern] : [];
+  });
+  return [...new Set(srns)];
+};
+
+/** A read a subscriber's policies lack for the events of one namespace. */
+export type UnreadEventNamespace = {
+  namespace: string;
+  action: string;
+  resource: string;
+};
+
+/**
+ * Each registered namespace the filter subscribes to whose events `policyIds`
+ * cannot read, by the check {@link mayReadEventResource} makes per event. A
+ * name outside every registered namespace is not checked.
+ */
+export const unreadEventNamespaces = async (args: {
+  projectPublicId: string;
+  policyIds: readonly string[] | null;
+  events: readonly string[];
+  eventResources: readonly string[] | null;
+}): Promise<UnreadEventNamespace[]> => {
+  const unread: UnreadEventNamespace[] = [];
+  for (const [namespace, resourceType] of NAMESPACE_RESOURCE_TYPES) {
+    const subscribed = SOAT_EVENT_TYPES.some((eventType) => {
+      return (
+        eventType.startsWith(`${namespace}.`) &&
+        matchesEvent({ patterns: args.events, eventType })
+      );
+    });
+    if (!subscribed) continue;
+    const action = EVENT_READ_ACTIONS[resourceType];
+    const srns = subscribedSrns({
+      typeScope: `srn:${args.projectPublicId}:${resourceType}:*`,
+      eventResources: args.eventResources,
+    });
+    for (const resource of srns) {
+      const allowed = await policiesAllow({
+        policyIds: args.policyIds,
+        projectPublicId: args.projectPublicId,
+        action,
+        resource,
+      });
+      if (!allowed) {
+        unread.push({ namespace, action, resource });
+        break;
+      }
+    }
+  }
+  return unread;
 };
 
 /**

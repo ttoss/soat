@@ -1137,6 +1137,11 @@
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
       "routes": []
     },
+    "TRIGGER_EVENTS_UNREADABLE": {
+      "http_status": 400,
+      "hint": "Add each `meta.unread` action to a policy in `policy_ids`, or narrow `events` or `event_resources` to what the policies read.",
+      "routes": []
+    },
     "TRIGGER_FIRING_ABANDONED": {
       "http_status": 500,
       "hint": "The dispatch did not survive long enough to record an outcome. Check the target named by the trigger for work that ends the process, then re-fire the trigger manually.",

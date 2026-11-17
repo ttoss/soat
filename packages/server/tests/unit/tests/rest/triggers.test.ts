@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { db } from 'src/db';
+import { EVENT_READ_ACTIONS } from 'src/lib/eventReadActions';
 import { SIGNATURE_TOLERANCE_SECONDS } from 'src/lib/hmacSignature';
 import { triggerAuthority } from 'src/lib/workAuthority';
 
@@ -61,6 +62,8 @@ describe('Triggers', () => {
         'secrets:CreateSecret',
         'secrets:UseSecret',
         'formations:CreateFormation',
+        // An event trigger must read every namespace it subscribes to.
+        ...new Set(Object.values(EVENT_READ_ACTIONS)),
       ],
       createOtherProject: true,
       createNoPermUser: true,
