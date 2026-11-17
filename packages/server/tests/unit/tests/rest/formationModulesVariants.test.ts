@@ -242,6 +242,22 @@ const CASES: RoundTripCase[] = [
     },
   },
   {
+    name: 'dataset never declaring a description',
+    type: 'dataset',
+    route: 'datasets',
+    build: () => {
+      return {
+        create: { name: 'Undescribed Suite' },
+        expectRead: { name: 'Undescribed Suite', description: null },
+        update: { name: 'Undescribed Suite v2' },
+        expectAfterUpdate: {
+          name: 'Undescribed Suite v2',
+          description: null,
+        },
+      };
+    },
+  },
+  {
     name: 'eval',
     type: 'eval',
     route: 'evals',
@@ -289,6 +305,25 @@ const CASES: RoundTripCase[] = [
           name: 'Declared-Only Eval v2',
           pass_threshold: null,
         },
+      };
+    },
+  },
+  {
+    name: 'eval never declaring a pass_threshold',
+    type: 'eval',
+    route: 'evals',
+    build: () => {
+      const declared = {
+        name: 'Ungated Eval',
+        agent_id: fx.agentId,
+        dataset_id: fx.datasetId,
+        scorers: [{ type: 'exact_match' }],
+      };
+      return {
+        create: declared,
+        expectRead: { pass_threshold: null },
+        update: { ...declared, name: 'Ungated Eval v2' },
+        expectAfterUpdate: { name: 'Ungated Eval v2', pass_threshold: null },
       };
     },
   },
