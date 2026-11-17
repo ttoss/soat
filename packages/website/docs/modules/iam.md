@@ -325,7 +325,7 @@ The check exists because an unknown key is never present in the evaluation conte
 
 Attached to every principal but a screener, it keeps any other principal from writing `screened: clean`, whichever route or resource the write goes through. A `StringLike` pattern `*` also matches an absent key; use `StringEquals` on the value, or `?*` for any non-empty one.
 
-A formation evaluates the literal tag values of each declared resource before applying anything. A value computed from an intrinsic (`param`, `sub`, `ref`) is known only after that check, so a template computing the value of a key that a `iam:RequestTag/<key>` condition in the caller's policies names is refused with `403 FORBIDDEN`.
+A formation evaluates the literal tag values of each declared resource before applying anything. A value computed from an intrinsic (`param`, `sub`, `ref`) is known only after that check, so a template computing the value of a key that a `iam:RequestTag/<key>` condition in the caller's policies names is refused with `403 FORBIDDEN` whatever the value resolves to, in an `Allow` or a `Deny` statement.
 
 Operators and keys match **by exact string**; no case conversion applies to a `condition` block or to `tags` (see [Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
 
