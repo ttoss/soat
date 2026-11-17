@@ -126,7 +126,7 @@ describe('GET /api/v1/generations/:generation_id acts_for', () => {
     const res = await turn
       .api()
       .get('/api/v1/generations')
-      .query({ project_id: turn.projectId, agent_id: agentId });
+      .query({ agent_id: agentId });
     expect(res.status).toBe(200);
     const listed = (
       res.body.data as Array<{ id: string; acts_for: unknown }>

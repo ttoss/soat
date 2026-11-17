@@ -592,10 +592,10 @@ components:
           properties:
             type:
               type: string
-              example: mcp_server
+              example: channel
             id:
               type: string
-              example: srv_V1StGXR8Z5jdHi6B
+              example: discord-dm-42
         status:
           type: string
           description: Lifecycle status of the generation
