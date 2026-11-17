@@ -1,13 +1,14 @@
 #!/bin/bash
-# The previous release (`ttoss/soat:<latest CHANGELOG version>`) boots on its
-# own schema, keeps serving while this checkout's `migrate.mjs run` changes it,
-# then passes its own smoke tests: `.claude/rules/postgresdb.md`, first section.
+# The previous release (`ttoss/soat:<newest published version>`, resolved by
+# `scripts/previousRelease.mjs`) boots on its own schema, keeps serving while
+# this checkout's `migrate.mjs run` changes it, then passes its own smoke
+# tests: `.claude/rules/postgresdb.md`, first section.
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
-previous="$(grep -m1 -oE '^#+ \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+previous="$(node scripts/previousRelease.mjs)"
 tag="v$previous"
 image="ttoss/soat:$previous"
 project="soat-previous-release"
