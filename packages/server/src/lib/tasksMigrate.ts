@@ -8,7 +8,7 @@ import {
   type ActiveDispatch,
   computeStallDeadline,
   findTaskInstance,
-  mapTask,
+  presentTask,
   stateByName,
   type TaskInstance,
   type TaskPrincipal,
@@ -236,6 +236,7 @@ const performMigrationTxn = async (args: {
         generationId: null,
         orchestrationRunId: null,
         note: null,
+        kind: 'migration',
         fromWorkflowVersion: fromVersion,
         toWorkflowVersion: a.toVersion,
       },
@@ -267,7 +268,9 @@ export const migrateTask = async (args: MigrateArgs) => {
     definition,
   });
 
-  const mapped = mapTask((await findTaskInstance({ id: args.id }))!);
+  const mapped = await presentTask({
+    task: (await findTaskInstance({ id: args.id }))!,
+  });
   await emitTaskEvent({
     type: 'tasks.migrated',
     projectId: loaded.projectId as number,

@@ -121,6 +121,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-14-generation-provenance` | `tools.trusted_output` (`NOT NULL`, default `false`), and `generations.untrusted_tool_results` and `knowledge_results` (`NOT NULL`, default `0`), the provenance counts `runtime.generations.*` reads |
 | `2026-11-15-eval-run-definition` | `eval_runs.agent_public_id` and `eval_runs.definition` (`json`), the agent a run executes against and the scorers, threshold and grouping key it is graded by; filled from the Eval for `queued` and `running` runs, left null on terminal ones |
 | `2026-11-16-expire-work-without-authority` | every unfinished generation, orchestration run, playbook execution and task without `authority` ended: generations and playbook executions `failed`, orchestration runs `expired`, each with a `WORK_AUTHORITY_MISSING` error; tasks `closed` in their current state; finished rows untouched, nothing backfilled |
+| `2026-11-17-task-history-kinds` | `task_transitions.kind` (`transition`, `migration` backfilled from `to_workflow_version`, `dependency_added`, `dependency_removed`) and `related_task_id`, and `to_state` nullable for a dependency row |
 
 Run them from the server package, which owns the entrypoint:
 

@@ -16,6 +16,8 @@ export {
 } from './models/MemoryAssertion';
 export type { MemoryRuleEvent } from './models/MemoryRule';
 export { MEMORY_RULE_EVENTS } from './models/MemoryRule';
+export type { TaskHistoryKind } from './models/TaskTransition';
+export { TASK_HISTORY_KINDS } from './models/TaskTransition';
 export { USAGE_EVENT_DURABLE_IDS } from './models/UsageEvent';
 export { SCHEMA_SYNC_OPTIONS } from './schemaSync';
 export * from './utils/embedding';

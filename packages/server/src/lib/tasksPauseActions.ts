@@ -6,7 +6,8 @@ import { emitTaskEvent } from './taskEvents';
 import {
   dispatchOnEnter,
   findTaskInstance,
-  mapTask,
+  type MappedTask,
+  presentTask,
   stateByName,
 } from './tasks';
 import {
@@ -47,7 +48,7 @@ export const pauseTask = async (args: {
   reason?: string | null;
   /** Whose pause it is — see `TaskPauseOrigin`. */
   origin: TaskPauseOrigin;
-}): Promise<ReturnType<typeof mapTask>> => {
+}): Promise<MappedTask> => {
   log('pauseTask: id=%s', args.id);
 
   const task = await findTaskInstance({ id: args.id });
@@ -60,7 +61,7 @@ export const pauseTask = async (args: {
       `Task '${args.id}' is closed and has no automation left to pause.`
     );
   }
-  if (isTaskPaused(task)) return mapTask(task);
+  if (isTaskPaused(task)) return presentTask({ task });
 
   await task.update({
     pauseRequestedAt: new Date(),
@@ -69,7 +70,7 @@ export const pauseTask = async (args: {
   });
 
   const refreshed = await findTaskInstance({ id: args.id });
-  const mapped = mapTask(refreshed!);
+  const mapped = await presentTask({ task: refreshed! });
   await emitTaskEvent({
     type: 'tasks.paused',
     projectId: task.projectId as number,
@@ -90,7 +91,7 @@ export const pauseTask = async (args: {
 export const resumeTask = async (args: {
   id: string;
   authority: WorkAuthority | null;
-}): Promise<ReturnType<typeof mapTask>> => {
+}): Promise<MappedTask> => {
   log('resumeTask: id=%s', args.id);
 
   const task = await findTaskInstance({ id: args.id });
@@ -116,7 +117,7 @@ export const resumeTask = async (args: {
   });
 
   const refreshed = await findTaskInstance({ id: args.id });
-  const mapped = mapTask(refreshed!);
+  const mapped = await presentTask({ task: refreshed! });
   await emitTaskEvent({
     type: 'tasks.resumed',
     projectId: task.projectId as number,

@@ -167,6 +167,13 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The dispatch did not survive long enough to record an outcome. Check the target named by the trigger for work that ends the process, then re-fire the trigger manually.',
   TASK_MIGRATION_STATE_UNMAPPED:
     'Add `state_map: { "<meta.state>": "<a state the target version declares>" }` to the migration.',
+  TASK_DEPENDENCY_CYCLE:
+    'Remove one dependency along `meta.path`, or add the dependency the other way round.',
+  TASK_DEPENDENCY_EXISTS:
+    'Nothing to add: the dependency in `meta.dependency_id` already holds the task.',
+  TASK_DEPENDENCY_SELF: 'Name a different task in `depends_on_task_id`.',
+  TASK_DEPENDENCY_NOT_FOUND:
+    "List the task's dependencies to find the id to remove.",
   TASK_MIGRATION_CONFLICT:
     'Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.',
   VERSION_CONFLICT:

@@ -4,20 +4,23 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
+import { emitUnblocked } from './taskDependencies';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
+import { freedByClose } from './taskReadiness';
 import {
   type ActiveDispatch,
   computeStallDeadline,
   dispatchOnEnter,
   findTaskInstance,
-  mapTask,
   mergeTaskPayload,
+  presentTask,
   stateByName,
   type TaskInstance,
   type TaskPrincipal,
 } from './tasks';
 import { parkTransitionForApproval } from './tasksApprovalGate';
+import { cancelDispatchOnExit } from './tasksCancelOnExit';
 import { resolveDispatchAuthority } from './tasksDispatchAuthority';
 import { assertTransitionAllowed } from './tasksTransitionCheck';
 import {
@@ -34,30 +37,6 @@ import {
 import type { WorkflowState, WorkflowTransition } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
-
-/** Best-effort cancellation of a still-running dispatch when a task leaves its state. */
-const cancelDispatchOnExit = async (args: {
-  previous: ActiveDispatch | null;
-  projectId: number;
-}): Promise<void> => {
-  const prev = args.previous;
-  if (!prev || prev.status !== 'running') return;
-  if (prev.kind === 'orchestration_run' && prev.id) {
-    try {
-      const { cancelOrchestrationRun } =
-        await import('./orchestrationRunActions');
-      await cancelOrchestrationRun({
-        runPublicId: prev.id,
-        projectIds: [args.projectId],
-      });
-    } catch (error) {
-      // A terminal run is not cancellable — nothing to do.
-      log('cancelDispatchOnExit: %o', error);
-    }
-  }
-  // Generation dispatches are detached: their late result is discarded by the
-  // staleness check in tasksAutomation (task re-validated on completion).
-};
 
 // An `automation` transition carries no principal id — the cause lives
 // in `generationId`/`orchestrationRunId`/`toolId`. With all of those null,
@@ -198,12 +177,13 @@ const nextChainDepth = (args: {
 
 // Re-validates the move against the committed, locked state, with the move's
 // payload merged in first so the guard reads what the caller sent.
-const resolveLockedTransition = (args: {
+const resolveLockedTransition = async (args: {
   task: TaskInstance;
   transitionArgs: TransitionArgs;
   transitions: WorkflowTransition[];
   payloadSchema: unknown;
-}): WorkflowTransition => {
+  transaction: Transaction;
+}): Promise<WorkflowTransition> => {
   const { task, transitionArgs: a, transitions } = args;
   const transition = transitions.find((t) => {
     return t.name === a.transition;
@@ -215,8 +195,9 @@ const resolveLockedTransition = (args: {
       payloadSchema: args.payloadSchema,
     });
   }
-  assertTransitionAllowed({
+  await assertTransitionAllowed({
     task,
+    transaction: args.transaction,
     transition,
     transitions,
     principal: a.principal,
@@ -241,13 +222,18 @@ const claimedUnderLock = async (args: {
   });
 };
 
-const appendHistory = async (args: {
+/**
+ * Appends the move's history row and answers which dependents it frees: any
+ * close frees what the task held, a cancellation included.
+ */
+const recordMove = async (args: {
   taskId: number;
   fromState: string;
   transition: WorkflowTransition;
   transitionArgs: TransitionArgs;
+  closed: boolean;
   transaction: Transaction;
-}): Promise<void> => {
+}): Promise<number[]> => {
   const a = args.transitionArgs;
   assertAutomationHasProvenance({
     transitionArgs: a,
@@ -255,6 +241,7 @@ const appendHistory = async (args: {
   });
   await appendTaskHistory({
     row: {
+      kind: 'transition',
       taskId: args.taskId,
       fromState: args.fromState,
       toState: args.transition.to,
@@ -268,6 +255,9 @@ const appendHistory = async (args: {
     },
     transaction: args.transaction,
   });
+  return args.closed
+    ? freedByClose({ taskId: args.taskId, transaction: args.transaction })
+    : [];
 };
 
 // Runs the atomic state change under a row lock: re-reads the committed state,
@@ -293,6 +283,7 @@ const performTransitionTxn = async (args: {
       previousDispatch: ActiveDispatch | null;
       toState: string;
       closed: boolean;
+      freed: number[];
     }
 > => {
   const { transitionArgs: a, transitions, states } = args;
@@ -307,11 +298,12 @@ const performTransitionTxn = async (args: {
       return { replayed: true as const };
     }
 
-    const transition = resolveLockedTransition({
+    const transition = await resolveLockedTransition({
       task,
       transitionArgs: a,
       transitions,
       payloadSchema: args.payloadSchema,
+      transaction: t,
     });
 
     // Before any mutation: a refused chain hop must leave the task exactly where
@@ -353,11 +345,12 @@ const performTransitionTxn = async (args: {
         : computeStallDeadline({ state: toStateDef, enteredStateAt });
     await task.save({ transaction: t });
 
-    await appendHistory({
+    const freed = await recordMove({
       taskId: task.id as number,
       fromState,
       transition,
       transitionArgs: a,
+      closed,
       transaction: t,
     });
 
@@ -366,12 +359,13 @@ const performTransitionTxn = async (args: {
       previousDispatch,
       toState: transition.to,
       closed,
+      freed,
     };
   });
 };
 
 const currentTask = async (id: string) => {
-  return mapTask((await findTaskInstance({ id }))!);
+  return presentTask({ task: (await findTaskInstance({ id }))! });
 };
 
 const applyTransition = async (input: {
@@ -438,7 +432,7 @@ const applyTransition = async (input: {
   });
 
   const updated = await findTaskInstance({ id: args.id });
-  const mapped = mapTask(updated!);
+  const mapped = await presentTask({ task: updated! });
 
   await emitTaskEvent({
     type: 'tasks.transitioned',
@@ -448,6 +442,7 @@ const applyTransition = async (input: {
   });
   if (result.closed) {
     await emitTaskEvent({ type: 'tasks.closed', projectId, task: mapped });
+    await emitUnblocked({ taskIds: result.freed, projectId });
   }
 
   const toStateDef = stateByName({ states, name: result.toState });

@@ -918,6 +918,24 @@ export const ERROR_CODES = {
     description:
       "The task's current state is not declared by the target workflow version and the migration's `state_map` does not map it. `meta.state` names it.",
   },
+  TASK_DEPENDENCY_CYCLE: {
+    httpStatus: 409,
+    description:
+      'The task the dependency names already depends, directly or through others, on the task it would block. `meta.path` lists the task ids around the cycle.',
+  },
+  TASK_DEPENDENCY_EXISTS: {
+    httpStatus: 409,
+    description:
+      'The task already depends on that task. `meta.dependency_id` names the existing dependency.',
+  },
+  TASK_DEPENDENCY_SELF: {
+    httpStatus: 400,
+    description: 'A task cannot depend on itself.',
+  },
+  TASK_DEPENDENCY_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The task has no dependency with that id.',
+  },
   TASK_MIGRATION_CONFLICT: {
     httpStatus: 409,
     description:

@@ -28,6 +28,7 @@ import { captureAuthority } from 'src/lib/workAuthority';
 
 import {
   parseEnumListQuery,
+  parseEnumQuery,
   parseNullableToolContextBody,
   parsePagination,
   requestPrincipalFromCtx,
@@ -53,6 +54,15 @@ const tasksRouter = new Router<Context>();
 const principalFromCtx = (ctx: Context): TaskPrincipal => {
   const { principalType, principalId } = requestPrincipalFromCtx(ctx);
   return { kind: principalType, id: principalId };
+};
+
+const blockedQuery = (ctx: Context): boolean | undefined => {
+  const value = parseEnumQuery({
+    ctx,
+    name: 'blocked',
+    allowed: ['true', 'false'],
+  });
+  return value === undefined ? undefined : value === 'true';
 };
 
 /**
@@ -91,6 +101,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     }),
     automationStatuses,
     assignee: ctx.query.assignee as string | undefined,
+    blocked: blockedQuery(ctx),
     metadata,
     ...parsePagination(ctx),
   });
@@ -426,8 +437,11 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
     ),
   });
 
-  await deleteTask({ id: ctx.params.task_id });
+  await deleteTask({
+    id: ctx.params.task_id,
+    principal: principalFromCtx(ctx),
+  });
   ctx.status = 204;
 });
 
-export { tasksRouter };
+export { principalFromCtx, tasksRouter };

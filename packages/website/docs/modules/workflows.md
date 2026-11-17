@@ -90,6 +90,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `pause_reason`      | string \| null   | The reason supplied with the pause, when one was                        |
 | `automation_chain_depth` | integer     | Server-owned, read-only: how many machine-driven transitions have run back-to-back with no outside intervention. Reset to `0` by any move a person, a plain API key, or an approval resolution makes. See [The automation chain budget](#the-automation-chain-budget) |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
+| `readiness`         | object           | Server-owned, computed on every read: `{ blocked, blocked_by, blocked_by_count, unblocks }`. See [Task dependencies](#task-dependencies) |
 | `tool_context`      | object           | **Write-only.** Caller context for the task's automation dispatches, accepted on `create-task` and `transition-task` and never returned by a read. See [Dispatch tool context](#dispatch-tool-context) |
 | `entered_state_at`  | string           | When the task entered its current state                                 |
 | `created_at`        | string           | ISO 8601 creation timestamp                                             |
@@ -122,8 +123,10 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 | --------------- | --------------- | ----------------------------------------------------------------- |
 | `id`            | string          | Public identifier (`task_tr_…`)                                   |
 | `task_id`       | string          | Owning task                                                        |
-| `from_state`    | string \| null  | Source state (`null` on the initial placement)                    |
-| `to_state`      | string          | Destination state                                                 |
+| `kind`          | string          | `transition` \| `migration` \| `dependency_added` \| `dependency_removed` |
+| `related_task_id` | string \| null | The other end of the dependency, on a `dependency_*` row only     |
+| `from_state`    | string \| null  | Source state (`null` on the initial placement and on a `dependency_*` row) |
+| `to_state`      | string \| null  | Destination state (`null` on a `dependency_*` row)                |
 | `transition`    | string \| null  | Transition name fired (`null` for the initial placement)          |
 | `principal_type`| string          | `user` \| `api_key` \| `automation` \| `approval`                 |
 | `principal_id`  | string \| null  | The principal that made the move. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted. `null` for `automation`, which has no principal — read `generation_id` / `orchestration_run_id` / `tool_id` for the cause |
@@ -272,6 +275,19 @@ GET /api/v1/tasks?status=open&automation_status=running&automation_status=paused
 ```
 
 `none` selects a `null` `automation_status` (never entered a state with an automation); omitted means every task. It is `none`, not `null`, because the CLI reads the token `null` as JSON null. A value outside `running` / `completed` / `failed` / `unrouted` / `paused` / `none`, empty string included, is `400 VALIDATION_FAILED`.
+
+### Task dependencies
+
+A task can depend on other tasks in its project: it is **blocked** while any of them is open. Needs `tasks:UpdateTaskDependencies` to add or remove, `tasks:GetTask` to list.
+
+- [`POST /tasks/{task_id}/dependencies`](/docs/api/tasks/add-task-dependency) `{ depends_on_task_id, note? }` makes the path's task wait on the body's. An edge that would close a cycle is `409 TASK_DEPENDENCY_CYCLE` with `meta.path`, the task ids around it; a repeated edge is `409 TASK_DEPENDENCY_EXISTS`; the task itself is `400 TASK_DEPENDENCY_SELF`; a task in another project is `404 TASK_NOT_FOUND`.
+- [`GET /tasks/{task_id}/dependencies`](/docs/api/tasks/list-task-dependencies) lists what it waits on, [`GET /tasks/{task_id}/dependents`](/docs/api/tasks/list-task-dependents) what it holds, open and closed alike. Each row is `{ id, task, depends_on_task, note, created_by_principal_type, created_by_principal_id, created_at }`, both ends as `{ id, title, state, status }`.
+- [`DELETE /tasks/{task_id}/dependencies/{dependency_id}`](/docs/api/tasks/remove-task-dependency) removes one.
+- Every task read carries `readiness`: `blocked`, `blocked_by` (the open dependencies, oldest first, at most 20, each `{ task_id, title, state }`), `blocked_by_count` (all of them) and `unblocks` (open dependents).
+- Any close frees what the task held, `cancelled` included; deleting a task removes its edges and frees its dependents.
+- `tasks.unblocked` fires once, when a task's last open dependency closes or is removed.
+- Adding or removing appends a `dependency_added` / `dependency_removed` history row to both tasks, with `related_task_id` naming the other.
+- Readiness gates nothing on its own. A guard reads it as `task.readiness`, so `{ "!": { "var": "task.readiness.blocked" } }` holds a transition until the task is free; [`GET /tasks?blocked=true`](/docs/api/tasks/list-tasks) (or `false`) filters a board by it.
 
 ### Versioning
 
@@ -487,6 +503,10 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | `INVALID_TOOL_CONTEXT_KEY`  | 400    | A `tool_context` key on `create-task` / `transition-task` is not a valid header name, or two keys collide on one header. See [Dispatch tool context](#dispatch-tool-context) |
 | `TASK_AUTOMATION_CHAIN_LIMIT` | 409 | The task has run `TASK_AUTOMATION_CHAIN_LIMIT` machine-driven transitions with no outside intervention; the next one is refused. See [The automation chain budget](#the-automation-chain-budget) |
 | `TASK_NOT_PAUSABLE`        | 409    | The task is closed, so it has no automation left to pause. See [Pausing a task](#pausing-a-task) |
+| `TASK_DEPENDENCY_CYCLE`    | 409    | The dependency would close a cycle; `meta.path` lists it. See [Task dependencies](#task-dependencies) |
+| `TASK_DEPENDENCY_EXISTS`   | 409    | The task already depends on that task |
+| `TASK_DEPENDENCY_SELF`     | 400    | A task cannot depend on itself |
+| `TASK_DEPENDENCY_NOT_FOUND`| 404    | The task has no dependency with that id |
 | `TASK_NOT_PAUSED`          | 409    | The task carries no operator pause to lift; advance an idle task by firing a transition instead. See [Pausing a task](#pausing-a-task) |
 
 ## Webhook events
@@ -498,6 +518,7 @@ Every event's `data` is the task as [`GET /api/v1/tasks/{task_id}`](/docs/api/ta
 | `tasks.created`              | A task is created and placed in its initial state        | |
 | `tasks.transitioned`         | A task moves between states                              | `transition`, `from_state` |
 | `tasks.closed`               | A task enters a terminal state                           | |
+| `tasks.unblocked`            | A task's last open [dependency](#task-dependencies) closes or is removed | |
 | `tasks.migrated`             | A task moves onto a newer workflow version               | `from_state`, `from_workflow_version` |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   | `result` |
 | `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) | `result`, `transition`, `error_code` |
@@ -662,6 +683,48 @@ APPROVAL_ID=$(curl -s "$SOAT_URL/api/v1/approvals?project_id=$PROJECT_ID&status=
 
 curl -s -X POST "$SOAT_URL/api/v1/approvals/$APPROVAL_ID/approve" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{}'
+```
+
+</TabItem>
+</Tabs>
+
+### Make a task wait on another
+
+See [Task dependencies](#task-dependencies).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat add-task-dependency --task-id "$TASK_ID" --depends-on-task-id "$BLOCKER_ID"
+
+# readiness.blocked is true until the blocker closes.
+soat get-task --task-id "$TASK_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: dependency, error } = await soat.tasks.addTaskDependency({
+  path: { task_id: TASK_ID },
+  body: { depends_on_task_id: BLOCKER_ID },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+const { data: task } = await soat.tasks.getTask({ path: { task_id: TASK_ID } });
+// task.readiness.blocked is true until the blocker closes.
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/dependencies" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"depends_on_task_id\":\"$BLOCKER_ID\"}"
+
+curl -s "$SOAT_URL/api/v1/tasks/$TASK_ID" -H "Authorization: Bearer $TOKEN"
 ```
 
 </TabItem>

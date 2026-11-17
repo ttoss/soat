@@ -15,6 +15,7 @@ const ADVISORY_LOCK_NAMESPACES = {
   conversationWrites: 0x50a7_c001,
   firstAdminBootstrap: 0x50a7_c002,
   oauthConnectionRefresh: 0x50a7_c003,
+  taskDependencyGraph: 0x50a7_c004,
 } as const;
 
 /**
