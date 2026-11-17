@@ -1,8 +1,9 @@
 import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
-import { type AgentAuthority, agentCapSets } from './agentAuthority';
-import type { AssertionAuthority } from './assertionAuthority';
+import type { AgentAuthority } from './agentAuthority';
+import type { AssertionAuthority, AssertionCap } from './assertionAuthority';
+import type { DeniedPrincipal } from './authorizationDenial';
 import type { PolicySets } from './iam';
 import { authUserUnder, turnAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
@@ -14,8 +15,44 @@ const NOTHING: PolicySets = [[]];
 
 export type SenderCredential = Pick<
   AuthUser,
-  'getPolicies' | 'iamToken' | 'onBehalfOfPrincipal'
+  'getLabeledPolicies' | 'iamToken' | 'onBehalfOfPrincipal'
 >;
+
+const ASSERTION = { type: 'on_behalf_of', id: null } as const;
+
+/**
+ * Whom a callback's refusal names, per cap: what acts inside the tool's
+ * project keeps its name; what narrows the caller's credential is the
+ * assertion's, since the tool server reads nothing of who made the call.
+ */
+const NAMED_THROUGH_ASSERTION: Record<DeniedPrincipal['type'], boolean> = {
+  user: false,
+  api_key: false,
+  caller: false,
+  iam_token: false,
+  on_behalf_of: false,
+  generation: true,
+  project: true,
+  agent: true,
+  trigger: true,
+  eval: true,
+  decider: true,
+  ingestion_rule: true,
+  memory_rule: true,
+  playbook_version: true,
+};
+
+const capOf = (args: {
+  principal: DeniedPrincipal;
+  sets: PolicySets;
+}): AssertionCap => {
+  return {
+    by: NAMED_THROUGH_ASSERTION[args.principal.type]
+      ? args.principal
+      : ASSERTION,
+    sets: args.sets,
+  };
+};
 
 /**
  * Whose authority a tool call carries in its assertion. `caller` is the
@@ -53,21 +90,28 @@ export const resolveSenderAuthority = async (args: {
 }): Promise<AssertionAuthority> => {
   const { sender, projectPublicId } = args;
   const credential = await credentialOf(sender);
-  const credentialSets = credential
-    ? await credential.getPolicies(projectPublicId)
+  const credentialCaps = credential
+    ? await credential.getLabeledPolicies(projectPublicId)
     : [];
   const principal =
     credential?.iamToken?.principal ?? credential?.onBehalfOfPrincipal;
   log(
     'resolveSenderAuthority: project=%s credential=%s',
     projectPublicId,
-    credentialSets.length > 0
+    credentialCaps.length > 0
+  );
+  const agentCaps = (sender.agentAuthority?.caps ?? []).map(
+    ({ by, policy }) => {
+      return { principal: by, sets: [[policy]] };
+    }
   );
   return {
-    sets: [
-      ...(credentialSets.length > 0 ? credentialSets : NOTHING),
-      ...agentCapSets(sender.agentAuthority),
-    ],
+    caps: [
+      ...(credentialCaps.length > 0
+        ? credentialCaps
+        : [{ principal: ASSERTION, sets: NOTHING }]),
+      ...agentCaps,
+    ].map(capOf),
     ...(principal ? { principal } : {}),
   };
 };

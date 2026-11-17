@@ -24,7 +24,7 @@ export const withOnBehalfOf = (args: {
     keyProjectPublicId: projectPublicId,
   });
   if (!asserted || !projectPublicId) return args.resolved;
-  const { principal, sets } = asserted.authority;
+  const { principal, caps } = asserted.authority;
   return {
     authUser: {
       ...authUser,
@@ -36,11 +36,13 @@ export const withOnBehalfOf = (args: {
         pinned: projectPublicId,
         caps: [
           ...authUser.terms.caps,
-          {
-            kind: 'bound',
-            bound: { policySets: sets },
-            by: { type: 'on_behalf_of', id: null },
-          },
+          ...caps.map(({ by, sets }) => {
+            return {
+              kind: 'bound' as const,
+              bound: { policySets: sets },
+              by,
+            };
+          }),
         ],
       },
     },

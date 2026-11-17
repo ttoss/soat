@@ -1,3 +1,4 @@
+import type { AuthUser } from '../Context';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { SenderCredential } from './assertionSender';
 import type { DeniedPrincipal } from './authorizationDenial';
@@ -116,7 +117,8 @@ export type FormationActor = {
   narrowed: boolean;
   /** Records a refusal the module makes before any `isAllowed` call. */
   recordRefusal: (action: string) => void;
-} & SenderCredential;
+} & SenderCredential &
+  Pick<AuthUser, 'getPolicies'>;
 
 export type FormationActingPrincipal = { actor: FormationActor };
 

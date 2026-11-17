@@ -43,6 +43,9 @@ beforeAll(async () => {
     getPolicies: async () => {
       return [];
     },
+    getLabeledPolicies: async () => {
+      return [];
+    },
     keyPolicyBoundary: undefined,
     narrowed: false,
     recordRefusal: () => {},

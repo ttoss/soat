@@ -2,7 +2,7 @@ import { db } from '../db';
 import { type AgentRunAs, readAgentRunAs } from './agentRunAs';
 import { resolveAttachedPolicies } from './attachedPolicies';
 import type { DeniedPrincipal } from './authorizationDenial';
-import type { PolicyDocument, PolicySets } from './iam';
+import type { PolicyDocument } from './iam';
 
 /** One document capping every call of an agent's turn. */
 export type AgentCap = { by: DeniedPrincipal; policy: PolicyDocument };
@@ -133,13 +133,4 @@ export const projectCapOf = (authority: AgentAuthority): AgentCap | null => {
       return by.type === 'project';
     }) ?? null
   );
-};
-
-/** The caps' documents, each one more set every check must satisfy. */
-export const agentCapSets = (
-  authority: AgentAuthority | undefined
-): PolicySets => {
-  return (authority?.caps ?? []).map(({ policy }) => {
-    return [policy];
-  });
 };

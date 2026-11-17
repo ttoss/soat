@@ -106,6 +106,7 @@ const formationActorOf = (
     author: requestPrincipalFromCtx(ctx),
     isAllowed: ctx.authUser.isAllowed,
     getPolicies: ctx.authUser.getPolicies,
+    getLabeledPolicies: ctx.authUser.getLabeledPolicies,
     iamToken: ctx.authUser.iamToken,
     onBehalfOfPrincipal: ctx.authUser.onBehalfOfPrincipal,
     keyPolicyBoundary: ctx.authUser.apiKeyPolicyIds,
