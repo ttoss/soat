@@ -3,7 +3,7 @@ import createDebug from 'debug';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
-import { mapTask } from './tasks';
+import { presentTask } from './tasks';
 import {
   applyLocked,
   isStale,
@@ -131,7 +131,7 @@ const recordRetriedAttempt = async (args: {
   await emitTaskEvent({
     type: 'tasks.automation_retrying',
     projectId: args.projectId,
-    task: mapTask(task),
+    task: await presentTask({ task }),
     facts: {
       attempt: args.attempt,
       max_attempts: args.maxAttempts,

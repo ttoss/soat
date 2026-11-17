@@ -52,6 +52,26 @@
       "description": "Lift a task's pause and re-dispatch the state it was suppressed in"
     },
     {
+      "operationId": "addTaskDependency",
+      "action": "tasks:UpdateTaskDependencies",
+      "description": "Make a task depend on another task in its project"
+    },
+    {
+      "operationId": "listTaskDependencies",
+      "action": "tasks:GetTask",
+      "description": "List the tasks a task depends on"
+    },
+    {
+      "operationId": "listTaskDependents",
+      "action": "tasks:GetTask",
+      "description": "List the tasks that depend on a task"
+    },
+    {
+      "operationId": "removeTaskDependency",
+      "action": "tasks:UpdateTaskDependencies",
+      "description": "Remove one of a task's dependencies"
+    },
+    {
       "operationId": "deleteTask",
       "action": "tasks:DeleteTask",
       "description": "Delete a task"

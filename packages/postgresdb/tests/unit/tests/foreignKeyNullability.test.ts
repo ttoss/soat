@@ -104,6 +104,8 @@ const NOT_NULL_FOREIGN_KEYS = [
   'share_acceptances.share_id',
   'share_cap_counters.acceptance_id',
   'shares.project_id',
+  'task_dependencies.depends_on_task_id',
+  'task_dependencies.task_id',
   'task_transitions.task_id',
   'tasks.project_id',
   'tasks.workflow_id',

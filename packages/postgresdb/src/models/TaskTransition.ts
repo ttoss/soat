@@ -10,10 +10,21 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Task } from './Task';
 
+export const TASK_HISTORY_KINDS = [
+  'transition',
+  'migration',
+  'dependency_added',
+  'dependency_removed',
+] as const;
+
+export type TaskHistoryKind = (typeof TASK_HISTORY_KINDS)[number];
+
 /**
  * Append-only history of a task's state changes. Every move — human, API,
  * automation outcome, approval resolution — writes exactly one row through
- * `transitionTask`, and a version migration one through `migrateTask`, so the history is the audited contract for a task.
+ * `transitionTask`, a version migration one through `migrateTask`, and adding or
+ * removing a dependency one on each end, so the history is the audited contract
+ * for a task.
  */
 @Table({
   tableName: 'task_transitions',
@@ -67,8 +78,21 @@ export class TaskTransition extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare fromState: string | null;
 
-  @Column({ type: DataType.STRING, allowNull: false })
-  declare toState: string;
+  // Null on a dependency row, which moves no state.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare toState: string | null;
+
+  @Column({
+    type: DataType.STRING(32),
+    allowNull: false,
+    defaultValue: 'transition',
+  })
+  declare kind: TaskHistoryKind;
+
+  // The other end of the edge, on a dependency row only. A public id, so the
+  // row outlives that task.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare relatedTaskId: string | null;
 
   // Transition name fired (null for the initial placement).
   @Column({ type: DataType.STRING, allowNull: true })
