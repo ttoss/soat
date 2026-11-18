@@ -65,7 +65,7 @@ const listWhere = (args: ListTasksArgs): Record<string, unknown> => {
 /** A page's rows and their readiness, in two queries rather than two per row. */
 const pageReader = () => {
   let readiness = new Map<number, TaskReadiness>();
-  const query = async (page: {
+  const read = async (page: {
     where: Record<string, unknown> | undefined;
     limit: number;
     order: TaskOrder;
@@ -86,7 +86,7 @@ const pageReader = () => {
   const map = (task: TaskInstance) => {
     return mapTask({ task, readiness: readiness.get(task.id as number)! });
   };
-  return { query, map };
+  return { read, map };
 };
 
 export const listTasks = async (args: {
@@ -128,14 +128,14 @@ export const listTasks = async (args: {
     where.workflowId = workflow ? (workflow.id as number) : -1;
   }
 
-  const { query, map } = pageReader();
+  const { read, map } = pageReader();
   if (args.order === 'next') {
     return firstPageOnly({
       limit: args.limit,
       cursor: args.cursor,
       reason: '`order=next` is computed on every read and answers one page',
       query: ({ limit }) => {
-        return query({ where, limit, order: pullOrder() });
+        return read({ where, limit, order: pullOrder() });
       },
       map,
     });
@@ -157,7 +157,9 @@ export const listTasks = async (args: {
     },
     where,
     order: [['createdAt', 'DESC']],
-    query,
+    query: ({ where: pageWhere, limit, order }) => {
+      return read({ where: pageWhere, limit, order });
+    },
     map,
   });
 };
