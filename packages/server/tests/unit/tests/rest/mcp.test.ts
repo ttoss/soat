@@ -12,6 +12,7 @@ import { saveTrace } from 'src/lib/traces';
 
 import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
+import { createPlaybookCaseOverMcp } from '../../fixtures/playbookCase';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -3746,9 +3747,12 @@ describe('MCP tools - happy path', () => {
       expect(playbookRes.status).toBe(200);
       playbookId = parseResult(playbookRes).id;
 
-      const caseRes = await mcpCall('create-playbook-case', {
-        playbook_id: playbookId,
-        subject: 'ACME Ltda',
+      const caseRes = await createPlaybookCaseOverMcp({
+        call: mcpCall,
+        body: {
+          playbook_id: playbookId,
+          subject: 'ACME Ltda',
+        },
       });
       expect(caseRes.status).toBe(200);
       caseId = parseResult(caseRes).id;
@@ -3774,10 +3778,13 @@ describe('MCP tools - happy path', () => {
       });
       expect(dependent.status).toBe(200);
 
-      const res = await mcpCall('create-playbook-case', {
-        playbook_id: parseResult(dependent).id,
-        subject: 'ACME Ltda · 2026-08',
-        upstreams: { pricing: caseId },
+      const res = await createPlaybookCaseOverMcp({
+        call: mcpCall,
+        body: {
+          playbook_id: parseResult(dependent).id,
+          subject: 'ACME Ltda · 2026-08',
+          upstreams: { pricing: caseId },
+        },
       });
 
       expect(res.status).toBe(200);
@@ -3884,9 +3891,12 @@ describe('MCP tools - happy path', () => {
           ],
         },
       });
-      const created = await mcpCall('create-playbook-case', {
-        playbook_id: parseResult(runPlaybook).id,
-        subject: 'Runs Ltda',
+      const created = await createPlaybookCaseOverMcp({
+        call: mcpCall,
+        body: {
+          playbook_id: parseResult(runPlaybook).id,
+          subject: 'Runs Ltda',
+        },
       });
       const runCaseId = parseResult(created).id;
       await mcpCall('write-playbook-case-inputs', {
@@ -3957,9 +3967,12 @@ describe('MCP tools - happy path', () => {
           ],
         },
       });
-      const created = await mcpCall('create-playbook-case', {
-        playbook_id: parseResult(exportPlaybook).id,
-        subject: 'Exports Ltda',
+      const created = await createPlaybookCaseOverMcp({
+        call: mcpCall,
+        body: {
+          playbook_id: parseResult(exportPlaybook).id,
+          subject: 'Exports Ltda',
+        },
       });
       const exportCaseId = parseResult(created).id;
       await mcpCall('write-playbook-case-inputs', {
@@ -4010,9 +4023,12 @@ describe('MCP tools - happy path', () => {
         definition: { nodes: [node('first')] },
       });
       const upgradePlaybookId = parseResult(upgradePlaybook).id;
-      const created = await mcpCall('create-playbook-case', {
-        playbook_id: upgradePlaybookId,
-        subject: 'Upgrades Ltda',
+      const created = await createPlaybookCaseOverMcp({
+        call: mcpCall,
+        body: {
+          playbook_id: upgradePlaybookId,
+          subject: 'Upgrades Ltda',
+        },
       });
       const upgradeCaseId = parseResult(created).id;
       await mcpCall('update-playbook', {
@@ -4061,9 +4077,12 @@ describe('MCP tools - happy path', () => {
           ],
         },
       });
-      const created = await mcpCall('create-playbook-case', {
-        playbook_id: parseResult(confirmed).id,
-        subject: 'Confirms Ltda',
+      const created = await createPlaybookCaseOverMcp({
+        call: mcpCall,
+        body: {
+          playbook_id: parseResult(confirmed).id,
+          subject: 'Confirms Ltda',
+        },
       });
       const confirmCaseId = parseResult(created).id;
       await mcpCall('write-playbook-case-inputs', {
@@ -4194,10 +4213,13 @@ describe('MCP tools - happy path', () => {
       };
       const mine = await actor('MCP case owner');
       const theirs = await actor('MCP case stranger');
-      const created = await mcpCall('create-playbook-case', {
-        playbook_id: playbookId,
-        subject: 'Pinned Ltda',
-        actor_id: mine,
+      const created = await createPlaybookCaseOverMcp({
+        call: mcpCall,
+        body: {
+          playbook_id: playbookId,
+          subject: 'Pinned Ltda',
+          actor_id: mine,
+        },
       });
       const pinnedCaseId = parseResult(created).id;
 
