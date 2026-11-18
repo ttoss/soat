@@ -98,7 +98,7 @@
     },
     {
       "operationId": "cancelEvalRun",
-      "action": "evaluations:RunEval",
+      "action": "evaluations:CancelEvalRun",
       "description": "Cancel a queued or running eval run"
     }
   ]
