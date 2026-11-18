@@ -122,6 +122,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-15-eval-run-definition` | `eval_runs.agent_public_id` and `eval_runs.definition` (`json`), the agent a run executes against and the scorers, threshold and grouping key it is graded by; filled from the Eval for `queued` and `running` runs, left null on terminal ones |
 | `2026-11-16-expire-work-without-authority` | every unfinished generation, orchestration run, playbook execution and task without `authority` ended: generations and playbook executions `failed`, orchestration runs `expired`, each with a `WORK_AUTHORITY_MISSING` error; tasks `closed` in their current state; finished rows untouched, nothing backfilled |
 | `2026-11-18-eval-run-cancel-action` | `evaluations:CancelEvalRun` added beside every `evaluations:RunEval` in a stored policy statement (`policies.document`, `formations.template`, `formation_resources.last_applied_properties`), Allow and Deny alike |
+| `2026-11-18-usage-event-model-aliases` | `usage_events.model` under a vendor model id renamed to the one alias of the event's provider that targets it; an id two aliases target, or none, kept; no other column written |
 
 Run them from the server package, which owns the entrypoint:
 
