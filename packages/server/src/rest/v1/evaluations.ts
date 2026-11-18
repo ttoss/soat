@@ -560,7 +560,7 @@ evaluationsRouter.post(
   async (ctx: Context) => {
     const { projectIds } = await evalAccess.authorizeWrite({
       ctx,
-      action: 'evaluations:RunEval',
+      action: 'evaluations:CancelEvalRun',
     });
 
     ctx.body = await cancelEvalRun({

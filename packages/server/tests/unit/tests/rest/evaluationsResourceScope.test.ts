@@ -37,6 +37,7 @@ describe('a policy scoped to one dataset or eval does not reach another', () => 
     'evaluations:CreateEval',
     'evaluations:DeleteEval',
     'evaluations:RunEval',
+    'evaluations:CancelEvalRun',
     'evaluations:ListEvals',
     'generations:GetGeneration',
     'agents:CreateAgentGeneration',

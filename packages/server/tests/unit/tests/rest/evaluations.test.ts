@@ -117,6 +117,7 @@ describe('Evaluations', () => {
         'evaluations:GetEval',
         'evaluations:DeleteEval',
         'evaluations:RunEval',
+        'evaluations:CancelEvalRun',
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
         'tools:CallTool',
@@ -1991,11 +1992,44 @@ describe('Evaluations', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without evaluations:RunEval returns 404', async () => {
+    test('a user without evaluations:CancelEvalRun returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).post(
         `/api/v1/evals/${evalId}/runs/evrun_x/cancel`
       );
       expect(res.status).toBe(404);
+    });
+
+    test('evaluations:RunEval alone does not cancel: 403', async () => {
+      const runner = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'evalsrunonly',
+        actions: ['evaluations:GetEval', 'evaluations:RunEval'],
+      });
+      const run = await startQueued();
+
+      const res = await authenticatedTestClient(runner).post(
+        `/api/v1/evals/${evalId}/runs/${run.id}/cancel`
+      );
+
+      expect(res.status).toBe(403);
+    });
+
+    test('evaluations:CancelEvalRun cancels without evaluations:RunEval', async () => {
+      const canceller = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'evalscancelonly',
+        actions: ['evaluations:GetEval', 'evaluations:CancelEvalRun'],
+      });
+      const run = await startQueued();
+
+      const res = await authenticatedTestClient(canceller).post(
+        `/api/v1/evals/${evalId}/runs/${run.id}/cancel`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('cancelled');
     });
   });
 

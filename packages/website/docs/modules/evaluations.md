@@ -682,6 +682,9 @@ and recounts the run after it settles. `aggregate_scores` is left `null` (a part
 roll-up would read as a whole-dataset verdict), and no lifecycle event fires. The run's
 [`tool_context`](#run-tool-context) is cleared, as on any terminal transition.
 
+Cancelling needs `evaluations:CancelEvalRun`, not `evaluations:RunEval`: a
+policy can let a caller stop spend without letting it start any.
+
 ### Scheduled runs
 
 A [trigger](./triggers.md) with `target_type: "eval"` runs a suite on a cadence. Every

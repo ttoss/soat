@@ -1496,7 +1496,7 @@ paths:
 
         A run that has already finished is rejected with 400.
       operationId: cancelEvalRun
-      x-iam-action: evaluations:RunEval
+      x-iam-action: evaluations:CancelEvalRun
       x-iam-resource-type: eval
       parameters:
         - name: eval_id
