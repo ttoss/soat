@@ -1,43 +1,16 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
-import { buildSrn } from 'src/lib/iam';
 import {
   addTaskDependency,
   listTaskDependencies,
   removeTaskDependency,
 } from 'src/lib/taskDependencies';
-import { getTask } from 'src/lib/tasks';
 
-import { parsePagination, requireAuth } from './helpers';
-import { requireAllowed } from './resourceAccess';
+import { parsePagination } from './helpers';
+import { authorizeTask } from './taskAccess';
 import { principalFromCtx } from './tasks';
 
 const taskDependenciesRouter = new Router<Context>();
-
-const authorizeTask = async (args: {
-  ctx: Context;
-  action: 'tasks:GetTask' | 'tasks:UpdateTaskDependencies';
-}): Promise<void> => {
-  requireAuth(args.ctx);
-  const task = await getTask({ id: args.ctx.params.task_id });
-  await requireAllowed({
-    ctx: args.ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: args.action,
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${args.ctx.params.task_id}' not found.`
-    ),
-  });
-};
 
 /**
  * @openapi

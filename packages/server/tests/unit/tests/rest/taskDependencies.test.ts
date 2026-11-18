@@ -432,6 +432,30 @@ describe('closing and deleting', () => {
     );
     expect(deps.body.data).toEqual([]);
   });
+
+  test('deleting a closed task frees nothing and records the removal on the other end', async () => {
+    const blocker = await createTask();
+    const task = await createTask();
+    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
+    expect((await fire(task.id, 'finish')).status).toBe(200);
+
+    const seen = await unblockedDuring(async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/tasks/${task.id}`
+      );
+      expect(res.status).toBe(204);
+    });
+
+    expect(seen).toEqual([]);
+    const history = await authenticatedTestClient(userToken).get(
+      `/api/v1/tasks/${blocker.id}/history`
+    );
+    expect(history.body.data.at(-1)).toMatchObject({
+      kind: 'dependency_removed',
+      related_task_id: task.id,
+    });
+    expect((await readTask(blocker.id)).readiness.unblocks).toBe(0);
+  });
 });
 
 describe('guards and lists read readiness', () => {

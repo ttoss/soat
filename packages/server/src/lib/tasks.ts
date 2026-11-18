@@ -15,6 +15,7 @@ import {
   type TaskCreateIdempotency,
   taskIdempotencyColumns,
 } from './tasksCreateIdempotency';
+import type { TaskPriority } from './tasksPriority';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import { storedAuthority, type WorkAuthority } from './workAuthority';
@@ -93,6 +94,7 @@ export const mapTask = (args: {
     metadata: instance.metadata ?? undefined,
     last_result: instance.lastResult ?? null,
     assignee: instance.assignee,
+    priority: instance.priority ?? null,
     active_dispatch: instance.activeDispatch,
     automation_status: instance.automationStatus,
     pause_requested_at: instance.pauseRequestedAt,
@@ -286,6 +288,7 @@ export type CreateTaskArgs = {
   title: string;
   payload?: Record<string, unknown> | null;
   assignee?: string | null;
+  priority: TaskPriority | null;
   /**
    * Alternate entry point: name a declared state to place the task there
    * instead of the workflow's `initial` state. Entering it behaves exactly
@@ -369,6 +372,7 @@ const insertTask = async (args: CreateTaskArgs) => {
     payload,
     metadata: args.metadata ?? null,
     assignee: args.assignee ?? null,
+    priority: args.priority,
     ...taskIdempotencyColumns(args.idempotency),
     // A task created straight into a terminal state dispatches nothing and can
     // never be moved again, so it never holds a credential at rest.

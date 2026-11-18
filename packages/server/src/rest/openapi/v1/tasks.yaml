@@ -26,7 +26,7 @@ paths:
     get:
       description: >-
         Lists tasks (the board query). Filter by workflow, state, status,
-        automation status, assignee, or `metadata` — `GET
+        automation status, priority, assignee, or `metadata` — `GET
         /tasks?workflow_id=...&state=...` is one board column.
       tags:
         - Tasks
@@ -91,6 +91,28 @@ paths:
           explode: true
           example:
             - running
+        - name: priority
+          in: query
+          required: false
+          description: >-
+            Filter by priority. Repeat the parameter to OR values. `none`
+            selects the tasks nobody prioritised (`priority: null`). A value
+            outside the enum, empty string included, is a `400`.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - very_high
+                - high
+                - medium
+                - low
+                - very_low
+                - none
+          style: form
+          explode: true
+          example:
+            - high
         - name: assignee
           in: query
           required: false
@@ -592,6 +614,69 @@ paths:
           description: >-
             The task is closed, has a transition pending approval, or has a
             dispatch in flight
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+
+  /api/v1/tasks/{task_id}/priority:
+    put:
+      description: >-
+        Sets or clears a task's priority. An action of its own,
+        `tasks:SetTaskPriority`, so a principal can update a task without
+        reprioritising it; update-task does not accept `priority`.
+      tags:
+        - Tasks
+      summary: Set a task's priority
+      operationId: setTaskPriority
+      x-iam-action: tasks:SetTaskPriority
+      x-iam-resource-type: task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: The task's ID.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetTaskPriorityRequest'
+      responses:
+        '200':
+          description: The task with its new priority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
           content:
             application/json:
               schema:
@@ -1118,6 +1203,20 @@ components:
         assignee:
           type: string
           nullable: true
+        priority:
+          type: string
+          nullable: true
+          enum:
+            - very_high
+            - high
+            - medium
+            - low
+            - very_low
+            - null
+          description: >-
+            A person's assertion of how much the task matters, never derived.
+            `null` until someone sets it. Set and cleared with set-task-priority;
+            readable by guards as `task.priority`.
         active_dispatch:
           type: object
           nullable: true
@@ -1408,6 +1507,19 @@ components:
         assignee:
           type: string
           nullable: true
+        priority:
+          type: string
+          nullable: true
+          enum:
+            - very_high
+            - high
+            - medium
+            - low
+            - very_low
+            - null
+          description: >-
+            The task's starting priority. Afterwards only set-task-priority
+            changes it. A value outside the enum is `400 VALIDATION_FAILED`.
         idempotency_key:
           type: string
           maxLength: 255
@@ -1490,6 +1602,25 @@ components:
         assignee:
           type: string
           nullable: true
+    SetTaskPriorityRequest:
+      type: object
+      required:
+        - priority
+      additionalProperties: false
+      properties:
+        priority:
+          type: string
+          nullable: true
+          enum:
+            - very_high
+            - high
+            - medium
+            - low
+            - very_low
+            - null
+          description: >-
+            The priority to set; `null` clears it. A value outside the enum is
+            `400 VALIDATION_FAILED`.
     PauseTaskRequest:
       type: object
       properties:

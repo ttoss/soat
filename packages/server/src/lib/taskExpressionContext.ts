@@ -20,6 +20,7 @@ export const taskExpressionContext = (args: {
     status: task.status,
     payload: task.payload,
     assignee: task.assignee,
+    priority: task.priority ?? null,
     // Server-owned, in its own namespace: an expression on `task.last_result`
     // can only be satisfied by a value an automation wrote.
     last_result: task.lastResult ?? null,

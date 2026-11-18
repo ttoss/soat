@@ -2,7 +2,6 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 
-import { DomainError } from '../errors';
 import { appendDependencyHistory, emitUnblocked } from './taskDependencies';
 import { freedAmong } from './taskReadiness';
 import type { TaskPrincipal } from './tasks';
@@ -19,10 +18,10 @@ export const deleteTask = async (args: {
   principal: TaskPrincipal;
 }) => {
   log('deleteTask: id=%s', args.id);
-  const task = await db.Task.findOne({ where: { publicId: args.id } });
-  if (!task) {
-    throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
-  }
+  const task = await db.Task.findOne({
+    where: { publicId: args.id },
+    rejectOnEmpty: true,
+  });
   const freed = await db.sequelize.transaction(async (t) => {
     const edges = await db.TaskDependency.findAll({
       where: {
