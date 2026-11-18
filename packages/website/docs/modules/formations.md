@@ -476,7 +476,7 @@ soat update-formation --formation-id "$F" --template "$T" && echo "deployed"
 A deploy stops at the first failing resource and walks back every change it applied, newest first (a dependent before what it references), so the stack ends `failed` as it stood before the deploy:
 
 - A **created** resource is deleted; a corrected re-deploy re-creates it from scratch.
-- An **updated** resource is re-applied with the properties it had before. A write-only property is never stored, so it keeps the value the deploy sent.
+- An **updated** resource is re-applied with the properties it had before; a nullable property the deploy set and the previous state lacked is cleared to `null`. A write-only property is never stored, so it keeps the value the deploy sent.
 - A **replaced** resource's replacement is deleted and the record points back at the resource it superseded.
 - A `deletion_policy: retain` resource that was created or replaced survives; its record keeps pointing at it, so the next deploy adopts it rather than provisioning a duplicate.
 

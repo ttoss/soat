@@ -7,6 +7,8 @@ import createDebug from 'debug';
 import type { db } from 'src/db';
 
 import { isResourceAlreadyGone } from './formationsApplyHelpers';
+import { mergeWithPrevious } from './formationsProperties';
+import { clearablePropertiesOf } from './formationsRegistry';
 import {
   applyDeleteResource,
   applyUpdateResource,
@@ -98,6 +100,23 @@ const unwindCreate = async (args: Unwind): Promise<FormationEvent> => {
 };
 
 /**
+ * What re-applying the overwritten properties sends: a property the update set
+ * and the previous state lacked is cleared by the same rule a template that
+ * drops it follows, since an absent field leaves the stored value alone.
+ */
+const restoreProperties = (args: {
+  resourceRow: ResourceRow;
+  previousProperties: Record<string, unknown>;
+}): Record<string, unknown> => {
+  return mergeWithPrevious({
+    resolved: args.previousProperties,
+    previous: {},
+    lastApplied: args.resourceRow.lastAppliedProperties ?? {},
+    clearable: clearablePropertiesOf(args.resourceRow.resourceType),
+  }).merged;
+};
+
+/**
  * A replacement is deleted and the row pointed back at what it superseded,
  * which a failed deploy never disposes of. An in-place update is re-applied
  * with the properties it overwrote; a write-only property is never stored, so
@@ -122,7 +141,10 @@ const unwindUpdate = async (
     const outcome = await applyUpdateResource({
       resourceType: resourceRow.resourceType,
       physicalResourceId: previousId,
-      resolvedProperties: update.previousProperties,
+      resolvedProperties: restoreProperties({
+        resourceRow,
+        previousProperties: update.previousProperties,
+      }),
       projectId: args.projectId,
       actor: args.actor,
       logicalId: resourceRow.logicalId,
