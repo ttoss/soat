@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.117.0](https://github.com/ttoss/soat/compare/v0.116.0...v0.117.0) (2026-11-18)
+
+**Note:** Version bump only for package @soat/cli
+
 # [0.116.0](https://github.com/ttoss/soat/compare/v0.115.0...v0.116.0) (2026-11-17)
 
 * fix(cli)!: soat listen verifies only the t=,v1= signature scheme (#1978) ([cee3eca](https://github.com/ttoss/soat/commit/cee3eca58be93519b1ace8470c1283027711d78e)), closes [#1978](https://github.com/ttoss/soat/issues/1978)

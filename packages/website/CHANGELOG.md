@@ -3,6 +3,42 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.117.0](https://github.com/ttoss/soat/compare/v0.116.0...v0.117.0) (2026-11-18)
+
+* fix(iam)!: check decider, workflow, orchestration and eval starts at their entry point (#2003) ([4b8ce49](https://github.com/ttoss/soat/commit/4b8ce49b50e3b4e1bb72fe8493de89127e9bb9fa)), closes [#2003](https://github.com/ttoss/soat/issues/2003)
+* fix(formations)!: a nullable formation property clears on update (#2001) ([f73aad7](https://github.com/ttoss/soat/commit/f73aad7d3dee76bbfa4c2205a3e487cda5094965)), closes [#2001](https://github.com/ttoss/soat/issues/2001)
+
+### Bug Fixes
+
+* **evaluations:** a cancel takes the settle claim, so a settled run never moves back ([#1988](https://github.com/ttoss/soat/issues/1988)) ([9944746](https://github.com/ttoss/soat/commit/9944746572ede56c06315f5322a5697bbb79a6bf))
+* **formations:** a failed update's rollback clears a nullable field it set ([#2005](https://github.com/ttoss/soat/issues/2005)) ([25f4732](https://github.com/ttoss/soat/commit/25f47320f4c199028fc00ba643235d251d63a685))
+* **guardrails:** a session turn counts runtime.generations.* from the messages it replays ([#2000](https://github.com/ttoss/soat/issues/2000)) ([40815f7](https://github.com/ttoss/soat/commit/40815f78c47cc4a8e513b761314ed2f18b15e287))
+* **iam:** an on-behalf-of callback names the cap that refused it ([#1992](https://github.com/ttoss/soat/issues/1992)) ([b53864f](https://github.com/ttoss/soat/commit/b53864ffce6af324763a4753b0cba6309309126f))
+* **playbooks:** deleting a case deletes its export files ([#1994](https://github.com/ttoss/soat/issues/1994)) ([d6f45e1](https://github.com/ttoss/soat/commit/d6f45e1cf0928dc658f3e638fee76250aa872e66))
+
+### Features
+
+* **generations:** record acts_for, the principal an IAM token acts for ([#1991](https://github.com/ttoss/soat/issues/1991)) ([296f04f](https://github.com/ttoss/soat/commit/296f04f6868915926799f0786b026bc89e53c5b9))
+* **iam:** check a project-wide action on srn:<project>:*:* ([#1990](https://github.com/ttoss/soat/issues/1990)) ([b3ae282](https://github.com/ttoss/soat/commit/b3ae282eac12f164c3ac2adc3f6c13b6602ecbde))
+* **tasks:** a priority field on tasks ([#1995](https://github.com/ttoss/soat/issues/1995)) ([b7128bc](https://github.com/ttoss/soat/commit/b7128bc747b3ecf89cc873fd13c69741cb58d903))
+* **tasks:** a priority field on tasks, set through its own route ([#1998](https://github.com/ttoss/soat/issues/1998)) ([8c7ccee](https://github.com/ttoss/soat/commit/8c7ccee8995f2212e7cc5a48c28f9bbe2fed5433))
+* **tasks:** task dependencies, with readiness on every read ([#1999](https://github.com/ttoss/soat/issues/1999)) ([40236e9](https://github.com/ttoss/soat/commit/40236e9dbed05542c65e838e69c87e534e151fe4))
+* **triggers:** every firing's input carries fired_at ([#2002](https://github.com/ttoss/soat/issues/2002)) ([562240d](https://github.com/ttoss/soat/commit/562240d81664443fe126f26f679778f63429b4bb))
+
+### Reverts
+
+* Revert "feat(tasks): a priority field on tasks (#1995)" (#1997) ([f828a5c](https://github.com/ttoss/soat/commit/f828a5cddb7b265b9a378fb5e2c0cedf4382afd8)), closes [#1995](https://github.com/ttoss/soat/issues/1995) [#1997](https://github.com/ttoss/soat/issues/1997)
+
+### BREAKING CHANGES
+
+* a template declaring `null` for a property its type's update
+  cannot clear (`policy.name`, `webhook.description`, `file.prefix`, ...) is
+  refused instead of ignored.
+* a trigger fire whose orchestration or eval the trigger may not
+  start answers `200` with a `failed` firing instead of `403`, and a playbook
+  node that may not start its target fails its execution `FORBIDDEN`; the
+  `PLAYBOOK_EXECUTOR_FORBIDDEN` error code is removed.
+
 # [0.116.0](https://github.com/ttoss/soat/compare/v0.115.0...v0.116.0) (2026-11-17)
 
 * fix(cli)!: soat listen verifies only the t=,v1= signature scheme (#1978) ([cee3eca](https://github.com/ttoss/soat/commit/cee3eca58be93519b1ace8470c1283027711d78e)), closes [#1978](https://github.com/ttoss/soat/issues/1978)
