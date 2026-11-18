@@ -519,6 +519,36 @@ describe('AI Providers', () => {
       expect(response.body.secret_id).toBe(secretId);
     });
 
+    test('unlinks the secret when updating with secret_id null', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/ai-providers/${aiProviderId}`)
+        .send({ secret_id: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.secret_id).toBeNull();
+    });
+
+    test('refuses secret_id null on a provider that needs a credential', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Bedrock Unlink',
+          provider: 'bedrock',
+          default_model: 'model-x',
+          secret_id: bedrockSecretId,
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/ai-providers/${created.body.id}`)
+        .send({ secret_id: null });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta.field).toBe('secret_id');
+    });
+
     test('returns 400 when updating with an invalid secret ID', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/ai-providers/${aiProviderId}`)
