@@ -232,7 +232,7 @@ export const signIamToken = (args: {
 export const createIamToken = async (args: {
   issuer: Issuer;
   body: Record<string, unknown>;
-}): Promise<{ token: string; expires_at: string }> => {
+}): Promise<{ token: string; jti: string; expires_at: string }> => {
   const { issuer, body } = args;
   const ttlSeconds = parseTtl(body.ttl_seconds);
   const { token, jti, expiresAt } = signIamToken({
@@ -247,5 +247,9 @@ export const createIamToken = async (args: {
     jti,
     ttlSeconds
   );
-  return { token, expires_at: new Date(expiresAt * 1000).toISOString() };
+  return {
+    token,
+    jti,
+    expires_at: new Date(expiresAt * 1000).toISOString(),
+  };
 };
