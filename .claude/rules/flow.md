@@ -18,9 +18,9 @@ and those parameters, started by `/flow` or not:
   `after_integration` (what integrating leaves), and its wait on the gates.
   After the verdict, the tick writes the task.
 - A soat task closes on the validation its brief names from naturali's
-  `.claude/flow-validation.md`, usually `merged`. Every soat code change is
-  also validated on the real naturali API: at handoff the child writes an
-  API-validation task behind naturali's bump (`.claude/flow-release.md`).
+  `.claude/flow-validation.md`, usually `merged`. Which soat changes also get
+  an API-validation task at handoff, and how it is written, is that file's
+  § Every task that changes the API is validated on the API.
 - A change that leaves anything to remove later (a shim, fallback or dual read,
   deprecated route or field, column or table kept a release, feature flag,
   migration-only path, workaround awaiting an upstream fix) files one removal
