@@ -2,12 +2,13 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
-import { paginatedList } from './pagination';
 import type { ActingPrincipalType } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
+import { readinessOfTask, type TaskReadiness } from './taskReadiness';
 import { runStateAutomation } from './tasksAutomation';
 import {
   findCreatedTask,
@@ -23,6 +24,8 @@ import {
   type WorkflowState,
 } from './workflowsValidation';
 
+export { getTaskHistory } from './taskHistory';
+export { deleteTask } from './tasksDelete';
 export { migrateTask } from './tasksMigrate';
 export { transitionTask } from './tasksTransition';
 export { listTaskTransitions } from './tasksTransitionCheck';
@@ -69,7 +72,15 @@ export type TaskInstance = InstanceType<(typeof db)['Task']> & {
   workflow?: InstanceType<(typeof db)['Workflow']>;
 };
 
-export const mapTask = (instance: TaskInstance) => {
+/**
+ * The task as every read answers it. `readiness` is required, so no read can
+ * answer a task without it; {@link presentTask} computes it.
+ */
+export const mapTask = (args: {
+  task: TaskInstance;
+  readiness: TaskReadiness;
+}) => {
+  const instance = args.task;
   return {
     id: instance.publicId,
     project_id: instance.project?.publicId,
@@ -89,10 +100,26 @@ export const mapTask = (instance: TaskInstance) => {
     pause_reason: instance.pauseReason,
     automation_chain_depth: instance.automationChainDepth ?? 0,
     pending_transition: instance.pendingTransition,
+    readiness: args.readiness,
     entered_state_at: instance.enteredStateAt,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
+};
+
+export type MappedTask = ReturnType<typeof mapTask>;
+
+export const presentTask = async (args: {
+  task: TaskInstance;
+  transaction?: Transaction;
+}): Promise<MappedTask> => {
+  return mapTask({
+    task: args.task,
+    readiness: await readinessOfTask({
+      taskId: args.task.id as number,
+      transaction: args.transaction,
+    }),
+  });
 };
 
 /**
@@ -128,7 +155,7 @@ export const findTaskInstance = async (args: {
 
 const findTask = async (args: { id: string }) => {
   const task = await findTaskInstance({ id: args.id });
-  return task ? mapTask(task) : null;
+  return task ? presentTask({ task }) : null;
 };
 
 export const getTask = async (args: { id: string }) => {
@@ -228,7 +255,7 @@ const finalizeCreatedTask = async (args: {
   authority: WorkAuthority | null;
 }) => {
   const created = await findTaskInstance({ id: args.taskPublicId });
-  const mapped = mapTask(created!);
+  const mapped = await presentTask({ task: created! });
   await emitTaskEvent({
     type: 'tasks.created',
     projectId: args.projectId,
@@ -467,55 +494,5 @@ export const updateTask = async (args: {
   await task.save();
 
   const updated = await findTaskInstance({ id: args.id });
-  return mapTask(updated!);
-};
-
-export const deleteTask = async (args: { id: string }) => {
-  log('deleteTask: id=%s', args.id);
-  const task = await db.Task.findOne({ where: { publicId: args.id } });
-  if (!task) {
-    throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
-  }
-  await task.destroy();
-};
-
-// ── History ──────────────────────────────────────────────────────────────────
-
-export const getTaskHistory = async (args: {
-  id: string;
-  limit?: number;
-  cursor?: string;
-}) => {
-  const task = await db.Task.findOne({ where: { publicId: args.id } });
-  if (!task) {
-    throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
-  }
-  return paginatedList({
-    limit: args.limit,
-    cursor: args.cursor,
-    filters: { id: args.id },
-    where: { taskId: task.id as number },
-    order: [['createdAt', 'ASC']],
-    query: ({ where, limit, order }) => {
-      return db.TaskTransition.findAll({ where, limit, order });
-    },
-    map: (row) => {
-      return {
-        id: row.publicId,
-        task_id: task.publicId,
-        from_state: row.fromState,
-        to_state: row.toState,
-        transition: row.transition,
-        principal_type: row.principalType,
-        principal_id: row.principalId,
-        generation_id: row.generationId,
-        orchestration_run_id: row.orchestrationRunId,
-        tool_id: row.toolId,
-        note: row.note,
-        from_workflow_version: row.fromWorkflowVersion ?? null,
-        to_workflow_version: row.toWorkflowVersion ?? null,
-        created_at: row.createdAt,
-      };
-    },
-  });
+  return presentTask({ task: updated! });
 };

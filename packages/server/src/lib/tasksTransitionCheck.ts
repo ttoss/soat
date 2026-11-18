@@ -1,9 +1,11 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import type { Transaction } from './dbTransaction';
 import { evaluateLogic } from './jsonLogicMapping';
 import { type Page, pageOf } from './pagination';
-import { taskGuardContext } from './taskGuardContext';
+import { taskExpressionContext } from './taskExpressionContext';
+import { readinessOfTask, type TaskReadiness } from './taskReadiness';
 import {
   findTaskInstance,
   type TaskInstance,
@@ -20,12 +22,16 @@ const log = createDebug('soat:tasks');
 const guardRejection = (args: {
   transition: WorkflowTransition;
   task: TaskInstance;
+  readiness: TaskReadiness;
   principal: TaskPrincipal;
 }): DomainError | null => {
   if (args.transition.guard == null) return null;
   const ok = Boolean(
     evaluateLogic(args.transition.guard, {
-      task: taskGuardContext(args.task),
+      task: taskExpressionContext({
+        task: args.task,
+        readiness: args.readiness,
+      }),
       transition: { name: args.transition.name },
       principal: args.principal,
     })
@@ -48,6 +54,7 @@ const guardRejection = (args: {
  */
 export const transitionRefusal = (args: {
   task: TaskInstance;
+  readiness: TaskReadiness;
   transition: WorkflowTransition;
   transitions: WorkflowTransition[];
   principal: TaskPrincipal;
@@ -83,16 +90,28 @@ export const transitionRefusal = (args: {
   const parks =
     valid.requiresApproval === true && principal.kind !== 'approval';
   if (parks) return null;
-  return guardRejection({ transition: valid, task, principal });
+  return guardRejection({
+    transition: valid,
+    task,
+    readiness: args.readiness,
+    principal,
+  });
 };
 
-export const assertTransitionAllowed = (args: {
+export const assertTransitionAllowed = async (args: {
   task: TaskInstance;
   transition: WorkflowTransition;
   transitions: WorkflowTransition[];
   principal: TaskPrincipal;
-}): void => {
-  const refusal = transitionRefusal(args);
+  transaction?: Transaction;
+}): Promise<void> => {
+  const refusal = transitionRefusal({
+    ...args,
+    readiness: await readinessOfTask({
+      taskId: args.task.id as number,
+      transaction: args.transaction,
+    }),
+  });
   if (refusal) throw refusal;
 };
 
@@ -129,9 +148,11 @@ export const listTaskTransitions = async (args: {
     cursor: args.cursor,
     filters: { id: args.id },
   });
+  const readiness = await readinessOfTask({ taskId: task.id as number });
   const data = page.data.map((transition) => {
     const refusal = transitionRefusal({
       task,
+      readiness,
       transition,
       transitions,
       principal: args.principal,

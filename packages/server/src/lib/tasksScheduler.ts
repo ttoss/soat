@@ -4,7 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { createScheduler, createSweep } from './scheduler';
 import { emitTaskEvent } from './taskEvents';
-import { mapTask, taskIncludes, type TaskInstance } from './tasks';
+import { presentTask, taskIncludes, type TaskInstance } from './tasks';
 import type { TaskWithWorkflow } from './tasksAutomationLocking';
 import {
   claimOrphanedDispatch,
@@ -64,7 +64,7 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
     await emitTaskEvent({
       type: 'tasks.stalled',
       projectId: task.projectId as number,
-      task: mapTask(task),
+      task: await presentTask({ task }),
     });
     log('sweepStalledTasks: emitted tasks.stalled task=%s', task.publicId);
   },

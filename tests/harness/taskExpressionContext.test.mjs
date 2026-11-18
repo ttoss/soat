@@ -16,11 +16,11 @@ const tsFiles = (dir) => {
 };
 
 /**
- * A guard, an `on_complete` rule and a `payload_writes` mapping read one
- * `task`, so a field one of them can name the others can too.
+ * Guards, `on_enter` input mappings, `on_complete` rules and `payload_writes`
+ * read one `task`, so a field one of them can name the others can too.
  */
-describe('task guard context chokepoint', () => {
-  test('only taskGuardContext and the wire mapper spell a task row as `last_result`', () => {
+describe('task expression context chokepoint', () => {
+  test('only taskExpressionContext and the wire mapper spell a task row as `last_result`', () => {
     const builders = tsFiles(srcDir)
       .filter((file) => {
         return /last_result:\s*\w+\.lastResult/.test(
@@ -31,6 +31,6 @@ describe('task guard context chokepoint', () => {
         return path.relative(srcDir, file);
       })
       .sort();
-    assert.deepEqual(builders, ['lib/taskGuardContext.ts', 'lib/tasks.ts']);
+    assert.deepEqual(builders, ['lib/taskExpressionContext.ts', 'lib/tasks.ts']);
   });
 });

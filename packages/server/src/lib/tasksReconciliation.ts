@@ -5,7 +5,8 @@ import { db } from '../db';
 import { applyInputMapping } from './jsonLogicMapping';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import type { MappedOrchestrationRun } from './orchestrations';
-import { taskGuardContext } from './taskGuardContext';
+import { taskExpressionContext } from './taskExpressionContext';
+import { readinessOfTask } from './taskReadiness';
 import { type ActiveDispatch, stateByName } from './tasks';
 import { routeSettledDispatch } from './tasksAutomation';
 import {
@@ -135,6 +136,7 @@ export const claimOrphanedDispatch = async (args: {
   const succeeded = !NON_SUCCESS_TERMINAL_STATUSES.has(run.status);
   const dispatch = args.task.activeDispatch as ActiveDispatch;
   const enteredAt = (args.task.enteredStateAt as Date).getTime();
+  const readiness = await readinessOfTask({ taskId: args.task.id as number });
 
   const claimed = await applyLocked({
     taskPublicId: args.task.publicId as string,
@@ -156,7 +158,7 @@ export const claimOrphanedDispatch = async (args: {
       if (!succeeded) return;
       const result = run.state ?? {};
       const writes = applyInputMapping(onEnter.dispatch.payloadWrites, {
-        task: taskGuardContext(t),
+        task: taskExpressionContext({ task: t, readiness }),
         result,
       });
       t.lastResult = result;

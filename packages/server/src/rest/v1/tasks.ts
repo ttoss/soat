@@ -19,16 +19,13 @@ import { TASK_AUTOMATION_STATUSES } from 'src/lib/tasksAutomationStatus';
 import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
 import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
-import {
-  parseTaskPriority,
-  setTaskPriority,
-  TASK_PRIORITIES,
-} from 'src/lib/tasksPriority';
+import { TASK_PRIORITIES } from 'src/lib/tasksPriority';
 import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import {
   parseEnumListQuery,
+  parseEnumQuery,
   parseNullableEnumListQuery,
   parseNullableToolContextBody,
   parsePagination,
@@ -55,6 +52,15 @@ const tasksRouter = new Router<Context>();
 const principalFromCtx = (ctx: Context): TaskPrincipal => {
   const { principalType, principalId } = requestPrincipalFromCtx(ctx);
   return { kind: principalType, id: principalId };
+};
+
+const blockedQuery = (ctx: Context): boolean | undefined => {
+  const value = parseEnumQuery({
+    ctx,
+    name: 'blocked',
+    allowed: ['true', 'false'],
+  });
+  return value === undefined ? undefined : value === 'true';
 };
 
 /**
@@ -91,6 +97,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
       allowed: TASK_PRIORITIES,
     }),
     assignee: ctx.query.assignee as string | undefined,
+    blocked: blockedQuery(ctx),
     metadata,
     ...parsePagination(ctx),
   });
@@ -251,35 +258,6 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
     title: body.title,
     payload: body.payload,
     assignee: body.assignee,
-  });
-});
-
-tasksRouter.put('/tasks/:task_id/priority', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
-    ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:SetTaskPriority',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
-  });
-
-  const body = ctx.request.body as { priority?: unknown };
-
-  ctx.body = await setTaskPriority({
-    id: ctx.params.task_id,
-    priority: parseTaskPriority(body.priority),
   });
 });
 
@@ -459,4 +437,4 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-export { tasksRouter };
+export { principalFromCtx, tasksRouter };

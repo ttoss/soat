@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { findTaskInstance, mapTask } from './tasks';
+import { findTaskInstance, presentTask } from './tasks';
 
 const log = createDebug('soat:tasks');
 
@@ -51,5 +51,5 @@ export const setTaskPriority = async (args: {
   }
   task.priority = args.priority;
   await task.save();
-  return mapTask(task);
+  return presentTask({ task });
 };

@@ -91,6 +91,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `pause_reason`      | string \| null   | The reason supplied with the pause, when one was                        |
 | `automation_chain_depth` | integer     | Server-owned, read-only: how many machine-driven transitions have run back-to-back with no outside intervention. Reset to `0` by any move a person, a plain API key, or an approval resolution makes. See [The automation chain budget](#the-automation-chain-budget) |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
+| `readiness`         | object           | Server-owned, computed on every read: `{ blocked, blocked_by, blocked_by_count, unblocks }`. See [Task dependencies](#task-dependencies) |
 | `tool_context`      | object           | **Write-only.** Caller context for the task's automation dispatches, accepted on `create-task` and `transition-task` and never returned by a read. See [Dispatch tool context](#dispatch-tool-context) |
 | `entered_state_at`  | string           | When the task entered its current state                                 |
 | `created_at`        | string           | ISO 8601 creation timestamp                                             |
@@ -319,6 +320,21 @@ curl -s "$SOAT_URL/api/v1/tasks?workflow_id=$WORKFLOW_ID&priority=high&priority=
 </TabItem>
 </Tabs>
 
+### Task dependencies
+
+A task can depend on other tasks in its project: it is **blocked** while any of them is open. Needs `tasks:UpdateTaskDependencies` to add or remove, `tasks:GetTask` to list.
+
+The pair of tasks is a dependency's identity; it has no id of its own. Edges cross workflows within a project.
+
+- [`POST /tasks/{task_id}/dependencies`](/docs/api/tasks/add-task-dependency) `{ depends_on_task_id, note? }` makes the path's task wait on the body's: `201`, or `200` with the existing dependency when the pair already holds. An edge that would close a cycle is `409 TASK_DEPENDENCY_CYCLE` with `meta.path`, the task ids around it; the task itself is `400 TASK_DEPENDENCY_SELF`; a body task that is missing or in another project is `400 TASK_DEPENDENCY_TARGET_NOT_FOUND`; a closed path task is `409 TASK_DEPENDENCY_CLOSED`. A closed task may be depended on; that edge blocks nothing.
+- [`GET /tasks/{task_id}/dependencies`](/docs/api/tasks/list-task-dependencies) lists what it waits on, [`GET /tasks/{task_id}/dependents`](/docs/api/tasks/list-task-dependents) what it holds, open and closed alike. Each row is `{ task, depends_on_task, note, created_by_principal_type, created_by_principal_id, created_at }`, both ends as `{ id, title, state, status }`.
+- [`DELETE /tasks/{task_id}/dependencies/{depends_on_task_id}`](/docs/api/tasks/remove-task-dependency) removes one; `204` also when it is already gone.
+- Every task read carries `readiness`: `blocked`, `blocked_by` (the open dependencies, oldest first, at most 20, each `{ task_id, title, state }`), `blocked_by_count` (all of them) and `unblocks` (open dependents). A list page computes it in a fixed number of queries, whatever its size.
+- Any close frees what the task held, `cancelled` included; deleting a task removes its edges and frees its dependents.
+- `tasks.unblocked` fires once, when a task's last open dependency closes, is removed or is deleted.
+- History records state moves only; the [audit log](./audit-log.md) records each add and remove.
+- Readiness gates nothing on its own. A guard reads it as `task.readiness`, so `{ "!": { "var": "task.readiness.blocked" } }` holds a transition until the task is free; [`GET /tasks?blocked=true`](/docs/api/tasks/list-tasks) (or `false`) filters a board by it.
+
 ### Versioning
 
 The state machine is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout), [guardrail versions](./guardrails.md#versioning) and [orchestration versions](./orchestrations.md#versioning). Version 1 is written on create; every write that **changes** the definition increments `version` and archives a `WorkflowVersion`. Versioned surface: `states`, `transitions`, `payload_schema`.
@@ -533,6 +549,10 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | `INVALID_TOOL_CONTEXT_KEY`  | 400    | A `tool_context` key on `create-task` / `transition-task` is not a valid header name, or two keys collide on one header. See [Dispatch tool context](#dispatch-tool-context) |
 | `TASK_AUTOMATION_CHAIN_LIMIT` | 409 | The task has run `TASK_AUTOMATION_CHAIN_LIMIT` machine-driven transitions with no outside intervention; the next one is refused. See [The automation chain budget](#the-automation-chain-budget) |
 | `TASK_NOT_PAUSABLE`        | 409    | The task is closed, so it has no automation left to pause. See [Pausing a task](#pausing-a-task) |
+| `TASK_DEPENDENCY_CYCLE`    | 409    | The dependency would close a cycle; `meta.path` lists it. See [Task dependencies](#task-dependencies) |
+| `TASK_DEPENDENCY_SELF`     | 400    | A task cannot depend on itself |
+| `TASK_DEPENDENCY_TARGET_NOT_FOUND` | 400 | `depends_on_task_id` names no task in the project of the task it would block |
+| `TASK_DEPENDENCY_CLOSED`   | 409    | A closed task cannot gain a dependency |
 | `TASK_NOT_PAUSED`          | 409    | The task carries no operator pause to lift; advance an idle task by firing a transition instead. See [Pausing a task](#pausing-a-task) |
 
 ## Webhook events
@@ -544,6 +564,7 @@ Every event's `data` is the task as [`GET /api/v1/tasks/{task_id}`](/docs/api/ta
 | `tasks.created`              | A task is created and placed in its initial state        | |
 | `tasks.transitioned`         | A task moves between states                              | `transition`, `from_state` |
 | `tasks.closed`               | A task enters a terminal state                           | |
+| `tasks.unblocked`            | A task's last open [dependency](#task-dependencies) closes, is removed or is deleted | `unblocked_by: { task_id, state }` |
 | `tasks.migrated`             | A task moves onto a newer workflow version               | `from_state`, `from_workflow_version` |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   | `result` |
 | `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) | `result`, `transition`, `error_code` |
@@ -708,6 +729,48 @@ APPROVAL_ID=$(curl -s "$SOAT_URL/api/v1/approvals?project_id=$PROJECT_ID&status=
 
 curl -s -X POST "$SOAT_URL/api/v1/approvals/$APPROVAL_ID/approve" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{}'
+```
+
+</TabItem>
+</Tabs>
+
+### Make a task wait on another
+
+See [Task dependencies](#task-dependencies).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat add-task-dependency --task-id "$TASK_ID" --depends-on-task-id "$BLOCKER_ID"
+
+# readiness.blocked is true until the blocker closes.
+soat get-task --task-id "$TASK_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: dependency, error } = await soat.tasks.addTaskDependency({
+  path: { task_id: TASK_ID },
+  body: { depends_on_task_id: BLOCKER_ID },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+const { data: task } = await soat.tasks.getTask({ path: { task_id: TASK_ID } });
+// task.readiness.blocked is true until the blocker closes.
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/dependencies" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"depends_on_task_id\":\"$BLOCKER_ID\"}"
+
+curl -s "$SOAT_URL/api/v1/tasks/$TASK_ID" -H "Authorization: Bearer $TOKEN"
 ```
 
 </TabItem>

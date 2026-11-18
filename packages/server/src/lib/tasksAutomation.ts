@@ -3,9 +3,10 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { emitTaskEvent } from './taskEvents';
-import { taskGuardContext } from './taskGuardContext';
+import { taskExpressionContext } from './taskExpressionContext';
+import { readinessOfTask } from './taskReadiness';
 import type { ActiveDispatch } from './tasks';
-import { mapTask, transitionTask } from './tasks';
+import { presentTask, transitionTask } from './tasks';
 import {
   applyLocked,
   loadTask,
@@ -24,8 +25,13 @@ import type { OnEnter, WorkflowDispatch } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
 
-const buildTaskContext = (task: TaskWithWorkflow) => {
-  return { task: taskGuardContext(task) };
+const buildTaskContext = async (task: TaskWithWorkflow) => {
+  return {
+    task: taskExpressionContext({
+      task,
+      readiness: await readinessOfTask({ taskId: task.id as number }),
+    }),
+  };
 };
 
 const setDispatchState = async (args: {
@@ -92,7 +98,7 @@ const surfaceUnrouted = async (args: {
       ? 'tasks.automation_rejected'
       : 'tasks.automation_unrouted',
     projectId: args.projectId,
-    task: mapTask(task),
+    task: await presentTask({ task }),
     facts: {
       result: args.result,
       ...(args.rejected
@@ -204,7 +210,7 @@ export const routeSettledDispatch = async (args: {
   await routeOnComplete({
     taskPublicId,
     onEnter: args.onEnter,
-    context: buildTaskContext(args.task),
+    context: await buildTaskContext(args.task),
     result: args.result,
     projectId,
     generationId: null,
@@ -406,7 +412,7 @@ export const runStateAutomation = async (args: {
   if (await suppressIfPaused({ task, stateName: args.stateName, token }))
     return;
 
-  const context = buildTaskContext(task);
+  const context = await buildTaskContext(task);
   const inputs = applyInputMapping(dispatch.inputMapping, context);
 
   // No `retry` declared means one attempt and no `attempt` counter on
