@@ -4504,8 +4504,15 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
 
   # 34b-iii. Aggregate — the per-project usage rollup, bucketed by meter type.
   # Grand totals and each group carry summed token counts and cost_usd.
+  # A closed window, so a request-counter flush between two calls (stamped at
+  # flush time) cannot change `totals`; the sleeps let in-flight writes settle.
+  sleep 1
+  USAGE_WINDOW_FROM="1970-01-01T00:00:00Z"
+  USAGE_WINDOW_TO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  sleep 1
   USAGE_AGG_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
+    --from "$USAGE_WINDOW_FROM" --to "$USAGE_WINDOW_TO" \
     --group-by meter_type | sanitize_json)
   USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups.data | type == "array") and (.groups | has("next_cursor")) and (.totals.input_tokens | type == "number") and (.totals.event_count | type == "number") and ([.groups.data[] | select(.key == "llm_tokens")] | length >= 1))')
   if [ "$USAGE_AGG_OK" != "true" ]; then
@@ -4556,6 +4563,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   # understate it.
   USAGE_COUNT_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
+    --from "$USAGE_WINDOW_FROM" --to "$USAGE_WINDOW_TO" \
     --group-by meter_type \
     --limit 1 | sanitize_json)
   USAGE_COUNT_OK=$(printf '%s\n' "$USAGE_COUNT_RESP" | jq -r --argjson full "$USAGE_AGG_RESP" '
