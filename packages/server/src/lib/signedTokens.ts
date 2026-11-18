@@ -22,6 +22,7 @@ export const TOKEN_TYPES = [
   'iam',
   'file-download',
   'ingestion-callback',
+  'causation',
 ] as const;
 
 export type TokenType = (typeof TOKEN_TYPES)[number];

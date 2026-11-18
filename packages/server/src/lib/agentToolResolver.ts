@@ -20,6 +20,7 @@ import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
 import { readForwardedDenial } from './authorizationDenial';
 import { resolveAddedBuiltinActions } from './builtinAddedActions';
+import { withOutboundToolHeaders } from './causationHeader';
 import { HttpToolError, toToolUnreachableError } from './httpToolError';
 import {
   parseResponseMode,
@@ -32,7 +33,6 @@ import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
 import { mcpDefinitionGate } from './mcpDefinitionPins';
 import { openMcpTransport } from './mcpTransport';
 import { isPlainObject } from './plainObject';
-import { withRequestIdHeader } from './requestCorrelation';
 import { toolReferences } from './resourceReferences';
 import {
   resolveSecretRefsInString,
@@ -484,7 +484,7 @@ const buildHttpRequestInit = (args: {
   extraHeaders?: Record<string, string>;
 }): RequestInit => {
   const isMultipart = args.hasBody && args.bodyMode === 'multipart';
-  const headers = withRequestIdHeader({
+  const headers = withOutboundToolHeaders({
     ...(args.hasBody && !isMultipart
       ? { 'Content-Type': 'application/json' }
       : {}),
