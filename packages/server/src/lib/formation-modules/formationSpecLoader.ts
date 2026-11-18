@@ -158,6 +158,37 @@ export const isFormationExpression = (value: unknown): boolean => {
   return typeof value[key] === 'string';
 };
 
+/** Whether an expression sits anywhere in the value, itself included. */
+export const holdsFormationExpression = (value: unknown): boolean => {
+  if (isFormationExpression(value)) return true;
+  if (Array.isArray(value)) return value.some(holdsFormationExpression);
+  if (isObjectRecord(value)) {
+    return Object.values(value).some(holdsFormationExpression);
+  }
+  return false;
+};
+
+/** Drops each error on a field that resolves only at apply. */
+export const withoutUnresolvedFieldErrors = (args: {
+  errors: ValidationError[];
+  properties: Record<string, unknown>;
+  basePath: string;
+}): ValidationError[] => {
+  const unresolved = Object.keys(args.properties).filter((field) => {
+    return holdsFormationExpression(args.properties[field]);
+  });
+  return args.errors.filter((error) => {
+    return !unresolved.some((field) => {
+      const fieldPath = `${args.basePath}.${field}`;
+      return (
+        error.path === fieldPath ||
+        error.path.startsWith(`${fieldPath}.`) ||
+        error.path.startsWith(`${fieldPath}[`)
+      );
+    });
+  });
+};
+
 // ── Generic validation push helpers ─────────────────────────────────────
 
 /**

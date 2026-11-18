@@ -39,6 +39,7 @@ import {
   pushFieldTypeErrors,
   pushRequiredFieldErrors,
   pushUnknownFieldErrors,
+  withoutUnresolvedFieldErrors,
 } from './formationSpecLoader';
 
 // ── Derived names ─────────────────────────────────────────────────────────
@@ -91,13 +92,22 @@ export type FormationModuleDefinition<TResource> = {
    * field.
    */
   requiredOnUpdate?: boolean;
-  /** The resource-specific checks — the only per-module validation left. */
+  /**
+   * Checks of a value as it resolves. An error on a field still holding a
+   * `ref`/`param`/`sub` is dropped: the apply runs them on the resolved value.
+   */
   extraChecks?: (args: {
     properties: Record<string, unknown>;
     basePath: string;
     forUpdate: boolean;
     /** The formation's project, or `null` when validation has none. */
     projectPublicId: string | null;
+    errors: ValidationError[];
+  }) => void;
+  /** Checks that read a `ref`/`param`/`sub` as itself; never dropped. */
+  templateChecks?: (args: {
+    properties: Record<string, unknown>;
+    basePath: string;
     errors: ValidationError[];
   }) => void;
   /** Non-fatal checks surfaced as `ValidationResult.warnings`. */
@@ -221,15 +231,24 @@ const buildValidator = <TResource>(args: {
       errors,
       skipFields: typeErrored,
     });
+    definition.templateChecks?.({ properties, basePath, errors });
+    const extraErrors: ValidationError[] = [];
     definition.extraChecks?.({
       properties,
       basePath,
       forUpdate,
       projectPublicId,
-      errors,
+      errors: extraErrors,
     });
 
-    return errors;
+    return [
+      ...errors,
+      ...withoutUnresolvedFieldErrors({
+        errors: extraErrors,
+        properties,
+        basePath,
+      }),
+    ];
   };
 };
 

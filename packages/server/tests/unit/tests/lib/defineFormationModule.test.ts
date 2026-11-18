@@ -45,3 +45,51 @@ describe('defineFormationModule — authorization', () => {
     );
   });
 });
+
+describe('defineFormationModule — extra checks', () => {
+  const formationModule = defineFormationModule<QuotaRow>({
+    resourceType: 'policy',
+    authorization: {
+      srnResourceType: 'policy',
+      create: 'policies:CreatePolicy',
+      delete: 'policies:DeletePolicy',
+    },
+    extraChecks: ({ basePath, errors }) => {
+      errors.push({ path: basePath, message: 'whole' });
+      errors.push({ path: `${basePath}.document`, message: 'document' });
+      errors.push({ path: `${basePath}.name`, message: 'name' });
+    },
+    create: async () => {
+      return { id: 'pol_created' };
+    },
+    remove: async () => {},
+  });
+
+  const messagesFor = (document: unknown) => {
+    const errors =
+      formationModule.validateProperties?.({
+        properties: { name: 'p', document },
+        basePath: 'resources.P.properties',
+        projectPublicId: null,
+      }) ?? [];
+    return errors.map((error) => {
+      return error.message;
+    });
+  };
+
+  test.each([
+    ['itself', { sub: 'x' }],
+    ['nested', { statement: [{ resource: [{ ref: 'Other' }] }] }],
+    ['deep', { statement: [{ resource: [{ param: 'P' }] }] }],
+  ])('leave a field holding an expression %s to the apply', (_where, doc) => {
+    expect(messagesFor(doc)).toEqual(['whole', 'name']);
+  });
+
+  test('check a field holding only literals', () => {
+    expect(messagesFor({ statement: [{ resource: ['foo'] }] })).toEqual([
+      'whole',
+      'document',
+      'name',
+    ]);
+  });
+});

@@ -191,6 +191,8 @@ export const toolsFormationModule = defineFormationModule({
     },
   },
 
+  templateChecks: pushLiteralCredentialErrors,
+
   extraChecks: ({ properties, basePath, errors }) => {
     if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
       try {
@@ -203,7 +205,6 @@ export const toolsFormationModule = defineFormationModule({
     }
 
     pushExecuteErrors({ properties, basePath, errors });
-    pushLiteralCredentialErrors({ properties, basePath, errors });
     pushBuiltinActionErrors({ properties, basePath, errors });
 
     // The same rule the REST write path enforces, from the same function, so a
