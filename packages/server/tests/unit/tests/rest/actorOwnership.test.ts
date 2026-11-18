@@ -6,6 +6,7 @@ import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { soatTools } from 'src/lib/soatTools';
 
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -104,10 +105,16 @@ describe('Actor ownership', () => {
           name: `owned-${(seq += 1)}`,
           definition: PLAYBOOK_DEFINITION,
         });
-        return created(`/api/v1/playbooks/${playbookId}/cases`, {
-          subject: `client-${seq}`,
-          ...(actorId ? { actor_id: actorId } : {}),
+        const res = await createPlaybookCase({
+          client: asAdmin(),
+          playbookId,
+          body: {
+            subject: `client-${seq}`,
+            ...(actorId ? { actor_id: actorId } : {}),
+          },
         });
+        expect(res.status).toBe(201);
+        return res.body.id as string;
       },
       path: (template, id) => {
         return template

@@ -13,6 +13,7 @@ import {
   textCompletion,
   toolCallCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const CASE_ACTIONS = [
@@ -138,9 +139,11 @@ describe('Playbook executions', () => {
         definition: args.definition,
       });
     expect(playbook.status).toBe(201);
-    const created = await asAdmin()
-      .post(`/api/v1/playbooks/${playbook.body.id}/cases`)
-      .send({ subject: `client-${seq}` });
+    const created = await createPlaybookCase({
+      client: asAdmin(),
+      playbookId: playbook.body.id,
+      body: { subject: `client-${seq}` },
+    });
     expect(created.status).toBe(201);
     return created.body.id as string;
   };

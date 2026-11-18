@@ -13,6 +13,7 @@ import {
   type ChatCompletionsStub,
   startChatCompletionsStub,
 } from '../../fixtures/chatCompletionsStub';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const PDF = Buffer.from('%PDF-1.4 proposal');
@@ -89,9 +90,11 @@ describe('Playbook exports', () => {
         ),
       });
     expect(playbook.status).toBe(201);
-    const created = await asAdmin()
-      .post(`/api/v1/playbooks/${playbook.body.id}/cases`)
-      .send({ subject: `client-${seq}` });
+    const created = await createPlaybookCase({
+      client: asAdmin(),
+      playbookId: playbook.body.id,
+      body: { subject: `client-${seq}` },
+    });
     expect(created.status).toBe(201);
     return created.body.id as string;
   };

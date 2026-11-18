@@ -6,6 +6,7 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -223,9 +224,11 @@ describe('Resource grants', () => {
           })
       );
       const caseId = await createdId(
-        admin()
-          .post(`/api/v1/playbooks/${playbookId}/cases`)
-          .send({ subject: unique('rg-case') })
+        createPlaybookCase({
+          client: admin(),
+          playbookId,
+          body: { subject: unique('rg-case') },
+        })
       );
       const playbook = await db.Playbook.findOne({
         where: { publicId: playbookId },

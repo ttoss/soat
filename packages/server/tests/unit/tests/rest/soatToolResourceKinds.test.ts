@@ -7,6 +7,7 @@ import {
   type ChatRequest,
   startChatCompletionStub,
 } from '../../fixtures/chatCompletionStub';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -177,10 +178,13 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
         nodes: [{ id: 'intake', title: 'Intake', kind: 'collect', inputs: [] }],
       },
     });
-    const playbookCaseId = await create(
-      `/api/v1/playbooks/${playbookId}/cases`,
-      { subject: 'kinds' }
-    );
+    const opened = await createPlaybookCase({
+      client: asAdmin(),
+      playbookId,
+      body: { subject: 'kinds' },
+    });
+    expect(opened.status).toBe(201);
+    const playbookCaseId = opened.body.id as string;
 
     // Rows no single request creates on its own: a run, a recorded turn and
     // its trace, a chain, an audit entry and a decision are each the residue

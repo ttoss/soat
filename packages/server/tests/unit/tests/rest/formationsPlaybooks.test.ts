@@ -8,6 +8,7 @@ import {
   type ChatCompletionsStub,
   startChatCompletionsStub,
 } from '../../fixtures/chatCompletionsStub';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient } from '../../testClient';
 
 const DEPLOY_ACTIONS = [
@@ -241,9 +242,11 @@ describe('Formations — playbook resources', () => {
     test('its nodes run under the playbook policy_ids', async () => {
       const formation = await deploy(userToken, { resources: resources() });
       const playbookId = physicalId(formation.body, 'Pricing');
-      const created = await authenticatedTestClient(userToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: unique('client') });
+      const created = await createPlaybookCase({
+        client: authenticatedTestClient(userToken),
+        playbookId,
+        body: { subject: unique('client') },
+      });
       expect(created.status).toBe(201);
 
       const written = await authenticatedTestClient(userToken)
@@ -359,9 +362,11 @@ describe('Formations — playbook resources', () => {
     test('a playbook with cases blocks the teardown before anything is deleted', async () => {
       const formation = await deploy(userToken, { resources: resources() });
       const playbookId = physicalId(formation.body, 'Pricing');
-      const created = await authenticatedTestClient(userToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: unique('client') });
+      const created = await createPlaybookCase({
+        client: authenticatedTestClient(userToken),
+        playbookId,
+        body: { subject: unique('client') },
+      });
       expect(created.status).toBe(201);
 
       const res = await authenticatedTestClient(userToken).delete(

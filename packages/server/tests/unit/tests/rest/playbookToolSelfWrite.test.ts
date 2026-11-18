@@ -7,6 +7,7 @@ import {
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -51,11 +52,12 @@ describe("Playbook writes from a dependent case's agent through a tool", () => {
     upstreams?: Record<string, string>
   ): Promise<string> => {
     seq += 1;
-    const res = await admin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `case-${seq}`, ...(upstreams && { upstreams }) });
+    const res = await createPlaybookCase({
+      client: admin(),
+      playbookId,
+      body: { subject: `case-${seq}`, ...(upstreams && { upstreams }) },
+    });
     expect(res.status).toBe(201);
-    await flushPlaybookExecutions();
     return res.body.id as string;
   };
 

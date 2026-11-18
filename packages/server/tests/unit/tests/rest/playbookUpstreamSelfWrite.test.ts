@@ -2,6 +2,7 @@ import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import {
   authenticatedTestClient,
   clientFor,
@@ -107,11 +108,12 @@ describe("Playbook writes from a dependent case's own work", () => {
     upstreams?: Record<string, string>
   ): Promise<CaseBody> => {
     seq += 1;
-    const res = await admin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `case-${seq}`, ...(upstreams && { upstreams }) });
+    const res = await createPlaybookCase({
+      client: admin(),
+      playbookId,
+      body: { subject: `case-${seq}`, ...(upstreams && { upstreams }) },
+    });
     expect(res.status).toBe(201);
-    await flushPlaybookExecutions();
     return res.body as CaseBody;
   };
 

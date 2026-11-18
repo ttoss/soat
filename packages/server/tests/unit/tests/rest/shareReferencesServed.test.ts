@@ -1,4 +1,5 @@
 import { testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -277,9 +278,11 @@ describe('Share references through served versions and attachments', () => {
     };
     const pinned = await playbook('pinned-by-a-case');
     const unpinned = await playbook('no-case');
-    const opened = await admin()
-      .post(`/api/v1/playbooks/${pinned}/cases`)
-      .send({ subject: 'pinned' });
+    const opened = await createPlaybookCase({
+      client: admin(),
+      playbookId: pinned,
+      body: { subject: 'pinned' },
+    });
     expect(opened.status).toBe(201);
     for (const id of [pinned, unpinned]) {
       await update('patch', `/api/v1/playbooks/${id}`, {
@@ -317,9 +320,11 @@ describe('Share references through served versions and attachments', () => {
         ],
       },
     });
-    const opened = await admin()
-      .post(`/api/v1/playbooks/${playbook}/cases`)
-      .send({ subject: 'unrelated' });
+    const opened = await createPlaybookCase({
+      client: admin(),
+      playbookId: playbook,
+      body: { subject: 'unrelated' },
+    });
     expect(opened.status).toBe(201);
     const agent = await createIn(granteeId, '/api/v1/agents', {
       name: 'Beside the case',
