@@ -175,7 +175,7 @@ export const createAiProvider = async (args: {
 };
 
 type AiProviderFieldUpdates = {
-  secretId?: number;
+  secretId?: number | null;
   name?: string;
   provider?: AiProviderSlug;
   defaultModel?: string;
@@ -207,7 +207,7 @@ const applyAiProviderFields = (args: {
 
 export const updateAiProvider = async (args: {
   id: string;
-  secretId?: number;
+  secretId?: number | null;
   name?: string;
   provider?: AiProviderSlug;
   defaultModel?: string;
