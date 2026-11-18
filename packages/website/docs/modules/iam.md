@@ -55,7 +55,7 @@ An API key scoped to a project issues a short-lived token that acts as the key h
 }
 ```
 
-It answers `201 { "token", "expires_at" }`.
+It answers `201 { "token", "jti", "expires_at" }`; `jti` is the id a denial by the bound names in `meta.denied_by` and the audit log records.
 
 - The bound is `policy`, an inline document, or `policy_ids`, policies of the key's project or global ones; exactly one. An invalid document or an unknown id is `400 IAM_TOKEN_POLICY_INVALID`.
 - `ttl_seconds` runs from 30 to 900 (default 300). An expired token is `401`.

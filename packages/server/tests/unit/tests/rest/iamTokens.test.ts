@@ -172,6 +172,21 @@ describe('IAM tokens', () => {
       expect(expiresAt).toBeLessThanOrEqual(Date.now() + 61_000);
     });
 
+    test('answers the jti a denial by its bound names', async () => {
+      const res = await mint(key, { policy: GENERATE_ONLY });
+      const resource = `srn:${turn.projectId}:document:${documentId}`;
+
+      expect(res.status).toBe(201);
+      expect(res.body.jti).toBe(
+        jwt.decode(res.body.token, { json: true })?.jti
+      );
+      const read = await readDocument(res.body.token);
+      expect(read.body.error.meta).toMatchObject({
+        resource,
+        denied_by: { type: 'iam_token', id: res.body.jti },
+      });
+    });
+
     test('401 without a credential', async () => {
       const res = await testClient
         .post('/api/v1/iam/tokens')

@@ -297,6 +297,7 @@ components:
       type: object
       required:
         - token
+        - jti
         - expires_at
       properties:
         token:
@@ -305,6 +306,12 @@ components:
             Send as `Authorization: Bearer <token>`. Shown once; an expired
             token is `401`.
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.sig
+        jti:
+          type: string
+          description: >-
+            The token's id: `meta.denied_by.id` of a denial its bound causes,
+            and `detail.iam_token.jti` on the audit entries it makes.
+          example: 3f2c1a9e-7b4d-4e8a-9c1f-2d5e6a7b8c9d
         expires_at:
           type: string
           format: date-time
