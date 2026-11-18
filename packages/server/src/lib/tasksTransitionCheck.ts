@@ -3,7 +3,6 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import { evaluateLogic } from './jsonLogicMapping';
 import { type Page, pageOf } from './pagination';
-import { taskGuardContext } from './taskGuardContext';
 import {
   findTaskInstance,
   type TaskInstance,
@@ -17,6 +16,20 @@ import {
 
 const log = createDebug('soat:tasks');
 
+const buildTaskContext = (task: TaskInstance) => {
+  return {
+    id: task.publicId,
+    title: task.title,
+    state: task.state,
+    status: task.status,
+    payload: task.payload,
+    assignee: task.assignee,
+    // Server-owned, in its own namespace: a guard on `task.last_result` can
+    // only be satisfied by a value an automation wrote.
+    last_result: task.lastResult ?? null,
+  };
+};
+
 const guardRejection = (args: {
   transition: WorkflowTransition;
   task: TaskInstance;
@@ -25,7 +38,7 @@ const guardRejection = (args: {
   if (args.transition.guard == null) return null;
   const ok = Boolean(
     evaluateLogic(args.transition.guard, {
-      task: taskGuardContext(args.task),
+      task: buildTaskContext(args.task),
       transition: { name: args.transition.name },
       principal: args.principal,
     })

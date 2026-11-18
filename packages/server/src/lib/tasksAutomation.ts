@@ -3,7 +3,6 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { emitTaskEvent } from './taskEvents';
-import { taskGuardContext } from './taskGuardContext';
 import type { ActiveDispatch } from './tasks';
 import { mapTask, transitionTask } from './tasks';
 import {
@@ -25,7 +24,19 @@ import type { OnEnter, WorkflowDispatch } from './workflowsValidation';
 const log = createDebug('soat:tasks');
 
 const buildTaskContext = (task: TaskWithWorkflow) => {
-  return { task: taskGuardContext(task) };
+  return {
+    task: {
+      id: task.publicId,
+      title: task.title,
+      state: task.state,
+      status: task.status,
+      payload: task.payload,
+      assignee: task.assignee,
+      // Server-owned, in its own namespace: a guard on `task.last_result`
+      // can only be satisfied by a value an automation wrote.
+      last_result: task.lastResult ?? null,
+    },
+  };
 };
 
 const setDispatchState = async (args: {

@@ -20,9 +20,7 @@ const isMissing = (
   value: unknown,
   fieldSpec: FieldSpec | undefined
 ): boolean => {
-  if (value === undefined) return true;
-  // A required nullable field is sent as `null` to clear what it names.
-  if (value === null) return fieldSpec?.nullable !== true;
+  if (value === undefined || value === null) return true;
   // Treat an empty string as absent for required string fields, matching the
   // `if (!field)` presence checks this enforcement replaces.
   return fieldSpec?.type === 'string' && value === '';

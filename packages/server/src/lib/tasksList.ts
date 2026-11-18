@@ -1,7 +1,6 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 
-import { nullableInWhere } from './nullableFilter';
 import { paginatedList } from './pagination';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
@@ -10,8 +9,10 @@ import {
   type StructuredFilter,
 } from './structuredFilter';
 import { mapTask, taskIncludes } from './tasks';
-import { type TaskAutomationStatus } from './tasksAutomationStatus';
-import { type TaskPriority } from './tasksPriority';
+import {
+  automationStatusWhere,
+  type TaskAutomationStatus,
+} from './tasksAutomationStatus';
 
 const log = createDebug('soat:tasks');
 
@@ -29,8 +30,6 @@ export const listTasks = async (args: {
   // ORed, `null` included. `status=open` narrows a board; it does not say which
   // of those cards has an automation still dispatching.
   automationStatuses?: (TaskAutomationStatus | null)[];
-  // ORed, `null` included, as `automationStatuses`.
-  priorities?: (TaskPriority | null)[];
   assignee?: string;
   /** Structured question about the bag; see {@link compileStructuredWhere}. */
   metadata?: StructuredFilter;
@@ -52,12 +51,8 @@ export const listTasks = async (args: {
   if (args.statuses?.length) where.status = args.statuses;
   if (args.assignee) where.assignee = args.assignee;
 
-  const nullableFilters = {
-    automationStatus: args.automationStatuses,
-    priority: args.priorities,
-  };
-  for (const [column, values] of Object.entries(nullableFilters)) {
-    if (values?.length) where[column] = nullableInWhere(values);
+  if (args.automationStatuses?.length) {
+    where.automationStatus = automationStatusWhere(args.automationStatuses);
   }
 
   applyFilterWhere({
@@ -86,7 +81,6 @@ export const listTasks = async (args: {
       state: args.state,
       statuses: args.statuses,
       automationStatuses: args.automationStatuses,
-      priorities: args.priorities,
       assignee: args.assignee,
       metadata: args.metadata,
     },

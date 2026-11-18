@@ -1,8 +1,9 @@
-import { FILTER_NONE } from 'src/lib/nullableFilter';
 import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { ORCHESTRATION_RUN_STATUSES } from 'src/lib/orchestrations';
-import { TASK_AUTOMATION_STATUSES } from 'src/lib/tasksAutomationStatus';
-import { TASK_PRIORITIES } from 'src/lib/tasksPriority';
+import {
+  AUTOMATION_STATUS_NONE,
+  TASK_AUTOMATION_STATUSES,
+} from 'src/lib/tasksAutomationStatus';
 
 /**
  * The listing filters are only useful if the values a caller may send are the
@@ -44,32 +45,6 @@ describe('list status filters', () => {
   test('the task listing offers every automation status, plus the sentinel', () => {
     expect(
       parameterEnum({ path: '/api/v1/tasks', name: 'automation_status' })
-    ).toEqual([...TASK_AUTOMATION_STATUSES, FILTER_NONE]);
+    ).toEqual([...TASK_AUTOMATION_STATUSES, AUTOMATION_STATUS_NONE]);
   });
-
-  test('the task listing offers every priority, plus the sentinel', () => {
-    expect(parameterEnum({ path: '/api/v1/tasks', name: 'priority' })).toEqual([
-      ...TASK_PRIORITIES,
-      FILTER_NONE,
-    ]);
-  });
-
-  // The same set wherever a body or a read carries the field.
-  test.each(['Task', 'CreateTaskRequest', 'SetTaskPriorityRequest'])(
-    '%s.priority holds every priority, plus null',
-    (schema) => {
-      const spec = getMergedOpenApiSpec() as {
-        components: {
-          schemas: Record<
-            string,
-            { properties: Record<string, { enum?: unknown[] }> }
-          >;
-        };
-      };
-      expect(spec.components.schemas[schema].properties.priority.enum).toEqual([
-        ...TASK_PRIORITIES,
-        null,
-      ]);
-    }
-  );
 });

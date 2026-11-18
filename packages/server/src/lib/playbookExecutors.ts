@@ -145,7 +145,6 @@ const startWorkflow = async (args: StartArgs): Promise<ExecutorOutcome> => {
     workflowId: args.executor.id,
     title: args.title,
     payload: args.input,
-    priority: null,
     principal: {
       kind: args.runAs.authority.principal.type,
       id: args.runAs.authority.principal.id,

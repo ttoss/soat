@@ -15,21 +15,19 @@ import {
   transitionTask,
   updateTask,
 } from 'src/lib/tasks';
-import { TASK_AUTOMATION_STATUSES } from 'src/lib/tasksAutomationStatus';
+import {
+  AUTOMATION_STATUS_NONE,
+  TASK_AUTOMATION_STATUSES,
+  type TaskAutomationStatus,
+} from 'src/lib/tasksAutomationStatus';
 import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
 import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
-import {
-  parseTaskPriority,
-  setTaskPriority,
-  TASK_PRIORITIES,
-} from 'src/lib/tasksPriority';
 import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import {
   parseEnumListQuery,
-  parseNullableEnumListQuery,
   parseNullableToolContextBody,
   parsePagination,
   requestPrincipalFromCtx,
@@ -71,6 +69,17 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     projectSelector: 'optional',
   });
 
+  // The absent status is a value a task really holds, so it is a value of the
+  // filter too — the parameter's own absence already means "every task".
+  const automationStatuses = parseEnumListQuery({
+    ctx,
+    name: 'automation_status',
+    allowed: [...TASK_AUTOMATION_STATUSES, AUTOMATION_STATUS_NONE],
+  })?.map((value) => {
+    return value === AUTOMATION_STATUS_NONE
+      ? null
+      : (value as TaskAutomationStatus);
+  });
   ctx.body = await listTasks({
     projectIds,
     workflowId: ctx.query.workflow_id as string | undefined,
@@ -80,16 +89,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
       name: 'status',
       allowed: ['open', 'closed'],
     }),
-    automationStatuses: parseNullableEnumListQuery({
-      ctx,
-      name: 'automation_status',
-      allowed: TASK_AUTOMATION_STATUSES,
-    }),
-    priorities: parseNullableEnumListQuery({
-      ctx,
-      name: 'priority',
-      allowed: TASK_PRIORITIES,
-    }),
+    automationStatuses,
     assignee: ctx.query.assignee as string | undefined,
     metadata,
     ...parsePagination(ctx),
@@ -183,7 +183,6 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     title: string;
     payload?: Record<string, unknown> | null;
     assignee?: string | null;
-    priority?: unknown;
     state?: string | null;
     tool_context?: unknown;
     metadata?: unknown;
@@ -200,7 +199,6 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     title: body.title,
     payload: body.payload,
     assignee: body.assignee,
-    priority: parseTaskPriority(body.priority),
     state: body.state,
     toolContext: parseNullableToolContextBody(body.tool_context),
     // Rejected before the task row exists, like every other metadata bag.
@@ -253,35 +251,6 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
     title: body.title,
     payload: body.payload,
     assignee: body.assignee,
-  });
-});
-
-tasksRouter.put('/tasks/:task_id/priority', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
-    ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:SetTaskPriority',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
-  });
-
-  const body = ctx.request.body as { priority?: unknown };
-
-  ctx.body = await setTaskPriority({
-    id: ctx.params.task_id,
-    priority: parseTaskPriority(body.priority),
   });
 });
 

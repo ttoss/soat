@@ -23,7 +23,6 @@ export const createTaskRequestDigest = (args: {
   state?: string | null;
   toolContext?: Record<string, string> | null;
   metadata?: Record<string, unknown>;
-  priority?: string | null;
 }): string => {
   return stableDigest({
     workflow: args.workflowId,
@@ -33,9 +32,6 @@ export const createTaskRequestDigest = (args: {
     state: args.state ?? null,
     context: args.toolContext ?? null,
     metadata: args.metadata ?? null,
-    // Only when set, so a key claimed by a create that sent none keeps its
-    // stored digest.
-    ...(args.priority ? { priority: args.priority } : {}),
   });
 };
 
