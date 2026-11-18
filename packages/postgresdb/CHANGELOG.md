@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.118.0](https://github.com/ttoss/soat/compare/v0.117.0...v0.118.0) (2026-11-18)
+
+* feat(evaluations)!: give the eval-run cancel its own IAM action (#2010) ([57ced2e](https://github.com/ttoss/soat/commit/57ced2e47e347a6f1106a297ea75f0c5a766b4e7)), closes [#2010](https://github.com/ttoss/soat/issues/2010)
+
+### Bug Fixes
+
+* **postgresdb:** name pre-alias usage events by their provider's model alias ([#2019](https://github.com/ttoss/soat/issues/2019)) ([ad75fb6](https://github.com/ttoss/soat/commit/ad75fb6ef3a413e796da28acc1381ff917330e77))
+
+### BREAKING CHANGES
+
+* cancelling an eval run needs `evaluations:CancelEvalRun`.
+  Stored policies and formation templates are rewritten; a template kept
+  outside SOAT that grants `evaluations:RunEval` for cancelling must add it.
+
 # [0.117.0](https://github.com/ttoss/soat/compare/v0.116.0...v0.117.0) (2026-11-18)
 
 ### Bug Fixes
