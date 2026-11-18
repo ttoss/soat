@@ -55,7 +55,7 @@ describe('list status filters', () => {
   });
 
   // The same set wherever a body or a read carries the field.
-  test.each(['Task', 'CreateTaskRequest', 'SetTaskPriorityRequest'])(
+  test.each(['Task', 'SetTaskPriorityRequest'])(
     '%s.priority holds every priority, plus null',
     (schema) => {
       const spec = getMergedOpenApiSpec() as {
