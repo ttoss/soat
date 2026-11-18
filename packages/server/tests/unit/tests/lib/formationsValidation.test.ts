@@ -1098,6 +1098,59 @@ describe('validateFormationTemplate', () => {
     ).toBe(true);
   });
 
+  test('warns on an unreferenced pipeline parameter when a step tool_id is a ref', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        Target: {
+          type: 'tool',
+          properties: {
+            type: 'http',
+            name: 'target',
+            execute: { url: 'https://example.com' },
+          },
+        },
+        MyPipeline: {
+          type: 'tool',
+          properties: {
+            type: 'pipeline',
+            name: 'my-pipeline',
+            parameters: {
+              type: 'object',
+              properties: { rows: {}, title: {} },
+            },
+            pipeline: {
+              steps: [
+                {
+                  id: 'step1',
+                  tool_id: { ref: 'Target' },
+                  input: { rows: { var: 'input.rows' } },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    const messages = result.warnings
+      .filter((w) => {
+        return w.path === 'resources.MyPipeline.properties.pipeline';
+      })
+      .map((w) => {
+        return w.message;
+      });
+    expect(
+      messages.some((m) => {
+        return m.includes("'title'");
+      })
+    ).toBe(true);
+    expect(
+      messages.some((m) => {
+        return m.includes("'rows'");
+      })
+    ).toBe(false);
+  });
+
   test('returns valid for a template with param expression in resource properties', () => {
     const result = validateFormationTemplate({
       parameters: {
