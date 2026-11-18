@@ -164,7 +164,7 @@ models' indexes mid-way calls `context.sync()` itself.
 Never import a model into a migration: the models describe the schema the
 migration is in the middle of changing.
 
-#### Two traps all three migrations here hit
+#### Two traps every migration meets
 
 **A step that must not half-land goes in one `context.run`.** `run` executes
 through the pool, so two calls can land on different connections and `BEGIN` /
