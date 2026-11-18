@@ -343,6 +343,26 @@ describe('SOAT self-call', () => {
       ).toBe(true);
     });
 
+    // A dispatched run waits in the queue until a drain claims it, so an
+    // on_enter automation settles only while the queue is driven.
+    const driveTaskAutomations = async () => {
+      let settled = false;
+      const flushed = flushTaskAutomations().then(() => {
+        settled = true;
+      });
+      while (!settled) {
+        await drainQueueOnce();
+      }
+      await flushed;
+    };
+
+    const stateOf = async (taskPublicId: string) => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${taskPublicId}`
+      );
+      return res.body.state as string;
+    };
+
     /**
      * The transition a background-driven run made, found by name. Attribution
      * is asserted on *this* row rather than the task's first: the creation row
@@ -428,20 +448,8 @@ describe('SOAT self-call', () => {
       expect(taskRes.status).toBe(201);
       expect(taskRes.body.state).toBe('working');
 
-      // The dispatch is fire-and-forget and its run is queued, so drive the
-      // queue while polling the task — the observable side effect — rather than
-      // sleeping for a fixed settle time.
-      let state = taskRes.body.state as string;
-      for (let attempt = 0; attempt < 40 && state !== 'done'; attempt += 1) {
-        await drainQueueOnce();
-        const poll = await authenticatedTestClient(userToken).get(
-          `/api/v1/tasks/${taskRes.body.id}`
-        );
-        state = poll.body.state as string;
-      }
-      await flushTaskAutomations();
-
-      expect(state).toBe('done');
+      await driveTaskAutomations();
+      expect(await stateOf(taskRes.body.id)).toBe('done');
 
       // A user-started chain names that user. The `api_key` half of the same
       // assertion lives in the next test; both kinds are covered through a
@@ -549,17 +557,8 @@ describe('SOAT self-call', () => {
       expect(taskRes.status).toBe(201);
       expect(taskRes.body.state).toBe('working');
 
-      let state = taskRes.body.state as string;
-      for (let attempt = 0; attempt < 40 && state !== 'done'; attempt += 1) {
-        await drainQueueOnce();
-        const poll = await authenticatedTestClient(userToken).get(
-          `/api/v1/tasks/${taskRes.body.id}`
-        );
-        state = poll.body.state as string;
-      }
-      await flushTaskAutomations();
-
-      expect(state).toBe('done');
+      await driveTaskAutomations();
+      expect(await stateOf(taskRes.body.id)).toBe('done');
 
       const row = await finishRowOf(taskRes.body.id);
       expect(row.principal_type).toBe('api_key');
