@@ -5,6 +5,7 @@ import {
   applyCreateChange,
   failFormationOperation,
   isCreateChange,
+  isOrphanedResource,
   isResourceAlreadyGone,
   markResourceDeleted,
 } from './formationsApplyHelpers';
@@ -51,20 +52,17 @@ export const handleOrphanedDeletes = async (args: {
   events: FormationEvent[];
 }): Promise<void> => {
   const { template, existingResources, events } = args;
-  const newLogicalIds = new Set(Object.keys(template.resources));
-  const toDelete = existingResources.filter((r) => {
-    return (
-      !newLogicalIds.has(r.logicalId) &&
-      r.physicalResourceId &&
-      r.status !== 'deleted'
-    );
+  const declaredLogicalIds = new Set(Object.keys(template.resources));
+  const toDelete = existingResources.filter((resource) => {
+    return isOrphanedResource({ resource, declaredLogicalIds });
   });
   for (const resource of toDelete) {
     try {
-      if (resource.deletionPolicy !== 'retain') {
+      // A row whose create never succeeded has nothing to delete upstream.
+      if (resource.physicalResourceId && resource.deletionPolicy !== 'retain') {
         await applyDeleteResource({
           resourceType: resource.resourceType,
-          physicalResourceId: resource.physicalResourceId!,
+          physicalResourceId: resource.physicalResourceId,
           projectId: args.projectId,
           actor: args.actor,
           logicalId: resource.logicalId,

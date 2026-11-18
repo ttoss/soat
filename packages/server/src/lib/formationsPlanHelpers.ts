@@ -1,5 +1,6 @@
 import type { db } from 'src/db';
 
+import { isOrphanedResource } from './formationsApplyHelpers';
 import { resolveParamExpressions, resolveRefs } from './formationsHelpers';
 import {
   mergeWithPrevious,
@@ -176,18 +177,19 @@ export const computeOrphanedPlanChanges = (args: {
 }): PlanChange[] => {
   const { templateResourceKeys, existingResources } = args;
   return existingResources
-    .filter((r) => {
-      return (
-        !templateResourceKeys.has(r.logicalId) &&
-        r.physicalResourceId &&
-        r.status !== 'deleted'
-      );
+    .filter((resource) => {
+      return isOrphanedResource({
+        resource,
+        declaredLogicalIds: templateResourceKeys,
+      });
     })
     .map((r) => {
       return {
         logicalId: r.logicalId,
         resourceType: r.resourceType,
-        physicalResourceId: r.physicalResourceId!,
+        ...(r.physicalResourceId
+          ? { physicalResourceId: r.physicalResourceId }
+          : {}),
         action: 'delete' as const,
       };
     });
