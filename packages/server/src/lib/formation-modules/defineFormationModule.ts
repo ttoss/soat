@@ -96,6 +96,8 @@ export type FormationModuleDefinition<TResource> = {
     properties: Record<string, unknown>;
     basePath: string;
     forUpdate: boolean;
+    /** The formation's project, or `null` when validation has none. */
+    projectPublicId: string | null;
     errors: ValidationError[];
   }) => void;
   /** Non-fatal checks surfaced as `ValidationResult.warnings`. */
@@ -168,6 +170,7 @@ type Validator = (args: {
   properties: unknown;
   basePath: string;
   forUpdate: boolean;
+  projectPublicId: string | null;
 }) => ValidationError[];
 
 /**
@@ -182,7 +185,7 @@ const buildValidator = <TResource>(args: {
   schemaName: string;
 }): Validator => {
   const { definition, resourceLabel, propertiesLabel, schemaName } = args;
-  return ({ properties: raw, basePath, forUpdate }) => {
+  return ({ properties: raw, basePath, forUpdate, projectPublicId }) => {
     if (!isObjectRecord(raw)) {
       return [
         {
@@ -218,7 +221,13 @@ const buildValidator = <TResource>(args: {
       errors,
       skipFields: typeErrored,
     });
-    definition.extraChecks?.({ properties, basePath, forUpdate, errors });
+    definition.extraChecks?.({
+      properties,
+      basePath,
+      forUpdate,
+      projectPublicId,
+      errors,
+    });
 
     return errors;
   };
@@ -470,6 +479,8 @@ export const defineFormationModule = <TResource>(
       properties: args.properties,
       basePath,
       forUpdate: args.forUpdate,
+      // The apply's lib write holds the resource to its project.
+      projectPublicId: null,
     });
     if (errors.length > 0) {
       throw new DomainError('VALIDATION_FAILED', errors[0].message);
@@ -485,8 +496,17 @@ export const defineFormationModule = <TResource>(
     resourceType,
     authorization: definition.authorization,
 
-    validateProperties: ({ properties, basePath: hookBasePath }) => {
-      return validate({ properties, basePath: hookBasePath, forUpdate: false });
+    validateProperties: ({
+      properties,
+      basePath: hookBasePath,
+      projectPublicId,
+    }) => {
+      return validate({
+        properties,
+        basePath: hookBasePath,
+        forUpdate: false,
+        projectPublicId,
+      });
     },
 
     ...buildOperations({ definition, assertValid, log }),

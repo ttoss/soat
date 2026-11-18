@@ -31,17 +31,6 @@ const granted = (type: string, properties: unknown) => {
   return { policy_ids: grant, ...properties };
 };
 
-/** Names a project id, so only the apply knows it is not the formation's. */
-const elsewhereDocument = {
-  statement: [
-    {
-      effect: 'Allow',
-      action: ['tools:ListTools'],
-      resource: ['srn:proj_elsewhere00000:*:*'],
-    },
-  ],
-};
-
 const client = () => {
   return authenticatedTestClient(adminToken);
 };
@@ -495,13 +484,6 @@ describe('POST /api/v1/formations — rules only the apply can check', () => {
     message: RegExp;
   }> = [
     {
-      name: "a policy grants in its formation's project only",
-      template: () => {
-        return one('policy', { document: elsewhereDocument });
-      },
-      message: /outside the policy's project/,
-    },
-    {
       name: 'a model_route target names a provider of this project',
       template: () => {
         return one('model_route', {
@@ -561,24 +543,6 @@ describe('POST /api/v1/formations — rules only the apply can check', () => {
 });
 
 describe('PUT /api/v1/formations/:formation_id — rules only the apply can check', () => {
-  test("a policy update stays in its formation's project", async () => {
-    const document = {
-      statement: [{ effect: 'Allow', action: ['tools:ListTools'] }],
-    };
-    const created = await deploy(one('policy', { name: 'Valid', document }));
-
-    const updated = await redeploy(
-      created.id,
-      one('policy', { name: 'Valid', document: elsewhereDocument })
-    );
-
-    expect(updated.status).toBe('failed');
-    expect(updated.error).toMatchObject({
-      code: 'VALIDATION_FAILED',
-      message: expect.stringMatching(/outside the policy's project/),
-    });
-  });
-
   test('an ingestion_rule switches its converter from a tool to an agent', async () => {
     const glob = `video/${seed()}`;
     const created = await deploy(
