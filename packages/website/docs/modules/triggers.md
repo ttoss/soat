@@ -1,5 +1,5 @@
 ---
-description: "Bind a starter — manual, webhook, schedule, or event — to an executable target in SOAT."
+description: 'Bind a starter — manual, webhook, schedule, or event — to an executable target in SOAT.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -39,56 +39,56 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 
 ### Trigger
 
-| Field          | Type                                    | Description                                                                       |
-| -------------- | --------------------------------------- | --------------------------------------------------------------------------------- |
-| `id`           | string                                  | Public identifier (`trg_…`)                                                       |
-| `project_id`   | string                                  | ID of the owning project (hard security boundary)                                 |
-| `name`         | string                                  | Human-readable name, unique per project                                           |
-| `description`  | string \| null                          | Optional description                                                              |
-| `type`         | `manual` \| `webhook` \| `schedule` \| `event` | Starter type. **Immutable after creation**                                   |
-| `target_type`  | `orchestration` \| `agent` \| `tool` \| `eval` | Kind of resource activated                                                   |
-| `target_id`    | string                                  | Public ID of the target; must exist in the same project at create/update time     |
-| `action`       | string \| null                          | Tool targets only: the action for `builtin`/`mcp` tools (required for `mcp`; for `builtin`, the firing's input may name it instead; rejected otherwise) |
-| `input`        | object \| null                          | Static input, shallow-merged under fire-time input (fire-time keys win)           |
-| `tool_context` | object \| null                          | Write-only. Caller context every firing forwards to the run it starts, so a context-dependent agent can be scheduled — see [Carrying tool context](#carrying-tool-context) |
-| `cron`         | string \| null                          | 5-field cron expression (UTC). Required iff `type=schedule`, rejected otherwise   |
-| `events`       | string[] \| null                        | Event type patterns. Required iff `type=event`, rejected otherwise (see [Event Triggers](#event-triggers)). On write, `event_pattern` is the one-pattern spelling of `events` |
-| `event_resources` | string[] \| null                     | Event type only. SRN patterns the event's resource must match; `null` matches any resource in the project |
-| `event_data`   | object \| null                          | Event type only. A [structured filter](./documents.md#metadata-filters) the event's `data` must match |
-| `active`       | boolean                                 | Inactive triggers never fire                                                      |
-| `policy_ids`   | string[]                                | Required. The policies every firing acts under (see [Execution Identity](#execution-identity)) |
-| `secret`       | string                                  | Webhook type only. Returned **only** on create, rotate, and `GET …/secret`        |
-| `next_fire_at` | string \| null                          | Read-only. Schedule type only. Server-computed next fire time; `null` while inactive, recomputed from now on re-activation |
-| `created_at`   | string                                  | ISO 8601 creation timestamp                                                       |
-| `updated_at`   | string                                  | ISO 8601 last-updated timestamp                                                   |
+| Field             | Type                                           | Description                                                                                                                                                                   |
+| ----------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | string                                         | Public identifier (`trg_…`)                                                                                                                                                   |
+| `project_id`      | string                                         | ID of the owning project (hard security boundary)                                                                                                                             |
+| `name`            | string                                         | Human-readable name, unique per project                                                                                                                                       |
+| `description`     | string \| null                                 | Optional description                                                                                                                                                          |
+| `type`            | `manual` \| `webhook` \| `schedule` \| `event` | Starter type. **Immutable after creation**                                                                                                                                    |
+| `target_type`     | `orchestration` \| `agent` \| `tool` \| `eval` | Kind of resource activated                                                                                                                                                    |
+| `target_id`       | string                                         | Public ID of the target; must exist in the same project at create/update time                                                                                                 |
+| `action`          | string \| null                                 | Tool targets only: the action for `builtin`/`mcp` tools (required for `mcp`; for `builtin`, the firing's input may name it instead; rejected otherwise)                       |
+| `input`           | object \| null                                 | Static input, shallow-merged under fire-time input (fire-time keys win)                                                                                                       |
+| `tool_context`    | object \| null                                 | Write-only. Caller context every firing forwards to the run it starts, so a context-dependent agent can be scheduled — see [Carrying tool context](#carrying-tool-context)    |
+| `cron`            | string \| null                                 | 5-field cron expression (UTC). Required iff `type=schedule`, rejected otherwise                                                                                               |
+| `events`          | string[] \| null                               | Event type patterns. Required iff `type=event`, rejected otherwise (see [Event Triggers](#event-triggers)). On write, `event_pattern` is the one-pattern spelling of `events` |
+| `event_resources` | string[] \| null                               | Event type only. SRN patterns the event's resource must match; `null` matches any resource in the project                                                                     |
+| `event_data`      | object \| null                                 | Event type only. A [structured filter](./documents.md#metadata-filters) the event's `data` must match                                                                         |
+| `active`          | boolean                                        | Inactive triggers never fire                                                                                                                                                  |
+| `policy_ids`      | string[]                                       | Required. The policies every firing acts under (see [Execution Identity](#execution-identity))                                                                                |
+| `secret`          | string                                         | Webhook type only. Returned **only** on create, rotate, and `GET …/secret`                                                                                                    |
+| `next_fire_at`    | string \| null                                 | Read-only. Schedule type only. Server-computed next fire time; `null` while inactive, recomputed from now on re-activation                                                    |
+| `created_at`      | string                                         | ISO 8601 creation timestamp                                                                                                                                                   |
+| `updated_at`      | string                                         | ISO 8601 last-updated timestamp                                                                                                                                               |
 
 ### Trigger Firing
 
-| Field          | Type                                                | Description                                                            |
-| -------------- | --------------------------------------------------- | --------------------------------------------------------------------- |
-| `id`           | string                                              | Public identifier (`trg_fire_…`)                                      |
-| `trigger_id`   | string                                              | Public ID of the trigger that fired                                   |
-| `project_id`   | string                                              | ID of the owning project                                              |
-| `source`       | `manual` \| `webhook` \| `schedule` \| `event`      | How _this_ firing started (manually firing a webhook trigger records `manual`) |
-| `status`       | `queued` \| `running` \| `completed` \| `failed`   | Firing lifecycle status                                               |
-| `input`        | object \| null                                      | Effective (post-merge) input snapshot                                 |
-| `result`       | object \| null                                      | `{ target_type, result_id, status, output }` — `result_id` is the run/generation public ID; `output` truncated |
-| `error`        | object \| null                                      | `{ code, message, meta }` when the firing failed                      |
+| Field             | Type                                             | Description                                                                                                                                                          |
+| ----------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | string                                           | Public identifier (`trg_fire_…`)                                                                                                                                     |
+| `trigger_id`      | string                                           | Public ID of the trigger that fired                                                                                                                                  |
+| `project_id`      | string                                           | ID of the owning project                                                                                                                                             |
+| `source`          | `manual` \| `webhook` \| `schedule` \| `event`   | How _this_ firing started (manually firing a webhook trigger records `manual`)                                                                                       |
+| `status`          | `queued` \| `running` \| `completed` \| `failed` | Firing lifecycle status                                                                                                                                              |
+| `input`           | object \| null                                   | Effective (post-merge) input snapshot                                                                                                                                |
+| `result`          | object \| null                                   | `{ target_type, result_id, status, output }` — `result_id` is the run/generation public ID; `output` truncated                                                       |
+| `error`           | object \| null                                   | `{ code, message, meta }` when the firing failed                                                                                                                     |
 | `idempotency_key` | string \| null                                   | `<event_id>:<trigger_id>` for an `event` firing (`event_id` is the `id` in `input`), `<v1>:<trigger_id>` for a `webhook` firing, null otherwise — one firing per key |
-| `attempts`     | number                                              | Dispatch starts. Above 1 means an interrupted start was redelivered ([Delivery Guarantees](#delivery-guarantees)) |
-| `started_at`   | string \| null                                      | ISO 8601 timestamp when execution began                               |
-| `completed_at` | string \| null                                      | ISO 8601 timestamp when the firing reached a terminal status          |
+| `attempts`        | number                                           | Dispatch starts. Above 1 means an interrupted start was redelivered ([Delivery Guarantees](#delivery-guarantees))                                                    |
+| `started_at`      | string \| null                                   | ISO 8601 timestamp when execution began                                                                                                                              |
+| `completed_at`    | string \| null                                   | ISO 8601 timestamp when the firing reached a terminal status                                                                                                         |
 
 ## Key Concepts
 
 ### Trigger Types
 
-| Type       | Started by                                    | Notes                                                     |
-| ---------- | --------------------------------------------- | --------------------------------------------------------- |
-| `manual`   | [`POST /api/v1/triggers/{id}/fire`](/docs/api/triggers/fire-trigger)             | Synchronous; the response is the terminal firing          |
-| `webhook`  | Signed `POST /hooks/triggers/{trigger_id}` (see below) | Has a `secret`; verified with HMAC-SHA256                 |
-| `schedule` | The built-in scheduler on a cron cadence      | Requires `cron`; `next_fire_at` is server-computed in UTC |
-| `event`    | An internal platform event, in-process        | Requires `events`; no HTTP hop, no secret (see below) |
+| Type       | Started by                                                           | Notes                                                     |
+| ---------- | -------------------------------------------------------------------- | --------------------------------------------------------- |
+| `manual`   | [`POST /api/v1/triggers/{id}/fire`](/docs/api/triggers/fire-trigger) | Synchronous; the response is the terminal firing          |
+| `webhook`  | Signed `POST /hooks/triggers/{trigger_id}` (see below)               | Has a `secret`; verified with HMAC-SHA256                 |
+| `schedule` | The built-in scheduler on a cron cadence                             | Requires `cron`; `next_fire_at` is server-computed in UTC |
+| `event`    | An internal platform event, in-process                               | Requires `events`; no HTTP hop, no secret (see below)     |
 
 The `type` is fixed at creation.
 
@@ -150,10 +150,10 @@ error, including a `failed` orchestration run.
 
 A trigger acts under its own `policy_ids`, never its creator's grant:
 
-| Started by                                  | Acts as                         | `acted_as` on the firing        |
-| ------------------------------------------- | ------------------------------- | ------------------------------- |
-| `schedule`, `webhook`, `event` (no caller)  | `policy_ids`                    | `{ principal_type: "trigger", principal_id: "trg_…" }` |
-| [`POST /api/v1/triggers/{trigger_id}/fire`](/docs/api/triggers/fire-trigger) | the caller ∩ `policy_ids` | the caller (`user` or `api_key`) |
+| Started by                                                                   | Acts as                   | `acted_as` on the firing                               |
+| ---------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------ |
+| `schedule`, `webhook`, `event` (no caller)                                   | `policy_ids`              | `{ principal_type: "trigger", principal_id: "trg_…" }` |
+| [`POST /api/v1/triggers/{trigger_id}/fire`](/docs/api/triggers/fire-trigger) | the caller ∩ `policy_ids` | the caller (`user` or `api_key`)                       |
 
 The server mints a short-lived token with that grant, confined to the
 trigger's project, and the target runs with the trigger as its caller: an
@@ -228,15 +228,15 @@ X-Soat-Signature: t=<unix seconds>,v1=<hex(HMAC-SHA256(secret, "<t>.<body>"))>
 
 Responses:
 
-| Condition                                   | Status | Body                                    |
-| ------------------------------------------- | ------ | --------------------------------------- |
-| Unknown or non-webhook trigger              | `404`  | Existence is not leaked                 |
-| Missing or bad signature, or `t` too far    | `401`  |                                         |
-| Inactive trigger (after a valid signature)  | `409`  |                                         |
-| Signed delivery already accepted            | `409`  | `HOOK_DELIVERY_REPLAYED`                |
-| Invalid JSON body                           | `400`  |                                         |
-| Orchestration `input_schema` violation      | `400`  | With details                            |
-| Accepted                                    | `202`  | `{ firing_id, trigger_id, status }`     |
+| Condition                                  | Status | Body                                |
+| ------------------------------------------ | ------ | ----------------------------------- |
+| Unknown or non-webhook trigger             | `404`  | Existence is not leaked             |
+| Missing or bad signature, or `t` too far   | `401`  |                                     |
+| Inactive trigger (after a valid signature) | `409`  |                                     |
+| Signed delivery already accepted           | `409`  | `HOOK_DELIVERY_REPLAYED`            |
+| Invalid JSON body                          | `400`  |                                     |
+| Orchestration `input_schema` violation     | `400`  | With details                        |
+| Accepted                                   | `202`  | `{ firing_id, trigger_id, status }` |
 
 The body (max 1 MiB) is the fire-time input; a non-object JSON value is wrapped
 as `{ "payload": … }`. The firing runs in the background; poll the firing
@@ -275,11 +275,11 @@ The filter and the read guard below are the ones a [webhook](./webhooks.md#event
 
 **Pattern grammar** for `events`:
 
-| Pattern              | Matches                                              |
-| -------------------- | ---------------------------------------------------- |
-| `documents.ingested` | that event only                                      |
-| `documents.*`        | every event in the `documents` namespace             |
-| `*`                  | every event in the project                           |
+| Pattern              | Matches                                  |
+| -------------------- | ---------------------------------------- |
+| `documents.ingested` | that event only                          |
+| `documents.*`        | every event in the `documents` namespace |
+| `*`                  | every event in the project               |
 
 A pattern whose first segment is a **platform namespace** must resolve to a
 [registered event](../webhook-events.md); `documents.ingsted` is rejected with
@@ -335,6 +335,13 @@ first recurrence) or that is already `5` hops deep. Either refusal records a
 on the trigger). Like the workflow [automation chain budget](./workflows.md),
 this is a backstop: bound the cycle in your wiring.
 
+The chain follows the work wherever SOAT calls back into itself: a run, a
+generation, a `builtin` tool call, and a write an `http` or `mcp` tool's server
+makes back into the API with the [`X-Soat-Causation`](./tools.md#causation-x-soat-causation)
+header it received. A loop through a system that drops that header — a
+[webhook](./webhooks.md) receiver or tool server that calls back without it —
+starts a fresh chain and is not detected.
+
 **Quota admission.** A firing is admitted against the project's `requests`
 [quotas](./quotas.md) before dispatch (an event trigger bypasses the HTTP
 middleware that admits other requests). A breach records a `failed` firing with
@@ -349,7 +356,7 @@ firing belongs to the database, so a process that dies mid-dispatch leaves a
 row another process redelivers.
 
 - **At-least-once.** A firing whose dispatch was interrupted is retried once
-  its lease lapses, up to three starts. A firing interrupted *after* its target
+  its lease lapses, up to three starts. A firing interrupted _after_ its target
   started runs that target again, so an event target must be idempotent.
 - **Deduplicated per (event, trigger).** Each event firing carries an
   `idempotency_key` of `<event_id>:<trigger_id>`, so the same event reaching
@@ -359,7 +366,7 @@ row another process redelivers.
 - **Unordered.** Sequential events may fire in either order; triggers on the
   same event fire independently.
 
-`attempts` above 1 means a start was interrupted. A target that *refused* the
+`attempts` above 1 means a start was interrupted. A target that _refused_ the
 work is different: that firing is `failed` with the reason in `error`, and is
 never retried.
 
@@ -380,23 +387,23 @@ catch-up firing on restart.
 
 ### Common Errors
 
-| Code                          | Status | Cause                                                                                                        | What to do                                                                                          |
-| ------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `INVALID_CRON_EXPRESSION`      | `400`  | `cron` is missing a field or otherwise not a valid 5-field expression                                          | Fix the expression; it is always evaluated in **UTC**                                                |
-| `INVALID_EVENT_PATTERN`        | `400`  | An `events` item is malformed, or names a platform namespace with no registered event matching it (a typo)     | Use `*`, `prefix.*`, or an exact registered event name — see [Event Triggers](#event-triggers)       |
-| `TRIGGER_CAUSATION_LIMIT`      | `409`  | An event trigger refused to extend the causal chain that reached it — it is already in the chain, or the chain ran past the depth cap | Recorded on the firing, never returned to a caller. Break the cycle in the wiring; see [Loops and Cost](#loops-and-cost) |
-| `TRIGGER_EVENTS_UNREADABLE`    | `400`  | An event trigger's `policy_ids` cannot read a platform namespace its `events` subscribe to | Add each `meta.unread` action to a policy, or narrow `events` or `event_resources`; see [Event Triggers](#event-triggers) |
-| `TRIGGER_TARGET_NOT_FOUND`     | `400`  | `target_id` does not exist in the trigger's project                                                            | Verify the target ID and that it belongs to the same project as the trigger                          |
-| `TRIGGER_ACTION_NOT_ALLOWED`   | `400`  | An invalid field combination for `type`/`target_type` — e.g. `cron` on a non-`schedule` trigger, `events`, `event_resources` or `event_data` on a non-`event` trigger (or no `events` on an `event` trigger), `action` on a non-tool target, or a `client`-type tool as the target | Check the [Trigger Types](#trigger-types) and [Targets and Input](#targets-and-input) rules          |
-| `TRIGGER_INPUT_INVALID`        | `400`  | Fire-time input doesn't satisfy the target — empty agent input, or a field missing/mismatched against an orchestration's `input_schema` | Supply the required input fields for the target type                                                 |
-| `TRIGGER_NOT_ACTIVE`           | `409`  | The trigger's `active` field is `false`                                                                        | `PATCH` the trigger with `active: true` before firing                                                |
-| `TRIGGER_RECURSION_FORBIDDEN`  | `403`  | Work a firing began tried to call the fire endpoint                                                            | Fire the trigger with a user/API-key credential; a trigger cannot fire another trigger               |
-| `NAME_CONFLICT`                | `409`  | A trigger with that `name` already exists in the project                                                       | Choose a different name                                                                              |
-| `POLICY_GRANT_NOT_HELD`        | `403`  | The trigger, as the write leaves it, carries a policy granting a permission the caller does not hold in its project | Carry only policies inside your own grants (`meta.ungranted` lists the rest), or have a caller who holds them write it |
-| `ACTION_NOT_HELD`              | `403`  | The trigger, as the write leaves it, starts a target the caller may not start                                  | Point it at a target you may start (`meta.action` on `meta.resource`), or have a caller who may write it |
-| `POLICY_HAS_DEPENDENTS`        | `409`  | Attempted to delete a policy while a trigger's `policy_ids` still names it                                     | Detach the policy from the trigger first, or delete the trigger                                      |
-| `RESOURCE_NOT_FOUND`           | `404`  | The trigger or firing ID doesn't exist (or isn't in the caller's project)                                      | Check the ID and project scope                                                                        |
-| `SECRET_NOT_DECRYPTABLE`       | `500`  | The stored signing secret is not valid ciphertext — encrypted under a different `SECRETS_ENCRYPTION_KEY` | Rotate the secret ([`POST /triggers/{id}/rotate-secret`](/docs/api/triggers/rotate-trigger-secret)) to replace it, or restore the original key. A webhook trigger in this state cannot authenticate inbound deliveries until it is fixed |
+| Code                          | Status | Cause                                                                                                                                                                                                                                                                              | What to do                                                                                                                                                                                                                               |
+| ----------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_CRON_EXPRESSION`     | `400`  | `cron` is missing a field or otherwise not a valid 5-field expression                                                                                                                                                                                                              | Fix the expression; it is always evaluated in **UTC**                                                                                                                                                                                    |
+| `INVALID_EVENT_PATTERN`       | `400`  | An `events` item is malformed, or names a platform namespace with no registered event matching it (a typo)                                                                                                                                                                         | Use `*`, `prefix.*`, or an exact registered event name — see [Event Triggers](#event-triggers)                                                                                                                                           |
+| `TRIGGER_CAUSATION_LIMIT`     | `409`  | An event trigger refused to extend the causal chain that reached it — it is already in the chain, or the chain ran past the depth cap                                                                                                                                              | Recorded on the firing, never returned to a caller. Break the cycle in the wiring; see [Loops and Cost](#loops-and-cost)                                                                                                                 |
+| `TRIGGER_EVENTS_UNREADABLE`   | `400`  | An event trigger's `policy_ids` cannot read a platform namespace its `events` subscribe to                                                                                                                                                                                         | Add each `meta.unread` action to a policy, or narrow `events` or `event_resources`; see [Event Triggers](#event-triggers)                                                                                                                |
+| `TRIGGER_TARGET_NOT_FOUND`    | `400`  | `target_id` does not exist in the trigger's project                                                                                                                                                                                                                                | Verify the target ID and that it belongs to the same project as the trigger                                                                                                                                                              |
+| `TRIGGER_ACTION_NOT_ALLOWED`  | `400`  | An invalid field combination for `type`/`target_type` — e.g. `cron` on a non-`schedule` trigger, `events`, `event_resources` or `event_data` on a non-`event` trigger (or no `events` on an `event` trigger), `action` on a non-tool target, or a `client`-type tool as the target | Check the [Trigger Types](#trigger-types) and [Targets and Input](#targets-and-input) rules                                                                                                                                              |
+| `TRIGGER_INPUT_INVALID`       | `400`  | Fire-time input doesn't satisfy the target — empty agent input, or a field missing/mismatched against an orchestration's `input_schema`                                                                                                                                            | Supply the required input fields for the target type                                                                                                                                                                                     |
+| `TRIGGER_NOT_ACTIVE`          | `409`  | The trigger's `active` field is `false`                                                                                                                                                                                                                                            | `PATCH` the trigger with `active: true` before firing                                                                                                                                                                                    |
+| `TRIGGER_RECURSION_FORBIDDEN` | `403`  | Work a firing began tried to call the fire endpoint                                                                                                                                                                                                                                | Fire the trigger with a user/API-key credential; a trigger cannot fire another trigger                                                                                                                                                   |
+| `NAME_CONFLICT`               | `409`  | A trigger with that `name` already exists in the project                                                                                                                                                                                                                           | Choose a different name                                                                                                                                                                                                                  |
+| `POLICY_GRANT_NOT_HELD`       | `403`  | The trigger, as the write leaves it, carries a policy granting a permission the caller does not hold in its project                                                                                                                                                                | Carry only policies inside your own grants (`meta.ungranted` lists the rest), or have a caller who holds them write it                                                                                                                   |
+| `ACTION_NOT_HELD`             | `403`  | The trigger, as the write leaves it, starts a target the caller may not start                                                                                                                                                                                                      | Point it at a target you may start (`meta.action` on `meta.resource`), or have a caller who may write it                                                                                                                                 |
+| `POLICY_HAS_DEPENDENTS`       | `409`  | Attempted to delete a policy while a trigger's `policy_ids` still names it                                                                                                                                                                                                         | Detach the policy from the trigger first, or delete the trigger                                                                                                                                                                          |
+| `RESOURCE_NOT_FOUND`          | `404`  | The trigger or firing ID doesn't exist (or isn't in the caller's project)                                                                                                                                                                                                          | Check the ID and project scope                                                                                                                                                                                                           |
+| `SECRET_NOT_DECRYPTABLE`      | `500`  | The stored signing secret is not valid ciphertext — encrypted under a different `SECRETS_ENCRYPTION_KEY`                                                                                                                                                                           | Rotate the secret ([`POST /triggers/{id}/rotate-secret`](/docs/api/triggers/rotate-trigger-secret)) to replace it, or restore the original key. A webhook trigger in this state cannot authenticate inbound deliveries until it is fixed |
 
 Inbound webhook endpoint errors: see the [table above](#inbound-webhook-endpoint).
 
@@ -498,10 +505,10 @@ a tool is told, not what the firing is allowed to reach.
 
 ## Configuration
 
-| Environment Variable                 | Required | Description                                                  |
-| ------------------------------------ | -------- | ------------------------------------------------------------ |
-| `SOAT_TRIGGER_SCHEDULER_INTERVAL_MS` | No       | Scheduler poll interval in milliseconds (default `30000`)    |
-| `SOAT_TRIGGER_SCHEDULER_DISABLED`    | No       | Set to `true` to disable the schedule poller                 |
+| Environment Variable                 | Required | Description                                               |
+| ------------------------------------ | -------- | --------------------------------------------------------- |
+| `SOAT_TRIGGER_SCHEDULER_INTERVAL_MS` | No       | Scheduler poll interval in milliseconds (default `30000`) |
+| `SOAT_TRIGGER_SCHEDULER_DISABLED`    | No       | Set to `true` to disable the schedule poller              |
 
 ## Examples
 
@@ -526,7 +533,10 @@ soat create-trigger \
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.triggers.createTrigger({
   body: {

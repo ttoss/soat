@@ -20,6 +20,7 @@ import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
 import { auditMiddleware } from './middleware/audit';
 import { authMiddleware } from './middleware/auth';
+import { causationMiddleware } from './middleware/causation';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { hookRawBodyMiddleware } from './middleware/hookRawBody';
 import { requestAttributionMiddleware } from './middleware/requestAttribution';
@@ -47,6 +48,7 @@ app.use(cors());
 // downstream middleware runs, so every response (including errors) carries it
 // and the audit log can record it.
 app.use(requestIdMiddleware);
+app.use(causationMiddleware);
 // Capture the raw body for public inbound hook paths before the JSON body
 // parser runs, so signatures can be verified over the exact bytes.
 app.use(hookRawBodyMiddleware);

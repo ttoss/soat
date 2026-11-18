@@ -640,12 +640,13 @@ One signed `POST` to the registration's URL per operation, with a JSON body:
 
 `physical_resource_id` replaces `properties` on `delete` and accompanies it on `update` and `read`. `project_id` is on **every** request type except `validate`, which is not bound to a deploy.
 
-Two headers travel with every call, and a third with every write ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
+Each call carries these headers, and its `X-Request-Id` ([`SOAT_HEADER_PREFIX`](../self-hosting/configuration.md#header-prefix) replaces `X-Soat-`):
 
 | Header                   | Meaning                                                                                                                                                                                                                                                                                                         |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `X-Soat-Signature`       | `t=<unix>,v1=<hex hmac-sha256 of "{t}.{body}">`, keyed with the registration's secret — the same scheme [webhooks](./webhooks.md) are signed with. Verify over the **raw** body bytes, and reject a stale `t`.                                                                                                  |
 | `X-Soat-Idempotency-Key` | Stable per (resource, operation) across re-applies, distinct between resources. A handler that has already completed this key can answer with the same result instead of acting twice.                                                                                                                          |
+| `X-Soat-Causation`       | When the call runs for an [event trigger](./triggers.md#loops-and-cost): the trigger chain, forwarded unchanged on a callback ([Causation](./tools.md#causation-x-soat-causation)).                                                                                                                             |
 | `X-Soat-Tool-Assertion`  | On `create`, `update` and `delete` only, when the deployment sets [`TOOL_ASSERTION_PRIVATE_KEY`](./tools.md#configuration): a [tool assertion](./tools.md#tool-assertions) naming the project, with no `tool_id`, whose `ath` carries the authority of the credential that deployed or tore down the formation. |
 
 What a 2xx must answer with, per operation:

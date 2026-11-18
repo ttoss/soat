@@ -3,8 +3,8 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { sealAssertionAuthority } from './assertionAuthority';
 import { resolveSenderAuthority } from './assertionSender';
+import { withOutboundToolHeaders } from './causationHeader';
 import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
-import { withRequestIdHeader } from './requestCorrelation';
 import { resolveSecretRefsWithValues } from './secrets';
 import {
   isToolAssertionConfigured,
@@ -87,7 +87,7 @@ export const openMcpTransport = async (args: {
     projectId,
     toolContext: args.toolContext,
   });
-  const headers = withRequestIdHeader({
+  const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
     ...(resolved ?? {}),
@@ -95,7 +95,7 @@ export const openMcpTransport = async (args: {
       toolContext: args.toolContext,
       contextKeys: args.contextKeys,
     }),
-  });
+  };
   const credentialHeaders = secretBearingHeaderNames(args.mcp.headers);
   if (!isToolAssertionConfigured()) {
     return {
@@ -147,9 +147,11 @@ export const postMcp = (args: {
         body: args.body,
       })
     : {};
+  // Per request, not at open: the chain is the one the sending work runs in.
+  const sent = withOutboundToolHeaders(transport.headers);
   const headers = transport.identity
-    ? { ...withoutAssertionHeader(transport.headers), ...assertion }
-    : transport.headers;
+    ? { ...withoutAssertionHeader(sent), ...assertion }
+    : sent;
   return fetchWithEgressGuard(
     transport.fetchUrl,
     {

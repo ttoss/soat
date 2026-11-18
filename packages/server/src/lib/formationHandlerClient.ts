@@ -19,6 +19,7 @@ import {
   sealAssertionAuthority,
 } from './assertionAuthority';
 import { readCappedText } from './cappedBody';
+import { withOutboundToolHeaders } from './causationHeader';
 import type { FormationResourceTypeRegistration } from './formationResourceTypeConfig';
 import { soatHeader } from './headerPrefix';
 import {
@@ -245,7 +246,7 @@ export const callFormationHandler = async (args: {
   try {
     response = await fetch(registration.handler.url, {
       method: 'POST',
-      headers: {
+      headers: withOutboundToolHeaders({
         'content-type': 'application/json',
         [signatureHeader()]: timestampedSignature({
           payload,
@@ -257,7 +258,7 @@ export const callFormationHandler = async (args: {
           url: registration.handler.url,
           body: payload,
         }),
-      },
+      }),
       body: payload,
       signal: AbortSignal.timeout(registration.handler.timeoutMs),
     });
