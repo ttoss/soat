@@ -6761,6 +6761,13 @@ if ! $SOAT_CLI get-task --task-id "$WAITING_TASK_ID" \
 fi
 expect_cli_error_status 409 add-task-dependency --task-id "$BLOCKER_TASK_ID" \
   --depends-on-task-id "$WAITING_TASK_ID"
+# The blocker inherits the priority of the task it holds, so it is pulled first.
+$SOAT_CLI set-task-priority --task-id "$WAITING_TASK_ID" --priority very_high >/dev/null
+if ! $SOAT_CLI list-tasks --workflow-id "$WORKFLOW_ID" --blocked false --order next --limit 1 \
+  | jq -e --arg b "$BLOCKER_TASK_ID" '.data[0].id == $b and .next_cursor == null' >/dev/null; then
+  echo "ERROR: order=next did not pull the blocker of a very_high task first" >&2
+  exit 1
+fi
 $SOAT_CLI remove-task-dependency --task-id "$WAITING_TASK_ID" \
   --depends-on-task-id "$BLOCKER_TASK_ID" >/dev/null
 if ! $SOAT_CLI get-task --task-id "$WAITING_TASK_ID" | jq -e '.readiness.blocked == false' >/dev/null; then

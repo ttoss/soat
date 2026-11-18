@@ -20,6 +20,7 @@ import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
 import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 import { TASK_PRIORITIES } from 'src/lib/tasksPriority';
+import { TASK_LIST_ORDERS } from 'src/lib/tasksPullOrder';
 import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
 import { captureAuthority } from 'src/lib/workAuthority';
 
@@ -99,6 +100,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     assignee: ctx.query.assignee as string | undefined,
     blocked: blockedQuery(ctx),
     metadata,
+    order: parseEnumQuery({ ctx, name: 'order', allowed: TASK_LIST_ORDERS }),
     ...parsePagination(ctx),
   });
 });
