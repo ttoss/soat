@@ -32,6 +32,21 @@ export const isCreateChange = (existing: ResourceRow | undefined): boolean => {
 };
 
 /**
+ * A ledger row the template no longer declares and that is not yet retired —
+ * with or without a physical resource behind it. Shared by apply and plan, so
+ * a plan lists exactly the deletes an apply performs.
+ */
+export const isOrphanedResource = (args: {
+  resource: ResourceRow;
+  declaredLogicalIds: Set<string>;
+}): boolean => {
+  return (
+    !args.declaredLogicalIds.has(args.resource.logicalId) &&
+    args.resource.status !== 'deleted'
+  );
+};
+
+/**
  * A resource the platform was asked to remove but that is already gone counts
  * as removed — both teardown and the apply unwind treat it as an idempotent
  * success rather than a blocker.
