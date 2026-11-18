@@ -82,6 +82,7 @@ export const mapTask = (instance: TaskInstance) => {
     metadata: instance.metadata ?? undefined,
     last_result: instance.lastResult ?? null,
     assignee: instance.assignee,
+    priority: instance.priority ?? null,
     active_dispatch: instance.activeDispatch,
     automation_status: instance.automationStatus,
     pause_requested_at: instance.pauseRequestedAt,

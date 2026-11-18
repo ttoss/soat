@@ -84,6 +84,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `metadata`          | object   | Caller-owned annotations supplied at creation; invisible to guards and to `payload_writes` (see [Task metadata](#task-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
+| `priority`          | string \| null   | `very_high` \| `high` \| `medium` \| `low` \| `very_low`, or `null` when nobody prioritised the task. A person's assertion, never derived; guards read it as `task.priority` (see [Task priority](#task-priority)) |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect. `kind` is `generation`, `orchestration_run` or `tool_call`; a `tool_call` always carries a null `id`, since a direct tool call leaves no addressable record |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch, or `paused` when an operator pause suppressed it before it ran (see [Pausing a task](#pausing-a-task)) |
 | `pause_requested_at` | string \| null  | ISO 8601 instant an operator paused this task's automation, or `null` when no pause is in force (see [Pausing a task](#pausing-a-task)) |
@@ -272,6 +273,51 @@ GET /api/v1/tasks?status=open&automation_status=running&automation_status=paused
 ```
 
 `none` selects a `null` `automation_status` (never entered a state with an automation); omitted means every task. It is `none`, not `null`, because the CLI reads the token `null` as JSON null. A value outside `running` / `completed` / `failed` / `unrouted` / `paused` / `none`, empty string included, is `400 VALIDATION_FAILED`.
+
+### Task priority
+
+A task's `priority` is what a person says it is: `very_high`, `high`, `medium`, `low`, `very_low`, or `null` (nobody prioritised it). Only [`PUT /tasks/{task_id}/priority`](/docs/api/tasks/set-task-priority) sets it, and `null` clears it. That route has its own action, `tasks:SetTaskPriority`, so a policy can grant `tasks:CreateTask` or `tasks:UpdateTask` without prioritisation; [`POST /tasks`](/docs/api/tasks/create-task) and [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) refuse `priority` as an unknown field. Each change is an [audit log](/docs/modules/audit-log) entry, not task history. A value outside the set is `400 VALIDATION_FAILED`.
+
+[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on `priority` the way it filters on `automation_status`: repeat it to OR values, and `none` selects the tasks with no priority. Guards read it as `task.priority`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat set-task-priority --task-id "$TASK_ID" --priority high
+
+soat list-tasks --workflow-id "$WORKFLOW_ID" --priority high --priority none
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: task, error } = await soat.tasks.setTaskPriority({
+  path: { task_id: TASK_ID },
+  body: { priority: 'high' },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+const { data: page } = await soat.tasks.listTasks({
+  query: { workflow_id: WORKFLOW_ID, priority: ['high', 'none'] },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X PUT "$SOAT_URL/api/v1/tasks/$TASK_ID/priority" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"priority":"high"}'
+
+curl -s "$SOAT_URL/api/v1/tasks?workflow_id=$WORKFLOW_ID&priority=high&priority=none" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+</TabItem>
+</Tabs>
 
 ### Versioning
 
