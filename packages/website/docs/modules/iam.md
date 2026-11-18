@@ -128,7 +128,7 @@ Examples:
 
 ### Project Segment and Policy Scoping
 
-The `<project_id>` segment is the primary project restriction. A [project policy](./policies.md#project-and-global-policies) may name only its own project; a global policy may name any:
+The `<project_id>` segment is the primary project restriction. A [project policy](./policies.md#project-and-global-policies) may name only its own project, and an `Allow` there without `resource` grants every resource of that project; a global policy may name any:
 
 - `resource: ["*"]` — all resources in **all projects**
 - `resource: ["srn:proj_ABC:*:*"]` — `proj_ABC` only
@@ -447,7 +447,7 @@ Policy evaluation (Layer 2) follows AWS IAM semantics:
 A statement matches a request when **all** of the following are true:
 
 1. At least one pattern in `action` matches the requested action.
-2. At least one pattern in `resource` matches the target SRN (or `resource` is omitted / `["*"]`).
+2. At least one pattern in `resource` matches the target SRN (or `resource` is omitted / `["*"]`). An `Allow` without `resource` in a project policy matches its project only, as `srn:<project_id>:*:*`.
 3. All `condition` blocks evaluate to true (or `condition` is omitted).
 
 ### Pattern Matching

@@ -1,6 +1,10 @@
 import { DomainError } from '../../errors';
 import type { PolicyDocument } from '../iam';
-import { validatePolicyActions } from '../iam';
+import {
+  findAllowResourcesOutsideEveryProject,
+  validatePolicyActions,
+  validatePolicyDocument,
+} from '../iam';
 import {
   createPolicy,
   deletePolicy,
@@ -24,14 +28,27 @@ export const policiesFormationModule = defineFormationModule({
     delete: 'policies:DeletePolicy',
   },
 
-  // Only the semantic action-name check — structure is validated downstream.
-  // A typo'd action rejected here fails at `validate-formation` time rather
-  // than silently failing open at evaluation.
+  // Every check that needs no project id runs at validate and plan time, so a
+  // plan refuses what its apply would; the formation's own project is checked
+  // on apply.
   extraChecks: ({ properties, basePath, errors }) => {
     const document = properties.document;
     if (document == null || !isObjectRecord(document)) return;
-    for (const message of validatePolicyActions(document).errors) {
+    const structural = validatePolicyDocument(document);
+    const messages = structural.valid
+      ? validatePolicyActions(document).errors
+      : structural.errors;
+    for (const message of messages) {
       errors.push({ path: `${basePath}.document`, message });
+    }
+    if (!structural.valid) return;
+    for (const resource of findAllowResourcesOutsideEveryProject(
+      document as PolicyDocument
+    )) {
+      errors.push({
+        path: `${basePath}.document`,
+        message: `Allow resource '${resource}' is outside the formation's project; name srn:<project_id>:<type>:<id>, or omit resource for every resource of the project.`,
+      });
     }
   },
 

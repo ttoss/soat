@@ -44,19 +44,55 @@ const extractProjectIdsFromResourcePatterns = (
 };
 
 /**
+ * The document a policy grants: a project policy's `Allow` with no `resource`
+ * covers every resource of its project, never wider. Every reader evaluating a
+ * stored policy goes through it; the stored document stays as written.
+ */
+export const scopePolicyDocument = (args: {
+  document: PolicyDocument;
+  projectPublicId: string | null;
+}): PolicyDocument => {
+  const { projectPublicId } = args;
+  if (projectPublicId === null) return args.document;
+  return {
+    ...args.document,
+    statement: args.document.statement.map((statement) => {
+      if (statement.effect !== 'Allow' || statement.resource !== undefined) {
+        return statement;
+      }
+      return { ...statement, resource: [`srn:${projectPublicId}:*:*`] };
+    }),
+  };
+};
+
+const explicitAllowResources = (document: PolicyDocument): string[] => {
+  return document.statement.flatMap((statement) => {
+    return statement.effect === 'Allow' ? (statement.resource ?? []) : [];
+  });
+};
+
+/**
  * Every `Allow` resource pattern that reaches past `projectPublicId`: one
- * naming another project, every project, a project glob or no project. An
- * `Allow` with no `resource` is `*`.
+ * naming another project, every project, a project glob or no project.
  */
 export const findAllowResourcesOutsideProject = (args: {
   document: PolicyDocument;
   projectPublicId: string;
 }): string[] => {
-  return args.document.statement.flatMap((statement) => {
-    if (statement.effect !== 'Allow') return [];
-    return (statement.resource ?? ['*']).filter((resource) => {
-      return projectSegment(resource) !== args.projectPublicId;
-    });
+  return explicitAllowResources(args.document).filter((resource) => {
+    return projectSegment(resource) !== args.projectPublicId;
+  });
+};
+
+/**
+ * Every `Allow` resource pattern no project policy may hold, whatever its
+ * project: `*`, every project, a project glob or no project.
+ */
+export const findAllowResourcesOutsideEveryProject = (
+  document: PolicyDocument
+): string[] => {
+  return explicitAllowResources(document).filter((resource) => {
+    return typeof projectOfResourcePattern(resource) !== 'string';
   });
 };
 
