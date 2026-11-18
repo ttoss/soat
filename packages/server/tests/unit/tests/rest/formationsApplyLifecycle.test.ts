@@ -527,6 +527,40 @@ describe('POST /api/v1/formations — a deploy that fails partway', () => {
   });
 });
 
+describe('PUT /api/v1/formations/:formation_id — a deploy that fails after an update', () => {
+  test('unsets a property the update set and the previous state lacked', async () => {
+    const created = await createFormation({
+      resources: {
+        Store: { type: 'memory_store', properties: { name: 'fmlife-restore' } },
+      },
+    });
+    const storeId = physicalIdOf(created.body, 'Store');
+
+    const res = await updateFormation(created.body.id, {
+      template: {
+        resources: {
+          Store: {
+            type: 'memory_store',
+            properties: { name: 'fmlife-restore', description: 'added' },
+          },
+          Broken: {
+            type: 'agent',
+            properties: {
+              name: { sub: 'fmlife-restore-broken-${Store}' },
+              ai_provider_id: 'aip_doesnotexist0000',
+            },
+          },
+        },
+      },
+    });
+
+    expect(res.body.status).toBe('failed');
+    const store = await client().get(`/api/v1/memory-stores/${storeId}`);
+    expect(store.status).toBe(200);
+    expect(store.body.description ?? null).toBeNull();
+  });
+});
+
 describe('POST /api/v1/formations/validate — actor declarations', () => {
   test('refuses an actor linked to both an agent and a chat', async () => {
     const res = await client()
