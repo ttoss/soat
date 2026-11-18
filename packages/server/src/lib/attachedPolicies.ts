@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { PolicyDocument, PolicySets } from './iam';
+import { scopePolicyDocument } from './iam';
 import { bindPolicyVariables } from './policyVariables';
 import type { PrincipalBound } from './principalBound';
 
@@ -13,7 +14,10 @@ const DENY_ALL: PolicyDocument = {
 };
 
 const loadPolicies = async (publicIds: string[]) => {
-  return db.Policy.findAll({ where: { publicId: publicIds } });
+  return db.Policy.findAll({
+    where: { publicId: publicIds },
+    include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
+  });
 };
 
 /**
@@ -38,7 +42,10 @@ export const resolveAttachedPolicies = async (args: {
   }
   const merged: PolicyDocument = {
     statement: rows.flatMap((row) => {
-      return (row.document as PolicyDocument).statement ?? [];
+      return scopePolicyDocument({
+        document: row.document as PolicyDocument,
+        projectPublicId: row.project?.publicId ?? null,
+      }).statement;
     }),
   };
   return bindPolicyVariables({ document: merged, actorId: args.actorId });

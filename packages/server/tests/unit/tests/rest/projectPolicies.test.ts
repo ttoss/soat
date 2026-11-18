@@ -174,18 +174,6 @@ describe('Project policies', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('an Allow with no resource is 400', async () => {
-      const res = await createProjectPolicy({
-        token: projectAdminToken,
-        project: projectId,
-        document: {
-          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
-        },
-      });
-
-      expect(res.status).toBe(400);
-    });
-
     test('a Deny on any resource is accepted', async () => {
       const res = await createProjectPolicy({
         token: projectAdminToken,
@@ -376,7 +364,9 @@ describe('Project policies', () => {
       const res = await authenticatedTestClient(adminToken)
         .put(`/api/v1/policies/${otherProjectPolicyId}`)
         .send({
-          document: { statement: [{ effect: 'Allow', action: ['*'] }] },
+          document: {
+            statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
+          },
         });
 
       expect(res.status).toBe(400);
@@ -421,7 +411,7 @@ describe('Project policies', () => {
           project_id: args.project,
           name: 'projpol hook',
           url: 'https://example.com/hook',
-          events: ['*'],
+          events: ['orders.shipped'],
           policy_ids: args.policyIds,
         });
     };

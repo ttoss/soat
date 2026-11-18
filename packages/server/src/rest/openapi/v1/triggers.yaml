@@ -88,7 +88,7 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     post:
-      description: Creates a new trigger for a project. A `{{secret:...}}` reference in `tool_context` also needs `secrets:UseSecret` on that secret, else `403`. An event trigger whose `policy_ids` cannot read a platform namespace its `events` subscribe to is refused with `400` `TRIGGER_EVENTS_UNREADABLE`.
+      description: Creates a new trigger for a project. A `{{secret:...}}` reference in `tool_context` also needs `secrets:UseSecret` on that secret, else `403`. An event trigger whose `policy_ids` cannot read a platform namespace its `events` subscribe to is refused with `400` `EVENTS_UNREADABLE`.
       tags:
         - Triggers
       summary: Create a trigger
@@ -274,7 +274,7 @@ paths:
         secret, else `403`.
         An update leaving an event trigger's `policy_ids` unable to read a
         platform namespace its `events` subscribe to is refused with `400`
-        `TRIGGER_EVENTS_UNREADABLE`.
+        `EVENTS_UNREADABLE`.
       tags:
         - Triggers
       summary: Update a trigger

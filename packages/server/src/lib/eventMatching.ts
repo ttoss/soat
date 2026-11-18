@@ -299,7 +299,7 @@ export type UnreadEventNamespace = {
  * cannot read, by the check {@link mayReadEventResource} makes per event. A
  * name outside every registered namespace is not checked.
  */
-export const unreadEventNamespaces = async (args: {
+const unreadEventNamespaces = async (args: {
   projectPublicId: string;
   policyIds: readonly string[] | null;
   events: readonly string[];
@@ -333,6 +333,60 @@ export const unreadEventNamespaces = async (args: {
     }
   }
   return unread;
+};
+
+/** The event filter an update leaves: each field sent, else the stored one. */
+export const effectiveEventFilter = (params: {
+  stored: {
+    events: string[] | null;
+    eventResources: string[] | null;
+    eventData: Record<string, unknown> | null;
+  };
+  args: EventFilterArgs;
+}): EventFilterArgs => {
+  const { stored, args } = params;
+  return {
+    events: args.events !== undefined ? args.events : stored.events,
+    eventResources:
+      args.eventResources !== undefined
+        ? args.eventResources
+        : stored.eventResources,
+    eventData: args.eventData !== undefined ? args.eventData : stored.eventData,
+  };
+};
+
+/**
+ * Every subscriber write — trigger or webhook, create or update with the
+ * filter it leaves — crosses this: a subscription wider than its
+ * `policy_ids` read would have those events dropped by the delivery guard.
+ */
+export const assertSubscriberReadsEvents = async (args: {
+  projectId: number;
+  policyIds: readonly string[] | null;
+  events: readonly string[];
+  eventResources: readonly string[] | null;
+}): Promise<void> => {
+  const project = await db.Project.findByPk(args.projectId, {
+    attributes: ['publicId'],
+    rejectOnEmpty: true,
+  });
+  const unread = await unreadEventNamespaces({
+    projectPublicId: project.publicId,
+    policyIds: args.policyIds,
+    events: args.events,
+    eventResources: args.eventResources,
+  });
+  if (unread.length === 0) return;
+  const namespaces = unread
+    .map((entry) => {
+      return entry.namespace;
+    })
+    .join(', ');
+  throw new DomainError(
+    'EVENTS_UNREADABLE',
+    `policy_ids cannot read the events subscribed to in: ${namespaces}.`,
+    { unread }
+  );
 };
 
 /**

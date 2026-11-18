@@ -68,7 +68,7 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     post:
-      description: Creates a new webhook for a project
+      description: Creates a new webhook for a project. A webhook whose `policy_ids` cannot read a platform namespace its `events` subscribe to is refused with `400` `EVENTS_UNREADABLE`.
       tags:
         - Webhooks
       summary: Create a webhook
@@ -164,7 +164,7 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
     put:
-      description: Updates an existing webhook's configuration
+      description: Updates an existing webhook's configuration. An update leaving its `policy_ids` unable to read a platform namespace its `events` subscribe to is refused with `400` `EVENTS_UNREADABLE`.
       tags:
         - Webhooks
       summary: Update a webhook

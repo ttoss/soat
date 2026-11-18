@@ -680,15 +680,15 @@ export const ERROR_CODES = {
     description:
       'An event trigger refused to extend the causal chain that reached it — it is already in the chain, or the chain has run too deep.',
   },
+  EVENTS_UNREADABLE: {
+    httpStatus: 400,
+    description:
+      "An event subscriber's (an event trigger's or a webhook's) `policy_ids` cannot read the resources of an event type it subscribes to, so it would never receive those events. `meta.unread` lists each platform namespace left unread: `namespace`, the read `action` and the `resource` it is checked on.",
+  },
   INVALID_EVENT_PATTERN: {
     httpStatus: 400,
     description:
       "The event pattern is invalid. An event trigger subscribes with '*', 'prefix.*', or an exact event name, and a pattern in a platform namespace must match a registered event.",
-  },
-  TRIGGER_EVENTS_UNREADABLE: {
-    httpStatus: 400,
-    description:
-      "An event trigger's `policy_ids` cannot read the resources of an event type it subscribes to, so it would never receive those events. `meta.unread` lists each platform namespace left unread: `namespace`, the read `action` and the `resource` it is checked on.",
   },
   TRIGGER_TYPE_IMMUTABLE: {
     httpStatus: 400,

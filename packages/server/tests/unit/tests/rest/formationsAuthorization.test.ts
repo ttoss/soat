@@ -207,7 +207,9 @@ describe('Formation resource authorization', () => {
         .send({
           project_id: projectId,
           name: 'policy-escalation-stack',
-          template: policyTemplate([{ effect: 'Allow', action: ['*'] }]),
+          template: policyTemplate([
+            { effect: 'Allow', action: ['*'], resource: ['*'] },
+          ]),
         });
 
       expect(res.body.status).not.toBe('active');

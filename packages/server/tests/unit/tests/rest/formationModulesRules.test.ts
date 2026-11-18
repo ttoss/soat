@@ -31,6 +31,17 @@ const granted = (type: string, properties: unknown) => {
   return { policy_ids: grant, ...properties };
 };
 
+/** Names a project id, so only the apply knows it is not the formation's. */
+const elsewhereDocument = {
+  statement: [
+    {
+      effect: 'Allow',
+      action: ['tools:ListTools'],
+      resource: ['srn:proj_elsewhere00000:*:*'],
+    },
+  ],
+};
+
 const client = () => {
   return authenticatedTestClient(adminToken);
 };
@@ -484,11 +495,11 @@ describe('POST /api/v1/formations — rules only the apply can check', () => {
     message: RegExp;
   }> = [
     {
-      name: 'a policy document is valid',
+      name: "a policy grants in its formation's project only",
       template: () => {
-        return one('policy', { document: { statement: 'not an array' } });
+        return one('policy', { document: elsewhereDocument });
       },
-      message: /Policy document is invalid/,
+      message: /outside the policy's project/,
     },
     {
       name: 'a model_route target names a provider of this project',
@@ -550,7 +561,7 @@ describe('POST /api/v1/formations — rules only the apply can check', () => {
 });
 
 describe('PUT /api/v1/formations/:formation_id — rules only the apply can check', () => {
-  test('a policy update keeps a valid document', async () => {
+  test("a policy update stays in its formation's project", async () => {
     const document = {
       statement: [{ effect: 'Allow', action: ['tools:ListTools'] }],
     };
@@ -558,13 +569,13 @@ describe('PUT /api/v1/formations/:formation_id — rules only the apply can chec
 
     const updated = await redeploy(
       created.id,
-      one('policy', { name: 'Valid', document: { statement: 'nope' } })
+      one('policy', { name: 'Valid', document: elsewhereDocument })
     );
 
     expect(updated.status).toBe('failed');
     expect(updated.error).toMatchObject({
       code: 'VALIDATION_FAILED',
-      message: expect.stringMatching(/Policy document is invalid/),
+      message: expect.stringMatching(/outside the policy's project/),
     });
   });
 

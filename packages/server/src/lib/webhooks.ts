@@ -3,6 +3,8 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import {
+  assertSubscriberReadsEvents,
+  effectiveEventFilter,
   type EventFilterArgs,
   storedEventFilter,
   validateEventFilter,
@@ -126,6 +128,12 @@ export const createWebhook = async (
     projectId: args.projectId,
     carried: { policyIds: args.policyIds ?? [] },
   });
+  await assertSubscriberReadsEvents({
+    projectId: args.projectId,
+    policyIds: args.policyIds ?? null,
+    events: args.events,
+    eventResources: args.eventResources ?? null,
+  });
 
   const secret = generateSecret();
 
@@ -179,6 +187,13 @@ export const updateWebhook = async (
     writer: args.writer,
     projectId: webhook.projectId,
     carried: { policyIds: args.policyIds ?? webhook.policyIds },
+  });
+  const filter = effectiveEventFilter({ stored: webhook, args });
+  await assertSubscriberReadsEvents({
+    projectId: webhook.projectId,
+    policyIds: args.policyIds ?? webhook.policyIds,
+    events: filter.events ?? [],
+    eventResources: filter.eventResources ?? null,
   });
 
   const updates: Record<string, unknown> = {};

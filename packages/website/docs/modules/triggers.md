@@ -314,14 +314,16 @@ cannot see. A custom event from an orchestration
 [`emit_event` node](./orchestrations.md) is about its run
 (`orchestrations:GetRun`).
 
-**A trigger reads what it subscribes to.** A create or update leaving an event
-trigger subscribed to a platform namespace its `policy_ids` cannot read is
-refused with `400 TRIGGER_EVENTS_UNREADABLE`; `meta.unread` lists each such
-namespace with its read `action` and the `resource` checked. The check is the
-read guard's, on `srn:<project>:<type>:*`, or on each `event_resources` item
-reaching into that type, so a policy reading one resource covers a trigger
-whose `event_resources` names only it. `*` needs a read on every namespace. A
-name outside every platform namespace is not checked.
+**A subscriber reads what it subscribes to.** A create or update leaving an
+event trigger or a [webhook](./webhooks.md#policy-ids-and-the-read-guard)
+subscribed to a platform namespace its `policy_ids` cannot read is refused
+with `400 EVENTS_UNREADABLE`; `meta.unread` lists each such namespace with its
+read `action` and the `resource` checked. An update is checked against the
+filter and policies it leaves. The check is the read guard's, on
+`srn:<project>:<type>:*`, or on each `event_resources` item reaching into that
+type, so a policy reading one resource covers a subscriber whose
+`event_resources` names only it. `*` needs a read on every namespace. A name
+outside every platform namespace is not checked.
 
 #### Loops and Cost
 
@@ -392,7 +394,7 @@ catch-up firing on restart.
 | `INVALID_CRON_EXPRESSION`     | `400`  | `cron` is missing a field or otherwise not a valid 5-field expression                                                                                                                                                                                                              | Fix the expression; it is always evaluated in **UTC**                                                                                                                                                                                    |
 | `INVALID_EVENT_PATTERN`       | `400`  | An `events` item is malformed, or names a platform namespace with no registered event matching it (a typo)                                                                                                                                                                         | Use `*`, `prefix.*`, or an exact registered event name — see [Event Triggers](#event-triggers)                                                                                                                                           |
 | `TRIGGER_CAUSATION_LIMIT`     | `409`  | An event trigger refused to extend the causal chain that reached it — it is already in the chain, or the chain ran past the depth cap                                                                                                                                              | Recorded on the firing, never returned to a caller. Break the cycle in the wiring; see [Loops and Cost](#loops-and-cost)                                                                                                                 |
-| `TRIGGER_EVENTS_UNREADABLE`   | `400`  | An event trigger's `policy_ids` cannot read a platform namespace its `events` subscribe to                                                                                                                                                                                         | Add each `meta.unread` action to a policy, or narrow `events` or `event_resources`; see [Event Triggers](#event-triggers)                                                                                                                |
+| `EVENTS_UNREADABLE`           | `400`  | An event trigger's `policy_ids` cannot read a platform namespace its `events` subscribe to                                                                                                                                                                                         | Add each `meta.unread` action to a policy, or narrow `events` or `event_resources`; see [Event Triggers](#event-triggers)                                                                                                                |
 | `TRIGGER_TARGET_NOT_FOUND`    | `400`  | `target_id` does not exist in the trigger's project                                                                                                                                                                                                                                | Verify the target ID and that it belongs to the same project as the trigger                                                                                                                                                              |
 | `TRIGGER_ACTION_NOT_ALLOWED`  | `400`  | An invalid field combination for `type`/`target_type` — e.g. `cron` on a non-`schedule` trigger, `events`, `event_resources` or `event_data` on a non-`event` trigger (or no `events` on an `event` trigger), `action` on a non-tool target, or a `client`-type tool as the target | Check the [Trigger Types](#trigger-types) and [Targets and Input](#targets-and-input) rules                                                                                                                                              |
 | `TRIGGER_INPUT_INVALID`       | `400`  | Fire-time input doesn't satisfy the target — empty agent input, or a field missing/mismatched against an orchestration's `input_schema`                                                                                                                                            | Supply the required input fields for the target type                                                                                                                                                                                     |
