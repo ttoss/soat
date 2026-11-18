@@ -11,6 +11,7 @@ import { contentBytes } from '../quotaStorage';
 import {
   toNullableNumber,
   toNullableObject,
+  toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { assertNoSystemTagKeys } from '../tags';
@@ -76,7 +77,7 @@ export const documentsFormationModule = defineFormationModule({
       id: physicalResourceId,
       createdBy: actor.author,
       content,
-      path: toOptionalString(properties.path) ?? undefined,
+      path: toNullableString(properties.path),
       title: toOptionalString(properties.title) ?? undefined,
       metadata: (toNullableObject(properties.metadata) ?? undefined) as
         Record<string, unknown> | undefined,

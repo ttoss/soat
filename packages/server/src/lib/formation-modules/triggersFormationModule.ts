@@ -169,7 +169,7 @@ export const triggersFormationModule = defineFormationModule({
       targetType: toOptionalString(properties.target_type),
       targetId: toOptionalString(properties.target_id),
       action: toNullableString(properties.action),
-      input: toInputObject(properties.input),
+      input: toNullableRecord(properties.input),
       toolContext: toStoredToolContext(properties.tool_context),
       cron: toNullableString(properties.cron),
       events: templateEvents(properties),

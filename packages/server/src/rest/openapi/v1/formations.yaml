@@ -899,7 +899,6 @@ components:
               example: low
         single_session_per_actor:
           type: boolean
-          nullable: true
           description: When true, only one open session per actor_id is allowed for this agent.
         trace_content_mode:
           type: string
@@ -992,7 +991,6 @@ components:
           description: Actor display name
         external_id:
           type: string
-          nullable: true
           description: External identifier for idempotent actor creation
         instructions:
           type: string
@@ -1078,7 +1076,6 @@ components:
           description: Tool display name
         type:
           type: string
-          nullable: true
           description: Tool type hint (e.g. http, mcp, builtin, pipeline)
         description:
           type: string
@@ -1389,11 +1386,9 @@ components:
           description: Virtual path for organising the document
         filename:
           type: string
-          nullable: true
           description: Original filename
         title:
           type: string
-          nullable: true
           description: Document title
         metadata:
           description: Arbitrary metadata key-value pairs
@@ -1401,7 +1396,6 @@ components:
             - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         tags:
           type: object
-          nullable: true
           description: Tag key-value pairs for filtering
         chunk_strategy:
           type: string
@@ -1480,7 +1474,6 @@ components:
             `conversation` requires `source_id`.
         source_id:
           type: string
-          nullable: true
           description: >-
             The conversation this fact was learned in, when `source_type` is
             `conversation`; null when it is `manual`.
@@ -1552,12 +1545,10 @@ components:
             type: string
         failure_threshold:
           type: integer
-          nullable: true
           description: >-
             Consecutive retryable failures before a target is skipped (default 3)
         cooldown_seconds:
           type: integer
-          nullable: true
           description: How long a tripped target is skipped before being probed again (default 60)
 
     WebhookResourceProperties:
@@ -1577,7 +1568,6 @@ components:
           description: Webhook display name
         description:
           type: string
-          nullable: true
           description: Optional description
         url:
           type: string
@@ -1787,7 +1777,6 @@ components:
         actor_id:
           x-soat-ref: actors
           type: string
-          nullable: true
           description: Public ID of an actor to associate with this conversation
 
     FileResourceProperties:
@@ -1798,19 +1787,15 @@ components:
       properties:
         prefix:
           type: string
-          nullable: true
           description: Directory within the project. Optional; defaults to / (root). Combined with filename to form the file's key (path).
         filename:
           type: string
-          nullable: true
           description: Original / download name and the key's leaf segment.
         content_type:
           type: string
-          nullable: true
           description: MIME type of the file
         size:
           type: integer
-          nullable: true
           description: File size in bytes
         metadata:
           description: >-
@@ -1830,11 +1815,9 @@ components:
       properties:
         name:
           type: string
-          nullable: true
           description: Human-readable label for the policy
         description:
           type: string
-          nullable: true
           description: Description of what the policy grants
         document:
           type: object
@@ -2015,7 +1998,6 @@ components:
         actor_id:
           x-soat-ref: actors
           type: string
-          nullable: true
           description: Public ID of an actor to associate with this session
         auto_generate:
           type: boolean
@@ -2086,13 +2068,11 @@ components:
           description: Merged into the tool input before invocation (tool converters only)
         native_extraction:
           type: string
-          nullable: true
           description: >-
             For native types (PDF/text): `first` (default) converts only
             when native extraction yields no text; `skip` always converts.
         file_delivery:
           type: string
-          nullable: true
           description: How the file reaches a tool converter — base64 (default) or download_url
         chunk_strategy:
           type: string

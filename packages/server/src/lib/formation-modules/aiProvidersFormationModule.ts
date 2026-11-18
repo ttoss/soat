@@ -85,17 +85,16 @@ export const aiProvidersFormationModule = defineFormationModule({
   },
 
   update: async ({ properties, physicalResourceId, projectId, actor }) => {
-    let secretId: number | undefined;
-    const rawSecretId = properties.secret_id;
-    if (rawSecretId !== undefined) {
-      const secretPublicId = toNullableString(rawSecretId);
-      if (secretPublicId) {
-        secretId = await lookupSecretInternalId({
-          publicId: secretPublicId,
-          projectId,
-        });
-      }
-    }
+    const secretPublicId = toNullableString(properties.secret_id);
+    const secretId =
+      secretPublicId === null
+        ? null
+        : secretPublicId
+          ? await lookupSecretInternalId({
+              publicId: secretPublicId,
+              projectId,
+            })
+          : undefined;
 
     await updateAiProvider({
       id: physicalResourceId,
