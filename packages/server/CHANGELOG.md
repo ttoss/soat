@@ -3,6 +3,33 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.118.0](https://github.com/ttoss/soat/compare/v0.117.0...v0.118.0) (2026-11-18)
+
+* feat(webhooks)!: refuse events a webhook's policy_ids cannot read (#2022) ([0447e1c](https://github.com/ttoss/soat/commit/0447e1c76ea2ae280ed3ca0b0aaa82519e575437)), closes [#2022](https://github.com/ttoss/soat/issues/2022)
+* feat(evaluations)!: give the eval-run cancel its own IAM action (#2010) ([57ced2e](https://github.com/ttoss/soat/commit/57ced2e47e347a6f1106a297ea75f0c5a766b4e7)), closes [#2010](https://github.com/ttoss/soat/issues/2010)
+
+### Bug Fixes
+
+* **ai-providers:** unlink the secret on patch with secret_id null ([#2011](https://github.com/ttoss/soat/issues/2011)) ([777764b](https://github.com/ttoss/soat/commit/777764b175ab459faa813ae7cdbf683a56ca9c0b))
+* **formations:** retire a dropped resource whose create failed ([#2012](https://github.com/ttoss/soat/issues/2012)) ([cd373c9](https://github.com/ttoss/soat/commit/cd373c90ce995e21b80c1e80110f60cef21486c3))
+* **formations:** warn on unread pipeline parameters when a step tool_id is a ref ([#2015](https://github.com/ttoss/soat/issues/2015)) ([ff0da4f](https://github.com/ttoss/soat/commit/ff0da4fd5cfcf8bcded4667a4b7956bfb7e5e40a))
+* **iam:** admission asks with the scoped credential's project when the check names none ([#2009](https://github.com/ttoss/soat/issues/2009)) ([913d532](https://github.com/ttoss/soat/commit/913d5325f0d3e6ac28b71762a1c0690c67da9ac1))
+* **policies:** an allow without resource grants its policy's project ([#2020](https://github.com/ttoss/soat/issues/2020)) ([df86b54](https://github.com/ttoss/soat/commit/df86b54ae387e092ea617117690881d89ed2807f))
+
+### Features
+
+* **knowledge:** search by an existing document or memory id ([#2013](https://github.com/ttoss/soat/issues/2013)) ([492f2be](https://github.com/ttoss/soat/commit/492f2bee5efeb292af72016349fd2fc9a61bb8f6))
+* **tasks:** list tasks in pull order ([#2007](https://github.com/ttoss/soat/issues/2007)) ([b59c66a](https://github.com/ttoss/soat/commit/b59c66a30d38185efacbeeb9b0306e1dfe30b65e))
+
+### BREAKING CHANGES
+
+* a webhook whose policy_ids cannot read a platform namespace
+  its events subscribe to is refused 400 EVENTS_UNREADABLE; the trigger refusal
+  code TRIGGER_EVENTS_UNREADABLE is renamed EVENTS_UNREADABLE.
+* cancelling an eval run needs `evaluations:CancelEvalRun`.
+  Stored policies and formation templates are rewritten; a template kept
+  outside SOAT that grants `evaluations:RunEval` for cancelling must add it.
+
 # [0.117.0](https://github.com/ttoss/soat/compare/v0.116.0...v0.117.0) (2026-11-18)
 
 * fix(iam)!: check decider, workflow, orchestration and eval starts at their entry point (#2003) ([4b8ce49](https://github.com/ttoss/soat/commit/4b8ce49b50e3b4e1bb72fe8493de89127e9bb9fa)), closes [#2003](https://github.com/ttoss/soat/issues/2003)
