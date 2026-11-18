@@ -1,8 +1,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
+
 /**
- * Nothing on a tool surface reaches the platform over the network any more.
+ * Nothing on a tool surface reaches the platform over the network.
  * Both the agent-side `soat` tool and the MCP tool surface dispatch
  * in-process, through the app's own middleware chain.
  *
@@ -52,13 +54,6 @@ const SELF_CALL_URL =
 
 const readSource = (relativePath: string): string => {
   return readFileSync(join(SRC_DIR, relativePath), 'utf8');
-};
-
-/** Strips comments so prose *describing* a loopback call is not a violation. */
-const stripComments = (source: string): string => {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
 };
 
 describe('tool surfaces do not self-call over the loopback', () => {

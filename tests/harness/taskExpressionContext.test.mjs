@@ -31,6 +31,9 @@ describe('task expression context chokepoint', () => {
         return path.relative(srcDir, file);
       })
       .sort();
-    assert.deepEqual(builders, ['lib/taskExpressionContext.ts', 'lib/tasks.ts']);
+    assert.deepEqual(builders, [
+      'lib/taskExpressionContext.ts',
+      'lib/tasks.ts',
+    ]);
   });
 });

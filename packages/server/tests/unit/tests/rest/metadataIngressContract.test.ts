@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
+
 /**
  * A caller's `metadata` bag has one reader: `lib/metadataBag.ts`. A route that
  * reads `body.metadata` for itself is how that stops being true, and nothing
@@ -35,9 +37,7 @@ const NOT_INGRESSES = new Set([
 
 /** Source with comments and string literals dropped, so prose is not a hit. */
 const code = (file: string): string => {
-  return readFileSync(join(ROUTES_DIR, file), 'utf-8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '')
+  return stripComments(readFileSync(join(ROUTES_DIR, file), 'utf-8'))
     .replace(/'(?:[^'\\]|\\.)*'/g, "''")
     .replace(/"(?:[^"\\]|\\.)*"/g, '""');
 };

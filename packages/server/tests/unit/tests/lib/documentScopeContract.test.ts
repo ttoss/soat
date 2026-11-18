@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
+
 /**
  * "Which documents exist for this read" is one question, and the moment two
  * readers answer it for themselves they answer it differently — which shows up
@@ -35,12 +37,7 @@ const COLLECTION_READERS = ['documents.ts', 'knowledgeDocuments.ts'];
 
 /** Blanks comments while preserving offsets, so prose is never a match. */
 const code = (path: string): string => {
-  return readFileSync(path, 'utf-8').replace(
-    /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
-    (match) => {
-      return match.replace(/[^\n]/g, ' ');
-    }
-  );
+  return stripComments(readFileSync(path, 'utf-8'));
 };
 
 describe('document scope contract', () => {

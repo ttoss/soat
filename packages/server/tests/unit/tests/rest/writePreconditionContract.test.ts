@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
 import { VERSIONED_RESOURCES } from '../../fixtures/versionedResources';
 
 /**
@@ -32,13 +33,6 @@ const callSites = Object.entries(VERSIONED_RESOURCES).flatMap(
 
 /** The one place a route is allowed to read a precondition off a request. */
 const PRECONDITION_READER = 'writePreconditionOf';
-
-/** Blanks comments while preserving offsets, so prose is never a match. */
-const stripComments = (source: string): string => {
-  return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (match) => {
-    return match.replace(/[^\n]/g, ' ');
-  });
-};
 
 const read = (path: string): string => {
   return stripComments(readFileSync(path, 'utf-8'));
