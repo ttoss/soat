@@ -568,8 +568,10 @@ describe('guards and lists read readiness', () => {
     // writes may still be querying other tables while the list runs.
     const queriesFor = async (limit: number) => {
       let count = 0;
-      const hook = (_options: unknown, query: { sql?: string }) => {
-        if (/\b(tasks|task_dependencies)\b/.test(query.sql ?? '')) count += 1;
+      const hook = (_options: unknown, query: object) => {
+        const sql =
+          'sql' in query && typeof query.sql === 'string' ? query.sql : '';
+        if (/\b(tasks|task_dependencies)\b/.test(sql)) count += 1;
       };
       db.sequelize.addHook('afterQuery', 'countListQueries', hook);
       try {
