@@ -16,6 +16,11 @@
 | A dated or versioned aside | "as it stood at v3", "before the ledger existed", "since the rewrite" |
 | Work narration | "added in this PR", "kept for now", "TODO", "left as is" |
 
+## Remove on contact
+
+- A change that touches a file removes every historical narration in that
+  file, in the same change: rewrite it to the present-tense fact or delete it.
+
 ## Keep the fact, drop the narrative
 
 | Instead of | Write |

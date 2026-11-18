@@ -32,10 +32,10 @@ const computeIngestionProgress = (args: {
 };
 
 /**
- * Lightweight ingestion status for polling (#5, #6) — the lifecycle fields
+ * Lightweight ingestion status for polling — the lifecycle fields
  * only, never the multi-megabyte chunk content `getDocument` assembles.
  * Self-recovers a stalled document to `failed` so a poller reaches a terminal
- * state (#4).
+ * state.
  *
  * - `chunk_count` — chunks currently indexed; grows during `processing`.
  * - `total_chunks` — planned total, `null` until chunking starts.

@@ -7,9 +7,6 @@ import { join } from 'node:path';
  * else notices — the column is JSONB, so a bag that is not an object is stored
  * rather than refused, and the drift only surfaces when a consumer trusts the
  * type it was promised.
- *
- * Five routes were doing exactly that before this check existed, and the two
- * modules that did validate had each written the rule out again.
  */
 
 const ROUTES_DIR = join(__dirname, '../../../../src/rest/v1');
