@@ -577,6 +577,57 @@ describe('MCP tools - happy path', () => {
     expect(migrated.state).toBe('backlog');
   });
 
+  test('task dependency tools add, list and remove an edge via MCP', async () => {
+    const workflow = parseResult(
+      await mcpCall('create-workflow', {
+        project_id: projectId,
+        name: 'mcp-dependencies',
+        states: [
+          { name: 'todo', initial: true },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [{ name: 'finish', from: ['todo'], to: 'done' }],
+      })
+    );
+    const [blocker, task] = await Promise.all(
+      ['blocker', 'waits'].map(async (title) => {
+        return parseResult(
+          await mcpCall('create-task', {
+            project_id: projectId,
+            workflow_id: workflow.id,
+            title,
+          })
+        );
+      })
+    );
+
+    const dependency = parseResult(
+      await mcpCall('add-task-dependency', {
+        task_id: task.id,
+        depends_on_task_id: blocker.id,
+      })
+    );
+    expect(dependency.depends_on_task.id).toBe(blocker.id);
+    expect(
+      parseResult(await mcpCall('get-task', { task_id: task.id })).readiness
+        .blocked
+    ).toBe(true);
+
+    const dependents = parseResult(
+      await mcpCall('list-task-dependents', { task_id: blocker.id })
+    );
+    expect(dependents.data[0].task.id).toBe(task.id);
+
+    await mcpCall('remove-task-dependency', {
+      task_id: task.id,
+      depends_on_task_id: blocker.id,
+    });
+    const listed = parseResult(
+      await mcpCall('list-task-dependencies', { task_id: task.id })
+    );
+    expect(listed.data).toEqual([]);
+  });
+
   test('create-workflow-migration moves every open task and get-workflow-migration reads the run', async () => {
     const workflow = parseResult(
       await mcpCall('create-workflow', {

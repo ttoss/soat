@@ -13,8 +13,9 @@ import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
 import {
   findTaskInstance,
-  mapTask,
+  type MappedTask,
   mergeTaskPayload,
+  presentTask,
   type TaskInstance,
   type TaskPrincipal,
   transitionTask,
@@ -120,7 +121,7 @@ export const parkTransitionForApproval = async (args: {
    */
   payload?: Record<string, unknown>;
   payloadSchema: unknown;
-}): Promise<ReturnType<typeof mapTask>> => {
+}): Promise<MappedTask> => {
   const { task, transition, transitions } = args;
   const taskPublicId = task.publicId;
   log(
@@ -131,7 +132,7 @@ export const parkTransitionForApproval = async (args: {
 
   // A fast, clear error before the atomic claim, which is the authority under
   // contention.
-  assertTransitionAllowed({
+  await assertTransitionAllowed({
     task,
     transition,
     transitions,
@@ -194,7 +195,7 @@ export const parkTransitionForApproval = async (args: {
   );
 
   const refreshed = await findTaskInstance({ id: taskPublicId });
-  return mapTask(refreshed!);
+  return presentTask({ task: refreshed! });
 };
 
 // Clears the gate for exactly the approval that resolved (guarded on
@@ -295,7 +296,7 @@ const applyApprovedTransition = async (args: {
         await emitTaskEvent({
           type: 'tasks.approval_failed',
           projectId: refreshed.projectId as number,
-          task: mapTask(refreshed),
+          task: await presentTask({ task: refreshed }),
           facts: {
             transition: item.task_transition,
             error_code: error.code,

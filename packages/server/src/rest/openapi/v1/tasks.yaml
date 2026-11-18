@@ -96,6 +96,15 @@ paths:
           required: false
           schema:
             type: string
+        - name: blocked
+          in: query
+          required: false
+          description: >-
+            `true` lists only the tasks with an open dependency
+            (`readiness.blocked`), `false` only the rest.
+          schema:
+            type: string
+            enum: ['true', 'false']
         - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
@@ -332,7 +341,9 @@ paths:
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
-      description: Deletes a task. Its transition history cascades.
+      description: >-
+        Deletes a task. Its transition history and dependencies cascade; a
+        dependent it was the last open dependency of is freed.
       tags:
         - Tasks
       summary: Delete a task
@@ -745,6 +756,261 @@ paths:
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
+  /api/v1/tasks/{task_id}/dependencies:
+    post:
+      description: >-
+        Makes the task depend on `depends_on_task_id`, a task in the same
+        project: the path's task is blocked until that one closes, in any
+        terminal state. The pair is the dependency's identity: adding it
+        again answers `200` with the existing one. An edge that would close
+        a cycle is refused.
+      tags:
+        - Tasks
+      summary: Add a task dependency
+      operationId: addTaskDependency
+      x-iam-action: tasks:UpdateTaskDependencies
+      x-iam-resource-type: task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: The task that waits.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTaskDependencyRequest'
+      responses:
+        '200':
+          description: The dependency already held; it is returned unchanged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependency'
+        '201':
+          description: The dependency
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependency'
+        '400':
+          description: >-
+            The task names itself (`TASK_DEPENDENCY_SELF`), `depends_on_task_id`
+            is missing or in another project
+            (`TASK_DEPENDENCY_TARGET_NOT_FOUND`), or the body is invalid
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: The task does not exist
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            The task is closed (`TASK_DEPENDENCY_CLOSED`) or the dependency
+            would close a cycle (`TASK_DEPENDENCY_CYCLE`, `meta.path`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+    get:
+      description: >-
+        Lists the tasks this task depends on, open and closed, oldest first. Only the open ones block it.
+      tags:
+        - Tasks
+      summary: List a task's dependencies
+      operationId: listTaskDependencies
+      x-iam-action: tasks:GetTask
+      x-iam-resource-type: task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: The task that waits.
+          schema:
+            type: string
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The task's dependencies
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TaskDependency'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+
+  /api/v1/tasks/{task_id}/dependents:
+    get:
+      description: >-
+        Lists the tasks that depend on this task, open and closed, oldest first.
+      tags:
+        - Tasks
+      summary: List a task's dependents
+      operationId: listTaskDependents
+      x-iam-action: tasks:GetTask
+      x-iam-resource-type: task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: The task the dependents wait on.
+          schema:
+            type: string
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The tasks that depend on this task
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TaskDependency'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+
+  /api/v1/tasks/{task_id}/dependencies/{depends_on_task_id}:
+    delete:
+      description: >-
+        Removes the task's dependency on `depends_on_task_id`; answers `204`
+        also when there is none. When it was the task's last open
+        dependency, `tasks.unblocked` fires.
+      tags:
+        - Tasks
+      summary: Remove a task dependency
+      operationId: removeTaskDependency
+      x-iam-action: tasks:UpdateTaskDependencies
+      x-iam-resource-type: task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: The task that waits.
+          schema:
+            type: string
+        - name: depends_on_task_id
+          in: path
+          required: true
+          description: The task it no longer waits on.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Dependency removed
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: The task does not exist
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+
   /api/v1/tasks/{task_id}/history:
     get:
       description: Returns the append-only transition history of a task.
@@ -918,6 +1184,8 @@ components:
             decision. Non-null while an ApprovalItem gates the move; the task
             stays in its current state and no other transition may fire until the
             approval resolves.
+        readiness:
+          $ref: '#/components/schemas/TaskReadiness'
         entered_state_at:
           type: string
           format: date-time
@@ -992,6 +1260,98 @@ components:
         created_at:
           type: string
           format: date-time
+    TaskReadiness:
+      type: object
+      description: >-
+        Computed on every read. Only an open dependency blocks; any close,
+        `cancelled` included, frees what the task held. Guards read it as
+        `task.readiness`.
+      required:
+        - blocked
+        - blocked_by
+        - blocked_by_count
+        - unblocks
+      properties:
+        blocked:
+          type: boolean
+          description: Whether any dependency is still open.
+        blocked_by:
+          type: array
+          description: The open dependencies, oldest first, at most 20.
+          items:
+            type: object
+            required:
+              - task_id
+              - title
+              - state
+            properties:
+              task_id:
+                type: string
+              title:
+                type: string
+              state:
+                type: string
+        blocked_by_count:
+          type: integer
+          description: How many dependencies are open, including any beyond the 20 listed.
+        unblocks:
+          type: integer
+          description: How many open tasks depend on this one.
+    TaskDependencyEnd:
+      type: object
+      required:
+        - id
+        - title
+        - state
+        - status
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        state:
+          type: string
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+    TaskDependency:
+      type: object
+      description: >-
+        `depends_on_task` blocks `task` until it closes. The pair is its
+        identity.
+      properties:
+        task:
+          $ref: '#/components/schemas/TaskDependencyEnd'
+        depends_on_task:
+          $ref: '#/components/schemas/TaskDependencyEnd'
+        note:
+          type: string
+          nullable: true
+        created_by_principal_type:
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: Who added the dependency.
+        created_by_principal_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    AddTaskDependencyRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - depends_on_task_id
+      properties:
+        depends_on_task_id:
+          type: string
+          description: The task that blocks this one, in the same project.
+        note:
+          type: string
+          nullable: true
+          description: Why the task waits, returned as written.
     TaskTransitionOption:
       type: object
       required:

@@ -1013,6 +1013,26 @@
       "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
       "routes": []
     },
+    "TASK_DEPENDENCY_CLOSED": {
+      "http_status": 409,
+      "hint": "Add the dependency to an open task; a closed task waits on nothing.",
+      "routes": []
+    },
+    "TASK_DEPENDENCY_CYCLE": {
+      "http_status": 409,
+      "hint": "Remove one dependency along `meta.path`, or add the dependency the other way round.",
+      "routes": []
+    },
+    "TASK_DEPENDENCY_SELF": {
+      "http_status": 400,
+      "hint": "Name a different task in `depends_on_task_id`.",
+      "routes": []
+    },
+    "TASK_DEPENDENCY_TARGET_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Name a task of the same project in `depends_on_task_id`.",
+      "routes": []
+    },
     "TASK_GUARD_REJECTED": {
       "http_status": 400,
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",

@@ -6736,6 +6736,31 @@ if ! printf '%s\n' "$DRIVING_TASKS" | jq -e 'all(.data[]; .automation_status | I
 fi
 echo "Task automation_status filter: OK"
 
+# ── Task dependencies ──
+# A task waits on another until it closes; every read carries its readiness.
+BLOCKER_TASK_ID=$($SOAT_CLI create-task --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" --title "smoke blocker" | jq -r '.id')
+WAITING_TASK_ID=$($SOAT_CLI create-task --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" --title "smoke waits" | jq -r '.id')
+$SOAT_CLI add-task-dependency --task-id "$WAITING_TASK_ID" \
+  --depends-on-task-id "$BLOCKER_TASK_ID" >/dev/null
+if ! $SOAT_CLI get-task --task-id "$WAITING_TASK_ID" \
+  | jq -e --arg b "$BLOCKER_TASK_ID" '.readiness.blocked and .readiness.blocked_by[0].task_id == $b' >/dev/null; then
+  echo "ERROR: a task with an open dependency did not read as blocked" >&2
+  exit 1
+fi
+expect_cli_error_status 409 add-task-dependency --task-id "$BLOCKER_TASK_ID" \
+  --depends-on-task-id "$WAITING_TASK_ID"
+$SOAT_CLI remove-task-dependency --task-id "$WAITING_TASK_ID" \
+  --depends-on-task-id "$BLOCKER_TASK_ID" >/dev/null
+if ! $SOAT_CLI get-task --task-id "$WAITING_TASK_ID" | jq -e '.readiness.blocked == false' >/dev/null; then
+  echo "ERROR: removing the last dependency left the task blocked" >&2
+  exit 1
+fi
+$SOAT_CLI delete-task --task-id "$WAITING_TASK_ID" >/dev/null
+$SOAT_CLI delete-task --task-id "$BLOCKER_TASK_ID" >/dev/null
+echo "Task dependencies: OK (blocked, cycle refused, freed)"
+
 # ── on_enter tool dispatch ──
 # A state whose work is a single tool call dispatches it directly, with no
 # orchestration in between. A `builtin` tool is used so the call exercises the
