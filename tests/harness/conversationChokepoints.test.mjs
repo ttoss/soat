@@ -52,7 +52,7 @@ describe('conversation chokepoints', () => {
     );
   });
 
-  test('a conversation or its messages are deleted only through releaseTurnDocuments', () => {
+  test('a conversation or its messages are deleted only through conversationTurnDocuments', () => {
     assert.deepEqual(
       filesMatching(
         /\b(Conversation|ConversationMessage|conversation|message)\.destroy\(/

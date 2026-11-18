@@ -16,9 +16,9 @@ import { countConverterRules } from './converterRuleDependents';
 import type { Transaction } from './dbTransaction';
 import { countBackendDeciders } from './deciderDependents';
 import { emitResourceEvent } from './eventBus';
-import { deleteStorageObjects } from './fileStorage';
 import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
 import type { StoredError } from './storedError';
+import { SYSTEM_FILE_RELEASES } from './systemFileRelease';
 import { redactAgentToolSecrets } from './toolSecretRedaction';
 
 const log = createDebug('soat:agents');
@@ -62,10 +62,8 @@ const findDependentIds = async (args: {
 };
 
 // Cross-references from other agents' rows are nulled first, since those
-// self-referencing FKs are RESTRICT. Storage objects behind the traces' step
-// files are cleaned up only once the transaction commits: the row must be gone
-// before the object, or a concurrent read references bytes mid-delete.
-// The agent's sessions in its own project go with it; a grantee's sessions on
+// self-referencing FKs are RESTRICT. The traces' step files are released once
+// the transaction commits. The agent's sessions in its own project go with it; a grantee's sessions on
 // a shared agent keep their durable `agent_public_id`.
 const destroyOwnSessions = async (args: {
   agent: InstanceType<typeof db.Agent>;
@@ -85,14 +83,6 @@ const forceDeleteAgentWithDependents = async (args: {
     agentId: args.agentId,
     projectId: args.agent.projectId,
   });
-
-  const files =
-    fileIds.length > 0
-      ? await db.File.findAll({
-          where: { id: fileIds },
-          attributes: ['storagePath', 'storageType'],
-        })
-      : [];
 
   await db.sequelize.transaction(async (transaction) => {
     if (generationIds.length > 0) {
@@ -114,9 +104,6 @@ const forceDeleteAgentWithDependents = async (args: {
 
     await db.Generation.destroy({ where: { id: generationIds }, transaction });
     await db.Trace.destroy({ where: { id: traceIds }, transaction });
-    if (fileIds.length > 0) {
-      await db.File.destroy({ where: { id: fileIds }, transaction });
-    }
     // Archived configs are owned by the agent; remove them before the parent so
     // no orphan version rows are left behind.
     await agentVersionStore.deleteVersions({
@@ -127,11 +114,7 @@ const forceDeleteAgentWithDependents = async (args: {
     await args.agent.destroy({ transaction });
   });
 
-  await deleteStorageObjects(
-    files.map((file) => {
-      return { storagePath: file.storagePath, storageType: file.storageType };
-    })
-  );
+  await SYSTEM_FILE_RELEASES.traces({ fileIds });
 };
 
 const countAgentDependents = async (args: {

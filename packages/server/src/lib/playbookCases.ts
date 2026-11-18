@@ -20,12 +20,12 @@ import {
   writeCaseBindings,
 } from './playbookCaseUpstreams';
 import type { PlaybookDefinition } from './playbookDefinition';
-import { releaseCaseExportFiles } from './playbookExportRender';
 import { type PlaybookNodeRun, playbookNodeRuns } from './playbookNodeRuns';
 import { playbooks } from './playbooks';
 import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
 import { parsePlaybookDefinition } from './playbookWire';
 import { projectScopeWhere } from './projectScope';
+import { SYSTEM_FILE_RELEASES } from './systemFileRelease';
 
 export {
   appendEntries,
@@ -288,7 +288,7 @@ export const deletePlaybookCase = async (args: {
   });
   // Entries, exports and the case's own bindings cascade with the case.
   await row.destroy();
-  await releaseCaseExportFiles({
+  await SYSTEM_FILE_RELEASES.playbooks({
     projectId: row.projectId,
     casePublicId: row.publicId,
   });
