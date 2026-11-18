@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.117.0](https://github.com/ttoss/soat/compare/v0.116.0...v0.117.0) (2026-11-18)
+
+### Bug Fixes
+
+* **guardrails:** a session turn counts runtime.generations.* from the messages it replays ([#2000](https://github.com/ttoss/soat/issues/2000)) ([40815f7](https://github.com/ttoss/soat/commit/40815f78c47cc4a8e513b761314ed2f18b15e287))
+
+### Features
+
+* **tasks:** a priority field on tasks ([#1995](https://github.com/ttoss/soat/issues/1995)) ([b7128bc](https://github.com/ttoss/soat/commit/b7128bc747b3ecf89cc873fd13c69741cb58d903))
+* **tasks:** a priority field on tasks, set through its own route ([#1998](https://github.com/ttoss/soat/issues/1998)) ([8c7ccee](https://github.com/ttoss/soat/commit/8c7ccee8995f2212e7cc5a48c28f9bbe2fed5433))
+* **tasks:** task dependencies, with readiness on every read ([#1999](https://github.com/ttoss/soat/issues/1999)) ([40236e9](https://github.com/ttoss/soat/commit/40236e9dbed05542c65e838e69c87e534e151fe4))
+
+### Reverts
+
+* Revert "feat(tasks): a priority field on tasks (#1995)" (#1997) ([f828a5c](https://github.com/ttoss/soat/commit/f828a5cddb7b265b9a378fb5e2c0cedf4382afd8)), closes [#1995](https://github.com/ttoss/soat/issues/1995) [#1997](https://github.com/ttoss/soat/issues/1997)
+
 # [0.116.0](https://github.com/ttoss/soat/compare/v0.115.0...v0.116.0) (2026-11-17)
 
 **Note:** Version bump only for package @soat/postgresdb
