@@ -11,7 +11,7 @@ import { getDocument } from 'src/lib/documents';
 
 import { assertDocumentReachable } from './documentPins';
 import {
-  checkDocumentPermission,
+  assertDocumentPermission,
   documentsRouter as _router,
 } from './documents';
 import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
@@ -39,7 +39,7 @@ const gateDocument = async (args: {
   if (!doc) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
-  await checkDocumentPermission(args.ctx, doc, args.action);
+  await assertDocumentPermission(args.ctx, doc, args.action);
 };
 
 /**

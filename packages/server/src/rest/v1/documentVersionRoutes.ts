@@ -34,11 +34,11 @@ type DocumentForPermission = {
 
 type RegisterArgs = {
   documentsRouter: Router<Context>;
-  checkDocumentPermission: (
+  assertDocumentPermission: (
     ctx: Context,
     doc: DocumentForPermission,
     action: string
-  ) => Promise<boolean>;
+  ) => Promise<void>;
 };
 
 /** A version path segment, refused rather than coerced when it is not one. */
@@ -53,7 +53,7 @@ const parseVersionParam = (raw: string): number => {
 };
 
 export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
-  const { documentsRouter, checkDocumentPermission } = args;
+  const { documentsRouter, assertDocumentPermission } = args;
 
   /**
    * Loads the document a history route names and checks the caller may act on
@@ -65,7 +65,7 @@ export const registerDocumentVersionRoutes = (args: RegisterArgs) => {
     if (!doc) {
       throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
     }
-    await checkDocumentPermission(ctx, doc, action);
+    await assertDocumentPermission(ctx, doc, action);
   };
 
   documentsRouter.post(
