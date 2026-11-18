@@ -13,7 +13,7 @@ import { hasUnboundPolicyVariable } from './policyVariables';
 
 /**
  * Describes how a resource's fields map to Sequelize column references.
- * - `column`: the database column name (e.g. 'publicId', 'path', 'tags')
+ * - `column`: the model attribute (e.g. 'publicId', 'path', 'tags')
  * - `alias`: if the column is on an associated (joined) model, the association
  *   alias used in the query (e.g. 'file'). When set, the column reference is
  *   rendered as `$alias.column$` which requires `subQuery: false` in the query.
@@ -88,8 +88,16 @@ const rootedFieldMap = (
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+/**
+ * Sequelize maps a root attribute to its field but splices a `$alias.column$`
+ * reference into SQL verbatim, so that form names the underscored field.
+ */
 const colRef = (spec: ColumnSpec): string => {
-  return spec.alias ? `$${spec.alias}.${spec.column}$` : spec.column;
+  if (!spec.alias) return spec.column;
+  const field = spec.column.replace(/[A-Z]/g, (letter) => {
+    return `_${letter.toLowerCase()}`;
+  });
+  return `$${spec.alias}.${field}$`;
 };
 
 export const globToLike = (pattern: string): string => {

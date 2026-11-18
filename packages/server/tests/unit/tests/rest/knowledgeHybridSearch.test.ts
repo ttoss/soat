@@ -586,6 +586,7 @@ describe('POST /api/v1/knowledge/search — hybrid ranking', () => {
   describe('a path-scoped policy', () => {
     const SCOPED_PATH = '/docs/policy-scoped.txt';
     const DENIED_PATH = '/docs/policy-denied.txt';
+    const DENIED_BY_ID_PATH = '/docs/policy-denied-by-id.txt';
     let projectId: string;
     let scopedToken: string;
 
@@ -600,6 +601,11 @@ describe('POST /api/v1/knowledge/search — hybrid ranking', () => {
         projectId,
         content: 'Content the scoped policy leaves out.',
         path: DENIED_PATH,
+      });
+      const deniedByIdDocumentId = await createDocument({
+        projectId,
+        content: 'Content the scoped policy leaves out by id.',
+        path: DENIED_BY_ID_PATH,
       });
 
       const user = await asAdmin()
@@ -621,7 +627,10 @@ describe('POST /api/v1/knowledge/search — hybrid ranking', () => {
               {
                 effect: 'Deny',
                 action: ['knowledge:SearchKnowledge'],
-                resource: [`srn:${projectId}:document:${DENIED_PATH}`],
+                resource: [
+                  `srn:${projectId}:document:${DENIED_PATH}`,
+                  `srn:${projectId}:document:${deniedByIdDocumentId}`,
+                ],
               },
             ],
           },
@@ -632,9 +641,9 @@ describe('POST /api/v1/knowledge/search — hybrid ranking', () => {
       scopedToken = await loginAs('hybridscoped', 'scopedpass');
     });
 
-    // The compiled clause names `file.path` through an association, which both
-    // ranked channels resolve only with `subQuery: false`.
-    test('a semantic query leaves out the document the policy denies', async () => {
+    // The compiled clause names `file.path` and `public_id` through an
+    // association, which both ranked channels resolve only with `subQuery: false`.
+    test('a semantic query leaves out the documents the policy denies', async () => {
       const res = await authenticatedTestClient(scopedToken)
         .post('/api/v1/knowledge/search')
         .send({ project_id: projectId, query: 'scoped policy content' });
