@@ -144,16 +144,26 @@ declare const systemPathBrand: unique symbol;
  */
 export type SystemPath = string & { readonly [systemPathBrand]: true };
 
-/** A module directory is one plain segment, so the root stays one level deep. */
-const MODULE_SEGMENT = /^[a-z0-9-]+$/;
+/**
+ * The module directories under {@link SYSTEM_ROOT}, each one plain segment.
+ * Each has a release in `SYSTEM_FILE_RELEASES` (`systemFileRelease.ts`), so an
+ * owner's delete takes what its module wrote with it.
+ */
+export const SYSTEM_MODULES = ['conversations', 'playbooks', 'traces'] as const;
+
+export type SystemModule = (typeof SYSTEM_MODULES)[number];
+
+const isSystemModule = (value: string): value is SystemModule => {
+  return (SYSTEM_MODULES as readonly string[]).includes(value);
+};
 
 export const systemPath = (args: {
-  module: string;
+  module: SystemModule;
   leaf: string;
 }): SystemPath => {
-  if (!MODULE_SEGMENT.test(args.module)) {
+  if (!isSystemModule(args.module)) {
     throw new Error(
-      `systemPath: module must be a single path segment of [a-z0-9-], got "${args.module}"`
+      `systemPath: module "${String(args.module)}" has no release in SYSTEM_FILE_RELEASES`
     );
   }
   const directory = `${SYSTEM_ROOT}/${args.module}`;

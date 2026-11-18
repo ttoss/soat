@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { pathPrefixPattern, systemPath } from './filePaths';
+import { systemPath } from './filePaths';
 import { deleteFile, upsertFileByPath } from './files';
 import { isPlainObject } from './plainObject';
 import { PLAYBOOK_EXPORT_FORMATS } from './playbookDefinition';
@@ -18,9 +18,6 @@ import type { WorkAuthority } from './workAuthority';
 const log = createDebug('soat:playbookExports');
 
 type ExportRow = InstanceType<(typeof db)['PlaybookExport']>;
-
-/** Every export file sits under `/.system/playbooks/<case>/`. */
-const EXPORT_MODULE = 'playbooks';
 
 /** The case an export renders, as the render needs it. */
 export type ExportCase = {
@@ -101,8 +98,9 @@ const renderFile = async (args: {
   const stored = await upsertFileByPath({
     projectId: exportCase.projectId,
     projectPublicId: exportCase.projectPublicId,
+    // Under the case's directory, which its delete releases.
     path: systemPath({
-      module: EXPORT_MODULE,
+      module: 'playbooks',
       leaf: `${exportCase.publicId}/${exported.node}/${exported.revision}/${exported.publicId}.${exported.format}`,
     }),
     fileBuffer: Buffer.from(file.dataBase64, 'base64'),
@@ -159,29 +157,6 @@ export const renderPlaybookExport = async (args: {
     });
     if (file) await deleteFile({ id: file.publicId });
   }
-};
-
-/**
- * Deletes the files a case's exports rendered; called once the case is gone,
- * since `playbook_exports.file_id` does not take the file with the export.
- */
-export const releaseCaseExportFiles = async (args: {
-  projectId: number;
-  casePublicId: string;
-}): Promise<void> => {
-  const directory = systemPath({
-    module: EXPORT_MODULE,
-    leaf: args.casePublicId,
-  });
-  log('releaseCaseExportFiles: %s', directory);
-  const files = await db.File.findAll({
-    where: {
-      projectId: args.projectId,
-      path: { [Op.like]: pathPrefixPattern(directory) },
-    },
-    attributes: ['publicId'],
-  });
-  for (const file of files) await deleteFile({ id: file.publicId });
 };
 
 /**

@@ -159,10 +159,11 @@ describe('the reserved system root', () => {
       }).toThrow(/escapes/i);
     });
 
-    test('refuses a module that is not a single plain segment', () => {
+    test('refuses a module with no release registered', () => {
       expect(() => {
+        // @ts-expect-error a module outside SYSTEM_MODULES
         return systemPath({ module: 'a/b', leaf: 'x.txt' });
-      }).toThrow(/single path segment/);
+      }).toThrow(/has no release/);
     });
   });
 

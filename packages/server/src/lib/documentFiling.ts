@@ -2,6 +2,7 @@ import {
   assertCallerPath,
   filenameFromPath,
   normalizeCallerPath,
+  type SystemModule,
   systemPath,
 } from './filePaths';
 
@@ -15,7 +16,7 @@ import {
  *
  * Everything else is a caller path, and goes through the reserved-root gate.
  */
-export type DocumentFiling = { module: string; dir?: string };
+export type DocumentFiling = { module: SystemModule; dir?: string };
 
 export const resolveDocumentFiling = (args: {
   system?: DocumentFiling;
