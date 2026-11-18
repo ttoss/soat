@@ -4,11 +4,9 @@ import { db } from 'src/db';
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
 import { workCaller } from '../middleware/auth';
-import { authorizationDenied } from './authorizationDenial';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { principalOfAuthority } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
-import { callerChecksStart, mayStart, startCheck } from './startActions';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { resolveStoredToolContext } from './toolContextCarrier';
 import {
@@ -19,7 +17,6 @@ import {
   reloadFiring,
 } from './triggerFirings';
 import { dispatchToTarget } from './triggerTargets';
-import { readTargetType } from './triggerValidation';
 import {
   captureAuthority,
   narrowAuthority,
@@ -161,8 +158,8 @@ const firingAuthority = (args: {
 };
 
 /**
- * Checks that a firing's authority can start the trigger's target, unless the
- * target's own entry point checks it, and names who it acts as.
+ * Names who a firing acts as; its target's entry point checks the start under
+ * the firing's authority.
  */
 const resolveFiringIdentity = async (args: {
   trigger: InstanceType<(typeof db)['Trigger']>;
@@ -171,30 +168,8 @@ const resolveFiringIdentity = async (args: {
   const { trigger } = args;
   const work = `Firing of trigger '${trigger.publicId as string}'`;
   const authority = requireWorkAuthority({ authority: args.authority, work });
-  const projectPublicId = authority.project;
-  if (!projectPublicId) throw workAuthorityMissing({ work });
-  const identity = await workCaller({ db, authority, work });
-  const targetType = readTargetType(trigger.targetType as string);
-  const canStart =
-    !callerChecksStart(targetType) ||
-    (await mayStart({
-      isAllowed: identity.isAllowed,
-      projectPublicId,
-      type: targetType,
-      id: trigger.targetId as string,
-    }));
-  if (!canStart) {
-    throw authorizationDenied({
-      principal: { type: 'trigger', id: trigger.publicId as string },
-      denied: [
-        startCheck({
-          projectPublicId,
-          type: targetType,
-          id: trigger.targetId as string,
-        }),
-      ],
-    });
-  }
+  if (!authority.project) throw workAuthorityMissing({ work });
+  await workCaller({ db, authority, work });
   return { authority, actedAs: principalOfAuthority(authority)! };
 };
 

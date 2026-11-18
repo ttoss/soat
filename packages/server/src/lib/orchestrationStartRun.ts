@@ -5,10 +5,14 @@ import {
   type MappedOrchestrationRun,
   mapRequiredAction,
 } from './orchestrations';
+import { gateStart } from './startGate';
+import type { WorkAuthority } from './workAuthority';
 
+/** The orchestration a run starts, once `authority` may start it. */
 export const findOrchestrationForStartRun = async (args: {
   orchestrationPublicId: string;
   projectIds?: number[];
+  authority: WorkAuthority | null;
 }): Promise<InstanceType<typeof db.Orchestration>> => {
   // `scopedWhere` makes an empty scope match nothing, which is what every
   // other module means by it — never "no restriction".
@@ -21,6 +25,12 @@ export const findOrchestrationForStartRun = async (args: {
   if (!orchestration) {
     throw orchestrations.notFound(args.orchestrationPublicId);
   }
+  await gateStart({
+    type: 'orchestration',
+    id: orchestration.publicId as string,
+    projectId: orchestration.projectId as number,
+    authority: args.authority,
+  });
   return orchestration;
 };
 

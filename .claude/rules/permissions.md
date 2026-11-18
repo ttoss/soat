@@ -88,11 +88,11 @@ test that fails when a new site skips it.
   surfaces: `tools:CallTool` on the tool, for every type. Every binding
   declares its `gate`. `agentTurnGate.test.mjs`,
   `tests/harness/toolSurfaceGate.test.mjs`.
-- A tool or generation start is checked at its entry point, under the
-  authority the work runs under: `gateToolCall` and `gateGenerationStart`
-  (`lib/generationStartGate.ts`). A caller starting one for someone else does
-  not check it again (`START_ACTIONS[type].entryChecked`).
-  `tests/harness/startChokepoint.test.mjs`.
+- Every start in `START_ACTIONS` (`lib/startActions.ts`) is checked at its
+  entry point, under the authority the work runs under: `gateToolCall`,
+  `gateGenerationStart` (`lib/generationStartGate.ts`) and `gateStart`
+  (`lib/startGate.ts`). A caller starting work for someone else never checks
+  it again. `tests/harness/startChokepoint.test.mjs`.
 - What the caller names in the call (a document or `tool_output` message, a
   `knowledge_config`, an `agent_id`, an actor) is read under
   `callerNamedAuthority`, as the caller. `agentTurnGate.test.mjs` › content an

@@ -15,11 +15,7 @@ import {
 import type { PlaybookNode } from './playbookDefinition';
 import { EXECUTION_LEASE_MS } from './playbookExecutionLease';
 import { settleFromRun } from './playbookExecutionSettle';
-import {
-  caseAuthority,
-  executeClaimed,
-  resolveRunAs,
-} from './playbookExecutionWork';
+import { caseAuthority, executeClaimed } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
 import type { PlaybookNodeView } from './playbookState';
@@ -148,9 +144,8 @@ const executeInBackground = async (args: {
 };
 
 /**
- * Runs one node of a case now. Everything a refusal depends on — the node,
- * its state, the author and the author's permission — is checked before the
- * execution is recorded. Without `wait` it answers `running` and settles in
+ * Runs one node of a case now. The node and its state are checked before
+ * the execution is recorded; the executor's start, where it starts. Without `wait` it answers `running` and settles in
  * the background; with it, it answers once the executor settles or parks on a
  * task or a run that settles it later.
  */
@@ -171,14 +166,6 @@ export const runPlaybookNode = async (args: {
   const node = readCaseNode({ definition, node: args.node });
   await assertProjectAcceptsWork({ projectId: row.projectId });
   const authority = await caseAuthority({ row });
-  if (node.executor) {
-    await resolveRunAs({
-      row,
-      node: node.id,
-      executors: [node.executor],
-      authority,
-    });
-  }
 
   const execution = await withLockedCase({
     row,

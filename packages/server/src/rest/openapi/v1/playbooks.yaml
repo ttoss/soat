@@ -999,9 +999,8 @@ paths:
         its executor with the node's input values mapped through the
         executor's `input`. The executor runs under the
         `policy_ids` of the case's playbook version, which must allow starting
-        it: a decider, workflow or orchestration it may not start is `403
-        PLAYBOOK_EXECUTOR_FORBIDDEN`, and an agent or tool fails the execution
-        (`FORBIDDEN`). Only a `ready`,
+        it: an executor it may not start fails the execution (`FORBIDDEN`).
+        Only a `ready`,
         `stale`, `failed` or `done` node with every required input set runs;
         anything else is `409 PLAYBOOK_NODE_NOT_RUNNABLE`. A paused case is `409
         PLAYBOOK_CASE_PAUSED`, and a case in a paused project `409
@@ -1057,7 +1056,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden, or the version's policy_ids do not allow starting the executor
+          description: Forbidden
           content:
             application/json:
               schema:

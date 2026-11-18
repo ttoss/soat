@@ -2113,7 +2113,8 @@ describe('Triggers', () => {
         .post(`/api/v1/triggers/${orchTriggerId}/fire`)
         .send({});
 
-      expect(refused.status).toBe(403);
+      expect(refused.status).toBe(200);
+      expect(refused.body.status).toBe('failed');
       expect(refused.body.error.code).toBe('FORBIDDEN');
       expect(fired.status).toBe(200);
       expect(fired.body.acted_as).toEqual({
@@ -2122,7 +2123,7 @@ describe('Triggers', () => {
       });
     });
 
-    test("a manual fire is refused when the trigger's policy_ids cannot start the target (403)", async () => {
+    test("a firing fails when the trigger's policy_ids cannot start its orchestration", async () => {
       const narrow = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
@@ -2145,7 +2146,8 @@ describe('Triggers', () => {
         .post(`/api/v1/triggers/${created.body.id}/fire`)
         .send({});
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
       expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
@@ -3312,12 +3314,13 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
-    test('refuses a fire from a caller who cannot start the target: it acts as caller ∩ policy_ids', async () => {
+    test('fails a fire from a caller who cannot start the target: it acts as caller ∩ policy_ids', async () => {
       const res = await authenticatedTestClient(shaperToken)
         .post(`/api/v1/triggers/${triggerId}/fire`)
         .send({});
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
       expect(res.body.error.code).toBe('FORBIDDEN');
     });
 

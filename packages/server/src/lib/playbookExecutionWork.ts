@@ -8,14 +8,11 @@ import {
   type PlaybookCaseRow,
   playbookCases,
 } from './playbookCases';
-import type { PlaybookExecutor } from './playbookDefinition';
 import { settleExecution, settleFromOutcome } from './playbookExecutionSettle';
 import { type ExecutorRunAs, startExecutor } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
-import { assertExecutorStartable } from './playbookStarts';
 import { samePlaybookBasis } from './playbookState';
 import { resourceWorkAuthority } from './resourceWork';
-import { callerChecksStart } from './startActions';
 import {
   forWork,
   parseWorkAuthority,
@@ -38,7 +35,7 @@ export const caseAuthority = async (args: {
     attributes: ['publicId'],
     rejectOnEmpty: true,
   });
-  // Each node's starts are checked as it runs: `resolveRunAs` or its entry point.
+  // Each node's starts are checked at their entry points as it runs.
   return resourceWorkAuthority({
     carrier: 'playbookVersions',
     id: version.publicId as string,
@@ -50,14 +47,11 @@ export const caseAuthority = async (args: {
 
 /**
  * Work's authority (the case's when none is given), resolved as a request
- * would be and checked against what a node starts before it runs, unless the
- * start's own entry point checks it. Work holding none, or whose authority no
- * longer resolves, is refused.
+ * would be. Work holding none, or whose authority no longer resolves, is
+ * refused.
  */
 export const resolveRunAs = async (args: {
   row: PlaybookCaseRow;
-  node: string;
-  executors: PlaybookExecutor[];
   authority?: WorkAuthority | null;
   workPublicId?: string;
 }): Promise<ExecutorRunAs> => {
@@ -70,21 +64,8 @@ export const resolveRunAs = async (args: {
         : args.authority,
     work,
   });
-  const authUser = await workCaller({ db, authority, work });
-  const runAs = {
-    authority: forWork({ authority, work }),
-    isAllowed: authUser.isAllowed,
-  };
-  for (const executor of args.executors) {
-    if (!callerChecksStart(executor.type)) continue;
-    await assertExecutorStartable({
-      node: args.node,
-      executor,
-      projectPublicId: row.project.publicId,
-      isAllowed: runAs.isAllowed,
-    });
-  }
-  return runAs;
+  await workCaller({ db, authority, work });
+  return { authority: forWork({ authority, work }) };
 };
 
 /**
@@ -143,8 +124,6 @@ export const executeClaimed = async (args: {
         title: `${row.subject} · ${node.title}`,
         runAs: await resolveRunAs({
           row,
-          node: node.id,
-          executors: [executor],
           authority: parseWorkAuthority(execution.authority),
           workPublicId: execution.publicId,
         }),

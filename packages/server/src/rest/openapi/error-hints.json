@@ -723,11 +723,6 @@
         }
       ]
     },
-    "PLAYBOOK_EXECUTOR_FORBIDDEN": {
-      "http_status": 403,
-      "hint": "Add a policy allowing the start action `meta.action` names to the playbook's `policy_ids`; cases created on the new version run under it.",
-      "routes": []
-    },
     "PLAYBOOK_EXPORT_FAILED": {
       "http_status": 422,
       "hint": "Read the export's `error`, make the transformation's tool answer a file (`execute.response_mode: base64`), and export the node again.",

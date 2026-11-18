@@ -200,8 +200,6 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Read the case's `nodes` for the inputs its version declares and which of them are filled by a person; correct the value to its input's schema.",
   PLAYBOOK_INPUT_CONFLICT:
     'Re-read the case, decide each conflicting field against its current value, and retry with the revisions `meta.conflicts` names.',
-  PLAYBOOK_EXECUTOR_FORBIDDEN:
-    "Add a policy allowing the start action `meta.action` names to the playbook's `policy_ids`; cases created on the new version run under it.",
   WORK_AUTHORITY_MISSING:
     'Start the work again with a credential that can run it; work runs only under the authority stored when it started.',
   ON_BEHALF_OF_INVALID:

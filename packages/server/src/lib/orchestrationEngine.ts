@@ -720,6 +720,7 @@ export const startOrchestrationRun = async (
   const orch = await findOrchestrationForStartRun({
     orchestrationPublicId: args.orchestrationPublicId,
     projectIds: args.projectIds,
+    authority: args.authority,
   });
   const { effectiveProjectId, effectiveProjectIds } =
     resolveStartRunProjectScope({
