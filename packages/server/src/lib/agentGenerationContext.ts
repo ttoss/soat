@@ -20,7 +20,10 @@ import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
-import { resolveServerToolContextIdentity } from './generationAttribution';
+import {
+  type GenerationConversation,
+  resolveServerToolContextIdentity,
+} from './generationAttribution';
 import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
@@ -29,6 +32,7 @@ import {
   countOf,
   createGenerationProvenance,
   type GenerationProvenance,
+  NO_PROVENANCE,
   readGenerationProvenance,
   trackGenerationProvenance,
 } from './generationProvenance';
@@ -238,6 +242,8 @@ export type BuildGenerationContextArgs = {
   outputSchemaOverride?: Record<string, unknown>;
   /** The generation this turn continues, whose counts it starts from. */
   initiatorGenerationId?: string | null;
+  /** The conversation this turn answers, whose messages' counts it adds. */
+  conversation?: GenerationConversation;
 };
 
 const requireLiveAgent = async (args: {
@@ -283,13 +289,24 @@ const resolveTurnAgent = async (
   };
 };
 
-/** A continuation's context is its chain's: it starts from what its initiator had read. */
-const chainProvenance = async (
-  initiatorGenerationId: string | null | undefined
-): Promise<GenerationProvenance> => {
-  return createGenerationProvenance(
-    await readGenerationProvenance(initiatorGenerationId)
+/**
+ * A continuation's context is its chain's: it starts from what its initiator
+ * had read. A conversation turn adds what the messages it is sent carry; one
+ * that continues a chain inherits only what the initiator read beyond the
+ * messages it was sent, since it is sent the conversation again.
+ */
+const turnProvenance = async (args: {
+  initiatorGenerationId?: string | null;
+  conversation?: GenerationConversation;
+}): Promise<GenerationProvenance> => {
+  const provenance = createGenerationProvenance(
+    await readGenerationProvenance({
+      generationId: args.initiatorGenerationId,
+      withoutReplayed: args.conversation !== undefined,
+    })
   );
+  provenance.record(args.conversation?.replayed ?? NO_PROVENANCE);
+  return provenance;
 };
 
 export const buildGenerationContext = async (
@@ -299,7 +316,7 @@ export const buildGenerationContext = async (
 
   const { typedAgent, agentVersion } = await resolveTurnAgent(args);
 
-  const provenance = await chainProvenance(args.initiatorGenerationId);
+  const provenance = await turnProvenance(args);
 
   const agentAuthority = await resolveAgentAuthority({
     agentId: args.agentId,

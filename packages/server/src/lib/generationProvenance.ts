@@ -147,11 +147,33 @@ export const createGenerationProvenance = (
 
 // ── Persistence ───────────────────────────────────────────────────────────
 
-/** The row columns for counts a generation is created with. */
+/**
+ * The row columns for counts a generation is created with, or a conversation
+ * message is stamped with.
+ */
 export const provenanceColumns = (counts: ProvenanceCounts) => {
   return {
     untrustedToolResults: counts.untrusted_tool_results,
     knowledgeResults: counts.knowledge_results,
+  };
+};
+
+/** The counts a generation or conversation message row stores. */
+export const storedProvenance = (row: {
+  untrustedToolResults: number;
+  knowledgeResults: number;
+}): ProvenanceCounts => {
+  return {
+    untrusted_tool_results: row.untrustedToolResults,
+    knowledge_results: row.knowledgeResults,
+  };
+};
+
+/** The generation columns for the counts a turn took from its conversation. */
+export const replayedProvenanceColumns = (counts: ProvenanceCounts) => {
+  return {
+    replayedUntrustedToolResults: counts.untrusted_tool_results,
+    replayedKnowledgeResults: counts.knowledge_results,
   };
 };
 
@@ -247,21 +269,33 @@ export const persistGenerationProvenance = (args: {
   });
 };
 
-/** A generation's stored counts, or none when there is no such row. */
-export const readGenerationProvenance = async (
-  generationId: string | null | undefined
-): Promise<ProvenanceCounts> => {
-  if (!generationId) return NO_PROVENANCE;
+/**
+ * A generation's stored counts, or none when there is no such row. With
+ * `withoutReplayed`, less what it took from the conversation messages it was
+ * sent: what a turn that replays the conversation itself inherits, and what
+ * its reply's message is stamped with.
+ */
+export const readGenerationProvenance = async (args: {
+  generationId: string | null | undefined;
+  withoutReplayed: boolean;
+}): Promise<ProvenanceCounts> => {
+  if (!args.generationId) return NO_PROVENANCE;
   const row = await db.Generation.findOne({
-    where: { publicId: generationId },
-    attributes: ['untrustedToolResults', 'knowledgeResults'],
+    where: { publicId: args.generationId },
+    attributes: [
+      'untrustedToolResults',
+      'knowledgeResults',
+      'replayedUntrustedToolResults',
+      'replayedKnowledgeResults',
+    ],
   });
-  return row
-    ? {
-        untrusted_tool_results: row.untrustedToolResults,
-        knowledge_results: row.knowledgeResults,
-      }
-    : NO_PROVENANCE;
+  if (!row) return NO_PROVENANCE;
+  const total = storedProvenance(row);
+  if (!args.withoutReplayed) return total;
+  return subtract(total, {
+    untrusted_tool_results: row.replayedUntrustedToolResults,
+    knowledge_results: row.replayedKnowledgeResults,
+  });
 };
 
 export const sumProvenance = (

@@ -11,6 +11,7 @@ import { createDocument } from './documents';
 import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
+import type { ProvenanceCounts } from './generationProvenance';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 
@@ -158,6 +159,7 @@ type AddConversationMessageArgs = {
   responseMessages?: unknown[];
   idempotencyKey?: string | null;
   idempotencyDigest?: string | null;
+  provenance: ProvenanceCounts;
 };
 
 type ConversationRow = InstanceType<(typeof db)['Conversation']>;
@@ -211,6 +213,7 @@ const createTextMessage = async (
     responseMessages: args.responseMessages,
     idempotencyKey: args.idempotencyKey ?? null,
     idempotencyDigest: args.idempotencyDigest,
+    provenance: args.provenance,
   });
 
   const messageWithAssociations = await conversationMessages.reload(result);
@@ -263,6 +266,7 @@ type AddConversationDocumentMessageArgs = {
   metadata?: Record<string, unknown>;
   idempotencyKey?: string | null;
   idempotencyDigest?: string | null;
+  provenance: ProvenanceCounts;
 };
 
 const createDocumentMessage = async (
@@ -298,6 +302,7 @@ const createDocumentMessage = async (
     metadata: args.metadata,
     idempotencyKey: args.idempotencyKey ?? null,
     idempotencyDigest: args.idempotencyDigest,
+    provenance: args.provenance,
   });
 
   const messageWithAssociations = await conversationMessages.reload(result);

@@ -113,4 +113,13 @@ export class ConversationMessage extends Model {
     field: 'response_messages',
   })
   declare responseMessages: unknown[] | null;
+
+  // The provenance counts the message's content feeds a turn it is sent to:
+  // the resolved block of a user message, or what an assistant message's turn
+  // read beyond the messages it was sent (`generationProvenance.ts`).
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare untrustedToolResults: number;
+
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare knowledgeResults: number;
 }

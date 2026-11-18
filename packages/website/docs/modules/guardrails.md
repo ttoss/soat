@@ -326,6 +326,7 @@ Attach it to every write tool. What counts:
 
 - **Judged on what the model had read.** A call is evaluated on the counts at the start of the step that proposed it. A result arriving during that step, a parallel sibling's included, counts from the next step, so a write proposed in the same step as a read is not held by that read.
 - **Fixed when it enters.** Whether a result counts is decided by its tool's `trusted_output` at that moment; a later edit does not rewrite the chain.
+- **Across a conversation's turns.** A [session](./sessions.md#context-window) or conversation turn starts from the counts of the messages it is sent. Each message is stamped when written: a `document` user message with one knowledge result, an assistant message with what its turn read beyond the messages it was sent. A message trimmed by `max_context_messages` no longer counts; a [fork](./sessions.md#forking) keeps its copied messages' stamps.
 - **Durable.** The counts are stored as numbers on the generation, never read back from content, so they hold across a `submit-tool-outputs` resumption, a recovered generation, an approval continuation, `trace_content_mode: "none"` and a content purge.
 - **Outside a generation** — a direct call, a pipeline step, an orchestration tool node, a [dry run](#dry-run-evaluation) — the keys are unresolvable and fail closed. Attach these guardrails at agent or tool scope.
 - **Results only.** A call held for approval, blocked or tripped counts nothing; the platform's own results (`write_memory`) are trusted.

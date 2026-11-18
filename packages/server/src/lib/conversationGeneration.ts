@@ -8,6 +8,11 @@ import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
+import {
+  readGenerationProvenance,
+  storedProvenance,
+  sumProvenance,
+} from './generationProvenance';
 import { agentReferences } from './resourceReferences';
 import type { WorkAuthority } from './workAuthority';
 
@@ -97,6 +102,8 @@ const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
   conversationId: string;
   snapshotPosition: number;
+  // The messages the turn is sent, whose stamped counts it starts from.
+  replayed: Array<ConversationMessage>;
   // The conversation's project, where the turn runs and is recorded.
   runProjectId: number;
   messagesForModel: Array<{ role: string; content: unknown }>;
@@ -120,6 +127,7 @@ const runAgentGeneration = async (args: {
     conversation: {
       id: args.conversationId,
       snapshotPosition: args.snapshotPosition,
+      replayed: sumProvenance(...args.replayed.map(storedProvenance)),
     },
     authority: args.authority,
     authUser: args.authUser,
@@ -148,35 +156,6 @@ const runAgentGeneration = async (args: {
     traceId: result.traceId,
     output: result.output,
   };
-};
-
-const runGenerationForAgent = async (args: {
-  generatingAgent: GenerationContext['generatingAgent'];
-  conversationId: string;
-  snapshotPosition: number;
-  runProjectId: number;
-  messagesForModel: Array<{ role: string; content: unknown }>;
-  model?: string;
-  toolContext?: Record<string, string>;
-  abortSignal?: AbortSignal;
-  sessionId?: string;
-  authority: WorkAuthority | null;
-  authUser: AuthUser | undefined;
-  initiatorGenerationId?: string | null;
-}): Promise<InternalGenerationResult> => {
-  return runAgentGeneration({
-    agent: args.generatingAgent,
-    conversationId: args.conversationId,
-    snapshotPosition: args.snapshotPosition,
-    runProjectId: args.runProjectId,
-    messagesForModel: args.messagesForModel,
-    toolContext: args.toolContext,
-    abortSignal: args.abortSignal,
-    sessionId: args.sessionId,
-    authority: args.authority,
-    authUser: args.authUser,
-    initiatorGenerationId: args.initiatorGenerationId,
-  });
 };
 
 /**
@@ -323,6 +302,10 @@ const storeGeneratedTurn = async (args: {
       responseMessages && responseMessages.length > 0
         ? responseMessages
         : undefined,
+    provenance: await readGenerationProvenance({
+      generationId: args.generationId,
+      withoutReplayed: true,
+    }),
   });
 
   if (!message) {
@@ -457,13 +440,13 @@ export const generateConversationMessage = async (args: {
     ...history,
   ];
 
-  const genResult = await runGenerationForAgent({
-    generatingAgent,
+  const genResult = await runAgentGeneration({
+    agent: generatingAgent,
     conversationId: args.conversationId,
     snapshotPosition,
+    replayed: messages,
     runProjectId: conversation.projectId,
     messagesForModel,
-    model: args.model,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
