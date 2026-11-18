@@ -32,11 +32,6 @@
       "description": "Update a task's payload, title, or assignee"
     },
     {
-      "operationId": "setTaskPriority",
-      "action": "tasks:SetTaskPriority",
-      "description": "Set or clear a task's priority"
-    },
-    {
       "operationId": "transitionTask",
       "action": "tasks:TransitionTask",
       "description": "Fire a named transition on a task"
