@@ -1,6 +1,6 @@
 /**
- * The project-scoped refusal of a model no price row covers, behind
- * `require_priced_model`.
+ * The refusal of a model no price row covers, behind `require_priced_model`:
+ * on the project it holds every candidate, on an AI provider that provider's.
  *
  * A `cost_usd` quota and a guardrail cost ceiling both answer *after* the fact:
  * they read a window the meter already wrote, so the generations that opened an
@@ -10,7 +10,8 @@
  * the one question a window cannot ask: *may this model run at all*.
  *
  * It is opt-in because a deployment that keeps no price book meters every
- * event at `cost_usd = null` and must keep running.
+ * event at `cost_usd = null` and must keep running; the provider flag lets one
+ * project hold the providers it bills while its others run unpriced.
  *
  * The check reads the configured model, which is the name the binding can be
  * held to before a call exists. A provider that answers under a more specific
@@ -40,6 +41,7 @@ type ModelCandidate = {
   provider: string;
   model: string;
   aiProviderId: number;
+  requirePricedModel: boolean;
 };
 
 type CandidateBinding = {
@@ -52,9 +54,10 @@ type CandidateBinding = {
  * failover bills whichever target answers, and a pinned agent's single pair.
  *
  * The route and the provider rows are read again here rather than carried out
- * of `resolveAgentModel`: two reads on a project that opted into the gate cost
- * nothing beside the provider call they precede, and threading the pair through
- * the routing stack would put a pricing concern in every model builder.
+ * of `resolveAgentModel`: two reads cost nothing beside the provider call they
+ * precede, and threading the pair through the routing stack would put a
+ * pricing concern in every model builder. Each candidate carries its provider's
+ * own flag, so a turn reads them whether or not the project requires pricing.
  */
 const resolveCandidates = async (
   typedAgent: TypedAgent
@@ -87,7 +90,13 @@ const resolveCandidates = async (
       }),
       projectId,
     },
-    attributes: ['id', 'publicId', 'provider', 'defaultModel'],
+    attributes: [
+      'id',
+      'publicId',
+      'provider',
+      'defaultModel',
+      'requirePricedModel',
+    ],
   });
 
   return bindings.flatMap((binding) => {
@@ -102,6 +111,7 @@ const resolveCandidates = async (
         // read one name.
         model: binding.model ?? provider.defaultModel ?? '',
         aiProviderId: provider.id as number,
+        requirePricedModel: provider.requirePricedModel,
       },
     ];
   });
@@ -154,14 +164,17 @@ const unpricedRows = async (args: {
 export const assertGenerationModelPriced = async (args: {
   typedAgent: TypedAgent;
 }): Promise<void> => {
-  if (args.typedAgent.project.requirePricedModel !== true) return;
+  const projectRequires = args.typedAgent.project.requirePricedModel === true;
+  const candidates = (await resolveCandidates(args.typedAgent)).filter(
+    (candidate) => {
+      return projectRequires || candidate.requirePricedModel;
+    }
+  );
+  if (candidates.length === 0) return;
 
   // The price book the agent's own provider is priced in.
   const projectId = ownerProjectId(args.typedAgent);
-  const rows = await unpricedRows({
-    projectId,
-    candidates: await resolveCandidates(args.typedAgent),
-  });
+  const rows = await unpricedRows({ projectId, candidates });
   if (rows.length === 0) return;
 
   const named = rows
@@ -172,7 +185,7 @@ export const assertGenerationModelPriced = async (args: {
 
   throw new DomainError(
     'MODEL_NOT_PRICED',
-    `Project '${args.typedAgent.project.publicId}' requires a priced model, and no price row covers ${named}.`,
+    `A priced model is required, and no price row covers ${named}.`,
     { unpriced_rows: rows }
   );
 };

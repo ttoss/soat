@@ -35,6 +35,7 @@ An AI provider is a named configuration that tells the system how to reach a spe
 | `config`        | object \| null   | Arbitrary provider-specific configuration object          |
 | `model_aliases` | object           | Alias → model id sent to the vendor; `{}` when none (see [Model aliases](#model-aliases)) |
 | `model_aliases_only` | boolean     | Refuse a model that is not one of `model_aliases` |
+| `require_priced_model` | boolean   | Refuse a generation on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
 
@@ -279,6 +280,10 @@ The record supplies the region and the IAM scope; the credential comes from the 
 Wherever a model is named beside the provider (its `default_model`, an agent's `model`, a [model route](./model-routes.md) target, a chat or chat completion `model`, a formation resource), an alias is accepted and stored as written. Reads, a generation's `output.model`, [usage](./usage.md) events, price rows and traces answer the alias; only the vendor call uses the id. A name that is not an alias reaches the vendor as written.
 
 `model_aliases_only: true` closes the catalog: a model that is not one of the aliases is `400 MODEL_NOT_OFFERED`, on the write that names it and on any call that would send it. Setting either field needs `ai-providers:UpdateAiProvider`.
+
+### Requiring a priced model
+
+`require_priced_model: true` on a provider refuses, with `409 MODEL_NOT_PRICED`, a generation on that provider whose model no price row covers, before the provider is called. It holds that provider alone: another provider of the project runs unpriced unless the [project's own flag](./projects.md#priced-models) is set. A route target is held when its provider sets it. Setting it needs `ai-providers:UpdateAiProvider`.
 
 ### Price overrides
 

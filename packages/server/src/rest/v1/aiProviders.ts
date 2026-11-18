@@ -32,6 +32,7 @@ type CreateAiProviderBody = {
   config?: Record<string, unknown>;
   model_aliases?: Record<string, string>;
   model_aliases_only?: boolean;
+  require_priced_model?: boolean;
 };
 
 const validateCreateAiProviderBody = (
@@ -206,6 +207,7 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     config: body.config,
     modelAliases: body.model_aliases,
     modelAliasesOnly: body.model_aliases_only,
+    requirePricedModel: body.require_priced_model,
     isAllowed: ctx.authUser.isAllowed,
   });
 
@@ -246,6 +248,7 @@ aiProvidersRouter.patch(
       config?: Record<string, unknown> | null;
       model_aliases?: Record<string, string> | null;
       model_aliases_only?: boolean;
+      require_priced_model?: boolean;
     };
 
     let resolvedSecretId: number | null | undefined =
@@ -273,6 +276,7 @@ aiProvidersRouter.patch(
       config: body.config,
       modelAliases: body.model_aliases,
       modelAliasesOnly: body.model_aliases_only,
+      requirePricedModel: body.require_priced_model,
       isAllowed: ctx.authUser.isAllowed,
     });
 

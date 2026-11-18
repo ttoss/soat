@@ -106,7 +106,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   QUOTA_UNENFORCEABLE:
     'Add price book entries covering the models this project runs (`{{PUT /usage/prices}}`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, set `on_unpriced: "allow"` on the quota with `{{PATCH /quotas/{quota_id}}}` (or switch it to `monitor` mode to stop blocking entirely).',
   MODEL_NOT_PRICED:
-    'Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `{{PUT /usage/prices}}`, or for one provider instance with `{{PUT /ai-providers/{ai_provider_id}/prices}}`. To run unpriced models again, set `require_priced_model` to `false` with `{{PATCH /projects/{project_id}}}`.',
+    'Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `{{PUT /usage/prices}}`, or for one provider instance with `{{PUT /ai-providers/{ai_provider_id}/prices}}`. To run unpriced models again, set `require_priced_model` to `false` with `{{PATCH /projects/{project_id}}}` or `{{PATCH /ai-providers/{ai_provider_id}}}`, whichever set it.',
   QUOTA_STORAGE_EXCEEDED:
     'Delete stored content — files, documents, or memories — until the project is back under the cap; `meta.current_bytes` and `meta.limit` say by how much. Waiting does not help: a storage quota caps a stored total, not a rate. Alternatively raise the cap with `{{PATCH /quotas/{quota_id}}}`, or switch it to `monitor` mode to stop blocking while you measure.',
   TOOL_EGRESS_BLOCKED:

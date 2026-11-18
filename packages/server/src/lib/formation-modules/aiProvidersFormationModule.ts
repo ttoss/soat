@@ -80,6 +80,7 @@ export const aiProvidersFormationModule = defineFormationModule({
           string
         >) ?? undefined,
       modelAliasesOnly: toOptionalBoolean(properties.model_aliases_only),
+      requirePricedModel: toOptionalBoolean(properties.require_priced_model),
       isAllowed: actor.isAllowed,
     });
   },
@@ -109,6 +110,7 @@ export const aiProvidersFormationModule = defineFormationModule({
       modelAliases: toNullableObject(properties.model_aliases) as
         Record<string, string> | null | undefined,
       modelAliasesOnly: toOptionalBoolean(properties.model_aliases_only),
+      requirePricedModel: toOptionalBoolean(properties.require_priced_model),
       isAllowed: actor.isAllowed,
     });
   },
