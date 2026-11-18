@@ -77,6 +77,8 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 | Parameter        | Type       | Description                                                                                |
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
 | `query`          | `string`   | Search query — ranks results by [hybrid retrieval](#hybrid-retrieval)                      |
+| `similar_to_document_id` | `string` | Ranks by this document's stored vector — see [More like this](#more-like-this) |
+| `similar_to_memory_id` | `string` | Ranks by this memory's stored vector — see [More like this](#more-like-this) |
 | `memory_store_ids` | `string[]` | Search memories within these specific memory stores                                        |
 | `actor_id`       | `string`   | Search only the memories of this [actor](./memories.md#memories-of-an-end-user); documents are not narrowed |
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
@@ -86,6 +88,22 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 | `include_memories`  | `boolean` | Default `true`. `false` leaves the memory store out of this search |
 
 With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_similarity`, `rrf_k` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
+
+### More like this
+
+`similar_to_document_id` or `similar_to_memory_id` ranks by an existing row's stored embedding instead of a `query`:
+
+- A document's vector is the mean of its chunk embeddings; a memory's is its own.
+- Ranking is the vector channel alone: `rrf_k` is ignored, `similarity_score` is the raw cosine to the source, and `signals` carries only `vector`.
+- The source never answers itself: every chunk of the source document, or the memory itself, is left out.
+- Nothing is embedded, so nothing is billed and `embeddings:CreateEmbeddings` is not needed.
+- It reaches both stores, like `query`; `document_paths`, `document_ids`, `memory_store_ids`, `tags`, `metadata`, `include_*`, `min_similarity` and `limit` narrow it as usual.
+
+| Refusal | When |
+| --- | --- |
+| `400 VALIDATION_FAILED` | both fields are set, or either is set with `query` |
+| `404 RESOURCE_NOT_FOUND` | the id does not exist, or the caller's `knowledge:SearchKnowledge` does not reach it — the same answer, so a hidden id is not disclosed |
+| `409 SIMILARITY_SOURCE_NOT_EMBEDDED` | the source has no embedding yet: its ingestion has not finished, or the embedding provider was unreachable when it was written |
 
 ### Platform-written documents
 
@@ -357,6 +375,53 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
     "project_id": "proj_ABC",
     "query": "quarterly revenue",
     "memory_store_ids": ["mstore_xyz"],
+    "limit": 5
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Documents like an existing one
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat search-knowledge \
+  --project-id proj_ABC \
+  --similar-to-document-id doc_XYZ \
+  --include-memories false \
+  --limit 5
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.knowledge.searchKnowledge({
+  body: {
+    project_id: 'proj_ABC',
+    similar_to_document_id: 'doc_XYZ',
+    include_memories: false,
+    limit: 5,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+console.log(data.results);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/knowledge/search \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "similar_to_document_id": "doc_XYZ",
+    "include_memories": false,
     "limit": 5
   }'
 ```

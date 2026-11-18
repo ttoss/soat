@@ -245,6 +245,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The file is too large to parse inside the request. Call the same operation without `wait=true` and poll the handle it returns.',
   BOOTSTRAP_ALREADY_COMPLETED:
     'The first admin already exists, so bootstrap is closed for good. Sign in instead, and create further users with `{{POST /users}}`.',
+  SIMILARITY_SOURCE_NOT_EMBEDDED:
+    'Retry once the source is embedded: poll {{GET /documents/{document_id}/status}} until a document is `ready`. A source written while the embedding provider was unreachable has no vector until it is re-ingested or rewritten; search with `query` meanwhile.',
 };
 
 /**

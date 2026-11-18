@@ -11,6 +11,7 @@ import {
 } from './knowledgeLexical';
 import type {
   SearchCandidates,
+  SearchProbe,
   SearchSignals,
   SignalCandidate,
 } from './knowledgeRanking';
@@ -29,7 +30,6 @@ import { withIterativeVectorScan } from './vectorSearch';
  */
 
 export type DocumentQueryConfig = {
-  search?: string;
   /**
    * Raw-cosine floor a **vector** candidate must clear to be ranked. Lexical
    * candidates are never subject to it.
@@ -39,6 +39,8 @@ export type DocumentQueryConfig = {
   limit?: number;
   paths?: string[];
   documentIds?: string[];
+  /** Documents none of whose chunks may be a result: a probe's own source. */
+  excludeDocumentIds?: string[];
   tags?: Record<string, string>;
   /**
    * Compiled by the caller, which is where the filter's project is known. `[]`
@@ -335,17 +337,14 @@ const findChunksByLexical = async (args: {
  * `simple` configuration is the common case for a natural-language query.
  */
 const findChunksWithSearch = async (args: {
-  config: DocumentQueryConfig;
-  /** The query vector, or `undefined` where the search degraded to lexical. */
-  embedding: number[] | undefined;
+  probe: SearchProbe;
   docWhere: Record<string, unknown>;
   fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   topLevelWhere?: Record<string, any>;
 }): Promise<ChunkWithDocument[][]> => {
-  const search = args.config.search!;
-  const { embedding } = args;
+  const { text, embedding } = args.probe;
   const distanceLiteral = embedding
     ? db.DocumentChunk.sequelize!.literal(
         distanceExpression({ column: CHUNK_EMBEDDING_COLUMN, embedding })
@@ -366,13 +365,15 @@ const findChunksWithSearch = async (args: {
           topLevelWhere: args.topLevelWhere,
         })
       : Promise.resolve([]),
-    findChunksByLexical({
-      query: search,
-      distanceLiteral,
-      docInclude,
-      limit: args.limit,
-      topLevelWhere: args.topLevelWhere,
-    }),
+    text
+      ? findChunksByLexical({
+          query: text,
+          distanceLiteral,
+          docInclude,
+          limit: args.limit,
+          topLevelWhere: args.topLevelWhere,
+        })
+      : Promise.resolve([]),
   ]);
 
   return [vector, lexical];
@@ -410,33 +411,37 @@ const findChunksWithoutSearch = async (args: {
  */
 const buildDocWhere = (args: {
   documentIds: string[] | undefined;
+  excludeDocumentIds: string[] | undefined;
   tags: Record<string, string> | undefined;
   metadataWhere: unknown[];
 }): Record<string, unknown> => {
   const where: Record<string, unknown> = { ...liveDocumentWhere() };
-  if (args.documentIds && args.documentIds.length > 0) {
-    where.publicId = args.documentIds;
-  }
+  const publicId = {
+    ...(args.documentIds && args.documentIds.length > 0
+      ? { [Op.in]: args.documentIds }
+      : {}),
+    ...(args.excludeDocumentIds && args.excludeDocumentIds.length > 0
+      ? { [Op.notIn]: args.excludeDocumentIds }
+      : {}),
+  };
+  if (Reflect.ownKeys(publicId).length > 0) where.publicId = publicId;
   applyTagFilter({ where, tags: args.tags });
   applyFilterWhere({ where, fragments: args.metadataWhere });
   return where;
 };
 
 /**
- * The document store's shard of each signal, when `config.search` is set; the
+ * The document store's shard of each signal, when a probe is given; the
  * deterministic chunk-order read, which no signal ranks, when it is not.
  */
 export const resolveDocumentSearchLists = async (args: {
   projectIds?: number[];
   /**
-   * The query vector, embedded once by the caller, or `undefined` where the
-   * provider was unreachable and the search degraded to lexical-only.
-   *
-   * Passed in rather than embedded here so a search that reads both stores
-   * makes one provider call and bills one usage row — and so both stores
-   * measure against the same vector, or against none.
+   * Embedded once by the caller rather than here, so a search that reads both
+   * stores makes one provider call and bills one usage row — and so both
+   * stores measure against the same vector, or against none.
    */
-  embedding: number[] | undefined;
+  probe: SearchProbe | undefined;
   config: DocumentQueryConfig;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
@@ -444,8 +449,9 @@ export const resolveDocumentSearchLists = async (args: {
   const { config, projectIds } = args;
   const limit = clampKnowledgeSearchLimit(config.limit);
 
+  const { probe } = args;
   if (projectIds !== undefined && projectIds.length === 0) {
-    return config.search
+    return probe
       ? { ranked: true, vector: [], lexical: [] }
       : { ranked: false, results: [] };
   }
@@ -464,11 +470,12 @@ export const resolveDocumentSearchLists = async (args: {
   });
   const docWhere = buildDocWhere({
     documentIds: config.documentIds,
+    excludeDocumentIds: config.excludeDocumentIds,
     tags: config.tags,
     metadataWhere: config.metadataWhere,
   });
 
-  if (!config.search) {
+  if (!probe) {
     const rawChunks = await findChunksWithoutSearch({
       docWhere,
       fileInclude,
@@ -479,8 +486,7 @@ export const resolveDocumentSearchLists = async (args: {
   }
 
   const [vector, lexical] = await findChunksWithSearch({
-    config,
-    embedding: args.embedding,
+    probe,
     docWhere,
     fileInclude,
     limit,

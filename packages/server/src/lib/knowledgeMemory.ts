@@ -10,6 +10,7 @@ import {
 } from './knowledgeLexical';
 import type {
   SearchCandidates,
+  SearchProbe,
   SearchSignals,
   SignalCandidate,
 } from './knowledgeRanking';
@@ -25,7 +26,8 @@ export type MemoryStoreQueryConfig = {
   /** Only this actor's memories; every owner's when absent. */
   actorId?: string;
   tags?: Record<string, string>;
-  search?: string;
+  /** Memories that may not be a result: a probe's own source. */
+  excludeMemoryIds?: string[];
   /** Cosine floor on the **vector** candidates only. */
   minSimilarity?: number;
   rrfK?: number;
@@ -280,13 +282,11 @@ const findEntriesByLexical = async (args: {
 const findEntriesWithSearch = async (args: {
   entryWhere: Record<string, unknown>;
   memoryStoreWhere: Record<string, unknown>;
-  /** The query vector, or `undefined` where the search degraded to lexical. */
-  embedding: number[] | undefined;
-  search: string;
+  probe: SearchProbe;
   limit: number;
   minSimilarity?: number;
 }): Promise<SearchCandidates<MemoryKnowledgeResult>> => {
-  const { embedding } = args;
+  const { text, embedding } = args.probe;
   const distanceLiteral = embedding
     ? db.Memory.sequelize!.literal(
         distanceExpression({ column: ENTRY_EMBEDDING_COLUMN, embedding })
@@ -302,13 +302,15 @@ const findEntriesWithSearch = async (args: {
           limit: args.limit,
         })
       : Promise.resolve([]),
-    findEntriesByLexical({
-      entryWhere: args.entryWhere,
-      memoryStoreWhere: args.memoryStoreWhere,
-      distanceLiteral,
-      search: args.search,
-      limit: args.limit,
-    }),
+    text
+      ? findEntriesByLexical({
+          entryWhere: args.entryWhere,
+          memoryStoreWhere: args.memoryStoreWhere,
+          distanceLiteral,
+          search: text,
+          limit: args.limit,
+        })
+      : Promise.resolve([]),
   ]);
 
   const vectorCandidates = vector.map(toVectorCandidate);
@@ -409,6 +411,7 @@ export type MemoryStorePolicyWhere = {
 const buildSearchWheres = (args: {
   selection: Record<string, unknown>;
   owner: Record<string, unknown>;
+  excludeMemoryIds: string[] | undefined;
   projectIds?: number[];
   policyWhere?: MemoryStorePolicyWhere;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -421,6 +424,9 @@ const buildSearchWheres = (args: {
       args.selection,
       args.owner,
       validMemoryWhere(),
+      ...(args.excludeMemoryIds && args.excludeMemoryIds.length > 0
+        ? [{ publicId: { [Op.notIn]: args.excludeMemoryIds } }]
+        : []),
       ...(hasPolicyConstraints(args.policyWhere?.memory)
         ? [args.policyWhere.memory]
         : []),
@@ -438,18 +444,18 @@ const buildSearchWheres = (args: {
 };
 
 /**
- * The memory store's shard of each signal, when `config.search` is set; the
+ * The memory store's shard of each signal, when a probe is given; the
  * deterministic oldest-first read, which no signal ranks, when it is not.
  */
 export const resolveMemoryStoreSearchLists = async (args: {
   projectIds?: number[];
   /** See `resolveDocumentSearchLists` in `knowledgeDocuments.ts`. */
-  embedding: number[] | undefined;
+  probe: SearchProbe | undefined;
   config: MemoryStoreQueryConfig;
   policyWhere?: MemoryStorePolicyWhere;
 }): Promise<SearchCandidates<MemoryKnowledgeResult>> => {
-  const { config, projectIds } = args;
-  const empty: SearchCandidates<MemoryKnowledgeResult> = config.search
+  const { config, projectIds, probe } = args;
+  const empty: SearchCandidates<MemoryKnowledgeResult> = probe
     ? { ranked: true, vector: [], lexical: [] }
     : { ranked: false, results: [] };
 
@@ -462,18 +468,18 @@ export const resolveMemoryStoreSearchLists = async (args: {
   const { entryWhere, memoryStoreWhere } = buildSearchWheres({
     selection,
     owner: await ownerActorWhere({ actorId: config.actorId }),
+    excludeMemoryIds: config.excludeMemoryIds,
     projectIds,
     policyWhere: args.policyWhere,
   });
 
   const limit = clampKnowledgeSearchLimit(config.limit);
 
-  if (config.search) {
+  if (probe) {
     return findEntriesWithSearch({
       entryWhere,
       memoryStoreWhere,
-      embedding: args.embedding,
-      search: config.search,
+      probe,
       limit,
       minSimilarity: config.minSimilarity,
     });

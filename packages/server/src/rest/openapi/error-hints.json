@@ -988,6 +988,16 @@
       "hint": "A revoked share cannot be used again: ask the publisher for a new share. If the publisher revoked only your acceptance, it must delete that acceptance before you can accept again.",
       "routes": []
     },
+    "SIMILARITY_SOURCE_NOT_EMBEDDED": {
+      "http_status": 409,
+      "hint": "Retry once the source is embedded: poll GET /api/v1/documents/{document_id}/status until a document is `ready`. A source written while the embedding provider was unreachable has no vector until it is re-ingested or rewritten; search with `query` meanwhile.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/documents/{document_id}/status"
+        }
+      ]
+    },
     "SINGLE_SESSION_CONFLICT": {
       "http_status": 409,
       "hint": "The agent allows one open session per actor. Reuse the session named in `meta.session_id`, or close it first.",

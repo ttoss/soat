@@ -417,7 +417,7 @@ describe('compilePolicy', () => {
     });
   });
 
-  test('aliased resource column renders $alias.column$ reference', () => {
+  test('aliased resource column renders $alias.field$ reference', () => {
     const result = compilePolicy({
       policies: [
         [
@@ -439,7 +439,7 @@ describe('compilePolicy', () => {
     expect(result.hasAccess).toBe(true);
     expect(result.where).toEqual({
       [Op.and]: [
-        { [Op.or]: [{ [Op.and]: [{ '$file.publicId$': 'res_abc' }] }] },
+        { [Op.or]: [{ [Op.and]: [{ '$file.public_id$': 'res_abc' }] }] },
       ],
     });
   });

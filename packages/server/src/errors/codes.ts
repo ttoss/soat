@@ -124,6 +124,11 @@ export const ERROR_CODES = {
     description:
       'An actor cannot have both an agent_id and a chat_id assigned simultaneously. Set one or the other, not both.',
   },
+  SIMILARITY_SOURCE_NOT_EMBEDDED: {
+    httpStatus: 409,
+    description:
+      'The document or memory named by `similar_to_document_id` or `similar_to_memory_id` has no embedding yet: its ingestion has not finished, or the embedding provider was unreachable when it was written.',
+  },
   DOCUMENT_RELATION_EXISTS: {
     httpStatus: 409,
     description:

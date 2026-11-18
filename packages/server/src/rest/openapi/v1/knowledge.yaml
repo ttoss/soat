@@ -24,7 +24,7 @@ paths:
       tags:
         - Knowledge
       summary: Search knowledge
-      description: Searches across documents and memories using hybrid retrieval — a vector query and a full-text query per source, fused by reciprocal rank — or by file paths, document IDs, memory store IDs, or tags. At least one of `query`, `tags`, `document_paths`, `document_ids`, or `memory_store_ids` must be provided.
+      description: Searches across documents and memories using hybrid retrieval — a vector query and a full-text query per source, fused by reciprocal rank — by the stored vector of an existing document or memory (`similar_to_document_id`, `similar_to_memory_id`), or by file paths, document IDs, memory store IDs, or tags. At least one of `query`, `similar_to_document_id`, `similar_to_memory_id`, `tags`, `document_paths`, `document_ids`, or `memory_store_ids` must be provided.
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
       x-iam-resource-type: document
@@ -48,12 +48,30 @@ paths:
                     store and fuses the rankings; the full-text channel matches exact tokens
                     and phrases, the vector channel everything else.
                   example: 'customer communication preferences'
+                similar_to_document_id:
+                  x-soat-ref: documents
+                  type: string
+                  description: >-
+                    Ranks by this document's stored embedding (the mean of its chunk
+                    embeddings) instead of a query: the vector channel alone, no
+                    embedding call, and none of the document's own chunks in the results.
+                    Not combinable with `query` or `similar_to_memory_id`.
+                  example: 'doc_V1StGXR8Z5jdHi6B'
+                similar_to_memory_id:
+                  x-soat-ref: memories
+                  type: string
+                  description: >-
+                    Ranks by this memory's stored embedding instead of a query: the
+                    vector channel alone, no embedding call, and the memory itself left
+                    out of the results. Not combinable with `query` or
+                    `similar_to_document_id`.
+                  example: 'mem_V1StGXR8Z5jdHi6B'
                 min_similarity:
                   type: number
                   description: >-
                     Minimum raw cosine `similarity_score` a **vector** candidate must
                     reach to take part in ranking, applied before fusion. Only applies
-                    when `query` is provided. Lexical candidates are deliberately exempt:
+                    when `query` or a `similar_to_*` source is provided. Lexical candidates are deliberately exempt:
                     a result that literally contains the searched token is the evidence,
                     and dropping it for a low cosine is the failure hybrid search exists
                     to prevent. Not a floor on `score`, whose fused value encodes rank
@@ -68,7 +86,8 @@ paths:
                     sets how steeply a result's contribution decays with its position in
                     each ranked list. A smaller value weights the very top of each list
                     more heavily. Defaults to the deployment's `KNOWLEDGE_RRF_K`, itself
-                    60 by default. Only applies when `query` is provided.
+                    60 by default. Only applies when `query` is provided; ignored with a
+                    `similar_to_*` source, which ranks by one channel.
                   minimum: 1
                   example: 60
                 recency_half_life_days:
@@ -182,7 +201,9 @@ paths:
                     items:
                       $ref: '#/components/schemas/KnowledgeResult'
         '400':
-          description: Bad request — at least one search parameter is required
+          description: >-
+            Bad request — at least one search parameter is required, and a
+            `similar_to_*` source takes neither `query` nor the other source
           content:
             application/json:
               schema:
@@ -197,6 +218,21 @@ paths:
           description: >-
             Forbidden, or a `query` and no project in scope the caller holds
             `embeddings:CreateEmbeddings` on to bill its embedding to
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            The `similar_to_*` source does not exist or the caller cannot search it
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            SIMILARITY_SOURCE_NOT_EMBEDDED — the `similar_to_*` source has no
+            embedding yet
           content:
             application/json:
               schema:
