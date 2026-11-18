@@ -1201,7 +1201,7 @@ describe('Sessions', () => {
     });
   });
 
-  // ── Closed session guards (regression: session replay duplicates) ─────
+  // ── Closed session guards ─────
 
   describe('closed session guards', () => {
     let closedSessionId: string;
@@ -1420,7 +1420,7 @@ describe('Sessions', () => {
         position: number;
       }> = msgsRes.body.data;
 
-      // The fix guarantees: assistant is at position 1 (snapshotPosition+1),
+      // The assistant is at position 1 (snapshotPosition+1),
       // not pushed to position 2 by the concurrent user message
       expect(messages).toHaveLength(3);
       expect(messages[0]).toMatchObject({
@@ -1974,7 +1974,7 @@ describe('Sessions', () => {
     });
   });
 
-  // ── Session with pre-existing actor (bug regression) ─────────────────────
+  // ── Session with pre-existing actor ─────────────────────
 
   describe('Session created with pre-existing actor_id', () => {
     let preExistingActorId: string;

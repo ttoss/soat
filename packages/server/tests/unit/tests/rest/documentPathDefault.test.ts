@@ -88,7 +88,7 @@ describe('the path a document gets when it is not given one', () => {
   });
 
   test('a caller may still clear the path, and keeps a document by id', async () => {
-    // An explicit clear is a caller's choice, not the default this fixes.
+    // An explicit clear is a caller's choice, not the default.
     const doc = await create({});
     const cleared = await client()
       .patch(`/api/v1/documents/${doc.id}`)

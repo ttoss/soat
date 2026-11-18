@@ -101,7 +101,7 @@ describe('workflowCollectionToCamel / workflowCollectionToSnake', () => {
     });
   });
 
-  test('an unrecognized key is copied verbatim, never deep-rewritten (the deepConvertKeys regression)', () => {
+  test('an unrecognized key is copied verbatim, never deep-rewritten', () => {
     const wire = [
       {
         name: 'a',

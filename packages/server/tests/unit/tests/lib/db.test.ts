@@ -35,10 +35,10 @@ describe('buildDatabaseConfig', () => {
   });
 
   test('enables keepDefaultTimezone so Sequelize skips the SET TIME ZONE that crashes Aurora PostgreSQL 18.3', () => {
-    // Regression guard: without keepDefaultTimezone, Sequelize v6 sends
+    // Without keepDefaultTimezone, Sequelize v6 sends
     // `SET client_min_messages ...;SET TIME ZONE INTERVAL '+00:00' ...` as one
     // multi-statement query on every pooled connection, which crashes Aurora
-    // 18.3 and blocks boot. Removing this flag would re-break Aurora boot.
+    // 18.3 and blocks boot.
     expect(buildDatabaseConfig().keepDefaultTimezone).toBe(true);
   });
 

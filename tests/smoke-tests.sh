@@ -1260,7 +1260,7 @@ if [ -z "$MD_DOC_ID" ] || [ "$MD_DOC_ID" = "null" ]; then
 fi
 echo "Text ingestion: OK"
 
-# 12e. Re-ingest an existing document with a different chunk strategy (issue #7)
+# 12e. Re-ingest an existing document with a different chunk strategy
 echo "--- Re-ingesting document ---"
 REINGEST_RESP=$($SOAT_CLI reingest-document \
   --document-id "$PDF_DOC_ID" \
@@ -3264,7 +3264,7 @@ else
   echo "WARNING: Agent output may not contain the exact project name (LLM response varies), but generation completed successfully."
 fi
 
-# 22a2. Writable generation metadata (F-15): attach caller metadata after the
+# 22a2. Writable generation metadata: attach caller metadata after the
 # generation ran, then confirm it round-trips on get-generation.
 GEN_ID=$(printf '%s\n' "$GEN_RESP" | jq -r '.id')
 if [ -z "$GEN_ID" ] || [ "$GEN_ID" = "null" ]; then
@@ -5860,7 +5860,7 @@ fi
 $SOAT_CLI delete-formation --formation_id "$FORMATION_KEY_FORMATION_ID" >/dev/null
 echo "Formation api_key owned by the deploying caller."
 
-# Metadata substitution (F-16): top-level `metadata` resolves `sub`/`param`/`ref`
+# Metadata substitution: top-level `metadata` resolves `sub`/`param`/`ref`
 # at deploy, exposed on `resolved_metadata`; deploy parameter values are recorded
 # on `resolved_parameters`.
 echo "--- Creating formation with metadata substitution ---"
@@ -6010,7 +6010,7 @@ expect_cli_error_status 404 get-eval --eval_id "$EVAL_FORM_EVAL_ID"
 expect_cli_error_status 404 get-dataset --dataset_id "$EVAL_FORM_DATASET_ID"
 echo "Formation evaluation resources verified."
 
-# Guardrail resource — a formation declares an action-class guardrail (F-17),
+# Guardrail resource — a formation declares an action-class guardrail,
 # which must be queryable via get-guardrail and removed when the formation is
 # torn down.
 echo "--- Creating formation with a guardrail resource ---"

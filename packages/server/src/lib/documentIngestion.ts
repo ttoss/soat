@@ -398,7 +398,7 @@ const ensureReingestibleFile = async (args: {
 
 /**
  * Re-run ingestion for an existing document against its already-stored source
- * file (issue #7). Clears the existing chunks, resets the document to
+ * file. Clears the existing chunks, resets the document to
  * `pending`, then runs the same pipeline as the initial ingestion. Useful to
  * recover a stuck document or re-process with a different chunk strategy.
  * Returns `null` when the document does not exist.

@@ -135,8 +135,7 @@ const pushBareKey = (args) => {
  * unterminated.
  *
  * Bounded to the object it is given: reading the *next* `body:` anywhere in the
- * file instead would attribute a later example's fields to this call, which is
- * how the first draft of this check reported 180 phantom violations.
+ * file instead would attribute a later example's fields to this call.
  */
 export const objectEntriesAt = (text, from) => {
   const open = text.indexOf('{', from);

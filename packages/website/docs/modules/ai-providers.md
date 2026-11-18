@@ -123,7 +123,7 @@ Bedrock models are built on the **Converse** API — one path for every vendor B
 
 Converse is the common denominator, so Anthropic-only features (tool search with `defer_loading`, model betas) are not reachable through it: those are InvokeModel, which the AI SDK exposes as a separate Bedrock path with full Anthropic parity.
 
-**Decision (pre-v1):** when one of those features is wanted, Anthropic models on Bedrock move to InvokeModel and every other vendor stays on Converse. Until then nothing changes. Recorded now because the switch is observable to agents that already exist — the breakpoint spelling, which features resolve, and how tokens are accounted — and a v1 contract should not freeze Converse by default merely because no one wrote the choice down.
+When one of those features is wanted, Anthropic models on Bedrock move to InvokeModel and every other vendor stays on Converse. The switch is observable to existing agents: the breakpoint spelling, which features resolve, and how tokens are accounted.
 
 ### Vertex AI authentication
 

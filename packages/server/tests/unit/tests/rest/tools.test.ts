@@ -3122,7 +3122,7 @@ describe('Tools', () => {
 
     // `preset_parameters` is a pin the tool's operator sets, so it outranks the
     // caller's `input` for the same key — on this route as in an agent's tool
-    // loop. Before the precedence was fixed, `input` silently won here.
+    // loop.
     describe('preset_parameters precedence', () => {
       let presetServer: http.Server;
       let presetServerUrl: string;

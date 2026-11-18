@@ -543,7 +543,7 @@ describe('formationsHelpers', () => {
       );
     });
 
-    test('reports a param used only in top-level metadata (F-16)', () => {
+    test('reports a param used only in top-level metadata', () => {
       const template: FormationTemplate = {
         resources: {
           A: { type: 'memory_store', properties: { name: 'm' } },

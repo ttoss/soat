@@ -1448,7 +1448,7 @@ describe('Tasks', () => {
         content: 'a sonnet',
         finishReason: 'stop',
       });
-      // The caller bag carries no server key anymore.
+      // The caller bag carries no server key.
       expect(settled.payload).toEqual({ topic: 'spring' });
     });
 

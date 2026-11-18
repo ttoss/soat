@@ -225,7 +225,7 @@ describe('Policies', () => {
       expect(response.status).toBe(400);
     });
 
-    test('returns 400 for an unknown/typo action string (F-11)', async () => {
+    test('returns 400 for an unknown/typo action string', async () => {
       // A mis-named action must be rejected at create time so a `Deny` cannot
       // silently no-op against a nonexistent action.
       const response = await authenticatedTestClient(adminToken)
@@ -253,7 +253,7 @@ describe('Policies', () => {
       ).toBe(true);
     });
 
-    test('returns 400 for an action whose module does not exist (F-11)', async () => {
+    test('returns 400 for an action whose module does not exist', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
@@ -268,7 +268,7 @@ describe('Policies', () => {
       expect(response.body.error.message).toBe('Invalid policy document');
     });
 
-    test('accepts a real memory-write action and a module wildcard (F-11)', async () => {
+    test('accepts a real memory-write action and a module wildcard', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({

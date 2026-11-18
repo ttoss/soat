@@ -118,7 +118,7 @@ export const resolveChunkConfig = (
  * Persist chunks while keeping the document's progress state current.
  * Records the totals up front (so the status endpoint has a denominator) and
  * periodically rewrites `indexedChunks`, which also bumps `updatedAt` to keep
- * a long-running ingestion from looking stalled (issue #4). These are typed
+ * a long-running ingestion from looking stalled. These are typed
  * columns, not `metadata` — that bag is caller-owned and a `PATCH` replacing
  * it must never disturb ingestion progress.
  */

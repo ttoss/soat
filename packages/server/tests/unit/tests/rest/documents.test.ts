@@ -1350,7 +1350,7 @@ describe('Documents', () => {
       });
     });
 
-    test('?wait=true on a file over the sync limit returns 413 (issue #3)', async () => {
+    test('?wait=true on a file over the sync limit returns 413', async () => {
       const prev = process.env.SYNC_INGESTION_MAX_BYTES;
       process.env.SYNC_INGESTION_MAX_BYTES = '16';
 
@@ -1438,7 +1438,7 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('ready');
-      // The stored path is leading-slash normalized (F-10) so that a
+      // The stored path is leading-slash normalized so that a
       // `document_paths` prefix filter (`/archive/`) can match it. Stored as
       // `archive/2024/...` it would never match.
       expect(ingestRes.body.path).toBe('/archive/2024/prefixed.txt');
@@ -1882,7 +1882,7 @@ describe('Documents', () => {
       expect(res.status).toBe(404);
     });
 
-    test('self-recovers a document stuck in processing (issue #4)', async () => {
+    test('self-recovers a document stuck in processing', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
@@ -1910,7 +1910,7 @@ describe('Documents', () => {
     });
   });
 
-  describe('POST /api/v1/documents/:id/ingest — re-ingest (issue #7)', () => {
+  describe('POST /api/v1/documents/:id/ingest — re-ingest', () => {
     let extractSpy: jest.SpyInstance;
 
     const uploadFile = async (args: {
@@ -2016,7 +2016,7 @@ describe('Documents', () => {
       expect(doc.status).toBe('ready');
     });
 
-    test('re-ingest recovers a document stuck in processing (issue #4)', async () => {
+    test('re-ingest recovers a document stuck in processing', async () => {
       const fileId = await uploadFile({
         buffer: ONE_PAGE_PDF_BUFFER,
         filename: 'reingest-stuck.pdf',
