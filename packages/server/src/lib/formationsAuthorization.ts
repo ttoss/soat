@@ -198,13 +198,14 @@ export const collectAuthorizationDenials = async (args: {
 }): Promise<FormationAuthorizationDenial[]> => {
   const denials: FormationAuthorizationDenial[] = [];
   for (const request of args.requests) {
-    const { allowed, resource } = await args.authorize.check(request);
-    if (allowed) continue;
+    const answer = await args.authorize.check(request);
+    if (answer.allowed) continue;
     denials.push({
       logicalId: request.logicalId,
       resourceType: request.resourceType,
       action: request.action,
-      resource,
+      resource: answer.resource,
+      deniedBy: answer.deniedBy,
     });
   }
   return denials;
@@ -227,9 +228,15 @@ export const assertResourceActionsAuthorized = async (args: {
 
   log('assertResourceActionsAuthorized: denied %d action(s)', rest.length + 1);
 
+  const sameSet = rest.filter((denial) => {
+    return (
+      denial.deniedBy.type === first.deniedBy.type &&
+      denial.deniedBy.id === first.deniedBy.id
+    );
+  });
   throw authorizationDenied({
-    principal: args.authorize.principal,
-    denied: [first, ...rest],
+    principal: first.deniedBy,
+    denied: [first, ...sameSet],
     extra: { denied_actions: [first, ...rest].map(authorizationDenialToWire) },
   });
 };

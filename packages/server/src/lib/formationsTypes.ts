@@ -220,12 +220,18 @@ export type FormationAuthorizationRequest = {
  * the deploy engine would make every module principal-aware for no gain.
  */
 export type FormationAuthorizer = {
-  /** Whose policies a refusal names. */
-  principal: DeniedPrincipal;
   check: (
     request: FormationAuthorizationRequest
-  ) => Promise<{ allowed: boolean; resource: string }>;
+  ) => Promise<FormationAuthorizationAnswer>;
 };
+
+/**
+ * A refusal names the set that refused this check: a request's sets differ in
+ * what they allow, so no one principal answers for every check.
+ */
+export type FormationAuthorizationAnswer =
+  | { allowed: true; resource: string }
+  | { allowed: false; resource: string; deniedBy: DeniedPrincipal };
 
 /** A refused per-resource action, as reported to the caller. */
 export type FormationAuthorizationDenial = {
@@ -234,6 +240,7 @@ export type FormationAuthorizationDenial = {
   action: string;
   /** The SRN the action was refused on. */
   resource: string;
+  deniedBy: DeniedPrincipal;
 };
 
 export type FormationAuthorizationDenialWire = {

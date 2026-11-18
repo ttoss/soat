@@ -114,6 +114,7 @@ describe('IAM tokens', () => {
             'agents:*',
             'documents:*',
             'orchestrations:*',
+            'formations:*',
             'tools:CallTool',
             'iam:CreateToken',
           ],
@@ -314,6 +315,39 @@ describe('IAM tokens', () => {
         message: `Forbidden: IAM token ${jti}'s policies deny documents:GetDocument on ${resource}`,
         meta: { denied_by: { type: 'iam_token', id: jti } },
       });
+    });
+
+    test('a formation denial by the bound names the token, not the key', async () => {
+      const token = await mintToken({
+        policy: {
+          statement: [{ effect: 'Allow', action: ['formations:*'] }],
+        },
+      });
+      const { jti } = jwt.decode(token, { json: true }) ?? {};
+
+      const res = await authenticatedTestClient(token)
+        .post('/api/v1/formations')
+        .send({
+          project_id: turn.projectId,
+          name: turn.unique('formation'),
+          template: {
+            resources: {
+              Doc: {
+                type: 'document',
+                properties: { path: `/${turn.unique('doc')}.md`, content: 'x' },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.meta).toMatchObject({
+        action: 'documents:CreateDocument',
+        denied_by: { type: 'iam_token', id: jti },
+      });
+      expect(res.body.error.message).toMatch(
+        new RegExp(`^Forbidden: IAM token ${jti}'s policies deny`)
+      );
     });
 
     test("a denial by the key's own policies names the key", async () => {
