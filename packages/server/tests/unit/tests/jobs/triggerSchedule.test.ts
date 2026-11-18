@@ -24,7 +24,10 @@ describe('Schedule trigger tick', () => {
     return authenticatedTestClient(userToken);
   };
 
-  const createScheduleTrigger = async (cron = '0 8 * * *') => {
+  const createScheduleTrigger = async (
+    cron = '0 8 * * *',
+    target = { id: '', input: undefined as Record<string, unknown> | undefined }
+  ) => {
     seq += 1;
     const res = await asUser()
       .post('/api/v1/triggers')
@@ -34,7 +37,8 @@ describe('Schedule trigger tick', () => {
         policy_ids: [userPolicyId],
         type: 'schedule',
         target_type: 'orchestration',
-        target_id: orchestrationId,
+        target_id: target.id || orchestrationId,
+        input: target.input,
         cron,
       });
     expect(res.status).toBe(201);
@@ -55,7 +59,12 @@ describe('Schedule trigger tick', () => {
       `/api/v1/trigger-firings?trigger_id=${triggerId}`
     );
     expect(res.status).toBe(200);
-    return res.body.data as Array<{ status: string; source: string }>;
+    return res.body.data as Array<{
+      status: string;
+      source: string;
+      input: Record<string, unknown> | null;
+      result: { result_id: string } | null;
+    }>;
   };
 
   /** The tick fires detached, so poll for the settled firing. */
@@ -82,6 +91,7 @@ describe('Schedule trigger tick', () => {
         'triggers:ListTriggerFirings',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
+        'orchestrations:GetRun',
       ],
       createNoPermUser: false,
     });
@@ -141,6 +151,48 @@ describe('Schedule trigger tick', () => {
 
       await waitForSettledFiring(trigger.id);
       expect(await listFirings(trigger.id)).toHaveLength(1);
+    });
+  });
+
+  describe('a firing time in the run input', () => {
+    test('the run reads fired_at, the firing time, over a static fired_at', async () => {
+      const reader = await asUser()
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'Sched fired_at reader',
+          nodes: [
+            {
+              id: 'cutoff',
+              type: 'transform',
+              expression: { var: 'input.fired_at' },
+            },
+          ],
+          edges: [],
+        });
+      expect(reader.status).toBe(201);
+      const trigger = await createScheduleTrigger('0 8 * * *', {
+        id: reader.body.id,
+        input: { fired_at: 'static' },
+      });
+      const before = new Date().toISOString();
+
+      await fireDueTriggers({
+        now: new Date(trigger.nextFireAt.getTime() + HOUR_MS),
+      });
+
+      const firing = await waitForSettledFiring(trigger.id);
+      expect(firing.status).toBe('completed');
+      const firedAt = firing.input?.fired_at;
+      expect(typeof firedAt).toBe('string');
+      expect(new Date(String(firedAt)).toISOString()).toBe(firedAt);
+      expect(String(firedAt) >= before).toBe(true);
+
+      const run = await asUser().get(
+        `/api/v1/orchestration-runs/${firing.result?.result_id}`
+      );
+      expect(run.status).toBe(200);
+      expect(run.body.state.cutoff).toBe(firedAt);
     });
   });
 

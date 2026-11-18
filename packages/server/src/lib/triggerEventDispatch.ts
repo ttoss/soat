@@ -216,7 +216,11 @@ const dispatchTrigger = async (args: {
       // dispatched. A trigger whose input cannot satisfy its target is a
       // configuration defect rather than a firing that happened, so it is
       // raised here and leaves no row — nothing is lost if this never runs.
-      const effectiveInput = mergeFiringInput({ trigger, fireInput: input });
+      const effectiveInput = mergeFiringInput({
+        trigger,
+        fireInput: input,
+        firedAt: new Date(),
+      });
       await assertFireInputValid({ trigger, input: effectiveInput });
 
       // Written before the trigger's credentials are resolved and before its

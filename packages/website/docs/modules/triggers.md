@@ -97,7 +97,27 @@ The `type` is fixed at creation.
 Effective input is a shallow merge; fire-time input wins:
 
 ```
-effective_input = { ...trigger.input, ...fire_time_input }
+effective_input = { ...trigger.input, ...fire_time_input, fired_at }
+```
+
+`fired_at` is the firing's own time, an ISO 8601 UTC string
+(`2026-08-25T12:00:00.000Z`), on every firing (`schedule`, `event`,
+`webhook`, manual). It overrides a `fired_at` in the static or fire-time
+input, and it is recorded in the firing's `input`, so a redelivered firing
+reads the same time. Tool targets do not receive it: their input is the call's
+arguments, checked against the tool's own schema.
+
+A scheduled run builds time filters from it, such as a node's `input_mapping`
+for a list filtered by `data`. `lt`/`gt` compare strings lexicographically,
+which orders ISO 8601 UTC strings of this form by time, so compare against
+data stored in the same form:
+
+```json
+{
+  "input_mapping": {
+    "data": { "expires_at": { "lt": { "var": "input.fired_at" } } }
+  }
+}
 ```
 
 Per target:

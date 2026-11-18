@@ -32,6 +32,9 @@ import {
 
 const log = createDebug('soat:triggers');
 
+/** The input key a firing's own time is written to. */
+export const FIRED_AT_KEY = 'fired_at';
+
 /**
  * Builds the agent message list from the effective input:
  * - `input.messages` (array of `{role, content}`) is used verbatim;
@@ -48,7 +51,12 @@ export const buildAgentMessages = (
   if (typeof input.message === 'string' && input.message.length > 0) {
     return [{ role: 'user', content: input.message }];
   }
-  if (Object.keys(input).length > 0) {
+  // The firing time alone is no message.
+  if (
+    Object.keys(input).some((key) => {
+      return key !== FIRED_AT_KEY;
+    })
+  ) {
     return [{ role: 'user', content: JSON.stringify(input) }];
   }
   throw new DomainError(
@@ -253,18 +261,28 @@ const loadActiveTrigger = async (args: {
 };
 
 /**
+ * Targets whose input is a document the run reads, so it carries `fired_at`.
+ * A tool's input is its call's arguments, checked against its own schema.
+ */
+const FIRED_AT_TARGETS = new Set(['orchestration', 'agent', 'eval']);
+
+/**
  * The effective input for a firing: the trigger's stored input, overlaid by
- * whatever the fire supplied. Exported because the event path settles it
- * before the firing row is written, so the row records what was dispatched.
+ * whatever the fire supplied, then the firing's own `fired_at`. Exported
+ * because the event path settles it before the firing row is written, so the
+ * row records what was dispatched and a redelivery reads the same time.
  */
 export const mergeFiringInput = (args: {
   trigger: TriggerInstance;
   fireInput?: Record<string, unknown> | null;
+  firedAt: Date;
 }): Record<string, unknown> => {
-  return {
+  const merged = {
     ...((args.trigger.input as Record<string, unknown> | null) ?? {}),
     ...(args.fireInput ?? {}),
   };
+  if (!FIRED_AT_TARGETS.has(args.trigger.targetType as string)) return merged;
+  return { ...merged, [FIRED_AT_KEY]: args.firedAt.toISOString() };
 };
 
 export { assertFireInputValid };
@@ -336,6 +354,7 @@ export const prepareFiring = async (args: {
   const effectiveInput = mergeFiringInput({
     trigger,
     fireInput: args.fireInput,
+    firedAt: new Date(),
   });
   await assertFireInputValid({ trigger, input: effectiveInput });
 

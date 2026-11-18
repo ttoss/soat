@@ -244,6 +244,45 @@ describe('Event trigger dispatch', () => {
       });
     }, 60_000);
 
+    test('the run reads fired_at, the firing time, from its input', async () => {
+      const reader = await asUser()
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'Event fired_at reader',
+          nodes: [
+            {
+              id: 'cutoff',
+              type: 'transform',
+              expression: { var: 'input.fired_at' },
+            },
+          ],
+          edges: [],
+        });
+      expect(reader.status).toBe(201);
+      const emitter = await createEmitter();
+      const triggerId = await createEventTrigger({
+        targetId: reader.body.id,
+        eventPattern: emitter.eventName,
+      });
+      const before = new Date().toISOString();
+
+      await emitter.emit();
+
+      const [firing] = await waitForFirings({ triggerId, count: 1 });
+      expect(firing.status).toBe('completed');
+      const firedAt = firing.input?.fired_at;
+      expect(typeof firedAt).toBe('string');
+      expect(new Date(String(firedAt)).toISOString()).toBe(firedAt);
+      expect(String(firedAt) >= before).toBe(true);
+
+      const run = await asUser().get(
+        `/api/v1/orchestration-runs/${String(firing.result?.result_id)}`
+      );
+      expect(run.status).toBe(200);
+      expect(run.body.state.cutoff).toBe(firedAt);
+    }, 60_000);
+
     test('a pattern that does not match, or an inactive trigger, does not fire', async () => {
       const emitter = await createEmitter();
       const mismatched = await createEventTrigger({
