@@ -1848,7 +1848,9 @@ components:
                     items:
                       type: string
                     description: >-
-                      Resource SRN patterns. Omit to match every resource.
+                      Resource SRN patterns. Omitted, an `Allow` matches every
+                      resource of the formation's project
+                      (`srn:<project_id>:*:*`); a `Deny` matches every resource.
                   condition:
                     type: object
                     nullable: true

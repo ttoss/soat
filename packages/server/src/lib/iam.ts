@@ -501,5 +501,7 @@ export const evaluatePoliciesMultiResource = (args: {
 
 export {
   extractProjectIdsFromPolicies,
+  findAllowResourcesOutsideEveryProject,
   policySetsConcernProject,
+  scopePolicyDocument,
 } from './policyProjectIds';

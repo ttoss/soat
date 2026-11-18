@@ -91,7 +91,8 @@ paths:
       description: >-
         Creates a project policy when `project_id` is given or the credential
         is bound to a project: its `Allow` statements may name only that
-        project's resources (`srn:<project_id>:<type>:<id>`), else `400`.
+        project's resources (`srn:<project_id>:<type>:<id>`), else `400`; an
+        `Allow` without `resource` grants every resource of that project.
         Without a project, creates a global policy, which only the
         unrestricted admin may.
       operationId: createPolicy
@@ -375,6 +376,10 @@ components:
           type: array
           items:
             type: string
+          description: >-
+            Resource SRN patterns. Omitted, an `Allow` in a project policy
+            matches every resource of the policy's project
+            (`srn:<project_id>:*:*`); anywhere else it matches every resource.
           example: ['srn:proj_abc:files:*']
         condition:
           type: object
