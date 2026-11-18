@@ -4,7 +4,11 @@ import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
-import { type EventFilterArgs, storedEventFilter } from './eventMatching';
+import {
+  effectiveEventFilter,
+  type EventFilterArgs,
+  storedEventFilter,
+} from './eventMatching';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
   decryptStoredSecret,
@@ -15,7 +19,6 @@ import {
   acceptStoredToolContext,
   acceptStoredToolContextUpdate,
 } from './toolContextCarrier';
-import { effectiveEventFilter } from './triggerEventFilter';
 import {
   assertTriggerConfigValid,
   assertTriggerUpdateWriterHolds,
@@ -412,7 +415,7 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     policyIds: args.policyIds ?? trigger.policyIds,
     action: args.action !== undefined ? args.action : trigger.action,
     cron: args.cron !== undefined ? args.cron : trigger.cron,
-    ...effectiveEventFilter({ trigger, args }),
+    ...effectiveEventFilter({ stored: trigger, args }),
     validateTarget: targetChanged,
   });
 

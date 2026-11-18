@@ -77,7 +77,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Delete the deciders that name the tool, or point them at another backend with `{{PATCH /deciders/{decider_id}}}`, then delete the tool. Accepted shares (`meta.accepted_share_count`) are revoked by retrying with `force=true`; ingestion rules (`meta.ingestion_rule_count`) are repointed with `{{PATCH /ingestion-rules/{ingestion_rule_id}}}`, or left without a converter by `force=true`.',
   ACTION_NOT_HELD:
     'Name a target or action you may perform yourself (`meta.action` on `meta.resource`), or have a caller who holds it make the change.',
-  TRIGGER_EVENTS_UNREADABLE:
+  EVENTS_UNREADABLE:
     'Add each `meta.unread` action to a policy in `policy_ids`, or narrow `events` or `event_resources` to what the policies read.',
   AGENT_RUN_AS_REQUIRES_POLICIES:
     'Give the agent the policies it acts under in `policy_ids`, or set `run_as: caller` so the agent runs as its caller.',

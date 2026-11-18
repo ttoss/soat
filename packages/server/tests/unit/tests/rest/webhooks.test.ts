@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { EVENT_READ_ACTIONS } from 'src/lib/eventReadActions';
 
 import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import {
@@ -11,13 +12,14 @@ describe('Webhooks', () => {
   let adminToken: string;
   let userToken: string;
   let projectId: string;
-  /** The user's own policy: the grant a webhook it creates may carry. */
+  /** The user's own policy, reading every event's resource: the grant a webhook it creates may carry. */
   let userPolicyId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'webhooks',
       policyActions: [
+        ...new Set(Object.values(EVENT_READ_ACTIONS)),
         'webhooks:ListWebhooks',
         'webhooks:CreateWebhook',
         'webhooks:GetWebhook',
@@ -1064,7 +1066,7 @@ describe('Webhooks', () => {
           policy_ids: [policy.body.id],
           name: 'Scoped Hook',
           url: 'https://example.com/scoped',
-          events: ['*'],
+          events: ['orders.shipped'],
         });
       const id = created.body.id;
 
