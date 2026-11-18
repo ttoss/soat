@@ -95,6 +95,13 @@ export const mergeSignalShards = <T>(args: {
 };
 
 /**
+ * What ranks a search; absent, each store answers its deterministic read.
+ * `text` feeds the lexical channel and `embedding` the vector one, and either
+ * may be missing: a stored-vector probe has no text, a degraded query no vector.
+ */
+export type SearchProbe = { text?: string; embedding?: number[] };
+
+/**
  * What one store contributes to a search: its shard of each signal's ranking
  * when the request carries a query, and a single unranked list — the store's
  * deterministic read — when it does not.

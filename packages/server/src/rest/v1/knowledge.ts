@@ -4,6 +4,11 @@ import { DomainError } from 'src/errors';
 import { projectEmbeddingBilling } from 'src/lib/embedding';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compileKnowledgeSearchPolicy } from 'src/lib/knowledgeSearchPolicy';
+import {
+  resolveSimilaritySource,
+  type SimilaritySource,
+  type SimilaritySourceRef,
+} from 'src/lib/knowledgeSimilaritySource';
 import { assertProjectSpendWithinQuota } from 'src/lib/quotaEnforcement';
 import { readScopePolicySets } from 'src/lib/scopePolicySets';
 import {
@@ -24,6 +29,8 @@ const knowledgeRouter = new Router<Context>();
 type KnowledgeSearchBody = {
   project_id?: string;
   query?: string;
+  similar_to_document_id?: string;
+  similar_to_memory_id?: string;
   min_similarity?: number;
   rrf_k?: number;
   recency_half_life_days?: number;
@@ -53,6 +60,33 @@ const toStringArray = (
   return Array.isArray(value) ? value : [value];
 };
 
+/** One probe per search: a stored row's vector, or `query`, never both. */
+const readSimilaritySourceRef = (
+  body: KnowledgeSearchBody
+): SimilaritySourceRef | undefined => {
+  const documentId = body.similar_to_document_id;
+  const memoryId = body.similar_to_memory_id;
+  if (documentId !== undefined && memoryId !== undefined) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'similar_to_document_id and similar_to_memory_id cannot both be set'
+    );
+  }
+  const ref: SimilaritySourceRef | undefined =
+    documentId !== undefined
+      ? { documentId }
+      : memoryId !== undefined
+        ? { memoryId }
+        : undefined;
+  if (ref && body.query !== undefined) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'query cannot be combined with similar_to_document_id or similar_to_memory_id'
+    );
+  }
+  return ref;
+};
+
 const hasSearchFilters = (
   body: KnowledgeSearchBody,
   tags: Record<string, string> | undefined,
@@ -66,6 +100,7 @@ const hasSearchFilters = (
     body.memory_store_ids !== undefined && body.memory_store_ids.length > 0;
   return (
     Boolean(body.query) ||
+    readSimilaritySourceRef(body) !== undefined ||
     hasDocumentFilters ||
     hasMemoryStoreFilters ||
     hasTagFilter(tags)
@@ -106,13 +141,21 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     resourceType: 'document',
   });
 
-  const policy = compileKnowledgeSearchPolicy({
-    policySets: await readScopePolicySets({
-      getPolicies: ctx.authUser.getPolicies,
-      projectPublicId: body.project_id,
-      projectIds,
-    }),
+  const policySets = await readScopePolicySets({
+    getPolicies: ctx.authUser.getPolicies,
+    projectPublicId: body.project_id,
+    projectIds,
   });
+  const sourceRef = readSimilaritySourceRef(body);
+  const similarTo: SimilaritySource | undefined = sourceRef
+    ? await resolveSimilaritySource({
+        source: sourceRef,
+        projectIds,
+        policySets,
+      })
+    : undefined;
+
+  const policy = compileKnowledgeSearchPolicy({ policySets });
   if (policy.forbidden) {
     ctx.body = { results: [] };
     return;
@@ -131,6 +174,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     embeddingBilling: projectEmbeddingBilling({ projectId: billedProjectId }),
     policyWhere: policy.policyWhere,
     query: body.query,
+    similarTo,
     minSimilarity: body.min_similarity,
     rrfK: body.rrf_k,
     recencyHalfLifeDays: body.recency_half_life_days,

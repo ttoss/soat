@@ -12,10 +12,12 @@ import type {
 import { resolveMemoryStoreSearchLists } from './knowledgeMemory';
 import type {
   SearchCandidates,
+  SearchProbe,
   SearchSignals,
   SignalCandidate,
 } from './knowledgeRanking';
 import { fuseCandidates } from './knowledgeRanking';
+import type { SimilaritySource } from './knowledgeSimilaritySource';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import {
   compileStructuredWhere,
@@ -73,6 +75,12 @@ type SearchKnowledgeArgs = {
   /** See {@link resolveDocumentSearchLists}. Required, so a caller has to say. */
   embeddingBilling: EmbeddingBilling;
   query?: string;
+  /**
+   * A stored vector to rank by instead of `query`: the vector channel alone,
+   * no embedding call, and the source's own rows left out. `rrfK` does not
+   * apply.
+   */
+  similarTo?: SimilaritySource;
   /**
    * Raw-cosine floor a **vector** candidate must clear to enter fusion.
    * Lexical candidates are never subject to it.
@@ -167,17 +175,17 @@ const namesAny = (...filters: Array<string[] | undefined>): boolean => {
 /**
  * Which stores this search reads.
  *
- * A `query` names no store, so it reaches **both**: a caller who asked for
- * "everything I can see" gets it. Store-specific filters narrow within a
+ * A probe (`query` or `similarTo`) names no store, so it reaches **both**: a
+ * caller who asked for "everything I can see" gets it. Store-specific filters narrow within a
  * store rather than choosing between them, and `include_*` is the only way to
  * take one out — a flag the caller set, never overridden by a filter that
  * happens to name the other store.
  */
 const getSearchFlags = (
-  args: KnowledgeScope & { query?: string }
+  args: KnowledgeScope & { probe?: SearchProbe }
 ): { hasDocumentSearch: boolean; hasMemoryStoreSearch: boolean } => {
-  // `query` and `tags` name no store, so either one reaches both.
-  const everyStore = args.query !== undefined || hasTagFilter(args.tags);
+  // A probe and `tags` name no store, so either one reaches both.
+  const everyStore = args.probe !== undefined || hasTagFilter(args.tags);
   const hasDocumentSearch =
     args.includeDocuments !== false &&
     (everyStore ||
@@ -222,14 +230,14 @@ const toDocumentCandidate = (
  * discriminant that store would have returned for this request, so a skipped
  * store needs no special case downstream.
  */
-const emptyCandidates = <T>(query?: string): SearchCandidates<T> => {
-  return query
+const emptyCandidates = <T>(probe?: SearchProbe): SearchCandidates<T> => {
+  return probe
     ? { ranked: true, vector: [], lexical: [] }
     : { ranked: false, results: [] };
 };
 
 /**
- * `ranked` follows the request's `query` in both stores, so these two are
+ * `ranked` follows the request's probe in both stores, so these two are
  * narrowings of the union rather than branches on store behavior: exactly one
  * of them is non-empty for any one search.
  */
@@ -277,18 +285,18 @@ const collectScope = async (args: {
   scope: KnowledgeScope;
   actorId?: string;
   projectIds?: number[];
-  query?: string;
-  embedding: number[] | undefined;
+  probe: SearchProbe | undefined;
+  similarTo?: SimilaritySource;
   minSimilarity?: number;
   limit: number;
 }): Promise<{
   documents: SearchCandidates<QueryDocumentResult>;
   memoryStores: SearchCandidates<MemoryKnowledgeResult>;
 }> => {
-  const { scope, query, limit } = args;
+  const { scope, probe, limit } = args;
   const { hasDocumentSearch, hasMemoryStoreSearch } = getSearchFlags({
     ...scope,
-    query,
+    probe,
   });
   const metadataWhere = compileStructuredWhere({
     filter: scope.metadata,
@@ -300,36 +308,56 @@ const collectScope = async (args: {
     hasDocumentSearch
       ? resolveDocumentSearchLists({
           projectIds: args.projectIds,
-          embedding: args.embedding,
+          probe,
           policyWhere: scope.policyWhere?.document,
           config: {
-            search: query,
             minSimilarity: args.minSimilarity,
             limit,
             paths: scope.paths,
             documentIds: scope.documentIds,
+            excludeDocumentIds: args.similarTo?.excludeDocumentIds,
             tags: scope.tags,
             metadataWhere,
           },
         })
-      : Promise.resolve(emptyCandidates<QueryDocumentResult>(query)),
+      : Promise.resolve(emptyCandidates<QueryDocumentResult>(probe)),
     hasMemoryStoreSearch
       ? resolveMemoryStoreSearchLists({
           projectIds: args.projectIds,
-          embedding: args.embedding,
+          probe,
           policyWhere: scope.policyWhere,
           config: {
             memoryStoreIds: scope.memoryStoreIds,
             actorId: args.actorId,
             tags: scope.tags,
-            search: query,
+            excludeMemoryIds: args.similarTo?.excludeMemoryIds,
             minSimilarity: args.minSimilarity,
             limit,
           },
         })
-      : Promise.resolve(emptyCandidates<MemoryKnowledgeResult>(query)),
+      : Promise.resolve(emptyCandidates<MemoryKnowledgeResult>(probe)),
   ]);
   return { documents, memoryStores };
+};
+
+/**
+ * Embedded once, for every store and scope. Embedding per store would bill the
+ * same text twice and let the halves disagree: one call failing would leave
+ * documents with a `similarity_score` and memory stores without, which the
+ * contract reserves for a search that answered from the lexical channel alone.
+ */
+const resolveProbe = async (
+  args: Pick<SearchKnowledgeArgs, 'query' | 'similarTo' | 'embeddingBilling'>
+): Promise<SearchProbe | undefined> => {
+  if (args.similarTo) return { embedding: args.similarTo.embedding };
+  if (!args.query) return undefined;
+  return {
+    text: args.query,
+    embedding: await embedQueryOrDegrade({
+      text: args.query,
+      billing: args.embeddingBilling,
+    }),
+  };
 };
 
 export const searchKnowledge = async (
@@ -340,17 +368,7 @@ export const searchKnowledge = async (
   // scan through this one function.
   const limit = clampKnowledgeSearchLimit(args.limit);
 
-  // Once, for every store and scope. Embedding per store would bill the same
-  // text twice and let the halves disagree: one call failing would leave
-  // documents with a `similarity_score` and memory stores without, which the
-  // contract reserves for a search that answered from the lexical channel
-  // alone.
-  const embedding = args.query
-    ? await embedQueryOrDegrade({
-        text: args.query,
-        billing: args.embeddingBilling,
-      })
-    : undefined;
+  const probe = await resolveProbe(args);
 
   const scopes = await Promise.all(
     [args, ...(args.alsoScopes ?? [])].map((scope) => {
@@ -358,16 +376,16 @@ export const searchKnowledge = async (
         scope,
         actorId: args.actorId,
         projectIds: args.projectIds,
-        query: args.query,
-        embedding,
+        probe,
+        similarTo: args.similarTo,
         minSimilarity: args.minSimilarity,
         limit,
       });
     })
   );
 
-  if (!args.query) {
-    // No query, no ranking signal: each store contributed its one deterministic
+  if (!probe) {
+    // No probe, no ranking signal: each store contributed its one deterministic
     // read — chunk order, then oldest-first entries.
     return dedupeByKey([
       ...scopes.flatMap((scope) => {
@@ -403,7 +421,7 @@ export const searchKnowledge = async (
       ];
     }),
     keyOf: knowledgeKey,
-    rrfK: args.rrfK,
+    rrfK: args.similarTo ? undefined : args.rrfK,
     isMemory: isMemoryResult,
     recencyHalfLifeDays: args.recencyHalfLifeDays,
     limit,
