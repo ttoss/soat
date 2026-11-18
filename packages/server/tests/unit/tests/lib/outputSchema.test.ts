@@ -31,9 +31,9 @@ describe('validateStructuredOutput', () => {
     expect(result.success && result.value).toEqual(value);
   });
 
-  // The regression this module exists for: a model returned every required key
-  // with every type correct, filled with the name of the agent's own tool. A
-  // required+type-only check passes that; `minLength` is what rejects it.
+  // An object with every required key and type correct, each filled with the
+  // name of the agent's own tool, passes a required+type-only check;
+  // `minLength` is what rejects it.
   test('rejects a degenerate object whose keys and types are all correct', () => {
     const result = validateStructuredOutput(themeSchema)({
       text: 'get-fundamental-truth',

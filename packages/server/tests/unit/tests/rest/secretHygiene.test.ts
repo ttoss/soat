@@ -108,7 +108,7 @@ describe('Secret hygiene', () => {
       );
       const logStatements = (source.match(/log\([^;]*\)/g) ?? []).map(
         (statement) => {
-          // A fingerprinted argument is the point of the fix, so the hash call
+          // A fingerprinted argument is allowed, so the hash call
           // and what it wraps are removed before looking for a raw token.
           return statement.replace(/fingerprintToken\([^)]*\)/g, '');
         }

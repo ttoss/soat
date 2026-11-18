@@ -1208,8 +1208,8 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(keyRes.body.key as string).get(
         `/api/v1/ingestion-rules/${ruleId}`
       );
-      // A read the caller may not perform is indistinguishable from absence,
-      // now that the route authorizes against the rule's own SRN.
+      // A read the caller may not perform is indistinguishable from absence:
+      // the route authorizes against the rule's own SRN.
       expect(res.status).toBe(404);
     });
 

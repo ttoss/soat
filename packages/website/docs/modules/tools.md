@@ -637,8 +637,8 @@ therefore name the tools it covers:
 }
 ```
 
-This is the same check [approvals](./approvals.md) have always made for
-`tools:CallTool`, so a per-tool grant now means the same thing whether the call
+This is the same check [approvals](./approvals.md) make for
+`tools:CallTool`, so a per-tool grant means the same thing whether the call
 arrives directly or through an approval.
 
 Every call, whatever starts it (an agent turn, an orchestration node, a trigger, a playbook, a scorer, a decider, a converter or a memory rule) and whatever the tool's type, needs `tools:CallTool` on the tool under the authority the work runs under, checked before the call reaches anything.

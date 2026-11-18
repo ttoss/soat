@@ -301,7 +301,7 @@ export const executeAndRecordItem = async (args: {
   });
 
   const columns = {
-    // Frozen at run time: editing or deleting the item afterwards can no longer
+    // Frozen at run time: editing or deleting the item afterwards cannot
     // rewrite what this run was scored against.
     input: args.item.input,
     expectedOutput: args.item.expectedOutput,

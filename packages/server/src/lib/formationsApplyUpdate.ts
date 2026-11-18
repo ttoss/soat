@@ -230,8 +230,8 @@ const recordAppliedUpdate = async (args: {
   });
 };
 
-// Shared with `plan-formation`, so the preview and the apply it previews can
-// no longer disagree about whether a resource changed.
+// Shared with `plan-formation`, so the preview and the apply it previews
+// never disagree about whether a resource changed.
 const mergeWithLastApplied = (args: {
   existing: ResourceRow;
   resourceType: string;

@@ -6,7 +6,7 @@
  * The two halves live in different places, which is the whole reason this module
  * exists. The input is a generation column (`inputMessages`); the answer is in
  * the trace's steps object, which is a File. Callers that want to replay a turn
- * (curating a dataset item today; session forking and transcripts next) should
+ * (curating a dataset item, forking a session, reading a transcript) should
  * not each have to know that, and the evaluations module in particular must not
  * learn the trace file layout.
  */
@@ -170,9 +170,8 @@ export const readTraceSteps = async (
  *
  * A `trace_id` may group several generations, and the object then holds every
  * one of their segments — so a turn reader must take its own slice or it would
- * report a neighbouring turn's steps as this one's. A trace written
- * before the index existed holds a single turn and is read whole, which is what
- * every reader did before grouping worked.
+ * report a neighbouring turn's steps as this one's. A trace without the index
+ * holds a single turn and is read whole.
  */
 export const readGenerationSteps = async (
   generation: GenerationWithTrace

@@ -153,10 +153,9 @@ let cachedTemplates: Map<number, IndexedTemplate[]> | null = null;
  * The spec's path templates split once and bucketed by segment count, fewest
  * brace segments first.
  *
- * `matchOpenApiPath` runs on every authenticated request now that the query
- * check is not opt-in, and re-splitting ~275 templates per request to compare a
- * handful of segments is work the spec already knows the answer to. Rebuilt
- * only when the spec cache is.
+ * `matchOpenApiPath` runs on every authenticated request, and re-splitting
+ * ~275 templates per request to compare a handful of segments is work the
+ * spec already knows the answer to. Rebuilt only when the spec cache is.
  */
 const templateIndex = (): Map<number, IndexedTemplate[]> => {
   if (cachedTemplates) return cachedTemplates;

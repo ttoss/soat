@@ -105,7 +105,7 @@ export type PendingAgentConfig = {
   activeToolIds: string[] | null;
   stepRules: unknown;
   temperature: number | null;
-  /** Absent on a turn paused before the field existed; reads as unset. */
+  /** Absent on a paused turn that never stored it; reads as unset. */
   maxOutputTokens?: number | null;
   reasoning?: unknown;
   outputSchema: unknown;

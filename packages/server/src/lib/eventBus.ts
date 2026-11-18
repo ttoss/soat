@@ -53,8 +53,8 @@ const droppedEvents = new Map<EventDropStage, number>();
  * operation that produced it has already committed and cannot be failed.
  *
  * Logged through `console.error` rather than `log`: `debug` output is disabled
- * in production, so a `debug`-only line would leave silent loss silent, which is
- * the bug (`db.ts` makes the same call for the same reason).
+ * in production, so a `debug`-only line would leave silent loss silent (`db.ts`
+ * makes the same call for the same reason).
  */
 export const recordDroppedEvent = (args: {
   stage: EventDropStage;

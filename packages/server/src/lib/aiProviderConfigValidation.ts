@@ -39,7 +39,7 @@ const refusal = (args: { provider: AiProviderSlug; key: string }): string => {
  * The value of a `config` key that reaches a URL, or `undefined` when the
  * record sets none. Throws `AI_PROVIDER_MISCONFIGURED` for anything else.
  *
- * This is the build-time half, so a record written before the rule existed
+ * This is the build-time half, so a stored record the routes would refuse
  * fails closed rather than reaching the host it names. The create/update routes
  * refuse the same values earlier, as `VALIDATION_FAILED`.
  */

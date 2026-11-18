@@ -18,9 +18,7 @@ import {
  * `standardizePrompt` throws `InvalidPromptError` for a system message left in
  * `messages`, so everything system-shaped must be lifted into `instructions` —
  * and because `Instructions` accepts an *ordered array*, nothing has to be
- * dropped or concatenated to fit. The previous helper took `.find` (the first
- * message) while the filter removed all of them, so every system message after
- * the first was silently destroyed.
+ * dropped or concatenated to fit.
  */
 describe('collectSystemInstructions', () => {
   test('no system message yields undefined', () => {

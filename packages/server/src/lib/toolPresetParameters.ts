@@ -13,8 +13,7 @@ import type { JSONSchema7, Tool } from 'ai';
  * {@link stripPresetKeysFromSchema} is the ergonomic complement, removing a
  * pinned parameter from the schema the model sees. It is not a guarantee: none
  * of these schemas set `additionalProperties: false`, so a model emitting a
- * hidden key is not rejected, and before the merge order was fixed its value
- * silently overrode the pin.
+ * hidden key is not rejected; the merge order is what keeps the pin.
  */
 export const mergePresetParameters = (args: {
   presetParameters?: object | null;
@@ -78,8 +77,8 @@ export const gatePresetsOf = (args: {
 
 /**
  * The model-visible schema with every pinned key removed from `properties` and
- * from `required` — a pinned parameter the model can no longer omit by mistake,
- * and no longer waste a guess on.
+ * from `required` — a pinned parameter the model cannot omit by mistake
+ * or waste a guess on.
  */
 export const stripPresetKeysFromSchema = (
   schema: JSONSchema7,

@@ -41,8 +41,8 @@ export const assertValidOnApprovalExpiry = (value: unknown): void => {
 
 /**
  * Whether an expired approval should spawn the continuation that reports it.
- * Only the explicit opt-in does; anything else — including a legacy row written
- * before the field existed — terminates.
+ * Only the explicit opt-in does; anything else, including a row without the
+ * field, terminates.
  */
 export const reactsToExpiredApproval = (value: unknown): boolean => {
   return value === 'react';

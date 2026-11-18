@@ -4,11 +4,9 @@
  * The AI SDK takes system content as its own `instructions` argument, and
  * `standardizePrompt` refuses a system message left in `messages`
  * (`allowSystemInMessages` defaults to false), so every call site has to lift
- * it out. The split was written out nine times across `agentGeneration`,
- * `agentNonStreamGeneration`, `agentGenerationHelpers` and `chats` — two of
- * them reading the system message from a *different* array than the one they
- * filter, which is why this is composable functions rather than one returning
- * both.
+ * it out. These are composable functions rather than one returning both,
+ * because a caller may read the system message from a *different* array than
+ * the one it filters.
  *
  * All of them are key-blind apart from `providerOptions`, which the SDK itself
  * defines on a system message and which carries the prompt-cache breakpoint: a
@@ -40,9 +38,7 @@ const isSystem = (message: unknown): boolean => {
  * value: `undefined` for none, the bare string for one, an ordered array for
  * several.
  *
- * The previous helper read the *first* system message while the filter beside
- * it removed *all* of them, so every one after the first was silently
- * destroyed. Non-string content cannot be an instruction (providers accept only
+ * Non-string content cannot be an instruction (providers accept only
  * a string), so it is skipped rather than coerced; surfaces that must reject
  * system content outright use {@link hasSystemMessage}.
  *

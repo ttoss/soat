@@ -4,8 +4,8 @@ import { authenticatedTestClient } from '../../testClient';
 /**
  * A `metadata` bag is caller-owned and stored as written, which is what makes
  * its type worth refusing at the door: the column is JSONB, so it stores
- * `"a string"` as happily as an object, and the structured filter added in
- * #1398 then reads that row as matching nothing — a bad write becomes an
+ * `"a string"` as happily as an object, and the structured filter
+ * then reads that row as matching nothing — a bad write becomes an
  * invisible read.
  *
  * So every entry point that stores a bag answers the same way, through

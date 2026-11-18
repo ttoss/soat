@@ -94,8 +94,8 @@ describe('toProviderDomainError', () => {
   });
 
   // The SDK wraps a streamed frame in an `Error`, so the raw-object branch
-  // above no longer sees it; unmatched it reaches the caller as "Internal
-  // Server Error" again.
+  // above does not see it; unmatched it would reach the caller as "Internal
+  // Server Error".
   test('maps a streamed provider error the SDK wrapped in StreamProviderError', () => {
     const error = toProviderDomainError(
       new StreamProviderError({

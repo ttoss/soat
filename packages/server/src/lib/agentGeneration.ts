@@ -174,7 +174,7 @@ const resolveContextAndRecord = async (
     // function its complexity budget, as the note on `nodeAttempt` below records.
     conversation: args.conversation,
     // Usage attribution and the served agent version: typed columns, for the
-    // same reason. `metadata` carries only what the caller sent (F-15).
+    // same reason. `metadata` carries only what the caller sent.
     actionId: args.actionId ?? null,
     triggerId: args.triggerId ?? null,
     orchestrationRunId: args.orchestrationRunId ?? null,

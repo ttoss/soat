@@ -10,9 +10,9 @@
  * nested run transitions no task), `max_call_depth` bounds agent→agent
  * recursion through tool calls (a `sub_orchestration` node is not a tool call),
  * and `maxChainGenerations` bounds one agent chain (each child run meters its
- * own). So the runaway was bounded only by whatever ran out first — queue
- * capacity, the project's concurrency limit, provider spend — and the failure
- * that eventually surfaced named nothing about the real cause.
+ * own). Unbounded here, a runaway stops only on whatever runs out first — queue
+ * capacity, the project's concurrency limit, provider spend — with a failure
+ * that names nothing about the real cause.
  */
 import { db } from '../db';
 import { DomainError } from '../errors';

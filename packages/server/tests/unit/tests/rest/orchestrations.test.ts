@@ -1125,7 +1125,7 @@ describe('Orchestrations', () => {
     });
 
     test("a transform expression's data-object keys round-trip verbatim (no camelCase conversion)", async () => {
-      // F-9: the templating doc promises JSON Logic keys round-trip verbatim.
+      // The templating doc promises JSON Logic keys round-trip verbatim.
       // A `preserve`-wrapped literal emitted by a transform must land in
       // state.nodes.<id>.result with its snake_case keys intact — the engine
       // must not camelCase `action_id` into `actionId`.
@@ -1565,9 +1565,7 @@ describe('Orchestrations', () => {
       expect(nodeB.output).toEqual({ result: 43 });
     });
 
-    // Regression: https://github.com/ttoss/soat/issues/378 — an agent node's
-    // generation call creates a real trace, but the run's own `trace_id`
-    // column was never populated from it.
+    // The run's own `trace_id` is captured from its agent node's generation.
     test('run with an agent node has a non-null trace_id captured from the generation', async () => {
       const aiProviderRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
@@ -2848,10 +2846,9 @@ describe('Orchestrations', () => {
     });
 
     test('a dotted state_mapping target round-trips through a nested var read', async () => {
-      // Regression: writing to `state.proposed.action_id` stored a single flat
-      // key "proposed.action_id", which `{ "var": "proposed.action_id" }` could
-      // not read back (var descends dot-paths). The write must build a nested
-      // object so a downstream node reads the value.
+      // `var` descends dot-paths, so writing to `state.proposed.action_id` must
+      // build a nested object, not a flat "proposed.action_id" key, for a
+      // downstream node to read the value.
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -3515,9 +3512,7 @@ describe('Orchestrations', () => {
       expect(response.body.status).toBe('awaiting_input');
       expect(response.body.required_action).toBeDefined();
       expect(response.body.required_action.node_id).toBe('approval');
-      // Regression: https://github.com/ttoss/soat/issues/376 — the docs
-      // document `required_action.type: "human_input"` as a discriminator,
-      // but the field was never part of the runtime type or construction site.
+      // The docs name `required_action.type: "human_input"` as a discriminator.
       expect(response.body.required_action.type).toBe('human_input');
     });
 
@@ -4139,10 +4134,8 @@ describe('Orchestrations', () => {
       });
     });
 
-    // Regression: https://github.com/ttoss/soat/issues/379 — a `loop` node
-    // anywhere in the graph blanket-exempted cycle detection, so a totally
-    // unrelated cycle between non-loop nodes (`a -> b -> a`) slipped through
-    // both create-time and runtime validation.
+    // A `loop` node exempts only its own cycle: an unrelated cycle between
+    // non-loop nodes (`a -> b -> a`) fails create-time and runtime validation.
     test('a loop node does not exempt an unrelated cycle among non-loop nodes', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')

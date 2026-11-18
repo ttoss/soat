@@ -68,7 +68,7 @@ Composing agents into workflows and reacting to events.
 
 How the system changes and what proves it improved; see [The Layers of an Agent System](../agent-system-layers.md#layer-4--the-ratchet).
 
-- [Evaluations](./evaluations.md) — datasets, scorers, and scored runs comparable against a baseline (coming soon)
+- [Evaluations](./evaluations.md) — datasets, scorers, and scored runs comparable against a baseline
 - [Agent versions](./agents.md#versioning-and-staged-rollout) — append-only config history with staged canary rollout
 - [Approvals recurrence view](./approvals.md#recurrence-view) — what human correction keeps coming back, and what to do with it
 

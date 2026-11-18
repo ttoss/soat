@@ -66,9 +66,8 @@ const backoffMs = (args: { attempts: number }) => {
 
 /**
  * A delivery is due when it is still queued, its backoff has elapsed, and no
- * live lease is held on it. `nextAttemptAt: null` counts as due so rows written
- * before the outbox existed — stranded `queued` rows from a pre-upgrade
- * restart — are picked up by the first sweep after the deploy.
+ * live lease is held on it. `nextAttemptAt: null` counts as due, so a stranded
+ * `queued` row with no due time is picked up by the next sweep.
  */
 const duePredicate = (args: { now: Date }) => {
   return {

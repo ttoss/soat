@@ -311,7 +311,7 @@ resources:
       expect(res.body.errors).toEqual([]);
     });
 
-    test('policy resource with an unknown action is rejected (F-11)', async () => {
+    test('policy resource with an unknown action is rejected', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')
         .send({
@@ -344,7 +344,7 @@ resources:
       ).toBe(true);
     });
 
-    test('policy resource with only real actions validates (F-11)', async () => {
+    test('policy resource with only real actions validates', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')
         .send({
@@ -878,7 +878,7 @@ resources:
       expect(res.body.metadata).toEqual({ env: 'test' });
     });
 
-    test('resolves `sub` in top-level template metadata and records deploy parameters (F-16)', async () => {
+    test('resolves `sub` in top-level template metadata and records deploy parameters', async () => {
       const template = {
         parameters: {
           my_version: { type: 'string', default: 'unpinned' },
@@ -927,7 +927,7 @@ resources:
       expect(res.body.resolved_parameters.db_password).toBe('***');
     });
 
-    test('rejects substitution expressions in the formation `metadata` field (F-16)', async () => {
+    test('rejects substitution expressions in the formation `metadata` field', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
@@ -1220,7 +1220,7 @@ resources:
       expect(res.body.metadata).toEqual({ env: 'updated' });
     });
 
-    test('rejects a substitution expression in metadata on update (F-16)', async () => {
+    test('rejects a substitution expression in metadata on update', async () => {
       const res = await authenticatedTestClient(userToken)
         .put(`/api/v1/formations/${metadataFormationId}`)
         .send({ metadata: { version: { param: 'my_version' } } });
@@ -2050,8 +2050,7 @@ resources:
       expect(res.status).toBe(200);
     });
 
-    // Regression coverage for an ai_provider-shaped template, matching the
-    // exact resource/parameter names reported as corrupted: `DefaultAiProvider`
+    // An ai_provider-shaped template's keys keep their case: `DefaultAiProvider`
     // must not become `_default_ai_provider`, and `aiProviderName` must not
     // become `ai_provider_name`.
     describe('ai_provider resource with camelCase/PascalCase keys', () => {

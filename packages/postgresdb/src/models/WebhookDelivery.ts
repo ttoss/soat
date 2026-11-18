@@ -106,7 +106,7 @@ export class WebhookDelivery extends Model {
    * failure, so a `queued` row always carries its own due time rather than
    * depending on a retry loop living in some process's memory.
    *
-   * Nullable only for rows written before the outbox existed; the sweep treats
+   * Nullable for rows with no due time; the sweep treats
    * `null` as "due now" so a deploy recovers deliveries a restart had stranded.
    */
   @Column({

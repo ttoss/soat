@@ -178,7 +178,7 @@ describe('Knowledge', () => {
     });
 
     test('matches when the prefix filter itself omits the leading slash', async () => {
-      // Regression (F-10): a prefix supplied without a leading slash
+      // A prefix supplied without a leading slash
       // (`docs/`) is normalized on the query side so it still matches the
       // leading-slash-normalized stored path `/docs/sample.txt`.
       const response = await authenticatedTestClient(userToken)
@@ -195,7 +195,7 @@ describe('Knowledge', () => {
     });
 
     test('matches a deeply nested path by an intermediate folder prefix', async () => {
-      // Regression (F-10): a 3-level path must be reachable both by a shallow
+      // A 3-level path must be reachable both by a shallow
       // folder prefix and by its exact full path.
       await authenticatedTestClient(userToken).post('/api/v1/documents').send({
         project_id: projectId,
@@ -229,7 +229,7 @@ describe('Knowledge', () => {
     });
 
     test('matches a path prefix when combined with a semantic query', async () => {
-      // Regression: `document_paths` must compose with `query`. The semantic
+      // `document_paths` must compose with `query`. The semantic
       // path (`findChunksWithSearch`) applies a `limit` + vector `order`, which
       // must not drop the path filter — a query + prefix combination has to
       // still return the path-matched document.

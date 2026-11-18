@@ -3144,8 +3144,8 @@ describe('MCP tools - happy path', () => {
         guardrail_id: guardrailId,
       });
       const document = parseResult(getRes).document;
-      // Echo the exact document back — with the bug this carried `defaultClass`
-      // and was rejected as an unknown field.
+      // Echo the exact document back: a read carrying `defaultClass` would be
+      // rejected as an unknown field.
       const updRes = await mcpCall('update-guardrail', {
         guardrail_id: guardrailId,
         document,
@@ -4383,11 +4383,11 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
 });
 
 /**
- * What the in-process dispatch must keep true now that the loopback is gone.
+ * What the in-process dispatch must keep true.
  *
  * Sharing a process with the API is not the same as being authorized by it, and
- * a rejected action is not a result. Both were properties of the network hop
- * that are now properties of `dispatchApiRequestOrThrow`, so both are pinned
+ * a rejected action is not a result. Both are properties of
+ * `dispatchApiRequestOrThrow`, so both are pinned
  * here — at the entry point, where a client actually observes them.
  */
 describe('MCP in-process dispatch', () => {

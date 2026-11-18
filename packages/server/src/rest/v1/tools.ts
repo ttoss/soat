@@ -396,8 +396,8 @@ toolsRouter.get('/tools/:tool_id/actions', async (ctx: Context) => {
  * `undefined` is serialized as `null` rather than passed through: a `undefined`
  * Koa body sets no status, so the response would keep the framework default of
  * `404` and report a call that *succeeded* as a missing resource. A tool whose
- * action legitimately returns nothing — a SOAT action answering `204`, now that
- * those resolve instead of failing to parse — reaches here.
+ * action legitimately returns nothing — a SOAT action answering `204` — reaches
+ * here.
  */
 const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
   if (result !== null && result !== undefined && typeof result === 'object') {

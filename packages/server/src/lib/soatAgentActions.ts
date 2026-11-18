@@ -28,8 +28,8 @@ export const isAgentExcludedAction = (action: string): boolean => {
 };
 
 /**
- * Drops the excluded actions from a stored binding, so a tool row written
- * before the exclusion existed loses them at resolution rather than handing an
+ * Drops the excluded actions from a stored binding, so a stored tool row that
+ * names one loses them at resolution rather than handing an
  * agent an action the write would now refuse. Logged: dropped silently, it
  * reads as "the agent ignored my tool".
  */

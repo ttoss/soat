@@ -1030,7 +1030,6 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
   });
 
   test('user can read a file in the project targeted by the policy SRN', async () => {
-    // Regression: was returning 403 before the resource SRN fix in auth.ts
     const response = await authenticatedTestClient(userToken).get(
       `/api/v1/files/${fileInProjectA}`
     );
@@ -1151,7 +1150,6 @@ describe('Group 11: API key — scoped key with project-resource SRN in key poli
   });
 
   test('API key can read a file when the key policy SRN matches the project', async () => {
-    // Regression: was returning 403 before the resource SRN fix in auth.ts
     const response = await testClient
       .get(`/api/v1/files/${fileInProjectA}`)
       .set('Authorization', `Bearer ${apiKey}`);

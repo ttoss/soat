@@ -931,7 +931,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
   });
 
   test('vertex still refuses to list when no project can be resolved at all', async () => {
-    // `project` no longer reaches the listing URL, so it cannot be read
+    // `project` does not reach the listing URL, so it cannot be read
     // back out of the request. Refusing the record without it is what proves the
     // field is resolved rather than ignored.
     await expect(

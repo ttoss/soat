@@ -705,7 +705,7 @@ describe('validateFormationTemplate', () => {
     expect(result.valid).toBe(true);
   });
 
-  // ── metadata (F-16) ──────────────────────────────────────────────────────
+  // ── metadata ──────────────────────────────────────────────────────
 
   test('returns invalid when top-level metadata references an unknown resource', () => {
     const result = validateFormationTemplate({
