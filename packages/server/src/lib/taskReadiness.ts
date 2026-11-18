@@ -93,6 +93,13 @@ export const blockedWhereSql = (blocked: boolean): string => {
      WHERE d.task_id = "Task"."id" AND b.status = 'open')`;
 };
 
+/** `readiness.unblocks` as SQL over the list's `Task` alias. */
+export const unblocksSql = (): string => {
+  return `(SELECT COUNT(*) FROM task_dependencies d
+      JOIN tasks t ON t.id = d.task_id
+     WHERE d.depends_on_task_id = "Task"."id" AND t.status = 'open')`;
+};
+
 /**
  * Of `candidateIds`, the open tasks left with no open dependency. Locks each
  * candidate first, in id order, so two writers freeing one task serialize and

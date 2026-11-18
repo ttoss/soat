@@ -321,6 +321,39 @@ export const paginatedList = async <M extends object, T>(args: {
 };
 
 /**
+ * A list read as its first page only, in an order a cursor cannot resume (a
+ * rank computed per read): `limit` applies, a `cursor` is `VALIDATION_FAILED`
+ * and the page names no next cursor.
+ */
+export const firstPageOnly = async <M, T>(args: {
+  limit?: number;
+  cursor?: string;
+  bounds?: PageBounds;
+  /** Why the list takes no cursor, for the refusal. */
+  reason: string;
+  query: (page: { limit: number }) => Promise<M[]>;
+  map: (row: M) => T | Promise<T>;
+}): Promise<Page<T>> => {
+  const limit = resolveLimit(args);
+  if (args.cursor !== undefined) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `\`cursor\` is not accepted: ${args.reason}.`,
+      { field: 'cursor' }
+    );
+  }
+  const rows = await args.query({ limit });
+  return {
+    data: await Promise.all(
+      rows.map((row) => {
+        return args.map(row);
+      })
+    ),
+    next_cursor: null,
+  };
+};
+
+/**
  * The page over a set that is not a keyset scan — held in memory, answered by
  * a vendor API, or ordered by a computed value. The cursor carries an offset.
  * `items` must arrive in a stable order, or two pages can overlap.

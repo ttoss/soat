@@ -128,6 +128,20 @@ paths:
             type: string
             enum: ['true', 'false']
         - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
+        - name: order
+          in: query
+          required: false
+          description: >-
+            Omitted, newest first. `next` lists in pull order: effective
+            priority (the highest `priority` of the task and of every open task
+            it blocks, transitively; `null` below `very_low`), then
+            `readiness.unblocks` descending, then `entered_state_at` oldest
+            first, then `id`. It composes with every filter and answers one
+            page: `limit` applies, a `cursor` is a `400`, and `next_cursor` is
+            `null`.
+          schema:
+            type: string
+            enum: [next]
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:

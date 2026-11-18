@@ -335,6 +335,69 @@ The pair of tasks is a dependency's identity; it has no id of its own. Edges cro
 - History records state moves only; the [audit log](./audit-log.md) records each add and remove.
 - Readiness gates nothing on its own. A guard reads it as `task.readiness`, so `{ "!": { "var": "task.readiness.blocked" } }` holds a transition until the task is free; [`GET /tasks?blocked=true`](/docs/api/tasks/list-tasks) (or `false`) filters a board by it.
 
+### Pulling the next task
+
+[`GET /tasks?order=next`](/docs/api/tasks/list-tasks) lists in the order work should be pulled:
+
+1. Effective priority: the highest `priority` of the task and of every open task it blocks, transitively, so a task holding a `high` one ranks `high`. `null` ranks below `very_low`. It orders the list and is not a field of the task.
+2. `readiness.unblocks`, most first.
+3. `entered_state_at`, oldest first.
+4. `id`.
+
+It composes with every list filter and answers one page: `limit` applies, a `cursor` is `400 VALIDATION_FAILED` and `next_cursor` is `null`. Another `order` value is `400 VALIDATION_FAILED`; omitted, the list is newest first. The page is ordered in a fixed number of queries, whatever its size.
+
+There is no claim or lease. A worker lists the state it works from with `blocked=false` and `order=next`, then fires the transition out of that state on the first task with an idempotency key ([Retrying a transition](#retrying-a-transition)). `TASK_TRANSITION_CONFLICT` (409) means another worker moved it first: take the next task on the page.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+NEXT_ID=$(soat list-tasks --workflow-id "$WORKFLOW_ID" --state todo --blocked false --order next --limit 1 | jq -r '.data[0].id')
+
+soat transition-task --task-id "$NEXT_ID" --transition start --idempotency-key "$RUN_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: page } = await soat.tasks.listTasks({
+  query: {
+    workflow_id: WORKFLOW_ID,
+    state: 'todo',
+    blocked: 'false',
+    order: 'next',
+    limit: 10,
+  },
+});
+
+for (const candidate of page?.data ?? []) {
+  const { error } = await soat.tasks.transitionTask({
+    path: { task_id: candidate.id },
+    body: { transition: 'start', idempotency_key: RUN_ID },
+  });
+  if (!error) break;
+  if (error.error.code !== 'TASK_TRANSITION_CONFLICT') {
+    throw new Error(JSON.stringify(error));
+  }
+}
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+NEXT_ID=$(curl -s "$SOAT_URL/api/v1/tasks?workflow_id=$WORKFLOW_ID&state=todo&blocked=false&order=next&limit=1" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.data[0].id')
+
+curl -s -X POST "$SOAT_URL/api/v1/tasks/$NEXT_ID/transitions" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"transition":"start","idempotency_key":"'"$RUN_ID"'"}'
+```
+
+</TabItem>
+</Tabs>
+
 ### Versioning
 
 The state machine is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout), [guardrail versions](./guardrails.md#versioning) and [orchestration versions](./orchestrations.md#versioning). Version 1 is written on create; every write that **changes** the definition increments `version` and archives a `WorkflowVersion`. Versioned surface: `states`, `transitions`, `payload_schema`.

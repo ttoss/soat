@@ -2,7 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { nullableInWhere } from './nullableFilter';
-import { paginatedList } from './pagination';
+import { firstPageOnly, paginatedList } from './pagination';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
   applyFilterWhere,
@@ -17,6 +17,7 @@ import {
 import { mapTask, taskIncludes, type TaskInstance } from './tasks';
 import { type TaskAutomationStatus } from './tasksAutomationStatus';
 import { type TaskPriority } from './tasksPriority';
+import { pullOrder, type TaskListOrder } from './tasksPullOrder';
 
 const log = createDebug('soat:tasks');
 
@@ -27,6 +28,7 @@ const log = createDebug('soat:tasks');
 const TASK_METADATA_COLUMN = '"Task"."metadata"';
 
 type ListTasksArgs = Parameters<typeof listTasks>[0];
+type TaskOrder = NonNullable<Parameters<typeof db.Task.findAll>[0]>['order'];
 
 const listWhere = (args: ListTasksArgs): Record<string, unknown> => {
   const where: Record<string, unknown> = projectScopeWhere({
@@ -60,6 +62,33 @@ const listWhere = (args: ListTasksArgs): Record<string, unknown> => {
   return where;
 };
 
+/** A page's rows and their readiness, in two queries rather than two per row. */
+const pageReader = () => {
+  let readiness = new Map<number, TaskReadiness>();
+  const query = async (page: {
+    where: Record<string, unknown> | undefined;
+    limit: number;
+    order: TaskOrder;
+  }) => {
+    const rows = (await db.Task.findAll({
+      where: page.where,
+      include: taskIncludes(),
+      order: page.order,
+      limit: page.limit,
+    })) as TaskInstance[];
+    readiness = await readinessOf({
+      taskIds: rows.map((row) => {
+        return row.id as number;
+      }),
+    });
+    return rows;
+  };
+  const map = (task: TaskInstance) => {
+    return mapTask({ task, readiness: readiness.get(task.id as number)! });
+  };
+  return { query, map };
+};
+
 export const listTasks = async (args: {
   projectIds: ProjectScope;
   workflowId?: string;
@@ -75,16 +104,19 @@ export const listTasks = async (args: {
   blocked?: boolean;
   /** Structured question about the bag; see {@link compileStructuredWhere}. */
   metadata?: StructuredFilter;
+  /** Absent: newest first, paged by cursor. `next`: pull order, one page. */
+  order?: TaskListOrder;
   limit?: number;
   cursor?: string;
 }) => {
   log(
-    'listTasks: projectIds=%o workflowId=%s state=%s statuses=%o metadata=%o',
+    'listTasks: projectIds=%o workflowId=%s state=%s statuses=%o metadata=%o order=%s',
     args.projectIds,
     args.workflowId,
     args.state,
     args.statuses,
-    args.metadata
+    args.metadata,
+    args.order
   );
   const where = listWhere(args);
 
@@ -96,7 +128,19 @@ export const listTasks = async (args: {
     where.workflowId = workflow ? (workflow.id as number) : -1;
   }
 
-  let readiness = new Map<number, TaskReadiness>();
+  const { query, map } = pageReader();
+  if (args.order === 'next') {
+    return firstPageOnly({
+      limit: args.limit,
+      cursor: args.cursor,
+      reason: '`order=next` is computed on every read and answers one page',
+      query: ({ limit }) => {
+        return query({ where, limit, order: pullOrder() });
+      },
+      map,
+    });
+  }
+
   return paginatedList({
     limit: args.limit,
     cursor: args.cursor,
@@ -113,23 +157,7 @@ export const listTasks = async (args: {
     },
     where,
     order: [['createdAt', 'DESC']],
-    // A page's readiness in two queries rather than two per row.
-    query: async ({ where: pageWhere, limit, order }) => {
-      const rows = (await db.Task.findAll({
-        where: pageWhere,
-        include: taskIncludes(),
-        order,
-        limit,
-      })) as TaskInstance[];
-      readiness = await readinessOf({
-        taskIds: rows.map((row) => {
-          return row.id as number;
-        }),
-      });
-      return rows;
-    },
-    map: (task) => {
-      return mapTask({ task, readiness: readiness.get(task.id as number)! });
-    },
+    query,
+    map,
   });
 };
