@@ -302,6 +302,8 @@ Rules:
 
 Refs are implicit dependencies; `depends_on` need not repeat them.
 
+A pipeline tool's step `tool_id` may be a ref; `validate-formation` checks that pipeline exactly as one with a literal id, including the warning for a declared `parameters` property no step `input` (nor `output`) reads.
+
 ### Sub Expressions
 
 `{ "sub": "..." }` interpolates values **inside** a string. A `${Name}` token resolves to:

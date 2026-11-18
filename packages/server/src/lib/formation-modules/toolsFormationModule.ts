@@ -43,7 +43,7 @@ const optional = <T>(value: T | null): T | undefined => {
 // legitimate reference. The ref's target is validated template-wide elsewhere.
 const REF_TOOL_ID_PLACEHOLDER = '__formation_ref__';
 
-const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
+const normalizePipelineRefs = (pipeline: unknown): unknown => {
   if (!isObjectRecord(pipeline) || !Array.isArray(pipeline.steps)) {
     return pipeline;
   }
@@ -58,6 +58,12 @@ const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
       return { ...rest, tool_id: REF_TOOL_ID_PLACEHOLDER };
     }),
   };
+};
+
+// Every check of a template pipeline parses through here, so a `{ ref }`
+// `tool_id` never makes one check see a pipeline another accepts.
+const validateTemplatePipeline = (pipeline: unknown) => {
+  return validatePipelineConfig(normalizePipelineRefs(pipeline));
 };
 
 /**
@@ -188,9 +194,7 @@ export const toolsFormationModule = defineFormationModule({
   extraChecks: ({ properties, basePath, errors }) => {
     if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
       try {
-        validatePipelineConfig(
-          normalizePipelineRefsForValidation(properties.pipeline)
-        );
+        validateTemplatePipeline(properties.pipeline);
       } catch (error) {
         const message =
           error instanceof DomainError ? error.message : String(error);
@@ -254,7 +258,7 @@ export const toolsFormationModule = defineFormationModule({
 
     let config;
     try {
-      config = validatePipelineConfig(properties.pipeline);
+      config = validateTemplatePipeline(properties.pipeline);
     } catch {
       // Already reported by the validation checks; nothing more to warn about.
       return [];
