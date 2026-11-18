@@ -1,7 +1,7 @@
 import { createCliTestClient } from '../testClient';
 
 // The generated CLI manifest must expose the usage surface too, so a
-// spec/manifest regression cannot silently drop the commands again.
+// spec/manifest regression cannot silently drop the commands.
 describe('usage commands', () => {
   const cli = createCliTestClient();
 
