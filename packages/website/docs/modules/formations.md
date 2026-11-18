@@ -551,6 +551,8 @@ The check runs over the whole template **before anything is applied**: no format
 }
 ```
 
+`denied_by` names the set that refused the first action, as on the [routes](./iam.md#what-a-denial-looks-like): an [IAM token](./iam.md#iam-tokens)'s bound is `iam_token`, not its key. The message lists the actions that set refused; `denied_actions` lists them all.
+
 [`POST /api/v1/formations/plan`](/docs/api/formations/plan-formation) changes nothing, so it **reports** the same list under `unauthorized_actions` instead of refusing; the field is absent when the caller may perform every action the plan implies.
 
 - A `policy` resource is a [project policy](./policies.md) of the formation's project, authorized as `policies:CreatePolicy` there; its `Allow` statements name that project's resources (`srn:<project_id>:<type>:<id>`), or omit `resource` for every resource of the project. Validation refuses an `Allow` on `*`, every project, a project glob or a non-SRN pattern; plan, create and update, which know the formation's project, also refuse one naming another project's id, with `400 VALIDATION_FAILED`.

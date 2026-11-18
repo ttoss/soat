@@ -1,7 +1,10 @@
 import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { callerPrincipal } from 'src/lib/authorizationDenial';
+import {
+  callerPrincipal,
+  refusingPrincipal,
+} from 'src/lib/authorizationDenial';
 import {
   createFormation,
   deleteFormation,
@@ -70,17 +73,18 @@ const formationAuthorizer = (args: {
   ctx: Context & { authUser: AuthUser };
   projectPublicId: string;
 }): FormationAuthorizer => {
+  const { authUser } = args.ctx;
   return {
-    principal: callerPrincipal(args.ctx.authUser),
     check: async (request) => {
       const resource = buildSrn({
         projectPublicId: args.projectPublicId,
         resourceType: request.srnResourceType,
         resourceId: request.resourceId,
       });
+      const unknownTag = await writesUnknownRequestTag({ ...args, request });
       const allowed =
-        !(await writesUnknownRequestTag({ ...args, request })) &&
-        (await args.ctx.authUser.isAllowed({
+        !unknownTag &&
+        (await authUser.isAllowed({
           projectPublicId: args.projectPublicId,
           action: request.action,
           resource,
@@ -92,7 +96,14 @@ const formationAuthorizer = (args: {
         allowed,
       });
 
-      return { allowed, resource };
+      if (allowed) return { allowed, resource };
+      return {
+        allowed,
+        resource,
+        deniedBy: unknownTag
+          ? callerPrincipal(authUser)
+          : refusingPrincipal({ authUser, action: request.action, resource }),
+      };
     },
   };
 };

@@ -111,25 +111,37 @@ export const callerPrincipal = (authUser: {
   return { type: principalType, id: principalId };
 };
 
+type RefusableAuthUser = {
+  terms: { principal: ActingPrincipal };
+  isAllowed?: { refusedBy?: RefusedBy };
+};
+
 /**
- * A refusal of the request's authority: the set its authorizer recorded as
- * refusing, else the credential.
+ * Whose set refused the request's check of `action` on `resource`: the one its
+ * authorizer recorded, else the credential.
  */
+export const refusingPrincipal = (args: {
+  authUser: RefusableAuthUser;
+  action: string;
+  resource: string | null;
+}): DeniedPrincipal => {
+  return (
+    args.authUser.isAllowed?.refusedBy?.({
+      action: args.action,
+      resource: args.resource,
+    }) ?? callerPrincipal(args.authUser)
+  );
+};
+
+/** A refusal of the request's authority, naming the set that refused. */
 export const callerDenied = (args: {
-  authUser: {
-    terms: { principal: ActingPrincipal };
-    isAllowed?: { refusedBy?: RefusedBy };
-  };
+  authUser: RefusableAuthUser;
   action: string;
   resource: string | null;
   extra?: Record<string, unknown>;
 }): DomainError => {
-  const refusing = args.authUser.isAllowed?.refusedBy?.({
-    action: args.action,
-    resource: args.resource,
-  });
   return authorizationDenied({
-    principal: refusing ?? callerPrincipal(args.authUser),
+    principal: refusingPrincipal(args),
     denied: [{ action: args.action, resource: args.resource }],
     extra: args.extra,
   });
