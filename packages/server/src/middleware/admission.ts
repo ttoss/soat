@@ -31,9 +31,15 @@ const buildGate = (args: {
   return async (allowed) => {
     if (asked || allowed.action !== args.action) return;
     asked = true;
+    // A create whose check names no project lands in the credential's own.
+    const projectPublicId =
+      allowed.projectPublicId ??
+      args.authUser.apiKeyProjectPublicId ??
+      args.authUser.oauthProjectPublicId ??
+      null;
     await assertAdmitted({
       action: args.action,
-      projectPublicId: allowed.projectPublicId ?? null,
+      projectPublicId,
       resourceType: args.resourceType,
       targetId: resourceIdOf(allowed.resource),
       body: args.ctx.request.body ?? null,

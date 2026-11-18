@@ -11,7 +11,7 @@ import {
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { proposeCalls } from '../../fixtures/scriptedModel';
-import { testClient } from '../../testClient';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 let service: AdmissionService;
 let turn: AgentToolTurn;
@@ -352,6 +352,64 @@ describe('admission — a declared write is asked about before it executes', () 
       expect(res.body.status).toBe('failed');
       expect(res.body.error.code).toBe('ADMISSION_UNAVAILABLE');
     });
+  });
+
+  describe('a project-scoped key on a create whose check names no project', () => {
+    let scopedKey: string;
+
+    beforeAll(async () => {
+      const res = await turn
+        .api()
+        .post('/api/v1/api-keys')
+        .send({ name: 'admission-scoped', project_id: turn.projectId });
+      expect(res.status).toBe(201);
+      scopedKey = res.body.key;
+    });
+
+    test.each([
+      {
+        action: 'agents:CreateAgent',
+        path: '/api/v1/agents',
+        body: () => {
+          return { name: turn.unique('scoped-agent') };
+        },
+      },
+      {
+        action: 'tools:CreateTool',
+        path: '/api/v1/tools',
+        body: () => {
+          return {
+            name: turn.unique('scoped-tool'),
+            type: 'http',
+            execute: { url: 'http://127.0.0.1:9/none', method: 'POST' },
+          };
+        },
+      },
+      {
+        action: 'orchestrations:StartRun',
+        path: '/api/v1/orchestration-runs',
+        body: () => {
+          return { orchestration_id: 'orc_unknown' };
+        },
+      },
+    ])(
+      "$action asks with the key's project",
+      async ({ action, path, body }) => {
+        service.declare({ actions: [action] });
+        service.reply = REFUSAL;
+
+        const res = await authenticatedTestClient(scopedKey)
+          .post(path)
+          .send(body());
+
+        expect(res.body.error?.code).toBe('PLAN_LIMIT_REACHED');
+        expect(service.asked).toHaveLength(1);
+        expect(service.asked[0].body).toMatchObject({
+          action,
+          project_id: turn.projectId,
+        });
+      }
+    );
   });
 
   describe('a start: POST /api/v1/agents/{agent_id}/generate', () => {
