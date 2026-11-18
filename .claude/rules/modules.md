@@ -49,7 +49,7 @@ Never add per-module MCP files; tools derive from the specs
 | Key | Content |
 |---|---|
 | `resourceType` | the template type (`model_route`); schema name derives from it (`ModelRouteResourceProperties`, pinned by `formationsResourceTypeContract.test.ts`) |
-| `extraChecks` / `warnChecks` | resource-specific validation |
+| `extraChecks` / `templateChecks` / `warnChecks` | resource-specific validation: `extraChecks` of resolved values (an error on a field holding `ref`/`param`/`sub` waits for the apply), `templateChecks` of an expression itself |
 | `create` / `update` / `remove` | property → lib-arg mapping |
 | `fetch` + optional `read` | load the live resource; declare `read` only when a field is transformed, else `pickSpecFields` selects the schema's keys verbatim |
 

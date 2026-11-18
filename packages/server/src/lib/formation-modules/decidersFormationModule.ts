@@ -13,7 +13,6 @@ import {
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
-import { isFormationExpression } from './formationSpecLoader';
 
 export const decidersFormationModule = defineFormationModule({
   resourceType: 'decider',
@@ -24,8 +23,7 @@ export const decidersFormationModule = defineFormationModule({
     delete: 'deciders:DeleteDecider',
   },
 
-  // The questions are checked by the validator the route uses; one still an
-  // unresolved expression is checked by the lib once it resolves.
+  // The questions are checked by the validator the route uses.
   extraChecks: ({ properties, basePath, forUpdate, errors }) => {
     const namingError = deciderBackendNamingError({
       namesAgent: properties.agent_id != null,
@@ -34,12 +32,7 @@ export const decidersFormationModule = defineFormationModule({
     });
     if (namingError) errors.push({ path: basePath, message: namingError });
 
-    if (
-      properties.questions === undefined ||
-      isFormationExpression(properties.questions)
-    ) {
-      return;
-    }
+    if (properties.questions === undefined) return;
     try {
       parseDeciderQuestions(properties.questions);
     } catch (error) {
