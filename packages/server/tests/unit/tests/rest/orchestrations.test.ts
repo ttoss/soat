@@ -5666,4 +5666,73 @@ describe('Orchestrations', () => {
       expect(fetched.body.nodes[1].arguments).toEqual(authored);
     });
   });
+
+  describe('a nested start is checked under the run authority', () => {
+    test('a sub_orchestration child the run may not start fails its node FORBIDDEN', async () => {
+      const child = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...simpleOrchestration,
+          name: 'Nested Start Child',
+          project_id: projectId,
+        });
+      expect(child.status).toBe(201);
+      const parent = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Nested Start Parent',
+          nodes: [
+            {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: child.body.id,
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(parent.status).toBe(201);
+      const policy = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['orchestrations:StartRun', 'orchestrations:GetRun'],
+              },
+              {
+                effect: 'Deny',
+                action: ['orchestrations:StartRun'],
+                resource: [`srn:${projectId}:orchestration:${child.body.id}`],
+              },
+            ],
+          },
+        });
+      const key = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'Nested Start Key',
+          project_id: projectId,
+          policy_ids: [policy.body.id],
+        });
+      expect(key.status).toBe(201);
+
+      const run = await authenticatedTestClient(key.body.key)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: parent.body.id, input: {} });
+
+      expect(run.status).toBe(201);
+      expect(run.body.status).toBe('failed');
+      const execs = await nodeExecutionsOf({
+        token: userToken,
+        runId: run.body.id,
+      });
+      expect(execs[0]).toMatchObject({
+        node_id: 'child',
+        status: 'failed',
+        error: { code: 'FORBIDDEN' },
+      });
+    });
+  });
 });

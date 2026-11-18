@@ -6,6 +6,7 @@ import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
 import type { ActingPrincipalType } from './principals';
+import { gateStart } from './startGate';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
 import { readinessOfTask, type TaskReadiness } from './taskReadiness';
@@ -321,15 +322,8 @@ export type CreateTaskArgs = {
   authority: WorkAuthority | null;
 };
 
-const insertTask = async (args: CreateTaskArgs) => {
-  log(
-    'createTask: projectId=%d workflowId=%s title=%s state=%s',
-    args.projectId,
-    args.workflowId,
-    args.title,
-    args.state
-  );
-
+/** The workflow a task starts on, once its authority may start it. */
+const startableWorkflow = async (args: CreateTaskArgs) => {
   const workflow = await db.Workflow.findOne({
     where: { publicId: args.workflowId, projectId: args.projectId },
   });
@@ -339,6 +333,25 @@ const insertTask = async (args: CreateTaskArgs) => {
       `Workflow '${args.workflowId}' not found.`
     );
   }
+  await gateStart({
+    type: 'workflow',
+    id: args.workflowId,
+    projectId: args.projectId,
+    authority: args.authority,
+  });
+  return workflow;
+};
+
+const insertTask = async (args: CreateTaskArgs) => {
+  log(
+    'createTask: projectId=%d workflowId=%s title=%s state=%s',
+    args.projectId,
+    args.workflowId,
+    args.title,
+    args.state
+  );
+
+  const workflow = await startableWorkflow(args);
 
   const entryState = resolveEntryState({
     states: workflow.states as WorkflowState[],

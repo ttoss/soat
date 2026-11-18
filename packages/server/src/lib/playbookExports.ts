@@ -276,13 +276,7 @@ export const exportPlaybookCaseNode = async (args: {
     names: args.transformations,
   });
   await assertProjectAcceptsWork({ projectId: row.projectId });
-  const runAs = await resolveRunAs({
-    row,
-    node: node.id,
-    executors: transformations.map((transformation) => {
-      return { type: 'tool', id: transformation.tool };
-    }),
-  });
+  const runAs = await resolveRunAs({ row });
 
   const created = await recordExports({
     row,

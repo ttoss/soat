@@ -43,6 +43,7 @@ import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
 import { parseActiveRelease } from './releaseAssignment';
 import { resourceWorkAuthority } from './resourceWork';
+import { gateStart } from './startGate';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import { storedAuthority, type WorkAuthority } from './workAuthority';
 
@@ -212,10 +213,17 @@ const planRun = async (args: {
   wait: boolean;
   agentVersion?: unknown;
   baselineRunId?: unknown;
+  authority: WorkAuthority | null;
 }): Promise<RunPlan> => {
   const evaluation = await getEvalRow({
     projectIds: args.projectIds,
     id: args.evalId,
+  });
+  await gateStart({
+    type: 'eval',
+    id: evaluation.publicId as string,
+    projectId: evaluation.projectId as number,
+    authority: args.authority,
   });
   const { agent, dataset } = evaluation;
 

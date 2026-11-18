@@ -385,7 +385,9 @@ paths:
       description: >-
         Fires a trigger synchronously and returns the terminal firing record.
         The firing acts as the caller ∩ the trigger's `policy_ids`, which must
-        allow starting the target, else `403`. The firing itself always settles
+        allow starting the target, else the firing fails `FORBIDDEN`. A body
+        carrying `input` or `tool_context` also needs the caller to start the
+        target, else `403`. The firing itself always settles
         here; an `eval` target's run is queued rather than executed inline, so
         the record names a `queued` run to poll.
       tags:

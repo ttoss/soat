@@ -198,7 +198,7 @@ A state, a transition and everything under `on_enter` take the fields named here
 
 Entering a state cancels any dispatch still running from the state left, an in-flight orchestration run included: task state is the source of truth.
 
-A task stores the authority its dispatches run under: the one of the user, API key, OAuth token or firing that last moved it (an OAuth token's consent and a trigger's `policy_ids` included); an `automation` hop carries on the authority of the run that routed it; an approval resolution keeps the stored one. A task holding none runs no tool (`409 WORK_AUTHORITY_MISSING`), as for [an orchestration run](./orchestrations.md#durable-background-execution).
+A task stores the authority its dispatches run under: the one of the user, API key, OAuth token or firing that last moved it (an OAuth token's consent and a trigger's `policy_ids` included); an `automation` hop carries on the authority of the run that routed it; an approval resolution keeps the stored one. A task holding none runs no tool (`409 WORK_AUTHORITY_MISSING`), as for [an orchestration run](./orchestrations.md#durable-background-execution). Each dispatch's start action (`agents:CreateAgentGeneration`, `orchestrations:StartRun` or `tools:CallTool`) is checked under that authority where it starts, else the dispatch fails `FORBIDDEN`.
 
 #### Tool dispatch
 

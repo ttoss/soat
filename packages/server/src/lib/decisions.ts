@@ -20,6 +20,7 @@ import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { resourceWorkAuthority } from './resourceWork';
+import { gateStart } from './startGate';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:decisions');
@@ -257,6 +258,12 @@ export const createDecision = async (args: {
   const decider = await deciders.getByPublicId({
     projectIds: args.projectIds,
     id: args.deciderId,
+  });
+  await gateStart({
+    type: 'decider',
+    id: decider.publicId as string,
+    projectId: decider.projectId,
+    authority: args.authority,
   });
   const questionSet = await deciderQuestionSetAt({
     decider,

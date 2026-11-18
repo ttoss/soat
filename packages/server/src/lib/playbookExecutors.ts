@@ -2,7 +2,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { createDecision } from './decisions';
 import { applyInputMapping } from './jsonLogicMapping';
 import { startOrchestrationRun } from './orchestrationEngine';
@@ -23,10 +22,9 @@ export type ExecutorOutcome =
   | { kind: 'settled'; output: JsonValue; runId: string | null }
   | { kind: 'pending'; runId: string };
 
-/** The authority a case's executors run under, and its checks. */
+/** The authority a case's executors run under. */
 export type ExecutorRunAs = {
   authority: WorkAuthority;
-  isAllowed: IsAllowedFn;
 };
 
 type StartArgs = {

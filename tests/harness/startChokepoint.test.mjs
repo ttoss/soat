@@ -47,8 +47,45 @@ const bodyOf = (file, name) => {
   return source.slice(start, ends.length ? Math.min(...ends) : undefined);
 };
 
+/** Where each start type is checked, under the authority the work runs under. */
+const ENTRY_GATES = {
+  agent: {
+    file: 'lib/agentGeneration.ts',
+    entry: 'prepareGeneration',
+    gate: 'gateGenerationStart',
+  },
+  tool: {
+    file: 'lib/toolsCall.ts',
+    entry: 'runResolvedTool',
+    gate: 'gateResolvedCall',
+  },
+  decider: {
+    file: 'lib/decisions.ts',
+    entry: 'createDecision',
+    gate: 'gateStart',
+  },
+  workflow: {
+    file: 'lib/tasks.ts',
+    entry: 'startableWorkflow',
+    gate: 'gateStart',
+    calledFrom: ['lib/tasks.ts'],
+  },
+  orchestration: {
+    file: 'lib/orchestrationStartRun.ts',
+    entry: 'findOrchestrationForStartRun',
+    gate: 'gateStart',
+    calledFrom: ['lib/orchestrationEngine.ts'],
+  },
+  eval: {
+    file: 'lib/evaluationRuns.ts',
+    entry: 'planRun',
+    gate: 'gateStart',
+    calledFrom: ['lib/evaluationRuns.ts'],
+  },
+};
+
 /**
- * A tool or generation start is checked at its entry point, under the
+ * A start is checked at its entry point, under the
  * authority the work runs under, so no caller can start one around the check.
  */
 describe('start chokepoint', () => {
@@ -95,26 +132,61 @@ describe('start chokepoint', () => {
       'gateToolCall exempts no tool type'
     );
   });
+});
 
-  test('agent and tool starts are checked at their entry point', () => {
-    const actions = code('lib/startActions.ts');
-    for (const type of ['agent', 'tool']) {
+describe('every start type', () => {
+  test('every start type is checked by the gate at its entry point', () => {
+    const block = code('lib/startActions.ts').match(
+      /START_ACTIONS = \{([\s\S]*?)\n\} as const/
+    );
+    assert.ok(block, 'startActions.ts declares START_ACTIONS');
+    const types = [...block[1].matchAll(/^ {2}(\w+): \{/gm)].map((match) => {
+      return match[1];
+    });
+    assert.deepEqual(types.sort(), Object.keys(ENTRY_GATES).sort());
+    for (const [type, { file, entry, gate }] of Object.entries(ENTRY_GATES)) {
       assert.match(
-        actions,
-        new RegExp(`\\b${type}: \\{[^}]*entryChecked: true`),
-        `${type} is entryChecked`
+        bodyOf(file, entry),
+        new RegExp(`\\b${gate}\\(`),
+        `${type}: ${entry} crosses ${gate}`
       );
     }
   });
 
-  test('a run-time caller checks only the starts no entry point checks', () => {
-    for (const file of filesCalling('mayStart').filter((entry) => {
-      return !entry.startsWith('rest/') && entry !== 'lib/playbookStarts.ts';
-    })) {
-      assert.match(code(file), /\bcallerChecksStart\(/, file);
+  test('a gated lookup serves only the start it gates', () => {
+    for (const { entry, calledFrom } of Object.values(ENTRY_GATES)) {
+      if (calledFrom) assert.deepEqual(filesCalling(entry), calledFrom, entry);
     }
-    for (const file of filesCalling('assertExecutorStartable')) {
-      assert.match(code(file), /\bcallerChecksStart\(/, file);
+  });
+
+  test('gateStart is called only by the entry points it guards', () => {
+    assert.deepEqual(
+      filesCalling('gateStart'),
+      [
+        ...new Set(
+          Object.values(ENTRY_GATES)
+            .filter(({ gate }) => {
+              return gate === 'gateStart';
+            })
+            .map(({ file }) => {
+              return file;
+            })
+        ),
+      ].sort()
+    );
+  });
+
+  test('no caller re-checks a start at run time', () => {
+    assert.deepEqual(filesCalling('mayStart'), [
+      'lib/playbookStarts.ts',
+      'rest/v1/triggers.ts',
+    ]);
+    for (const file of sourceFiles) {
+      assert.doesNotMatch(
+        code(file),
+        /\b(callerChecksStart|entryChecked|assertExecutorStartable)\b/,
+        file
+      );
     }
   });
 });

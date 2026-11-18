@@ -1,4 +1,3 @@
-import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type {
   PlaybookDefinition,
@@ -11,30 +10,9 @@ import {
   type ToolStart,
 } from './playbookExecutorReferences';
 import { throwPlaybookDefinitionProblems } from './playbookWire';
-import { mayStart, START_ACTIONS } from './startActions';
+import { mayStart } from './startActions';
 import type { ValidationProblem } from './validationProblems';
 import { assertWriterHolds, startOf, type Writer } from './writerRule';
-
-export const assertExecutorStartable = async (args: {
-  node: string;
-  executor: PlaybookExecutor;
-  projectPublicId: string;
-  isAllowed: IsAllowedFn;
-}): Promise<void> => {
-  const allowed = await mayStart({
-    isAllowed: args.isAllowed,
-    projectPublicId: args.projectPublicId,
-    type: args.executor.type,
-    id: args.executor.id,
-  });
-  if (!allowed) {
-    throw new DomainError(
-      'PLAYBOOK_EXECUTOR_FORBIDDEN',
-      `The version's policy_ids do not allow starting the ${args.executor.type} on node '${args.node}'.`,
-      { node_id: args.node, action: START_ACTIONS[args.executor.type].action }
-    );
-  }
-};
 
 /**
  * What a node starts: its executor and each export's tool, with
