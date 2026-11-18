@@ -981,6 +981,8 @@ components:
             the fire-time input. For an `event` firing the fire-time input is
             the event envelope a webhook delivery carries (`id`, `event`,
             `project_id`, `resource_type`, `resource_id`, `data`, `timestamp`).
+            For every target but a tool, `fired_at` is the firing's own time
+            (ISO 8601 UTC), overriding a supplied `fired_at`.
         result:
           type: object
           nullable: true

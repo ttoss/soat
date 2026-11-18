@@ -19,6 +19,8 @@ import {
   workRequest,
 } from '../../testClient';
 
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 describe('Triggers', () => {
   let adminToken: string;
   let userToken: string;
@@ -1945,9 +1947,10 @@ describe('Triggers', () => {
     });
 
     test('fires an orchestration trigger synchronously and records a firing', async () => {
+      const before = new Date().toISOString();
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/triggers/${orchTriggerId}/fire`)
-        .send({ input: { extra: 2 } });
+        .send({ input: { extra: 2, fired_at: 'caller-supplied' } });
 
       expect(res.status).toBe(200);
       expect(res.body.id).toMatch(/^trg_fire_/);
@@ -1955,8 +1958,15 @@ describe('Triggers', () => {
       expect(res.body.status).toBe('completed');
       expect(res.body.result.target_type).toBe('orchestration');
       expect(res.body.result.result_id).toMatch(/^orch_run_/);
-      // effective input is the shallow merge of static + fire-time input
-      expect(res.body.input).toEqual({ seed: 1, extra: 2 });
+      // effective input is the shallow merge of static + fire-time input, and
+      // the firing's own time overrides a supplied `fired_at`
+      expect(res.body.input).toEqual({
+        seed: 1,
+        extra: 2,
+        fired_at: expect.stringMatching(ISO_INSTANT),
+      });
+      expect(res.body.input.fired_at >= before).toBe(true);
+      expect(res.body.input.fired_at <= new Date().toISOString()).toBe(true);
       expect(res.body.completed_at).toBeTruthy();
     });
 
@@ -1979,6 +1989,9 @@ describe('Triggers', () => {
         .post(`/api/v1/triggers/${toolTriggerId}/fire`)
         .send({});
 
+      // A tool's input is its call's arguments, checked against its own
+      // schema, so no `fired_at` is added.
+      expect(res.body.input).toEqual({ url: 'https://example.invalid' });
       // The firing always yields an auditable record; a bare http tool with no
       // reachable endpoint records a `failed` outcome rather than throwing.
       expect(res.status).toBe(200);
@@ -2586,7 +2599,11 @@ describe('Triggers', () => {
       const firing = await pollFiring(res.body.firing_id);
       expect(firing.source).toBe('webhook');
       expect(firing.status).toBe('completed');
-      expect(firing.input).toEqual({ event: 'push', ref: 'main' });
+      expect(firing.input).toEqual({
+        event: 'push',
+        ref: 'main',
+        fired_at: expect.stringMatching(ISO_INSTANT),
+      });
     });
 
     // A firing nobody called runs under the trigger's own grant: the user who
@@ -2761,11 +2778,8 @@ describe('Triggers', () => {
           `/api/v1/trigger-firings?trigger_id=${hookTriggerId}&limit=100`
         );
         const replayed = firings.body.data.filter(
-          (firing: { input: unknown }) => {
-            return (
-              JSON.stringify(firing.input) ===
-              JSON.stringify({ event: 'replayed' })
-            );
+          (firing: { input: { event?: unknown } | null }) => {
+            return firing.input?.event === 'replayed';
           }
         );
         expect(replayed).toHaveLength(1);
@@ -2813,7 +2827,10 @@ describe('Triggers', () => {
 
       expect(res.status).toBe(202);
       const firing = await pollFiring(res.body.firing_id);
-      expect(firing.input).toEqual({ payload: 42 });
+      expect(firing.input).toEqual({
+        payload: 42,
+        fired_at: expect.stringMatching(ISO_INSTANT),
+      });
     });
 
     test('SOAT_HEADER_PREFIX names the signature header the hook reads', async () => {
