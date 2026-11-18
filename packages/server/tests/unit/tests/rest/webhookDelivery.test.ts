@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { db } from 'src/db';
+import { EVENT_READ_ACTIONS } from 'src/lib/eventReadActions';
 import { sweepDueWebhookDeliveries } from 'src/lib/webhookDispatcher';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -34,7 +35,7 @@ describe('Webhook delivery', () => {
   let adminToken: string;
   let userToken: string;
   let projectId: string;
-  /** The user's own policy, which reads files: what a webhook may receive. */
+  /** The user's own policy, which reads every event's resource. */
   let userPolicyId: string;
   let fetchMock: jest.SpyInstance;
   let seq = 0;
@@ -138,8 +139,8 @@ describe('Webhook delivery', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'whdelivery',
       policyActions: [
+        ...new Set(Object.values(EVENT_READ_ACTIONS)),
         'files:CreateFile',
-        'files:GetFile',
         'webhooks:CreateWebhook',
         'webhooks:ListWebhookDeliveries',
         'webhooks:GetWebhookDelivery',
@@ -287,14 +288,12 @@ describe('Webhook delivery', () => {
       ).toBeUndefined();
     });
 
-    test('a webhook whose policy_ids cannot read the resource receives nothing', async () => {
+    test('a webhook whose policy stops reading the resource receives nothing', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
           document: {
-            statement: [
-              { effect: 'Allow', action: ['webhooks:GetWebhookDelivery'] },
-            ],
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
           },
         });
       expect(res.status).toBe(201);
@@ -303,6 +302,16 @@ describe('Webhook delivery', () => {
         events: ['files.created'],
         policyId: res.body.id,
       });
+      const narrowed = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/policies/${res.body.id}`)
+        .send({
+          document: {
+            statement: [
+              { effect: 'Allow', action: ['webhooks:GetWebhookDelivery'] },
+            ],
+          },
+        });
+      expect(narrowed.status).toBe(200);
       const witness = await createWebhook({
         url: 'https://example.com/delivery-witness',
         events: ['files.created'],

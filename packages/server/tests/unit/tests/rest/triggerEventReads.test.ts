@@ -109,7 +109,7 @@ describe('Event trigger reads its events', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('TRIGGER_EVENTS_UNREADABLE');
+      expect(res.body.error.code).toBe('EVENTS_UNREADABLE');
       expect(res.body.error.meta.unread).toEqual([
         {
           namespace: 'memories',
@@ -157,7 +157,7 @@ describe('Event trigger reads its events', () => {
         fields: { events: ['memories.*'] },
       });
       expect(wide.status).toBe(400);
-      expect(wide.body.error.code).toBe('TRIGGER_EVENTS_UNREADABLE');
+      expect(wide.body.error.code).toBe('EVENTS_UNREADABLE');
 
       const narrowed = await createEventTrigger({
         policyId: readsOneMemoryId,
@@ -203,7 +203,7 @@ describe('Event trigger reads its events', () => {
         .patch(`/api/v1/triggers/${created.body.id}`)
         .send({ policy_ids: [startOnlyId] });
       expect(narrowed.status).toBe(400);
-      expect(narrowed.body.error.code).toBe('TRIGGER_EVENTS_UNREADABLE');
+      expect(narrowed.body.error.code).toBe('EVENTS_UNREADABLE');
       expect(unreadOf(narrowed.body)).toEqual(['memories']);
 
       const widened = await authenticatedTestClient(userToken)

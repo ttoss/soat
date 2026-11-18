@@ -421,7 +421,7 @@ describe('Project policies', () => {
           project_id: args.project,
           name: 'projpol hook',
           url: 'https://example.com/hook',
-          events: ['*'],
+          events: ['orders.shipped'],
           policy_ids: args.policyIds,
         });
     };

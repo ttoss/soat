@@ -2,14 +2,15 @@ import { Cron } from 'croner';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import {
+  assertSubscriberReadsEvents,
+  isEventPatternList,
+} from './eventMatching';
 import { agentReferences, toolReferences } from './resourceReferences';
 import { secretRefIds } from './secretUse';
 import type { StartableType } from './startActions';
 import { serverSideToolProblem } from './toolsCallDispatch';
-import {
-  assertTriggerReadsEvents,
-  validateTriggerEventFilter,
-} from './triggerEventFilter';
+import { validateTriggerEventFilter } from './triggerEventFilter';
 import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 export const TRIGGER_TYPES = [
@@ -316,11 +317,14 @@ export const assertTriggerConfigValid = async (args: {
       action: args.action,
     });
   }
-  await assertTriggerReadsEvents({
-    type: args.type,
-    projectId: args.projectId,
-    policyIds: args.policyIds,
-    events: args.events,
-    eventResources: args.eventResources,
-  });
+  if (args.type === 'event' && isEventPatternList(args.events)) {
+    await assertSubscriberReadsEvents({
+      projectId: args.projectId,
+      policyIds: args.policyIds,
+      events: args.events,
+      eventResources: isEventPatternList(args.eventResources)
+        ? args.eventResources
+        : null,
+    });
+  }
 };

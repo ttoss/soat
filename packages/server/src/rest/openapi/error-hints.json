@@ -205,6 +205,11 @@
       "hint": "Read the message for the scorer's failure, fix the scorer's configuration, and run the eval again.",
       "routes": []
     },
+    "EVENTS_UNREADABLE": {
+      "http_status": 400,
+      "hint": "Add each `meta.unread` action to a policy in `policy_ids`, or narrow `events` or `event_resources` to what the policies read.",
+      "routes": []
+    },
     "EXCEPTION_ALREADY_RESOLVED": {
       "http_status": 409,
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
@@ -1160,11 +1165,6 @@
     "TRIGGER_CAUSATION_LIMIT": {
       "http_status": 409,
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
-      "routes": []
-    },
-    "TRIGGER_EVENTS_UNREADABLE": {
-      "http_status": 400,
-      "hint": "Add each `meta.unread` action to a policy in `policy_ids`, or narrow `events` or `event_resources` to what the policies read.",
       "routes": []
     },
     "TRIGGER_FIRING_ABANDONED": {
