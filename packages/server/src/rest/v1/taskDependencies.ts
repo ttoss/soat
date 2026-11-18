@@ -51,13 +51,14 @@ taskDependenciesRouter.post(
       depends_on_task_id: string;
       note?: string | null;
     };
-    ctx.status = 201;
-    ctx.body = await addTaskDependency({
+    const { dependency, created } = await addTaskDependency({
       taskId: ctx.params.task_id,
       dependsOnTaskId: body.depends_on_task_id,
       note: body.note ?? null,
       principal: principalFromCtx(ctx),
     });
+    ctx.status = created ? 201 : 200;
+    ctx.body = dependency;
   }
 );
 
@@ -86,13 +87,12 @@ taskDependenciesRouter.get(
 );
 
 taskDependenciesRouter.delete(
-  '/tasks/:task_id/dependencies/:dependency_id',
+  '/tasks/:task_id/dependencies/:depends_on_task_id',
   async (ctx: Context) => {
     await authorizeTask({ ctx, action: 'tasks:UpdateTaskDependencies' });
     await removeTaskDependency({
       taskId: ctx.params.task_id,
-      dependencyId: ctx.params.dependency_id,
-      principal: principalFromCtx(ctx),
+      dependsOnTaskId: ctx.params.depends_on_task_id,
     });
     ctx.status = 204;
   }

@@ -241,7 +241,6 @@ const recordMove = async (args: {
   });
   await appendTaskHistory({
     row: {
-      kind: 'transition',
       taskId: args.taskId,
       fromState: args.fromState,
       toState: args.transition.to,
@@ -442,7 +441,11 @@ const applyTransition = async (input: {
   });
   if (result.closed) {
     await emitTaskEvent({ type: 'tasks.closed', projectId, task: mapped });
-    await emitUnblocked({ taskIds: result.freed, projectId });
+    await emitUnblocked({
+      taskIds: result.freed,
+      projectId,
+      unblockedBy: { task_id: args.id, state: result.toState },
+    });
   }
 
   const toStateDef = stateByName({ states, name: result.toState });

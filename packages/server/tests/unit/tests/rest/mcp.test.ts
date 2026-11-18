@@ -620,7 +620,7 @@ describe('MCP tools - happy path', () => {
 
     await mcpCall('remove-task-dependency', {
       task_id: task.id,
-      dependency_id: dependency.id,
+      depends_on_task_id: blocker.id,
     });
     const listed = parseResult(
       await mcpCall('list-task-dependencies', { task_id: task.id })

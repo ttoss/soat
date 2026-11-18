@@ -7,22 +7,17 @@ import {
   Table,
 } from '@ttoss/postgresdb';
 
-import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Task } from './Task';
 
 /**
- * `dependsOnTask` blocks `task` until it closes. Both ends cascade: deleting
- * either task removes the edge, which frees the dependent.
+ * `dependsOnTask` blocks `task` until it closes. The pair is the edge's
+ * identity; `id` never leaves the server. Both ends cascade: deleting either
+ * task removes the edge, which frees the dependent.
  */
 @Table({
   tableName: 'task_dependencies',
   updatedAt: false,
   indexes: [
-    {
-      name: 'task_dependencies_public_id_unique',
-      unique: true,
-      fields: ['public_id'],
-    },
     {
       name: 'task_dependencies_edge_unique',
       unique: true,
@@ -34,18 +29,8 @@ import { Task } from './Task';
       fields: ['depends_on_task_id'],
     },
   ],
-  hooks: {
-    beforeValidate: (instance: TaskDependency) => {
-      if (!instance.publicId) {
-        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.taskDependency);
-      }
-    },
-  },
 })
 export class TaskDependency extends Model {
-  @Column({ type: DataType.STRING(32), allowNull: false })
-  declare publicId: string;
-
   @ForeignKey(() => {
     return Task;
   })

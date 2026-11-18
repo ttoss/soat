@@ -236,7 +236,6 @@ const performMigrationTxn = async (args: {
         generationId: null,
         orchestrationRunId: null,
         note: null,
-        kind: 'migration',
         fromWorkflowVersion: fromVersion,
         toWorkflowVersion: a.toVersion,
       },

@@ -1,4 +1,3 @@
-import type { TaskHistoryKind } from '@soat/postgresdb';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
@@ -7,7 +6,7 @@ import { paginatedList } from './pagination';
 
 type TaskHistoryRow = NonNullable<
   Parameters<typeof db.TaskTransition.create>[0]
-> & { taskId: number; kind: TaskHistoryKind };
+> & { taskId: number };
 
 /**
  * The one writer of a task's history. History lists by `createdAt`, so each row
@@ -55,8 +54,6 @@ export const getTaskHistory = async (args: {
       return {
         id: row.publicId,
         task_id: task.publicId,
-        kind: row.kind,
-        related_task_id: row.relatedTaskId ?? null,
         from_state: row.fromState,
         to_state: row.toState,
         transition: row.transition,

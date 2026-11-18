@@ -6742,8 +6742,8 @@ BLOCKER_TASK_ID=$($SOAT_CLI create-task --project-id "$PROJECT_PUBLIC_ID" \
   --workflow-id "$WORKFLOW_ID" --title "smoke blocker" | jq -r '.id')
 WAITING_TASK_ID=$($SOAT_CLI create-task --project-id "$PROJECT_PUBLIC_ID" \
   --workflow-id "$WORKFLOW_ID" --title "smoke waits" | jq -r '.id')
-DEPENDENCY_ID=$($SOAT_CLI add-task-dependency --task-id "$WAITING_TASK_ID" \
-  --depends-on-task-id "$BLOCKER_TASK_ID" | jq -r '.id')
+$SOAT_CLI add-task-dependency --task-id "$WAITING_TASK_ID" \
+  --depends-on-task-id "$BLOCKER_TASK_ID" >/dev/null
 if ! $SOAT_CLI get-task --task-id "$WAITING_TASK_ID" \
   | jq -e --arg b "$BLOCKER_TASK_ID" '.readiness.blocked and .readiness.blocked_by[0].task_id == $b' >/dev/null; then
   echo "ERROR: a task with an open dependency did not read as blocked" >&2
@@ -6752,7 +6752,7 @@ fi
 expect_cli_error_status 409 add-task-dependency --task-id "$BLOCKER_TASK_ID" \
   --depends-on-task-id "$WAITING_TASK_ID"
 $SOAT_CLI remove-task-dependency --task-id "$WAITING_TASK_ID" \
-  --dependency-id "$DEPENDENCY_ID" >/dev/null
+  --depends-on-task-id "$BLOCKER_TASK_ID" >/dev/null
 if ! $SOAT_CLI get-task --task-id "$WAITING_TASK_ID" | jq -e '.readiness.blocked == false' >/dev/null; then
   echo "ERROR: removing the last dependency left the task blocked" >&2
   exit 1

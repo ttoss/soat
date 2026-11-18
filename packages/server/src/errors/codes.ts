@@ -923,18 +923,18 @@ export const ERROR_CODES = {
     description:
       'The task the dependency names already depends, directly or through others, on the task it would block. `meta.path` lists the task ids around the cycle.',
   },
-  TASK_DEPENDENCY_EXISTS: {
-    httpStatus: 409,
-    description:
-      'The task already depends on that task. `meta.dependency_id` names the existing dependency.',
-  },
   TASK_DEPENDENCY_SELF: {
     httpStatus: 400,
     description: 'A task cannot depend on itself.',
   },
-  TASK_DEPENDENCY_NOT_FOUND: {
-    httpStatus: 404,
-    description: 'The task has no dependency with that id.',
+  TASK_DEPENDENCY_TARGET_NOT_FOUND: {
+    httpStatus: 400,
+    description:
+      'The task named by `depends_on_task_id` does not exist in the project of the task it would block.',
+  },
+  TASK_DEPENDENCY_CLOSED: {
+    httpStatus: 409,
+    description: 'A closed task cannot gain a dependency.',
   },
   TASK_MIGRATION_CONFLICT: {
     httpStatus: 409,

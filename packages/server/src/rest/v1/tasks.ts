@@ -437,10 +437,7 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
     ),
   });
 
-  await deleteTask({
-    id: ctx.params.task_id,
-    principal: principalFromCtx(ctx),
-  });
+  await deleteTask({ id: ctx.params.task_id });
   ctx.status = 204;
 });
 

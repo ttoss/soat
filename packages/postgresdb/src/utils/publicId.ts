@@ -59,7 +59,6 @@ export const PUBLIC_ID_PREFIXES = {
   workflowMigration: 'wfl_mig_',
   task: 'task_',
   taskTransition: 'task_tr_',
-  taskDependency: 'tdp_',
   guardrail: 'guard_',
   guardrailVersion: 'guard_ver_',
   guardrailEvaluation: 'gev_',

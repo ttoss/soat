@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import {
@@ -21,12 +22,12 @@ type Readiness = {
   unblocks: number;
 };
 
-const createWorkflow = async (project: string) => {
+const createWorkflow = async (project: string, name = 'dependency board') => {
   const res = await authenticatedTestClient(userToken)
     .post('/api/v1/workflows')
     .send({
       project_id: project,
-      name: 'dependency board',
+      name,
       states: [
         { name: 'todo', initial: true },
         { name: 'doing' },
@@ -86,10 +87,10 @@ const fire = (taskId: string, transition: string) => {
 };
 
 /** The `tasks.unblocked` events `action` emits before it answers. */
-const unblockedDuring = async (action: () => Promise<unknown>) => {
-  const seen: string[] = [];
+const unblockedEventsDuring = async (action: () => Promise<unknown>) => {
+  const seen: SoatEvent[] = [];
   const handler = (event: SoatEvent) => {
-    if (event.type === 'tasks.unblocked') seen.push(event.resourceId);
+    if (event.type === 'tasks.unblocked') seen.push(event);
   };
   eventBus.on('soat:event', handler);
   try {
@@ -98,6 +99,12 @@ const unblockedDuring = async (action: () => Promise<unknown>) => {
     eventBus.off('soat:event', handler);
   }
   return seen;
+};
+
+const unblockedDuring = async (action: () => Promise<unknown>) => {
+  return (await unblockedEventsDuring(action)).map((event) => {
+    return event.resourceId;
+  });
 };
 
 beforeAll(async () => {
@@ -137,7 +144,7 @@ describe('POST /api/v1/tasks/:task_id/dependencies', () => {
     const res = await addDependency(task.id, blocker.id);
 
     expect(res.status).toBe(201);
-    expect(res.body.id).toMatch(/^tdp_/);
+    expect(res.body.id).toBeUndefined();
     expect(res.body.task).toEqual({
       id: task.id,
       title: 'waits',
@@ -173,35 +180,6 @@ describe('POST /api/v1/tasks/:task_id/dependencies', () => {
     });
   });
 
-  test('records a dependency_added row on both tasks', async () => {
-    const blocker = await createTask();
-    const task = await createTask();
-    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
-
-    for (const [own, related] of [
-      [task.id, blocker.id],
-      [blocker.id, task.id],
-    ]) {
-      const history = await authenticatedTestClient(userToken).get(
-        `/api/v1/tasks/${own}/history`
-      );
-      expect(history.status).toBe(200);
-      const rows = history.body.data as Record<string, unknown>[];
-      expect(rows[0]).toMatchObject({
-        kind: 'transition',
-        related_task_id: null,
-        to_state: 'todo',
-      });
-      expect(rows[1]).toMatchObject({
-        kind: 'dependency_added',
-        related_task_id: related,
-        from_state: null,
-        to_state: null,
-        principal_type: 'user',
-      });
-    }
-  });
-
   test('refuses a cycle with its path', async () => {
     const a = await createTask();
     const b = await createTask();
@@ -216,17 +194,52 @@ describe('POST /api/v1/tasks/:task_id/dependencies', () => {
     expect(res.body.error.meta.path).toEqual([a.id, c.id, b.id, a.id]);
   });
 
-  test('refuses a duplicate', async () => {
+  test('the same pair again answers 200 with the existing edge', async () => {
     const blocker = await createTask();
     const task = await createTask();
     const first = await addDependency(task.id, blocker.id);
     expect(first.status).toBe(201);
 
+    const res = await authenticatedTestClient(userToken)
+      .post(`/api/v1/tasks/${task.id}/dependencies`)
+      .send({ depends_on_task_id: blocker.id, note: 'another note' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(first.body);
+    expect((await readTask(task.id)).readiness.blocked_by_count).toBe(1);
+  });
+
+  test('a closed task cannot gain a dependency', async () => {
+    const blocker = await createTask();
+    const task = await createTask();
+    expect((await fire(task.id, 'finish')).status).toBe(200);
+
     const res = await addDependency(task.id, blocker.id);
 
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('TASK_DEPENDENCY_EXISTS');
-    expect(res.body.error.meta.dependency_id).toBe(first.body.id);
+    expect(res.body.error.code).toBe('TASK_DEPENDENCY_CLOSED');
+  });
+
+  test('a closed task may be depended on, and the edge is inert', async () => {
+    const blocker = await createTask();
+    const task = await createTask();
+    expect((await fire(blocker.id, 'finish')).status).toBe(200);
+
+    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
+
+    expect((await readTask(task.id)).readiness.blocked).toBe(false);
+  });
+
+  test('edges cross workflows within a project', async () => {
+    const elsewhere = await createWorkflow(projectId, 'another board');
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/tasks')
+      .send({ project_id: projectId, workflow_id: elsewhere, title: 'x' });
+    expect(res.status).toBe(201);
+    const task = await createTask();
+
+    expect((await addDependency(task.id, res.body.id)).status).toBe(201);
+    expect((await readTask(task.id)).readiness.blocked).toBe(true);
   });
 
   test('refuses the task itself', async () => {
@@ -236,17 +249,24 @@ describe('POST /api/v1/tasks/:task_id/dependencies', () => {
     expect(res.body.error.code).toBe('TASK_DEPENDENCY_SELF');
   });
 
-  test('a task in another project is not found', async () => {
+  test("the body's task in another project is a bad request", async () => {
     const task = await createTask();
     const other = await createTask('elsewhere', { project: otherProjectId });
     const res = await addDependency(task.id, other.id);
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('TASK_NOT_FOUND');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('TASK_DEPENDENCY_TARGET_NOT_FOUND');
   });
 
-  test('a missing task is not found', async () => {
+  test("a missing body's task is a bad request", async () => {
     const task = await createTask();
     const res = await addDependency(task.id, 'task_doesnotexist');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('TASK_DEPENDENCY_TARGET_NOT_FOUND');
+  });
+
+  test("a missing path's task is not found", async () => {
+    const task = await createTask();
+    const res = await addDependency('task_doesnotexist', task.id);
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('TASK_NOT_FOUND');
   });
@@ -272,14 +292,14 @@ describe('a reader of the task without tasks:UpdateTaskDependencies', () => {
   test('is refused 403 on add and remove', async () => {
     const blocker = await createTask();
     const task = await createTask();
-    const added = await addDependency(task.id, blocker.id);
+    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
 
     const add = await addDependency(task.id, blocker.id, readerToken);
     expect(add.status).toBe(403);
     expect(add.body.error.code).toBe('FORBIDDEN');
 
     const remove = await authenticatedTestClient(readerToken).delete(
-      `/api/v1/tasks/${task.id}/dependencies/${added.body.id}`
+      `/api/v1/tasks/${task.id}/dependencies/${blocker.id}`
     );
     expect(remove.status).toBe(403);
   });
@@ -337,45 +357,51 @@ describe('GET /api/v1/tasks/:task_id/dependencies and /dependents', () => {
   });
 });
 
-describe('DELETE /api/v1/tasks/:task_id/dependencies/:dependency_id', () => {
+describe('DELETE /api/v1/tasks/:task_id/dependencies/:depends_on_task_id', () => {
   test('removes it, frees the task and emits tasks.unblocked', async () => {
     const blocker = await createTask();
     const task = await createTask();
-    const added = await addDependency(task.id, blocker.id);
+    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
 
-    const seen = await unblockedDuring(async () => {
+    const events = await unblockedEventsDuring(async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        `/api/v1/tasks/${task.id}/dependencies/${added.body.id}`
+        `/api/v1/tasks/${task.id}/dependencies/${blocker.id}`
       );
       expect(res.status).toBe(204);
     });
 
-    expect(seen).toEqual([task.id]);
-    expect((await readTask(task.id)).readiness.blocked).toBe(false);
-    const history = await authenticatedTestClient(userToken).get(
-      `/api/v1/tasks/${blocker.id}/history`
-    );
-    expect(history.body.data.at(-1)).toMatchObject({
-      kind: 'dependency_removed',
-      related_task_id: task.id,
+    expect(events).toHaveLength(1);
+    expect(events[0].resourceId).toBe(task.id);
+    expect(events[0].data.unblocked_by).toEqual({
+      task_id: blocker.id,
+      state: 'todo',
     });
+    expect((await readTask(task.id)).readiness.blocked).toBe(false);
   });
 
-  test('an unknown dependency is not found', async () => {
+  test('removing it again answers 204', async () => {
+    const blocker = await createTask();
     const task = await createTask();
-    const res = await authenticatedTestClient(userToken).delete(
-      `/api/v1/tasks/${task.id}/dependencies/tdp_doesnotexist`
+    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
+    const path = `/api/v1/tasks/${task.id}/dependencies/${blocker.id}`;
+    expect((await authenticatedTestClient(userToken).delete(path)).status).toBe(
+      204
     );
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('TASK_DEPENDENCY_NOT_FOUND');
+
+    const seen = await unblockedDuring(async () => {
+      const res = await authenticatedTestClient(userToken).delete(path);
+      expect(res.status).toBe(204);
+    });
+
+    expect(seen).toEqual([]);
   });
 
   test('a caller without tasks:UpdateTaskDependencies is answered 404', async () => {
     const blocker = await createTask();
     const task = await createTask();
-    const added = await addDependency(task.id, blocker.id);
+    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
     const res = await authenticatedTestClient(noPermToken).delete(
-      `/api/v1/tasks/${task.id}/dependencies/${added.body.id}`
+      `/api/v1/tasks/${task.id}/dependencies/${blocker.id}`
     );
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('TASK_NOT_FOUND');
@@ -383,7 +409,7 @@ describe('DELETE /api/v1/tasks/:task_id/dependencies/:dependency_id', () => {
 
   test('401 without credentials', async () => {
     const res = await testClient.delete(
-      '/api/v1/tasks/task_x/dependencies/tdp_x'
+      '/api/v1/tasks/task_x/dependencies/task_y'
     );
     expect(res.status).toBe(401);
   });
@@ -406,10 +432,18 @@ describe('closing and deleting', () => {
       blocked_by_count: 1,
     });
 
-    const afterSecond = await unblockedDuring(() => {
+    const afterSecond = await unblockedEventsDuring(() => {
       return fire(second.id, 'cancel');
     });
-    expect(afterSecond).toEqual([task.id]);
+    expect(
+      afterSecond.map((event) => {
+        return event.resourceId;
+      })
+    ).toEqual([task.id]);
+    expect(afterSecond[0].data.unblocked_by).toEqual({
+      task_id: second.id,
+      state: 'cancelled',
+    });
     expect((await readTask(task.id)).readiness.blocked).toBe(false);
   });
 
@@ -431,6 +465,25 @@ describe('closing and deleting', () => {
       `/api/v1/tasks/${task.id}/dependencies`
     );
     expect(deps.body.data).toEqual([]);
+  });
+});
+
+describe('deleting a closed task', () => {
+  test('frees nothing', async () => {
+    const blocker = await createTask();
+    const task = await createTask();
+    expect((await addDependency(task.id, blocker.id)).status).toBe(201);
+    expect((await fire(blocker.id, 'finish')).status).toBe(200);
+
+    const seen = await unblockedDuring(async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/tasks/${blocker.id}`
+      );
+      expect(res.status).toBe(204);
+    });
+
+    expect(seen).toEqual([]);
+    expect((await readTask(task.id)).readiness.blocked).toBe(false);
   });
 });
 
@@ -483,5 +536,55 @@ describe('guards and lists read readiness', () => {
       `/api/v1/tasks?project_id=${projectId}&blocked=yes`
     );
     expect(res.status).toBe(400);
+  });
+
+  test('a page of 100 reads readiness in as many queries as a page of 1', async () => {
+    const board = await createWorkflow(projectId, 'page board');
+    const create = async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({ project_id: projectId, workflow_id: board, title: 'row' });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+    const blocker = await create();
+    const ids: string[] = [];
+    for (let batch = 0; batch < 10; batch += 1) {
+      ids.push(
+        ...(await Promise.all(
+          Array.from({ length: 10 }, () => {
+            return create();
+          })
+        ))
+      );
+    }
+    await Promise.all(
+      ids.map(async (id) => {
+        expect((await addDependency(id, blocker)).status).toBe(201);
+      })
+    );
+
+    // Counts only reads of the task graph: event fan-out from the setup's
+    // writes may still be querying other tables while the list runs.
+    const queriesFor = async (limit: number) => {
+      let count = 0;
+      const hook = (_options: unknown, query: { sql?: string }) => {
+        if (/\b(tasks|task_dependencies)\b/.test(query.sql ?? '')) count += 1;
+      };
+      db.sequelize.addHook('afterQuery', 'countListQueries', hook);
+      try {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks?project_id=${projectId}&workflow_id=${board}&limit=${limit}`
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.data).toHaveLength(limit);
+        expect(res.body.data[0].readiness.blocked).toBe(true);
+      } finally {
+        db.sequelize.removeHook('afterQuery', 'countListQueries');
+      }
+      return count;
+    };
+
+    expect(await queriesFor(100)).toBe(await queriesFor(1));
   });
 });

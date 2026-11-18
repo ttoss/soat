@@ -235,7 +235,6 @@ const appendResolutionNote = async (args: {
       : 'Approval expired before a decision; transition not applied.';
   await appendTaskHistory({
     row: {
-      kind: 'transition',
       taskId: task.id as number,
       fromState: task.state,
       toState: task.state,

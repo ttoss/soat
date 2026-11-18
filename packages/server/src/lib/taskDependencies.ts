@@ -6,7 +6,6 @@ import { lockForTransaction } from './advisoryLocks';
 import type { Transaction } from './dbTransaction';
 import { paginatedList } from './pagination';
 import { emitTaskEvent } from './taskEvents';
-import { appendTaskHistory } from './taskHistory';
 import { freedAmong } from './taskReadiness';
 import {
   findTaskInstance,
@@ -35,7 +34,6 @@ const taskRef = (task: TaskRow) => {
 
 const mapDependency = (row: DependencyRow) => {
   return {
-    id: row.publicId,
     task: taskRef(row.task!),
     depends_on_task: taskRef(row.dependsOnTask!),
     note: row.note,
@@ -64,6 +62,7 @@ const requireTask = async (args: { id: string }): Promise<TaskInstance> => {
 export const emitUnblocked = async (args: {
   taskIds: number[];
   projectId: number;
+  unblockedBy: { task_id: string; state: string };
 }): Promise<void> => {
   for (const id of args.taskIds) {
     const task = (await db.Task.findByPk(id, {
@@ -74,33 +73,7 @@ export const emitUnblocked = async (args: {
       type: 'tasks.unblocked',
       projectId: args.projectId,
       task: await presentTask({ task }),
-    });
-  }
-};
-
-/** One history row on each surviving end of an edge. */
-export const appendDependencyHistory = async (args: {
-  kind: 'dependency_added' | 'dependency_removed';
-  ends: { task: TaskRow; related: TaskRow }[];
-  principal: TaskPrincipal;
-  transaction: Transaction;
-}): Promise<void> => {
-  for (const end of args.ends) {
-    await appendTaskHistory({
-      row: {
-        taskId: end.task.id as number,
-        kind: args.kind,
-        relatedTaskId: end.related.publicId,
-        fromState: null,
-        toState: null,
-        transition: null,
-        principalType: args.principal.kind,
-        principalId: args.principal.id,
-        generationId: null,
-        orchestrationRunId: null,
-        note: null,
-      },
-      transaction: args.transaction,
+      facts: { unblocked_by: args.unblockedBy },
     });
   }
 };
@@ -152,6 +125,10 @@ const cyclePath = async (args: {
   ];
 };
 
+/**
+ * `created` is false when the pair already held: the existing edge answers,
+ * unchanged.
+ */
 export const addTaskDependency = async (args: {
   taskId: string;
   dependsOnTaskId: string;
@@ -175,12 +152,13 @@ export const addTaskDependency = async (args: {
   });
   if (!dependsOn) {
     throw new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${args.dependsOnTaskId}' not found.`
+      'TASK_DEPENDENCY_TARGET_NOT_FOUND',
+      `Task '${args.dependsOnTaskId}' not found in the project of '${args.taskId}'.`,
+      { depends_on_task_id: args.dependsOnTaskId }
     );
   }
 
-  const id = await db.sequelize.transaction(async (t) => {
+  const { id, created } = await db.sequelize.transaction(async (t) => {
     // One writer per project's graph at a time, so two edges added at once
     // cannot close a cycle neither sees.
     await lockForTransaction({
@@ -194,10 +172,13 @@ export const addTaskDependency = async (args: {
       transaction: t,
     });
     if (existing) {
+      log('addTaskDependency: edge exists');
+      return { id: existing.id as number, created: false };
+    }
+    if (task.status !== 'open') {
       throw new DomainError(
-        'TASK_DEPENDENCY_EXISTS',
-        `Task '${args.taskId}' already depends on '${args.dependsOnTaskId}'.`,
-        { dependency_id: existing.publicId }
+        'TASK_DEPENDENCY_CLOSED',
+        `Task '${args.taskId}' is closed.`
       );
     }
     const path = await cyclePath({ task, dependsOn, transaction: t });
@@ -208,7 +189,7 @@ export const addTaskDependency = async (args: {
         { path }
       );
     }
-    const created = await db.TaskDependency.create(
+    const row = await db.TaskDependency.create(
       {
         taskId: task.id as number,
         dependsOnTaskId: dependsOn.id as number,
@@ -218,22 +199,13 @@ export const addTaskDependency = async (args: {
       },
       { transaction: t }
     );
-    await appendDependencyHistory({
-      kind: 'dependency_added',
-      ends: [
-        { task, related: dependsOn },
-        { task: dependsOn, related: task },
-      ],
-      principal: args.principal,
-      transaction: t,
-    });
-    return created.id as number;
+    return { id: row.id as number, created: true };
   });
 
   const row = await db.TaskDependency.findByPk(id, {
     include: dependencyIncludes(),
   });
-  return mapDependency(row as DependencyRow);
+  return { dependency: mapDependency(row as DependencyRow), created };
 };
 
 export const listTaskDependencies = async (args: {
@@ -252,6 +224,8 @@ export const listTaskDependencies = async (args: {
     filters: { id: args.taskId, direction: args.direction },
     where: { [column]: task.id as number },
     order: [['createdAt', 'ASC']],
+    // An edge's identity is its pair; the internal id only orders the page.
+    tiebreak: ['id'],
     query: ({ where, limit, order }) => {
       return db.TaskDependency.findAll({
         where,
@@ -266,44 +240,50 @@ export const listTaskDependencies = async (args: {
   });
 };
 
+/** Idempotent: an edge already gone, or a task it named, removes nothing. */
 export const removeTaskDependency = async (args: {
   taskId: string;
-  dependencyId: string;
-  principal: TaskPrincipal;
+  dependsOnTaskId: string;
 }): Promise<void> => {
   log(
-    'removeTaskDependency: task=%s dependency=%s',
+    'removeTaskDependency: task=%s dependsOn=%s',
     args.taskId,
-    args.dependencyId
+    args.dependsOnTaskId
   );
   const task = await requireTask({ id: args.taskId });
-  const projectId = task.projectId as number;
-  const freed = await db.sequelize.transaction(async (t) => {
+  const removed = await db.sequelize.transaction(async (t) => {
     const row = (await db.TaskDependency.findOne({
-      where: { publicId: args.dependencyId, taskId: task.id as number },
-      include: [{ model: db.Task, as: 'dependsOnTask' }],
+      where: { taskId: task.id as number },
+      include: [
+        {
+          model: db.Task,
+          as: 'dependsOnTask',
+          where: { publicId: args.dependsOnTaskId },
+        },
+      ],
       transaction: t,
     })) as DependencyRow | null;
     if (!row) {
-      throw new DomainError(
-        'TASK_DEPENDENCY_NOT_FOUND',
-        `Task '${args.taskId}' has no dependency '${args.dependencyId}'.`
-      );
+      log('removeTaskDependency: no edge');
+      return null;
     }
     const dependsOn = row.dependsOnTask!;
     await row.destroy({ transaction: t });
-    await appendDependencyHistory({
-      kind: 'dependency_removed',
-      ends: [
-        { task, related: dependsOn },
-        { task: dependsOn, related: task },
-      ],
-      principal: args.principal,
+    // A closed dependency held nothing, so removing it frees nothing.
+    if (dependsOn.status !== 'open') return null;
+    const freed = await freedAmong({
+      candidateIds: [task.id as number],
       transaction: t,
     });
-    // A closed dependency held nothing, so removing it frees nothing.
-    if (dependsOn.status !== 'open') return [];
-    return freedAmong({ candidateIds: [task.id as number], transaction: t });
+    return { freed, dependsOn };
   });
-  await emitUnblocked({ taskIds: freed, projectId });
+  if (!removed) return;
+  await emitUnblocked({
+    taskIds: removed.freed,
+    projectId: task.projectId as number,
+    unblockedBy: {
+      task_id: removed.dependsOn.publicId,
+      state: removed.dependsOn.state,
+    },
+  });
 };

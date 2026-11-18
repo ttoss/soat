@@ -392,7 +392,6 @@ const insertTask = async (args: CreateTaskArgs) => {
 
   await appendTaskHistory({
     row: {
-      kind: 'transition',
       taskId: task.id as number,
       fromState: null,
       toState: entryState.name,

@@ -169,11 +169,11 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Add `state_map: { "<meta.state>": "<a state the target version declares>" }` to the migration.',
   TASK_DEPENDENCY_CYCLE:
     'Remove one dependency along `meta.path`, or add the dependency the other way round.',
-  TASK_DEPENDENCY_EXISTS:
-    'Nothing to add: the dependency in `meta.dependency_id` already holds the task.',
   TASK_DEPENDENCY_SELF: 'Name a different task in `depends_on_task_id`.',
-  TASK_DEPENDENCY_NOT_FOUND:
-    "List the task's dependencies to find the id to remove.",
+  TASK_DEPENDENCY_TARGET_NOT_FOUND:
+    'Name a task of the same project in `depends_on_task_id`.',
+  TASK_DEPENDENCY_CLOSED:
+    'Add the dependency to an open task; a closed task waits on nothing.',
   TASK_MIGRATION_CONFLICT:
     'Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.',
   VERSION_CONFLICT:

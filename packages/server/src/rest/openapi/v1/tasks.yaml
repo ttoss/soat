@@ -759,8 +759,9 @@ paths:
       description: >-
         Makes the task depend on `depends_on_task_id`, a task in the same
         project: the path's task is blocked until that one closes, in any
-        terminal state. Both tasks get a `dependency_added` history row. An
-        edge that would close a cycle is refused.
+        terminal state. The pair is the dependency's identity: adding it
+        again answers `200` with the existing one. An edge that would close
+        a cycle is refused.
       tags:
         - Tasks
       summary: Add a task dependency
@@ -781,6 +782,12 @@ paths:
             schema:
               $ref: '#/components/schemas/AddTaskDependencyRequest'
       responses:
+        '200':
+          description: The dependency already held; it is returned unchanged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependency'
         '201':
           description: The dependency
           content:
@@ -788,7 +795,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/TaskDependency'
         '400':
-          description: The task names itself (`TASK_DEPENDENCY_SELF`) or the body is invalid
+          description: >-
+            The task names itself (`TASK_DEPENDENCY_SELF`), `depends_on_task_id`
+            is missing or in another project
+            (`TASK_DEPENDENCY_TARGET_NOT_FOUND`), or the body is invalid
           content:
             application/json:
               schema:
@@ -806,15 +816,15 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
-          description: Either task does not exist, or `depends_on_task_id` is in another project
+          description: The task does not exist
           content:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
-            The dependency exists (`TASK_DEPENDENCY_EXISTS`) or would close a
-            cycle (`TASK_DEPENDENCY_CYCLE`, `meta.path`)
+            The task is closed (`TASK_DEPENDENCY_CLOSED`) or the dependency
+            would close a cycle (`TASK_DEPENDENCY_CYCLE`, `meta.path`)
           content:
             application/json:
               schema:
@@ -942,11 +952,11 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
-  /api/v1/tasks/{task_id}/dependencies/{dependency_id}:
+  /api/v1/tasks/{task_id}/dependencies/{depends_on_task_id}:
     delete:
       description: >-
-        Removes one of the task's dependencies. Both tasks get a
-        `dependency_removed` history row; when it was the task's last open
+        Removes the task's dependency on `depends_on_task_id`; answers `204`
+        also when there is none. When it was the task's last open
         dependency, `tasks.unblocked` fires.
       tags:
         - Tasks
@@ -961,10 +971,10 @@ paths:
           description: The task that waits.
           schema:
             type: string
-        - name: dependency_id
+        - name: depends_on_task_id
           in: path
           required: true
-          description: The dependency to remove.
+          description: The task it no longer waits on.
           schema:
             type: string
       responses:
@@ -985,7 +995,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
-          description: The task or the dependency does not exist
+          description: The task does not exist
           content:
             application/json:
               schema:
@@ -1190,28 +1200,11 @@ components:
           type: string
         task_id:
           type: string
-        kind:
-          type: string
-          enum:
-            - transition
-            - migration
-            - dependency_added
-            - dependency_removed
-          description: >-
-            What the row records. A dependency row moves no state, so its
-            `from_state` and `to_state` are null.
-        related_task_id:
-          type: string
-          nullable: true
-          description: >-
-            The other end of the dependency, on a `dependency_added` or
-            `dependency_removed` row only.
         from_state:
           type: string
           nullable: true
         to_state:
           type: string
-          nullable: true
         transition:
           type: string
           nullable: true
@@ -1323,11 +1316,10 @@ components:
             - closed
     TaskDependency:
       type: object
-      description: '`depends_on_task` blocks `task` until it closes.'
+      description: >-
+        `depends_on_task` blocks `task` until it closes. The pair is its
+        identity.
       properties:
-        id:
-          type: string
-          example: tdp_V1StGXR8Z5jdHi6B
         task:
           $ref: '#/components/schemas/TaskDependencyEnd'
         depends_on_task:
