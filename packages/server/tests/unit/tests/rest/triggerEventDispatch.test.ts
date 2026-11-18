@@ -255,6 +255,7 @@ describe('Event trigger dispatch', () => {
               id: 'cutoff',
               type: 'transform',
               expression: { var: 'input.fired_at' },
+              state_mapping: { 'state.cutoff': { var: 'output.result' } },
             },
           ],
           edges: [],

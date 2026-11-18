@@ -2778,11 +2778,8 @@ describe('Triggers', () => {
           `/api/v1/trigger-firings?trigger_id=${hookTriggerId}&limit=100`
         );
         const replayed = firings.body.data.filter(
-          (firing: { input: unknown }) => {
-            return (
-              JSON.stringify(firing.input) ===
-              JSON.stringify({ event: 'replayed' })
-            );
+          (firing: { input: { event?: unknown } | null }) => {
+            return firing.input?.event === 'replayed';
           }
         );
         expect(replayed).toHaveLength(1);
