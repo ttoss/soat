@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
+
 /**
  * `resolveReadProjectIds` is the **read** preamble: `.claude/rules/errors.md`
  * documents it as "a list/read route; an empty scope is allowed and yields an
@@ -40,14 +42,6 @@ const PREAMBLE_OWNERS = ['helpers.ts', 'listScope.ts'];
 const READ_VERBS = ['Get', 'List', 'Search', 'Export'];
 
 const READ_ACTION = new RegExp(`^[a-z0-9-]+:(${READ_VERBS.join('|')})[A-Z]`);
-
-/** Blanks comments while preserving offsets, so a rule quoted in a doc comment
- * is not read as an instance of it. */
-const stripComments = (source: string): string => {
-  return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (match) => {
-    return match.replace(/[^\n]/g, ' ');
-  });
-};
 
 /**
  * Every `resolveReadProjectIds(` call with the action it was given, or

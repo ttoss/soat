@@ -4,6 +4,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './sourceText.mjs';
+
 const routesDir = fileURLToPath(
   new URL('../../packages/server/src/rest/v1/', import.meta.url)
 );
@@ -41,12 +43,6 @@ const BYPASSES = [
   /\b(?:resolveReadProjectIds|requireProjectAccess)\(/,
   /project_id (?:query parameter )?is required/,
 ];
-
-const stripComments = (source) => {
-  return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (match) => {
-    return match.replace(/[^\n]/g, ' ');
-  });
-};
 
 const blockFrom = (lines, startLine) => {
   const endLine = lines.findIndex((line, index) => {
@@ -131,7 +127,8 @@ test('no list route reads project_id or resolves its scope itself', () => {
   assert.deepEqual(offenders, []);
 });
 
-const EMPTY_SCOPE_CHECK = /\bprojectIds\??\.length\s*(?:===|<)\s*[01]\b|\.length\s*===\s*0[^;]*\bFORBIDDEN\b/;
+const EMPTY_SCOPE_CHECK =
+  /\bprojectIds\??\.length\s*(?:===|<)\s*[01]\b|\.length\s*===\s*0[^;]*\bFORBIDDEN\b/;
 const LIST_SCOPE_SOURCE = path.join(routesDir, 'listScope.ts');
 
 test('no list route answers 403 to a caller permitted in no project', () => {
@@ -142,9 +139,7 @@ test('no list route answers 403 to a caller permitted in no project', () => {
     .map((route) => {
       return route.key;
     });
-  const chokepoint = stripComments(
-    fs.readFileSync(LIST_SCOPE_SOURCE, 'utf-8')
-  );
+  const chokepoint = stripComments(fs.readFileSync(LIST_SCOPE_SOURCE, 'utf-8'));
   if (/\bFORBIDDEN\b/.test(chokepoint)) offenders.push('listScope.ts');
 
   assert.deepEqual(offenders, []);

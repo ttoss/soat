@@ -4,6 +4,8 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './sourceText.mjs';
+
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const serverDir = path.join(repoRoot, 'packages/server');
 
@@ -17,7 +19,7 @@ const DURABLE_MODELS = [
   'TriggerFiring',
 ];
 
-/** Credentials and readers durable work no longer has: a token per drive. */
+/** Credentials and readers durable work never holds: a token per drive. */
 const REMOVED_SYMBOLS = [
   'onBehalfOfIdentity',
   'resolveGenerationIdentitySets',
@@ -43,14 +45,7 @@ const REMOVED_SYMBOLS = [
 
 /** Source with comments dropped, so prose naming a symbol is not a hit. */
 const code = (file) => {
-  return fs
-    .readFileSync(file, 'utf-8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .filter((line) => {
-      return !/^\s*(\/\/|\*)/.test(line);
-    })
-    .join('\n');
+  return stripComments(fs.readFileSync(file, 'utf-8'));
 };
 
 const tsFiles = (dir) => {

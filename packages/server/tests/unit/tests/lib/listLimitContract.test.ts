@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
+
 /**
  * Pagination has one parser and one resolver. `parsePagination`
  * (`rest/v1/helpers.ts`) is the only reader of `limit`/`cursor` off a query
@@ -39,12 +41,7 @@ const sourceLinesExcept = (owner: string): [string, string[]][] => {
       return !file.endsWith(owner);
     })
     .map((file) => {
-      const source = readFileSync(file, 'utf-8').replace(
-        /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
-        (match) => {
-          return match.replace(/[^\n]/g, ' ');
-        }
-      );
+      const source = stripComments(readFileSync(file, 'utf-8'));
       return [file.slice(SRC_DIR.length + 1), source.split('\n')];
     });
 };

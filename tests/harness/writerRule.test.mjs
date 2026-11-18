@@ -4,6 +4,8 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './sourceText.mjs';
+
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const srcDir = path.join(repoRoot, 'packages/server/src');
 const modelsDir = path.join(repoRoot, 'packages/postgresdb/src/models');
@@ -11,14 +13,7 @@ const RULE = 'lib/writerRule.ts';
 
 /** Source with comments dropped, so prose naming a symbol is not a hit. */
 const code = (file) => {
-  return fs
-    .readFileSync(file, 'utf-8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .filter((line) => {
-      return !/^\s*\/\//.test(line);
-    })
-    .join('\n');
+  return stripComments(fs.readFileSync(file, 'utf-8'));
 };
 
 const serverFiles = fs
@@ -89,7 +84,8 @@ const NOT_A_CARRIER = {
   OrchestrationVersion:
     "an orchestration's archived graph, written back through its update",
   PlaybookExport: "records an export a case's execution started",
-  Session: 'binds a conversation to its agent; the turn is checked as its caller',
+  Session:
+    'binds a conversation to its agent; the turn is checked as its caller',
   TaskTransition: 'records a transition',
   Trace: 'records a run',
   UsageEvent: 'records metered use',
@@ -119,8 +115,7 @@ describe('writer rule', () => {
     assert.ok(naming.length > 0);
     for (const model of naming) {
       assert.ok(
-        registered.includes(model) ||
-          Object.hasOwn(NOT_A_CARRIER, model),
+        registered.includes(model) || Object.hasOwn(NOT_A_CARRIER, model),
         `${model} names a policy, agent, tool or target: add it to WRITER_RULE_CARRIERS (${RULE}) and write it through assertWriterHolds`
       );
     }

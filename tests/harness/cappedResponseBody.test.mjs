@@ -4,6 +4,8 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './sourceText.mjs';
+
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const srcDir = path.join(repoRoot, 'packages/server/src');
 
@@ -21,14 +23,7 @@ const TRUSTED_HOST_READS = [
 ];
 
 const code = (file) => {
-  return fs
-    .readFileSync(file, 'utf-8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .filter((line) => {
-      return !/^\s*\/\//.test(line);
-    })
-    .join('\n');
+  return stripComments(fs.readFileSync(file, 'utf-8'));
 };
 
 const tsFiles = (dir) => {

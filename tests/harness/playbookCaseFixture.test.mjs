@@ -4,23 +4,15 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './sourceText.mjs';
+
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const testsDir = path.join(repoRoot, 'packages/server/tests');
 const FIXTURE = 'unit/fixtures/playbookCase.ts';
 
-/**
- * Source with comments dropped, so prose naming the route is not a hit. A
- * block comment opens a line: a `'/*'` string literal opens none.
- */
+/** Source with comments dropped, so prose naming the route is not a hit. */
 const code = (file) => {
-  return fs
-    .readFileSync(file, 'utf-8')
-    .replace(/^\s*\/\*[\s\S]*?\*\//gm, '')
-    .split('\n')
-    .filter((line) => {
-      return !/^\s*\/\//.test(line);
-    })
-    .join('\n');
+  return stripComments(fs.readFileSync(file, 'utf-8'));
 };
 
 /**

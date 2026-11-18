@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
+
 /**
  * A project's metadata schema is only worth what the least careful writer
  * honours: one module minting a `Document` row of its own would store metadata
@@ -34,12 +36,7 @@ const DOCUMENT_ROW_WRITERS = ['documentIngestion.ts', 'documents.ts'];
 
 /** Blanks comments while preserving offsets, so prose is never a match. */
 const code = (path: string): string => {
-  return readFileSync(path, 'utf-8').replace(
-    /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
-    (match) => {
-      return match.replace(/[^\n]/g, ' ');
-    }
-  );
+  return stripComments(readFileSync(path, 'utf-8'));
 };
 
 /** The argument text of one call, brace-counted so nested objects survive. */

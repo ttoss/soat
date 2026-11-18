@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
+
 /**
  * `.claude/rules/errors.md` states the rule in prose:
  *
@@ -119,17 +121,6 @@ const routeHandlers = (
 /** `/tools/:tool_id`, `/evals/:eval_id/runs` — a path that names one resource. */
 const namesAResource = (path: string): boolean => {
   return /\/:\w+_id\b/.test(path);
-};
-
-/**
- * Blanks comments while preserving offsets, so a rule quoted in a doc comment —
- * as `helpers.ts` quotes the ❌ example it exists to replace — is not read as an
- * instance of it.
- */
-const stripComments = (source: string): string => {
-  return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (match) => {
-    return match.replace(/[^\n]/g, ' ');
-  });
 };
 
 /** Line numbers where `pattern` matches, scanning the whole source at once. */
