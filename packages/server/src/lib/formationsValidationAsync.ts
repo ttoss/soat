@@ -56,11 +56,18 @@ const validateDeclaration = async (args: {
  * A template with a malformed resource has nothing coherent to ask a handler
  * about, and asking anyway would send a half-checked bag to an external service
  * on every typo.
+ *
+ * `projectPublicId` is required so a route that has the formation's project
+ * plans what its apply would refuse; `null` only where there is no project.
  */
-export const validateFormationTemplateAsync = async (
-  template: unknown
-): Promise<ValidationResult> => {
-  const result = validateFormationTemplate(template);
+export const validateFormationTemplateAsync = async (args: {
+  template: unknown;
+  projectPublicId: string | null;
+}): Promise<ValidationResult> => {
+  const { template } = args;
+  const result = validateFormationTemplate(template, {
+    projectPublicId: args.projectPublicId,
+  });
   if (!result.valid) return result;
 
   /* istanbul ignore next — a valid template always parses to a resources map. */

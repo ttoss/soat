@@ -168,7 +168,10 @@ formationsRouter.post('/formations/validate', async (ctx: Context) => {
     parameters?: Record<string, string>;
   };
   const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = await validateFormationTemplateAsync(parsedTemplate);
+  const validation = await validateFormationTemplateAsync({
+    template: parsedTemplate,
+    projectPublicId: null,
+  });
 
   if (validation.valid && body.parameters !== undefined) {
     const missing = getMissingParams(
@@ -199,8 +202,15 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     action: 'formations:PlanFormation',
     resourceType: 'formation',
   });
+  const projectPublicId = resolveWriteProjectPublicId({
+    ctx,
+    projectPublicId: body.project_id,
+  });
   const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = await validateFormationTemplateAsync(parsedTemplate);
+  const validation = await validateFormationTemplateAsync({
+    template: parsedTemplate,
+    projectPublicId,
+  });
   if (!validation.valid) {
     throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
       details: validation.errors,
@@ -212,13 +222,7 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     template: parsedTemplate as FormationTemplate,
     formationId: body.formation_id,
     parameters: body.parameters,
-    authorize: formationAuthorizer({
-      ctx,
-      projectPublicId: resolveWriteProjectPublicId({
-        ctx,
-        projectPublicId: body.project_id,
-      }),
-    }),
+    authorize: formationAuthorizer({ ctx, projectPublicId }),
   });
   ctx.body = planResultToWire(plan);
 });
@@ -239,8 +243,15 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     action: 'formations:CreateFormation',
     resourceType: 'formation',
   });
+  const projectPublicId = resolveWriteProjectPublicId({
+    ctx,
+    projectPublicId: body.project_id,
+  });
   const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = await validateFormationTemplateAsync(parsedTemplate);
+  const validation = await validateFormationTemplateAsync({
+    template: parsedTemplate,
+    projectPublicId,
+  });
   if (!validation.valid) {
     throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
       details: validation.errors,
@@ -257,13 +268,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     template: parsedTemplate as FormationTemplate,
     metadata: metadata ?? undefined,
     parameters: body.parameters,
-    authorize: formationAuthorizer({
-      ctx,
-      projectPublicId: resolveWriteProjectPublicId({
-        ctx,
-        projectPublicId: body.project_id,
-      }),
-    }),
+    authorize: formationAuthorizer({ ctx, projectPublicId }),
     actor: formationActorOf(ctx),
   });
 
@@ -346,7 +351,10 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   let parsedTemplate: unknown = undefined;
   if (body.template !== undefined) {
     parsedTemplate = parseFormationTemplateInput(body.template);
-    const validation = await validateFormationTemplateAsync(parsedTemplate);
+    const validation = await validateFormationTemplateAsync({
+      template: parsedTemplate,
+      projectPublicId: formation.project_id,
+    });
     if (!validation.valid) {
       throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
         details: validation.errors,

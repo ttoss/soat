@@ -162,6 +162,7 @@ const runFormationModuleHooks = (args: {
   type: string;
   properties: unknown;
   basePath: string;
+  projectPublicId: string | null;
 }): { errors: ValidationError[]; warnings: ValidationError[] } => {
   const formationModule = getFormationModule({ resourceType: args.type });
   const hookArgs = {
@@ -171,7 +172,11 @@ const runFormationModuleHooks = (args: {
     basePath: `${args.basePath}.properties`,
   };
   return {
-    errors: formationModule?.validateProperties?.(hookArgs) ?? [],
+    errors:
+      formationModule?.validateProperties?.({
+        ...hookArgs,
+        projectPublicId: args.projectPublicId,
+      }) ?? [],
     warnings: formationModule?.warnProperties?.(hookArgs) ?? [],
   };
 };
@@ -181,6 +186,7 @@ const validateResourceDeclaration = (args: {
   declRaw: unknown;
   logicalIds: Set<string>;
   paramNames: Set<string>;
+  projectPublicId: string | null;
 }): { errors: ValidationError[]; warnings: ValidationError[] } => {
   const { logicalId, declRaw, logicalIds, paramNames } = args;
   const errors: ValidationError[] = [];
@@ -217,6 +223,7 @@ const validateResourceDeclaration = (args: {
       type: decl.type,
       properties: decl.properties,
       basePath,
+      projectPublicId: args.projectPublicId,
     });
     errors.push(...hookResult.errors);
     warnings.push(...hookResult.warnings);
@@ -338,25 +345,32 @@ const resolveTemplateParams = (
   return { errors, warnings, paramNames };
 };
 
+const notAnObjectResult = (template: unknown): ValidationResult => {
+  const parseError = yamlParseError(template);
+  return {
+    valid: false,
+    errors: [
+      {
+        path: '',
+        message: parseError
+          ? `Template is not valid YAML or JSON: ${parseError}`
+          : 'Template must be an object',
+      },
+    ],
+    warnings: [],
+  };
+};
+
+/**
+ * Without `projectPublicId` the checks that need the formation's project
+ * (a policy naming another project's resources) are left to the apply.
+ */
 export const validateFormationTemplate = (
-  template: unknown
+  template: unknown,
+  scope: { projectPublicId: string | null } = { projectPublicId: null }
 ): ValidationResult => {
   const tmpl = parseTemplateObject(template);
-  if (!tmpl) {
-    const parseError = yamlParseError(template);
-    return {
-      valid: false,
-      errors: [
-        {
-          path: '',
-          message: parseError
-            ? `Template is not valid YAML or JSON: ${parseError}`
-            : 'Template must be an object',
-        },
-      ],
-      warnings: [],
-    };
-  }
+  if (!tmpl) return notAnObjectResult(template);
 
   const resources = getPlainObjectField(tmpl, 'resources');
   if (!resources) {
@@ -381,6 +395,7 @@ export const validateFormationTemplate = (
       declRaw,
       logicalIds,
       paramNames,
+      projectPublicId: scope.projectPublicId,
     });
     errors.push(...declResult.errors);
     warnings.push(...declResult.warnings);

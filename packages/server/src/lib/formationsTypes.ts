@@ -258,6 +258,8 @@ export type FormationModule = {
   validateProperties?: (args: {
     properties: unknown;
     basePath: string;
+    /** The formation's project; `null` skips the checks that need one. */
+    projectPublicId: string | null;
   }) => ValidationError[];
   /**
    * Validation that has to leave the process — today only an

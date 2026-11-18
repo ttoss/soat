@@ -11,6 +11,7 @@ import {
   getPolicy,
   updatePolicy,
 } from '../policies';
+import { findAllowResourcesOutsideProject } from '../policyProjectIds';
 import { findProjectPublicId } from '../projects';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
@@ -28,10 +29,9 @@ export const policiesFormationModule = defineFormationModule({
     delete: 'policies:DeletePolicy',
   },
 
-  // Every check that needs no project id runs at validate and plan time, so a
-  // plan refuses what its apply would; the formation's own project is checked
-  // on apply.
-  extraChecks: ({ properties, basePath, errors }) => {
+  // With the formation's project, plan refuses every Allow resource its apply
+  // would; without one, only those outside every project.
+  extraChecks: ({ properties, basePath, projectPublicId, errors }) => {
     const document = properties.document;
     if (document == null || !isObjectRecord(document)) return;
     const structural = validatePolicyDocument(document);
@@ -42,12 +42,19 @@ export const policiesFormationModule = defineFormationModule({
       errors.push({ path: `${basePath}.document`, message });
     }
     if (!structural.valid) return;
-    for (const resource of findAllowResourcesOutsideEveryProject(
-      document as PolicyDocument
-    )) {
+    const policy = document as PolicyDocument;
+    const outside =
+      projectPublicId === null
+        ? findAllowResourcesOutsideEveryProject(policy)
+        : findAllowResourcesOutsideProject({
+            document: policy,
+            projectPublicId,
+          });
+    const project = projectPublicId ?? '<project_id>';
+    for (const resource of outside) {
       errors.push({
         path: `${basePath}.document`,
-        message: `Allow resource '${resource}' is outside the formation's project; name srn:<project_id>:<type>:<id>, or omit resource for every resource of the project.`,
+        message: `Allow resource '${resource}' is outside the formation's project; name srn:${project}:<type>:<id>, or omit resource for every resource of the project.`,
       });
     }
   },

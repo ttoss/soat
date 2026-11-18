@@ -953,9 +953,18 @@ describe('Agent knowledge', () => {
             return memory.content;
           })
         ).toEqual(['Invoices are due in 30 days.']);
-        const assertions = await asAdmin().get(
-          `/api/v1/memories/${written[0].id}/assertions`
-        );
+        // The decision runs in the background, and the memory row commits
+        // before its assertion: wait for the write to settle, not the row.
+        const assertions = await pollUntil({
+          read: () => {
+            return asAdmin().get(
+              `/api/v1/memories/${written[0].id}/assertions`
+            );
+          },
+          done: (response) => {
+            return response.body.data?.length > 0;
+          },
+        });
         expect(assertions.body.data).toEqual([
           expect.objectContaining({
             mechanism: 'tool',
