@@ -19,7 +19,7 @@ const libDir = path.join(srcDir, 'lib');
  * `metadata` can write any JSON at all — `system.*` is refused on a tag write
  * and nothing corresponds on the other bag, because nothing there reaches
  * platform state. The day a policy conditions on `metadata`, that caller
- * decides what their own rows match, and the refusal that used to hold is a
+ * decides what their own rows match, and the refusal that holds on tags is a
  * field they can set.
  *
  * True by construction is not the same as true: these hold the construction.
