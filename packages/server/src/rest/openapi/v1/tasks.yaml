@@ -341,7 +341,9 @@ paths:
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
     delete:
-      description: Deletes a task. Its transition history cascades.
+      description: >-
+        Deletes a task. Its transition history and dependencies cascade; a
+        dependent it was the last open dependency of is freed.
       tags:
         - Tasks
       summary: Delete a task
