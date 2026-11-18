@@ -91,11 +91,7 @@ const buildDocumentResources = (
   return resources;
 };
 
-/**
- * Check if user is allowed to perform action on document
- * Returns false if not allowed (after setting ctx.status to 403)
- */
-export const checkDocumentPermission = async (
+export const assertDocumentPermission = async (
   ctx: Context,
   doc: {
     id: string;
@@ -103,7 +99,7 @@ export const checkDocumentPermission = async (
     tags?: Record<string, string>;
   } & ProjectOwned,
   action: string
-): Promise<boolean> => {
+): Promise<void> => {
   // Every by-id route passes here, so none can act outside the pin.
   assertDocumentReachable(ctx)(doc);
   const context = buildDocumentContext(doc);
@@ -123,7 +119,6 @@ export const checkDocumentPermission = async (
       resource: resources[0],
     });
   }
-  return allowed;
 };
 
 documentsRouter.get('/documents', async (ctx: Context) => {
@@ -218,9 +213,7 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
-  if (!(await checkDocumentPermission(ctx, doc, 'documents:GetDocument'))) {
-    return;
-  }
+  await assertDocumentPermission(ctx, doc, 'documents:GetDocument');
 
   ctx.body = doc;
 });
@@ -281,9 +274,7 @@ documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
-  if (!(await checkDocumentPermission(ctx, doc, 'documents:DeleteDocument'))) {
-    return;
-  }
+  await assertDocumentPermission(ctx, doc, 'documents:DeleteDocument');
 
   const result = await deleteDocument({ id: ctx.params.document_id });
   if (result === null) {
@@ -302,9 +293,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
-  if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
-    return;
-  }
+  await assertDocumentPermission(ctx, doc, 'documents:UpdateDocument');
 
   const body = ctx.request.body as {
     content?: string;
@@ -347,9 +336,7 @@ documentsRouter.get('/documents/:document_id/status', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
-  if (!(await checkDocumentPermission(ctx, status, 'documents:GetDocument'))) {
-    return;
-  }
+  await assertDocumentPermission(ctx, status, 'documents:GetDocument');
 
   // Return only the lightweight lifecycle payload — never chunk content.
   ctx.body = {
@@ -372,7 +359,7 @@ const resolveDocument = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
-  await checkDocumentPermission(
+  await assertDocumentPermission(
     args.ctx,
     doc,
     args.access === 'read'
@@ -444,9 +431,7 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
-  if (!(await checkDocumentPermission(ctx, doc, 'documents:IngestDocument'))) {
-    return;
-  }
+  await assertDocumentPermission(ctx, doc, 'documents:IngestDocument');
 
   const body = ctx.request.body as {
     chunk_strategy?: 'page' | 'whole' | 'size';
@@ -473,7 +458,7 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
   ctx.body = result;
 });
 
-registerDocumentVersionRoutes({ documentsRouter, checkDocumentPermission });
+registerDocumentVersionRoutes({ documentsRouter, assertDocumentPermission });
 registerIngestionCallbackRoute({ documentsRouter });
 
 export { documentsRouter };
