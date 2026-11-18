@@ -2,6 +2,7 @@ import { db } from 'src/db';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { createPlaybookTool } from '../../fixtures/playbookExecutors';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -52,9 +53,11 @@ describe('Playbook cases under a project pause', () => {
 
   const newCase = async (): Promise<string> => {
     seq += 1;
-    const res = await asAdmin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `paused-${seq}` });
+    const res = await createPlaybookCase({
+      client: asAdmin(),
+      playbookId,
+      body: { subject: `paused-${seq}` },
+    });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };

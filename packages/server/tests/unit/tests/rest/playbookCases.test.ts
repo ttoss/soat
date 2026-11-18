@@ -1,4 +1,5 @@
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { createPlaybookTool } from '../../fixtures/playbookExecutors';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -89,9 +90,11 @@ describe('Playbook cases', () => {
 
   const newCase = async (token = adminToken) => {
     seq += 1;
-    const res = await authenticatedTestClient(token)
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `client-${seq}` });
+    const res = await createPlaybookCase({
+      client: authenticatedTestClient(token),
+      playbookId,
+      body: { subject: `client-${seq}` },
+    });
     expect(res.status).toBe(201);
     return res.body as { id: string };
   };
@@ -153,9 +156,11 @@ describe('Playbook cases', () => {
 
   describe('POST /api/v1/playbooks/{playbook_id}/cases', () => {
     test('creates a case pinned to the current version', async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: 'ACME Ltda' });
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(userToken),
+        playbookId,
+        body: { subject: 'ACME Ltda' },
+      });
 
       expect(res.status).toBe(201);
       expect(res.body.id).toMatch(/^pbk_case_/);
@@ -169,30 +174,38 @@ describe('Playbook cases', () => {
     });
 
     test('returns 401 without a token', async () => {
-      const res = await testClient
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: 'x' });
+      const res = await createPlaybookCase({
+        client: testClient,
+        playbookId,
+        body: { subject: 'x' },
+      });
       expect(res.status).toBe(401);
     });
 
     test('returns 404 to a caller without permission', async () => {
-      const res = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: 'x' });
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(noPermToken),
+        playbookId,
+        body: { subject: 'x' },
+      });
       expect(res.status).toBe(404);
     });
 
     test('returns 400 without a subject', async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({});
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(userToken),
+        playbookId,
+        body: {},
+      });
       expect(res.status).toBe(400);
     });
 
     test('returns 400 for a blank subject', async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: '   ' });
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(userToken),
+        playbookId,
+        body: { subject: '   ' },
+      });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });

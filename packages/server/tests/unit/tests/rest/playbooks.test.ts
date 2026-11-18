@@ -6,6 +6,7 @@ import {
   setupProjectWithUsers,
   testGrant,
 } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import {
   createPlaybookDecider,
   createPlaybookTool,
@@ -134,9 +135,11 @@ describe('Playbooks', () => {
   };
 
   const newCase = async (playbookId: string) => {
-    const res = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: 'ACME Ltda' });
+    const res = await createPlaybookCase({
+      client: authenticatedTestClient(adminToken),
+      playbookId,
+      body: { subject: 'ACME Ltda' },
+    });
     expect(res.status).toBe(201);
     return res.body as { id: string };
   };

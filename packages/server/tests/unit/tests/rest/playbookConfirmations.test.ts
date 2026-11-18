@@ -5,6 +5,7 @@ import {
   type ChatCompletionsStub,
   startChatCompletionsStub,
 } from '../../fixtures/chatCompletionsStub';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import {
   authenticatedTestClient,
   clientFor,
@@ -90,9 +91,11 @@ describe('Playbook confirmations', () => {
 
   const newCase = async (playbook = playbookId) => {
     seq += 1;
-    const res = await asAdmin()
-      .post(`/api/v1/playbooks/${playbook}/cases`)
-      .send({ subject: `confirm-${seq}` });
+    const res = await createPlaybookCase({
+      client: asAdmin(),
+      playbookId: playbook,
+      body: { subject: `confirm-${seq}` },
+    });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };

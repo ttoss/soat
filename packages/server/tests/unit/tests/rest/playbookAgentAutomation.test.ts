@@ -6,6 +6,7 @@ import {
   startChatCompletionsStub,
   textCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -115,9 +116,11 @@ describe('Playbook case automation while an agent node runs', () => {
   describe('GET /api/v1/playbook-cases/{case_id}', () => {
     test('reads running while the turn runs, then idle', async () => {
       seq += 1;
-      const created = await asAdmin()
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: `essay-${seq}` });
+      const created = await createPlaybookCase({
+        client: asAdmin(),
+        playbookId,
+        body: { subject: `essay-${seq}` },
+      });
       expect(created.status).toBe(201);
       const caseId = created.body.id as string;
       const turn = holdTurn();

@@ -5,6 +5,7 @@ import {
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient } from '../../testClient';
 
 type McpCall = { name: string; arguments: Record<string, unknown> };
@@ -54,12 +55,13 @@ describe('Playbook execute node on an mcp tool', () => {
   };
 
   const runCase = async (playbookId: string) => {
-    const created = await admin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: turn.unique('case') });
+    const created = await createPlaybookCase({
+      client: admin(),
+      playbookId,
+      body: { subject: turn.unique('case') },
+    });
     expect(created.status).toBe(201);
     const caseId = created.body.id as string;
-    await flushPlaybookExecutions();
     const written = await admin()
       .post(`/api/v1/playbook-cases/${caseId}/inputs`)
       .send({

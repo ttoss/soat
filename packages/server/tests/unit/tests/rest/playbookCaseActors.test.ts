@@ -1,4 +1,5 @@
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const DEFINITION = {
@@ -32,9 +33,11 @@ describe('Playbook case actors', () => {
 
   const newCase = async (body: Record<string, unknown> = {}) => {
     seq += 1;
-    const res = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `client-${seq}`, ...body });
+    const res = await createPlaybookCase({
+      client: authenticatedTestClient(adminToken),
+      playbookId,
+      body: { subject: `client-${seq}`, ...body },
+    });
     expect(res.status).toBe(201);
     return res.body as { id: string; subject: string };
   };
@@ -97,17 +100,21 @@ describe('Playbook case actors', () => {
     });
 
     test('an unknown actor is 400 ACTOR_NOT_FOUND', async () => {
-      const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: 'nobody', actor_id: 'actor_doesNotExist0000' });
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(adminToken),
+        playbookId,
+        body: { subject: 'nobody', actor_id: 'actor_doesNotExist0000' },
+      });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('ACTOR_NOT_FOUND');
     });
 
     test("another project's actor is 400 ACTOR_NOT_FOUND", async () => {
-      const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/playbooks/${playbookId}/cases`)
-        .send({ subject: 'elsewhere', actor_id: otherProjectActor });
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(adminToken),
+        playbookId,
+        body: { subject: 'elsewhere', actor_id: otherProjectActor },
+      });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('ACTOR_NOT_FOUND');
     });

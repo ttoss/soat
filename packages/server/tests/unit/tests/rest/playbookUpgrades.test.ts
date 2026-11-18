@@ -5,6 +5,7 @@ import {
   setupProjectWithUsers,
   testGrant,
 } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import {
   authenticatedTestClient,
   clientFor,
@@ -73,9 +74,11 @@ describe('Playbook case upgrades', () => {
   };
 
   const newCase = async (playbookId: string) => {
-    const res = await asAdmin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `client-${seq}` });
+    const res = await createPlaybookCase({
+      client: asAdmin(),
+      playbookId,
+      body: { subject: `client-${seq}` },
+    });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };

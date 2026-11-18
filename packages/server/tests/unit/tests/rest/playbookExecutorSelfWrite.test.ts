@@ -8,6 +8,7 @@ import {
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -37,11 +38,12 @@ describe("Playbook writes from a case's own tool and orchestration executors", (
 
   const newCase = async (playbookId: string): Promise<string> => {
     seq += 1;
-    const res = await admin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `case-${seq}` });
+    const res = await createPlaybookCase({
+      client: admin(),
+      playbookId,
+      body: { subject: `case-${seq}` },
+    });
     expect(res.status).toBe(201);
-    await flushPlaybookExecutions();
     return res.body.id as string;
   };
 

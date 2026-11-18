@@ -8,6 +8,7 @@ import {
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
@@ -53,9 +54,11 @@ describe('On-Behalf-Of', () => {
 
   const newCase = async () => {
     seq += 1;
-    const res = await asAdmin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `obo-${seq}` });
+    const res = await createPlaybookCase({
+      client: asAdmin(),
+      playbookId,
+      body: { subject: `obo-${seq}` },
+    });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };

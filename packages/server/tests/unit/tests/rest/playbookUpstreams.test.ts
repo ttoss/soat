@@ -5,6 +5,7 @@ import {
   setupProjectWithUsers,
   testGrant,
 } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /** A company's profile, filled once and read by every month's DRE. */
@@ -136,12 +137,12 @@ describe('Playbook upstreams', () => {
     playbookId: string,
     body: Record<string, unknown> = {}
   ): Promise<CaseBody> => {
-    const res = await admin()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: unique('case'), ...body });
+    const res = await createPlaybookCase({
+      client: admin(),
+      playbookId,
+      body: { subject: unique('case'), ...body },
+    });
     expect(res.status).toBe(201);
-    // The first pull runs as an execution of the new case.
-    await flushPlaybookExecutions();
     return res.body as CaseBody;
   };
 
@@ -487,9 +488,11 @@ describe('Playbook upstreams', () => {
     ])('%s is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async (_label, bind) => {
       const company = await filledCompany();
 
-      const res = await admin()
-        .post(`/api/v1/playbooks/${dreId}/cases`)
-        .send({ subject: unique('case'), upstreams: bind(company.id) });
+      const res = await createPlaybookCase({
+        client: admin(),
+        playbookId: dreId,
+        body: { subject: unique('case'), upstreams: bind(company.id) },
+      });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
     });
@@ -498,9 +501,11 @@ describe('Playbook upstreams', () => {
       const other = await newPlaybook(COMPANY);
       const wrong = await newCase(other);
 
-      const res = await admin()
-        .post(`/api/v1/playbooks/${dreId}/cases`)
-        .send({ subject: unique('case'), upstreams: { company: wrong.id } });
+      const res = await createPlaybookCase({
+        client: admin(),
+        playbookId: dreId,
+        body: { subject: unique('case'), upstreams: { company: wrong.id } },
+      });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
       expect(res.body.error.meta).toEqual({
@@ -516,13 +521,15 @@ describe('Playbook upstreams', () => {
       expect(actor.status).toBe(201);
       const company = await filledCompany();
 
-      const res = await admin()
-        .post(`/api/v1/playbooks/${dreId}/cases`)
-        .send({
+      const res = await createPlaybookCase({
+        client: admin(),
+        playbookId: dreId,
+        body: {
           subject: unique('case'),
           actor_id: actor.body.id,
           upstreams: { company: company.id },
-        });
+        },
+      });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
     });
@@ -543,9 +550,11 @@ describe('Playbook upstreams', () => {
     test('a caller who may not read the upstream case is 400, as if it did not exist', async () => {
       const company = await filledCompany();
 
-      const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/playbooks/${dreId}/cases`)
-        .send({ subject: unique('case'), upstreams: { company: company.id } });
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(userToken),
+        playbookId: dreId,
+        body: { subject: unique('case'), upstreams: { company: company.id } },
+      });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
     });
@@ -553,16 +562,20 @@ describe('Playbook upstreams', () => {
     test('a caller without CreatePlaybookCase is 403', async () => {
       const company = await filledCompany();
 
-      const res = await authenticatedTestClient(readerToken)
-        .post(`/api/v1/playbooks/${dreId}/cases`)
-        .send({ subject: unique('case'), upstreams: { company: company.id } });
+      const res = await createPlaybookCase({
+        client: authenticatedTestClient(readerToken),
+        playbookId: dreId,
+        body: { subject: unique('case'), upstreams: { company: company.id } },
+      });
       expect(res.status).toBe(403);
     });
 
     test('no credential is 401', async () => {
-      const res = await testClient
-        .post(`/api/v1/playbooks/${dreId}/cases`)
-        .send({ subject: 'anon', upstreams: {} });
+      const res = await createPlaybookCase({
+        client: testClient,
+        playbookId: dreId,
+        body: { subject: 'anon', upstreams: {} },
+      });
       expect(res.status).toBe(401);
     });
   });

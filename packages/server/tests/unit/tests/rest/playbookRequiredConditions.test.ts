@@ -1,6 +1,7 @@
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
+import { createPlaybookCase } from '../../fixtures/playbookCase';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const CASE_ACTIONS = [
@@ -121,13 +122,12 @@ describe('Playbook inputs required on a condition', () => {
 
   const newCase = async () => {
     seq += 1;
-    const res = await asUser()
-      .post(`/api/v1/playbooks/${playbookId}/cases`)
-      .send({ subject: `conditional-${seq}` });
+    const res = await createPlaybookCase({
+      client: asUser(),
+      playbookId,
+      body: { subject: `conditional-${seq}` },
+    });
     expect(res.status).toBe(201);
-    // Creating a case queues its runnable nodes in the background; a write
-    // racing that run supersedes it, so the case settles first.
-    await flushPlaybookExecutions();
     return res.body.id as string;
   };
 
