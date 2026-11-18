@@ -15,20 +15,18 @@ import {
   transitionTask,
   updateTask,
 } from 'src/lib/tasks';
-import {
-  AUTOMATION_STATUS_NONE,
-  TASK_AUTOMATION_STATUSES,
-  type TaskAutomationStatus,
-} from 'src/lib/tasksAutomationStatus';
+import { TASK_AUTOMATION_STATUSES } from 'src/lib/tasksAutomationStatus';
 import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
 import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
+import { TASK_PRIORITIES } from 'src/lib/tasksPriority';
 import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import {
   parseEnumListQuery,
   parseEnumQuery,
+  parseNullableEnumListQuery,
   parseNullableToolContextBody,
   parsePagination,
   requestPrincipalFromCtx,
@@ -79,17 +77,6 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     projectSelector: 'optional',
   });
 
-  // The absent status is a value a task really holds, so it is a value of the
-  // filter too — the parameter's own absence already means "every task".
-  const automationStatuses = parseEnumListQuery({
-    ctx,
-    name: 'automation_status',
-    allowed: [...TASK_AUTOMATION_STATUSES, AUTOMATION_STATUS_NONE],
-  })?.map((value) => {
-    return value === AUTOMATION_STATUS_NONE
-      ? null
-      : (value as TaskAutomationStatus);
-  });
   ctx.body = await listTasks({
     projectIds,
     workflowId: ctx.query.workflow_id as string | undefined,
@@ -99,7 +86,16 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
       name: 'status',
       allowed: ['open', 'closed'],
     }),
-    automationStatuses,
+    automationStatuses: parseNullableEnumListQuery({
+      ctx,
+      name: 'automation_status',
+      allowed: TASK_AUTOMATION_STATUSES,
+    }),
+    priorities: parseNullableEnumListQuery({
+      ctx,
+      name: 'priority',
+      allowed: TASK_PRIORITIES,
+    }),
     assignee: ctx.query.assignee as string | undefined,
     blocked: blockedQuery(ctx),
     metadata,
