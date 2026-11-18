@@ -238,7 +238,7 @@ aiProvidersRouter.patch(
     });
 
     const body = ctx.request.body as {
-      secret_id?: string;
+      secret_id?: string | null;
       name?: string;
       provider?: string;
       default_model?: string;
@@ -248,8 +248,9 @@ aiProvidersRouter.patch(
       model_aliases_only?: boolean;
     };
 
-    let resolvedSecretId: number | undefined;
-    if (body.secret_id !== undefined) {
+    let resolvedSecretId: number | null | undefined =
+      body.secret_id === null ? null : undefined;
+    if (typeof body.secret_id === 'string') {
       const project = await db.Project.findOne({
         where: { publicId: existing.project_id! },
       });
