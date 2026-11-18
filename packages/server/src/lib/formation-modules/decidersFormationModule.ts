@@ -53,7 +53,7 @@ export const decidersFormationModule = defineFormationModule({
       agentId: properties.agent_id,
       toolId: properties.tool_id,
       questions: properties.questions,
-      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
+      policyIds: toNullableArray<string>(properties.policy_ids),
     });
   },
 
@@ -67,7 +67,7 @@ export const decidersFormationModule = defineFormationModule({
       agentId: properties.agent_id,
       toolId: properties.tool_id,
       questions: properties.questions,
-      policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
+      policyIds: toNullableArray<string>(properties.policy_ids),
     });
   },
 
