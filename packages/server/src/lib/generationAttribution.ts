@@ -1,6 +1,11 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  NO_PROVENANCE,
+  type ProvenanceCounts,
+  replayedProvenanceColumns,
+} from './generationProvenance';
 import { buildSrn } from './iam';
 import {
   pinServerIdentityToolContext,
@@ -243,10 +248,15 @@ export const attributionColumns = (args: GenerationAttribution) => {
 };
 
 /**
- * The conversation a turn answers: its public id, and the `position` of the
- * last message the turn read, which is where its reply is stored after.
+ * The conversation a turn answers: its public id, the `position` of the last
+ * message the turn read, which is where its reply is stored after, and the
+ * provenance counts the messages it is sent carry.
  */
-export type GenerationConversation = { id: string; snapshotPosition: number };
+export type GenerationConversation = {
+  id: string;
+  snapshotPosition: number;
+  replayed: ProvenanceCounts;
+};
 
 /**
  * The conversation columns of a turn's record. The conversation is resolved by
@@ -256,10 +266,12 @@ export type GenerationConversation = { id: string; snapshotPosition: number };
  */
 export const conversationColumns = async (
   conversation?: GenerationConversation
-): Promise<{
-  conversationId: number | null;
-  conversationSnapshotPosition: number | null;
-}> => {
+): Promise<
+  {
+    conversationId: number | null;
+    conversationSnapshotPosition: number | null;
+  } & ReturnType<typeof replayedProvenanceColumns>
+> => {
   const row = conversation
     ? await db.Conversation.findOne({
         where: { publicId: conversation.id },
@@ -269,6 +281,7 @@ export const conversationColumns = async (
   return {
     conversationId: (row?.id as number | undefined) ?? null,
     conversationSnapshotPosition: conversation?.snapshotPosition ?? null,
+    ...replayedProvenanceColumns(conversation?.replayed ?? NO_PROVENANCE),
   };
 };
 

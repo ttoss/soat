@@ -5,6 +5,7 @@ import {
   addConversationDocumentMessage,
   addConversationMessage,
 } from './conversationMessages';
+import { countOf } from './generationProvenance';
 import { resolveMessageContent } from './messageContent';
 import type { WorkAuthority } from './workAuthority';
 import { captureAuthority } from './workAuthority';
@@ -44,6 +45,7 @@ export const addResolvedSessionUserMessage = async (args: {
     authUser: args.authUser,
   });
 
+  const provenance = countOf(resolvedContent.provenance ?? null);
   const userMsg = args.documentId
     ? await addConversationDocumentMessage({
         conversationId: args.conversationId,
@@ -52,6 +54,7 @@ export const addResolvedSessionUserMessage = async (args: {
         actorId: args.actorId ?? null,
         idempotencyKey: args.idempotencyKey,
         idempotencyDigest: args.idempotencyDigest,
+        provenance,
       })
     : await addConversationMessage({
         conversationId: args.conversationId,
@@ -60,6 +63,7 @@ export const addResolvedSessionUserMessage = async (args: {
         actorId: args.actorId ?? null,
         idempotencyKey: args.idempotencyKey,
         idempotencyDigest: args.idempotencyDigest,
+        provenance,
       });
 
   if (!userMsg) {

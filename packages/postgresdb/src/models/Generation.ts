@@ -337,6 +337,14 @@ export class Generation extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare knowledgeResults: number;
 
+  // The part of those counts a conversation turn took from the messages it was
+  // sent, so its reply's message is stamped with only what the turn added.
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare replayedUntrustedToolResults: number;
+
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare replayedKnowledgeResults: number;
+
   // Caller-owned. The server writes nothing here, so there is no reserved-key
   // list to maintain and no key a caller sets that reaches platform state.
   @Column({ type: DataType.JSON, allowNull: true })

@@ -16,6 +16,7 @@ import {
   updateConversationTags,
 } from 'src/lib/conversations';
 import { mapGeneratedTurn } from 'src/lib/generatedTurn';
+import { NO_PROVENANCE } from 'src/lib/generationProvenance';
 import { buildSrn } from 'src/lib/iam';
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
 import { assertAllowedUnder } from 'src/lib/turnAuthority';
@@ -118,6 +119,8 @@ conversationSubResourcesRouter.post(
       actorId: body.actor_id ?? null,
       position: body.position,
       metadata: readNullableMetadataBag(body.metadata) ?? undefined,
+      // Caller-written text: it carries no block that feeds a counter.
+      provenance: NO_PROVENANCE,
     });
 
     if (!message) {

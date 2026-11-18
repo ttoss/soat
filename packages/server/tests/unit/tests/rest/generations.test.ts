@@ -1,5 +1,6 @@
 import { db } from 'src/db';
 import { getGenerationPendingState } from 'src/lib/generationPendingState';
+import { NO_PROVENANCE } from 'src/lib/generationProvenance';
 import {
   createGenerationRecord,
   updateGenerationRecord,
@@ -370,7 +371,11 @@ describe('Generations', () => {
         projectId: project!.id as number,
         agentId,
         traceId: 'trc_conv_edge',
-        conversation: { id: conversation.body.id, snapshotPosition: -1 },
+        conversation: {
+          id: conversation.body.id,
+          snapshotPosition: -1,
+          replayed: NO_PROVENANCE,
+        },
       });
 
       const response = await authenticatedTestClient(userToken).get(

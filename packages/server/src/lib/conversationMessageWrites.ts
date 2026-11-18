@@ -4,6 +4,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { lockForTransaction } from './advisoryLocks';
 import { type Transaction } from './dbTransaction';
+import {
+  provenanceColumns,
+  type ProvenanceCounts,
+} from './generationProvenance';
 import { isUniqueViolationOf } from './uniqueViolation';
 
 const log = createDebug('soat:conversationMessages');
@@ -63,6 +67,8 @@ export const insertMessage = async (args: {
   responseMessages?: unknown[];
   idempotencyKey: string | null;
   idempotencyDigest?: string | null;
+  /** What the message's content feeds a turn it is sent to. */
+  provenance: ProvenanceCounts;
 }): Promise<InstanceType<(typeof db)['ConversationMessage']>> => {
   log(
     'insertMessage: conversationId=%d position=%s',
@@ -94,6 +100,7 @@ export const insertMessage = async (args: {
           position,
           metadata: args.metadata ?? null,
           responseMessages: args.responseMessages ?? null,
+          ...provenanceColumns(args.provenance),
           idempotencyKey: args.idempotencyKey,
           idempotencyDigest: args.idempotencyKey
             ? (args.idempotencyDigest ?? null)

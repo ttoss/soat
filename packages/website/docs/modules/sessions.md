@@ -237,6 +237,8 @@ When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LL
 
 A generation sends the conversation's most recent messages and drops the oldest: the session's `max_context_messages` when set, else the agent's [`max_context_messages`](./agents.md#context-window-limiting), else the whole history. The agent's instructions are not counted. The value is a positive integer; `0` or a negative is `400 VALIDATION_FAILED`. A [fork](#forking) keeps its parent's value.
 
+The window also bounds what a turn has read for a provenance guardrail: `runtime.generations.*` start from the counts of the messages sent, so content an earlier turn read keeps holding a guarded write until its messages leave the window ([What the turn has read](./guardrails.md#what-the-turn-has-read)).
+
 ### Single Session Per Actor
 
 When the parent agent has `single_session_per_actor: true`, creating a session with an `actor_id` returns `409 Conflict` if an open session for that actor already exists. The error body includes `meta.session_id` with the existing session's ID. See [Single Session Per Actor](./agents.md#single-session-per-actor).

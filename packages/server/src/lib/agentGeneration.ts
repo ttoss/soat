@@ -144,6 +144,7 @@ const resolveContextAndRecord = async (
     pinnedAgentVersion: args.pinnedAgentVersion,
     outputSchemaOverride: args.outputSchemaOverride,
     initiatorGenerationId: args.initiatorGenerationId,
+    conversation: args.conversation,
   });
 
   // Awaited so the record reliably exists before the generation runs and a

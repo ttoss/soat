@@ -17,6 +17,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { provenanceColumns, storedProvenance } from './generationProvenance';
 import { paginatedList } from './pagination';
 import { agentReferences } from './resourceReferences';
 import { sessionIncludes, type SessionRow, sessions } from './sessionAccessor';
@@ -153,6 +154,7 @@ const copyMessagesIntoFork = async (args: {
         position: message.position,
         metadata: message.metadata ?? null,
         responseMessages: message.responseMessages ?? null,
+        ...provenanceColumns(storedProvenance(message)),
         idempotencyKey: null,
       };
     }),
