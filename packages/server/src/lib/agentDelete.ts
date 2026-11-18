@@ -63,8 +63,8 @@ const findDependentIds = async (args: {
 
 // Cross-references from other agents' rows are nulled first, since those
 // self-referencing FKs are RESTRICT. The traces' step files are released once
-// the transaction commits. The agent's sessions in its own project go with it; a grantee's sessions on
-// a shared agent keep their durable `agent_public_id`.
+// the transaction commits. The agent's sessions in its own project go with it;
+// a grantee's sessions on a shared agent keep their durable `agent_public_id`.
 const destroyOwnSessions = async (args: {
   agent: InstanceType<typeof db.Agent>;
   transaction?: Transaction;

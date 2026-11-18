@@ -68,7 +68,6 @@ export const SYSTEM_FILE_RELEASES = {
   // The row goes before the object, so no read references bytes mid-delete.
   traces: async (args: { fileIds: number[] }): Promise<void> => {
     log('traces: %d files', args.fileIds.length);
-    if (args.fileIds.length === 0) return;
     const files = await db.File.findAll({
       where: { id: args.fileIds },
       attributes: ['storagePath', 'storageType'],
