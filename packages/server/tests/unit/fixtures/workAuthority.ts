@@ -12,6 +12,7 @@ export const ORPHAN_AUTHORITY: WorkAuthority = {
   trigger: null,
   work: null,
   actsFor: null,
+  toolContext: null,
 };
 
 /** A stored authority acting as the user `user` with that user's own grant. */
@@ -24,5 +25,6 @@ export const userAuthority = (args: { user: string }): WorkAuthority => {
     trigger: null,
     work: null,
     actsFor: null,
+    toolContext: null,
   };
 };

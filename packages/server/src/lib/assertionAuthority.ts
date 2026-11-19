@@ -8,19 +8,21 @@ import type { PolicySets } from './iam';
 import { isPlainObject } from './plainObject';
 import { isPolicySets } from './principalBound';
 import { deriveSecretKey } from './signedTokens';
+import { readToolContextLayer } from './toolContextLayer';
 
 /** One cap a callback is held to: its policy sets and whom a refusal by them names. */
 export type AssertionCap = { by: DeniedPrincipal; sets: PolicySets };
 
 /**
  * The authority of the work a tool assertion was sent for: the caps a
- * callback presenting it is held to, and the opaque principal it acts for.
- * Sealed with a key only this deployment derives, so a tool server that
- * verifies the assertion reads neither.
+ * callback presenting it is held to, the opaque principal it acts for, and
+ * the `tool_context` layer it pins. Sealed with a key only this deployment
+ * derives, so a tool server that verifies the assertion reads none of them.
  */
 export type AssertionAuthority = {
   caps: AssertionCap[];
   principal?: { type: string; id: string };
+  toolContext?: Record<string, string>;
 };
 
 const log = createDebug('soat:assertionAuthority');
@@ -86,6 +88,20 @@ const decrypt = (sealed: string): unknown => {
   }
 };
 
+const readOpened = (opened: unknown): AssertionAuthority | null => {
+  if (!isPlainObject(opened) || !isCaps(opened.caps)) return null;
+  if (opened.principal !== undefined && !isPrincipal(opened.principal)) {
+    return null;
+  }
+  const layer = readToolContextLayer(opened.toolContext);
+  if (layer === null) return null;
+  return {
+    caps: opened.caps,
+    ...(opened.principal ? { principal: opened.principal } : {}),
+    ...(layer ? { toolContext: layer } : {}),
+  };
+};
+
 /**
  * The authority a sealed claim holds, or `null` when it is absent, was not
  * sealed by this deployment, or holds no cap: a callback is never left
@@ -96,17 +112,7 @@ export const openAssertionAuthority = (args: {
 }): AssertionAuthority | null => {
   const { value } = args;
   if (typeof value !== 'string' || value.length === 0) return null;
-  const opened = decrypt(value);
-  if (
-    !isPlainObject(opened) ||
-    !isCaps(opened.caps) ||
-    (opened.principal !== undefined && !isPrincipal(opened.principal))
-  ) {
-    log('openAssertionAuthority: unreadable');
-    return null;
-  }
-  return {
-    caps: opened.caps,
-    ...(opened.principal ? { principal: opened.principal } : {}),
-  };
+  const authority = readOpened(decrypt(value));
+  if (!authority) log('openAssertionAuthority: unreadable');
+  return authority;
 };

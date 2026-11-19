@@ -65,6 +65,12 @@ describe('tool_context carriers', () => {
    */
   const FORWARDS_THE_BAG = ['agentToolResolverSoatBody.ts'];
 
+  /**
+   * A stored `WorkAuthority` holds an IAM token's layer under the same name;
+   * the authority column is never returned on a read.
+   */
+  const STORES_THE_LAYER = ['workAuthority.ts'];
+
   /** Source with comments dropped, so prose naming the field is not a hit. */
   const code = (file) => {
     return stripComments(fs.readFileSync(file, 'utf-8'));
@@ -83,7 +89,8 @@ describe('tool_context carriers', () => {
         return (
           typeof entry === 'string' &&
           entry.endsWith('.ts') &&
-          !FORWARDS_THE_BAG.includes(path.basename(entry))
+          !FORWARDS_THE_BAG.includes(path.basename(entry)) &&
+          !STORES_THE_LAYER.includes(path.basename(entry))
         );
       })
       .filter((entry) => {

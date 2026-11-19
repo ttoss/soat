@@ -153,6 +153,7 @@ const firingAuthority = (args: {
     ...narrowAuthority({ authority: own, by: callerAuthority }),
     principal: callerAuthority.principal,
     actsFor: callerAuthority.actsFor,
+    toolContext: callerAuthority.toolContext,
     work: callerAuthority.work,
   };
 };

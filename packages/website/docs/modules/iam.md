@@ -66,6 +66,27 @@ It answers `201 { "token", "jti", "expires_at" }`; `jti` is the id a denial by t
 - An `mcp` tool called on the token carries the bound and `principal` encrypted in its [assertion](./tools.md#tool-assertions); a tool server calling back with that assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) is capped by them, and its audit entries record `principal` under `detail.on_behalf_of_principal`.
 - A request on the token may itself carry [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a call made in the token's project: it is held to the token's bound ∩ the assertion's authority, and so is work it starts.
 
+### Pinning a `tool_context` layer
+
+A token may carry `tool_context`, a layer of keys its issuer pins for everything the token does:
+
+```json
+{
+  "policy": {
+    "statement": [
+      { "effect": "Allow", "action": ["agents:*", "tools:CallTool"] }
+    ]
+  },
+  "tool_context": { "tenant_id": "acct_42" }
+}
+```
+
+- On every tool call the token makes, and every call its work starts (a generation's tool calls, nested `builtin` and `soat` calls, a `call-tool` relay, a manual trigger fire), a caller key the layer names is dropped in any casing and the layer's value is sent instead. A model or caller writing `tenant_id` gets the layer's value.
+- A tool server calling back with the [assertion](./tools.md#tool-assertions) of a call the token or its work made, in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call), carries the layer too, stamped over its own credential's: its tool calls and the work it starts send the layer's value. A scheduled trigger firing carries no layer.
+- The stamp happens where the call enters the tool, after [admission](#admission): admission sees the caller's own `tool_context`.
+- Keys follow the [`tool_context` key grammar](./tools.md); a server identity key (`session_id`, `actor_id`, `actor_external_id`, `calling_project_id`) is `400 INVALID_TOOL_CONTEXT_KEY`.
+- A deployment may reserve a key prefix to token layers (`SOAT_RESERVED_TOOL_CONTEXT_PREFIX`, see [Configuration](#configuration)). A key under it is stripped from every caller's `tool_context` on a call, and `400 INVALID_TOOL_CONTEXT_KEY` on a write that stores one (a session, a task, a trigger, an orchestration or evaluation run, a loop's `item_tool_context`, and those resources in a formation). A token layer may carry one only when the issuing key's grant allows `iam:PinReservedToolContext` on `srn:<project_id>:iam_token:*`, else `400 INVALID_TOOL_CONTEXT_KEY`.
+
 ### Revoking a principal
 
 Work stores the `principal` it acts for. When the caller's own principal goes away (its user deleted, its key revoked), [`POST /api/v1/iam/principal-revocations`](/docs/api/iam/revoke-iam-principal) revokes it in the project, for good; it needs `iam:RevokePrincipal` on `srn:<project_id>:iam_principal:*`:
@@ -655,9 +676,10 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
 
 ## Configuration
 
-| Environment Variable       | Required | Description                                                                                                                                                                                                                                                                                                                                      |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `IAM_REGISTRATIONS_CONFIG` | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`), [MCP servers](#registered-mcp-servers) (`mcp_tools`), [the builtin catalog](#the-builtin-catalog) (`builtin_actions`) and an [admission service](#admission) (`admission`). Unset (the default) registers none and offers every native action. |
+| Environment Variable                | Required | Description                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `IAM_REGISTRATIONS_CONFIG`          | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`), [MCP servers](#registered-mcp-servers) (`mcp_tools`), [the builtin catalog](#the-builtin-catalog) (`builtin_actions`) and an [admission service](#admission) (`admission`). Unset (the default) registers none and offers every native action. |
+| `SOAT_RESERVED_TOOL_CONTEXT_PREFIX` | No       | A `tool_context` key prefix (e.g. `platform_`) only an [IAM token's layer](#pinning-a-tool_context-layer) carries: stripped from a caller's bag on a call, refused on a write that stores one. Unset reserves none.                                                                                                                              |
 
 ```json
 {

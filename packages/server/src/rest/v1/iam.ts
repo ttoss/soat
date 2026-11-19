@@ -4,14 +4,28 @@ import { callerDenied } from 'src/lib/authorizationDenial';
 import { checkIamPermission } from 'src/lib/iamCheck';
 import { assertIamTokenIssuer, createIamToken } from 'src/lib/iamTokens';
 import { revokePrincipal } from 'src/lib/principalRevocations';
+import { isReservedPrefixKey } from 'src/lib/toolContext';
 import {
   discardAuthorizationChecks,
   recordAuthorizationDecision,
 } from 'src/middleware/audit';
 
-import { requireAuth, resolveWriteProjectId } from './helpers';
+import {
+  parseToolContextBody,
+  requireAuth,
+  resolveWriteProjectId,
+} from './helpers';
 
 const iamRouter = new Router<Context>();
+
+/** Whether a `tool_context` body names a key under the reserved prefix. */
+const reservesKeys = (
+  toolContext: Record<string, string> | undefined
+): boolean => {
+  return Object.keys(toolContext ?? {}).some((key) => {
+    return isReservedPrefixKey(key);
+  });
+};
 
 const projectSrn = (args: {
   projectPublicId: string;
@@ -63,10 +77,20 @@ iamRouter.post('/iam/tokens', async (ctx: Context) => {
   if (!allowed) {
     throw callerDenied({ authUser: ctx.authUser, action, resource });
   }
+  const body = ctx.request.body as Record<string, unknown>;
+  const toolContext = parseToolContextBody(body.tool_context);
   ctx.status = 201;
   ctx.body = await createIamToken({
     issuer,
-    body: ctx.request.body as Record<string, unknown>,
+    body,
+    toolContext,
+    mayPinReserved:
+      reservesKeys(toolContext) &&
+      (await ctx.authUser.isAllowed({
+        projectPublicId,
+        action: 'iam:PinReservedToolContext',
+        resource,
+      })),
   });
 });
 

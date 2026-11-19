@@ -13,6 +13,7 @@ import {
 import { isPlainObject } from './plainObject';
 import { type PrincipalBound, serializeBound } from './principalBound';
 import { signToken } from './signedTokens';
+import { parseToolContextLayer } from './toolContextLayer';
 
 const log = createDebug('soat:iamTokens');
 
@@ -197,7 +198,7 @@ const parseTtl = (value: unknown): number => {
 /**
  * The issuing key held to `bound`, as an IAM token: every request on it is
  * checked against the key's grant as it stands then ∩ the bound, and work it
- * starts stores the bound.
+ * starts stores the bound and its `tool_context` layer.
  */
 export const signIamToken = (args: {
   issuer: Pick<
@@ -206,9 +207,10 @@ export const signIamToken = (args: {
   >;
   bound: PrincipalBound;
   principal?: { type: string; id: string };
+  toolContext?: Record<string, string>;
   ttlSeconds: number;
 }): { token: string; jti: string; expiresAt: number } => {
-  const { issuer, principal } = args;
+  const { issuer, principal, toolContext } = args;
   const jti = randomUUID();
   const issuedAt = Math.floor(Date.now() / 1000);
   const token = signToken({
@@ -220,6 +222,7 @@ export const signIamToken = (args: {
       key: issuer.apiKeyPublicId,
       bnd: serializeBound(args.bound),
       ...(principal ? { prn: principal } : {}),
+      ...(toolContext ? { tcx: toolContext } : {}),
       jti,
       iat: issuedAt,
     },
@@ -232,6 +235,10 @@ export const signIamToken = (args: {
 export const createIamToken = async (args: {
   issuer: Issuer;
   body: Record<string, unknown>;
+  /** The body's `tool_context`, read by `parseToolContextBody`. */
+  toolContext: Record<string, string> | undefined;
+  /** Whether the issuer's grant allows `iam:PinReservedToolContext`. */
+  mayPinReserved: boolean;
 }): Promise<{ token: string; jti: string; expires_at: string }> => {
   const { issuer, body } = args;
   const ttlSeconds = parseTtl(body.ttl_seconds);
@@ -239,13 +246,18 @@ export const createIamToken = async (args: {
     issuer,
     bound: await parseBoundBody({ body, issuer }),
     principal: parsePrincipal(body.principal),
+    toolContext: parseToolContextLayer({
+      toolContext: args.toolContext,
+      mayPinReserved: args.mayPinReserved,
+    }),
     ttlSeconds,
   });
   log(
-    'createIamToken: key=%s jti=%s ttl=%d',
+    'createIamToken: key=%s jti=%s ttl=%d layer=%s',
     issuer.apiKeyPublicId,
     jti,
-    ttlSeconds
+    ttlSeconds,
+    args.toolContext === undefined ? 'none' : 'set'
   );
   return {
     token,

@@ -310,6 +310,9 @@ const resolveWork = async (args: {
       ...(principal.type === 'api_key' ? { apiKeyPublicId: principal.id } : {}),
       ...(authority.project ? { oauthProjectPublicId: authority.project } : {}),
       ...(authority.actsFor ? { onBehalfOfPrincipal: authority.actsFor } : {}),
+      ...(authority.toolContext
+        ? { toolContextLayer: authority.toolContext }
+        : {}),
       work: { trigger: authority.trigger, work: authority.work },
       terms: workTerms(authority),
     },

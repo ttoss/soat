@@ -1,5 +1,6 @@
 import type { AuthUser } from '../Context';
 import { issuingKeyProject, requestOnBehalfOf } from '../lib/onBehalfOf';
+import { callbackToolContextLayer } from '../lib/toolContextLayer';
 import type { Authority } from './authority';
 
 /** A credential resolved before its authority is built: who it is, and its stated terms. */
@@ -11,7 +12,8 @@ export type ResolvedCredential = {
  * A request carrying a tool call's assertion runs as its credential (a key, or
  * an IAM token held to its bound), pinned to the key's project and capped by
  * the authority of the work that call was sent for, which the assertion
- * carries sealed: a tool server calling back acts no further than that work.
+ * carries sealed: a tool server calling back acts no further than that work,
+ * and carries the `tool_context` layer that work pins.
  */
 export const withOnBehalfOf = (args: {
   headers: Record<string, string | string[] | undefined>;
@@ -24,10 +26,15 @@ export const withOnBehalfOf = (args: {
     keyProjectPublicId: projectPublicId,
   });
   if (!asserted || !projectPublicId) return args.resolved;
-  const { principal, caps } = asserted.authority;
+  const { principal, caps, toolContext } = asserted.authority;
+  const layer = callbackToolContextLayer({
+    credential: authUser.toolContextLayer,
+    asserted: toolContext,
+  });
   return {
     authUser: {
       ...authUser,
+      ...(layer ? { toolContextLayer: layer } : {}),
       onBehalfOf: asserted.onBehalfOf,
       actor: asserted.onBehalfOf.actor_id,
       ...(principal ? { onBehalfOfPrincipal: principal } : {}),
