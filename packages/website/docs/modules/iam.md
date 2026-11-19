@@ -285,6 +285,8 @@ A deployment that gates runtime writes for its own reasons (a plan limit, a cap)
 
 `project_id` is the project the write lands in: the one the request names, else a project-scoped credential's own. `resource_id` names the resource an edit targets (`null` on a create); `body` is the write as it will be applied: the request body, or a formation resource's properties once resolved.
 
+`principal.type` is one of `user`, `api_key`, `trigger`, `eval`, `decider`, `ingestion_rule`, `memory_rule`, `playbook_version` (`ActingPrincipalType`). The question is the `AdmissionRequest` schema and a refusal's body the `AdmissionRefusal` schema, both in the spec `GET /api/v1/openapi.json` serves (source: `admission.yaml`).
+
 - A `2xx` admits the write.
 - A `4xx` with `{ "error": { "code", "message", "meta"? } }` refuses it: the caller receives that status, `code`, `message` and `meta` as sent, on every write the service can be asked about (each documents it as its `4XX` response). `code` is any identifier matching `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, so a service's own lowercase codes pass unchanged.
 - Anything else (unreachable, timed out, `5xx`, a refusal outside that shape) refuses it with `502 ADMISSION_UNAVAILABLE`. An unanswered question is never a pass.

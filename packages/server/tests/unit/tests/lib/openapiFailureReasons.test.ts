@@ -26,6 +26,10 @@ const PROBLEM_REF = './errors.yaml#/components/schemas/ValidationProblem';
  */
 const EXEMPT = new Map<string, string>([
   [
+    'admission.yaml#/components/schemas/AdmissionRefusal/properties/error',
+    "an admission service's answer: its code is the service's own, not an ERROR_CODES key",
+  ],
+  [
     'errors.yaml#/components/schemas/ErrorResponse/properties/error',
     'the response envelope itself: StoredError plus hint and docs_url',
   ],

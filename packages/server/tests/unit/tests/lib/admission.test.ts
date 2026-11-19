@@ -7,9 +7,11 @@ import {
   initAdmission,
   isAdmissionDeclared,
   parseAdmissionRegistration,
+  REFUSAL_CODE_PATTERN,
   registerAdmission,
 } from 'src/lib/admission';
 import { IAM_REGISTRATIONS_CONFIG_ENV } from 'src/lib/iamRegistrations';
+import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 import { PROTOCOL_ANSWER_MAX_BYTES } from 'src/lib/requestBounds';
 
 import {
@@ -104,6 +106,22 @@ describe('initAdmission', () => {
 
     expect(isAdmissionDeclared('triggers:CreateTrigger')).toBe(true);
     expect(isAdmissionDeclared('triggers:UpdateTrigger')).toBe(false);
+  });
+});
+
+describe('the published protocol', () => {
+  test('a relayed refusal code follows the grammar AdmissionRefusal publishes', () => {
+    expect(
+      getMergedOpenApiSpec().components.schemas.AdmissionRefusal
+    ).toMatchObject({
+      properties: {
+        error: {
+          properties: {
+            code: { pattern: REFUSAL_CODE_PATTERN.source },
+          },
+        },
+      },
+    });
   });
 });
 

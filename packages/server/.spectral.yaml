@@ -14,6 +14,7 @@ overrides:
   # by `$ref` from sibling specs), so linted alone every component reads
   # unused and `servers` has nothing to describe.
   - files:
+      - "src/rest/openapi/v1/admission.yaml"
       - "src/rest/openapi/v1/concurrency.yaml"
       - "src/rest/openapi/v1/errors.yaml"
       - "src/rest/openapi/v1/memory-assertions.yaml"

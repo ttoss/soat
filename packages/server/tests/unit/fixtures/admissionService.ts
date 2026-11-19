@@ -1,6 +1,7 @@
 /**
  * A deployment's admission service on localhost: every question is genuinely
- * serialized and signed, and what it received is the observable.
+ * serialized and signed, and what it received is the observable. A question
+ * outside the published `AdmissionRequest` fails `undeclare`.
  */
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -10,6 +11,8 @@ import {
   signatureHeader,
   verifyTimestampedSignature,
 } from 'src/lib/hmacSignature';
+
+import { assertMatchesComponentSchema } from '../openapiContract';
 
 const SECRET = 'admission-signing-secret';
 
@@ -57,12 +60,31 @@ export type AdmissionService = {
     url?: string;
     timeoutMs?: number;
   }) => void;
-  /** Unregisters; call it after every test that declared. */
+  /** Unregisters; call it after every test that declared. Throws when a question broke the contract. */
   undeclare: () => void;
   close: () => Promise<void>;
 };
 
-type State = Pick<AdmissionService, 'asked' | 'reply'>;
+type State = Pick<AdmissionService, 'asked' | 'reply'> & {
+  violations: string[];
+};
+
+const contractViolation = (body: unknown): string | null => {
+  try {
+    assertMatchesComponentSchema({ schema: 'AdmissionRequest', value: body });
+    const principal =
+      typeof body === 'object' && body !== null && 'principal' in body
+        ? body.principal
+        : undefined;
+    assertMatchesComponentSchema({
+      schema: 'AdmissionPrincipal',
+      value: principal,
+    });
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
 
 const answer = (args: { state: State }) => {
   const { state } = args;
@@ -73,8 +95,11 @@ const answer = (args: { state: State }) => {
     });
     req.on('end', () => {
       const header = req.headers[signatureHeader().toLowerCase()];
+      const body = JSON.parse(raw);
+      const violation = contractViolation(body);
+      if (violation) state.violations.push(violation);
       state.asked.push({
-        body: JSON.parse(raw),
+        body,
         signed:
           typeof header === 'string' &&
           verifyTimestampedSignature({
@@ -103,7 +128,7 @@ const answer = (args: { state: State }) => {
 };
 
 export const startAdmissionService = async (): Promise<AdmissionService> => {
-  const state: State = { asked: [], reply: ADMIT };
+  const state: State = { asked: [], reply: ADMIT, violations: [] };
   const server = answer({ state });
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
@@ -132,6 +157,12 @@ export const startAdmissionService = async (): Promise<AdmissionService> => {
     undeclare: () => {
       registerAdmission({ registration: null });
       state.reply = ADMIT;
+      const violations = state.violations.splice(0);
+      if (violations.length > 0) {
+        throw new Error(
+          `The runtime asked outside AdmissionRequest:\n${violations.join('\n')}`
+        );
+      }
     },
     close: () => {
       return new Promise<void>((resolve) => {

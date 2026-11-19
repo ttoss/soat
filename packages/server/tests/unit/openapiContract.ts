@@ -371,3 +371,40 @@ export const assertResponseMatchesSpec = (args: {
     });
   }
 };
+
+const componentValidators = new Map<string, ValidateFunction>();
+
+/**
+ * Throws unless `value` is what the named component schema describes and
+ * sends no top-level key it does not declare: the check for a payload the
+ * runtime sends rather than answers.
+ */
+export const assertMatchesComponentSchema = (args: {
+  schema: string;
+  value: unknown;
+}): void => {
+  const { schema, value } = args;
+  let validate = componentValidators.get(schema);
+  if (!validate) {
+    validate = getAjv(omittedErrorFields()).compile({
+      $ref: `${SPEC_ID}#/components/schemas/${escapePointerToken(schema)}`,
+    });
+    componentValidators.set(schema, validate);
+  }
+  if (!validate(value)) {
+    throw new Error(
+      `Payload does not match ${schema}:\n${formatErrors(validate.errors)}`
+    );
+  }
+  const declared = getMergedOpenApiSpec().components.schemas[schema];
+  const properties = isRecord(declared) ? declared.properties : undefined;
+  if (!isRecord(value) || !isRecord(properties)) return;
+  const undeclared = Object.keys(value).filter((key) => {
+    return !Object.hasOwn(properties, key);
+  });
+  if (undeclared.length > 0) {
+    throw new Error(
+      `Payload sends keys ${schema} does not declare: ${undeclared.join(', ')}`
+    );
+  }
+};
