@@ -88,20 +88,33 @@ describe('first-write races', () => {
 
   test('a trace created concurrently is updated, not duplicated', async () => {
     const traceId = generatePublicId(PUBLIC_ID_PREFIXES.trace);
+    const generationId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
     const held = await db.sequelize.transaction();
-    await findOrCreateTrace({
+    const trace = await findOrCreateTrace({
       traceId,
       projectId,
       agentDbId: agentId,
       transaction: held,
     });
+    await db.Generation.create(
+      {
+        publicId: generationId,
+        projectId,
+        agentId,
+        traceId: trace.id,
+        status: 'running',
+        startedAt: new Date(),
+        stepCount: 0,
+      },
+      { transaction: held }
+    );
 
     const save = saveTrace({
       traceId,
       projectId,
       projectPublicId,
       agentId: agentPublicId,
-      generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+      generationId,
       steps: [{ type: 'text', text: 'done' }],
     });
     await lockWaiterAppears();
@@ -111,6 +124,5 @@ describe('first-write races', () => {
     const rows = await db.Trace.findAll({ where: { publicId: traceId } });
     expect(rows).toHaveLength(1);
     expect(rows[0].stepCount).toBe(1);
-    expect(rows[0].fileId).not.toBeNull();
   });
 });

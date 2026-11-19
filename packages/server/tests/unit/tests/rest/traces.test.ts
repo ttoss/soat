@@ -1,3 +1,4 @@
+import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
 import { saveTrace } from 'src/lib/traces';
 
@@ -170,6 +171,16 @@ describe('Traces REST API', () => {
       lastActivityAt: new Date(Date.now() - 500),
       stopReason: 'stop',
       metadata: null,
+    });
+
+    // Steps count only for a generation that exists.
+    await saveTrace({
+      traceId,
+      projectId: internalProjectId,
+      projectPublicId: projectId,
+      agentId: 'agt_traces_rest_001',
+      generationId: firstGenerationId,
+      steps: [{ type: 'text-delta', text: 'hello' }],
     });
 
     traceGenerationIds = [firstGenerationId, secondGenerationId];
@@ -556,7 +567,17 @@ describe('Traces REST API', () => {
       });
 
       const rootRow = await db.Trace.findOne({ where: { publicId: rootId } });
+      const childRow = await db.Trace.findOne({ where: { publicId: childId } });
       const genId = `gen_purge_${args.suffix}`;
+      const childGenId = `gen_purge_child_${args.suffix}`;
+      await db.Generation.create({
+        publicId: childGenId,
+        projectId: internalProjectId,
+        agentId: tracesAgentDbId,
+        traceId: childRow!.id,
+        status: 'completed',
+        startedAt: new Date(),
+      });
       await db.Generation.create({
         publicId: genId,
         projectId: internalProjectId,
@@ -572,8 +593,33 @@ describe('Traces REST API', () => {
         extraction: { candidates: 1, created: 1, updated: 0, skipped: 0 },
         pendingState: { messages: [{ role: 'user', content: 'secret' }] },
       });
+      // Content lands only for a generation that exists.
+      await saveTrace({
+        traceId: rootId,
+        projectId: internalProjectId,
+        projectPublicId: projectId,
+        agentId: 'agt_traces_rest_001',
+        generationId: genId,
+        steps: [{ type: 'text-delta', text: 'root secret' }],
+      });
+      await saveTrace({
+        traceId: childId,
+        projectId: internalProjectId,
+        projectPublicId: projectId,
+        agentId: 'agt_traces_rest_002',
+        generationId: childGenId,
+        steps: [{ type: 'text-delta', text: 'child secret' }],
+      });
 
       return { rootId, childId, genId };
+    };
+
+    const stepFileCount = async (traceIdToCount: string) => {
+      return db.File.count({
+        where: {
+          path: { [Op.like]: `/.system/traces/${traceIdToCount}/%` },
+        },
+      });
     };
 
     test('returns 401 when unauthenticated', async () => {
@@ -596,16 +642,15 @@ describe('Traces REST API', () => {
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
-    test('purges the steps file and marks the trace redacted', async () => {
+    test('purges the step objects and marks the trace redacted', async () => {
       const seeded = await seedTree({ suffix: 'basic' });
 
       const before = await authenticatedTestClient(userToken).get(
         `/api/v1/traces/${seeded.rootId}`
       );
       expect(before.status).toBe(200);
-      expect(before.body.file_id).not.toBeNull();
       expect(before.body.content_redacted_at).toBeNull();
-      const fileId = before.body.file_id;
+      expect(await stepFileCount(seeded.rootId)).toBe(1);
 
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/traces/${seeded.rootId}/content`
@@ -619,9 +664,8 @@ describe('Traces REST API', () => {
       // Skeleton survives: the step counter is still auditable.
       expect(res.body.step_count).toBe(1);
 
-      // The bytes are gone, not merely unreferenced.
-      const fileRow = await db.File.findOne({ where: { publicId: fileId } });
-      expect(fileRow).toBeNull();
+      // The objects are gone, not merely unreferenced.
+      expect(await stepFileCount(seeded.rootId)).toBe(0);
     });
 
     test('a purged trace reads back as a skeleton with a redaction marker, not a 404', async () => {
@@ -653,7 +697,7 @@ describe('Traces REST API', () => {
       );
       expect(res.status).toBe(200);
 
-      // The child trace's own steps file holds the same run's content, so it
+      // The child trace's own steps hold the same run's content, so they
       // must be purged too or the content stays reachable by another path.
       const child = await authenticatedTestClient(userToken).get(
         `/api/v1/traces/${seeded.childId}`
@@ -661,6 +705,7 @@ describe('Traces REST API', () => {
       expect(child.status).toBe(200);
       expect(child.body.content_redacted_at).not.toBeNull();
       expect(child.body.file_id).toBeNull();
+      expect(await stepFileCount(seeded.childId)).toBe(0);
 
       const gen = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${seeded.genId}`
@@ -696,7 +741,7 @@ describe('Traces REST API', () => {
   });
 });
 
-describe('the steps object a generation stores', () => {
+describe('the step objects a generation stores', () => {
   let stub: ChatCompletionsStub;
   let adminToken: string;
   let agentId: string;
@@ -745,8 +790,20 @@ describe('the steps object a generation stores', () => {
     const trace = await authenticatedTestClient(adminToken).get(
       `/api/v1/traces/${res.body.trace_id}`
     );
+    expect(trace.body.step_count).toBe(1);
+    expect(trace.body.file_id).toBeNull();
+    const files = await authenticatedTestClient(adminToken).get(
+      `/api/v1/files?project_id=${trace.body.project_id}&path_prefix=/.system/traces/${res.body.trace_id}/${res.body.id}`
+    );
+    expect(
+      files.body.data.map((file: { path: string }) => {
+        return file.path;
+      })
+    ).toEqual([
+      `/.system/traces/${res.body.trace_id}/${res.body.id}/000000.json`,
+    ]);
     const download = await authenticatedTestClient(adminToken)
-      .get(`/api/v1/files/${trace.body.file_id}/download`)
+      .get(`/api/v1/files/${files.body.data[0].id}/download`)
       .buffer(true)
       .parse((response, callback) => {
         let text = '';
@@ -760,9 +817,8 @@ describe('the steps object a generation stores', () => {
     expect(download.status).toBe(200);
 
     expect(download.body).not.toContain('stub-model');
-    const steps: Array<Record<string, unknown>> = JSON.parse(download.body);
-    expect(steps).toHaveLength(1);
-    expect(steps[0].model).toBeUndefined();
-    expect(steps[0].content).toEqual([{ type: 'text', text: 'ok' }]);
+    const step: Record<string, unknown> = JSON.parse(download.body);
+    expect(step.model).toBeUndefined();
+    expect(step.content).toEqual([{ type: 'text', text: 'ok' }]);
   });
 });

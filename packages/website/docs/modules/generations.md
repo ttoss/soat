@@ -258,8 +258,8 @@ curl https://api.example.com/api/v1/generations/gen_abc/transcript \
 </TabItem>
 </Tabs>
 
-The transcript is **assembled at read time** from the generation record and the trace's
-steps object; there is no transcript table and no extra write on the generation path, so
+The transcript is **assembled at read time** from the generation record and its step
+files in the trace; there is no transcript table and no extra write on the generation path, so
 it always reflects the current records.
 
 Requires `traces:GetTrace` in addition to `generations:GetGeneration`, since the response
@@ -277,7 +277,7 @@ distinguish "no content" from "no such generation":
 
 | State                         | `status`  | `input` / `output` | `steps` | `content_redacted_at`           |
 | ----------------------------- | --------- | ------------------ | ------- | ------------------------------- |
-| Still running                 | `running` | `null`             | `[]`    | `null`                          |
+| Still running or paused       | `running`, `requires_action` | `null` | the steps ended so far | `null`          |
 | Never stored (zero-retention) | terminal  | `null`             | `[]`    | set, principal `zero_retention` |
 | Erased by a purge or sweep    | terminal  | `null`             | `[]`    | set, purging principal          |
 
@@ -286,7 +286,7 @@ turn's** steps: when a `trace_id` groups several generations, the trace's own `s
 covers every one of them, while each transcript reports only its own slice — see
 [Traces → Grouping Generations Under One Trace](./traces.md#grouping-generations-under-one-trace).
 
-A purged generation returns the skeleton even though the trace's steps object may still
+A purged generation returns the skeleton even though its step files in the trace may still
 exist (see the warning under [Content Purge](#content-purge)); the redaction marker
 governs the whole transcript.
 
@@ -323,7 +323,7 @@ The usage and audit skeleton is preserved (the billing ledger outlives the erasu
 The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
 
 :::warning
-A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run's content completely, purge the trace — [`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the steps bytes from storage and cascades the content purge to every generation in the tree. See [Traces](./traces.md#content-purge).
+A generation purge does **not** delete the parent trace's step files, which hold this generation's content alongside its siblings'. To erase a run's content completely, purge the trace — [`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the step files from storage and cascades the content purge to every generation in the tree. See [Traces](./traces.md#content-purge).
 :::
 
 ### Automatic content lifecycle

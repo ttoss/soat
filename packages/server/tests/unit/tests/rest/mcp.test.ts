@@ -2801,12 +2801,21 @@ describe('MCP tools - happy path', () => {
     // Destructive, so it runs on its own trace rather than the shared fixture.
     test('purge-trace-content redacts the trace and returns the skeleton', async () => {
       const purgeTraceId = 'trc_mcp_purge_001';
+      const purgeGenerationId = 'gen_mcp_purge_001';
+      await createGenerationRecord({
+        authority: null,
+        actsAsAgent: null,
+        publicId: purgeGenerationId,
+        projectId: tracesProjectDbId,
+        agentId: tracesAgentId,
+        traceId: purgeTraceId,
+      });
       await saveTrace({
         traceId: purgeTraceId,
         projectId: tracesProjectDbId,
         projectPublicId: projectId,
         agentId: tracesAgentId,
-        generationId: 'gen_test_steps',
+        generationId: purgeGenerationId,
         steps: [{ type: 'text-delta', text: 'purge me' }],
       });
 

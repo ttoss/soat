@@ -1,5 +1,6 @@
+import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
-import { systemPath } from 'src/lib/filePaths';
+import { pathPrefixPattern, systemPath } from 'src/lib/filePaths';
 
 import {
   type ChatCompletionsStub,
@@ -11,7 +12,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
  * Zero-retention (`trace_content_mode: none`) suppresses content at the write
- * chokepoints a real generation passes through — the steps object, the
+ * chokepoints a real generation passes through — the step objects, the
  * generation's content columns, a trace's error payload — while the skeleton
  * (rows, counters, status) is still written, so the run stays auditable and
  * attributable. The effective mode is the stricter of the project's and the
@@ -125,18 +126,31 @@ describe('POST /api/v1/agents/:agent_id/generate under trace_content_mode', () =
     stub.reply(textCompletion('ok'));
   });
 
+  // Every content object under the trace, not merely what a row links to.
+  const stepObjectCount = async (traceId: string) => {
+    return db.File.count({
+      where: {
+        path: {
+          [Op.like]: pathPrefixPattern(
+            systemPath({ module: 'traces', leaf: traceId })
+          ),
+        },
+      },
+    });
+  };
+
   afterAll(async () => {
     await stub.close();
   });
 
   describe('a completed generation', () => {
-    test('a storing agent writes the steps object and its metadata', async () => {
+    test('a storing agent writes the step objects and its metadata', async () => {
       const res = await generate(storingAgentId);
       expect(res.status).toBe(200);
 
       const trace = await traceOf(res.body.trace_id);
       expect(trace.status).toBe(200);
-      expect(trace.body.file_id).not.toBeNull();
+      expect(await stepObjectCount(res.body.trace_id)).toBe(1);
       expect(trace.body.content_redacted_at).toBeNull();
       expect(trace.body.step_count).toBe(1);
 
@@ -145,7 +159,7 @@ describe('POST /api/v1/agents/:agent_id/generate under trace_content_mode', () =
       expect(generation.body.content_redacted_at).toBeNull();
     });
 
-    test('an agent tightened to none never creates the steps file', async () => {
+    test('an agent tightened to none never writes a step object', async () => {
       const res = await generate(tightenedAgentId);
       expect(res.status).toBe(200);
 
@@ -154,16 +168,8 @@ describe('POST /api/v1/agents/:agent_id/generate under trace_content_mode', () =
       // A counter, not content: step_count is part of the skeleton.
       expect(trace.body.step_count).toBe(1);
 
-      // Not merely unlinked from the row: no file was ever written.
-      const files = await db.File.findAll({
-        where: {
-          path: systemPath({
-            module: 'traces',
-            leaf: `${res.body.trace_id}.json`,
-          }),
-        },
-      });
-      expect(files).toHaveLength(0);
+      // Not merely unlinked from the row: no object was ever written.
+      expect(await stepObjectCount(res.body.trace_id)).toBe(0);
     });
 
     test('an agent under a zero-retention project inherits it, stamped as never-stored', async () => {
@@ -171,7 +177,7 @@ describe('POST /api/v1/agents/:agent_id/generate under trace_content_mode', () =
       expect(res.status).toBe(200);
 
       const trace = await traceOf(res.body.trace_id);
-      expect(trace.body.file_id).toBeNull();
+      expect(await stepObjectCount(res.body.trace_id)).toBe(0);
       expect(trace.body.agent_id).toBe(inheritedAgentId);
       expect(trace.body.content_redacted_at).not.toBeNull();
       expect(trace.body.content_redacted_by_principal_type).toBe('system');
@@ -233,7 +239,7 @@ describe('POST /api/v1/agents/:agent_id/generate under trace_content_mode', () =
     });
 
     const before = await generate(agentId);
-    expect((await traceOf(before.body.trace_id)).body.file_id).not.toBeNull();
+    expect(await stepObjectCount(before.body.trace_id)).toBe(1);
 
     await asAdmin()
       .patch(`/api/v1/projects/${flipProject.body.id}`)
@@ -241,6 +247,6 @@ describe('POST /api/v1/agents/:agent_id/generate under trace_content_mode', () =
 
     // The update invalidates the mode cache, so no TTL has to pass first.
     const after = await generate(agentId);
-    expect((await traceOf(after.body.trace_id)).body.file_id).toBeNull();
+    expect(await stepObjectCount(after.body.trace_id)).toBe(0);
   });
 });

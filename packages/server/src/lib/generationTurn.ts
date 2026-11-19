@@ -5,10 +5,10 @@
  *
  * The two halves live in different places, which is the whole reason this module
  * exists. The input is a generation column (`inputMessages`); the answer is in
- * the trace's steps object, which is a File. Callers that want to replay a turn
- * (curating a dataset item, forking a session, reading a transcript) should
- * not each have to know that, and the evaluations module in particular must not
- * learn the trace file layout.
+ * the trace's step objects (`traceStepStore.ts`). Callers that want to replay a
+ * turn (curating a dataset item, forking a session, reading a transcript)
+ * should not each have to know that, and the evaluations module in particular
+ * must not learn the trace file layout.
  */
 import createDebug from 'debug';
 
@@ -22,6 +22,7 @@ import {
   readStepSegments,
   sliceGenerationSteps,
 } from './traceStepSegments';
+import { mergeSteps, readStoredGenerationSteps } from './traceStepStore';
 
 const log = createDebug('soat:generation-turn');
 
@@ -66,7 +67,7 @@ export type GenerationTurn = {
   agentVersion: number | null;
   /** The turn's resolved input, message-shaped and ready to replay. */
   inputMessages: unknown[];
-  /** The turn's final assistant text, or null when the steps object is gone. */
+  /** The turn's final assistant text, or null when its steps are gone. */
   outputText: string | null;
 };
 
@@ -121,11 +122,10 @@ export const deriveTurnOutputText = (steps: unknown): string | null => {
 
 /**
  * Loads a generation with the associations both turn readers need: the project
- * and agent it belongs to, and the trace carrying its steps file.
+ * and agent it belongs to, and the trace carrying its steps.
  *
- * Shared so the two consumers resolve a generation the same way and only one
- * of them has to know that the answer lives in a File hanging off the trace.
- * Throws `GENERATION_NOT_FOUND` when the id is unknown or out of scope.
+ * Shared so the two consumers resolve a generation the same way. Throws
+ * `GENERATION_NOT_FOUND` when the id is unknown or out of scope.
  */
 export const loadGenerationWithTrace = async (args: {
   generationId: string;
@@ -137,7 +137,7 @@ export const loadGenerationWithTrace = async (args: {
   });
 };
 
-/** Reads and parses a trace's steps object. Null when it cannot be read. */
+/** Reads and parses a trace's legacy steps object. Null when it cannot be read. */
 export const readTraceSteps = async (
   file: { storagePath: string; storageType: string } | null | undefined
 ): Promise<unknown> => {
@@ -166,28 +166,57 @@ export const readTraceSteps = async (
 };
 
 /**
- * Reads one generation's own steps out of its trace's steps object.
- *
- * A `trace_id` may group several generations, and the object then holds every
- * one of their segments — so a turn reader must take its own slice or it would
- * report a neighbouring turn's steps as this one's. A trace without the index
+ * A generation's slice of its trace's legacy steps object. Only a generation
+ * with no `stepCount` of its own has one; a trace without the segment index
  * holds a single turn and is read whole.
  */
-export const readGenerationSteps = async (
+const readLegacyGenerationSteps = async (
   generation: GenerationWithTrace
-): Promise<unknown> => {
+): Promise<unknown[]> => {
+  if (generation.stepCount !== null || !generation.trace?.file) return [];
   return sliceGenerationSteps({
-    steps: await readTraceSteps(generation.trace?.file),
-    segments: generation.trace?.stepSegments,
+    steps: await readTraceSteps(generation.trace.file),
+    segments: generation.trace.stepSegments,
     generationId: generation.publicId,
   });
 };
 
-/** How many steps of the trace's object are this generation's. Falls back to
- * the trace's own counter for an unindexed trace, whose object is one turn. */
+/**
+ * One generation's own steps, in order: its step objects over any legacy
+ * slice. Never another generation's, though a `trace_id` may group several.
+ */
+export const readGenerationSteps = async (
+  generation: GenerationWithTrace
+): Promise<unknown[]> => {
+  if (!generation.trace) return [];
+  const [legacy, stored] = await Promise.all([
+    readLegacyGenerationSteps(generation),
+    readStoredGenerationSteps({
+      projectId: generation.trace.projectId,
+      traceId: generation.trace.publicId,
+      generationId: generation.publicId,
+    }),
+  ]);
+  return mergeSteps({ legacy, stored });
+};
+
+/**
+ * The final assistant text of a `completed` generation; null for any other
+ * status, whose steps (a running or paused turn's) are no answer.
+ */
+export const completedTurnOutputText = async (
+  generation: GenerationWithTrace
+): Promise<string | null> => {
+  if (generation.status !== 'completed') return null;
+  return deriveTurnOutputText(await readGenerationSteps(generation));
+};
+
+/** How many steps are this generation's: its own counter, else its segment of
+ * the legacy object, else the trace's counter for an unindexed trace. */
 export const generationStepCount = (
   generation: GenerationWithTrace
 ): number => {
+  if (generation.stepCount !== null) return generation.stepCount;
   const segments = readStepSegments(generation.trace?.stepSegments);
   if (segments.length === 0) return generation.trace?.stepCount ?? 0;
 
@@ -242,8 +271,6 @@ export const getGenerationTurn = async (args: {
     );
   }
 
-  const steps = await readGenerationSteps(generation);
-
   return {
     generationDbId: generation.id as number,
     projectDbId: generation.projectId,
@@ -252,6 +279,6 @@ export const getGenerationTurn = async (args: {
     agentPublicId: generation.agent.publicId,
     agentVersion: generation.agentVersion,
     inputMessages,
-    outputText: deriveTurnOutputText(steps),
+    outputText: await completedTurnOutputText(generation),
   };
 };

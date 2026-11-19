@@ -11,7 +11,7 @@ Traces record the full execution history of agent generations, including every r
 
 ## Overview
 
-Every agent generation records a trace: the model's steps, tool invocations, inputs, outputs and errors. Traces are stored as JSON files in the project's file storage and indexed in the database. Parent-child links reconstruct a multi-agent run's tree; see the [Trace Ancestry Model](#trace-ancestry-model).
+Every agent generation records a trace: the model's steps, tool invocations, inputs, outputs and errors. Each step is stored as its own JSON file in the project's file storage, and the trace row in the database indexes them. Parent-child links reconstruct a multi-agent run's tree; see the [Trace Ancestry Model](#trace-ancestry-model).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -29,7 +29,7 @@ Every agent generation records a trace: the model's steps, tool invocations, inp
 | `id`              | string         | Public identifier for the trace                                                        |
 | `project_id`      | string         | Project the trace belongs to                                                           |
 | `agent_id`        | string         | Agent that produced the trace                                                          |
-| `file_id`         | string \| null | ID of the file containing the serialized steps (JSON array)                            |
+| `file_id`         | string \| null | ID of a single file holding the trace's steps as one JSON array, when it has one; `null` when each step is its own file ([Step Storage](#step-storage)) |
 | `step_count`      | number         | Number of reasoning steps recorded, across every generation grouped under the trace    |
 | `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` when this trace is itself the root            |
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent call tree; `null` when this trace is itself the root |
@@ -45,13 +45,19 @@ Every agent generation records a trace: the model's steps, tool invocations, inp
 
 When a generation fails (e.g. a provider error), the structured error is recorded on the trace's `error` field and on the generation record, distinguishing failed runs from not-yet-started ones. The steps the turn completed before failing are kept, so a turn whose final answer fails `output_schema` still shows the tool calls it made; a failure before the first step leaves `step_count: 0`.
 
-### Step Serialization and File Linkage
+### Step Storage
 
-Raw step objects from the Vercel AI SDK `generateText` call are stored at `/traces/{traceId}.json` in the project's file storage; `file_id` points to it (downloadable via the Files API). `Error` instances are serialized to plain objects (`message`, `name`, enumerable properties). Each step's `model` and `response.modelId` are dropped: they carry the provider's own model id, not the generation's `model`.
+Each step is written as it ends, as its own file at `/.system/traces/{trace_id}/{generation_id}/{index}.json` (`index` zero-padded to six digits, counted across the turn, so a resumed turn continues after the steps it spent before the pause). List them with [`GET /files?path_prefix=/.system/traces/{trace_id}/`](/docs/api/files/list-files) and download each through the Files API. A running generation's steps are readable before it settles.
+
+- A write never reads or rewrites another file, so generations sharing a `trace_id` cannot lose each other's steps, on one server or several.
+- A provider call retried without tools replaces the abandoned attempt's steps.
+- Every write checks the [content mode](#zero-retention-mode) and both redaction markers first; a step ending after a [purge](#content-purge) writes nothing.
+
+`Error` instances are serialized to plain objects (`message`, `name`, enumerable properties). Each step's `model` and `response.modelId` are dropped: they carry the provider's own model id, not the generation's `model`.
 
 ### Reading a Turn Back
 
-The steps object is in the `ai` package's own shape. The generation's transcript is an
+A step file is in the `ai` package's own shape. The generation's transcript is an
 ordered projection of the same steps into a stable schema:
 
 <Tabs groupId="client">
@@ -90,14 +96,11 @@ generation's segment. See [Generations → Transcript](./generations.md#transcri
 
 [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) accepts a `trace_id`; an existing one groups the new generation with the earlier ones. Use it when several turns are one logical run rather than nested calls.
 
-- **The steps object concatenates every grouped generation's steps**, in first-write order; a second generation appends.
-- **`step_count` counts them all**, matching the object `file_id` points at.
-- **A generation that writes twice rewrites only its own slice** (a tool-outputs continuation re-sends the turn's earlier steps with the new ones; they replace, not duplicate).
+- **Each grouped generation's steps are its own files**, under `/.system/traces/{trace_id}/{generation_id}/`; the trace's steps are their concatenation.
+- **`step_count` counts them all**; each generation's [transcript](./generations.md#transcript) counts its own.
 - **Sub-agent calls are not grouping**; they get their own trace linked through `parent_trace_id` / `root_trace_id` (see [Trace Ancestry Model](#trace-ancestry-model)).
 
 Read one grouped turn via its [transcript](#reading-a-turn-back).
-
-Concurrent generations on one `trace_id` are serialized per server process; simultaneous writes from several servers can lose one turn's steps. Sequential turns are unaffected.
 
 ### Debugging Joins (Trace, Generation, Session)
 
@@ -105,7 +108,7 @@ Generation responses carry `generation_id` + `trace_id`; [`GET /generations?trac
 
 ### Content Purge
 
-[`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the steps object **from storage** and clears the content columns. Requires `traces:PurgeTraceContent`.
+[`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the trace's step files **from storage** and clears the content columns. Requires `traces:PurgeTraceContent`.
 
 - **The row survives as a skeleton**: `content_redacted_at`, ids, timestamps and `step_count` remain. Reads return the skeleton, never a 404.
 - **The bytes are deleted.** Row changes commit, then storage objects are deleted; a failed object delete is logged for reconciliation, not rolled back.
@@ -213,7 +216,7 @@ What is **not written** is exactly the field set a [content purge](#content-purg
 
 | Record | Not written |
 | --- | --- |
-| Trace | the steps object (no `File` row, no bytes), `error` |
+| Trace | the step files (no `File` row, no bytes), `error` |
 | Generation | `metadata`, `error`, `extraction`, `pending_state` |
 
 The skeleton is still written: ids, timestamps, `status`, `stop_reason`, `step_count`, and every usage-attribution column, so metering, cost, quotas and audit are unchanged. Rows carry `content_redacted_at` with `content_redacted_by_principal_id: "zero_retention"`.

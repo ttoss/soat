@@ -18,6 +18,7 @@ import {
   leaseExpiry,
   newLeaseToken,
 } from './leases';
+import { type TraceStepTarget, writeTraceStep } from './traceStepStore';
 
 const log = createDebug('soat:generation');
 
@@ -203,30 +204,52 @@ const noteSegmentProgress = (generationId: string): void => {
   void renewLease({ generationId, token: segment.token });
 };
 
+/** The index the SDK gives a step within its call. */
+const stepNumberOf = (step: unknown): number | undefined => {
+  if (typeof step !== 'object' || step === null) return undefined;
+  if (!('stepNumber' in step) || typeof step.stepNumber !== 'number') {
+    return undefined;
+  }
+  return step.stepNumber;
+};
+
 /**
  * The cancellation, timeout and progress every model call of a segment runs
  * under: the segment's deadline and lease, plus `signal` (the request, a
  * session superseding the turn). The SDK hands the signal to every tool.
+ *
+ * Each step is recorded as it ends, at `steps.firstIndex` (the steps the turn
+ * spent before this call) plus its number; the SDK awaits it before going on.
  */
 export const segmentCallOptions = (args: {
   generationId: string;
+  steps: { target: TraceStepTarget; firstIndex: number };
   signal?: AbortSignal;
   onStepEnd?: (step: unknown) => void;
 }): {
   abortSignal?: AbortSignal;
   timeout: { stepMs: number };
-  onStepEnd: (step: unknown) => void;
+  onStepEnd: (step: unknown) => Promise<void>;
 } => {
   const own = segments.get(args.generationId)?.controller.signal;
   const signals = [own, args.signal].filter((signal) => {
     return signal !== undefined;
   });
+  let ended = 0;
   return {
     abortSignal: signals.length > 1 ? AbortSignal.any(signals) : signals[0],
     timeout: { stepMs: modelCallTimeoutMs() },
-    onStepEnd: (step) => {
+    onStepEnd: async (step) => {
       noteSegmentProgress(args.generationId);
       args.onStepEnd?.(step);
+      const stepNumber = stepNumberOf(step) ?? ended;
+      ended = stepNumber + 1;
+      await writeTraceStep({
+        target: args.steps.target,
+        firstIndex: args.steps.firstIndex,
+        stepNumber,
+        step,
+      });
     },
   };
 };

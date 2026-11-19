@@ -20,7 +20,6 @@ import {
   mergePresetParameters,
   readClientToolPresets,
 } from './toolPresetParameters';
-import { saveTrace, serializeSteps } from './traces';
 import type { WorkAuthority } from './workAuthority';
 
 // ── Wire Mappers ──────────────────────────────────────────────────────────
@@ -150,7 +149,7 @@ const storePendingGenerationState = (args: {
   allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; responseMessages: unknown[] };
   /** Steps this turn spent before the segment `result` describes. */
-  priorSteps?: unknown[];
+  priorStepCount?: number;
   /** Trailing `allMessages` this turn produced before `result`. */
   priorTurnMessageCount?: number;
   model: LanguageModel;
@@ -170,12 +169,9 @@ const storePendingGenerationState = (args: {
   const messages = [...args.allMessages, ...args.result.responseMessages];
   const turnMessageCount =
     (args.priorTurnMessageCount ?? 0) + args.result.responseMessages.length;
-  // The whole turn's steps, not the last segment's: a turn can pause more than
-  // once, and both its step budget and its trace are counted across all of them.
-  const steps = [
-    ...(args.priorSteps ?? []),
-    ...serializeSteps(args.result.steps),
-  ];
+  // The whole turn's count, not the last segment's: a turn can pause more than
+  // once, and its step budget and step indices run across all of them.
+  const stepCount = (args.priorStepCount ?? 0) + args.result.steps.length;
 
   pendingGenerations.set(args.generationId, {
     agentId: args.agentId,
@@ -188,7 +184,7 @@ const storePendingGenerationState = (args: {
     syntheticToolResults,
     messages,
     turnMessageCount,
-    steps,
+    stepCount,
     resolvedModel: args.model,
     aiProviderId: args.aiProviderId,
     agentConfig: toAgentConfig(args.typedAgent),
@@ -205,7 +201,7 @@ const storePendingGenerationState = (args: {
     syntheticToolResults,
     messages,
     turnMessageCount,
-    steps,
+    stepCount,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
     toolContext: args.toolContext ?? null,
@@ -250,7 +246,7 @@ export const savePendingGeneration = async (args: {
   syntheticToolResults?: ClientToolResult[];
   allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; responseMessages: unknown[] };
-  priorSteps?: unknown[];
+  priorStepCount?: number;
   priorTurnMessageCount?: number;
   model: LanguageModel;
   typedAgent: TypedAgent;
@@ -345,21 +341,8 @@ export const buildCompletedGenerationResult = async (args: {
     generationId: args.generationId,
     model: args.model,
   });
-  const serializedStepsCompleted = serializeSteps(
-    args.result.steps as unknown[]
-  );
-  await saveTrace({
-    traceId: args.traceId,
-    projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    agentId: args.agentId,
-    generationId: args.generationId,
-    steps: serializedStepsCompleted,
-    parentTraceId: args.parentTraceId ?? null,
-    rootTraceId: args.rootTraceId ?? null,
-  });
-  // After the trace is written — the offending text is the whole evidence —
-  // and before the generation is marked completed, which a generation throwing
+  // The steps, the offending text with them, were recorded as they ended;
+  // before the generation is marked completed, which a generation throwing
   // here must never have been.
   assertNoTextEncodedToolCall({
     text: args.result.text,
@@ -395,7 +378,7 @@ export const buildCompletedGenerationResult = async (args: {
       status: 'completed',
       stopReason: resolveStopReason({
         finishReason: args.result.finishReason,
-        stepCount: serializedStepsCompleted.length,
+        stepCount: args.result.steps.length,
         maxSteps: args.typedAgent.maxSteps,
       }),
       assistantContent: args.result.text,

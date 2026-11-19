@@ -20,6 +20,7 @@ import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
 import type { StoredError } from './storedError';
 import { SYSTEM_FILE_RELEASES } from './systemFileRelease';
 import { redactAgentToolSecrets } from './toolSecretRedaction';
+import { findTraceStepFiles } from './traceStepStore';
 
 const log = createDebug('soat:agents');
 
@@ -31,6 +32,7 @@ const findDependentIds = async (args: {
 }): Promise<{
   generationIds: number[];
   traceIds: number[];
+  traces: Array<{ projectId: number; publicId: string }>;
   fileIds: number[];
 }> => {
   const [generationRows, traceRows] = await Promise.all([
@@ -40,7 +42,7 @@ const findDependentIds = async (args: {
     }),
     db.Trace.findAll({
       where: { agentId: args.agentId, projectId: args.projectId },
-      attributes: ['id', 'fileId'],
+      attributes: ['id', 'fileId', 'projectId', 'publicId'],
     }),
   ]);
 
@@ -50,6 +52,9 @@ const findDependentIds = async (args: {
     }),
     traceIds: traceRows.map((row) => {
       return row.id as number;
+    }),
+    traces: traceRows.map((row) => {
+      return { projectId: row.projectId, publicId: row.publicId };
     }),
     fileIds: traceRows
       .map((row) => {
@@ -79,7 +84,7 @@ const forceDeleteAgentWithDependents = async (args: {
   agent: InstanceType<typeof db.Agent>;
   agentId: number;
 }): Promise<void> => {
-  const { generationIds, traceIds, fileIds } = await findDependentIds({
+  const { generationIds, traceIds, traces, fileIds } = await findDependentIds({
     agentId: args.agentId,
     projectId: args.agent.projectId,
   });
@@ -114,7 +119,17 @@ const forceDeleteAgentWithDependents = async (args: {
     await args.agent.destroy({ transaction });
   });
 
-  await SYSTEM_FILE_RELEASES.traces({ fileIds });
+  // Listed after the commit: a step writer finding its trace gone deletes what
+  // it wrote, so nothing lands after this listing.
+  const stepFiles = await findTraceStepFiles({ traces });
+  await SYSTEM_FILE_RELEASES.traces({
+    fileIds: [
+      ...fileIds,
+      ...stepFiles.map((file) => {
+        return file.id as number;
+      }),
+    ],
+  });
 };
 
 const countAgentDependents = async (args: {

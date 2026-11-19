@@ -343,7 +343,7 @@ Inspect metadata and tree structure ([Traces key concepts](/docs/modules/traces#
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-trace --trace-id "$TRACE_1_ID" | jq '{id, agent_id, file_id, parent_trace_id, root_trace_id, step_count}'
+soat get-trace --trace-id "$TRACE_1_ID" | jq '{id, agent_id, parent_trace_id, root_trace_id, step_count}'
 soat get-trace-tree --trace-id "$TRACE_1_ID" | jq '{id, children: [.children[].id]}'
 ```
 
@@ -365,7 +365,7 @@ const { data: traceTree1 } = await adminSoat.traces.getTraceTree({
 
 ```bash
 curl -s "$SOAT_URL/api/v1/traces/$(printf '%s\n' "$GEN_1" | jq -r '.trace_id')" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, agent_id, file_id, parent_trace_id, root_trace_id, step_count}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, agent_id, parent_trace_id, root_trace_id, step_count}'
 
 curl -s "$SOAT_URL/api/v1/traces/$(printf '%s\n' "$GEN_1" | jq -r '.trace_id')/tree" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, children: [.children[].id]}'
@@ -376,29 +376,35 @@ curl -s "$SOAT_URL/api/v1/traces/$(printf '%s\n' "$GEN_1" | jq -r '.trace_id')/t
 
 ---
 
-## Step 6 - Download raw trace steps using file_id
+## Step 6 - Download raw trace steps
 
-Raw trace payloads are files ([Files key concepts](/docs/modules/files#key-concepts), [Files examples](/docs/modules/files#examples)).
+Each step is its own file under `/.system/traces/{trace_id}/{generation_id}/` ([Step Storage](/docs/modules/traces#step-storage), [Files examples](/docs/modules/files#examples)); list the trace's directory, then download a step.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-TRACE_FILE_ID=$(soat get-trace --trace-id "$TRACE_1_ID" | jq -r '.file_id')
+TRACE_FILE_ID=$(soat list-files --project-id "$PROJECT_ID" \
+  --path-prefix "/.system/traces/$TRACE_1_ID/" | jq -r '.data[0].id')
 soat download-file-base64 --file-id "$TRACE_FILE_ID" \
-  | jq -r '.content' | base64 -d | jq '.[0]'
+  | jq -r '.content' | base64 -d | jq '.content'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const traceFileId = trace1.file_id;
+const { data: stepFiles } = await adminSoat.files.listFiles({
+  query: {
+    project_id: project.id,
+    path_prefix: `/.system/traces/${gen1.trace_id}/`,
+  },
+});
 const { data: traceFile } = await adminSoat.files.downloadFileBase64({
-  path: { file_id: traceFileId },
+  path: { file_id: stepFiles.data[0].id },
 });
 
-const rawTraceSteps = JSON.parse(
+const rawTraceStep = JSON.parse(
   Buffer.from(traceFile.content, 'base64').toString('utf8')
 );
 ```
@@ -407,12 +413,14 @@ const rawTraceSteps = JSON.parse(
 <TabItem value="curl" label="curl">
 
 ```bash
-TRACE_FILE_ID=$(curl -s "$SOAT_URL/api/v1/traces/$TRACE_1_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.file_id')
+TRACE_FILE_ID=$(curl -s -G "$SOAT_URL/api/v1/files" \
+  --data-urlencode "project_id=$PROJECT_ID" \
+  --data-urlencode "path_prefix=/.system/traces/$TRACE_1_ID/" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.data[0].id')
 
 curl -s "$SOAT_URL/api/v1/files/$TRACE_FILE_ID/download/base64" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq -r '.content' | base64 -d | jq '.[0]'
+  | jq -r '.content' | base64 -d | jq '.content'
 ```
 
 </TabItem>

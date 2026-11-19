@@ -17,7 +17,7 @@ Files belong to a project and are persisted through the configured backend (loca
 
 ## Related Tutorials
 
-- [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id)
+- [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps)
 - [Orchestrate a Sonnet - Step 8 (Read the persisted poem document)](/docs/tutorials/orchestrate-a-sonnet#step-8--read-the-persisted-poem-document)
 - [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions)
 
@@ -89,7 +89,7 @@ Every module that saves a file or document on your behalf files it under
 | Path                                                         | Written by                                      |
 | ------------------------------------------------------------ | ----------------------------------------------- |
 | `/.system/conversations/{conversation_id}/{document_id}.txt` | Each [conversation](./conversations.md) message |
-| `/.system/traces/{trace_id}.json`                            | Each [trace](./traces.md)'s raw steps           |
+| `/.system/traces/{trace_id}/{generation_id}/{index}.json`    | Each [trace](./traces.md) step, as it ends      |
 
 The root is yours to read and not to write. A `POST`, a path move or a tag write
 that lands under it is refused with `400 RESERVED_PATH`, so the marker cannot be
@@ -103,8 +103,8 @@ A list leaves the root out unless you ask for it: [`GET /api/v1/files`](/docs/ap
 and [`GET /api/v1/documents`](/docs/api/documents/list-documents) return
 platform-written rows only when `path_prefix` names a directory inside it, and
 [knowledge search](./knowledge.md) ranks them only when `document_paths` does.
-A read by `id` always returns one — the tutorial that downloads raw trace steps
-by `file_id` needs no prefix. See [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id).
+A read by `id` always returns one. Listing a trace's step files names its
+directory: see [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps).
 
 ### Path-Based SRNs
 
