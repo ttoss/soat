@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.119.0](https://github.com/ttoss/soat/compare/v0.118.0...v0.119.0) (2026-11-19)
+
+### Features
+
+* **server:** require a priced model per AI provider ([#2031](https://github.com/ttoss/soat/issues/2031)) ([a7b7e53](https://github.com/ttoss/soat/commit/a7b7e539a289c9ad6b954692f86d485768f02de4))
+
 # [0.118.0](https://github.com/ttoss/soat/compare/v0.117.0...v0.118.0) (2026-11-18)
 
 * feat(evaluations)!: give the eval-run cancel its own IAM action (#2010) ([57ced2e](https://github.com/ttoss/soat/commit/57ced2e47e347a6f1106a297ea75f0c5a766b4e7)), closes [#2010](https://github.com/ttoss/soat/issues/2010)

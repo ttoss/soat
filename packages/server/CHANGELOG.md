@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.119.0](https://github.com/ttoss/soat/compare/v0.118.0...v0.119.0) (2026-11-19)
+
+### Bug Fixes
+
+* **formations:** a per-resource denial names the set that refused it ([#2028](https://github.com/ttoss/soat/issues/2028)) ([b053ab9](https://github.com/ttoss/soat/commit/b053ab9d3b92de61b9650d581791153e98bcff59))
+* **formations:** check a property built with an expression once it resolves ([#2029](https://github.com/ttoss/soat/issues/2029)) ([7571277](https://github.com/ttoss/soat/commit/7571277d713b52a5314152eb55c447d708d76fe3))
+* **formations:** refuse a policy naming another project's id at plan time ([#2026](https://github.com/ttoss/soat/issues/2026)) ([affe9c5](https://github.com/ttoss/soat/commit/affe9c5da3dd85fa11d24a2b2edda592510d91e7))
+
+### Features
+
+* **iam:** an issued iam token answers its jti ([#2030](https://github.com/ttoss/soat/issues/2030)) ([7f2afd7](https://github.com/ttoss/soat/commit/7f2afd7a6f0735832f723c7bb9770cb22f34bfb5))
+* **server:** require a priced model per AI provider ([#2031](https://github.com/ttoss/soat/issues/2031)) ([a7b7e53](https://github.com/ttoss/soat/commit/a7b7e539a289c9ad6b954692f86d485768f02de4))
+
 # [0.118.0](https://github.com/ttoss/soat/compare/v0.117.0...v0.118.0) (2026-11-18)
 
 * feat(webhooks)!: refuse events a webhook's policy_ids cannot read (#2022) ([0447e1c](https://github.com/ttoss/soat/commit/0447e1c76ea2ae280ed3ca0b0aaa82519e575437)), closes [#2022](https://github.com/ttoss/soat/issues/2022)
