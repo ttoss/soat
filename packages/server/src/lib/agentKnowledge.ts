@@ -6,9 +6,11 @@ import { resolveOwnerActorDbId } from './actorOwnership';
 import type { AgentAuthority } from './agentAuthority';
 import type { TypedAgent } from './agentGenerationTypes';
 import {
+  KNOWLEDGE_BINDING_NAME,
   type KnowledgeConfig,
   mergeKnowledgeConfig,
   readKnowledgeConfig,
+  WRITE_MEMORY_TOOL_NAME,
 } from './agentKnowledgeConfig';
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import { NATIVE_PROPOSAL_PREFIX } from './agentToolApproval';
@@ -209,8 +211,6 @@ const MEMORY_WRITE_ACTIONS = [
  * {@link runApprovedWriteMemory} instead of `callTool`.
  */
 export const WRITE_MEMORY_TOOL_ID = `${NATIVE_PROPOSAL_PREFIX}write_memory`;
-
-const WRITE_MEMORY_TOOL_NAME = 'write_memory';
 
 const WRITE_MEMORY_PARAMETERS = {
   type: 'object' as const,
@@ -435,8 +435,6 @@ export const writeMemoryEditChecks = async (args: {
     return { action, resource, context };
   });
 };
-
-const KNOWLEDGE_BINDING_NAME = 'knowledge';
 
 /**
  * The `write_memory` binding when the agent's knowledge config names a write

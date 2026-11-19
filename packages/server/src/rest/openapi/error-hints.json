@@ -46,6 +46,16 @@
       "hint": "Give the agent the policies it acts under in `policy_ids`, or set `run_as: caller` so the agent runs as its caller.",
       "routes": []
     },
+    "AGENT_TOOL_NOT_OFFERED": {
+      "http_status": 400,
+      "hint": "Name the tool as the model is offered it, one of `meta.offered_tool_names`: a `builtin` action is `<tool name>_<action>`, and a name two bindings share is prefixed with the binding's name. Update the agent with `PATCH /api/v1/agents/{agent_id}`.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/agents/{agent_id}"
+        }
+      ]
+    },
     "AI_PROVIDER_ERROR": {
       "http_status": 502,
       "hint": "The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.",

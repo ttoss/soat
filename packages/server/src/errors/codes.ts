@@ -345,6 +345,11 @@ export const ERROR_CODES = {
     description:
       'The agent forces tool use on every step (`tool_choice: "required"`, or the `{ type: "tool" }` object form) but declares no `has_tool_call` stop condition, so no turn it runs could ever end by answering — only by exhausting `max_steps`. Declare the terminal condition, or drop the forcing to `"auto"` and force a specific step with `step_rules` instead.',
   },
+  AGENT_TOOL_NOT_OFFERED: {
+    httpStatus: 400,
+    description:
+      "The agent's `tool_choice`, a `step_rules[].tool_choice` or a `has_tool_call` stop condition names a tool the agent does not offer under that name. Refused on the agent write when the offered names are known without a tool server's listing, and at generation start otherwise; `meta.offered_tool_names` lists the names it offers.",
+  },
   SYSTEM_MESSAGE_NOT_ALLOWED: {
     httpStatus: 400,
     description:

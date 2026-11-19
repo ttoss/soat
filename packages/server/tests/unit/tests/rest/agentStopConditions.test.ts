@@ -176,7 +176,7 @@ describe('POST /api/v1/agents/:agent_id/generate with stop_conditions', () => {
   test('a condition naming another tool does not end the loop', async () => {
     const agentId = await createAgent({
       name: 'Stop On Other Tool Agent',
-      stopConditions: [{ type: 'has_tool_call', tool_name: 'not_called' }],
+      stopConditions: [{ type: 'has_tool_call', tool_name: 'confirm' }],
     });
 
     expect(await providerCallsFor(agentId)).toBe(MAX_STEPS);

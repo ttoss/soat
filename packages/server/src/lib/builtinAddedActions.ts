@@ -8,7 +8,10 @@ import type { Tool } from 'ai';
 import createDebug from 'debug';
 
 import { buildMcpToolExecute, resolveMcpTools } from './agentToolResolverMcp';
-import { findBuiltinAction } from './builtinActionCatalog';
+import {
+  builtinActionToolName,
+  findBuiltinAction,
+} from './builtinActionCatalog';
 import type { LogToolCallingError } from './externalToolCall';
 import { openMcpTransport } from './mcpTransport';
 import type { ToolExecutionMeter } from './usageToolRecording';
@@ -73,7 +76,7 @@ export const resolveAddedBuiltinActions = async (
   });
   return Object.fromEntries(
     Object.entries(resolved).map(([action, tool]) => {
-      return [`${args.toolName}_${action}`, tool];
+      return [builtinActionToolName({ toolName: args.toolName, action }), tool];
     })
   );
 };

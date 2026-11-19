@@ -1,5 +1,9 @@
 import { isPlainObject } from './plainObject';
 
+/** The binding a `write_memory_store_id` adds to a turn, and its one tool. */
+export const KNOWLEDGE_BINDING_NAME = 'knowledge';
+export const WRITE_MEMORY_TOOL_NAME = 'write_memory';
+
 export type KnowledgeConfig = {
   memoryStoreIds?: string[];
   documentIds?: string[];

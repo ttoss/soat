@@ -56,17 +56,16 @@ const freeName = (args: { candidate: string; taken: Set<string> }): string => {
 };
 
 /**
- * The model-facing tool set of a turn. A key only one binding resolves keeps its
- * name; a key several bindings resolve is offered once per binding as
- * `<binding name>_<key>`, so no binding's tool (and its presets) replaces
- * another's.
+ * The model-facing name of each binding's keys, in binding order. A key only
+ * one binding resolves keeps its name; a key several bindings resolve is
+ * offered once per binding as `<binding name>_<key>`.
  */
-const mergeBindingTools = (args: {
-  bindings: Array<{ bindingName: string; tools: Record<string, Tool> }>;
-}): Record<string, Tool> => {
+export const assignBindingToolNames = (args: {
+  bindings: Array<{ bindingName: string; keys: string[] }>;
+}): string[][] => {
   const occurrences = new Map<string, number>();
   for (const binding of args.bindings) {
-    for (const key of Object.keys(binding.tools)) {
+    for (const key of binding.keys) {
       occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
     }
   }
@@ -76,19 +75,41 @@ const mergeBindingTools = (args: {
     })
   );
 
-  const merged: Record<string, Tool> = {};
-  for (const binding of args.bindings) {
-    for (const [key, resolved] of Object.entries(binding.tools)) {
-      if (occurrences.get(key) === 1) {
-        merged[key] = resolved;
-        continue;
-      }
+  return args.bindings.map((binding) => {
+    return binding.keys.map((key) => {
+      if (occurrences.get(key) === 1) return key;
       const name = freeName({
         candidate: `${binding.bindingName}_${key}`,
         taken,
       });
       taken.add(name);
-      merged[name] = resolved;
+      return name;
+    });
+  });
+};
+
+/** The model-facing tool set of a turn, named by {@link assignBindingToolNames}. */
+const mergeBindingTools = (args: {
+  bindings: Array<{ bindingName: string; tools: Record<string, Tool> }>;
+}): Record<string, Tool> => {
+  const entries = args.bindings.map((binding) => {
+    return Object.entries(binding.tools);
+  });
+  const names = assignBindingToolNames({
+    bindings: args.bindings.map((binding, index) => {
+      return {
+        bindingName: binding.bindingName,
+        keys: entries[index].map(([key]) => {
+          return key;
+        }),
+      };
+    }),
+  });
+
+  const merged: Record<string, Tool> = {};
+  for (const [index, bindingEntries] of entries.entries()) {
+    for (const [keyIndex, [, resolved]] of bindingEntries.entries()) {
+      merged[names[index][keyIndex]] = resolved;
     }
   }
   return merged;
