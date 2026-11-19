@@ -5,9 +5,7 @@
  * where a bag enters a tool call (`callResolvedTool`,
  * `resolveAgentToolBindings`), after admission saw the caller's own bag.
  */
-import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
-import { readStringBag } from './stringBag';
 import {
   assertAssignableToolContextKeys,
   withoutReservedPrefixKeys,
@@ -15,29 +13,23 @@ import {
 import type { WorkAuthority } from './workAuthority';
 
 /**
- * The layer `POST /iam/tokens` sends, validated: header-name keys, string
- * values, no server identity key. Keys under the deployment's reserved prefix
- * need `mayPinReserved`, which the issuer's grant answers. Undefined when
- * absent or empty.
+ * The layer `POST /iam/tokens` sends, already read by `parseToolContextBody`:
+ * header-name keys, no server identity key. Keys under the deployment's
+ * reserved prefix need `mayPinReserved`, which the issuer's grant answers.
+ * Undefined when absent or empty.
  */
 export const parseToolContextLayer = (args: {
-  value: unknown;
+  toolContext: Record<string, string> | undefined;
   mayPinReserved: boolean;
 }): Record<string, string> | undefined => {
-  if (args.value === undefined || args.value === null) return undefined;
-  if (!isPlainObject(args.value)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'tool_context must be an object of string values.'
-    );
-  }
-  const layer = readStringBag({ field: 'tool_context', value: args.value });
+  if (!args.toolContext) return undefined;
+  const keys = Object.keys(args.toolContext);
   assertAssignableToolContextKeys({
     field: 'tool_context',
-    keys: Object.keys(layer),
+    keys,
     reservedPrefix: args.mayPinReserved ? 'allow' : 'refuse',
   });
-  return Object.keys(layer).length === 0 ? undefined : layer;
+  return keys.length === 0 ? undefined : args.toolContext;
 };
 
 /**

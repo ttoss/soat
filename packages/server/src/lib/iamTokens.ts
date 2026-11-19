@@ -235,6 +235,8 @@ export const signIamToken = (args: {
 export const createIamToken = async (args: {
   issuer: Issuer;
   body: Record<string, unknown>;
+  /** The body's `tool_context`, read by `parseToolContextBody`. */
+  toolContext: Record<string, string> | undefined;
   /** Whether the issuer's grant allows `iam:PinReservedToolContext`. */
   mayPinReserved: boolean;
 }): Promise<{ token: string; jti: string; expires_at: string }> => {
@@ -245,7 +247,7 @@ export const createIamToken = async (args: {
     bound: await parseBoundBody({ body, issuer }),
     principal: parsePrincipal(body.principal),
     toolContext: parseToolContextLayer({
-      value: body.tool_context,
+      toolContext: args.toolContext,
       mayPinReserved: args.mayPinReserved,
     }),
     ttlSeconds,
@@ -255,7 +257,7 @@ export const createIamToken = async (args: {
     issuer.apiKeyPublicId,
     jti,
     ttlSeconds,
-    body.tool_context === undefined ? 'none' : 'set'
+    args.toolContext === undefined ? 'none' : 'set'
   );
   return {
     token,
