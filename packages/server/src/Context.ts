@@ -99,6 +99,12 @@ export type AuthUser = {
   /** Set for an IAM token (`POST /iam/tokens`): what the audit log records. */
   iamToken?: { jti: string; principal?: { type: string; id: string } };
   /**
+   * The `tool_context` layer an IAM token, or the work it started, pins:
+   * stamped over every tool call the request or its work makes
+   * (`lib/toolContextLayer.ts`).
+   */
+  toolContextLayer?: Record<string, string>;
+  /**
    * The tool call the request writes on behalf of, from a verified
    * `On-Behalf-Of` assertion (`lib/onBehalfOf.ts`). Recorded; its generation
    * caps what the request may do (`authOnBehalfOf.ts`), and it refuses a write

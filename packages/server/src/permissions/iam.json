@@ -7,6 +7,11 @@
       "description": "Issue a short-lived token that holds the calling API key to a policy"
     },
     {
+      "operationId": "pinReservedToolContext",
+      "action": "iam:PinReservedToolContext",
+      "description": "Pin tool_context keys under the deployment's reserved prefix on an IAM token"
+    },
+    {
       "operationId": "revokeIamPrincipal",
       "action": "iam:RevokePrincipal",
       "description": "Revoke an opaque principal in a project, so work acting for it stops"

@@ -157,6 +157,7 @@ export const workAuthorityOf = (args: {
     trigger: args.trigger ?? null,
     work: args.work ?? null,
     actsFor: null,
+    toolContext: null,
   };
 };
 

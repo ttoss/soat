@@ -16,6 +16,7 @@ import {
   type ResourceGrantCarrier,
   type ResourceGrantPrincipalType,
 } from './resourceGrantCarriers';
+import { readToolContextLayer } from './toolContextLayer';
 
 /**
  * Who holds an authority's grant: a user (a credential's owner), a trigger
@@ -71,6 +72,8 @@ export type WorkAuthority = Omit<CredentialTerms, 'pinned'> & {
   work: string | null;
   /** The opaque principal the starter acted for, carried into tool calls. */
   actsFor: { type: string; id: string } | null;
+  /** The IAM token's `tool_context` layer, stamped over every tool call. */
+  toolContext: Record<string, string> | null;
 };
 
 const serializeCap = (cap: AuthorityCap): object => {
@@ -89,6 +92,7 @@ export const serializeWorkAuthority = (authority: WorkAuthority): object => {
     trigger: authority.trigger,
     work: authority.work,
     acts_for: authority.actsFor,
+    ...(authority.toolContext ? { tool_context: authority.toolContext } : {}),
   };
 };
 
@@ -238,32 +242,51 @@ const nullableStr = (value: unknown): string | null | undefined => {
   return str(value) ? value : undefined;
 };
 
+type Chain = Pick<
+  WorkAuthority,
+  'project' | 'trigger' | 'work' | 'actsFor' | 'toolContext'
+>;
+
+/** A stored layer: absent is none, a malformed one does not read. */
+const parseLayer = (value: unknown): Chain['toolContext'] | undefined => {
+  const layer = readToolContextLayer(value);
+  return layer === null ? undefined : (layer ?? null);
+};
+
+/** The chain fields of a stored authority, or null when one does not read. */
+const parseChain = (value: Record<string, unknown>): Chain | null => {
+  const chain = {
+    project: nullableStr(value.project),
+    trigger: nullableStr(value.trigger),
+    work: nullableStr(value.work),
+    actsFor: parseActsFor(value.acts_for),
+    toolContext: parseLayer(value.tool_context),
+  };
+  const { project, trigger, work, actsFor, toolContext } = chain;
+  if (
+    project === undefined ||
+    trigger === undefined ||
+    work === undefined ||
+    actsFor === undefined ||
+    toolContext === undefined
+  ) {
+    return null;
+  }
+  return { project, trigger, work, actsFor, toolContext };
+};
+
 /**
  * Reads a stored authority back, or null for an absent or malformed one:
  * work that cannot read its authority holds none.
  */
 export const parseWorkAuthority = (value: unknown): WorkAuthority | null => {
   if (!isPlainObject(value)) return null;
-  const chain = {
-    project: nullableStr(value.project),
-    trigger: nullableStr(value.trigger),
-    work: nullableStr(value.work),
-    actsFor: parseActsFor(value.acts_for),
-  };
+  const chain = parseChain(value);
   const grant = parseGrant(value.grant);
   const principal = parsePrincipal(value.principal);
   const caps = parseCaps(value.caps);
-  if (!grant || !principal || !caps) return null;
-  const { project, trigger, work, actsFor } = chain;
-  if (
-    project === undefined ||
-    trigger === undefined ||
-    work === undefined ||
-    actsFor === undefined
-  ) {
-    return null;
-  }
-  return { project, grant, caps, principal, trigger, work, actsFor };
+  if (!chain || !grant || !principal || !caps) return null;
+  return { ...chain, grant, caps, principal };
 };
 
 /** The serialized form of an authority, or null for none. */
@@ -325,6 +348,17 @@ export const requireWorkAuthority = (args: {
   return args.authority;
 };
 
+/** The chain a request carries on into work it starts. */
+const requestChain = (authUser: AuthUser): Omit<Chain, 'project'> => {
+  return {
+    trigger: authUser.work?.trigger ?? null,
+    work: authUser.work?.work ?? null,
+    actsFor:
+      authUser.iamToken?.principal ?? authUser.onBehalfOfPrincipal ?? null,
+    toolContext: authUser.toolContextLayer ?? null,
+  };
+};
+
 /**
  * The authority work a request starts stores: the request's stated terms,
  * pinned to the work's project, carrying on the chain the request belongs to.
@@ -342,10 +376,7 @@ export const captureAuthority = (args: {
     grant: terms.grant,
     caps: terms.caps,
     principal: terms.principal,
-    trigger: authUser.work?.trigger ?? null,
-    work: authUser.work?.work ?? null,
-    actsFor:
-      authUser.iamToken?.principal ?? authUser.onBehalfOfPrincipal ?? null,
+    ...requestChain(authUser),
   };
 };
 
@@ -425,6 +456,7 @@ export const triggerAuthority = (args: {
     trigger: args.triggerPublicId,
     work: null,
     actsFor: null,
+    toolContext: null,
   };
 };
 
@@ -454,5 +486,6 @@ export const resourceGrantAuthority = (args: {
     trigger: args.chain?.trigger ?? null,
     work: args.chain?.work ?? null,
     actsFor: args.chain?.actsFor ?? null,
+    toolContext: args.chain?.toolContext ?? null,
   };
 };

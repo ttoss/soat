@@ -2,8 +2,9 @@ import type { AuthUser } from '../Context';
 import { isPlainObject } from '../lib/plainObject';
 import { parseBound } from '../lib/principalBound';
 import type { TokenType } from '../lib/signedTokens';
+import { readToolContextLayer } from '../lib/toolContextLayer';
 
-/** The claims that carry an IAM token bound: `bnd`, with its `jti` and optional `prn`. */
+/** The claims that carry an IAM token bound: `bnd`, with its `jti` and optional `prn` and `tcx`. */
 export type BoundClaims = {
   typ: TokenType;
   key?: string;
@@ -11,6 +12,7 @@ export type BoundClaims = {
   bnd?: unknown;
   jti?: string;
   prn?: unknown;
+  tcx?: unknown;
 };
 
 /**
@@ -19,6 +21,7 @@ export type BoundClaims = {
  */
 export const holdsItsBound = (claims: BoundClaims): boolean => {
   if (parseBound(claims.bnd) === null) return false;
+  if (readToolContextLayer(claims.tcx) === null) return false;
   if (claims.typ !== 'iam') return true;
   return (
     typeof claims.prj === 'string' &&
@@ -38,12 +41,15 @@ const readPrincipalClaim = (
     : undefined;
 };
 
-/** The `iamToken` an authenticated caller carries, if any. */
+/** The `iamToken` an authenticated caller carries and its layer, if any. */
 export const boundIdentityFields = (
   claims: BoundClaims
-): Pick<AuthUser, 'iamToken'> => {
+): Pick<AuthUser, 'iamToken' | 'toolContextLayer'> => {
+  if (claims.typ !== 'iam' || typeof claims.jti !== 'string') return {};
   const principal = readPrincipalClaim(claims.prn);
-  return claims.typ === 'iam' && typeof claims.jti === 'string'
-    ? { iamToken: { jti: claims.jti, ...(principal ? { principal } : {}) } }
-    : {};
+  const layer = readToolContextLayer(claims.tcx);
+  return {
+    iamToken: { jti: claims.jti, ...(principal ? { principal } : {}) },
+    ...(layer ? { toolContextLayer: layer } : {}),
+  };
 };

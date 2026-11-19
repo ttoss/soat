@@ -1,5 +1,5 @@
 import type { ToolDefinition } from './soatTools';
-import { filterToolContext } from './toolContext';
+import { filterToolContext, withoutReservedPrefixKeys } from './toolContext';
 
 /**
  * What goes into the request body of a SOAT action a `soat` tool invokes: the
@@ -10,7 +10,8 @@ import { filterToolContext } from './toolContext';
 
 // A `soat` action propagates the bag to whatever it starts, so the allowlist
 // applies here too — unfiltered, it would be advisory on the one path that
-// carries context furthest.
+// carries context furthest. Reserved-prefix keys stay behind: the started work
+// holds the token's layer on its authority, and a write refuses them.
 const withToolContext = (args: {
   body: Record<string, unknown>;
   toolContext?: Record<string, string>;
@@ -19,7 +20,8 @@ const withToolContext = (args: {
 }) => {
   if (!args.acceptedBodyFields.includes('tool_context')) return args.body;
   const toolContext = filterToolContext({
-    toolContext: args.toolContext,
+    toolContext:
+      args.toolContext && withoutReservedPrefixKeys(args.toolContext),
     contextKeys: args.contextKeys,
   });
   if (!toolContext || Object.keys(toolContext).length === 0) return args.body;

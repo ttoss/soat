@@ -252,6 +252,23 @@ components:
           example: ['pol_V1StGXR8Z5jdHi6B']
         principal:
           $ref: '#/components/schemas/IamPrincipal'
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            A `tool_context` layer the token pins: on every tool call the token
+            makes, and every call its work starts (generations, nested
+            `builtin` and `soat` calls, `call-tool` relays), a caller key the
+            layer names is dropped in any casing and the layer's value is sent
+            instead. Admission sees the caller's own bag. Keys follow the
+            `tool_context` key grammar and may not be a server identity key
+            (`INVALID_TOOL_CONTEXT_KEY`). A key under the deployment's reserved
+            prefix (`SOAT_RESERVED_TOOL_CONTEXT_PREFIX`) needs
+            `iam:PinReservedToolContext` on `srn:<project_id>:iam_token:*`,
+            else `400 INVALID_TOOL_CONTEXT_KEY`.
+          example:
+            tenant_id: acct_42
         ttl_seconds:
           type: integer
           minimum: 30

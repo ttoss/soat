@@ -13,6 +13,7 @@ import {
   type ToolCallGuardrailMode,
 } from './toolCallGuardrail';
 import { pinCallingProject } from './toolContext';
+import { stampToolContextLayer } from './toolContextLayer';
 import { assertToolInputValid } from './toolInputValidation';
 import {
   mergePresetParameters,
@@ -462,7 +463,10 @@ export const callResolvedTool = async (
   return runResolvedTool({
     ...args,
     toolContext: pinCallingProject({
-      toolContext: args.toolContext,
+      toolContext: stampToolContextLayer({
+        toolContext: args.toolContext,
+        authority: args.authority,
+      }),
       callingProjectPublicId: caller?.publicId ?? null,
     }),
   });

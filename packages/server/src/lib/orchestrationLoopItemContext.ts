@@ -36,6 +36,7 @@ export const assertValidItemToolContext = (value: unknown): void => {
   assertAssignableToolContextKeys({
     field: 'item_tool_context',
     keys: Object.keys(value),
+    reservedPrefix: 'refuse',
   });
 };
 

@@ -53,6 +53,7 @@ import {
   buildContextHeaders,
   pinCallingProject,
 } from './toolContext';
+import { stampToolContextLayer } from './toolContextLayer';
 import { fetchWithEgressGuard } from './toolEgress';
 import { assertToolInputValid } from './toolInputValidation';
 import {
@@ -1586,6 +1587,10 @@ export const resolveAgentToolBindings = async (args: {
   attribution: ToolCallAttribution;
 }): Promise<ToolBinding[]> => {
   const bindings: ToolBinding[] = [];
+  const toolContext = stampToolContextLayer({
+    toolContext: args.toolContext,
+    authority: args.authority,
+  });
 
   for (const toolPublicId of args.toolIds) {
     bindings.push(
@@ -1594,7 +1599,7 @@ export const resolveAgentToolBindings = async (args: {
         projectId: args.projectId,
         callerProjectId: args.callerProjectId,
         projectPublicId: args.projectPublicId,
-        resolveArgs: args,
+        resolveArgs: { ...args, toolContext },
         guardrail: args.guardrail,
         activity: args.activity,
       })
@@ -1608,7 +1613,7 @@ export const resolveAgentToolBindings = async (args: {
       callerProjectId: args.callerProjectId,
       agentAuthority: args.agentAuthority,
       authority: args.authority,
-      toolContext: args.toolContext,
+      toolContext,
       traceId: args.traceId,
       parentTraceId: args.parentTraceId,
       rootTraceId: args.rootTraceId,

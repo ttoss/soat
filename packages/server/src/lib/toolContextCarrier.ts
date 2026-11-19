@@ -1,7 +1,10 @@
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { assertSecretRefsExist, resolveSecretRefsInString } from './secrets';
 import { assertSecretUseAllowed, secretRefIds } from './secretUse';
-import { sanitizeCallerToolContext } from './toolContext';
+import {
+  assertNoReservedPrefixKeys,
+  sanitizeCallerToolContext,
+} from './toolContext';
 
 /**
  * The rule a **stored** `tool_context` follows, for every row that holds one —
@@ -18,7 +21,8 @@ import { sanitizeCallerToolContext } from './toolContext';
 
 /**
  * The one ingress for a bag that is about to be written to a row: keys held to
- * the header-name grammar, reserved identity keys stripped in any casing, and —
+ * the header-name grammar, keys under the deployment's reserved prefix refused,
+ * reserved identity keys stripped in any casing, and —
  * for a carrier that resolves refs — every `{{secret:...}}` checked against this
  * project.
  *
@@ -60,6 +64,12 @@ type AcceptToolContextArgs =
 export const acceptStoredToolContext = async (
   args: AcceptToolContextArgs
 ): Promise<Record<string, string> | undefined> => {
+  if (args.toolContext) {
+    assertNoReservedPrefixKeys({
+      field: 'tool_context',
+      keys: Object.keys(args.toolContext),
+    });
+  }
   const accepted = sanitizeCallerToolContext(args.toolContext);
   if (!accepted) return undefined;
 

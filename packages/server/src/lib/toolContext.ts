@@ -184,16 +184,80 @@ const RESERVED_LOWER = new Set(
 );
 
 /**
+ * The key prefix the deployment reserves to an IAM token's `tool_context`
+ * layer (`SOAT_RESERVED_TOOL_CONTEXT_PREFIX`), or null when it reserves none.
+ * Read per call, like `SOAT_HEADER_PREFIX`.
+ */
+export const reservedToolContextPrefix = (): string | null => {
+  const configured = process.env.SOAT_RESERVED_TOOL_CONTEXT_PREFIX;
+  if (!configured) return null;
+  if (!HEADER_TOKEN_RE.test(configured)) {
+    throw new Error(
+      `SOAT_RESERVED_TOOL_CONTEXT_PREFIX '${configured}' is not a valid tool_context key prefix — it may only contain letters, digits and the characters !#$%&'*+-.^_\`|~.`
+    );
+  }
+  return configured.toLowerCase();
+};
+
+/** Whether `key` falls under the reserved prefix, in any casing. */
+export const isReservedPrefixKey = (key: string): boolean => {
+  const prefix = reservedToolContextPrefix();
+  return prefix !== null && key.toLowerCase().startsWith(prefix);
+};
+
+/**
+ * `toolContext` without its keys under the reserved prefix, in any casing:
+ * what a caller's bag keeps, since only a token's layer carries them.
+ */
+export const withoutReservedPrefixKeys = (
+  toolContext: Record<string, string>
+): Record<string, string> => {
+  return Object.fromEntries(
+    Object.entries(toolContext).filter(([key]) => {
+      return !isReservedPrefixKey(key);
+    })
+  );
+};
+
+/**
+ * Throws `INVALID_TOOL_CONTEXT_KEY` (400) when a write assigns a key under the
+ * reserved prefix: only an IAM token's layer carries one.
+ */
+export const assertNoReservedPrefixKeys = (args: {
+  field: string;
+  keys: string[];
+}): void => {
+  const reserved = args.keys.filter(isReservedPrefixKey);
+  if (reserved.length === 0) return;
+  throw new DomainError(
+    'INVALID_TOOL_CONTEXT_KEY',
+    `${args.field} cannot assign the key(s) ${reserved
+      .map((key) => {
+        return `'${key}'`;
+      })
+      .join(
+        ', '
+      )}; keys starting with '${reservedToolContextPrefix()}' are reserved to the deployment.`,
+    { keys: reserved }
+  );
+};
+
+/**
  * Throws `INVALID_TOOL_CONTEXT_KEY` (400) unless `keys` are keys a graph may
  * assign: valid, distinct header names, none of them server-reserved. A
  * reserved key is refused rather than stripped, since a graph that assigns one
- * expects it to arrive.
+ * expects it to arrive. `reservedPrefix` states whether the writer may assign
+ * keys under the deployment's reserved prefix.
  */
 export const assertAssignableToolContextKeys = (args: {
   field: string;
   keys: string[];
+  reservedPrefix: 'refuse' | 'allow';
 }): void => {
   assertValidToolContextKeys(args.keys);
+  if (args.reservedPrefix === 'refuse') {
+    assertNoReservedPrefixKeys({ field: args.field, keys: args.keys });
+  }
   const reserved = args.keys.filter((key) => {
     return RESERVED_LOWER.has(key.toLowerCase());
   });
