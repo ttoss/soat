@@ -55,7 +55,11 @@ import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
 } from './textEncodedToolCall';
-import { saveTrace, serializeSteps } from './traces';
+import {
+  replaceTraceSteps,
+  type TraceStepTarget,
+  turnStepTarget,
+} from './traceStepStore';
 import {
   addUsage,
   carrySpentUsage,
@@ -141,6 +145,7 @@ const callGenerateText = async (args: {
   prepareStep: ReturnType<typeof buildPrepareStep>;
   abortSignal?: AbortSignal;
   onStepEnd: (step: unknown) => void;
+  stepTarget: TraceStepTarget;
 }) => {
   const hasTools = Object.keys(args.resolvedTools).length > 0;
 
@@ -156,6 +161,7 @@ const callGenerateText = async (args: {
       ...modelCallSettings(args.typedAgent),
       ...segmentCallOptions({
         generationId: args.generationId,
+        steps: { target: args.stepTarget, firstIndex: 0 },
         signal: args.abortSignal,
         onStepEnd: args.onStepEnd,
       }),
@@ -196,8 +202,8 @@ type SettleSaveArgs = {
     finishReason: string;
     usage?: LanguageModelUsage;
   };
-  /** Steps the turn spent before `result` — empty on its first segment. */
-  priorSteps?: unknown[];
+  /** Steps the turn spent before `result`: none on its first segment. */
+  priorStepCount?: number;
   /** Trailing `allMessages` the turn produced before `result`. */
   priorTurnMessageCount?: number;
   remainingDepth?: number | null;
@@ -219,7 +225,7 @@ const settlePartition = async (args: {
     model: args.save.model,
     reportedModelId: args.save.result.response.modelId,
     usage: args.save.result.usage,
-    stepsAlreadySpent: args.save.priorSteps?.length ?? 0,
+    stepsAlreadySpent: args.save.priorStepCount ?? 0,
     turn: {
       steps: args.save.result.steps,
       finishReason: args.save.result.finishReason,
@@ -237,7 +243,7 @@ const settlePartition = async (args: {
       syntheticToolResults: args.partition.synthesizedResults,
       allMessages: args.save.allMessages,
       result: args.save.result,
-      priorSteps: args.save.priorSteps,
+      priorStepCount: args.save.priorStepCount,
       priorTurnMessageCount: args.save.priorTurnMessageCount,
       model: args.save.model,
       typedAgent: args.save.typedAgent,
@@ -258,7 +264,7 @@ const settlePartition = async (args: {
 };
 
 // The transient pending state for the initial turn's all-gated resume: no
-// released calls, carrying the just-run steps (so the trace keeps them) and the
+// released calls, counting the just-run steps (the trace holds them) and the
 // agent config the continuation loop needs.
 const buildInitialResumePending = (args: {
   generationId: string;
@@ -287,7 +293,7 @@ const buildInitialResumePending = (args: {
     syntheticToolResults: [],
     messages: [...args.allMessages, ...args.responseMessages],
     turnMessageCount: args.responseMessages.length,
-    steps: serializeSteps(args.initialSteps),
+    stepCount: args.initialSteps.length,
     resolvedModel: args.model,
     aiProviderId: servedAiProviderId({
       model: args.model,
@@ -451,6 +457,11 @@ const callWithToolFallback = async (args: {
     args.spend.abandoned = sumStepUsage(args.ranSteps);
     args.spend.reportedModelId = reportedModelOfSteps(args.ranSteps);
     args.ranSteps.splice(0);
+    await replaceTraceSteps({
+      target: args.callArgs.stepTarget,
+      firstIndex: 0,
+      steps: [],
+    });
     return callGenerateText({ ...args.callArgs, resolvedTools: {} });
   }
 };
@@ -551,6 +562,7 @@ export const runNonStreamGeneration = async (args: {
     onStepEnd: (step: unknown) => {
       ranSteps.push(step);
     },
+    stepTarget: turnStepTarget(args),
   };
 
   const spend: AbandonedSpend = {};
@@ -563,20 +575,6 @@ export const runNonStreamGeneration = async (args: {
       spend,
     });
   } catch (error) {
-    if (ranSteps.length > 0) {
-      await Promise.allSettled([
-        saveTrace({
-          traceId: args.traceId,
-          projectId: args.typedAgent.project.id as number,
-          projectPublicId: args.typedAgent.project.publicId,
-          agentId: args.agentId,
-          generationId: args.generationId,
-          steps: serializeSteps(ranSteps),
-          parentTraceId: args.parentTraceId ?? null,
-          rootTraceId: args.rootTraceId ?? null,
-        }),
-      ]);
-    }
     throw carrySpentUsage({
       error,
       usage: addUsage(spend.abandoned, sumStepUsage(ranSteps)),
@@ -616,7 +614,7 @@ export const runToolOutputsGeneration = async (args: {
 }): Promise<AgentRunResult> => {
   // A resume continues the turn that paused, so it inherits that turn's spent
   // steps rather than starting a fresh budget.
-  const stepsAlreadySpent = args.pending.steps?.length ?? 0;
+  const stepsAlreadySpent = args.pending.stepCount;
   if (
     isTurnBudgetSpent({
       maxSteps: args.pending.agentConfig.maxSteps,
@@ -665,6 +663,7 @@ export const runToolOutputsGeneration = async (args: {
       maxRetries: routedMaxRetries(args.pending.resolvedModel),
       ...segmentCallOptions({
         generationId: args.generationId,
+        steps: { target: args.pending, firstIndex: stepsAlreadySpent },
         onStepEnd: (step) => {
           ranSteps.push(step);
         },
@@ -768,7 +767,7 @@ export const resolveToolOutputsResult = async (args: {
   resumeCount?: number;
 }): Promise<GenerationResult> => {
   const resumeCount = args.resumeCount ?? 0;
-  const priorSteps = args.pending.steps ?? [];
+  const priorStepCount = args.pending.stepCount;
   const priorMessages = priorTurnMessages(args);
   let partition: ClientCallPartition | null;
   try {
@@ -799,8 +798,8 @@ export const resolveToolOutputsResult = async (args: {
   }
 
   if (partition && !capReached) {
-    // Fold this turn's assistant message and steps into the pending state so a
-    // resume (or a later suspend) carries the full history.
+    // Fold this turn's assistant message and step count into the pending state
+    // so a resume (or a later suspend) carries the full history.
     const nextPending: PendingGeneration = {
       ...args.pending,
       messages: [
@@ -809,7 +808,7 @@ export const resolveToolOutputsResult = async (args: {
       ],
       turnMessageCount:
         priorMessages.length + args.result.responseMessages.length,
-      steps: [...priorSteps, ...serializeSteps(args.result.steps)],
+      stepCount: priorStepCount + args.result.steps.length,
     };
     return settlePartition({
       pending: nextPending,
@@ -822,7 +821,7 @@ export const resolveToolOutputsResult = async (args: {
           content: unknown;
         }>,
         result: args.result as SettleSaveArgs['result'],
-        priorSteps,
+        priorStepCount,
         priorTurnMessageCount: priorMessages.length,
         remainingDepth: null,
       },

@@ -247,6 +247,12 @@ export const projectTranscriptSteps = (steps: unknown): TranscriptStep[] => {
  * own, and the answer worth reporting is the one before it. `finish_reason`
  * comes from the actual last step, because that is what ended the run.
  */
+// A turn in these is not over: its last step is no answer.
+const OPEN_STATUSES: ReadonlySet<string> = new Set([
+  'running',
+  'requires_action',
+]);
+
 const deriveOutput = (
   steps: TranscriptStep[]
 ): { content: string | null; finish_reason: string | null } | null => {
@@ -265,11 +271,11 @@ const deriveOutput = (
 /**
  * The two content halves of a transcript, or their absence.
  *
- * The generation's redaction marker governs **both**, and the steps object is
+ * The generation's redaction marker governs **both**, and its steps are
  * not read when it is set. A generation purge clears the generation's own
- * columns and the copies on any eval result, but not the trace's steps file —
+ * columns and the copies on any eval result, but not the trace's step objects —
  * that belongs to `DELETE /traces/{id}/content`. The turn's answer and its tool
- * payloads live in both places, so projecting the file after the generation was
+ * payloads live in both places, so projecting the steps after the generation was
  * purged would hand back the content the purge erased, in a response whose own
  * `content_redacted_at` says it is gone — which is why this slice references
  * rather than copies.
@@ -302,8 +308,8 @@ const resolveTranscriptContent = async (
  *   it; `content_redacted_by_principal_id` distinguishes the two. Matches the
  *   traces module, where a purged trace reads back as a skeleton so the erasure
  *   is provable rather than indistinguishable from a 404.
- * - **Still running** — the steps object is not written until the run finishes,
- *   so `steps` is an empty array and `status` disambiguates.
+ * - **Still running** — `steps` holds the steps ended so far and `output` is
+ *   null until the turn settles; `status` disambiguates.
  *
  * `step_count` survives both, being a counter rather than content.
  */
@@ -344,7 +350,7 @@ export const getGenerationTranscript = async (args: {
     step_count: generationStepCount(generation),
     input,
     steps,
-    output: deriveOutput(steps),
+    output: OPEN_STATUSES.has(generation.status) ? null : deriveOutput(steps),
     error: generation.error,
     content_redacted_at: generation.contentRedactedAt,
     content_redacted_by_principal_type:

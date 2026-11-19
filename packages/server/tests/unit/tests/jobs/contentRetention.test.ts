@@ -13,7 +13,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * `now` (unit tests never import `server.ts`). Content is written by real turns
  * against a local OpenAI-compatible stub, and the purge is read back through
  * `GET /api/v1/traces/:trace_id`, `GET /api/v1/generations/:generation_id` and
- * `GET /api/v1/files/:file_id`.
+ * `GET /api/v1/files?path_prefix=`.
  */
 describe('Trace content retention sweep', () => {
   let adminToken: string;
@@ -89,11 +89,21 @@ describe('Trace content retention sweep', () => {
     const res = await asAdmin().get(`/api/v1/traces/${traceId}`);
     expect(res.status).toBe(200);
     return res.body as {
-      file_id: string | null;
+      project_id: string;
       content_redacted_at: string | null;
       content_redacted_by_principal_type: string | null;
       content_redacted_by_principal_id: string | null;
     };
+  };
+
+  /** The trace's step objects, read through the Files API. */
+  const stepObjectCount = async (traceId: string) => {
+    const { project_id: projectId } = await getTrace(traceId);
+    const res = await asAdmin().get(
+      `/api/v1/files?project_id=${projectId}&path_prefix=/.system/traces/${traceId}`
+    );
+    expect(res.status).toBe(200);
+    return (res.body.data as unknown[]).length;
   };
 
   beforeAll(async () => {
@@ -151,7 +161,7 @@ describe('Trace content retention sweep', () => {
 
       const trace = await getTrace(traceId);
       expect(trace.content_redacted_at).toBeNull();
-      expect(trace.file_id).not.toBeNull();
+      expect(await stepObjectCount(traceId)).toBe(1);
     });
   });
 
@@ -163,13 +173,12 @@ describe('Trace content retention sweep', () => {
 
       const trace = await getTrace(traceId);
       expect(trace.content_redacted_at).toBeNull();
-      expect(trace.file_id).not.toBeNull();
+      expect(await stepObjectCount(traceId)).toBe(1);
     });
 
-    test('purges expired content, steps file included, as the sweep', async () => {
+    test('purges expired content, step objects included, as the sweep', async () => {
       const { traceId } = await turn({ agentId: await createProject(30) });
-      const before = await getTrace(traceId);
-      expect(before.file_id).not.toBeNull();
+      expect(await stepObjectCount(traceId)).toBe(1);
 
       expect(
         await sweepExpiredTraceContent({ now: daysAhead(31) })
@@ -177,13 +186,11 @@ describe('Trace content retention sweep', () => {
 
       const trace = await getTrace(traceId);
       expect(trace.content_redacted_at).not.toBeNull();
-      expect(trace.file_id).toBeNull();
       expect(trace.content_redacted_by_principal_type).toBe('system');
       expect(trace.content_redacted_by_principal_id).toBe('retention_sweep');
-      // The bytes, not just the pointer: a purge that leaves the object is a
-      // fake erasure.
-      const file = await asAdmin().get(`/api/v1/files/${before.file_id}`);
-      expect(file.status).toBe(404);
+      // The objects, not just a pointer: a purge that leaves them is a fake
+      // erasure.
+      expect(await stepObjectCount(traceId)).toBe(0);
     });
 
     test('clears generation content but keeps the billing skeleton', async () => {
@@ -220,13 +227,13 @@ describe('Trace content retention sweep', () => {
         agentId,
         body: { parent_trace_id: root.traceId, root_trace_id: root.traceId },
       });
-      expect((await getTrace(child.traceId)).file_id).not.toBeNull();
+      expect(await stepObjectCount(child.traceId)).toBe(1);
 
       await sweepExpiredTraceContent({ now: daysAhead(31) });
 
       const purged = await getTrace(child.traceId);
       expect(purged.content_redacted_at).not.toBeNull();
-      expect(purged.file_id).toBeNull();
+      expect(await stepObjectCount(child.traceId)).toBe(0);
     });
 
     test('a batch smaller than the backlog still drains it', async () => {

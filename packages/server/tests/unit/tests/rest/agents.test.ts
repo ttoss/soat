@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import { db } from 'src/db';
 import * as agentNonStreamGenerationModule from 'src/lib/agentNonStreamGeneration';
+import { createGenerationRecord } from 'src/lib/generations';
 import * as knowledgeModule from 'src/lib/knowledge';
 import { saveTrace } from 'src/lib/traces';
 
@@ -1258,7 +1259,7 @@ describe('Agents', () => {
       ).toBeNull();
     });
 
-    test('force=true removes the trace file row and its storage object', async () => {
+    test('force=true removes the trace step file rows and their storage objects', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({
@@ -1273,17 +1274,27 @@ describe('Agents', () => {
       });
 
       const traceId = `trc_frc_storage_${Date.now()}`;
+      const generationId = `gen_frc_storage_${Date.now()}`;
+      await createGenerationRecord({
+        authority: null,
+        actsAsAgent: null,
+        publicId: generationId,
+        projectId: project!.id as number,
+        agentId: forceAgentId,
+        traceId,
+      });
       await saveTrace({
         traceId,
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: forceAgentId,
-        generationId: 'gen_test_steps',
+        generationId,
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
-      const trace = await db.Trace.findOne({ where: { publicId: traceId } });
       const file = await db.File.findOne({
-        where: { id: trace!.fileId as number },
+        where: {
+          path: `/.system/traces/${traceId}/${generationId}/000000.json`,
+        },
       });
       const storagePath = file!.storagePath;
 

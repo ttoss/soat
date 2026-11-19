@@ -43,7 +43,8 @@ import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
 } from './textEncodedToolCall';
-import { recordTraceError, saveTrace, serializeSteps } from './traces';
+import { recordTraceError } from './traces';
+import { turnStepTarget } from './traceStepStore';
 import { carrySpentUsage, reportedModelOf, spentUsageOf } from './turnSpend';
 import type { WorkAuthority } from './workAuthority';
 
@@ -108,22 +109,11 @@ const fireStreamEndSideEffects = (args: {
    */
   failed: boolean;
 }): void => {
-  saveTrace({
-    traceId: args.traceId,
-    projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    agentId: args.agentId,
-    generationId: args.generationId,
-    steps: serializeSteps(args.steps),
-    parentTraceId: args.parentTraceId,
-    rootTraceId: args.rootTraceId,
-  }).catch(() => {});
-
   saveRoutingMetadata({
     generationId: args.generationId,
     model: args.model,
   }).catch(
-    /* istanbul ignore next -- fire-and-forget alongside the trace write */
+    /* istanbul ignore next -- fire-and-forget */
     () => {}
   );
   // Never rejects: `recordGenerationUsage` beneath it catches internally.
@@ -350,11 +340,8 @@ export const runStreamGeneration = async (
     promptCaching: args.typedAgent.promptCaching,
     provenance: args.provenance,
   });
-  log(
-    'runStreamGeneration: agentId=%s toolCount=%d',
-    args.agentId,
-    Object.keys(args.resolvedTools).length
-  );
+  const toolCount = Object.keys(args.resolvedTools).length;
+  log('runStreamGeneration: agentId=%s toolCount=%d', args.agentId, toolCount);
   // Captured, not acted on: `onError` fires mid-read, and the failure must not
   // overtake chunks already on their way to the caller.
   let streamError: unknown;
@@ -365,16 +352,14 @@ export const runStreamGeneration = async (
     maxRetries: routedMaxRetries(args.model),
     instructions: system,
     messages: nonSystemMessages as ModelMessage[],
-    tools:
-      Object.keys(args.resolvedTools).length > 0
-        ? args.resolvedTools
-        : undefined,
+    tools: toolCount > 0 ? args.resolvedTools : undefined,
     toolChoice: args.toolChoice,
     prepareStep,
     stopWhen: resolveStopWhen(args.typedAgent),
     ...modelCallSettings(args.typedAgent),
     ...segmentCallOptions({
       generationId: args.generationId,
+      steps: { target: turnStepTarget(args), firstIndex: 0 },
       signal: args.abortSignal,
     }),
     onError: ({ error }) => {

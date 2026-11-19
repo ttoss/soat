@@ -912,7 +912,7 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 11 — Inspect the trace
 
-The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**: the step count and a `file_id` for the full step JSON.
+The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**; each step is its own [file](/docs/modules/traces#step-storage) under `/.system/traces/{trace_id}/`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -920,7 +920,8 @@ The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**: t
 ```bash
 TRACE=$(soat get-trace --trace-id "$TRACE_ID")
 printf '%s\n' "$TRACE" | jq '.'
-FILE_ID=$(printf '%s\n' "$TRACE" | jq -r '.file_id')
+FILE_ID=$(soat list-files --project-id "$PROJECT_ID" \
+  --path-prefix "/.system/traces/$TRACE_ID/" | jq -r '.data[0].id')
 echo "FILE_ID: $FILE_ID"
 ```
 
@@ -931,7 +932,6 @@ Expected metadata output:
   "id": "trace_ypo8g0yO3563AfuC",
   "project_id": "proj_abc123",
   "agent_id": "agent_nCjF0owWdtPt3Osq",
-  "file_id": "file_xyz789",
   "step_count": 2,
   "parent_trace_id": null,
   "root_trace_id": null,
@@ -939,13 +939,13 @@ Expected metadata output:
 }
 ```
 
-Download `file_id` for the full steps (model calls, tool invocations, tool results):
+Download a step file for its full content (model call, tool invocations, tool results):
 
 ```bash
 soat download-file --file-id "$FILE_ID" | jq '.'
 ```
 
-The file is a JSON array of step objects (tool name, inputs, outputs). Each nested agent call creates its **own trace** (Step 13); the parent's step references the child's `trace_id` in the tool call result.
+The file is one step object (tool name, inputs, outputs). Each nested agent call creates its **own trace** (Step 13); the parent's step references the child's `trace_id` in the tool call result.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -956,8 +956,10 @@ const { data: trace } = await adminSoat.traces.getTrace({
 });
 console.log(JSON.stringify(trace, null, 2));
 console.log('Total steps:', trace.step_count);
-// trace.file_id points to the full steps JSON on disk
-const FILE_ID = trace.file_id;
+const { data: stepFiles } = await adminSoat.files.listFiles({
+  query: { project_id: PROJECT_ID, path_prefix: `/.system/traces/${TRACE_ID}/` },
+});
+const FILE_ID = stepFiles.data[0].id;
 ```
 
 </TabItem>
@@ -967,9 +969,12 @@ const FILE_ID = trace.file_id;
 TRACE=$(curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 printf '%s\n' "$TRACE" | jq '.'
-FILE_ID=$(printf '%s\n' "$TRACE" | jq -r '.file_id')
+FILE_ID=$(curl -s -G "$SOAT_URL/api/v1/files" \
+  --data-urlencode "project_id=$PROJECT_ID" \
+  --data-urlencode "path_prefix=/.system/traces/$TRACE_ID/" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.data[0].id')
 
-# Download the full steps JSON
+# Download the first step
 curl -s "$SOAT_URL/api/v1/files/$FILE_ID/download" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.'
 ```

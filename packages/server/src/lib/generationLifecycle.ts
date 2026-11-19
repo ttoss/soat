@@ -9,7 +9,7 @@ import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
-import { recordTraceError, saveTrace, serializeSteps } from './traces';
+import { recordTraceError } from './traces';
 import {
   reportedModelOf,
   reportedModelOfSteps,
@@ -164,17 +164,10 @@ export const recordGenerationFailure = async (args: {
   });
 };
 
-/** The steps a continuation's turn spent before the segment now running. */
-const priorStepsOf = (pending: PendingGeneration): unknown[] => {
-  return pending.steps ?? [];
-};
-
 /**
- * Fails a continuation turn (the tool-outputs path) the way
- * `runCompletionSideEffects` completes one: the trace keeps every step of the
- * run — the earlier ones the pending state carried plus this turn's — so the
- * text that caused the failure is there to read, and only then is the failure
- * stamped on both records. Returns the error to rethrow.
+ * Fails a continuation turn (the tool-outputs path): the trace already holds
+ * every step of the run, recorded as each ended, so the text that caused the
+ * failure is there to read. Returns the error to rethrow.
  *
  * The continuation has no `try`/`catch` above it the way `createGeneration`
  * does, so a throw from that path would otherwise leave the generation stuck
@@ -186,22 +179,6 @@ export const recordContinuationFailure = async (args: {
   steps: unknown[];
   error: unknown;
 }): Promise<unknown> => {
-  // `allSettled` rather than `.catch()`: a trace write that fails must not
-  // mask the failure being recorded — the same reason `recordGenerationFailure`
-  // above settles its writes instead of awaiting them bare.
-  await Promise.allSettled([
-    saveTrace({
-      traceId: args.pending.traceId,
-      projectId: args.pending.projectId,
-      projectPublicId: args.pending.projectPublicId,
-      agentId: args.pending.agentId,
-      generationId: args.generationId,
-      steps: [...priorStepsOf(args.pending), ...serializeSteps(args.steps)],
-      parentTraceId: args.pending.parentTraceId ?? undefined,
-      rootTraceId: args.pending.rootTraceId ?? undefined,
-    }),
-  ]);
-
   return recordGenerationFailure({
     generationId: args.generationId,
     traceId: args.pending.traceId,
@@ -212,7 +189,7 @@ export const recordContinuationFailure = async (args: {
     // failed `output_schema` included.
     usage: sumStepUsage(args.steps) ?? usageFromFailure(args.error),
     reportedModelId: reportedModelOfSteps(args.steps),
-    stepsAlreadySpent: priorStepsOf(args.pending).length,
+    stepsAlreadySpent: args.pending.stepCount,
   });
 };
 
@@ -256,7 +233,7 @@ export const meterContinuationSegment = (args: {
     model: args.pending.resolvedModel,
     reportedModelId: args.result.response?.modelId,
     usage: args.result.usage,
-    stepsAlreadySpent: priorStepsOf(args.pending).length,
+    stepsAlreadySpent: args.pending.stepCount,
     turn: {
       steps: args.result.steps,
       finishReason: args.result.finishReason,
@@ -269,9 +246,6 @@ export const meterContinuationSegment = (args: {
 const runCompletionSideEffects = async (
   args: CompletionSideEffectsArgs
 ): Promise<void> => {
-  const prevSteps = priorStepsOf(args.pending);
-  const allSteps = [...prevSteps, ...serializeSteps(args.result.steps)];
-
   await settleGeneration({
     generationId: args.generationId,
     fence: 'lease',
@@ -281,23 +255,13 @@ const runCompletionSideEffects = async (
         finishReason: args.result.finishReason,
         // The turn's steps, not this segment's: a turn spends one budget
         // across every pause it takes.
-        stepCount: allSteps.length,
+        stepCount: args.pending.stepCount + args.result.steps.length,
         maxSteps: args.pending.agentConfig.maxSteps,
       }),
       assistantContent: args.result.text,
     },
     effects: () => {
       return [
-        saveTrace({
-          traceId: args.pending.traceId,
-          projectId: args.pending.projectId,
-          projectPublicId: args.pending.projectPublicId,
-          agentId: args.pending.agentId,
-          generationId: args.generationId,
-          steps: allSteps,
-          parentTraceId: args.pending.parentTraceId ?? undefined,
-          rootTraceId: args.pending.rootTraceId ?? undefined,
-        }),
         saveRoutingMetadata({
           generationId: args.generationId,
           model: args.pending.resolvedModel,
@@ -308,7 +272,7 @@ const runCompletionSideEffects = async (
 };
 
 /**
- * Fire-and-forget completion side effects: persists the trace, marks the
+ * Fire-and-forget completion side effects: marks the
  * generation completed, and emits the completion event. Never throws.
  */
 export const fireCompletionSideEffects = (

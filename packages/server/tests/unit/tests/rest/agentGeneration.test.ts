@@ -678,7 +678,7 @@ describe('Agent Generation Routes', () => {
         initiatorGenerationId: null,
         pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
         messages: [{ role: 'user', content: 'hello' }],
-        steps: [],
+        stepCount: 0,
         resolvedModel: buildUnaliasedModel({
           provider: 'ollama',
           secretValue: null,
@@ -846,7 +846,7 @@ describe('Agent Generation Routes', () => {
         initiatorGenerationId: null,
         pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
         messages: [{ role: 'user', content: 'hello' }],
-        steps: [],
+        stepCount: 0,
         resolvedModel: buildUnaliasedModel({
           provider: 'ollama',
           secretValue: null,
@@ -1216,7 +1216,7 @@ describe('Agent Generation Routes', () => {
             { toolCallId: 'tc_1', toolName: 'show_dialog', args: {} },
           ],
           messages: [{ role: 'user', content: 'hello' }],
-          steps: [],
+          stepCount: 0,
           resolvedModel: buildUnaliasedModel({
             provider: 'ollama',
             secretValue: null,

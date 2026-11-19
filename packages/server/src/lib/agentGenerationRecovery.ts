@@ -28,6 +28,7 @@ import { createGenerationRecord, generations } from './generations';
 import { settleGeneration } from './generationSettle';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
+import { type TraceStepTarget, writeTraceSteps } from './traceStepStore';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
@@ -235,11 +236,27 @@ type PendingStateDb = {
   syntheticToolResults?: ClientToolResult[];
   messages: Array<{ role: string; content: string }>;
   turnMessageCount?: number;
+  stepCount?: number;
+  /** A pause written before steps were stored as they end. */
   steps?: unknown[];
   parentTraceId: string | null;
   rootTraceId: string | null;
   toolContext: Record<string, string> | null;
   remainingDepth: number | null;
+};
+
+/**
+ * The steps the paused turn spent. A pause that carries its steps never wrote
+ * them to the trace; they are written before the turn resumes past them.
+ */
+const restoredStepCount = async (args: {
+  target: TraceStepTarget;
+  pendingState: PendingStateDb;
+}): Promise<number> => {
+  const { steps } = args.pendingState;
+  if (!Array.isArray(steps)) return args.pendingState.stepCount ?? 0;
+  await writeTraceSteps({ target: args.target, firstIndex: 0, steps });
+  return steps.length;
 };
 
 const buildPendingFromState = async (args: {
@@ -305,7 +322,16 @@ const buildPendingFromState = async (args: {
       unavailableToolNames,
     }),
     turnMessageCount: args.pendingState.turnMessageCount,
-    steps: args.pendingState.steps ?? [],
+    stepCount: await restoredStepCount({
+      target: {
+        traceId: args.traceId,
+        generationId: args.generationId,
+        projectId: args.typedAgent.project.id as number,
+        projectPublicId: args.typedAgent.project.publicId,
+        agentId: args.agentId,
+      },
+      pendingState: args.pendingState,
+    }),
     resolvedModel: resolution.model,
     aiProviderId: args.typedAgent.aiProvider?.publicId ?? null,
     agentConfig: toAgentConfig(args.typedAgent),

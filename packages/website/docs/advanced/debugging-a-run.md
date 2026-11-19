@@ -75,7 +75,7 @@ An empty answer has four different meanings:
 
 ## What you can debug is a configuration choice
 
-[Zero-retention mode](../modules/traces.md#zero-retention-mode) never writes the steps object, nor the generation's `error` (content by the same definition). A project on `trace_content_mode: none` keeps every skeleton field (ids, `status`, `stop_reason`, `step_count`, and the whole usage ledger), so metering, quotas and the audit log are untouched; it gives up the material this page tells you to read.
+[Zero-retention mode](../modules/traces.md#zero-retention-mode) never writes a step file, nor the generation's `error` (content by the same definition). A project on `trace_content_mode: none` keeps every skeleton field (ids, `status`, `stop_reason`, `step_count`, and the whole usage ledger), so metering, quotas and the audit log are untouched; it gives up the material this page tells you to read.
 
 | Setting | You keep | You give up |
 | --- | --- | --- |

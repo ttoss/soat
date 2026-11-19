@@ -127,12 +127,9 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare stepCount: number;
 
-  // How the steps object divides between the generations under this trace, in
-  // first-write order. The object is the concatenation of these segments, so a
-  // reused `trace_id` appends rather than replacing the first generation's
-  // steps, and a re-writing generation rewrites only its own slice.
-  // Skeleton, not content, but reset by a purge because the object it indexes
-  // is deleted.
+  // How the legacy steps object (`fileId`) divides between the generations
+  // that wrote it. Read-only: a step is written as its own object
+  // (`traceStepStore.ts`).
   @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare stepSegments: { generationId: string; stepCount: number }[];
 

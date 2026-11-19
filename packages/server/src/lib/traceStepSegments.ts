@@ -1,12 +1,10 @@
 /**
- * The index that divides a trace's steps object between the generations
- * grouped under it (`Trace.stepSegments`).
+ * The index that divides a trace's legacy steps object (`Trace.fileId`)
+ * between the generations grouped under it (`Trace.stepSegments`). Read-only:
+ * a step is written as its own object (`traceStepStore.ts`).
  *
- * A `trace_id` may be reused to group several generations, so the object is the
- * concatenation of one segment per generation, in the order they first wrote.
- * Both sides of that layout live here: `traceWrite` places a write inside it,
- * and `generationTurn` reads one generation's slice back out. Splitting them
- * across two modules is how the object and the index drift apart.
+ * The object is the concatenation of one segment per generation, in the order
+ * they first wrote.
  */
 import createDebug from 'debug';
 
@@ -34,8 +32,7 @@ export const readStepSegments = (segments: unknown): StepSegment[] => {
 
 /**
  * Where `generationId`'s slice starts and how long it is. A generation with no
- * segment yet gets the end of the object and a length of zero, so a first write
- * appends.
+ * segment gets the end of the object and a length of zero.
  */
 export const locateSegment = (
   segments: StepSegment[],
@@ -51,47 +48,15 @@ export const locateSegment = (
   return { offset, stepCount: 0, found: false };
 };
 
-/** The index with `generationId`'s segment set to `stepCount` — replaced in
- * place when it already has one, appended when it does not. */
-export const applySegment = (args: {
-  segments: StepSegment[];
-  generationId: string;
-  stepCount: number;
-}): StepSegment[] => {
-  const { found } = locateSegment(args.segments, args.generationId);
-
-  if (!found) {
-    return [
-      ...args.segments,
-      { generationId: args.generationId, stepCount: args.stepCount },
-    ];
-  }
-
-  return args.segments.map((segment) => {
-    return segment.generationId === args.generationId
-      ? { generationId: segment.generationId, stepCount: args.stepCount }
-      : segment;
-  });
-};
-
-export const totalSegmentSteps = (segments: StepSegment[]): number => {
-  return segments.reduce((sum, segment) => {
-    return sum + segment.stepCount;
-  }, 0);
-};
-
 /**
  * The steps belonging to one generation, out of a trace's whole steps object.
  *
  * An **unindexed** object is returned whole: it carries one generation's steps
  * and nothing else, so there is no segment to take.
  *
- * An indexed object with no segment for this generation yields nothing. Note
- * this is the opposite of what `locateSegment` alone would say: that answers
- * "where should this generation write next", so an absent generation gets the
- * end of the object. On the read side the same absence means the generation
- * recorded nothing — still running, or failed before writing — and returning
- * the tail would attribute another turn's steps to it.
+ * An indexed object with no segment for this generation yields nothing: the
+ * generation recorded nothing there, and returning the tail would attribute
+ * another turn's steps to it.
  */
 export const sliceGenerationSteps = (args: {
   steps: unknown;

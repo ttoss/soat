@@ -15,6 +15,7 @@ import {
   PURGED_TRACE_CONTENT,
 } from './traceContentPolicy';
 import { getTrace, type Trace } from './traces';
+import { destroyStepFiles, findTraceStepFiles } from './traceStepStore';
 
 const log = createDebug('soat:content-purge');
 
@@ -81,9 +82,9 @@ const emitPurgeEvent = <R extends SoatResourceType>(args: {
  * skeleton. Idempotent — an already-redacted generation keeps its original
  * `contentRedactedAt`.
  *
- * This does not reach the trace's steps file, which holds this generation's
- * content alongside its siblings', so purging one generation is not a complete
- * erasure of the run; purge the trace for that. Returns null when the
+ * This does not reach the trace's steps, which hold this generation's content
+ * alongside its siblings', so purging one generation is not a complete erasure
+ * of the run; purge the trace for that. Returns null when the
  * generation is out of the caller's scope.
  */
 export const purgeGenerationContent = async (args: {
@@ -137,7 +138,7 @@ export const purgeGenerationContent = async (args: {
  * Every trace in the purge set: the named trace plus all of its descendants.
  *
  * The cascade is required for the erasure to mean anything. A child trace holds
- * its own steps file covering the same run, so purging only the named trace
+ * its own steps covering the same run, so purging only the named trace
  * would leave that content readable through the child — content deleted but
  * still reachable.
  *
@@ -183,7 +184,8 @@ const collectTraceSubtree = async (args: {
 
 /**
  * The transactional half of a trace purge: clear the trace and generation
- * content columns and destroy the File rows, all or nothing. The skeleton and
+ * content columns and destroy the legacy steps objects' File rows, all or
+ * nothing. The skeleton and
  * its generations must commit together — a partial purge would leave content
  * readable through the generations API after the trace claimed erasure.
  */
@@ -252,12 +254,14 @@ const commitTracePurge = async (args: {
 };
 
 /**
- * Purges a trace's content — deletes the steps object from storage, clears the
+ * Purges a trace's content — deletes its steps from storage, clears the
  * content columns, and cascades to descendant traces and their generations.
  *
  * Storage-aware delete order: collect locations, commit the DB changes in a
  * transaction, then delete the bytes best-effort, so a concurrent
- * read never references content mid-delete. Idempotent — already-redacted
+ * read never references content mid-delete. The step objects are listed after
+ * the commit: a writer checks the markers before writing and again after, so
+ * an object either lands before this listing or is deleted by its writer. Idempotent — already-redacted
  * traces keep their timestamps. Null when the trace is out of scope.
  */
 export const purgeTraceContent = async (args: {
@@ -308,6 +312,14 @@ export const purgeTraceContent = async (args: {
       transaction,
     });
   });
+
+  await destroyStepFiles(
+    await findTraceStepFiles({
+      traces: subtree.map((row) => {
+        return { projectId: row.projectId, publicId: row.publicId };
+      }),
+    })
+  );
 
   // After commit: the rows no longer reference these objects, so deleting the
   // bytes cannot strand a live pointer.

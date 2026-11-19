@@ -401,6 +401,12 @@ export class Generation extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare deadlineAt: Date | null;
 
+  // Steps this generation counts in its trace's `stepCount`: skeleton, kept by
+  // a purge. Null for a generation whose steps live in the trace's legacy
+  // steps object, which `Trace.stepSegments` counts.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare stepCount: number | null;
+
   // The caller's deduplication key, claimed for as long as this row exists.
   @Column({ type: DataType.STRING(255), allowNull: true })
   declare idempotencyKey: string | null;

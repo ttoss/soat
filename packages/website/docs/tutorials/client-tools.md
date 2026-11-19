@@ -478,13 +478,13 @@ Several client calls in one step yield one `tool_calls` entry each; submit all o
 
 ## Step 8 — Inspect the pause and resume in the trace
 
-Every generation writes a [trace](/docs/modules/traces#examples) recording the forced tool call, your submitted output and the final text. `step_count` covers both halves; `file_id` points to the [file](/docs/modules/files) with the serialized steps.
+Every generation writes a [trace](/docs/modules/traces#examples) recording the forced tool call, your submitted output and the final text. `step_count` covers both halves; each step is its own [file](/docs/modules/traces#step-storage).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-trace --trace-id "$TRACE_ID" | jq '{id, agent_id, step_count, file_id}'
+soat get-trace --trace-id "$TRACE_ID" | jq '{id, agent_id, step_count}'
 ```
 
 </TabItem>
@@ -494,7 +494,7 @@ soat get-trace --trace-id "$TRACE_ID" | jq '{id, agent_id, step_count, file_id}'
 const { data: trace } = await adminSoat.traces.getTrace({
   path: { trace_id: generation!.trace_id },
 });
-console.log(trace!.id, trace!.step_count, trace!.file_id);
+console.log(trace!.id, trace!.step_count);
 ```
 
 </TabItem>
@@ -502,7 +502,7 @@ console.log(trace!.id, trace!.step_count, trace!.file_id);
 
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, agent_id, step_count, file_id}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, agent_id, step_count}'
 ```
 
 </TabItem>
@@ -512,8 +512,7 @@ curl -s "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID" \
 {
   "id": "trace_Yhm0QlF6MOa67Z0v",
   "agent_id": "agent_AbpwfxbwiiweroDR",
-  "step_count": 2,
-  "file_id": "file_L0SMZw81UH0aZXnQ"
+  "step_count": 2
 }
 ```
 

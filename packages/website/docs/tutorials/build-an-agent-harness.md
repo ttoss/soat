@@ -578,7 +578,7 @@ Every generation writes a [trace](/docs/modules/traces#examples) with the forced
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-trace --trace-id "$TRACE_ID" | jq '{id, agent_id, step_count, file_id}'
+soat get-trace --trace-id "$TRACE_ID" | jq '{id, agent_id, step_count}'
 ```
 
 </TabItem>
@@ -588,7 +588,7 @@ soat get-trace --trace-id "$TRACE_ID" | jq '{id, agent_id, step_count, file_id}'
 const { data: trace } = await adminSoat.traces.getTrace({
   path: { trace_id: generation!.trace_id },
 });
-console.log(trace!.id, trace!.step_count, trace!.file_id);
+console.log(trace!.id, trace!.step_count);
 ```
 
 </TabItem>
@@ -596,7 +596,7 @@ console.log(trace!.id, trace!.step_count, trace!.file_id);
 
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, agent_id, step_count, file_id}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, agent_id, step_count}'
 ```
 
 </TabItem>

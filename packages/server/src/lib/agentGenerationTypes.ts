@@ -209,7 +209,8 @@ export type PendingGeneration = {
    * Counted from the end because recovery may insert a note at the front.
    */
   turnMessageCount?: number;
-  steps: unknown[];
+  /** Steps the turn spent before the pause; their content is in the trace. */
+  stepCount: number;
   resolvedModel: LanguageModel;
   /** Provider serving the frozen model, so the continuation reports it too. */
   aiProviderId?: string | null;

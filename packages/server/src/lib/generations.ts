@@ -137,6 +137,8 @@ const commitGenerationWithTrace = async (helperArgs: {
         status: 'running',
         ...lease,
         startedAt: new Date(),
+        // Zero, not null: its steps are step objects, never the legacy object.
+        stepCount: 0,
         // Not a content column: three integers describing the request, which a
         // purge and zero-retention both leave standing.
         toolSurface: args.toolSurface ?? null,

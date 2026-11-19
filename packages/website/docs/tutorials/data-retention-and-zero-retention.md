@@ -172,7 +172,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 3 — Run a turn, and confirm the content is stored
 
-Send a message with sensitive content, then read the trace back. `file_id` points to the stored steps object; `content_redacted_at` is `null` while the content is intact.
+Send a message with sensitive content, then read the trace back. `content_redacted_at` is `null` while the content is intact.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -189,15 +189,16 @@ GENERATION_ID=$(printf '%s\n' "$TURN" | jq -r '.generation_id')
 TRACE_ID=$(printf '%s\n' "$TURN" | jq -r '.trace_id')
 
 soat get-trace --trace-id "$TRACE_ID" \
-  | jq '{id, file_id, step_count, content_redacted_at}'
+  | jq '{id, step_count, content_redacted_at}'
 ```
 
-The steps object holds the whole exchange, account number included:
+Each step is its own [file](/docs/modules/traces#step-storage) under `/.system/traces/$TRACE_ID/`, holding the exchange, account number included:
 
 ```bash
-TRACE_FILE_ID=$(soat get-trace --trace-id "$TRACE_ID" | jq -r '.file_id')
+TRACE_FILE_ID=$(soat list-files --project-id "$PROJECT_ID" \
+  --path-prefix "/.system/traces/$TRACE_ID/" | jq -r '.data[0].id')
 soat download-file-base64 --file-id "$TRACE_FILE_ID" \
-  | jq -r '.content' | base64 -d | jq 'length'
+  | jq -r '.content' | base64 -d | jq '.content'
 ```
 
 </TabItem>
@@ -222,14 +223,19 @@ const { data: turn } = await adminSoat.sessions.generateSessionResponse({
 const { data: trace } = await adminSoat.traces.getTrace({
   path: { trace_id: turn.trace_id },
 });
-console.log(trace.file_id, trace.content_redacted_at); // 'file_...', null
+console.log(trace.content_redacted_at); // null
 
-const { data: traceFile } = await adminSoat.files.downloadFileBase64({
-  path: { file_id: trace.file_id },
+const { data: stepFiles } = await adminSoat.files.listFiles({
+  query: {
+    project_id: project.id,
+    path_prefix: `/.system/traces/${turn.trace_id}/`,
+  },
 });
-const steps = JSON.parse(
-  Buffer.from(traceFile.content, 'base64').toString('utf8')
-);
+const stepFileId = stepFiles.data[0].id;
+const { data: stepFile } = await adminSoat.files.downloadFileBase64({
+  path: { file_id: stepFileId },
+});
+const step = JSON.parse(Buffer.from(stepFile.content, 'base64').toString('utf8'));
 ```
 
 </TabItem>
@@ -252,7 +258,14 @@ TRACE_ID=$(printf '%s\n' "$TURN" | jq -r '.trace_id')
 
 curl -s "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '{id, file_id, step_count, content_redacted_at}'
+  | jq '{id, step_count, content_redacted_at}'
+
+TRACE_FILE_ID=$(curl -s -G "$SOAT_BASE_URL/api/v1/files" \
+  --data-urlencode "project_id=$PROJECT_ID" \
+  --data-urlencode "path_prefix=/.system/traces/$TRACE_ID/" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.data[0].id')
+curl -s "$SOAT_BASE_URL/api/v1/files/$TRACE_FILE_ID/download/base64" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.content' | base64 -d | jq '.content'
 ```
 
 </TabItem>
@@ -263,7 +276,6 @@ Expected output (ids will differ):
 ```json
 {
   "id": "trace_m9u9kHBRpiZ2BTSg",
-  "file_id": "file_VsczNprUw29Hd8Nw",
   "step_count": 1,
   "content_redacted_at": null
 }
@@ -273,14 +285,14 @@ Expected output (ids will differ):
 
 ## Step 4 — Purge the trace on request
 
-`purge-trace-content` deletes the steps object from storage and clears the trace's content columns. It requires the `traces:PurgeTraceContent` action.
+`purge-trace-content` deletes the trace's step files from storage and clears the trace's content columns. It requires the `traces:PurgeTraceContent` action.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
 soat purge-trace-content --trace-id "$TRACE_ID" \
-  | jq '{id, file_id, step_count, content_redacted_at, content_redacted_by_principal_type, content_redacted_by_principal_id}'
+  | jq '{id, step_count, content_redacted_at, content_redacted_by_principal_type, content_redacted_by_principal_id}'
 ```
 
 </TabItem>
@@ -291,7 +303,6 @@ const { data: purgedTrace } = await adminSoat.traces.purgeTraceContent({
   path: { trace_id: turn.trace_id },
 });
 
-console.log(purgedTrace.file_id); // null
 console.log(purgedTrace.content_redacted_at); // '2026-08-06T...'
 console.log(purgedTrace.content_redacted_by_principal_type); // 'user'
 ```
@@ -302,7 +313,7 @@ console.log(purgedTrace.content_redacted_by_principal_type); // 'user'
 ```bash
 curl -s -X DELETE "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID/content" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '{id, file_id, step_count, content_redacted_at, content_redacted_by_principal_type, content_redacted_by_principal_id}'
+  | jq '{id, step_count, content_redacted_at, content_redacted_by_principal_type, content_redacted_by_principal_id}'
 ```
 
 </TabItem>
@@ -313,7 +324,6 @@ Expected output:
 ```json
 {
   "id": "trace_m9u9kHBRpiZ2BTSg",
-  "file_id": null,
   "step_count": 1,
   "content_redacted_at": "2026-08-06T15:13:49.096Z",
   "content_redacted_by_principal_type": "user",
@@ -324,7 +334,7 @@ Expected output:
 Three things happened:
 
 - **The row survived as a skeleton** carrying `content_redacted_at`, so the erasure is provable to an auditor (a `404` would be indistinguishable from a resource that never existed).
-- **The bytes are gone.** The steps object and its `File` row were deleted from storage. Fetching it now fails:
+- **The bytes are gone.** Every step file and its `File` row were deleted from storage. Fetching one now fails:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -345,9 +355,9 @@ soat purge-trace-content --trace-id "$TRACE_ID" | jq '{content_redacted_at}'
 
 ```ts
 const { error } = await adminSoat.files.downloadFileBase64({
-  path: { file_id: trace.file_id },
+  path: { file_id: stepFileId },
 });
-console.log(error); // 404 — the object and its File row are gone
+console.log(error); // 404 — the file and its File row are gone
 
 // Idempotent: a second purge keeps the original content_redacted_at.
 await adminSoat.traces.purgeTraceContent({ path: { trace_id: turn.trace_id } });
@@ -368,7 +378,7 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID/content" \
 </TabItem>
 </Tabs>
 
-- **It cascaded.** Every descendant trace and its generations were purged too; a nested agent call writes its own steps object.
+- **It cascaded.** Every descendant trace and its generations were purged too; a nested agent call writes its own step files.
 
 ---
 
@@ -410,7 +420,7 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/generations/$GENERATION_ID/content" \
 </Tabs>
 
 :::warning
-A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run completely, purge the **trace**.
+A generation purge does **not** delete its step files in the parent trace. To erase a run completely, purge the **trace**.
 :::
 
 ---
@@ -619,7 +629,7 @@ INTAKE_TRACE_ID=$(printf '%s\n' "$INTAKE_TURN" | jq -r '.trace_id')
 printf '%s\n' "$INTAKE_TURN" | jq '{status}'
 
 soat get-trace --trace-id "$INTAKE_TRACE_ID" \
-  | jq '{id, file_id, content_redacted_at, content_redacted_by_principal_type, content_redacted_by_principal_id}'
+  | jq '{id, content_redacted_at, content_redacted_by_principal_type, content_redacted_by_principal_id}'
 
 soat get-generation --generation-id "$INTAKE_GENERATION_ID" \
   | jq '{id, status, metadata, content_redacted_by_principal_id}'
@@ -651,7 +661,6 @@ const { data: intakeTurn } = await adminSoat.sessions.generateSessionResponse({
 const { data: intakeTrace } = await adminSoat.traces.getTrace({
   path: { trace_id: intakeTurn.trace_id },
 });
-console.log(intakeTrace.file_id); // null — no steps object was ever written
 console.log(intakeTrace.content_redacted_by_principal_id); // 'zero_retention'
 ```
 
@@ -674,7 +683,7 @@ INTAKE_TRACE_ID=$(printf '%s\n' "$INTAKE_TURN" | jq -r '.trace_id')
 
 curl -s "$SOAT_BASE_URL/api/v1/traces/$INTAKE_TRACE_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '{id, file_id, content_redacted_at, content_redacted_by_principal_id}'
+  | jq '{id, content_redacted_at, content_redacted_by_principal_id}'
 ```
 
 </TabItem>
@@ -685,7 +694,6 @@ Expected output — the marker is set from the moment the row exists:
 ```json
 {
   "id": "trace_ZfPUnZBnUR3JAg1z",
-  "file_id": null,
   "content_redacted_at": "2026-08-06T15:13:55.490Z",
   "content_redacted_by_principal_type": "system",
   "content_redacted_by_principal_id": "zero_retention"

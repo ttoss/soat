@@ -16,9 +16,8 @@ import { toolCallTimeoutMs } from './externalToolCall';
 import { onGenerationSettled } from './generationEvents';
 import { getGenerationTraceId } from './generations';
 import {
-  deriveTurnOutputText,
+  completedTurnOutputText,
   loadGenerationWithTrace,
-  readGenerationSteps,
 } from './generationTurn';
 import { withCallTimeout } from './inProcessApi';
 import { isTimeoutError } from './timeoutError';
@@ -49,11 +48,9 @@ const outcomeText = async (args: {
   }
   const content =
     args.assistantContent ??
-    deriveTurnOutputText(
-      await readGenerationSteps(
-        await loadGenerationWithTrace({ generationId: child.publicId })
-      )
-    );
+    (await completedTurnOutputText(
+      await loadGenerationWithTrace({ generationId: child.publicId })
+    ));
   return `has completed. Result: ${JSON.stringify(content ?? '')}.`;
 };
 
