@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.121.0](https://github.com/ttoss/soat/compare/v0.120.0...v0.121.0) (2026-11-19)
+
+* feat(server)!: an iam token pins a tool_context layer over every call it starts (#2045) ([a4b9392](https://github.com/ttoss/soat/commit/a4b9392b0ff1abf31dfbb7598ab19789f04a6902)), closes [#2045](https://github.com/ttoss/soat/issues/2045)
+* fix(server)!: refuse an agent naming a tool it does not offer (#2044) ([15b0450](https://github.com/ttoss/soat/commit/15b045065a02d33521367f4574952dd31d4836bd)), closes [#2044](https://github.com/ttoss/soat/issues/2044)
+* refactor(server)!: one sse transport for agent generate and chats (#2043) ([f926eac](https://github.com/ttoss/soat/commit/f926eac8ce2026646a0efa9c41c23ca0ce2d50cc)), closes [#2043](https://github.com/ttoss/soat/issues/2043)
+
+### BREAKING CHANGES
+
+* a stream's error frame is `data: {"error": {"code", "message", "meta"?}}`, the StoredError shape, instead of `data: {"error": "<message>"}`.
+* an agent write naming a tool its bindings do not offer
+  is refused with `AGENT_TOOL_NOT_OFFERED`, and a stored agent naming one
+  is refused at generation start.
+
 # [0.120.0](https://github.com/ttoss/soat/compare/v0.119.0...v0.120.0) (2026-11-19)
 
 ### Bug Fixes
