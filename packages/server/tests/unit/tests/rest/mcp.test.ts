@@ -2,10 +2,7 @@ import { db } from 'src/db';
 import { emitActivityEntry } from 'src/lib/activity';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import { fileException } from 'src/lib/exceptions';
-import {
-  createGenerationRecord,
-  updateGenerationRecord,
-} from 'src/lib/generations';
+import { createGenerationRecord } from 'src/lib/generations';
 import * as pdfModule from 'src/lib/pdf';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 import { saveTrace } from 'src/lib/traces';
@@ -13,6 +10,7 @@ import { saveTrace } from 'src/lib/traces';
 import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { createPlaybookCaseOverMcp } from '../../fixtures/playbookCase';
+import { settleTestGeneration } from '../../fixtures/settledGeneration';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -3326,10 +3324,9 @@ describe('MCP tools - happy path', () => {
           { content: [{ type: 'text', text: 'On the first of each month.' }] },
         ],
       });
-      await updateGenerationRecord({
+      await settleTestGeneration({
         publicId: generationPublicId,
         status: 'completed',
-        completedAt: new Date(),
       });
 
       const res = await mcpCall('create-dataset-item-from-generation', {

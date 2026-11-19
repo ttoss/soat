@@ -7,6 +7,7 @@ import {
 } from 'src/lib/generations';
 import { getMergedOpenApiSpec } from 'src/lib/openapiSpec';
 
+import { settleTestGeneration } from '../../fixtures/settledGeneration';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -282,7 +283,10 @@ describe('Generations', () => {
       const project = await db.Project.findOne({
         where: { publicId: projectId },
       });
-      const seed = async (publicId: string, status?: string) => {
+      const seed = async (
+        publicId: string,
+        status?: 'completed' | 'requires_action'
+      ) => {
         await createGenerationRecord({
           authority: null,
           actsAsAgent: null,
@@ -291,7 +295,7 @@ describe('Generations', () => {
           agentId,
           traceId: `trc_${publicId}`,
         });
-        if (status) await updateGenerationRecord({ publicId, status });
+        if (status) await settleTestGeneration({ publicId, status });
       };
       await seed('gen_statusor_done', 'completed');
       await seed('gen_statusor_wait', 'requires_action');
@@ -438,11 +442,16 @@ describe('Generations', () => {
     });
 
     test('exposes the extraction summary but never the internal pending state', async () => {
+      await db.Generation.update(
+        {
+          pendingState: {
+            messages: [{ role: 'user', content: 'secret internal message' }],
+          },
+        },
+        { where: { publicId: failedGenerationId } }
+      );
       await updateGenerationRecord({
         publicId: failedGenerationId,
-        pendingState: {
-          messages: [{ role: 'user', content: 'secret internal message' }],
-        },
         // Keyed by memory rule: a store can have several, so one flat pair of
         // counts could not say which produced them.
         extraction: {
@@ -690,6 +699,10 @@ describe('Generations', () => {
     });
 
     test('merges over existing caller metadata and leaves server state untouched', async () => {
+      await db.Generation.update(
+        { pendingState: { messages: [] } },
+        { where: { publicId: failedGenerationId } }
+      );
       await updateGenerationRecord({
         publicId: failedGenerationId,
         metadata: { ticket_id: 'OPS-4821' },
@@ -701,7 +714,6 @@ describe('Generations', () => {
             skipped: 1,
           },
         },
-        pendingState: { messages: [] },
       });
 
       const patchResponse = await authenticatedTestClient(userToken)
@@ -752,8 +764,11 @@ describe('Generations', () => {
             skipped: 0,
           },
         },
-        pendingState: { messages: [{ role: 'user', content: 'secret' }] },
       });
+      await db.Generation.update(
+        { pendingState: { messages: [{ role: 'user', content: 'secret' }] } },
+        { where: { publicId: id } }
+      );
       return id;
     };
 

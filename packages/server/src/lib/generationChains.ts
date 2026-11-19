@@ -353,9 +353,9 @@ const TERMINAL_GENERATION_STATUSES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Called from `updateGenerationRecord` — the one funnel every completion path
- * goes through — whenever a generation's status changes. Fire-and-forget: an
- * observability write must not be able to fail the generation it describes.
+ * Called from `settleGeneration`, the only writer of a settled status.
+ * Fire-and-forget: an observability write must not be able to fail the
+ * generation it describes.
  */
 export const noteChainMemberSettled = (args: {
   rootGenerationId: string | null;

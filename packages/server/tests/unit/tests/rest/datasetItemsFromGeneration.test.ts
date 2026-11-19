@@ -3,15 +3,13 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
-import {
-  createGenerationRecord,
-  updateGenerationRecord,
-} from 'src/lib/generations';
+import { createGenerationRecord } from 'src/lib/generations';
 
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { settleTestGeneration } from '../../fixtures/settledGeneration';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
@@ -312,10 +310,9 @@ describe('POST /api/v1/datasets/:dataset_id/items/from-generation', () => {
       traceId: `trc_nosteps_${Date.now()}`,
       inputMessages: input,
     });
-    await updateGenerationRecord({
+    await settleTestGeneration({
       publicId: generationPublicId,
       status: 'completed',
-      completedAt: new Date(),
     });
 
     const res = await promote({ generation_id: generationPublicId });

@@ -8,11 +8,7 @@ import {
   type GenerationConversation,
   resolveEndUserAttribution,
 } from './generationAttribution';
-import {
-  findChainIdByRoot,
-  noteChainMemberSettled,
-  recordChainGrowth,
-} from './generationChains';
+import { findChainIdByRoot, recordChainGrowth } from './generationChains';
 import {
   buildCreateContentColumns,
   suppressContentWrites,
@@ -28,8 +24,11 @@ import {
   NO_PROVENANCE,
   provenanceColumns,
   type ProvenanceCounts,
-  provenanceStatusUpdates,
 } from './generationProvenance';
+import {
+  newGenerationLease,
+  startGenerationSegment,
+} from './generationSegment';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { readInputModalities } from './inputModalities';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
@@ -100,8 +99,9 @@ const commitGenerationWithTrace = async (helperArgs: {
     endUser,
     contentColumns,
   } = helperArgs;
+  const lease = newGenerationLease();
 
-  return db.sequelize.transaction(async (transaction) => {
+  const gen = await db.sequelize.transaction(async (transaction) => {
     const [parentTraceDbId, rootTraceDbId] = await Promise.all([
       findTraceDbId({ traceId: args.parentTraceId, transaction }),
       findTraceDbId({ traceId: args.rootTraceId, transaction }),
@@ -133,12 +133,10 @@ const commitGenerationWithTrace = async (helperArgs: {
         })),
         startedByActorId: endUser.actorId,
         sessionId: endUser.sessionId,
+        // Created running is a claim: the creating process holds the lease.
         status: 'running',
+        ...lease,
         startedAt: new Date(),
-        completedAt: null,
-        lastActivityAt: null,
-        stopReason: null,
-        error: null,
         // Not a content column: three integers describing the request, which a
         // purge and zero-retention both leave standing.
         toolSurface: args.toolSurface ?? null,
@@ -156,6 +154,7 @@ const commitGenerationWithTrace = async (helperArgs: {
       { transaction }
     );
   });
+  return { gen, lease };
 };
 
 const insertGenerationRecord = async (
@@ -237,7 +236,7 @@ const insertGenerationRecord = async (
     ? await findChainIdByRoot(args.rootGenerationId)
     : null;
 
-  const gen = await commitGenerationWithTrace({
+  const { gen, lease } = await commitGenerationWithTrace({
     args: {
       ...args,
       inputModalities: readInputModalities(args.inputMessages),
@@ -249,6 +248,7 @@ const insertGenerationRecord = async (
     endUser,
     contentColumns,
   });
+  startGenerationSegment({ generationId: args.publicId, lease });
 
   // After the row commits, so the re-derived count includes this hop. Awaited
   // (it never throws) so a caller reading the chain right after creating a
@@ -280,16 +280,11 @@ export const createGenerationRecord = (
   });
 };
 
+// No status column: a status is written only by `settleGeneration`.
 type UpdateGenerationRecordArgs = {
   publicId: string;
-  status?: string;
-  completedAt?: Date | null;
-  lastActivityAt?: Date | null;
-  stopReason?: string | null;
-  error?: Record<string, unknown> | null;
   routing?: Record<string, unknown> | null;
   extraction?: Record<string, unknown> | null;
-  pendingState?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -297,14 +292,8 @@ type UpdateGenerationRecordArgs = {
 // so "provided means write it, absent means leave it" is one rule, not one
 // branch per field.
 const UPDATABLE_GENERATION_FIELDS = [
-  'status',
-  'completedAt',
-  'lastActivityAt',
-  'stopReason',
-  'error',
   'routing',
   'extraction',
-  'pendingState',
   'metadata',
 ] as const satisfies ReadonlyArray<keyof UpdateGenerationRecordArgs>;
 
@@ -321,9 +310,8 @@ export const updateGenerationRecord = async (
     if (args[field] !== undefined) updates[field] = args[field];
   }
 
-  // Drops the content columns while the lifecycle columns on the same update
-  // still land. Enforced here, the only place those columns can be
-  // written, so a future caller inherits the guarantee.
+  // Drops the content columns while the other columns on the same update still
+  // land; `settleGeneration` applies the same rule to its write.
   await suppressContentWrites({
     agentDbId: gen.agentId,
     projectDbId: gen.projectId,
@@ -331,22 +319,7 @@ export const updateGenerationRecord = async (
     updates,
   });
 
-  // What the turn read since its row was last written rides the status write.
-  Object.assign(
-    updates,
-    provenanceStatusUpdates({
-      generationId: args.publicId,
-      status: args.status,
-    })
-  );
-
   await gen.update(updates);
-
-  // A member settling is the only signal a chain has that it may be finished.
-  noteChainMemberSettled({
-    rootGenerationId: gen.rootGenerationId,
-    status: gen.status,
-  });
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
     include: generationIncludes(),

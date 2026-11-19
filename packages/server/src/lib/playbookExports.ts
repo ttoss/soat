@@ -18,7 +18,7 @@ import type {
   PlaybookNode,
   PlaybookTransformation,
 } from './playbookDefinition';
-import { EXECUTION_LEASE_MS } from './playbookExecutionLease';
+import { executionLeaseExpiry } from './playbookExecutionLease';
 import { readCaseNode } from './playbookExecutions';
 import { resolveRunAs } from './playbookExecutionWork';
 import { type ExportCase, renderPlaybookExport } from './playbookExportRender';
@@ -210,7 +210,7 @@ const recordExports = (args: {
               format: transformation.format,
               toolId: transformation.tool,
               status: 'running',
-              leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
+              leaseExpiresAt: executionLeaseExpiry(),
               ...createdByColumns(args.createdBy),
               onBehalfOf: args.onBehalfOf,
             },

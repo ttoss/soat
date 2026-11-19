@@ -8,11 +8,9 @@ import { DomainError } from 'src/errors';
 import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import type { PendingGeneration } from 'src/lib/agentGenerationTypes';
 import { createGenerationProvenance } from 'src/lib/generationProvenance';
-import {
-  createGenerationRecord,
-  updateGenerationRecord,
-} from 'src/lib/generations';
+import { createGenerationRecord } from 'src/lib/generations';
 
+import { settleTestGeneration } from '../../fixtures/settledGeneration';
 import { buildUnaliasedModel } from '../../fixtures/unaliasedModel';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import {
@@ -709,7 +707,7 @@ describe('Agent Generation Routes', () => {
         agentId,
         traceId: 'trc_stub_test',
       });
-      await updateGenerationRecord({
+      await settleTestGeneration({
         publicId: 'gen_stub_pending',
         status: 'requires_action',
       });
@@ -895,7 +893,7 @@ describe('Agent Generation Routes', () => {
         agentId,
         traceId: 'trc_recovered',
       });
-      await updateGenerationRecord({
+      await settleTestGeneration({
         publicId: 'gen_recovered',
         status: 'requires_action',
         pendingState: {
@@ -941,7 +939,7 @@ describe('Agent Generation Routes', () => {
         agentId,
         traceId: 'trc_unknown_id',
       });
-      await updateGenerationRecord({
+      await settleTestGeneration({
         publicId: 'gen_unknown_id',
         status: 'requires_action',
         pendingState: {
@@ -980,7 +978,7 @@ describe('Agent Generation Routes', () => {
         agentId,
         traceId: 'trc_mixed_ids',
       });
-      await updateGenerationRecord({
+      await settleTestGeneration({
         publicId: 'gen_mixed_ids',
         status: 'requires_action',
         pendingState: {
@@ -1029,7 +1027,7 @@ describe('Agent Generation Routes', () => {
         agentId,
         traceId: 'trc_usage_metered',
       });
-      await updateGenerationRecord({
+      await settleTestGeneration({
         publicId: 'gen_usage_metered',
         status: 'requires_action',
         pendingState: {
@@ -1256,7 +1254,7 @@ describe('Agent Generation Routes', () => {
           agentId: pausingAgentId,
           traceId: 'trc_text_encoded_continuation',
         });
-        await updateGenerationRecord({
+        await settleTestGeneration({
           publicId: 'gen_text_encoded_continuation',
           status: 'requires_action',
         });

@@ -11,6 +11,7 @@ import type { GenerationResult, TypedAgent } from './agentGenerationTypes';
 import { resolveChainGenerationCeiling } from './agentStopConditions';
 import { emitChainLimitEvent } from './exceptionAutoFile';
 import { findOrCreateChain, markChainStatus } from './generationChains';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
 
@@ -197,6 +198,7 @@ const refuseChain = async (args: {
   chain: ChainContext;
   limit: number;
   limitSource: LimitSource;
+  authority: WorkAuthority | null;
   initiatorGenerationId?: string | null;
 }): Promise<GenerationResult> => {
   const { chainAgent } = args;
@@ -247,6 +249,7 @@ const refuseChain = async (args: {
     projectPublicId: chainAgent.project.publicId,
     agentId: args.agentId,
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    authority: args.authority,
     parentTraceId: args.chain.parentTraceId,
     rootTraceId: args.chain.rootTraceId,
   });
@@ -320,6 +323,7 @@ export const resolveChainOrRefuse = async (args: {
   runProjectId?: number;
   initiatorGenerationId?: string | null;
   traceId: string;
+  authority: WorkAuthority | null;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
 }): Promise<
@@ -360,6 +364,7 @@ export const resolveChainOrRefuse = async (args: {
         chain,
         limit,
         limitSource,
+        authority: args.authority,
         initiatorGenerationId: args.initiatorGenerationId,
       }),
     };

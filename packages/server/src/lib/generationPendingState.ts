@@ -1,5 +1,9 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  newGenerationLease,
+  startGenerationSegment,
+} from './generationSegment';
 import { actedAsPrincipalColumns, principalOfAuthority } from './principals';
 import { storedAuthority, type WorkAuthority } from './workAuthority';
 
@@ -38,9 +42,11 @@ export const claimPausedGeneration = async (args: {
   /** The agent, when the resumed segment runs under its own grant. */
   actsAsAgent: string | null;
 }): Promise<boolean> => {
+  const lease = newGenerationLease();
   const [claimed] = await db.Generation.update(
     {
       status: 'running',
+      ...lease,
       lastActivityAt: new Date(),
       ...actedAsPrincipalColumns({
         principal: principalOfAuthority(args.authority),
@@ -53,7 +59,9 @@ export const claimPausedGeneration = async (args: {
     },
     { where: { publicId: args.publicId, status: 'requires_action' } }
   );
-  return claimed > 0;
+  if (claimed === 0) return false;
+  startGenerationSegment({ generationId: args.publicId, lease });
+  return true;
 };
 
 export const notAwaitingToolOutputs = (generationId: string): DomainError => {

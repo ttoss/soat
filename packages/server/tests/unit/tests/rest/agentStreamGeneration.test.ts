@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
-import * as generationsModule from 'src/lib/generations';
+import * as generationSettleModule from 'src/lib/generationSettle';
 import * as tracesModule from 'src/lib/traces';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -432,7 +432,7 @@ describe('Streamed agent generations', () => {
       // generation itself runs on the real database.
       const agentId = await createAgent();
       jest
-        .spyOn(generationsModule, 'updateGenerationRecord')
+        .spyOn(generationSettleModule, 'settleGeneration')
         .mockRejectedValueOnce(new Error('status write failed'));
 
       const res = await stream(agentId);
@@ -560,7 +560,7 @@ describe('Streamed agent generations', () => {
       // Drives the catch around the pause write; everything else runs on the
       // real database.
       jest
-        .spyOn(generationsModule, 'updateGenerationRecord')
+        .spyOn(generationSettleModule, 'settleGeneration')
         .mockRejectedValueOnce(new Error('pause write failed'));
 
       const res = await streamPausedTurn();

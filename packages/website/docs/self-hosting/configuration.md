@@ -314,12 +314,19 @@ Mount a persistent volume here in Docker.
 
 ### Agent Generation
 
-| Variable                     | Default  | Description                                                                                                      |
-| ---------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
-| `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000` | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools)                  |
-| `TOOL_ASSERTION_PRIVATE_KEY` | —        | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
+| Variable                           | Default   | Description                                                                                                      |
+| ---------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
+| `SOAT_TOOL_CALL_TIMEOUT_MS`        | `300000`  | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools)                  |
+| `TOOL_ASSERTION_PRIVATE_KEY`       | —         | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
+| `GENERATION_DEADLINE_MS`           | `1800000` | How long one running segment of a generation may run before it is cancelled and fails                            |
+| `GENERATION_MODEL_CALL_TIMEOUT_MS` | `600000`  | How long one model call (one step) may take before it is aborted                                                |
+| `GENERATION_LEASE_TTL_MS`          | `120000`  | How long a running generation's lease lasts unrenewed; the running process renews it three times per period     |
+| `GENERATION_SWEEP_INTERVAL_MS`     | `60000`   | How often the sweep fails generations whose lease lapsed                                                         |
+| `GENERATION_SWEEP_DISABLED`        | —         | `true` turns the sweep off in this process                                                                       |
 
 A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation. A nested agent generation is the exception: the call answers with the running generation ([nested agent calls](../modules/agents.md#a-nested-generation-that-outlives-the-call)).
+
+A generation that runs past `GENERATION_DEADLINE_MS` is cancelled with the model call and every tool call it waits on, and fails with `GENERATION_DEADLINE_EXCEEDED`. A generation whose process stops renewing its lease (it crashed or was killed) is failed by the sweep with `GENERATION_INTERRUPTED` once `GENERATION_LEASE_TTL_MS` passes ([lifecycle](../modules/generations.md#lifecycle)).
 
 `TOOL_ASSERTION_PRIVATE_KEY` turns on [tool assertions](../modules/tools.md#tool-assertions); its public half is served at `/.well-known/tool-assertion-jwks.json`. Generate one with `openssl genpkey -algorithm ed25519`. To rotate, replace the key: a verifier that refetches the key set on an unknown `kid` picks up the new one, and assertions signed with the old key expire within 60 seconds.
 
