@@ -12,11 +12,11 @@ import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import { readForwardedDenial } from './authorizationDenial';
 import { findBuiltinAction } from './builtinActionCatalog';
+import { builtinActionError } from './builtinActionError';
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
 } from './externalToolCall';
-import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
 import { withoutAgentExcludedActions } from './soatAgentActions';
 import { buildSoatActionTarget, type ToolDefinition } from './soatTools';
@@ -82,8 +82,8 @@ export const executeSoatTool = async (args: {
     path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
     log('soat tool execute: %s %s %s', toolId, args.def.method, path);
     // The non-2xx rule is `dispatchApiRequestOrThrow`'s, shared with the MCP
-    // surface; only the error type is this caller's — `HttpToolError` carries
-    // the status that `isRetriableError` reads to keep a 4xx from being retried.
+    // surface; only the error is this caller's: `meta.tool_status_code` is
+    // what `isRetriableError` reads to keep a 4xx from being retried.
     return await meterToolExecution({
       meter: args.meter,
       send: (markSent) => {
@@ -105,17 +105,15 @@ export const executeSoatTool = async (args: {
               log('soat tool result: %s status=%d', toolId, response.status);
               const denial = readForwardedDenial({ body: response.body });
               if (denial) return denial;
-              return new HttpToolError(
-                `SOAT action '${args.def.name}' failed`,
-                response.status,
-                JSON.stringify(response.body) ?? '',
-                path,
-                args.def.method
-              );
+              return builtinActionError({
+                action: args.def.name,
+                method: args.def.method,
+                response,
+              });
             },
           }),
           ms: SOAT_TOOL_CALL_TIMEOUT_MS,
-          label: `SOAT action '${args.def.name}'`,
+          label: `Builtin action '${args.def.name}'`,
         });
       },
     });

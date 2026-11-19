@@ -28,7 +28,7 @@ export const validateSoatActions = (actions: string[] | null | undefined) => {
   if (excluded.length > 0) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `SOAT action(s) not available to an agent: ${excluded
+      `Builtin action(s) not available to an agent: ${excluded
         .map((action) => {
           return `"${action}"`;
         })
@@ -45,7 +45,7 @@ export const validateSoatActions = (actions: string[] | null | undefined) => {
   if (withheld.length > 0) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `SOAT action(s) not offered by this deployment: ${withheld
+      `Builtin action(s) not offered by this deployment: ${withheld
         .map((action) => {
           return `"${action}"`;
         })
@@ -63,6 +63,6 @@ export const validateSoatActions = (actions: string[] | null | undefined) => {
     .join(', ');
   throw new DomainError(
     'VALIDATION_FAILED',
-    `Unknown SOAT action(s): ${details}.`
+    `Unknown builtin action(s): ${details}.`
   );
 };

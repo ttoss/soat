@@ -123,7 +123,7 @@ describe('Conversation self-call', () => {
     expect(res.status).toBe(200);
     const result = builtinToolResult(stub.completions);
     expect(result).not.toBe('');
-    expect(result).not.toContain('HttpToolError');
+    expect(result).not.toContain('Builtin action');
     expect(result).toContain('conversation-self-call-tool');
     const generation = await authenticatedTestClient(adminToken).get(
       `/api/v1/generations/${res.body.generation_id}`

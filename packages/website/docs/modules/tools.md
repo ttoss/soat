@@ -381,7 +381,16 @@ Create/update validates every entry against the deployment's [builtin catalog](.
 
 Both are named `{name}_{action}`, take `preset_parameters`, `tool_context`, `context_keys` and guardrails alike, and are called directly with `action`. A stored tool naming an action the catalog no longer offers keeps it; the agent's surface leaves it out and a direct call is `400`.
 
-A non-2xx action response is `502 TOOL_HTTP_ERROR` with the real status in `meta.tool_status_code`. A `204 No Content` answer (every `delete-*`) yields `null`.
+A non-2xx action response is `502 TOOL_HTTP_ERROR`, its message `Builtin action '<action>' failed: HTTP <status> <code>: <message>`. In an agent turn that message is the tool result the model reads, so it can tell a refused write from a bad field; `hint` and `docs_url` never reach it. Error `meta`:
+
+| Key | Value |
+| --- | --- |
+| `tool_status_code` | The action's HTTP status |
+| `tool_action` | The action's name (operation id) |
+| `tool_method` | The action's HTTP method |
+| `tool_error` | The action's error object (`code`, `message`, `meta`) |
+
+A generation's [transcript](./generations.md#transcript) keeps the same code and `meta` for the failed call. A `204 No Content` answer (every `delete-*`) yields `null`.
 
 An action runs through the same request stack as its REST route, so a write the deployment's [admission service](./iam.md#admission) is asked about is asked here too; its refusal is the action's non-2xx response.
 

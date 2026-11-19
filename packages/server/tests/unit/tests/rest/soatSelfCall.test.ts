@@ -887,7 +887,7 @@ describe('SOAT self-call', () => {
       // Before the agent branch carried a principal the self-call went out with
       // no header at all, so the model was handed the 401 instead.
       const result = JSON.stringify(toolResultFromFollowUp(completionBodies));
-      expect(result).not.toContain('HttpToolError');
+      expect(result).not.toContain('Builtin action');
       expect(result).toContain('soat-agent-list-tool');
     });
 
@@ -1177,7 +1177,7 @@ describe('SOAT self-call', () => {
       // Without a re-minted credential the self-call goes out with no header at
       // all and the model is handed the 401 instead.
       const serialized = JSON.stringify(result);
-      expect(serialized).not.toContain('HttpToolError');
+      expect(serialized).not.toContain('Builtin action');
       expect(serialized).toContain('approval-continuation-tool');
     });
 
@@ -1274,7 +1274,7 @@ describe('SOAT self-call', () => {
       });
 
       const serialized = JSON.stringify(result);
-      expect(serialized).not.toContain('HttpToolError');
+      expect(serialized).not.toContain('Builtin action');
       expect(serialized).toContain('approval-continuation-tool');
     });
   });

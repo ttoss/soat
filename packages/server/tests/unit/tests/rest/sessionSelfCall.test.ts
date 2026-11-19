@@ -126,7 +126,7 @@ describe('Session self-call', () => {
   const expectAuthenticatedBuiltinCall = () => {
     const result = builtinToolResult(stub.completions);
     expect(result).not.toBe('');
-    expect(result).not.toContain('HttpToolError');
+    expect(result).not.toContain('Builtin action');
     expect(result).toContain('session-self-call-tool');
   };
 
