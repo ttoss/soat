@@ -86,6 +86,10 @@ This is a monorepo managed with pnpm and Turbo:
 - `packages/app` — the web UI (React), served by the server at `/app`
 - `packages/website` — the documentation site (Docusaurus)
 
+## Maintainer
+
+SOAT is created and maintained by Pedro Arantes. Questions, feedback or anything else: reach out on X at [@arantespp](https://x.com/arantespp).
+
 ## Contributing
 
 Issues and pull requests are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the workflow, the quality bar, and what changing a module involves. Run the tests with `pnpm --filter @soat/server test` and the smoke suite with `pnpm run -w smoke-tests`.
