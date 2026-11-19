@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.120.0](https://github.com/ttoss/soat/compare/v0.119.0...v0.120.0) (2026-11-19)
+
+### Features
+
+* **generations:** background generate answers its generation; a nested generation reports back past the call timeout ([#2040](https://github.com/ttoss/soat/issues/2040)) ([76e433f](https://github.com/ttoss/soat/commit/76e433fdf548744c62a0f54bb4644e335ee67380))
+
 # [0.119.0](https://github.com/ttoss/soat/compare/v0.118.0...v0.119.0) (2026-11-19)
 
 ### Features
