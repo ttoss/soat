@@ -19,7 +19,7 @@ const settledListeners: SettledListener[] = [];
 /**
  * Runs `listener` after every lifecycle event, once the record it announces is
  * written. A registry rather than an import, so the generation path does not
- * depend on the work that follows a generation.
+ * depend on the work that follows a generation. A listener never rejects.
  */
 export const onGenerationSettled = (listener: SettledListener): void => {
   settledListeners.push(listener);
@@ -101,8 +101,6 @@ export const emitGenerationEvent = async (
       generationId: record.id,
       assistantContent:
         'assistantContent' in args ? args.assistantContent : undefined,
-    }).catch((error: unknown) => {
-      log('settled listener failed id=%s %o', record.id, error);
     });
   }
 };

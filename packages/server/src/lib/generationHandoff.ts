@@ -104,21 +104,28 @@ const reportIfSettled = async (args: {
   });
 };
 
-/** Reports a settled generation, and every one it stopped waiting for. */
+/**
+ * Reports a settled generation, and every one it stopped waiting for. Never
+ * rejects: it runs after the generation's answer, with no caller to receive it.
+ */
 const reportSettled = async (args: {
   generationId: string;
   assistantContent?: string;
 }): Promise<void> => {
-  await reportIfSettled({
-    childId: args.generationId,
-    assistantContent: args.assistantContent,
-  });
-  const children = await db.Generation.findAll({
-    where: { reportsToGenerationId: args.generationId, reportedAt: null },
-    attributes: ['publicId'],
-  });
-  for (const child of children) {
-    await reportIfSettled({ childId: child.publicId });
+  try {
+    await reportIfSettled({
+      childId: args.generationId,
+      assistantContent: args.assistantContent,
+    });
+    const children = await db.Generation.findAll({
+      where: { reportsToGenerationId: args.generationId, reportedAt: null },
+      attributes: ['publicId'],
+    });
+    for (const child of children) {
+      await reportIfSettled({ childId: child.publicId });
+    }
+  } catch (error) {
+    log('reportSettled: generation=%s failed %o', args.generationId, error);
   }
 };
 
@@ -153,11 +160,7 @@ const handOffRunningGeneration = async (args: {
     { where: { id: child.id, reportsToGenerationId: null } }
   );
   // Settled between the timeout and the mark: no lifecycle event follows.
-  void reportSettled({ generationId: child.publicId }).catch(
-    (error: unknown) => {
-      log('handOffRunningGeneration: report failed %o', error);
-    }
-  );
+  void reportSettled({ generationId: child.publicId });
 
   return {
     status: 'running',
