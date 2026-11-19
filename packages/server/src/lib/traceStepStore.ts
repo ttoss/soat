@@ -222,6 +222,22 @@ const contentRedacted = async (target: TraceStepTarget): Promise<boolean> => {
   );
 };
 
+/** Stamps a zero-retention trace as never holding content; a trace already
+ * redacted keeps its stamp. */
+export const stampZeroRetentionTrace = async (where: {
+  publicId: string;
+  projectId: number;
+}): Promise<void> => {
+  await db.Trace.update(
+    {
+      contentRedactedAt: new Date(),
+      contentRedactedByPrincipalType: ZERO_RETENTION_PRINCIPAL.principalType,
+      contentRedactedByPrincipalId: ZERO_RETENTION_PRINCIPAL.principalId,
+    },
+    { where: { ...where, contentRedactedAt: null } }
+  );
+};
+
 /** Whether content may be written; stamps a zero-retention trace. */
 const contentWritable = async (target: TraceStepTarget): Promise<boolean> => {
   const mode = await resolveTraceContentModeForAgent({
@@ -230,20 +246,10 @@ const contentWritable = async (target: TraceStepTarget): Promise<boolean> => {
   });
   if (mode !== 'none') return !(await contentRedacted(target));
 
-  await db.Trace.update(
-    {
-      contentRedactedAt: new Date(),
-      contentRedactedByPrincipalType: ZERO_RETENTION_PRINCIPAL.principalType,
-      contentRedactedByPrincipalId: ZERO_RETENTION_PRINCIPAL.principalId,
-    },
-    {
-      where: {
-        publicId: target.traceId,
-        projectId: target.projectId,
-        contentRedactedAt: null,
-      },
-    }
-  );
+  await stampZeroRetentionTrace({
+    publicId: target.traceId,
+    projectId: target.projectId,
+  });
   return false;
 };
 
@@ -367,28 +373,6 @@ const readStep = async (file: StepFile): Promise<unknown> => {
   }
 };
 
-/** Each generation's stored steps under the trace, by generation id. */
-export const readStoredTraceSteps = async (args: {
-  projectId: number;
-  traceId: string;
-}): Promise<Map<string, StoredSteps>> => {
-  const files = await findStepFiles({
-    projectId: args.projectId,
-    directory: traceDirectory(args.traceId),
-  });
-  const byGeneration = new Map<string, StoredSteps>();
-  for (const file of files) {
-    const located = parseStepPath(file.path);
-    if (!located) continue;
-    const step = await readStep(file);
-    if (step === undefined) continue;
-    const steps = byGeneration.get(located.generationId) ?? new Map();
-    steps.set(located.index, step);
-    byGeneration.set(located.generationId, steps);
-  }
-  return byGeneration;
-};
-
 /** One generation's stored steps. */
 export const readStoredGenerationSteps = async (args: {
   projectId: number;
@@ -416,10 +400,10 @@ export const readStoredGenerationSteps = async (args: {
  * step objects, which own every index they hold. */
 export const mergeSteps = (args: {
   legacy: unknown[];
-  stored: StoredSteps | undefined;
+  stored: StoredSteps;
 }): unknown[] => {
   const merged = new Map<number, unknown>(args.legacy.entries());
-  for (const [index, step] of args.stored ?? []) merged.set(index, step);
+  for (const [index, step] of args.stored) merged.set(index, step);
   return [...merged.entries()]
     .sort(([left], [right]) => {
       return left - right;

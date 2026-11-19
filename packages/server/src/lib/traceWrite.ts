@@ -3,27 +3,12 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { agentReferences } from './resourceReferences';
-import {
-  resolveAgentTraceContentMode,
-  ZERO_RETENTION_PRINCIPAL,
-} from './traceContentPolicy';
-import { replaceTraceSteps } from './traceStepStore';
+import { resolveAgentTraceContentMode } from './traceContentPolicy';
+import { replaceTraceSteps, stampZeroRetentionTrace } from './traceStepStore';
 
 export { serializeSteps } from './traceStepStore';
 
 const log = createDebug('soat:traces');
-
-/** Redaction columns stamped on a row whose content was never written. Reuses
- * the purge marker deliberately: a reader that already handles "content was
- * erased" needs no new concept, and the principal id says which it was. */
-const zeroRetentionColumns = (zeroRetention?: boolean) => {
-  if (!zeroRetention) return {};
-  return {
-    contentRedactedAt: new Date(),
-    contentRedactedByPrincipalType: ZERO_RETENTION_PRINCIPAL.principalType,
-    contentRedactedByPrincipalId: ZERO_RETENTION_PRINCIPAL.principalId,
-  };
-};
 
 /**
  * Records a structured error payload on a trace so failed generations are
@@ -54,9 +39,10 @@ export const recordTraceError = async (args: {
       'recordTraceError: zero-retention, dropping payload for %s',
       args.traceId
     );
-    await trace.update({
-      error: null,
-      ...zeroRetentionColumns(trace.contentRedactedAt === null),
+    await trace.update({ error: null });
+    await stampZeroRetentionTrace({
+      publicId: trace.publicId,
+      projectId: trace.projectId,
     });
     return;
   }
