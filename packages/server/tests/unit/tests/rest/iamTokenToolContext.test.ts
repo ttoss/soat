@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import jwt from 'jsonwebtoken';
 
 import {
@@ -38,7 +40,10 @@ describe('IAM token tool_context layer', () => {
   let relayTool: { id: string; name: string };
   let httpAgentId: string;
   let relayAgentId: string;
+  let mcpTool: { id: string };
+  let mcpPath: string;
   let previousPrefix: string | undefined;
+  const previousAssertionKey = process.env.TOOL_ASSERTION_PRIVATE_KEY;
 
   const mint = (key: string, body: Record<string, unknown>) => {
     return authenticatedTestClient(key)
@@ -80,6 +85,10 @@ describe('IAM token tool_context layer', () => {
   beforeAll(async () => {
     previousPrefix = process.env[PREFIX_ENV];
     process.env[PREFIX_ENV] = 'plat_';
+    process.env.TOOL_ASSERTION_PRIVATE_KEY = crypto
+      .generateKeyPairSync('ed25519')
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString();
     service = await startAdmissionService();
     turn = await startAgentToolTurn({ prefix: 'tcxlayer' });
     const actions = ['agents:*', 'tools:*', 'sessions:*', 'iam:CreateToken'];
@@ -99,6 +108,20 @@ describe('IAM token tool_context layer', () => {
     relayAgentId = await turn.createAgent({
       tool_bindings: [{ tool_id: relayTool.id }],
     });
+    mcpPath = `/${turn.unique('mcp')}`;
+    turn.target.reply(mcpPath, (body) => {
+      const result =
+        body.method === 'tools/list'
+          ? { tools: [{ name: 'echo' }] }
+          : { content: [{ type: 'text', text: '{"ok":true}' }] };
+      return { body: { jsonrpc: '2.0', id: body.id, result } };
+    });
+    mcpTool = await turn.createTool({
+      type: 'mcp',
+      execute: undefined,
+      parameters: undefined,
+      mcp: { url: `${turn.target.baseUrl}${mcpPath}` },
+    });
   });
 
   beforeEach(() => {
@@ -108,6 +131,11 @@ describe('IAM token tool_context layer', () => {
   afterAll(async () => {
     if (previousPrefix === undefined) delete process.env[PREFIX_ENV];
     else process.env[PREFIX_ENV] = previousPrefix;
+    if (previousAssertionKey === undefined) {
+      delete process.env.TOOL_ASSERTION_PRIVATE_KEY;
+    } else {
+      process.env.TOOL_ASSERTION_PRIVATE_KEY = previousAssertionKey;
+    }
     await turn.close();
     await service.close();
   });
@@ -241,6 +269,81 @@ describe('IAM token tool_context layer', () => {
       } finally {
         service.undeclare();
       }
+    });
+  });
+
+  describe('an On-Behalf-Of callback', () => {
+    /** The assertion an `mcp` call made on the layered token sends. */
+    const layeredAssertion = async (): Promise<string> => {
+      const res = await authenticatedTestClient(await layeredToken())
+        .post(`/api/v1/tools/${mcpTool.id}/call`)
+        .send({ action: 'echo', input: {} });
+      expect(res.status).toBe(200);
+      const calls = turn.target.requestsAt(mcpPath).filter((request) => {
+        return request.body.method === 'tools/call';
+      });
+      return calls.at(-1)!.headers['x-soat-tool-assertion'] as string;
+    };
+
+    test("a callback's tool call sends the token's layer over a forged key", async () => {
+      const assertion = await layeredAssertion();
+
+      const res = await authenticatedTestClient(plainKey)
+        .post(`/api/v1/tools/${httpTool.id}/call`)
+        .set('X-Soat-On-Behalf-Of', assertion)
+        .send({
+          input: { amount: 6 },
+          tool_context: { Plat_Tenant: 'forged' },
+        });
+
+      expect(res.status).toBe(200);
+      expect(tenantsSent()).toEqual(['acct_1']);
+    });
+
+    test('work the callback starts sends the layer', async () => {
+      const assertion = await layeredAssertion();
+
+      const res = await authenticatedTestClient(plainKey)
+        .post(`/api/v1/agents/${relayAgentId}/generate?wait=true`)
+        .set('X-Soat-On-Behalf-Of', assertion)
+        .send({
+          messages: [
+            proposeCalls([
+              {
+                name: `${relayTool.name}_call-tool`,
+                args: { input: { amount: 7 } },
+              },
+            ]),
+          ],
+          tool_context: { plat_tenant: 'forged' },
+        });
+
+      expect(res.status).toBe(200);
+      expect(tenantsSent()).toEqual(['acct_1']);
+    });
+
+    test('a callback on an assertion without a layer carries none', async () => {
+      const direct = await authenticatedTestClient(plainKey)
+        .post(`/api/v1/tools/${mcpTool.id}/call`)
+        .send({ action: 'echo', input: {} });
+      expect(direct.status).toBe(200);
+      const [call] = turn.target.requestsAt(mcpPath).filter((request) => {
+        return request.body.method === 'tools/call';
+      });
+
+      const res = await authenticatedTestClient(plainKey)
+        .post(`/api/v1/tools/${httpTool.id}/call`)
+        .set(
+          'X-Soat-On-Behalf-Of',
+          call.headers['x-soat-tool-assertion'] as string
+        )
+        .send({
+          input: { amount: 8 },
+          tool_context: { plat_tenant: 'forged' },
+        });
+
+      expect(res.status).toBe(200);
+      expect(tenantsSent()).toEqual([undefined]);
     });
   });
 

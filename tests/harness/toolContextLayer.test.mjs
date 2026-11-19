@@ -49,10 +49,17 @@ describe('tool_context layer chokepoint', () => {
     );
   });
 
-  test('only a token claim or a stored authority is read as a layer', () => {
+  test('only a token claim, a stored authority or a sealed assertion is read as a layer', () => {
     assert.deepEqual(filesMatching(/\breadToolContextLayer\(/), [
+      'lib/assertionAuthority.ts',
       'lib/workAuthority.ts',
       'middleware/authBound.ts',
+    ]);
+  });
+
+  test('an On-Behalf-Of callback takes its layer from the assertion', () => {
+    assert.deepEqual(filesMatching(/\bcallbackToolContextLayer\(/), [
+      'middleware/authOnBehalfOf.ts',
     ]);
   });
 });

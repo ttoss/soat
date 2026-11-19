@@ -52,6 +52,34 @@ export const readToolContextLayer = (
   return Object.fromEntries(entries) as Record<string, string>;
 };
 
+/** `under` without every key `over` names, in any casing, then `over` on top. */
+const overlay = (args: {
+  under: Record<string, string>;
+  over: Record<string, string>;
+}): Record<string, string> => {
+  const pinned = new Set(
+    Object.keys(args.over).map((key) => {
+      return key.toLowerCase();
+    })
+  );
+  const kept = Object.entries(args.under).filter(([key]) => {
+    return !pinned.has(key.toLowerCase());
+  });
+  return { ...Object.fromEntries(kept), ...args.over };
+};
+
+/**
+ * The layer an `On-Behalf-Of` callback carries: the credential's own, with the
+ * layer of the work its assertion was sent for stamped on top.
+ */
+export const callbackToolContextLayer = (args: {
+  credential?: Record<string, string>;
+  asserted?: Record<string, string>;
+}): Record<string, string> | undefined => {
+  if (!args.asserted) return args.credential;
+  return overlay({ under: args.credential ?? {}, over: args.asserted });
+};
+
 /**
  * The bag a call forwards under `authority`: caller keys under the reserved
  * prefix, and every key the layer names, dropped in any casing; then the
@@ -64,18 +92,9 @@ export const stampToolContextLayer = (args: {
 }): Record<string, string> | undefined => {
   const layer = args.authority?.toolContext ?? null;
   if (!args.toolContext && !layer) return undefined;
-  const pinned = new Set(
-    Object.keys(layer ?? {}).map((key) => {
-      return key.toLowerCase();
-    })
-  );
-  const stripped = Object.fromEntries(
-    Object.entries(withoutReservedPrefixKeys(args.toolContext ?? {})).filter(
-      ([key]) => {
-        return !pinned.has(key.toLowerCase());
-      }
-    )
-  );
-  const stamped = { ...stripped, ...layer };
+  const stamped = overlay({
+    under: withoutReservedPrefixKeys(args.toolContext ?? {}),
+    over: layer ?? {},
+  });
   return Object.keys(stamped).length === 0 ? undefined : stamped;
 };

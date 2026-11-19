@@ -15,7 +15,7 @@ const NOTHING: PolicySets = [[]];
 
 export type SenderCredential = Pick<
   AuthUser,
-  'getLabeledPolicies' | 'iamToken' | 'onBehalfOfPrincipal'
+  'getLabeledPolicies' | 'iamToken' | 'onBehalfOfPrincipal' | 'toolContextLayer'
 >;
 
 const ASSERTION = { type: 'on_behalf_of', id: null } as const;
@@ -77,6 +77,19 @@ const credentialOf = async (
   return authUserUnder(turnAuthority(sender));
 };
 
+/** The principal and `tool_context` layer a callback carries on. */
+const chainOf = (
+  credential: SenderCredential | undefined
+): Pick<AssertionAuthority, 'principal' | 'toolContext'> => {
+  const principal =
+    credential?.iamToken?.principal ?? credential?.onBehalfOfPrincipal;
+  const toolContext = credential?.toolContextLayer;
+  return {
+    ...(principal ? { principal } : {}),
+    ...(toolContext ? { toolContext } : {}),
+  };
+};
+
 /**
  * The authority a call's assertion seals: the sender's credential in the
  * tool's project ∩ the agent's caps. A sender with no credential, or
@@ -93,8 +106,6 @@ export const resolveSenderAuthority = async (args: {
   const credentialCaps = credential
     ? await credential.getLabeledPolicies(projectPublicId)
     : [];
-  const principal =
-    credential?.iamToken?.principal ?? credential?.onBehalfOfPrincipal;
   log(
     'resolveSenderAuthority: project=%s credential=%s',
     projectPublicId,
@@ -112,6 +123,6 @@ export const resolveSenderAuthority = async (args: {
         : [{ principal: ASSERTION, sets: NOTHING }]),
       ...agentCaps,
     ].map(capOf),
-    ...(principal ? { principal } : {}),
+    ...chainOf(credential),
   };
 };
