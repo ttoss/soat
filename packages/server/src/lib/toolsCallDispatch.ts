@@ -117,7 +117,7 @@ export const callSoatTool = async (
   if (!found) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `action "${action}" is not a known SOAT action.`
+      `action "${action}" is not a known builtin action.`
     );
   }
   if (found.kind === 'added') {

@@ -1,6 +1,6 @@
 import type { Tool } from 'ai';
+import { DomainError } from 'src/errors';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
-import { HttpToolError } from 'src/lib/httpToolError';
 import type { WorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -70,10 +70,10 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
         return error_;
       }
     );
-    expect(error).toBeInstanceOf(HttpToolError);
-    const { status, body } = error as HttpToolError;
-    expect(status).toBe(400);
-    return (JSON.parse(body) as { error: { code: string } }).error.code;
+    expect(error).toBeInstanceOf(DomainError);
+    const { meta } = error as DomainError;
+    expect(meta?.tool_status_code).toBe(400);
+    return (meta?.tool_error as { code: string }).code;
   };
 
   beforeAll(async () => {

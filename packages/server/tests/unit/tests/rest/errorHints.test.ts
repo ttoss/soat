@@ -248,9 +248,9 @@ describe('error hints', () => {
       const response = await withHintsOmitted(false, failedBuiltinCall);
       expect(response.status).toBe(502);
       expect(response.body.error.hint).toEqual(expect.any(String));
-      const relayed = JSON.parse(response.body.error.meta.tool_response_body);
-      expect(relayed.error.hint).toEqual(expect.any(String));
-      expect(relayed.error.docs_url).toEqual(expect.any(String));
+      const relayed = response.body.error.meta.tool_error;
+      expect(relayed.hint).toEqual(expect.any(String));
+      expect(relayed.docs_url).toEqual(expect.any(String));
     });
 
     test('a failed orchestration run stores the relayed body with both', async () => {

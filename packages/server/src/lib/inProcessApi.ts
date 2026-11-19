@@ -138,7 +138,7 @@ const toWireBody = (args: {
     body.destroy();
     throw new DomainError(
       'TOOL_CALL_NOT_SUPPORTED',
-      `SOAT action ${args.method} ${args.path} streams binary content, which cannot be returned as a tool result. Use the base64 variant of the action instead.`
+      `Action ${args.method} ${args.path} streams binary content, which cannot be returned as a tool result. Use the base64 variant of the action instead.`
     );
   }
 
@@ -251,7 +251,7 @@ const workRefusalOf = (response: InProcessApiResponse): DomainError | null => {
  * as a tool result for years.
  *
  * Both callers reach the platform the same way; all that differs is how a
- * failure is spelled — an `HttpToolError` carrying the status for the agent's
+ * failure is spelled — a `TOOL_HTTP_ERROR` carrying the status for the agent's
  * retry logic, a plain `Error` for MCP — which is what `wrapError` supplies.
  */
 export const dispatchApiRequestOrThrow = async (args: {
