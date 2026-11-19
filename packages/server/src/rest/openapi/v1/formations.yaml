@@ -1931,8 +1931,9 @@ components:
           type: string
           nullable: true
           description: >-
-            The callback registered with the provider. Omitted, the server's
-            own `/api/v1/oauth-connections/callback`.
+            The callback registered with the provider. Omitted or `null`, the
+            deployment's `OAUTH_DEFAULT_REDIRECT_URI` when set, else the
+            server's own `/api/v1/oauth-connections/callback`.
         authorize_params:
           type: object
           nullable: true

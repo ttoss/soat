@@ -298,6 +298,12 @@ the deployment's cloud account, quotas and IAM role.
 The embedding stack is unaffected: `EMBEDDING_PROVIDER` and its region are
 operator settings, so `bedrock` embeddings always use the AWS credential chain.
 
+### OAuth
+
+| Variable                     | Default   | Description                                                                                                               |
+| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `OAUTH_DEFAULT_REDIRECT_URI` | _(unset)_ | The `redirect_uri` an [OAuth client](../modules/oauth-clients.md#redirect-uri) written without one stores; an http(s) URL |
+
 ### File Storage
 
 | Variable            | Default       | Description                                     |

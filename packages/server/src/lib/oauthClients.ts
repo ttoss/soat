@@ -120,6 +120,23 @@ const validateInput = (input: OauthClientInput): void => {
   validateAuthorizeParams(input.authorizeParams);
 };
 
+/**
+ * A write leaving `redirect_uri` absent on create, or `null`, stores the
+ * deployment's `OAUTH_DEFAULT_REDIRECT_URI` when set, on every write path.
+ */
+const withDefaultRedirect = (args: {
+  input: OauthClientInput;
+  isCreate: boolean;
+}): OauthClientInput => {
+  const fallback = process.env.OAUTH_DEFAULT_REDIRECT_URI;
+  const { redirectUri } = args.input;
+  const leftToDefault =
+    redirectUri === null || (args.isCreate && redirectUri === undefined);
+  return fallback && leftToDefault
+    ? { ...args.input, redirectUri: fallback }
+    : args.input;
+};
+
 export const clientSecretIds = (
   reference: string | null | undefined
 ): string[] => {
@@ -191,17 +208,18 @@ export const createOauthClient = async (args: {
     args.projectId,
     args.input.name
   );
-  validateInput(args.input);
+  const input = withDefaultRedirect({ input: args.input, isCreate: true });
+  validateInput(input);
   await assertSecretUseAllowed({
-    secretIds: clientSecretIds(args.input.clientSecret),
+    secretIds: clientSecretIds(input.clientSecret),
     projectId: args.projectId,
     isAllowed: args.isAllowed,
   });
   const row = await db.OauthProviderClient.create({
     projectId: args.projectId,
-    ...args.input,
+    ...input,
     tokenEndpointAuthMethod:
-      args.input.tokenEndpointAuthMethod ?? 'client_secret_basic',
+      input.tokenEndpointAuthMethod ?? 'client_secret_basic',
   });
   return mapOauthClient(await oauthClients.reload(row));
 };
@@ -212,15 +230,16 @@ export const updateOauthClient = async (args: {
   isAllowed: IsAllowedFn;
 }) => {
   log('updateOauthClient: id=%s', args.id);
-  validateInput(args.input);
+  const input = withDefaultRedirect({ input: args.input, isCreate: false });
+  validateInput(input);
   const row = await oauthClients.getByPublicId({ id: args.id });
   await assertSecretUseAllowed({
-    secretIds: clientSecretIds(args.input.clientSecret),
+    secretIds: clientSecretIds(input.clientSecret),
     projectId: row.projectId,
     isAllowed: args.isAllowed,
   });
   const changes = Object.fromEntries(
-    Object.entries(args.input).filter(([, value]) => {
+    Object.entries(input).filter(([, value]) => {
       return value !== undefined;
     })
   );

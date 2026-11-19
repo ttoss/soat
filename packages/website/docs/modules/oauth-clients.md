@@ -43,7 +43,7 @@ An OAuth client belongs to a project and holds what the provider issued you when
 
 ### Redirect URI
 
-Register `redirect_uri` with the provider. Left `null`, it is this server's own callback, which needs `SOAT_BASE_URL`. A front end that receives the provider's redirect itself (its own domain on the consent screen) forwards `code` and `state` to [`GET /api/v1/oauth-connections/callback`](/docs/api/oauth-connections/complete-oauth-connection).
+Register `redirect_uri` with the provider. A client created without one, or written with `null`, stores the deployment's `OAUTH_DEFAULT_REDIRECT_URI` when it is set, over REST, a formation and a `builtin` action alike ([Configuration](#configuration)). Unset, it stays `null`: this server's own callback, which needs `SOAT_BASE_URL`. A front end that receives the provider's redirect itself (its own domain on the consent screen) forwards `code` and `state` to [`GET /api/v1/oauth-connections/callback`](/docs/api/oauth-connections/complete-oauth-connection).
 
 ### In a formation
 
@@ -90,6 +90,12 @@ A literal `client_secret` fails `validate-formation`. Deleting the formation del
 ### Deletion
 
 Deleting a client deletes every connection made through it, without revoking them at the provider; delete the connections first to revoke.
+
+## Configuration
+
+| Variable                     | Default   | Description                                                            |
+| ---------------------------- | --------- | ---------------------------------------------------------------------- |
+| `OAUTH_DEFAULT_REDIRECT_URI` | _(unset)_ | The `redirect_uri` a client written without one stores; an http(s) URL |
 
 ## Examples
 
