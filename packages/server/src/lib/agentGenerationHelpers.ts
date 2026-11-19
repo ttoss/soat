@@ -11,7 +11,7 @@ import {
 import type { GenerationRequiredActionWire } from './generationEvents';
 import { recordSegmentUsage } from './generationLifecycle';
 import type { GenerationProvenance } from './generationProvenance';
-import { settleGeneration } from './generationSettle';
+import { logSettleFailure, settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
@@ -403,9 +403,7 @@ export const buildCompletedGenerationResult = async (args: {
     effects: () => {
       return [meterCompletedTurn({ ...args, reportedModelId })];
     },
-  }).catch(() => {
-    return false;
-  });
+  }).catch(logSettleFailure(args.generationId));
 
   return completedResult;
 };

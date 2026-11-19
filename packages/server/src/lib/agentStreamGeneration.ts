@@ -27,7 +27,7 @@ import {
 } from './generationLifecycle';
 import type { GenerationProvenance } from './generationProvenance';
 import { segmentCallOptions } from './generationSegment';
-import { settleGeneration } from './generationSettle';
+import { logSettleFailure, settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
 import {
   collectSystemInstructions,
@@ -154,7 +154,7 @@ const fireStreamEndSideEffects = (args: {
       traceId: args.traceId,
       toolName: streamedToolCall,
       usageWrite,
-    }).catch(() => {});
+    }).catch(logSettleFailure(args.generationId));
     return;
   }
   if (args.failed) return;
@@ -175,7 +175,7 @@ const fireStreamEndSideEffects = (args: {
     effects: () => {
       return [usageWrite];
     },
-  }).catch(() => {});
+  }).catch(logSettleFailure(args.generationId));
 };
 
 /**

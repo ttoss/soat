@@ -183,6 +183,17 @@ const settledColumns = async (args: {
 };
 
 /**
+ * The `.catch` of a settle whose caller already holds its answer: the failure
+ * is logged and the settle answers `false`, so the caller never throws for it.
+ */
+export const logSettleFailure = (generationId: string) => {
+  return (error: unknown): false => {
+    log('settleGeneration: failed generationId=%s %o', generationId, error);
+    return false;
+  };
+};
+
+/**
  * Settles `generationId` with `outcome`. `fence: 'lease'` (the running
  * segment) needs this process's lease token; `fence: 'expired'` (the sweep)
  * needs a lapsed lease. `effects` are writes only the winner makes, awaited

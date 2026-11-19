@@ -4,7 +4,7 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import type { PendingGeneration } from './agentGenerationTypes';
 import { segmentAbortReason } from './generationSegment';
-import { settleGeneration } from './generationSettle';
+import { logSettleFailure, settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
@@ -143,9 +143,7 @@ export const recordGenerationFailure = async (args: {
         }),
       ];
     },
-  }).catch((error: unknown) => {
-    log('recordGenerationFailure: settle failed %o', error);
-  });
+  }).catch(logSettleFailure(args.generationId));
 
   // Meta keys are
   // written in snake_case to match the external REST contract.
@@ -306,9 +304,7 @@ const runCompletionSideEffects = async (
         }),
       ];
     },
-  }).catch((error: unknown) => {
-    log('runCompletionSideEffects: settle failed %o', error);
-  });
+  }).catch(logSettleFailure(args.generationId));
 };
 
 /**

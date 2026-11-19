@@ -52,21 +52,12 @@ export const sweepExpiredGenerations = async (args?: {
   return swept;
 };
 
-const runGenerationSweep = async (): Promise<number> => {
-  try {
-    return await sweepExpiredGenerations();
-  } catch (error) {
-    log('runGenerationSweep: sweep failed %o', error);
-    return 0;
-  }
-};
-
 const scheduler = createScheduler({
   log,
   defaultIntervalMs: DEFAULT_INTERVAL_MS,
   envVar: 'GENERATION_SWEEP_INTERVAL_MS',
   disabledEnvVar: 'GENERATION_SWEEP_DISABLED',
-  sweeps: [runGenerationSweep],
+  sweeps: [sweepExpiredGenerations],
 });
 
 export const startGenerationSweepScheduler = scheduler.start;

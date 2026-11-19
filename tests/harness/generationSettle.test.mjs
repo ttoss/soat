@@ -63,6 +63,22 @@ const filesWhere = (predicate) => {
   ].sort();
 };
 
+/** Whether `entry` catches a `settleGeneration` call with its own handler. */
+const catchesSettleOtherwise = (entry) => {
+  const source = stripComments(
+    fs.readFileSync(path.join(srcDir, entry), 'utf-8')
+  );
+  return firstArguments(source, /\bsettleGeneration\(/g).some((call) => {
+    const rest = source
+      .slice(source.indexOf(call) + call.length + 1)
+      .trimStart();
+    return (
+      rest.startsWith('.catch(') &&
+      !/^\.catch\(\s*logSettleFailure\(/.test(rest)
+    );
+  });
+};
+
 /**
  * A generation's status has one writer per transition: the two claims take it
  * to `running` with a fresh lease, and `settleGeneration` takes it anywhere
@@ -85,6 +101,10 @@ describe('generation status writes', () => {
       }),
       ['lib/generationSettle.ts']
     );
+  });
+
+  test('a settle that must not throw is caught only by logSettleFailure', () => {
+    assert.deepEqual(sourceFiles.filter(catchesSettleOtherwise), []);
   });
 
   test('a generation instance never writes its own status', () => {

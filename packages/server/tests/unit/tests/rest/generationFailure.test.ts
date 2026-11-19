@@ -109,6 +109,26 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
       expect(res.body.output.content).toBe('answered anyway');
     });
 
+    test('a refused turn whose record write fails still answers', async () => {
+      const agentId = await createAgent('Guard Record Failure Agent');
+      // Sanctioned force-failure: drives the guard's `.catch` on its record
+      // write; the refusal itself runs for real.
+      jest
+        .spyOn(generationsModule, 'createGenerationRecord')
+        .mockRejectedValueOnce(new Error('db unavailable'));
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          max_call_depth: 0,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      expect(res.body.output.content).toBe('Maximum call depth reached');
+    });
+
     test('a failed Generation insert rolls its Trace back with it', async () => {
       const agentId = await createAgent('Record Atomicity Agent');
       stub.reply(providerFailure());

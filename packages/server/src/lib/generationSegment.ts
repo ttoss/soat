@@ -97,24 +97,30 @@ const leaseLost = (generationId: string): DomainError => {
 
 /**
  * Extends the lease while the row is still this segment's and its deadline has
- * not passed; `false` once either stops holding.
+ * not passed; `false` once either stops holding. A write that throws proves
+ * neither, so it answers nothing and the next renewal tries again.
  */
 const renewLease = async (args: {
   generationId: string;
   token: string;
-}): Promise<boolean> => {
-  const [renewed] = await db.Generation.update(
-    { leaseExpiresAt: leaseExpiry({ ttlMs: generationLeaseTtlMs() }) },
-    {
-      where: {
-        publicId: args.generationId,
-        status: 'running',
-        leaseToken: args.token,
-        deadlineAt: { [Op.gt]: new Date() },
-      },
-    }
-  );
-  return renewed > 0;
+}): Promise<boolean | undefined> => {
+  try {
+    const [renewed] = await db.Generation.update(
+      { leaseExpiresAt: leaseExpiry({ ttlMs: generationLeaseTtlMs() }) },
+      {
+        where: {
+          publicId: args.generationId,
+          status: 'running',
+          leaseToken: args.token,
+          deadlineAt: { [Op.gt]: new Date() },
+        },
+      }
+    );
+    return renewed > 0;
+  } catch (error) {
+    log('renewLease: failed %s %o', args.generationId, error);
+    return undefined;
+  }
 };
 
 /**
@@ -173,9 +179,6 @@ export const startGenerationSegment = (args: {
       log('startGenerationSegment: lease lost generationId=%s', generationId);
       abortSegment({ generationId, reason: leaseLost(generationId) });
     },
-    onError: (error) => {
-      log('startGenerationSegment: renew failed %s %o', generationId, error);
-    },
   });
 
   segments.set(generationId, {
@@ -197,11 +200,7 @@ export const segmentLeaseToken = (generationId: string): string | undefined => {
 const noteSegmentProgress = (generationId: string): void => {
   const segment = segments.get(generationId);
   if (!segment) return;
-  void renewLease({ generationId, token: segment.token }).catch(
-    (error: unknown) => {
-      log('noteSegmentProgress: renew failed %s %o', generationId, error);
-    }
-  );
+  void renewLease({ generationId, token: segment.token });
 };
 
 /**

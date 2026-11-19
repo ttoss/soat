@@ -275,4 +275,36 @@ describe('generation sweep', () => {
     const settled = await asAdmin().get(`/api/v1/generations/${generationId}`);
     expect(settled.body.status).toBe('completed');
   });
+
+  test('a live writer whose generation was swept cancels itself at its next renewal', async () => {
+    const savedTtl = process.env.GENERATION_LEASE_TTL_MS;
+    process.env.GENERATION_LEASE_TTL_MS = '150';
+    try {
+      holdChild();
+      const before = held.length;
+      const known = new Set(await runningChildIds());
+      const live = asAdmin()
+        .post(`/api/v1/agents/${childAgentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'never answered' }] })
+        .then((res) => {
+          return res;
+        });
+      await untilChildHeld(before + 1);
+      const generationId = (await runningChildIds()).find((id) => {
+        return !known.has(id);
+      });
+
+      await sweepExpiredGenerations({ now: pastEveryLease() });
+      const res = await live;
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('GENERATION_INTERRUPTED');
+      const swept = await asAdmin().get(`/api/v1/generations/${generationId}`);
+      expect(swept.body.status).toBe('failed');
+      expect(swept.body.error.code).toBe('GENERATION_INTERRUPTED');
+    } finally {
+      if (savedTtl === undefined) delete process.env.GENERATION_LEASE_TTL_MS;
+      else process.env.GENERATION_LEASE_TTL_MS = savedTtl;
+    }
+  });
 });
