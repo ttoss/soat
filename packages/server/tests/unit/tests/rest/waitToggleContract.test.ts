@@ -123,6 +123,76 @@ const waitOperations = (): WaitOperation[] => {
   return found;
 };
 
+type SchemaSpec = {
+  $ref?: string;
+  properties?: Record<string, unknown>;
+  allOf?: SchemaSpec[];
+};
+
+type SpecFile = {
+  paths?: Record<string, Record<string, OperationSpec>>;
+  components?: { schemas?: Record<string, SchemaSpec> };
+};
+
+const waitsInQuery = (operation: OperationSpec): boolean => {
+  return (operation.parameters ?? []).some((param) => {
+    return param.name === 'wait' && param.in === 'query';
+  });
+};
+
+/** A schema's property names, its local `$ref` and `allOf` members followed. */
+const propertiesOf = (args: {
+  doc: SpecFile;
+  schema: SchemaSpec;
+}): string[] => {
+  const local = args.schema.$ref?.match(/^#\/components\/schemas\/(.+)$/);
+  const resolved = local
+    ? (args.doc.components?.schemas?.[local[1]] ?? {})
+    : args.schema;
+  return [
+    ...Object.keys(resolved.properties ?? {}),
+    ...(resolved.allOf ?? []).flatMap((member) => {
+      return propertiesOf({ doc: args.doc, schema: member });
+    }),
+  ];
+};
+
+/** The property names of an operation's `202` body. */
+const acceptedFields = (args: {
+  doc: SpecFile;
+  operation: OperationSpec;
+}): string[] => {
+  const accepted = (args.operation.responses?.['202'] ?? {}) as {
+    content?: { 'application/json'?: { schema?: SchemaSpec } };
+  };
+  return propertiesOf({
+    doc: args.doc,
+    schema: accepted.content?.['application/json']?.schema ?? {},
+  });
+};
+
+/** Each query-`wait` operation with the property names of its `202` body. */
+const acceptedResponses = (): Array<{ label: string; fields: string[] }> => {
+  const found: Array<{ label: string; fields: string[] }> = [];
+  for (const file of readdirSync(SPEC_DIR).filter((name) => {
+    return name.endsWith('.yaml');
+  })) {
+    const doc = parseYaml(
+      readFileSync(join(SPEC_DIR, file), 'utf-8')
+    ) as SpecFile;
+    for (const [path, pathItem] of Object.entries(doc.paths ?? {})) {
+      for (const [method, operation] of Object.entries(pathItem)) {
+        if (!HTTP_METHODS.has(method) || !waitsInQuery(operation)) continue;
+        found.push({
+          label: `${method.toUpperCase()} ${path} (${file})`,
+          fields: acceptedFields({ doc, operation }),
+        });
+      }
+    }
+  }
+  return found;
+};
+
 describe('wait toggle contract', () => {
   test('no operation declares the retired `async` toggle', () => {
     const offenders = allOperations()
@@ -179,6 +249,17 @@ describe('wait toggle contract', () => {
         label: operation.label,
         declares202: operation.responses.includes('202'),
       }).toEqual(expectation);
+    }
+  });
+
+  test('every `202` names the work its caller polls', () => {
+    // The background answer carries an id whose record already exists: the
+    // started generation's `generation_id`, or the record's own `id`.
+    for (const { label, fields } of acceptedResponses()) {
+      expect({
+        label,
+        namesWork: fields.includes('generation_id') || fields.includes('id'),
+      }).toEqual({ label, namesWork: true });
     }
   });
 });

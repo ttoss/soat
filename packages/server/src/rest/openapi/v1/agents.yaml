@@ -406,7 +406,7 @@ paths:
           # channel to poll a background generation later, so it must block —
           # the mirror image of `stream`, which a tool call cannot receive.
           x-soat-tool-forced: true
-          description: 'When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately with a `generation_id` to poll. Pass `true` to block until the generation settles and receive the result. Mutually exclusive with `stream: true`. A tool call, `builtin` or MCP, always waits.'
+          description: 'When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately with a `generation_id` to poll. Pass `true` to block until the generation settles and receive the result. Mutually exclusive with `stream: true`. A tool call, `builtin` or MCP, always waits. An agent''s `builtin` call that is still waiting after `SOAT_TOOL_CALL_TIMEOUT_MS` answers with the running generation (`status: running`, `generation_id`), and the generation''s outcome is sent to that agent as a continuation once both have settled.'
           schema:
             type: boolean
             default: false

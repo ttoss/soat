@@ -5,6 +5,26 @@ import { getGeneration, type PersistedGeneration } from './generations';
 
 const log = createDebug('soat:generation-events');
 
+/** What a listener learns when a generation stops running. */
+export type GenerationSettled = {
+  generationId: string;
+  /** The final text, when the generation completed. */
+  assistantContent?: string;
+};
+
+type SettledListener = (args: GenerationSettled) => Promise<void>;
+
+const settledListeners: SettledListener[] = [];
+
+/**
+ * Runs `listener` after every lifecycle event, once the record it announces is
+ * written. A registry rather than an import, so the generation path does not
+ * depend on the work that follows a generation. A listener never rejects.
+ */
+export const onGenerationSettled = (listener: SettledListener): void => {
+  settledListeners.push(listener);
+};
+
 /** A pending `submit_tool_outputs` action, in its wire shape. */
 export type GenerationRequiredActionWire = {
   type: string;
@@ -75,4 +95,12 @@ export const emitGenerationEvent = async (
       ? { assistantContent: args.assistantContent }
       : {}),
   });
+
+  for (const listener of settledListeners) {
+    void listener({
+      generationId: record.id,
+      assistantContent:
+        'assistantContent' in args ? args.assistantContent : undefined,
+    });
+  }
 };

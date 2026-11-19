@@ -509,8 +509,9 @@ paths:
       summary: Generate the next message in a conversation
       description: |
         Generates the next message using the specified actor's linked agent or chat.
-        Background by default: returns `202 Accepted` immediately and the reply
-        lands as a new ConversationMessage when it completes — poll
+        Background by default: returns `202 Accepted` with the generation's id
+        once its record exists, and the reply lands as a new ConversationMessage
+        when it completes — poll `GET /api/v1/generations/{generation_id}` or
         `GET /api/v1/conversations/{conversation_id}/messages` for it.
         Pass `?wait=true` to block and receive the result inline. On
         `completed`, the reply is persisted as a new ConversationMessage
@@ -577,7 +578,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenerateConversationMessageResponse'
         '202':
-          description: Generation accepted and running in the background (default, when `wait` is omitted or `false`). The reply is persisted as a ConversationMessage when it completes.
+          description: Generation accepted and running in the background (default, when `wait` is omitted or `false`). The generation record already exists, so `generation_id` is pollable via `GET /api/v1/generations/{generation_id}`; the reply is persisted as a ConversationMessage when it completes.
           content:
             application/json:
               schema:
@@ -585,6 +586,8 @@ paths:
                 required:
                   - status
                   - conversation_id
+                  - generation_id
+                  - trace_id
                 properties:
                   status:
                     type: string
@@ -593,6 +596,12 @@ paths:
                   conversation_id:
                     type: string
                     example: 'conv_V1StGXR8Z5jdHi6B'
+                  generation_id:
+                    type: string
+                    example: 'gen_V1StGXR8Z5jdHi6B'
+                  trace_id:
+                    type: string
+                    example: 'trace_V1StGXR8Z5jdHi6B'
         '400':
           description: Invalid request
           content:

@@ -1,7 +1,10 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { submitToolOutputs } from './agentGeneration';
+import {
+  type CreateGenerationArgs,
+  submitToolOutputs,
+} from './agentGeneration';
 import {
   assertGenerationAnswersConversation,
   generateConversationMessage,
@@ -134,6 +137,8 @@ export const generateSessionResponse = async (args: {
   // approval's continuation). Declares the chain so it is bounded and linked;
   // a person's own message leaves it unset.
   initiatorGenerationId?: string | null;
+  // Called once the turn's generation record exists, before the provider is.
+  onRecorded?: CreateGenerationArgs['onRecorded'];
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -197,6 +202,7 @@ export const generateSessionResponse = async (args: {
       authUser: args.authUser,
       initiatorGenerationId: args.initiatorGenerationId,
       maxContextMessages: session.maxContextMessages,
+      onRecorded: args.onRecorded,
     });
   } finally {
     if (!controller.signal.aborted) {

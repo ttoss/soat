@@ -8,7 +8,7 @@ import {
   unresolvedAgentAuthority,
 } from './agentAuthority';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
-import { createGeneration } from './agentGeneration';
+import { fireAgentContinuation } from './agentContinuation';
 import {
   runApprovedWriteMemory,
   WRITE_MEMORY_TOOL_ID,
@@ -27,7 +27,6 @@ import { expireChainIfSettled } from './generationChains';
 import { countStoredToolResult } from './generationProvenance';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
-import { sendSessionMessage } from './sessionOperations';
 import { toolCallRunsAs } from './toolCallRunsAs';
 import { callTool } from './tools';
 import { meterNativeToolExecution } from './usageToolRecording';
@@ -386,15 +385,8 @@ const recordChainExpiry = async (item: MappedApproval): Promise<void> => {
 };
 
 /**
- * Fires the continuation generation that closes the return-pending loop (§4.2),
- * feeding the decision back into the agent's context. Two paths:
- *
- * - **Session-backed**: the continuation appends to the originating session's
- *   thread via `sendSessionMessage`, so provenance flows through the shared
- *   conversation, and `initiator_generation_id` rides the session generation
- *   stack so the turn joins the same bounded chain as the standalone branch.
- * - **Standalone**: a new generation linked to the original via
- *   `initiator_generation_id`.
+ * Fires the continuation that closes the return-pending loop (§4.2), feeding
+ * the decision back into the agent's context (`fireAgentContinuation`).
  */
 const fireContinuation = async (args: {
   item: MappedApproval;
@@ -405,38 +397,13 @@ const fireContinuation = async (args: {
 }): Promise<void> => {
   const { item } = args;
   if (!item.agent_id) return;
-
-  const message = buildContinuationMessage({ item, decision: args.decision });
-
-  if (item.session_id) {
-    const agent = await agentReferences.find({
-      id: item.agent_id,
-      projectId: args.projectInternalId,
-      reach: 'project',
-    });
-    if (!agent) return;
-    log('fireContinuation: session id=%s session=%s', item.id, item.session_id);
-    await sendSessionMessage({
-      agentId: agent.id as number,
-      sessionId: item.session_id,
-      message,
-      authority: args.authority,
-      // No request drives a continuation: it runs under `authority`.
-      authUser: undefined,
-      toolContext: args.toolContext,
-      initiatorGenerationId: item.generation_id,
-    });
-    return;
-  }
-
-  log('fireContinuation: standalone id=%s', item.id);
-  await createGeneration({
-    agentId: item.agent_id,
-    projectIds: [args.projectInternalId],
-    initiatorGenerationId: item.generation_id,
-    messages: [{ role: 'user', content: message }],
-    // The chain's authority, which the continuation's generation stores, so a
-    // further approval in the same chain runs under it in turn.
+  log('fireContinuation: id=%s session=%s', item.id, item.session_id);
+  await fireAgentContinuation({
+    agentPublicId: item.agent_id,
+    projectInternalId: args.projectInternalId,
+    sessionPublicId: item.session_id ?? null,
+    initiatorGenerationId: item.generation_id ?? null,
+    message: buildContinuationMessage({ item, decision: args.decision }),
     authority: args.authority,
     toolContext: args.toolContext,
   });

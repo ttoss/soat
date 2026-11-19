@@ -294,10 +294,15 @@ These three keys are always taken from the session and actor: a caller-provided 
 
 ### Background Generation
 
-`POST .../generate` runs in the background by default and returns `202 Accepted` immediately. Pass `?wait=true` to block until the generation settles and receive the [generated turn](#generated-turn). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
+`POST .../generate` runs in the background by default and returns `202 Accepted` once the turn's generation record exists; poll [`GET /generations/{generation_id}`](/docs/api/generations/get-generation) for it. A refusal before the record (a closed or expired session, a generation already in progress) is the same error as with `?wait=true`. Pass `?wait=true` to block until the generation settles and receive the [generated turn](#generated-turn). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
 
 ```json
-{ "status": "accepted", "session_id": "sess_..." }
+{
+  "status": "accepted",
+  "session_id": "sess_V1StGXR8Z5jdHi6B",
+  "generation_id": "gen_V1StGXR8Z5jdHi6B",
+  "trace_id": "trace_V1StGXR8Z5jdHi6B"
+}
 ```
 
 When a new generation request arrives while a previous one is in flight, the server **cancels the previous generation** and starts a fresh one, so the model always sees the complete message history.

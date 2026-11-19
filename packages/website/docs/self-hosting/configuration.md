@@ -313,7 +313,7 @@ Mount a persistent volume here in Docker.
 | `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000` | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools)                  |
 | `TOOL_ASSERTION_PRIVATE_KEY` | —        | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
 
-A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation.
+A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation. A nested agent generation is the exception: the call answers with the running generation ([nested agent calls](../modules/agents.md#a-nested-generation-that-outlives-the-call)).
 
 `TOOL_ASSERTION_PRIVATE_KEY` turns on [tool assertions](../modules/tools.md#tool-assertions); its public half is served at `/.well-known/tool-assertion-jwks.json`. Generate one with `openssl genpkey -algorithm ed25519`. To rotate, replace the key: a verifier that refetches the key set on an unknown `kid` picks up the new one, and assertions signed with the old key expire within 60 seconds.
 

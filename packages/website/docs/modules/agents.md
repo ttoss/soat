@@ -713,6 +713,25 @@ An agent invokes another through the `builtin` action `create-agent-generation`.
 
 Every generation creates its own trace linked to its parent: [Traces](./traces.md#trace-ancestry-model), [Multi-Agent Sonnet with Nested Agent Calls — Step 6](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents).
 
+#### A nested generation that outlives the call
+
+The call waits up to `SOAT_TOOL_CALL_TIMEOUT_MS` ([configuration](../self-hosting/configuration.md)). A nested generation still running then is not abandoned:
+
+1. The call answers the calling agent with the running generation, and its turn continues:
+
+   ```json
+   {
+     "status": "running",
+     "generation_id": "gen_V1StGXR8Z5jdHi6B",
+     "trace_id": "trace_V1StGXR8Z5jdHi6B",
+     "message": "The generation is still running. Its outcome is sent to you in a follow-up message once it settles; do not start it again."
+   }
+   ```
+
+2. Once both generations have settled, the nested one's outcome — `has completed. Result: …`, `has failed. Error: …`, or paused on client tools — is sent to the calling agent as a continuation: appended to its session when the calling turn ran in one, else a new generation over that message alone. The continuation's `initiator_generation_id` is the calling generation, so it joins that generation's [continuation chain](#continuation-chains) and its budget.
+
+The nested generation is found again by its idempotency key: the call's own `idempotency_key` when the model set one, else one derived from the calling generation and tool call.
+
 ### Versioning and Staged Rollout
 
 `version` starts at `1`; each config-changing write increments it and archives an [Agent Version](#agent-version); an unchanged write creates none. `PUT`, `PATCH` and a [formation](./formations.md) apply (attributed to the project's owning identity) leave the same history.
