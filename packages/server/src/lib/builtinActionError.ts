@@ -14,21 +14,24 @@ export const builtinActionError = (args: {
   response: InProcessApiResponse;
 }): DomainError => {
   const { status, body } = args.response;
-  const error = isPlainObject(body) ? body.error : undefined;
-  const relayed = isPlainObject(error) ? error : undefined;
-  const code = typeof relayed?.code === 'string' ? relayed.code : null;
-  const message = typeof relayed?.message === 'string' ? relayed.message : null;
-  const answer = [`HTTP ${status}`, code].filter(Boolean).join(' ');
+  // `errorBody` shapes every in-process error answer; one without its envelope
+  // (a redirect, an unmatched route) still fails, carrying its body.
+  const error =
+    isPlainObject(body) && isPlainObject(body.error)
+      ? body.error
+      : {
+          code: 'REQUEST_REJECTED',
+          message: 'The action answered without an error body.',
+          body,
+        };
   return new DomainError(
     'TOOL_HTTP_ERROR',
-    `Builtin action '${args.action}' failed: ${answer}${message ? `: ${message}` : ''}`,
+    `Builtin action '${args.action}' failed: HTTP ${status} ${String(error.code)}: ${String(error.message)}`,
     {
       tool_status_code: status,
       tool_action: args.action,
       tool_method: args.method,
-      ...(relayed
-        ? { tool_error: relayed }
-        : { tool_response_body: JSON.stringify(body) ?? '' }),
+      tool_error: error,
     }
   );
 };
