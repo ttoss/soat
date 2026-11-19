@@ -48,6 +48,7 @@ describe('server-side tool chokepoint', () => {
     const NOT_A_SERVER_SIDE_CALL = {
       // An agent hands a client tool back to its caller instead of running it.
       'lib/agentClientToolReHandoff.ts': 'agent surface',
+      'lib/agentNamedTools.ts': 'agent surface',
       'lib/agentToolBindings.ts': 'agent surface',
       'lib/agentToolResolver.ts': 'agent surface',
       'lib/agentToolSelection.ts': 'agent surface',

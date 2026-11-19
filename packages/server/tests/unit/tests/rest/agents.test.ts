@@ -8,6 +8,9 @@ import { saveTrace } from 'src/lib/traces';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
+// A stop condition names a tool the agent offers.
+const DONE_TOOL_BINDING = { tool: { name: 'done', type: 'client' } };
+
 describe('Agents', () => {
   let adminToken: string;
   let userToken: string;
@@ -2136,6 +2139,7 @@ describe('Agents', () => {
           project_id: projectId,
           ai_provider_id: aiProviderId,
           name: `stopcond-${Math.random().toString(36).slice(2, 8)}`,
+          tool_bindings: [DONE_TOOL_BINDING],
           stop_conditions,
         });
     };
@@ -2279,6 +2283,7 @@ describe('Agents', () => {
           project_id: projectId,
           ai_provider_id: aiProviderId,
           name: `forced-${Math.random().toString(36).slice(2, 8)}`,
+          tool_bindings: [DONE_TOOL_BINDING],
           ...body,
         });
     };

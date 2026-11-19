@@ -11,7 +11,10 @@ import createDebug from 'debug';
 import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import { readForwardedDenial } from './authorizationDenial';
-import { findBuiltinAction } from './builtinActionCatalog';
+import {
+  builtinActionToolName,
+  findBuiltinAction,
+} from './builtinActionCatalog';
 import { builtinActionError } from './builtinActionError';
 import { type LogToolCallingError } from './externalToolCall';
 import { type HandoffCall, handoffFor } from './generationHandoff';
@@ -249,7 +252,10 @@ export const resolveSoatTools = (args: {
     const found = findBuiltinAction(action);
     if (found?.kind !== 'native') continue;
     const { def } = found;
-    const resolvedToolName = `${args.typedTool.name}_${action}`;
+    const resolvedToolName = builtinActionToolName({
+      toolName: args.typedTool.name,
+      action,
+    });
     result[resolvedToolName] = buildSoatActionTool({
       toolName: args.typedTool.name,
       toolDescription: args.typedTool.description,

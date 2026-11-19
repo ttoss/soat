@@ -135,6 +135,14 @@ export const resetBuiltinActionCatalog = (): void => {
   catalog = EVERY_NATIVE_ACTION;
 };
 
+/** The name the model is offered one action of a `builtin` tool under. */
+export const builtinActionToolName = (args: {
+  toolName: string;
+  action: string;
+}): string => {
+  return `${args.toolName}_${args.action}`;
+};
+
 export const isNativeAction = (name: string): boolean => {
   return NATIVE.has(name);
 };

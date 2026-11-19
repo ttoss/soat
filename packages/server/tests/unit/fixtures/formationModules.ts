@@ -14,6 +14,8 @@ export type FormationModuleFixtures = {
   actorId: string;
   memoryStoreId: string;
   converterToolId: string;
+  /** The name an agent binding the converter tool is offered it under. */
+  converterToolName: string;
   policyA: string;
   policyB: string;
   datasetId: string;
@@ -77,6 +79,7 @@ export const setupFormationModuleFixtures = async (args: {
       // A guardrail's context call names no action of its own.
       preset_parameters: { action: 'list-tools' },
     }),
+    converterToolName: `${args.prefix}-converter_list-tools`,
     policyA: await policy('agents:CreateAgentGeneration'),
     policyB: await policy('agents:GetAgent'),
     datasetId: await created('datasets', {

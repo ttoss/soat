@@ -57,6 +57,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Check the id, and check that the credential can see the project that owns the resource — a resource in another project is indistinguishable from one that does not exist. List the collection to confirm.',
   VALIDATION_FAILED:
     'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.',
+  AGENT_TOOL_NOT_OFFERED:
+    "Name the tool as the model is offered it, one of `meta.offered_tool_names`: a `builtin` action is `<tool name>_<action>`, and a name two bindings share is prefixed with the binding's name. Update the agent with `{{PATCH /agents/{agent_id}}}`.",
   FORCED_TOOL_CHOICE_CANNOT_STOP:
     'Add `{ "type": "has_tool_call", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.',
   FORMATION_RESOURCE_TYPE_UNREGISTERED:

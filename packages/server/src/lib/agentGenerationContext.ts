@@ -12,6 +12,7 @@ import { buildKnowledgeMessages } from './agentKnowledge';
 import { readKnowledgeConfig } from './agentKnowledgeConfig';
 import { resolveKnowledgePolicy } from './agentKnowledgeScopes';
 import { resolveAgentModel } from './agentModelResolution';
+import { assertSurfaceOffersNamedTools } from './agentNamedTools';
 import {
   resolveServedAgentVersion,
   withOutputSchema,
@@ -371,6 +372,7 @@ export const buildGenerationContext = async (
     provenance,
   });
   const resolvedTools = toolSurface.tools;
+  assertSurfaceOffersNamedTools({ typedAgent, toolSurface });
 
   const { allMessages, retrieval } = await assembleContextMessages({
     agentId: args.agentId,

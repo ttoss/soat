@@ -1,15 +1,19 @@
 /**
  * Everything an agent write has to check or resolve before it touches a row:
  * the cross-resource reference guards, the trace-retention floor, and the
- * pinned-provider/model-route binding.
+ * pinned-provider/model-route binding, and the tools the config names.
  *
- * Split out of `agents.ts` so the CRUD module is CRUD. The rules themselves are
- * unchanged and still shared with the formation module through `modelRoutes` /
- * `traceContentPolicy` (`.claude/rules/modules.md` — Shared Business Rules).
+ * Apart from `agents.ts` so the CRUD module is CRUD. The rules are shared with
+ * the formation module through `modelRoutes` / `traceContentPolicy`
+ * (`.claude/rules/modules.md` — Shared Business Rules).
  */
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { readKnowledgeConfig } from './agentKnowledgeConfig';
+import {
+  assertNamedToolsOffered,
+  knownOfferedToolNames,
+} from './agentNamedTools';
 import { collectStepRuleActiveToolIds } from './agentStepRules';
 import {
   type AgentToolBinding,
@@ -65,6 +69,9 @@ type StoredAgentToolConfig = {
   toolBindings?: unknown;
   activeToolIds?: unknown;
   stepRules?: unknown;
+  toolChoice?: unknown;
+  stopConditions?: unknown;
+  knowledgeConfig?: unknown;
 };
 
 type ActiveToolsWrite = {
@@ -144,6 +151,70 @@ const assertActiveToolsBound = (args: ActiveToolsWrite): void => {
   }
 };
 
+type NamedToolsWrite = {
+  current: StoredAgentToolConfig | undefined;
+  projectId: number;
+  toolBindings?: AgentToolBinding[] | null;
+  activeToolIds?: unknown;
+  stepRules?: unknown;
+  toolChoice?: unknown;
+  stopConditions?: unknown;
+  knowledgeConfig?: unknown;
+};
+
+const NAMED_TOOLS_FIELDS = [
+  'toolBindings',
+  'activeToolIds',
+  'stepRules',
+  'toolChoice',
+  'stopConditions',
+  'knowledgeConfig',
+] as const;
+
+/**
+ * The tools `tool_choice`, `step_rules` and `stop_conditions` name are among
+ * the ones the agent offers, checked on the config the write leaves behind.
+ * Skipped when a binding's names are known only from its server's listing:
+ * generation start checks those.
+ */
+const assertNamedToolsBound = async (args: NamedToolsWrite): Promise<void> => {
+  const { current } = args;
+  if (
+    current &&
+    NAMED_TOOLS_FIELDS.every((field) => {
+      return args[field] === undefined;
+    })
+  ) {
+    return;
+  }
+  const merged = Object.fromEntries(
+    NAMED_TOOLS_FIELDS.map((field) => {
+      return [
+        field,
+        args[field] === undefined ? current?.[field] : args[field],
+      ];
+    })
+  );
+  const toolBindings =
+    args.toolBindings === undefined && current
+      ? readAgentToolBindings(current)
+      : (args.toolBindings ?? null);
+  if (!isBindingList(toolBindings)) return;
+  const offered = await knownOfferedToolNames({
+    projectId: args.projectId,
+    toolBindings,
+    activeToolIds: merged.activeToolIds,
+    knowledgeConfig: merged.knowledgeConfig,
+  });
+  if (!offered) return;
+  assertNamedToolsOffered({
+    toolChoice: merged.toolChoice,
+    stopConditions: merged.stopConditions,
+    stepRules: merged.stepRules,
+    offered,
+  });
+};
+
 /**
  * Every id a `knowledge_config` names is the agent's own project's: retrieval
  * and `write_memory` are scoped to it, so another project's id would only ever
@@ -177,6 +248,8 @@ export const assertAgentReferencesExist = async (
     toolBindings?: AgentToolBinding[] | null;
     activeToolIds?: string[] | null;
     stepRules?: unknown;
+    toolChoice?: unknown;
+    stopConditions?: unknown;
     traceContentMode?: string | null;
   } & ({ projectId: number } | { current: StoredAgentToolConfig })
 ): Promise<void> => {
@@ -194,6 +267,7 @@ export const assertAgentReferencesExist = async (
     reach: 'shares',
   });
   assertActiveToolsBound({ ...args, current });
+  await assertNamedToolsBound({ ...args, current, projectId });
   await assertKnowledgeConfigReferences({
     knowledgeConfig: args.knowledgeConfig,
     projectId,

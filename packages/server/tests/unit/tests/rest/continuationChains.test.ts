@@ -97,6 +97,7 @@ describe('Continuation chains', () => {
         ...(args.agentBudget === undefined
           ? {}
           : {
+              tool_bindings: [{ tool: { name: 'done', type: 'client' } }],
               stop_conditions: [
                 { type: 'has_tool_call', tool_name: 'done' },
                 {

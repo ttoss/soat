@@ -147,6 +147,8 @@ Agents attach [Tools](./tools.md) through `tool_bindings`; a persisted tool can 
 
 `tool_choice` and `stop_conditions` name tools by [resolved name](./tools.md#tool-name-resolution) (`github_create_issue`), not ID.
 
+A name the agent does not offer is [`AGENT_TOOL_NOT_OFFERED`](../error-codes.md#agent_tool_not_offered), listing the names it does offer in `meta.offered_tool_names`: in `tool_choice`, a `step_rules[].tool_choice` or a `has_tool_call` stop condition, on the write that leaves the config behind. An `mcp` binding's names come from its server's listing, so an agent with one is checked at generation start instead, as is a stored agent: the turn is refused before the model is called. A binding unreachable for the turn skips the check.
+
 #### Tool Bindings
 
 Each entry in `tool_bindings` is an object:
