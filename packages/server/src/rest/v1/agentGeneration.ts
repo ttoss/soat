@@ -59,13 +59,9 @@ const sendStreamResponse = async (args: {
     ctx: args.ctx,
     frames: framesOf(args.result),
     label: 'agentGeneration stream',
-    resume: () => {
-      return args.recorded
-        ? {
-            generation_id: args.recorded.generationId,
-            trace_id: args.recorded.traceId,
-          }
-        : {};
+    resume: args.recorded && {
+      generation_id: args.recorded.generationId,
+      trace_id: args.recorded.traceId,
     },
   });
 };

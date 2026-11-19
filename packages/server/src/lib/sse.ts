@@ -24,7 +24,7 @@ export const SSE_MAX_LIFETIME_MS = 5 * 60_000;
 export type SseFrame = { data: unknown; id?: string; event?: string };
 
 /** Where a stream closed by its lifetime resumes, e.g. `{ generation_id }`. */
-export type SseResume = () => Record<string, unknown>;
+export type SseResume = Record<string, unknown>;
 
 const formatFrame = (frame: SseFrame): string => {
   const id = frame.id === undefined ? '' : `id: ${frame.id}\n`;
@@ -50,7 +50,7 @@ const closingFrame = (args: {
   if (outcome.kind === 'expired') {
     return formatFrame({
       event: 'end',
-      data: { reason: 'max_lifetime', ...args.resume?.() },
+      data: { reason: 'max_lifetime', ...args.resume },
     });
   }
   return null;

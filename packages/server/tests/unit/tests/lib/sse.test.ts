@@ -70,7 +70,7 @@ const serve = async (args: {
   source: Source;
   heartbeatMs?: number;
   maxLifetimeMs?: number;
-  resume?: () => Record<string, unknown>;
+  resume?: Record<string, unknown>;
 }) => {
   let piped: Promise<void> = Promise.resolve();
   const server = http.createServer((_req, res) => {
@@ -207,9 +207,7 @@ describe('pipeSse', () => {
     const server = await serve({
       source,
       maxLifetimeMs: 50,
-      resume: () => {
-        return { generation_id: 'gen_resume' };
-      },
+      resume: { generation_id: 'gen_resume' },
     });
     try {
       const response = await fetch(server.url);
