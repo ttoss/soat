@@ -22,6 +22,7 @@ import {
   updateFormation,
   validateFormationTemplateAsync,
 } from 'src/lib/formations';
+import { deployableTemplate } from 'src/lib/formationsDeployTemplate';
 import type { FormationAuthorizationRequest } from 'src/lib/formationsTypes';
 import { buildSrn } from 'src/lib/iam';
 import { namesRequestTag } from 'src/lib/iamConditionKeys';
@@ -217,20 +218,18 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     ctx,
     projectPublicId: body.project_id,
   });
-  const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = await validateFormationTemplateAsync({
-    template: parsedTemplate,
+  const parsedTemplate = await deployableTemplate({
+    input: body.template,
     projectPublicId,
+    stored: {
+      formationId: body.formation_id,
+      projectId: Number(targetProjectId),
+    },
   });
-  if (!validation.valid) {
-    throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
-      details: validation.errors,
-    });
-  }
 
   const plan = await planFormation({
     projectId: Number(targetProjectId),
-    template: parsedTemplate as FormationTemplate,
+    template: parsedTemplate,
     formationId: body.formation_id,
     parameters: body.parameters,
     authorize: formationAuthorizer({ ctx, projectPublicId }),
@@ -258,18 +257,12 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     ctx,
     projectPublicId: body.project_id,
   });
-  const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = await validateFormationTemplateAsync({
-    template: parsedTemplate,
+  const parsedTemplate = await deployableTemplate({
+    input: body.template,
     projectPublicId,
   });
-  if (!validation.valid) {
-    throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
-      details: validation.errors,
-    });
-  }
 
-  assertNoMissingParams(parsedTemplate as FormationTemplate, body.parameters);
+  assertNoMissingParams(parsedTemplate, body.parameters);
   const metadata = readNullableMetadataBag(body.metadata);
   assertStaticMetadata(metadata);
 
@@ -359,29 +352,19 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   const metadata = readNullableMetadataBag(body.metadata);
   assertStaticMetadata(metadata);
 
-  let parsedTemplate: unknown = undefined;
+  let parsedTemplate: FormationTemplate | undefined = undefined;
   if (body.template !== undefined) {
-    parsedTemplate = parseFormationTemplateInput(body.template);
-    const validation = await validateFormationTemplateAsync({
-      template: parsedTemplate,
+    parsedTemplate = await deployableTemplate({
+      input: body.template,
       projectPublicId: formation.project_id,
+      stored: { formationId: formation.id },
     });
-    if (!validation.valid) {
-      throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
-        details: validation.errors,
-      });
-    }
-
-    assertNoMissingParams(
-      parsedTemplate as FormationTemplate,
-      body.parameters,
-      true
-    );
+    assertNoMissingParams(parsedTemplate, body.parameters, true);
   }
 
   const updated = await updateFormation({
     id: ctx.params.formation_id,
-    template: parsedTemplate as FormationTemplate | undefined,
+    template: parsedTemplate,
     metadata,
     parameters: body.parameters,
     authorize: formationAuthorizer({
