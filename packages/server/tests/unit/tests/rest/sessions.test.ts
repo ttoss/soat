@@ -1005,6 +1005,31 @@ describe('Sessions', () => {
       expect(response.status).toBe(202);
       expect(response.body.status).toBe('accepted');
       expect(response.body.session_id).toBe(sessionId);
+      expect(response.body.generation_id).toMatch(/^gen_/);
+      expect(response.body.trace_id).toEqual(expect.any(String));
+
+      const generation = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${response.body.generation_id}`
+      );
+      expect(generation.status).toBe(200);
+      expect(generation.body.session_id).toBe(sessionId);
+      expect(generation.body.trace_id).toBe(response.body.trace_id);
+    });
+
+    test('background mode refuses a closed session synchronously (409)', async () => {
+      const closed = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Closed Before Generate' });
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${closed.body.id}`)
+        .send({ status: 'closed' });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/sessions/${closed.body.id}/generate`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('SESSION_CLOSED');
     });
 
     test('accepts per-request toolContext in async mode', async () => {
@@ -1335,7 +1360,12 @@ describe('Sessions', () => {
         .send({ agent_id: agentId, name: 'ordering-test' });
       orderingSessionId = res.body.id;
 
-      mockCreateGeneration.mockImplementationOnce(() => {
+      mockCreateGeneration.mockImplementationOnce((args) => {
+        // A turn's record exists before the provider is called.
+        void args.onRecorded?.({
+          generationId: 'gen_test_01',
+          traceId: 'trc_test_01',
+        });
         return new Promise((resolve) => {
           resolveGeneration = () => {
             return resolve({
@@ -1473,6 +1503,11 @@ describe('Sessions', () => {
 
       // First call: blocks until the abort signal fires
       mockCreateGeneration.mockImplementationOnce((args) => {
+        // A turn's record exists before the provider is called.
+        void args.onRecorded?.({
+          generationId: 'gen_cancel_01',
+          traceId: 'trc_cancel_01',
+        });
         return new Promise((_, reject) => {
           signalFirstStarted();
           args.abortSignal?.addEventListener('abort', () => {
@@ -1696,7 +1731,12 @@ describe('Sessions', () => {
         generationStarted = new Promise<void>((r) => {
           signalGenerationStarted = r;
         });
-        mockCreateGeneration.mockImplementationOnce(() => {
+        mockCreateGeneration.mockImplementationOnce((args) => {
+          // A turn's record exists before the provider is called.
+          void args.onRecorded?.({
+            generationId: 'gen_auto_01',
+            traceId: 'trc_auto_01',
+          });
           return new Promise((resolve) => {
             signalGenerationStarted();
             resolveGeneration = () => {
@@ -1768,7 +1808,12 @@ describe('Sessions', () => {
           signalGenerationStarted = r;
         });
 
-        mockCreateGeneration.mockImplementation(() => {
+        mockCreateGeneration.mockImplementation((args) => {
+          // A turn's record exists before the provider is called.
+          void args.onRecorded?.({
+            generationId: 'gen_busy_01',
+            traceId: 'trc_busy_01',
+          });
           return new Promise(() => {
             // Signal that createGeneration was called (generatingAt is already
             // set in DB before this point), then never resolve to keep session busy

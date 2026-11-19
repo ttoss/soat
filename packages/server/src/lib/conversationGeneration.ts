@@ -3,7 +3,7 @@ import createDebug from 'debug';
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { createGeneration } from './agentGeneration';
+import { createGeneration, type CreateGenerationArgs } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
@@ -17,6 +17,8 @@ import { agentReferences } from './resourceReferences';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
+
+type GenerationRecorded = CreateGenerationArgs['onRecorded'];
 
 type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   document?: InstanceType<(typeof db)['Document']> & {
@@ -113,6 +115,7 @@ const runAgentGeneration = async (args: {
   authority: WorkAuthority | null;
   authUser: AuthUser | undefined;
   initiatorGenerationId?: string | null;
+  onRecorded?: GenerationRecorded;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
     agentId: args.agent.publicId,
@@ -132,6 +135,7 @@ const runAgentGeneration = async (args: {
     authority: args.authority,
     authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
+    onRecorded: args.onRecorded,
   });
 
   if (result instanceof ReadableStream) {
@@ -424,6 +428,8 @@ export const generateConversationMessage = async (args: {
   // a person's own message leaves it unset.
   initiatorGenerationId?: string | null;
   maxContextMessages?: number | null;
+  // Called once the turn's generation record exists, before the provider is.
+  onRecorded?: GenerationRecorded;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
     conversationId: args.conversationId,
@@ -453,6 +459,7 @@ export const generateConversationMessage = async (args: {
     authority: args.authority,
     authUser: args.authUser,
     initiatorGenerationId: args.initiatorGenerationId,
+    onRecorded: args.onRecorded,
   });
 
   if (genResult.status !== 'completed') {

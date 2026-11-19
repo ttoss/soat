@@ -7,9 +7,14 @@
  */
 
 /** How long an outbound tool call may take before it is abandoned. */
-export const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
-  ? parseInt(process.env.SOAT_TOOL_CALL_TIMEOUT_MS, 10)
-  : 300_000;
+export const toolCallTimeoutMs = (): number => {
+  return process.env.SOAT_TOOL_CALL_TIMEOUT_MS
+    ? parseInt(process.env.SOAT_TOOL_CALL_TIMEOUT_MS, 10)
+    : 300_000;
+};
+
+/** {@link toolCallTimeoutMs} as read when the process starts. */
+export const SOAT_TOOL_CALL_TIMEOUT_MS = toolCallTimeoutMs();
 
 export type LogToolCallingError = (args: {
   toolName: string;

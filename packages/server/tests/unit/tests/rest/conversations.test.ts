@@ -1201,6 +1201,14 @@ describe('Conversations', () => {
       expect(res.status).toBe(202);
       expect(res.body.status).toBe('accepted');
       expect(res.body.conversation_id).toBe(convId);
+      expect(res.body.generation_id).toMatch(/^gen_/);
+      expect(res.body.trace_id).toEqual(expect.any(String));
+
+      const generation = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${res.body.generation_id}`
+      );
+      expect(generation.status).toBe(200);
+      expect(generation.body.agent_id).toBe(agentRes.body.id);
     });
 
     test('background mode still resolves the agent synchronously (404)', async () => {

@@ -51,6 +51,11 @@ import { Trace } from './Trace';
       name: 'generations_chain_id_idx',
       fields: ['chain_id'],
     },
+    // Backs the lookup of a settled generation's unreported sub-generations.
+    {
+      name: 'generations_reports_to_generation_id_idx',
+      fields: ['reports_to_generation_id'],
+    },
     // Backs the walk from a generation up to the conversation it served.
     {
       name: 'generations_conversation_id_idx',
@@ -363,6 +368,20 @@ export class Generation extends Model {
   // row reads it after the content is gone.
   @Column({ type: DataType.JSON, allowNull: false, defaultValue: [] })
   declare inputModalities: string[];
+
+  // Public id of the generation whose tool call started this one and stopped
+  // waiting for it; its outcome is reported there once both have settled. Not a
+  // foreign key, like `rootGenerationId`: a deleted parent reports nothing.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare reportsToGenerationId: string | null;
+
+  // The parent's tool call that started this generation.
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare reportsToToolCallId: string | null;
+
+  // Set once the outcome is reported, so it is reported exactly once.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare reportedAt: Date | null;
 
   // The caller's deduplication key, claimed for as long as this row exists.
   @Column({ type: DataType.STRING(255), allowNull: true })

@@ -19,6 +19,9 @@ import type { WorkAuthority } from './workAuthority';
  * still pending, or released to the client by the guardrail gate. `input` is the
  * model's own arguments, copied as an opaque value.
  */
+/** A generation's ids, as soon as its record exists. */
+export type GenerationIds = { generationId: string; traceId: string };
+
 export type ClientToolCall = {
   toolCallId: string;
   toolName: string;

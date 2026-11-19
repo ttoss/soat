@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { acceptTurn } from 'src/lib/acceptedTurn';
 import {
   generateConversationMessage,
   resolveConversationAndAgent,
@@ -274,15 +275,27 @@ conversationSubResourcesRouter.post(
     });
 
     if (ctx.query['wait'] !== 'true') {
-      generateConversationMessage(turn).catch(() => {
-        // Fire-and-forget: the reply lands as a conversation message, and
-        // failures surface on the generation record the caller polls.
+      // The reply lands as a conversation message; a failure after the
+      // record exists is on the generation the caller polls.
+      const accepted = await acceptTurn({
+        start: async (onRecorded) => {
+          const result = await generateConversationMessage({
+            ...turn,
+            onRecorded,
+          });
+          return {
+            generationId: result.generationId,
+            traceId: result.traceId,
+          };
+        },
       });
 
       ctx.status = 202;
       ctx.body = {
         status: 'accepted',
         conversation_id: ctx.params.conversation_id,
+        generation_id: accepted.generationId,
+        trace_id: accepted.traceId,
       };
       return;
     }

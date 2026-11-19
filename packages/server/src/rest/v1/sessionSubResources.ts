@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { acceptTurn } from 'src/lib/acceptedTurn';
 import { forkSession, listSessionForks } from 'src/lib/sessionFork';
 import {
   addSessionMessage,
@@ -120,11 +121,22 @@ sessionSubResourcesRouter.post(
     };
 
     if (!wait) {
-      generateSessionResponse(turn).catch(() => {
-        // Fire-and-forget: errors are emitted via event bus
+      const accepted = await acceptTurn({
+        start: async (onRecorded) => {
+          const result = await generateSessionResponse({ ...turn, onRecorded });
+          return {
+            generationId: result.generation_id,
+            traceId: result.trace_id,
+          };
+        },
       });
       ctx.status = 202;
-      ctx.body = { status: 'accepted', session_id: ctx.params.session_id };
+      ctx.body = {
+        status: 'accepted',
+        session_id: ctx.params.session_id,
+        generation_id: accepted.generationId,
+        trace_id: accepted.traceId,
+      };
       return;
     }
 

@@ -8,7 +8,7 @@ import {
   type GenerationContext,
 } from './agentGenerationContext';
 import { buildDepthGuardIfExhausted } from './agentGenerationRecovery';
-import { type GenerationResult } from './agentGenerationTypes';
+import type { GenerationIds, GenerationResult } from './agentGenerationTypes';
 import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
 import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
@@ -259,7 +259,7 @@ export type CreateGenerationArgs = {
   outputSchemaOverride?: Record<string, unknown>;
   // Called once the record exists and before the provider is, so a caller
   // blocked on the turn can name it while it runs. Internal only.
-  onRecorded?: (args: { generationId: string }) => Promise<void> | void;
+  onRecorded?: (args: GenerationIds) => Promise<void> | void;
 };
 
 /**
@@ -413,7 +413,7 @@ const runPreparedGeneration = async (args: {
   );
 
   try {
-    await request.onRecorded?.({ generationId: ctx.generationId });
+    await request.onRecorded?.({ generationId: ctx.generationId, traceId });
     return await dispatchGeneration({
       stream: request.stream,
       ctx,

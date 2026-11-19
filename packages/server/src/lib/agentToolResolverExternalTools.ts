@@ -12,12 +12,10 @@ import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import { readForwardedDenial } from './authorizationDenial';
 import { findBuiltinAction } from './builtinActionCatalog';
-import {
-  type LogToolCallingError,
-  SOAT_TOOL_CALL_TIMEOUT_MS,
-} from './externalToolCall';
+import { type LogToolCallingError } from './externalToolCall';
+import { type HandoffCall, handoffFor } from './generationHandoff';
 import { HttpToolError } from './httpToolError';
-import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
+import { dispatchApiRequestOrThrow } from './inProcessApi';
 import { withoutAgentExcludedActions } from './soatAgentActions';
 import { buildSoatActionTarget, type ToolDefinition } from './soatTools';
 import {
@@ -56,12 +54,15 @@ export const executeSoatTool = async (args: {
   traceId?: string;
   rootTraceId?: string | null;
   remainingDepth?: number;
+  /** The tool call this is, within its generation; absent outside a turn. */
+  call?: HandoffCall | null;
   buildContextHeaders: (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }) => {
+  const handoff = handoffFor(args);
   // The template until the target is built: building refuses a call missing a
   // path argument, and that refusal is logged like any other failed call.
   let path = args.def.pathTemplate;
@@ -88,18 +89,15 @@ export const executeSoatTool = async (args: {
       meter: args.meter,
       send: (markSent) => {
         markSent({ input: args.rawArgs, action: args.def.name });
-        return withCallTimeout({
-          promise: dispatchApiRequestOrThrow({
+        return handoff.wait(
+          dispatchApiRequestOrThrow({
             method: args.def.method,
             path,
             as: {
               authority: turnAuthority(args),
               actor: args.toolContext?.actor_id ?? null,
             },
-            headers: args.buildContextHeaders({
-              toolContext: args.toolContext,
-              contextKeys: args.contextKeys,
-            }),
+            headers: handoff.headers,
             body,
             wrapError: (response) => {
               log('soat tool result: %s status=%d', toolId, response.status);
@@ -113,10 +111,8 @@ export const executeSoatTool = async (args: {
                 args.def.method
               );
             },
-          }),
-          ms: SOAT_TOOL_CALL_TIMEOUT_MS,
-          label: `SOAT action '${args.def.name}'`,
-        });
+          })
+        );
       },
     });
   } catch (error) {
@@ -179,7 +175,8 @@ const buildSoatActionTool = (args: {
   return tool({
     description: args.toolDescription ?? args.def.description,
     inputSchema: jsonSchema(effectiveInputSchema),
-    execute: async (toolArgs: unknown) => {
+    execute: async (toolArgs: unknown, options: { toolCallId: string }) => {
+      const generationId = args.meter.attribution.generationId;
       const rawArgs = mergePresetParameters({
         presetParameters: {
           ...resolvePresetParametersForCall({
@@ -204,6 +201,9 @@ const buildSoatActionTool = (args: {
         traceId: args.traceId,
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
+        call: generationId
+          ? { generationId, toolCallId: options.toolCallId }
+          : null,
         buildContextHeaders: args.buildContextHeaders,
         logToolCallingError: args.logToolCallingError,
       });

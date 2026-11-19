@@ -360,8 +360,8 @@ paths:
       summary: Trigger agent generation
       description: >
         Triggers the agent to generate a response based on the current
-        conversation. Background by default: returns `202 Accepted`
-        immediately while the generation runs. Pass ?wait=true to block and
+        conversation. Background by default: returns `202 Accepted` with the
+        generation's id once its record exists. Pass ?wait=true to block and
         receive the assistant reply (or a requires_action status if the agent
         needs client tool outputs) in the response.
       operationId: generateSessionResponse
@@ -392,17 +392,31 @@ paths:
               schema:
                 $ref: './conversations.yaml#/components/schemas/GenerateConversationMessageResponse'
         '202':
-          description: Generation accepted and running in the background (default, when `wait` is omitted or `false`)
+          description: >-
+            Generation accepted and running in the background (default, when
+            `wait` is omitted or `false`). The generation record already
+            exists: poll `GET /api/v1/generations/{generation_id}` for it.
           content:
             application/json:
               schema:
                 type: object
+                required:
+                  - status
+                  - session_id
+                  - generation_id
+                  - trace_id
                 properties:
                   status:
                     type: string
                     enum: [accepted]
                   session_id:
                     type: string
+                  generation_id:
+                    type: string
+                    example: 'gen_V1StGXR8Z5jdHi6B'
+                  trace_id:
+                    type: string
+                    example: 'trace_V1StGXR8Z5jdHi6B'
         '400':
           $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
