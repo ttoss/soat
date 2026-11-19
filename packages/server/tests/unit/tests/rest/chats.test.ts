@@ -711,9 +711,11 @@ describe('Chats', () => {
       });
       expect(frame).toBeDefined();
       const payload = JSON.parse((frame as string).replace(/^data: /, '')) as {
-        error: string;
+        error: { code: string; message: string };
       };
-      expect(payload.error).toContain('Provider returned 404');
+      expect(payload.error.code).toBe('AI_PROVIDER_ERROR');
+      expect(payload.error.message).toContain('Provider returned 404');
+      expect(response.text).not.toContain('[DONE]');
     });
   });
 
@@ -776,7 +778,9 @@ describe('Chats', () => {
         });
 
       expect(response.status).toBe(200);
-      expect(response.text).toContain('not found');
+      expect(response.text).toContain(
+        `data: ${JSON.stringify({ error: { code: 'CHAT_NOT_FOUND', message: "Chat 'cht_doesnotexist0000' not found." } })}\n\n`
+      );
     });
 
     test('streams SSE response when the chat has stored instructions', async () => {

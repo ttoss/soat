@@ -85,7 +85,7 @@ A caller without it gets `403` before any provider call or SSE stream (a refused
 
 ### Streaming
 
-`stream: true` returns SSE; each event is a JSON object with a `choices[0].delta.content` chunk, ending with `data: [DONE]`.
+`stream: true` returns SSE; each event is a JSON object with a `choices[0].delta.content` chunk, ending with `data: [DONE]`. A `: heartbeat` comment line is sent every 15 seconds; a stream lasts at most 5 minutes and then ends with `event: end` and `data: {"reason":"max_lifetime"}`.
 
 ### Upstream provider errors
 
@@ -100,7 +100,7 @@ When the provider rejects the completion (unavailable model, refused credential)
 }
 ```
 
-Same mapping as [Agents](./agents.md) generation, so probing which models a provider can serve gives an interpretable answer instead of a bare `500`. A streaming request has already written `200`; the failure arrives as a terminal `data: {"error": "..."}` frame and the stream ends without `[DONE]`.
+Same mapping as [Agents](./agents.md) generation, so probing which models a provider can serve gives an interpretable answer instead of a bare `500`. A streaming request has already written `200`; the failure arrives as a terminal `data: {"error": {"code": "AI_PROVIDER_ERROR", "message": "..."}}` frame and the stream ends without `[DONE]`.
 
 ### Document-Backed Messages
 

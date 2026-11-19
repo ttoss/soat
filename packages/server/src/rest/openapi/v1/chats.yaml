@@ -307,15 +307,19 @@ paths:
                 type: string
                 description: >
                   SSE stream of JSON objects, one per line, prefixed with
-                  `data: `. The stream ends with `data: [DONE]`.
+                  `data: `. The stream ends with `data: [DONE]`. A
+                  `: heartbeat` comment is sent every 15 seconds; after 5
+                  minutes the stream ends with `event: end` and
+                  `data: {"reason": "max_lifetime"}`.
 
                   The response headers are written before the provider is
                   called, so a failure cannot become a status code once the
                   stream is open. It arrives instead as a terminal
-                  `data: {"error": "..."}` frame carrying the same mapped
-                  message the non-streaming path returns in its `502` body
-                  (e.g. `Provider returned 404: ...`), and the stream then
-                  ends without a `[DONE]`.
+                  `data: {"error": {"code": "...", "message": "..."}}` frame
+                  carrying the code and message the non-streaming path returns
+                  in its `502` body (e.g. `AI_PROVIDER_ERROR`,
+                  `Provider returned 404: ...`), and the stream then ends
+                  without a `[DONE]`.
         '400':
           description: >-
             Bad Request — `messages` is missing or empty; a `role: "system"`

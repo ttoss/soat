@@ -446,7 +446,7 @@ describe('Agent Generation Routes', () => {
       expect(response.text).toContain('[DONE]');
     });
 
-    test('SSE stream includes error event when ReadableStream errors', async () => {
+    test('an unexpected stream error is an INTERNAL_ERROR frame, its message withheld', async () => {
       const errorStream = new ReadableStream<string>({
         start: (controller) => {
           controller.error(new Error('stream read error'));
@@ -460,7 +460,9 @@ describe('Agent Generation Routes', () => {
         .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
 
       expect(response.status).toBe(200);
-      expect(response.text).toContain('stream read error');
+      expect(response.text).toBe(
+        'data: {"error":{"code":"INTERNAL_ERROR","message":"Internal Server Error"}}\n\n'
+      );
     });
 
     test('depth guard: returns completed with depth-guard message when max_call_depth is 0', async () => {
@@ -1776,11 +1778,13 @@ describe('Agent Generation Routes', () => {
       });
       expect(frame).toBeDefined();
       const payload = JSON.parse((frame as string).replace(/^data: /, '')) as {
-        error: string;
+        error: { code: string; message: string; meta: Record<string, string> };
       };
+      expect(payload.error.code).toBe('AI_PROVIDER_ERROR');
       // The provider's own status is what separates "this model is not
       // available here" from "SOAT is broken".
-      expect(payload.error).toContain('Provider returned 404');
+      expect(payload.error.message).toContain('Provider returned 404');
+      expect(payload.error.meta.generation_id).toMatch(/^gen_/);
     });
 
     test('a failed stream does not claim completion with [DONE]', async () => {
@@ -1836,8 +1840,9 @@ describe('Agent Generation Routes', () => {
         expect(frame).toBeDefined();
         const payload = JSON.parse(
           (frame as string).replace(/^data: /, '')
-        ) as { error: string };
-        expect(payload.error).toContain('upstream capacity exceeded');
+        ) as { error: { code: string; message: string } };
+        expect(payload.error.code).toBe('AI_PROVIDER_ERROR');
+        expect(payload.error.message).toContain('upstream capacity exceeded');
         // Without this the prefix above reads as the whole answer.
         expect(response.text).not.toContain('[DONE]');
       });
