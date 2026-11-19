@@ -364,9 +364,9 @@ The stored header is `Bearer {{secret:sec_01HXYZ}}`; the decrypted value is subs
 }
 ```
 
-The placeholder is an object so that a read-edit-write round trip sending it back fails the schema's `type: string` check with a `400` instead of rotating the secret.
+A template read back can be deployed again as read. On [`PUT /api/v1/formations/{formation_id}`](/docs/api/formations/update-formation), and on [`POST /api/v1/formations/plan`](/docs/api/formations/plan-formation) with `formation_id`, each placeholder takes the stored value at the same path, provided its resource then equals the declaration last deployed; a resource changed beside a placeholder, a placeholder in a resource the formation does not hold, and any placeholder on a create are `400 VALIDATION_FAILED` with the resource's path in `meta.details`. A credential is kept where it stands or replaced by sending the value, never carried into a changed resource.
 
-A `tool` resource follows [Credentials Are References, Never Literals](./tools.md#credentials-are-references-never-literals): `validate-formation` reports a literal credential at its path, and the header references a `secret` resource instead (`{ "sub": "Bearer {{secret:${ApiSecret}}}" }`). A literal stored in a tool or agent before the rule is masked in the stored `template` and on both sides of a `plan-formation` diff.
+A `tool` resource follows [Credentials Are References, Never Literals](./tools.md#credentials-are-references-never-literals): `validate-formation` reports a literal credential at its path, and the header references a `secret` resource instead (`{ "sub": "Bearer {{secret:${ApiSecret}}}" }`). A literal a stored tool or agent holds is masked in the stored `template` and on both sides of a `plan-formation` diff.
 
 The stored template keeps the value it was given (an update with no new template re-applies the stored one). Declare the value through a `no_echo` parameter to keep it out of the database as well:
 

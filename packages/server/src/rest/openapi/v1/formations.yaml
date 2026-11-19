@@ -88,7 +88,9 @@ paths:
       summary: Plan a formation deployment
       description: >
         Computes a diff between the desired template and the current stack state
-        without making any changes. Returns the list of planned actions.
+        without making any changes. Returns the list of planned actions. With
+        `formation_id`, a `{ "no_echo": true }` placeholder takes that
+        formation's stored value, as on an update.
       operationId: planFormation
       x-iam-action: formations:PlanFormation
       x-iam-resource-type: formation
@@ -374,6 +376,12 @@ paths:
         Applies a new template to the formation. Resources are created,
         updated, or deleted to reconcile the current state with the desired
         state.
+
+
+        A template read back can be sent as read: each `{ "no_echo": true }`
+        placeholder takes the stored value at its path, in a resource that then
+        equals its deployed declaration, or the update is `400
+        VALIDATION_FAILED`.
 
 
         A **template-shape** error is refused with `400`. A **deploy** failure
