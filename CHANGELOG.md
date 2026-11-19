@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.120.0](https://github.com/ttoss/soat/compare/v0.119.0...v0.120.0) (2026-11-19)
+
+### Bug Fixes
+
+* **server:** a builtin call-tool keeps its target's action ([#2039](https://github.com/ttoss/soat/issues/2039)) ([680dd28](https://github.com/ttoss/soat/commit/680dd28f0f566d80b240f277a994ffe610bd777b))
+
+### Features
+
+* **generations:** background generate answers its generation; a nested generation reports back past the call timeout ([#2040](https://github.com/ttoss/soat/issues/2040)) ([76e433f](https://github.com/ttoss/soat/commit/76e433fdf548744c62a0f54bb4644e335ee67380))
+* **oauth-clients:** a client written without redirect_uri takes the deployment default ([#2038](https://github.com/ttoss/soat/issues/2038)) ([cb59738](https://github.com/ttoss/soat/commit/cb5973858dd25fc3d041cc618b6f193f3ae36f80))
+* **server:** keep a stored credential under a resent formation placeholder ([#2037](https://github.com/ttoss/soat/issues/2037)) ([acf6c2b](https://github.com/ttoss/soat/commit/acf6c2be6ad3d8de9d518719a5a6a5dc4109f881))
+
 # [0.119.0](https://github.com/ttoss/soat/compare/v0.118.0...v0.119.0) (2026-11-19)
 
 ### Bug Fixes
