@@ -2,8 +2,6 @@
 // 1) so a resolved `origin: tool_call` item fires its continuation generation.
 import 'src/lib/agentToolApprovalContinuation';
 
-import type { ServerResponse } from 'node:http';
-
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
@@ -11,15 +9,16 @@ import {
   type AcceptedGeneration,
   createGeneration,
   createIdempotentGeneration,
-  type GenerationResult,
   startGeneration,
   submitToolOutputs,
 } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
+import type { GenerationIds } from 'src/lib/agentGenerationTypes';
 import type { StreamedGenerationPart } from 'src/lib/agentStreamGeneration';
 import { storeResumedConversationTurn } from 'src/lib/conversationGeneration';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
+import { serveSse, type SseFrame } from 'src/lib/sse';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import { authorizeAgentWrite } from './agentAccess';
@@ -29,65 +28,46 @@ import { idempotencyKeyOf } from './idempotencyKey';
 import { authorizeSharedUse } from './sharedAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
-const toSseFrame = (part: StreamedGenerationPart): string => {
+const toSseFrame = (part: StreamedGenerationPart): SseFrame => {
   if (typeof part === 'string') {
-    return `data: ${JSON.stringify({ choices: [{ delta: { content: part } }] })}\n\n`;
+    return { data: { choices: [{ delta: { content: part } }] } };
   }
-  return `data: ${JSON.stringify(mapGenerationResult(part.generation))}\n\n`;
+  return { data: mapGenerationResult(part.generation) };
 };
 
-const pipeStreamToResponse = async (
-  stream: ReadableStream<StreamedGenerationPart>,
-  res: ServerResponse
-): Promise<void> => {
+async function* framesOf(
+  stream: ReadableStream<StreamedGenerationPart>
+): AsyncGenerator<SseFrame> {
   const reader = stream.getReader();
-  let done = false;
-  while (!done) {
+  for (;;) {
     const chunk = await reader.read();
-    done = chunk.done;
-    if (chunk.value) {
-      res.write(toSseFrame(chunk.value));
-    }
+    if (chunk.value !== undefined) yield toSseFrame(chunk.value);
+    if (chunk.done) return;
   }
-  res.write('data: [DONE]\n\n');
-};
+}
 
-const sendStreamResponse = async (
-  ctx: Context,
-  result: ReadableStream
-): Promise<void> => {
-  ctx.respond = false;
-  ctx.res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+/**
+ * The `200` goes out before the provider is called, so a failure becomes the
+ * terminal error frame. The stream's error is the one the generation records.
+ */
+const sendStreamResponse = async (args: {
+  ctx: Context;
+  result: ReadableStream<StreamedGenerationPart>;
+  recorded: GenerationIds | undefined;
+}): Promise<void> => {
+  await serveSse({
+    ctx: args.ctx,
+    frames: framesOf(args.result),
+    label: 'agentGeneration stream',
+    resume: () => {
+      return args.recorded
+        ? {
+            generation_id: args.recorded.generationId,
+            trace_id: args.recorded.traceId,
+          }
+        : {};
+    },
   });
-  try {
-    await pipeStreamToResponse(result, ctx.res);
-  } catch (error) {
-    // The `200` went out before the provider was called, so this frame is the
-    // only place left to report an upstream failure. `pipeStreamToResponse` is
-    // left before its `[DONE]`, so a truncated answer stays distinguishable
-    // from a complete one, and the message is already the mapped provider one
-    // — frame, generation record and failure event all agree.
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
-  } finally {
-    ctx.res.end();
-  }
-};
-
-const handleGenerationResult = async (
-  ctx: Context,
-  result: GenerationResult | ReadableStream,
-  stream: boolean | undefined
-): Promise<void> => {
-  if (stream && result && typeof result === 'object' && 'getReader' in result) {
-    await sendStreamResponse(ctx, result as ReadableStream);
-    return;
-  }
-  ctx.body = mapGenerationResult(result as GenerationResult);
 };
 
 const toObjectOrUndefined = (value: unknown): object | undefined => {
@@ -194,12 +174,18 @@ const respondAccepted = (args: {
 const runWaitedGeneration = (args: {
   generationArgs: ReturnType<typeof buildGenerationArgs>;
   stream: boolean;
+  onRecorded: (ids: GenerationIds) => void;
 }) => {
-  const { generationArgs, stream } = args;
+  const { generationArgs, stream, onRecorded } = args;
   const { idempotencyKey } = generationArgs;
   return idempotencyKey
-    ? createIdempotentGeneration({ ...generationArgs, idempotencyKey, stream })
-    : createGeneration({ ...generationArgs, stream });
+    ? createIdempotentGeneration({
+        ...generationArgs,
+        idempotencyKey,
+        stream,
+        onRecorded,
+      })
+    : createGeneration({ ...generationArgs, stream, onRecorded });
 };
 
 /**
@@ -264,16 +250,24 @@ agentGenerationRouter.post(
       return;
     }
 
+    let recorded: GenerationIds | undefined;
     const result = await runWaitedGeneration({
       generationArgs,
       stream: body.stream === true,
+      onRecorded: (ids) => {
+        recorded = ids;
+      },
     });
     if ('idempotent' in result) {
       respondAccepted({ ctx, accepted: result });
       return;
     }
 
-    await handleGenerationResult(ctx, result, body.stream);
+    if ('getReader' in result) {
+      await sendStreamResponse({ ctx, result, recorded });
+      return;
+    }
+    ctx.body = mapGenerationResult(result);
   }
 );
 

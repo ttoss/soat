@@ -462,16 +462,23 @@ paths:
                   `tool-outputs` to resume.
 
 
+                  A `: heartbeat` comment is sent every 15 seconds. After 5
+                  minutes the stream ends with `event: end` and
+                  `data: {"reason": "max_lifetime", "generation_id": "...",
+                  "trace_id": "..."}`; the generation keeps running and is read
+                  through `GET /generations/{generation_id}`.
+
+
                   The response headers are written before the provider is
                   called, so a failure cannot become a status code once the
                   stream is open. It arrives instead as a terminal
-                  `data: {"error": "..."}` frame carrying the same mapped
-                  message the non-streaming path returns in its `502` body
-                  (e.g. `Provider returned 404: ...`), and the stream then ends
-                  **without** a `[DONE]` — the absence of that sentinel is how a
-                  caller tells a truncated answer from a complete one. Chunks
-                  produced before the failure are still delivered, and the
-                  generation is recorded as `failed`.
+                  `data: {"error": {"code": "...", "message": "...", "meta": {...}}}`
+                  frame, the error the generation records (e.g.
+                  `AI_PROVIDER_ERROR`, `Provider returned 404: ...`), and the
+                  stream then ends **without** a `[DONE]`: the absence of that
+                  sentinel is how a caller tells a truncated answer from a
+                  complete one. Chunks produced before the failure are still
+                  delivered, and the generation is recorded as `failed`.
         '202':
           description: >-
             Generation accepted and running in the background (default, when

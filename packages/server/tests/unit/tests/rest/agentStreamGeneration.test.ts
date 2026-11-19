@@ -567,7 +567,14 @@ describe('Streamed agent generations', () => {
 
       expect(res.text).not.toContain('[DONE]');
       expect(framesOf(res.text).at(-1)).toEqual({
-        error: 'pause write failed',
+        error: {
+          code: 'GENERATION_FAILED',
+          message: 'pause write failed',
+          meta: {
+            generation_id: expect.stringMatching(/^gen_/),
+            trace_id: expect.any(String),
+          },
+        },
       });
       const generation = await settledGenerationOf(clientAgentId);
       expect(generation.status).toBe('failed');

@@ -16,6 +16,7 @@ import {
 } from 'src/lib/chats';
 import { buildSrn } from 'src/lib/iam';
 import { toProviderDomainError } from 'src/lib/providerError';
+import { serveSse, type SseFrame } from 'src/lib/sse';
 
 import {
   parsePagination,
@@ -240,8 +241,21 @@ const parseChatMessages = (messages: unknown): ChatMessageInput[] => {
   );
 };
 
+async function* chatFrames(
+  start: () => Promise<AsyncIterable<string>>
+): AsyncGenerator<SseFrame> {
+  try {
+    for await (const chunk of await start()) {
+      yield { data: { choices: [{ delta: { content: chunk } }] } };
+    }
+  } catch (error) {
+    throw toProviderDomainError(error) ?? error;
+  }
+}
+
 /**
- * Handles streaming chat completion response
+ * The `200` goes out before the provider is called, so an upstream rejection
+ * becomes the terminal error frame, never a status code.
  */
 const handleStreamingCompletion = async (args: {
   ctx: Context;
@@ -251,41 +265,21 @@ const handleStreamingCompletion = async (args: {
   model?: string;
   instructions?: string;
 }): Promise<void> => {
-  args.ctx.respond = false;
-  args.ctx.res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+  const authUser = args.ctx.authUser!;
+  await serveSse({
+    ctx: args.ctx,
+    frames: chatFrames(() => {
+      return streamChatCompletion({
+        aiProviderId: args.aiProviderId,
+        chatId: args.chatId,
+        messages: args.messages,
+        model: args.model,
+        instructions: args.instructions,
+        authUser,
+      });
+    }),
+    label: 'chats stream',
   });
-
-  try {
-    const textStream = await streamChatCompletion({
-      aiProviderId: args.aiProviderId,
-      chatId: args.chatId,
-      messages: args.messages,
-      model: args.model,
-      instructions: args.instructions,
-      authUser: args.ctx.authUser!,
-    });
-
-    for await (const chunk of textStream) {
-      args.ctx.res.write(
-        `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`
-      );
-    }
-
-    args.ctx.res.write('data: [DONE]\n\n');
-  } catch (error) {
-    // Headers went out with the `200` before the provider was called, so an
-    // upstream rejection can never become a status code — the terminal SSE
-    // event is the only place left to report it.
-    const mapped = toProviderDomainError(error) ?? error;
-    const message =
-      mapped instanceof Error ? mapped.message : 'Internal server error';
-    args.ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
-  } finally {
-    args.ctx.res.end();
-  }
 };
 
 chatsRouter.post('/chat/completions', async (ctx: Context) => {

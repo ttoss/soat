@@ -384,6 +384,14 @@ When `content.type` is `document` (`{ "type": "document", "document_id": "doc_ab
 
 `stream: true` returns Server-Sent Events, each step's output as generated; a completed stream ends with `data: [DONE]`.
 
+- A `: heartbeat` comment line is sent every 15 seconds, so an idle proxy keeps the connection open; SSE clients ignore comments.
+- A stream lasts at most 5 minutes. It then ends with an `end` event naming the generation, which keeps running; read its result through [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation):
+
+```
+event: end
+data: {"reason":"max_lifetime","generation_id":"gen_...","trace_id":"trace_..."}
+```
+
 A streamed turn that calls a `client` tool pauses as an unstreamed one does. Its last frame before `[DONE]` is the generation, in the same shape as the non-streaming response, and the turn resumes through [`POST /api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs):
 
 ```
@@ -395,10 +403,10 @@ REST/SDK/CLI only: the `create-agent-generation` tool (MCP client or an agent's 
 
 #### Upstream provider errors on a stream
 
-The `200` and headers are written before the model is called, so a provider failure arrives as a terminal frame carrying the non-streaming path's `502` message, and the stream ends without `[DONE]`:
+The `200` and headers are written before the model is called, so a provider failure arrives as a terminal frame carrying the error the generation records, the non-streaming path's `502` error without `hint` and `docs_url`, and the stream ends without `[DONE]`:
 
 ```
-data: {"error":"Provider returned 404: model \"gemini-2.0-flash\" not found"}
+data: {"error":{"code":"AI_PROVIDER_ERROR","message":"Provider returned 404: model \"gemini-2.0-flash\" not found","meta":{"generation_id":"gen_...","trace_id":"trace_..."}}}
 ```
 
 - No `[DONE]` means the stream did not complete; chunks produced before the failure are still delivered ahead of the error frame.
