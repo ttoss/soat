@@ -638,7 +638,7 @@ export const ERROR_CODES = {
   TOOL_HTTP_ERROR: {
     httpStatus: 502,
     description:
-      'An http-type tool call returned a non-2xx response. The error `meta` carries the real upstream status code, response body, URL, and method.',
+      "An http-type tool call or a builtin action returned a non-2xx response. For an http tool, the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url` and `tool_method`; for a builtin action, `tool_status_code`, `tool_action` (the operation id), `tool_method` and `tool_error` (the action's error object), and the message names the status, code and message the model is shown.",
   },
   TOOL_RESPONSE_TOO_LARGE: {
     httpStatus: 502,

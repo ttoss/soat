@@ -210,7 +210,7 @@ export const handoffFor = (args: {
       return withCallTimeout({
         promise,
         ms: toolCallTimeoutMs(),
-        label: `SOAT action '${args.def.name}'`,
+        label: `Builtin action '${args.def.name}'`,
       }).catch(async (error: unknown) => {
         const handedOff =
           key && call && isTimeoutError({ error })

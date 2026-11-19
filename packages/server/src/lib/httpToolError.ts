@@ -2,17 +2,12 @@ import { DomainError } from '../errors';
 import { isFetchFailure } from './providerError';
 
 /**
- * Thrown when a tool call's target responds with a non-2xx status: an
- * `http`-type tool's external endpoint, or a `soat`-type tool's loopback call
- * to this server's own REST API. `toHttpToolDomainError` (agentToolResolver)
- * maps it to a `TOOL_HTTP_ERROR` `DomainError` so the real upstream status
- * survives to the caller instead of a generic 500 — and so
- * `isRetriableError` can read `meta.tool_status_code` to tell a terminal 4xx
- * from a transient 5xx.
- *
- * It lives in its own module because both throw sites need it:
- * `agentToolResolver` (http) and `agentToolResolverExternalTools` (soat), and
- * the former imports the latter — importing it back would be a cycle.
+ * Thrown when an `http`-type tool's target responds with a non-2xx status.
+ * `toHttpToolDomainError` (agentToolResolver) maps it to a `TOOL_HTTP_ERROR`
+ * `DomainError` so the real upstream status survives to the caller instead of
+ * a generic 500, and so `isRetriableError` can read `meta.tool_status_code` to
+ * tell a terminal 4xx from a transient 5xx. A builtin action's failure is
+ * `builtinActionError`.
  */
 export class HttpToolError extends Error {
   status: number;

@@ -71,8 +71,8 @@ const refusedCall = async (generationId: string) => {
   expect(res.status).toBe(200);
   const [failed] = res.body.steps[0].tool_results;
   return {
-    status: failed.error.meta.status,
-    error: JSON.parse(failed.error.meta.body).error,
+    status: failed.error.meta.tool_status_code,
+    error: failed.error.meta.tool_error,
   };
 };
 
