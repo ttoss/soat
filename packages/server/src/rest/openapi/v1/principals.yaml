@@ -43,3 +43,19 @@ components:
         resource's work running under its own `policy_ids` when nobody
         started it, the id its own.
       example: user
+    ActingPrincipalType:
+      type: string
+      enum:
+        - user
+        - api_key
+        - trigger
+        - eval
+        - decider
+        - ingestion_rule
+        - memory_rule
+        - playbook_version
+      description: >-
+        The `PrincipalType` values a credential or stored work acts as, and so
+        every type a request naming the acting principal can carry (an
+        admission question's `principal.type`).
+      example: user

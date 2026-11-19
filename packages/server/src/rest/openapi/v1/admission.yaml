@@ -1,0 +1,97 @@
+openapi: 3.0.3
+info:
+  title: SOAT Admission
+  version: 1.0.0
+  description: >-
+    The protocol between the runtime and a deployment's admission service.
+    This file declares no paths: the runtime `POST`s an `AdmissionRequest`,
+    signed with `X-Soat-Signature`, to the service's own URL before a
+    declared write executes. A `2xx` admits the write, whatever its body; a
+    `4xx` carrying an `AdmissionRefusal` refuses it under that status and
+    code; any other answer refuses it with `502 ADMISSION_UNAVAILABLE`.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    AdmissionRequest:
+      type: object
+      required:
+        - action
+        - project_id
+        - resource_type
+        - resource_id
+        - body
+        - principal
+      properties:
+        action:
+          type: string
+          description: The runtime write action asked about.
+          example: triggers:CreateTrigger
+        project_id:
+          type: string
+          nullable: true
+          description: The project the write is in; `null` when it has none.
+          example: proj_V1StGXR8Z5jdHi6B
+        resource_type:
+          type: string
+          nullable: true
+          description: The resource type the write targets.
+          example: trigger
+        resource_id:
+          type: string
+          nullable: true
+          description: The resource an edit targets; `null` on a create.
+          example: null
+        body:
+          description: The write as it will be applied, in its wire shape.
+          example: { name: nightly, type: schedule, cron: '0 3 * * *' }
+        principal:
+          $ref: '#/components/schemas/AdmissionPrincipal'
+    AdmissionPrincipal:
+      type: object
+      required:
+        - type
+        - id
+      properties:
+        type:
+          $ref: './principals.yaml#/components/schemas/ActingPrincipalType'
+        id:
+          type: string
+          description: >-
+            The principal's own id: the user's (`user_…`), the key's
+            (`key_…`), the trigger's or the resource's.
+          example: user_V1StGXR8Z5jdHi6B
+      description: Who is writing.
+    AdmissionRefusal:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              pattern: '^[A-Za-z_][A-Za-z0-9_]{0,63}$'
+              description: >-
+                Relayed to the caller as sent; need not be an `ERROR_CODES`
+                key.
+              example: PLAN_LIMIT_REACHED
+            message:
+              type: string
+              description: Relayed to the caller as sent.
+              example: The plan allows 3 of these.
+            meta:
+              type: object
+              additionalProperties: true
+              description: Relayed to the caller as sent.
+              example: { limit: 3 }
+      description: >-
+        The body of a `4xx` answer that refuses the write. A `4xx` outside
+        this shape, or any answer over the runtime's answer size cap, is
+        `502 ADMISSION_UNAVAILABLE`.

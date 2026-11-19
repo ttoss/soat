@@ -43,9 +43,17 @@ export type AuthorityCap =
   | { kind: 'scope'; scope: string | null }
   | { kind: 'bound'; bound: PrincipalBound; by: DeniedPrincipal };
 
+/**
+ * Every type a credential or stored work acts as, `ActingPrincipalType` in
+ * `principals.yaml`; `principalFieldContract.test.ts` holds the two equal.
+ */
+export const ACTING_PRINCIPAL_TYPES: readonly (
+  'user' | 'api_key' | 'trigger' | ResourceGrantPrincipalType
+)[] = ['user', 'api_key', 'trigger', ...RESOURCE_GRANT_PRINCIPAL_TYPES];
+
 /** The principal that acts: what records credit and refusals name. */
 export type ActingPrincipal = {
-  type: 'user' | 'api_key' | 'trigger' | ResourceGrantPrincipalType;
+  type: (typeof ACTING_PRINCIPAL_TYPES)[number];
   id: string;
 };
 
@@ -214,19 +222,18 @@ const parseCaps = (value: unknown): AuthorityCap[] | null => {
   return caps;
 };
 
-const ACTING_TYPES = new Set<string>([
-  'user',
-  'api_key',
-  'trigger',
-  ...RESOURCE_GRANT_PRINCIPAL_TYPES,
-]);
+const isActingPrincipalType = (
+  value: unknown
+): value is ActingPrincipal['type'] => {
+  return ACTING_PRINCIPAL_TYPES.some((type) => {
+    return type === value;
+  });
+};
 
 const parsePrincipal = (value: unknown): ActingPrincipal | null => {
   if (!isPlainObject(value) || !str(value.id)) return null;
-  if (typeof value.type !== 'string' || !ACTING_TYPES.has(value.type)) {
-    return null;
-  }
-  return { type: value.type as ActingPrincipal['type'], id: value.id };
+  if (!isActingPrincipalType(value.type)) return null;
+  return { type: value.type, id: value.id };
 };
 
 const parseActsFor = (value: unknown): WorkAuthority['actsFor'] | undefined => {

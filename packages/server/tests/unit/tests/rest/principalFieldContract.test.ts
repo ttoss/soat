@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { load } from 'js-yaml';
 import { PRINCIPAL_TYPES } from 'src/lib/principals';
+import { ACTING_PRINCIPAL_TYPES } from 'src/lib/workAuthority';
 
 /**
  * Who did a thing is one shape on every record: a `<verb>_by_principal_type`
@@ -167,5 +168,22 @@ describe('who did it is one shape', () => {
       type: 'string',
       enum: [...PRINCIPAL_TYPES],
     });
+  });
+
+  test('the acting enum is every type a credential or work acts as', () => {
+    const spec = load(
+      readFileSync(join(SPECS_DIR, 'principals.yaml'), 'utf-8')
+    ) as { components: { schemas: Record<string, unknown> } };
+
+    expect(spec.components.schemas.ActingPrincipalType).toMatchObject({
+      type: 'string',
+      enum: [...ACTING_PRINCIPAL_TYPES],
+    });
+    const recorded = new Set<string>(PRINCIPAL_TYPES);
+    expect(
+      ACTING_PRINCIPAL_TYPES.filter((type) => {
+        return !recorded.has(type);
+      })
+    ).toEqual([]);
   });
 });

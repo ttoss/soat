@@ -124,8 +124,11 @@ const unavailable = (args: { action: string; detail: string }): DomainError => {
   );
 };
 
-/** The grammar `AdmissionRefused` documents for a relayed `code`. */
-const CODE_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+/**
+ * `AdmissionRefusal.error.code`'s pattern in `admission.yaml`;
+ * `admission.test.ts` holds the two equal.
+ */
+export const REFUSAL_CODE_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 
 type ServiceRefusal = {
   code: string;
@@ -144,7 +147,7 @@ const readRefusal = (raw: string): ServiceRefusal | null => {
   const error = isObjectRecord(parsed) ? parsed.error : undefined;
   if (!isObjectRecord(error)) return null;
   const { code, message, meta } = error;
-  if (typeof code !== 'string' || !CODE_PATTERN.test(code)) return null;
+  if (typeof code !== 'string' || !REFUSAL_CODE_PATTERN.test(code)) return null;
   if (typeof message !== 'string') return null;
   if (meta !== undefined && !isObjectRecord(meta)) return null;
   return { code, message, ...(meta === undefined ? {} : { meta }) };
