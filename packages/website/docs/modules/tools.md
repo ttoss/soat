@@ -593,6 +593,8 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 
 [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) invokes a tool without an agent. Body: `action` (required for `builtin` and `mcp`; ignored for `pipeline`), `input` (the pipeline input for `pipeline`), `tool_context`. With an `output_mapping` the response is its result ([Output Mapping](#output-mapping)).
 
+On a `builtin` tool without a body `action`, an `action` in `input` or `preset_parameters` selects the action and is not sent to it. With a body `action`, an input `action` reaches only an action that declares one: a tool binding `call-tool` takes `{ "action": "call-tool", "input": { "action": "list-agents" } }` and runs its target's `list-agents`.
+
 - A target neither publicly routable nor in `TOOL_EGRESS_ALLOWED_HOSTS` is `403 TOOL_EGRESS_BLOCKED` before any connection is opened — [Where a Tool May Reach](#where-a-tool-may-reach-egress).
 - A non-2xx target response is `502 TOOL_HTTP_ERROR`; error `meta` carries `tool_status_code`, `tool_response_body` (cut to [`TOOL_RESPONSE_MAX_BYTES`](#configuration)), `tool_url` and `tool_method`.
 - A 2xx body over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is `502 TOOL_RESPONSE_TOO_LARGE`, in either `response_mode`, refused while it streams.

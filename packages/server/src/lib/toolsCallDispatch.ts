@@ -12,7 +12,7 @@ import {
 } from './agentToolResolver';
 import { executeSoatTool } from './agentToolResolverExternalTools';
 import { buildMcpToolExecute } from './agentToolResolverMcp';
-import { findBuiltinAction } from './builtinActionCatalog';
+import { type BuiltinAction, findBuiltinAction } from './builtinActionCatalog';
 import { callAddedBuiltinAction } from './builtinAddedActions';
 import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
 import { McpToolError } from './mcpProtocol';
@@ -80,6 +80,23 @@ export const callHttpTool = (
   });
 };
 
+/**
+ * The input an action is sent. An input `action` that selected the action is
+ * consumed; otherwise it reaches the action only when the action declares
+ * `action` itself, as `call-tool` does for its target's action.
+ */
+const actionInput = (args: {
+  found: BuiltinAction;
+  input: Record<string, unknown>;
+  selectedByInput: boolean;
+}): Record<string, unknown> => {
+  const { action: _action, ...rest } = args.input;
+  void _action;
+  if (args.selectedByInput || args.found.kind !== 'native') return rest;
+  const properties = args.found.def.inputSchema.properties;
+  return properties && Object.hasOwn(properties, 'action') ? args.input : rest;
+};
+
 export const callSoatTool = async (
   tool: CallableToolDefinition,
   args: {
@@ -92,15 +109,11 @@ export const callSoatTool = async (
   }
 ): Promise<unknown> => {
   const { authority } = args;
-  // Support presetParameters.action as a fallback when no explicit action is given.
-  const action =
-    args.action ??
-    (typeof args.mergedInput['action'] === 'string'
+  const inputAction =
+    typeof args.mergedInput['action'] === 'string'
       ? args.mergedInput['action']
-      : undefined);
-  // Strip 'action' from the inputs so it is not forwarded as a tool parameter.
-  const { action: _action, ...mergedInput } = args.mergedInput;
-  void _action;
+      : undefined;
+  const action = args.action ?? inputAction;
   if (!action) {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -120,6 +133,11 @@ export const callSoatTool = async (
       `action "${action}" is not a known SOAT action.`
     );
   }
+  const mergedInput = actionInput({
+    found,
+    input: args.mergedInput,
+    selectedByInput: args.action === undefined,
+  });
   if (found.kind === 'added') {
     return callAddedBuiltinAction({
       url: found.url,
