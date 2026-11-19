@@ -315,9 +315,11 @@ components:
       nullable: true
       description: >-
         The callback the provider redirects to, as registered with the
-        provider. `null` is this server's own
-        `{SOAT_BASE_URL}/api/v1/oauth-connections/callback`; a front end that
-        receives the redirect itself forwards `code` and `state` there.
+        provider. Absent on create, or `null`, it is the deployment's
+        `OAUTH_DEFAULT_REDIRECT_URI` when set, else stored `null`: this
+        server's own `{SOAT_BASE_URL}/api/v1/oauth-connections/callback`. A
+        front end that receives the redirect itself forwards `code` and
+        `state` there.
       example: https://app.example.com/oauth/callback
     AuthorizeParams:
       type: object
