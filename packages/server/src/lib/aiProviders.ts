@@ -49,6 +49,7 @@ const mapAiProvider = (instance: AiProviderRow) => {
     config: instance.config ?? undefined,
     model_aliases: instance.modelAliases ?? {},
     model_aliases_only: instance.modelAliasesOnly,
+    require_priced_model: instance.requirePricedModel,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
@@ -139,6 +140,7 @@ export const createAiProvider = async (args: {
   config?: Record<string, unknown>;
   modelAliases?: Record<string, string>;
   modelAliasesOnly?: boolean;
+  requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   await assertEndpointSecretUse(args);
@@ -170,6 +172,7 @@ export const createAiProvider = async (args: {
     config: args.config ?? null,
     modelAliases: args.modelAliases ?? null,
     modelAliasesOnly: args.modelAliasesOnly ?? false,
+    requirePricedModel: args.requirePricedModel ?? false,
   });
   return mapAiProvider(await aiProviders.reload(instance));
 };
@@ -183,6 +186,7 @@ type AiProviderFieldUpdates = {
   config?: Record<string, unknown> | null;
   modelAliases?: Record<string, string> | null;
   modelAliasesOnly?: boolean;
+  requirePricedModel?: boolean;
 };
 
 const applyAiProviderFields = (args: {
@@ -203,6 +207,8 @@ const applyAiProviderFields = (args: {
     instance.modelAliases = args.fields.modelAliases;
   if (args.fields.modelAliasesOnly !== undefined)
     instance.modelAliasesOnly = args.fields.modelAliasesOnly;
+  if (args.fields.requirePricedModel !== undefined)
+    instance.requirePricedModel = args.fields.requirePricedModel;
 };
 
 export const updateAiProvider = async (args: {
@@ -215,6 +221,7 @@ export const updateAiProvider = async (args: {
   config?: Record<string, unknown> | null;
   modelAliases?: Record<string, string> | null;
   modelAliasesOnly?: boolean;
+  requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   const instance = await aiProviders.findByPublicId({ id: args.id });

@@ -99,6 +99,10 @@ export class AiProvider extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare modelAliasesOnly: boolean;
 
+  /** Refuse a generation on this provider whose model no price row covers. */
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare requirePricedModel: boolean;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

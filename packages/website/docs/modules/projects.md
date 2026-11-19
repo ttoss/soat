@@ -163,7 +163,9 @@ The route must belong to the project. An explicit binding always wins. Repointin
 ### Priced models
 
 `require_priced_model` refuses a generation whose model no price row covers,
-before the provider is called:
+before the provider is called. On the project it holds every provider; on an
+[AI provider](./ai-providers.md#requiring-a-priced-model) it holds that
+provider alone, and a candidate is checked when either flag holds it:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -348,7 +350,7 @@ A deleted formation and a usage event with no `cost_usd` (or a zero one) are not
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
 | `409`  | `{ "error": { "code": "PROJECT_PAUSED" } }` | Starting work — a generation, run, eval run, tool call or trigger fire — or resuming a run or task in a paused project | Resume the project once whatever paused it is resolved; `error.meta.pause_reason` says why — see [Pausing a project](#pausing-a-project) |
 | `409`  | `{ "error": { "code": "PROJECT_NOT_PAUSED" } }` | Resuming a project that is not paused | Nothing to do; `paused_at` is `null` |
-| `409`  | `{ "error": { "code": "MODEL_NOT_PRICED" } }` | A generation on a project with `require_priced_model` whose model carries no price row | Price the `(provider, model, component)` rows in `error.meta.unpriced_rows`, or set `require_priced_model` to `false` — see [Priced models](#priced-models) |
+| `409`  | `{ "error": { "code": "MODEL_NOT_PRICED" } }` | A generation whose project or provider has `require_priced_model` and whose model carries no price row | Price the `(provider, model, component)` rows in `error.meta.unpriced_rows`, or set `require_priced_model` to `false` — see [Priced models](#priced-models) |
 | `403`  | `{ "error": { "code": "POLICY_GRANT_NOT_HELD" } }` | Setting `agent_policy_ids` to a policy granting what the caller does not hold | Use a caller holding every grant, or narrower policies — see [Project agent cap](#project-agent-cap) |
 | `400`  | `{ "error": { "code": "POLICY_NOT_FOUND" } }` | `agent_policy_ids` names a policy that does not exist | Check the policy ids |
 | `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |

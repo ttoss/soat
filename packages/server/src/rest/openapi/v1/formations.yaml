@@ -1061,6 +1061,9 @@ components:
         model_aliases_only:
           type: boolean
           description: When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).
+        require_priced_model:
+          type: boolean
+          description: When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project.
 
     ToolResourceProperties:
       description: >-

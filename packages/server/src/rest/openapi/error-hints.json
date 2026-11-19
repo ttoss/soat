@@ -492,7 +492,7 @@
     },
     "MODEL_NOT_PRICED": {
       "http_status": 409,
-      "hint": "Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `PUT /api/v1/usage/prices`, or for one provider instance with `PUT /api/v1/ai-providers/{ai_provider_id}/prices`. To run unpriced models again, set `require_priced_model` to `false` with `PATCH /api/v1/projects/{project_id}`.",
+      "hint": "Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `PUT /api/v1/usage/prices`, or for one provider instance with `PUT /api/v1/ai-providers/{ai_provider_id}/prices`. To run unpriced models again, set `require_priced_model` to `false` with `PATCH /api/v1/projects/{project_id}` or `PATCH /api/v1/ai-providers/{ai_provider_id}`, whichever set it.",
       "routes": [
         {
           "method": "PUT",
@@ -505,6 +505,10 @@
         {
           "method": "PATCH",
           "path": "/projects/{project_id}"
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai-providers/{ai_provider_id}"
         }
       ]
     },

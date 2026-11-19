@@ -92,6 +92,9 @@ paths:
                             model_aliases_only:
                               type: boolean
                               description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                            require_priced_model:
+                              type: boolean
+                              description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
                             project_id:
                               x-soat-ref: projects
                               type: string
@@ -209,6 +212,10 @@ paths:
                   type: boolean
                   default: false
                   description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                require_priced_model:
+                  type: boolean
+                  default: false
+                  description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
       responses:
         '201':
           description: AI provider created successfully
@@ -233,6 +240,9 @@ paths:
                   model_aliases_only:
                     type: boolean
                     description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                  require_priced_model:
+                    type: boolean
+                    description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
                   project_id:
                     x-soat-ref: projects
                     type: string
@@ -327,6 +337,9 @@ paths:
                   model_aliases_only:
                     type: boolean
                     description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                  require_priced_model:
+                    type: boolean
+                    description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
                   created_at:
                     type: string
                     format: date-time
@@ -422,6 +435,9 @@ paths:
                 model_aliases_only:
                   type: boolean
                   description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                require_priced_model:
+                  type: boolean
+                  description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
       responses:
         '200':
           description: AI provider updated successfully
