@@ -60,7 +60,9 @@ export const DECLARATIONS: Record<string, Declaration[]> = {
         model: 'gpt-4o',
         tool_bindings: [{ tool_id: fx.converterToolId }],
         max_steps: 10,
-        stop_conditions: [{ type: 'has_tool_call', tool_name: 'done' }],
+        stop_conditions: [
+          { type: 'has_tool_call', tool_name: fx.converterToolName },
+        ],
         active_tool_ids: [fx.converterToolId],
         guardrail_ids: [fx.guardrailId],
         step_rules: [{ step: 1, active_tool_ids: [fx.converterToolId] }],
