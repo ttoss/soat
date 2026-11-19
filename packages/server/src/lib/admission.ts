@@ -20,6 +20,7 @@ import { listWriteActions } from './openapiSpec';
 import type { RequestPrincipal } from './principals';
 import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
 import { isTimeoutError } from './timeoutError';
+import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:admission');
 
@@ -114,6 +115,8 @@ export type AdmissionRequest = {
   /** The write as it will be applied. */
   body: unknown;
   principal: RequestPrincipal;
+  /** Whom the credential acts for (`actsForOf`), beside the principal acting. */
+  actsFor: WorkAuthority['actsFor'];
 };
 
 const unavailable = (args: { action: string; detail: string }): DomainError => {
@@ -180,6 +183,7 @@ const wireBody = (request: AdmissionRequest): string => {
       type: request.principal.principalType,
       id: request.principal.principalId,
     },
+    acts_for: request.actsFor,
   });
 };
 

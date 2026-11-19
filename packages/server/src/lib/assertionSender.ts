@@ -6,7 +6,7 @@ import type { AssertionAuthority, AssertionCap } from './assertionAuthority';
 import type { DeniedPrincipal } from './authorizationDenial';
 import type { PolicySets } from './iam';
 import { authUserUnder, turnAuthority } from './turnAuthority';
-import type { WorkAuthority } from './workAuthority';
+import { actsForOf, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:assertionSender');
 
@@ -93,8 +93,7 @@ export const resolveSenderAuthority = async (args: {
   const credentialCaps = credential
     ? await credential.getLabeledPolicies(projectPublicId)
     : [];
-  const principal =
-    credential?.iamToken?.principal ?? credential?.onBehalfOfPrincipal;
+  const principal = actsForOf(credential);
   log(
     'resolveSenderAuthority: project=%s credential=%s',
     projectPublicId,

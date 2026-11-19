@@ -134,6 +134,7 @@ describe('assertAdmitted', () => {
         targetId: null,
         body: {},
         principal: { principalType: 'user', principalId: 'usr_1' },
+        actsFor: null,
       })
     ).rejects.toMatchObject({
       code: 'ADMISSION_UNAVAILABLE',
@@ -154,6 +155,7 @@ describe('assertAdmitted', () => {
         targetId: null,
         body: {},
         principal: { principalType: 'user', principalId: 'usr_1' },
+        actsFor: null,
       })
     ).rejects.toMatchObject({
       code: 'ADMISSION_UNAVAILABLE',

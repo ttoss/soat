@@ -3,6 +3,7 @@ import { assertAdmitted, isAdmissionDeclared } from '../lib/admission';
 import { getOperationIam, matchOpenApiPath } from '../lib/openapiSpec';
 import { wrapIsAllowed } from '../lib/permissions';
 import { principalFromAuthUser } from '../lib/principals';
+import { actsForOf } from '../lib/workAuthority';
 
 type Next = () => Promise<void>;
 
@@ -44,6 +45,7 @@ const buildGate = (args: {
       targetId: resourceIdOf(allowed.resource),
       body: args.ctx.request.body ?? null,
       principal: principalFromAuthUser(args.authUser),
+      actsFor: actsForOf(args.authUser),
     });
   };
 };

@@ -151,6 +151,39 @@ describe('admission — a declared write is asked about before it executes', () 
         resource_id: null,
         body: { cron: '0 8 * * *', target_id: agentId },
         principal: { type: 'user' },
+        acts_for: null,
+      });
+    });
+
+    test('names the principal an IAM token acts for beside the key that minted it', async () => {
+      const policyId = await turn.createPolicy({
+        statement: [{ effect: 'Allow', action: ['*'] }],
+      });
+      const keyRes = await turn
+        .api()
+        .post('/api/v1/api-keys')
+        .send({
+          name: turn.unique('key'),
+          project_id: turn.projectId,
+          policy_ids: [policyId],
+        });
+      expect(keyRes.status).toBe(201);
+      const tokenRes = await authenticatedTestClient(keyRes.body.key)
+        .post('/api/v1/iam/tokens')
+        .send({
+          policy: { statement: [{ effect: 'Allow', action: ['*'] }] },
+          principal: { type: 'mcp_key', id: 'mck_1' },
+        });
+      expect(tokenRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(tokenRes.body.token)
+        .post('/api/v1/triggers')
+        .send({ project_id: turn.projectId, ...scheduleTrigger('0 8 * * *') });
+
+      expect(res.status).toBe(201);
+      expect(service.asked[0].body).toMatchObject({
+        principal: { type: 'api_key', id: keyRes.body.id },
+        acts_for: { type: 'mcp_key', id: 'mck_1' },
       });
     });
 

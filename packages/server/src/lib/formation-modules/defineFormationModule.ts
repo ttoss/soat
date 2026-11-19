@@ -29,6 +29,7 @@ import type {
 import { nullableFields } from '../openapiSchemaFields';
 import { findProjectPublicId } from '../projects';
 import type { StoredError } from '../storedError';
+import { actsForOf } from '../workAuthority';
 import type { ModuleOpenApiSpec } from './formationSpecLoader';
 import {
   isObjectRecord,
@@ -306,6 +307,7 @@ const admitWrite = async (args: {
     targetId: args.resourceId,
     body: args.properties,
     principal: args.actor.author,
+    actsFor: actsForOf(args.actor),
   });
 };
 

@@ -258,11 +258,12 @@ A deployment that gates runtime writes for its own reasons (a plan limit, a cap)
   "resource_type": "trigger",
   "resource_id": null,
   "body": { "name": "nightly", "type": "schedule", "cron": "0 3 * * *" },
-  "principal": { "type": "user", "id": "user_..." }
+  "principal": { "type": "user", "id": "user_..." },
+  "acts_for": null
 }
 ```
 
-`project_id` is the project the write lands in: the one the request names, else a project-scoped credential's own. `resource_id` names the resource an edit targets (`null` on a create); `body` is the write as it will be applied: the request body, or a formation resource's properties once resolved.
+`project_id` is the project the write lands in: the one the request names, else a project-scoped credential's own. `resource_id` names the resource an edit targets (`null` on a create); `body` is the write as it will be applied: the request body, or a formation resource's properties once resolved. `principal` is who acts (an IAM token's minting key, `api_key`); `acts_for` is whom the credential acts for: an IAM token's `principal`, else the principal an assertion names, `null` when neither.
 
 - A `2xx` admits the write.
 - A `4xx` with `{ "error": { "code", "message", "meta"? } }` refuses it: the caller receives that status, `code`, `message` and `meta` as sent, on every write the service can be asked about (each documents it as its `4XX` response). `code` is any identifier matching `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, so a service's own lowercase codes pass unchanged.

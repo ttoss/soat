@@ -326,6 +326,18 @@ export const requireWorkAuthority = (args: {
 };
 
 /**
+ * The principal a credential acts for: an IAM token's `principal`, else the
+ * principal an assertion names. Null when it acts only for itself.
+ */
+export const actsForOf = (
+  credential: Pick<AuthUser, 'iamToken' | 'onBehalfOfPrincipal'> | undefined
+): WorkAuthority['actsFor'] => {
+  return (
+    credential?.iamToken?.principal ?? credential?.onBehalfOfPrincipal ?? null
+  );
+};
+
+/**
  * The authority work a request starts stores: the request's stated terms,
  * pinned to the work's project, carrying on the chain the request belongs to.
  * Null without a caller.
@@ -344,8 +356,7 @@ export const captureAuthority = (args: {
     principal: terms.principal,
     trigger: authUser.work?.trigger ?? null,
     work: authUser.work?.work ?? null,
-    actsFor:
-      authUser.iamToken?.principal ?? authUser.onBehalfOfPrincipal ?? null,
+    actsFor: actsForOf(authUser),
   };
 };
 
