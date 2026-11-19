@@ -1,4 +1,5 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
+import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
@@ -23,10 +24,13 @@ import {
   createGenerationProvenance,
   trackGenerationProvenance,
 } from './generationProvenance';
-import { generations, updateGenerationRecord } from './generations';
+import { createGenerationRecord, generations } from './generations';
+import { settleGeneration } from './generationSettle';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
 import type { WorkAuthority } from './workAuthority';
+
+const log = createDebug('soat:generation');
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
 
@@ -92,55 +96,81 @@ const GUARD_MESSAGES: Record<GuardKind, string> = {
 /**
  * A turn refused before the provider is called: the trace records why, and the
  * caller gets a completed result rather than an error, because a refusal is the
- * platform working as intended. No generation row is written — the id never
- * reached `createGenerationRecord`.
+ * platform working as intended. The refused turn gets a row that settles at
+ * once, so its handle resolves like any other generation's. The row joins no
+ * chain: a member would count against the budget and conclude the chain.
  */
-const buildGuardResult = (args: {
+const buildGuardResult = async (args: {
   kind: GuardKind;
   traceId: string;
   projectId: number;
   projectPublicId: string;
   agentId: string;
   generationId: string;
+  authority: WorkAuthority | null;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
-}): GenerationResult => {
-  saveTrace({
-    traceId: args.traceId,
+}): Promise<GenerationResult> => {
+  const message = GUARD_MESSAGES[args.kind];
+  const recorded = await createGenerationRecord({
+    publicId: args.generationId,
     projectId: args.projectId,
-    projectPublicId: args.projectPublicId,
     agentId: args.agentId,
-    generationId: args.generationId,
-    steps: [{ type: args.kind, message: GUARD_MESSAGES[args.kind] }],
+    traceId: args.traceId,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
-  }).catch(
-    // Fire-and-forget; forcing a real failure here would require a
-    // genuinely broken DB write, and mocking saveTrace to fake one would
-    // violate the "never mock what you own" boundary policy.
-    /* istanbul ignore next */ () => {}
+    authority: args.authority,
+    actsAsAgent: null,
+  }).then(
+    () => {
+      return true;
+    },
+    (error: unknown) => {
+      log('buildGuardResult: record failed %s %o', args.generationId, error);
+      return false;
+    }
   );
-  updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'completed',
-    completedAt: new Date(),
-    stopReason: args.kind,
-  }).catch(/* istanbul ignore next -- see saveTrace above */ () => {});
+  const saveGuardTrace = () => {
+    return saveTrace({
+      traceId: args.traceId,
+      projectId: args.projectId,
+      projectPublicId: args.projectPublicId,
+      agentId: args.agentId,
+      generationId: args.generationId,
+      steps: [{ type: args.kind, message }],
+      parentTraceId: args.parentTraceId ?? null,
+      rootTraceId: args.rootTraceId ?? null,
+    });
+  };
+  if (recorded) {
+    await settleGeneration({
+      generationId: args.generationId,
+      fence: 'lease',
+      outcome: {
+        status: 'completed',
+        stopReason: args.kind,
+        assistantContent: message,
+      },
+      effects: () => {
+        return [saveGuardTrace()];
+      },
+    });
+  } else {
+    await saveGuardTrace().catch(
+      /* istanbul ignore next -- a broken trace write is logged by saveTrace */ () => {}
+    );
+  }
   return {
     id: args.generationId,
     traceId: args.traceId,
     status: 'completed',
-    output: {
-      model: '',
-      content: GUARD_MESSAGES[args.kind],
-      finishReason: 'stop',
-    },
+    output: { model: '', content: message, finishReason: 'stop' },
   };
 };
 
 export const buildDepthGuardResult = (
   args: Omit<Parameters<typeof buildGuardResult>[0], 'kind'>
-): GenerationResult => {
+): Promise<GenerationResult> => {
   return buildGuardResult({ ...args, kind: 'depth_guard' });
 };
 
@@ -151,7 +181,7 @@ export const buildDepthGuardResult = (
  */
 export const buildChainGuardResult = (
   args: Omit<Parameters<typeof buildGuardResult>[0], 'kind'>
-): GenerationResult => {
+): Promise<GenerationResult> => {
   return buildGuardResult({ ...args, kind: 'chain_limit' });
 };
 
@@ -165,6 +195,7 @@ export const buildDepthGuardIfExhausted = async (args: {
   runProjectId?: number;
   maxDepth: number;
   traceId: string;
+  authority: WorkAuthority | null;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
 }): Promise<GenerationResult | null> => {
@@ -187,6 +218,7 @@ export const buildDepthGuardIfExhausted = async (args: {
     projectPublicId: depthAgent.project.publicId,
     agentId: args.agentId,
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    authority: args.authority,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
   });

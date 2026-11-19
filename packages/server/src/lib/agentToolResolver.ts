@@ -658,6 +658,7 @@ const sendHttpToolRequest = async (
     toolArgs: unknown;
     toolContext?: Record<string, string>;
     markSent: (sent: SentToolCall) => void;
+    signal?: AbortSignal;
   }
 ): Promise<unknown> => {
   const { toolArgs, toolContext } = args;
@@ -700,14 +701,15 @@ const sendHttpToolRequest = async (
     // Last, over the final request: SigV4 signs a hash of exactly what goes
     // on the wire, so nothing may be added after this point. Egress is
     // checked on the resolved address and every redirect hop (toolEgress.ts).
+    const signed = await withHttpToolAuth({
+      resolved,
+      method,
+      init,
+      identity: authIdentity({ call: args, toolContext }),
+    });
     const response = await fetchWithEgressGuard(
       resolved.fetchUrl,
-      await withHttpToolAuth({
-        resolved,
-        method,
-        init,
-        identity: authIdentity({ call: args, toolContext }),
-      }),
+      { ...signed, signal: args.signal },
       {
         onRequest: () => {
           args.markSent({ input: rawArgs });
@@ -733,7 +735,7 @@ export const buildHttpToolExecute = (
   args: HttpToolExecuteArgs,
   toolContext?: Record<string, string>
 ) => {
-  return (toolArgs: unknown) => {
+  return (toolArgs: unknown, options?: { abortSignal?: AbortSignal }) => {
     return meterToolExecution({
       meter: args.meter,
       send: (markSent) => {
@@ -742,6 +744,7 @@ export const buildHttpToolExecute = (
           toolArgs,
           toolContext,
           markSent,
+          signal: options?.abortSignal,
         });
       },
     });

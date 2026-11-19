@@ -29,8 +29,34 @@ export type ResolvedToolSurface = {
 };
 
 /**
- * A denial thrown inside any tool reaches the model as the tool result a
- * refusal answers, with its `code` and `meta`, not the AI SDK's error string.
+ * Settles with `run`, or rejects with the signal's reason once it aborts, so a
+ * tool that ignores the signal still stops holding the turn.
+ */
+const untilAborted = <T>(args: {
+  run: () => PromiseLike<T> | T;
+  signal: AbortSignal | undefined;
+}): Promise<T> => {
+  const { signal } = args;
+  if (!signal) return Promise.resolve(args.run());
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve()
+      .then(args.run)
+      .then(resolve, reject)
+      .finally(() => {
+        signal.removeEventListener('abort', onAbort);
+      });
+  });
+};
+
+/**
+ * Every tool runs under the segment's abort signal. A denial thrown inside any
+ * tool reaches the model as the tool result a refusal answers, with its `code`
+ * and `meta`, not the AI SDK's error string.
  */
 const relayDenialsAsResults = (args: {
   tools: Record<string, Tool>;
@@ -45,7 +71,12 @@ const relayDenialsAsResults = (args: {
           ...resolved,
           execute: async (...executeArgs: Parameters<typeof execute>) => {
             try {
-              return await execute(...executeArgs);
+              return await untilAborted({
+                run: () => {
+                  return execute(...executeArgs);
+                },
+                signal: executeArgs[1]?.abortSignal,
+              });
             } catch (error) {
               if (isAuthorizationDenial(error)) return denialToolResult(error);
               throw error;

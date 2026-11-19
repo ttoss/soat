@@ -66,6 +66,7 @@ const dispatchGeneration = (args: {
       toolContext: args.ctx.toolContext ?? null,
       remainingDepth: args.ctx.remainingDepth ?? null,
       provenance: args.ctx.provenance,
+      abortSignal: args.abortSignal,
     });
   }
   return runNonStreamGeneration({
@@ -320,27 +321,15 @@ const prepareGeneration = async (
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
   const depthGuard = await buildDepthGuardIfExhausted({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    runProjectId: args.runProjectId,
+    ...args,
     maxDepth,
     traceId,
-    parentTraceId: args.parentTraceId,
-    rootTraceId: args.rootTraceId,
   });
   if (depthGuard) return { kind: 'short_circuit', result: depthGuard };
 
   // A declared initiator is what makes a turn a continuation: its lineage and
   // its budget are both resolved from that one field.
-  const chain = await resolveChainOrRefuse({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    runProjectId: args.runProjectId,
-    initiatorGenerationId: args.initiatorGenerationId,
-    traceId,
-    parentTraceId: args.parentTraceId,
-    rootTraceId: args.rootTraceId,
-  });
+  const chain = await resolveChainOrRefuse({ ...args, traceId });
   if (chain.kind === 'refused') {
     return { kind: 'short_circuit', result: chain.result };
   }

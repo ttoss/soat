@@ -8,10 +8,10 @@ import {
   toAgentConfig,
   type TypedAgent,
 } from './agentGenerationTypes';
-import { emitGenerationEvent } from './generationEvents';
+import type { GenerationRequiredActionWire } from './generationEvents';
 import { recordSegmentUsage } from './generationLifecycle';
 import type { GenerationProvenance } from './generationProvenance';
-import { updateGenerationRecord } from './generations';
+import { settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
@@ -160,6 +160,7 @@ const storePendingGenerationState = (args: {
   remainingDepth?: number | null;
   aiProviderId: string | null;
   provenance: GenerationProvenance;
+  requiredAction: GenerationRequiredActionWire;
 }): Promise<unknown> => {
   // Computed once rather than twice below, so a change to how a turn is frozen
   // cannot land on only one copy and leave a recovered generation resuming from
@@ -210,16 +211,17 @@ const storePendingGenerationState = (args: {
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
   };
-  // `pendingState`'s own column, not `metadata: { pendingState }` — that
-  // replaced the whole bag, so every generation pausing for a client tool lost
-  // its attribution and metered unattributed. Awaited with the status: a
-  // submission claims the pause by its status, so it must land before the
-  // caller can answer.
-  return updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'requires_action',
-    lastActivityAt: new Date(),
-    pendingState,
+  // Its own column: `metadata` is the caller's bag. Awaited: a submission
+  // claims the pause by its status, so it must land before the caller can
+  // answer.
+  return settleGeneration({
+    generationId: args.generationId,
+    fence: 'lease',
+    outcome: {
+      status: 'requires_action',
+      pendingState,
+      requiredAction: args.requiredAction,
+    },
   });
 };
 
@@ -264,8 +266,6 @@ export const savePendingGeneration = async (args: {
     typedAgent: args.typedAgent,
   });
 
-  await storePendingGenerationState({ ...args, aiProviderId });
-
   const requiredAction: NonNullable<GenerationResult['requiredAction']> = {
     type: 'submit_tool_outputs',
     toolCalls: args.pendingToolCalls.map((tc) => {
@@ -284,38 +284,13 @@ export const savePendingGeneration = async (args: {
     requiredAction,
   };
 
-  await emitGenerationEvent({
-    type: 'generations.requires_action',
-    projectId: args.typedAgent.project.id as number,
-    generationId: args.generationId,
+  await storePendingGenerationState({
+    ...args,
+    aiProviderId,
     requiredAction: mapGenerationRequiredAction(requiredAction),
   });
 
   return requiresActionResult;
-};
-
-/**
- * The terminal record write for a completed turn. A failed status write must
- * not fail the generation, whose result is already built.
- */
-const markGenerationCompleted = async (args: {
-  generationId: string;
-  finishReason: string;
-  stepCount: number;
-  maxSteps: unknown;
-}): Promise<void> => {
-  await updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'completed',
-    completedAt: new Date(),
-    stopReason: resolveStopReason({
-      finishReason: args.finishReason,
-      stepCount: args.stepCount,
-      maxSteps: args.maxSteps,
-    }),
-  }).catch(() => {
-    return null;
-  });
 };
 
 // A turn that completed in one `generateText` call is one metered segment.
@@ -392,13 +367,6 @@ export const buildCompletedGenerationResult = async (args: {
     outputSchema: args.typedAgent.outputSchema,
     generationId: args.generationId,
   });
-  await markGenerationCompleted({
-    generationId: args.generationId,
-    finishReason: args.result.finishReason,
-    stepCount: serializedStepsCompleted.length,
-    maxSteps: args.typedAgent.maxSteps,
-  });
-
   const reportedModelId = args.result.response.modelId;
   const model = servedModelName({ model: args.model, reportedModelId });
 
@@ -418,13 +386,25 @@ export const buildCompletedGenerationResult = async (args: {
     },
   };
 
-  await meterCompletedTurn({ ...args, reportedModelId });
-
-  await emitGenerationEvent({
-    type: 'generations.completed',
-    projectId: args.typedAgent.project.id as number,
+  // A failed status write must not fail the generation, whose result is
+  // already built.
+  await settleGeneration({
     generationId: args.generationId,
-    assistantContent: args.result.text,
+    fence: 'lease',
+    outcome: {
+      status: 'completed',
+      stopReason: resolveStopReason({
+        finishReason: args.result.finishReason,
+        stepCount: serializedStepsCompleted.length,
+        maxSteps: args.typedAgent.maxSteps,
+      }),
+      assistantContent: args.result.text,
+    },
+    effects: () => {
+      return [meterCompletedTurn({ ...args, reportedModelId })];
+    },
+  }).catch(() => {
+    return false;
   });
 
   return completedResult;

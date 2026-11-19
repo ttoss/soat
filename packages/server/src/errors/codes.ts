@@ -109,6 +109,16 @@ export const ERROR_CODES = {
     description:
       'A generation is already in progress for this session. Wait for it to complete before starting a new one.',
   },
+  GENERATION_INTERRUPTED: {
+    httpStatus: 500,
+    description:
+      'The generation lost its lease (`GENERATION_LEASE_TTL_MS`, two minutes by default) before it settled: the process running it stopped renewing it and the sweep failed the generation, or a process found its lease gone and cancelled its run. A model call cannot be resumed mid-flight; start a new generation.',
+  },
+  GENERATION_DEADLINE_EXCEEDED: {
+    httpStatus: 500,
+    description:
+      'A running generation segment ran past its deadline (`GENERATION_DEADLINE_MS`, thirty minutes by default) and was cancelled, the model call and every tool call it was waiting on included. `meta.deadline_ms` is the limit that applied.',
+  },
   SESSION_EXPIRED: {
     httpStatus: 410,
     description:

@@ -320,9 +320,19 @@
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
       "routes": []
     },
+    "GENERATION_DEADLINE_EXCEEDED": {
+      "http_status": 500,
+      "hint": "Bound the turn so it finishes within `GENERATION_DEADLINE_MS`: fewer steps (`max_steps`), or tools that answer sooner; an operator can raise the deadline.",
+      "routes": []
+    },
     "GENERATION_FAILED": {
       "http_status": 500,
       "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "routes": []
+    },
+    "GENERATION_INTERRUPTED": {
+      "http_status": 500,
+      "hint": "Start a new generation; the interrupted one cannot be resumed. Its trace keeps the steps that were recorded before the process stopped.",
       "routes": []
     },
     "GENERATION_NOT_AWAITING_TOOL_OUTPUTS": {

@@ -97,6 +97,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'A revoked share cannot be used again: ask the publisher for a new share. If the publisher revoked only your acceptance, it must delete that acceptance before you can accept again.',
   PUBLIC_SHARES_DISABLED:
     'Create the share with a project id as `grantee`, or ask the operator to set `SHARES_ALLOW_PUBLIC=true`.',
+  GENERATION_INTERRUPTED:
+    'Start a new generation; the interrupted one cannot be resumed. Its trace keeps the steps that were recorded before the process stopped.',
+  GENERATION_DEADLINE_EXCEEDED:
+    'Bound the turn so it finishes within `GENERATION_DEADLINE_MS`: fewer steps (`max_steps`), or tools that answer sooner; an operator can raise the deadline.',
   DECISION_INTERRUPTED:
     'Request a new decision with `{{POST /deciders/{decider_id}/decisions}}` or `{{POST /decisions}}`; nothing about the interrupted one can be resumed.',
   PROJECT_PAUSED:

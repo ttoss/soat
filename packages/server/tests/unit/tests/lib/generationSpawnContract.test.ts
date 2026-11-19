@@ -51,6 +51,14 @@ const RECORD_WRITERS = new Set([
   'lib/agentGeneration.ts',
 ]);
 
+/**
+ * Writers whose record joins no chain, with the reason it must not.
+ */
+const CHAINLESS_RECORDS: Record<string, string> = {
+  'lib/agentGenerationRecovery.ts':
+    'a refused turn would count against the budget and conclude its chain',
+};
+
 const collectSourceFiles = (dir: string): string[] => {
   const files: string[] = [];
 
@@ -162,6 +170,7 @@ describe('generation spawn contract', () => {
       if (calls.length === 0) continue;
 
       if (source.includes('resolveChainLineage')) continue;
+      if (CHAINLESS_RECORDS[key]) continue;
 
       violations.push(
         `${key}: writes a generation record without resolving its chain lineage`

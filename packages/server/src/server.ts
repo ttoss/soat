@@ -16,6 +16,7 @@ import {
   readEmbeddingInputTokenPriceUsd,
 } from './lib/embeddingPrice';
 import { startEvalWorker } from './lib/evaluationWorker';
+import { startGenerationSweepScheduler } from './lib/generationSweep';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
@@ -100,6 +101,8 @@ const startServer = async () => {
     startTasksScheduler();
     // Settles decisions a restart left unsettled.
     startDecisionsScheduler();
+    // Fails generations whose process stopped renewing their lease.
+    startGenerationSweepScheduler();
     // Runs queued playbook node executions, and recovers ones a restart left
     // running or whose task or run ended without an event.
     startPlaybookScheduler();

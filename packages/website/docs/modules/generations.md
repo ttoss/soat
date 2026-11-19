@@ -118,6 +118,15 @@ A generation starts as `running`. It transitions to:
 - `completed` when the model finishes (the `stop_reason` carries the finish reason).
 - `failed` when the run errors, for example when the upstream AI provider returns an error or is unreachable. `stop_reason` is set to `error` and the `error` field carries the failure details.
 
+A generation settles once. The process running it holds a lease that it renews while it works; a write of `completed`, `failed` or `requires_action` lands only while that lease is still its own, and a writer that lost it changes nothing.
+
+- **Deadline.** A running segment (from the start, or from a resume with tool outputs) that runs past `GENERATION_DEADLINE_MS` is cancelled: the model call and every tool call it waits on stop, whatever the tool's type. It fails with `GENERATION_DEADLINE_EXCEEDED`.
+- **Model call timeout.** One model call longer than `GENERATION_MODEL_CALL_TIMEOUT_MS` is aborted and fails the generation.
+- **A process that stopped.** When the process running a generation stops renewing its lease, a sweep fails it with `GENERATION_INTERRUPTED` once the lease lapses. Like any other settle, this frees the session and tells a parent waiting on a [nested generation](./agents.md#a-nested-generation-that-outlives-the-call).
+- **Refused turns.** A turn refused by the call depth or chain limit is recorded as a generation that completes at once, with `stop_reason` `depth_guard` or `chain_limit`.
+
+The durations are set per deployment ([configuration](../self-hosting/configuration.md#agent-generation)).
+
 ### Error Recording
 
 When a generation fails, the failure is persisted on both the generation record and its trace: `status` becomes `failed`, `stop_reason` is `error`, and `error` carries a [recorded failure](/docs/api#recorded-failures) `{ code, message, meta? }`.

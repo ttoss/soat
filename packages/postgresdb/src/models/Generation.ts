@@ -56,6 +56,11 @@ import { Trace } from './Trace';
       name: 'generations_reports_to_generation_id_idx',
       fields: ['reports_to_generation_id'],
     },
+    // Backs the sweep of running generations whose lease lapsed.
+    {
+      name: 'generations_status_lease_expires_at_idx',
+      fields: ['status', 'lease_expires_at'],
+    },
     // Backs the walk from a generation up to the conversation it served.
     {
       name: 'generations_conversation_id_idx',
@@ -382,6 +387,19 @@ export class Generation extends Model {
   // Set once the outcome is reported, so it is reported exactly once.
   @Column({ type: DataType.DATE, allowNull: true })
   declare reportedAt: Date | null;
+
+  // The running segment's claim: only the writer holding this token may settle
+  // the row. Null while paused or settled.
+  @Column({ type: DataType.STRING(36), allowNull: true })
+  declare leaseToken: string | null;
+
+  // Renewed while the segment makes progress; past it, the sweep fails the row.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare leaseExpiresAt: Date | null;
+
+  // When the running segment is aborted, however it renews.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare deadlineAt: Date | null;
 
   // The caller's deduplication key, claimed for as long as this row exists.
   @Column({ type: DataType.STRING(255), allowNull: true })

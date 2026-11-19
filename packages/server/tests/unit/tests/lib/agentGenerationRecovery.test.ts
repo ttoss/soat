@@ -1,11 +1,9 @@
 import { db } from 'src/db';
 import { recoverPendingFromDb } from 'src/lib/agentGenerationRecovery';
-import {
-  createGenerationRecord,
-  updateGenerationRecord,
-} from 'src/lib/generations';
+import { createGenerationRecord } from 'src/lib/generations';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { settleTestGeneration } from '../../fixtures/settledGeneration';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -59,7 +57,7 @@ describe('recoverPendingFromDb', () => {
       agentId,
       traceId: 'trc_scope_miss',
     });
-    await updateGenerationRecord({
+    await settleTestGeneration({
       publicId: 'gen_scope_miss',
       status: 'requires_action',
       pendingState: {

@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import { holdLease } from './leases';
 import {
   type ClaimedTask,
   getOrchestrationQueueDriver,
@@ -36,22 +37,23 @@ export const withTaskLeaseHeld = async <T>(args: {
   intervalMs?: number;
 }): Promise<T> => {
   const driver = getOrchestrationQueueDriver();
-  const timer = setInterval(() => {
-    void driver.extendLease({ task: args.task }).catch((error: unknown) => {
+  const lease = holdLease({
+    intervalMs: args.intervalMs ?? leaseHeartbeatMs(),
+    renew: () => {
+      return driver.extendLease({ task: args.task });
+    },
+    onError: (error) => {
       log(
         'withTaskLeaseHeld: heartbeat failed task=%s %o',
         args.task.id,
         error
       );
-    });
-  }, args.intervalMs ?? leaseHeartbeatMs());
-  // Nothing should be kept alive by a heartbeat: the process may exit between
-  // drives.
-  timer.unref?.();
+    },
+  });
 
   try {
     return await args.run();
   } finally {
-    clearInterval(timer);
+    lease.release();
   }
 };

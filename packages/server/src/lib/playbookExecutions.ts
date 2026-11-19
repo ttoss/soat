@@ -13,7 +13,7 @@ import {
   withLockedCase,
 } from './playbookCases';
 import type { PlaybookNode } from './playbookDefinition';
-import { EXECUTION_LEASE_MS } from './playbookExecutionLease';
+import { executionLeaseExpiry } from './playbookExecutionLease';
 import { settleFromRun } from './playbookExecutionSettle';
 import { caseAuthority, executeClaimed } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
@@ -188,7 +188,7 @@ export const runPlaybookNode = async (args: {
           executorType: node.executor?.type ?? null,
           executorId: node.executor?.id ?? null,
           status: 'running',
-          leaseExpiresAt: new Date(Date.now() + EXECUTION_LEASE_MS),
+          leaseExpiresAt: executionLeaseExpiry(),
           basis: view.basis,
           input: executorInput({
             executor: node.executor,

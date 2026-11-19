@@ -3,8 +3,8 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import type { PendingGeneration } from './agentGenerationTypes';
-import { emitGenerationEvent } from './generationEvents';
-import { updateGenerationRecord } from './generations';
+import { segmentAbortReason } from './generationSegment';
+import { settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
@@ -101,7 +101,10 @@ export const recordGenerationFailure = async (args: {
   /** Steps the turn spent before the failed segment — keys its usage event. */
   stepsAlreadySpent: number;
 }): Promise<unknown> => {
-  const errorPayload = buildGenerationErrorPayload(args.error);
+  // A segment cancelled at its deadline or on losing its lease fails for that
+  // reason, whatever the cancelled call threw.
+  const cause = segmentAbortReason(args.generationId) ?? args.error;
+  const errorPayload = buildGenerationErrorPayload(cause);
   // Derived here so no failure path has to remember to pass it: `usage` is only
   // supplied explicitly by a caller that mapped the error before handing it over
   // (the mapped `DomainError` carries no counts).
@@ -115,45 +118,40 @@ export const recordGenerationFailure = async (args: {
     errorPayload
   );
 
-  // Persistence failures must not mask the original generation error.
-  await Promise.allSettled([
-    updateGenerationRecord({
-      publicId: args.generationId,
-      status: 'failed',
-      completedAt: new Date(),
-      stopReason: 'error',
-      error: errorPayload,
-    }),
-    recordTraceError({
-      traceId: args.traceId,
-      error: errorPayload,
-    }),
-    // Every attempt the route burned is named on the generation even though it
-    // ultimately failed — that is what makes the unmetered-failed-attempt gap
-    // visible rather than silent.
-    saveRoutingMetadata({ generationId: args.generationId, model: args.model }),
-    // The provider billed for the tokens whether or not the answer could be
-    // used, so omitting them understates every roll-up that reads them.
-    ...meterFailedSegment({
-      ...args,
-      reportedModelId: args.reportedModelId ?? reportedModelOf(args.error),
-      usage,
-    }),
-  ]);
-
-  // Without this, the only way to learn a background generation died is to poll
-  // the record. After the writes above, so the event carries the failed record.
-  await emitGenerationEvent({
-    type: 'generations.failed',
-    projectId: args.projectId,
+  // Persistence failures must not mask the original generation error. The
+  // settle announces `generations.failed`: without it, the only way to learn a
+  // background generation died is to poll the record.
+  await settleGeneration({
     generationId: args.generationId,
+    fence: 'lease',
+    outcome: { status: 'failed', error: errorPayload },
+    effects: () => {
+      return [
+        recordTraceError({ traceId: args.traceId, error: errorPayload }),
+        // Every attempt the route burned is named on the generation even
+        // though it ultimately failed, so an unmetered failed attempt shows.
+        saveRoutingMetadata({
+          generationId: args.generationId,
+          model: args.model,
+        }),
+        // The provider billed for the tokens whether or not the answer could
+        // be used, so omitting them understates every roll-up that reads them.
+        ...meterFailedSegment({
+          ...args,
+          reportedModelId: args.reportedModelId ?? reportedModelOf(args.error),
+          usage,
+        }),
+      ];
+    },
+  }).catch((error: unknown) => {
+    log('recordGenerationFailure: settle failed %o', error);
   });
 
   // Meta keys are
   // written in snake_case to match the external REST contract.
-  if (args.error instanceof DomainError) {
-    return new DomainError(args.error.code, args.error.message, {
-      ...args.error.meta,
+  if (cause instanceof DomainError) {
+    return new DomainError(cause.code, cause.message, {
+      ...cause.meta,
       generation_id: args.generationId,
       trace_id: args.traceId,
     });
@@ -161,7 +159,7 @@ export const recordGenerationFailure = async (args: {
 
   // Wrap unexpected errors so the trace_id reaches the caller.
   const message =
-    args.error instanceof Error ? args.error.message : 'Internal Server Error';
+    cause instanceof Error ? cause.message : 'Internal Server Error';
   return new DomainError('GENERATION_FAILED', message, {
     generation_id: args.generationId,
     trace_id: args.traceId,
@@ -276,21 +274,11 @@ const runCompletionSideEffects = async (
   const prevSteps = priorStepsOf(args.pending);
   const allSteps = [...prevSteps, ...serializeSteps(args.result.steps)];
 
-  await Promise.allSettled([
-    saveTrace({
-      traceId: args.pending.traceId,
-      projectId: args.pending.projectId,
-      projectPublicId: args.pending.projectPublicId,
-      agentId: args.pending.agentId,
-      generationId: args.generationId,
-      steps: allSteps,
-      parentTraceId: args.pending.parentTraceId ?? undefined,
-      rootTraceId: args.pending.rootTraceId ?? undefined,
-    }),
-    updateGenerationRecord({
-      publicId: args.generationId,
+  await settleGeneration({
+    generationId: args.generationId,
+    fence: 'lease',
+    outcome: {
       status: 'completed',
-      completedAt: new Date(),
       stopReason: resolveStopReason({
         finishReason: args.result.finishReason,
         // The turn's steps, not this segment's: a turn spends one budget
@@ -298,18 +286,28 @@ const runCompletionSideEffects = async (
         stepCount: allSteps.length,
         maxSteps: args.pending.agentConfig.maxSteps,
       }),
-    }),
-    saveRoutingMetadata({
-      generationId: args.generationId,
-      model: args.pending.resolvedModel,
-    }),
-  ]);
-
-  await emitGenerationEvent({
-    type: 'generations.completed',
-    projectId: args.pending.projectId,
-    generationId: args.generationId,
-    assistantContent: args.result.text,
+      assistantContent: args.result.text,
+    },
+    effects: () => {
+      return [
+        saveTrace({
+          traceId: args.pending.traceId,
+          projectId: args.pending.projectId,
+          projectPublicId: args.pending.projectPublicId,
+          agentId: args.pending.agentId,
+          generationId: args.generationId,
+          steps: allSteps,
+          parentTraceId: args.pending.parentTraceId ?? undefined,
+          rootTraceId: args.pending.rootTraceId ?? undefined,
+        }),
+        saveRoutingMetadata({
+          generationId: args.generationId,
+          model: args.pending.resolvedModel,
+        }),
+      ];
+    },
+  }).catch((error: unknown) => {
+    log('runCompletionSideEffects: settle failed %o', error);
   });
 };
 

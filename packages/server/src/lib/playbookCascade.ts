@@ -11,7 +11,7 @@ import {
 } from './playbookCases';
 import { dependentCases } from './playbookCaseUpstreams';
 import {
-  EXECUTION_LEASE_MS,
+  executionLeaseExpiry,
   PARKED_RECHECK_MS,
 } from './playbookExecutionLease';
 import { settleExecution, settleFromRun } from './playbookExecutionSettle';
@@ -33,7 +33,7 @@ const claimPending = async (args: {
   const [claimed] = await db.PlaybookExecution.update(
     {
       status: 'running',
-      leaseExpiresAt: new Date(args.now.getTime() + EXECUTION_LEASE_MS),
+      leaseExpiresAt: executionLeaseExpiry({ now: args.now.getTime() }),
     },
     { where: { id: args.execution.id as number, status: 'queued' } }
   );

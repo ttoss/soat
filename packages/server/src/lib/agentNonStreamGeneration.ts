@@ -37,6 +37,7 @@ import {
   recordContinuationFailure,
 } from './generationLifecycle';
 import type { GenerationProvenance } from './generationProvenance';
+import { segmentCallOptions } from './generationSegment';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   collectSystemInstructions,
@@ -130,6 +131,7 @@ export { buildSyntheticToolResultMessages };
 
 const callGenerateText = async (args: {
   agentId: string;
+  generationId: string;
   model: LanguageModel;
   system: Instructions | undefined;
   nonSystemMessages: Array<{ role: string; content: unknown }>;
@@ -152,12 +154,15 @@ const callGenerateText = async (args: {
       prepareStep: args.prepareStep,
       stopWhen: resolveStopWhen(args.typedAgent),
       ...modelCallSettings(args.typedAgent),
-      abortSignal: args.abortSignal,
+      ...segmentCallOptions({
+        generationId: args.generationId,
+        signal: args.abortSignal,
+        onStepEnd: args.onStepEnd,
+      }),
       // The route config is the only retry authority for a routed model; a
       // non-routed model keeps the SDK default.
       maxRetries: routedMaxRetries(args.model),
       output: buildStructuredOutput(args.typedAgent.outputSchema),
-      onStepEnd: args.onStepEnd,
     });
   } catch (error) {
     log(
@@ -535,6 +540,7 @@ export const runNonStreamGeneration = async (args: {
   const ranSteps: unknown[] = [];
   const callArgs = {
     agentId: args.agentId,
+    generationId: args.generationId,
     model: args.model,
     system,
     nonSystemMessages,
@@ -657,10 +663,13 @@ export const runToolOutputsGeneration = async (args: {
       }),
       ...modelCallSettings(args.pending.agentConfig),
       maxRetries: routedMaxRetries(args.pending.resolvedModel),
+      ...segmentCallOptions({
+        generationId: args.generationId,
+        onStepEnd: (step) => {
+          ranSteps.push(step);
+        },
+      }),
       output: buildStructuredOutput(args.pending.agentConfig.outputSchema),
-      onStepEnd: (step) => {
-        ranSteps.push(step);
-      },
     });
   } catch (error) {
     throw await recordContinuationFailure({

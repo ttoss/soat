@@ -2,6 +2,7 @@ import { db } from 'src/db';
 import * as agentNonStreamGenerationModule from 'src/lib/agentNonStreamGeneration';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import * as generationsModule from 'src/lib/generations';
+import * as generationSettleModule from 'src/lib/generationSettle';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
@@ -98,7 +99,7 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
       // Sanctioned force-failure: drives the `.catch` on the fire-and-forget
       // completion write; the turn itself runs for real.
       jest
-        .spyOn(generationsModule, 'updateGenerationRecord')
+        .spyOn(generationSettleModule, 'settleGeneration')
         .mockRejectedValueOnce(new Error('status write failed'));
 
       const res = await generate(agentId);

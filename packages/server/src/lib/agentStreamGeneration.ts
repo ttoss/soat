@@ -21,13 +21,13 @@ import {
   type TurnToolChoice,
 } from './agentStepRules';
 import { resolveStopWhen } from './agentStopConditions';
-import { emitGenerationEvent } from './generationEvents';
 import {
   recordGenerationFailure,
   recordSegmentUsage,
 } from './generationLifecycle';
 import type { GenerationProvenance } from './generationProvenance';
-import { updateGenerationRecord } from './generations';
+import { segmentCallOptions } from './generationSegment';
+import { settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
 import {
   collectSystemInstructions,
@@ -55,24 +55,26 @@ const log = createDebug('soat:generation');
  * every other `onEnd` write: the stream has already been delivered, so there
  * is no caller left to throw at.
  */
-const recordStreamedTextEncodedToolCall = async (args: {
+const recordStreamedTextEncodedToolCall = (args: {
   generationId: string;
   traceId: string;
   toolName: string;
-}): Promise<void> => {
+  usageWrite: Promise<void>;
+}): Promise<boolean> => {
   const error = buildGenerationErrorPayload(
     textEncodedToolCallError(args.toolName)
   );
-  await Promise.allSettled([
-    updateGenerationRecord({
-      publicId: args.generationId,
-      status: 'failed',
-      completedAt: new Date(),
-      stopReason: 'error',
-      error,
-    }),
-    recordTraceError({ traceId: args.traceId, error }),
-  ]);
+  return settleGeneration({
+    generationId: args.generationId,
+    fence: 'lease',
+    outcome: { status: 'failed', error },
+    effects: () => {
+      return [
+        recordTraceError({ traceId: args.traceId, error }),
+        args.usageWrite,
+      ];
+    },
+  });
 };
 
 /**
@@ -117,33 +119,6 @@ const fireStreamEndSideEffects = (args: {
     rootTraceId: args.rootTraceId,
   }).catch(() => {});
 
-  // The blob has already gone down the wire, but the record of it can still
-  // tell the truth — `failed` is what makes this findable on the generation and
-  // the trace instead of only in whatever consumed the stream.
-  const streamedToolCall = findTextEncodedToolCall({
-    text: args.finalText,
-    toolNames: Object.keys(args.resolvedTools),
-  });
-  let completedWrite: Promise<unknown> | undefined;
-  if (streamedToolCall) {
-    void recordStreamedTextEncodedToolCall({
-      generationId: args.generationId,
-      traceId: args.traceId,
-      toolName: streamedToolCall,
-    });
-  } else if (!args.failed) {
-    completedWrite = updateGenerationRecord({
-      publicId: args.generationId,
-      status: 'completed',
-      completedAt: new Date(),
-      stopReason: resolveStopReason({
-        finishReason: args.finishReason,
-        stepCount: args.steps.length,
-        maxSteps: args.typedAgent.maxSteps,
-      }),
-    }).catch(() => {});
-  }
-
   saveRoutingMetadata({
     generationId: args.generationId,
     model: args.model,
@@ -166,18 +141,41 @@ const fireStreamEndSideEffects = (args: {
     },
   });
 
-  // After the status and usage writes, as the non-stream path emits after
-  // metering: the event carries the record as `GET` then answers it.
-  if (completedWrite) {
-    void Promise.all([completedWrite, usageWrite]).then(() => {
-      return emitGenerationEvent({
-        type: 'generations.completed',
-        projectId: args.typedAgent.project.id as number,
-        generationId: args.generationId,
-        assistantContent: args.finalText,
-      });
-    });
+  // The blob has already gone down the wire, but the record of it can still
+  // tell the truth — `failed` is what makes this findable on the generation and
+  // the trace instead of only in whatever consumed the stream.
+  const streamedToolCall = findTextEncodedToolCall({
+    text: args.finalText,
+    toolNames: Object.keys(args.resolvedTools),
+  });
+  if (streamedToolCall) {
+    void recordStreamedTextEncodedToolCall({
+      generationId: args.generationId,
+      traceId: args.traceId,
+      toolName: streamedToolCall,
+      usageWrite,
+    }).catch(() => {});
+    return;
   }
+  if (args.failed) return;
+  // After the usage write, as the non-stream path settles after metering: the
+  // event carries the record as `GET` then answers it.
+  void settleGeneration({
+    generationId: args.generationId,
+    fence: 'lease',
+    outcome: {
+      status: 'completed',
+      stopReason: resolveStopReason({
+        finishReason: args.finishReason,
+        stepCount: args.steps.length,
+        maxSteps: args.typedAgent.maxSteps,
+      }),
+      assistantContent: args.finalText,
+    },
+    effects: () => {
+      return [usageWrite];
+    },
+  }).catch(() => {});
 };
 
 /**
@@ -266,6 +264,8 @@ type StreamRunArgs = {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   provenance: GenerationProvenance;
+  /** The request's own cancellation, beside the segment's. */
+  abortSignal?: AbortSignal;
 };
 
 /** What `streamText` hands `onEnd` that the turn's records are built from. */
@@ -351,14 +351,10 @@ export const runStreamGeneration = async (
     provenance: args.provenance,
   });
   log(
-    'runStreamGeneration: agentId=%s toolCount=%d stepRulesCount=%d',
+    'runStreamGeneration: agentId=%s toolCount=%d',
     args.agentId,
-    Object.keys(args.resolvedTools).length,
-    Array.isArray(args.typedAgent.stepRules)
-      ? (args.typedAgent.stepRules as unknown[]).length
-      : 0
+    Object.keys(args.resolvedTools).length
   );
-  log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
   // Captured, not acted on: `onError` fires mid-read, and the failure must not
   // overtake chunks already on their way to the caller.
   let streamError: unknown;
@@ -377,6 +373,10 @@ export const runStreamGeneration = async (
     prepareStep,
     stopWhen: resolveStopWhen(args.typedAgent),
     ...modelCallSettings(args.typedAgent),
+    ...segmentCallOptions({
+      generationId: args.generationId,
+      signal: args.abortSignal,
+    }),
     onError: ({ error }) => {
       streamError = error;
     },
