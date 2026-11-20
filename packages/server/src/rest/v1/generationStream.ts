@@ -87,13 +87,11 @@ export const serveGenerationEvents = async (args: {
   label: string;
   prelude?: SseFrame[];
 }): Promise<void> => {
-  let cursor = args.afterSeq;
+  const resume = { generation_id: args.generationId, after_seq: args.afterSeq };
   await serveSse({
     ctx: args.ctx,
     label: args.label,
-    resume: () => {
-      return { generation_id: args.generationId, after_seq: cursor };
-    },
+    resume,
     async *frames(stopped) {
       yield* args.prelude ?? [];
       for await (const event of followGenerationEvents({
@@ -102,7 +100,7 @@ export const serveGenerationEvents = async (args: {
         includeContent: args.includeContent,
         signal: stopped,
       })) {
-        cursor = event.seq;
+        resume.after_seq = event.seq;
         yield progressFrame(event);
       }
     },

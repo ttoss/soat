@@ -47,7 +47,7 @@ type Outcome =
 
 const closingFrame = (args: {
   outcome: Outcome;
-  resume?: SseResume | (() => SseResume);
+  resume?: SseResume;
 }): string | null => {
   const { outcome } = args;
   if (outcome.kind === 'completed') return 'data: [DONE]\n\n';
@@ -57,10 +57,7 @@ const closingFrame = (args: {
   if (outcome.kind === 'expired') {
     return formatFrame({
       event: 'end',
-      data: {
-        reason: 'max_lifetime',
-        ...(typeof args.resume === 'function' ? args.resume() : args.resume),
-      },
+      data: { reason: 'max_lifetime', ...args.resume },
     });
   }
   return null;
@@ -71,8 +68,8 @@ const closingFrame = (args: {
  * as `text/event-stream`. A completed source ends with `data: [DONE]`; a
  * failed one with `data: {"error": StoredError}` (a `DomainError` as
  * thrown, anything else `INTERNAL_ERROR`) and no `[DONE]`; a stream
- * outliving `maxLifetimeMs` with an `end` event carrying `resume` (read when
- * it closes, when a function). Once the client leaves or the lifetime ends, an
+ * outliving `maxLifetimeMs` with an `end` event carrying `resume`, read as
+ * it closes. Once the client leaves or the lifetime ends, an
  * iterable source is still drained unwritten, so the work behind it settles
  * as it would have; a function source is told to stop.
  */
@@ -81,7 +78,7 @@ export const pipeSse = async (args: {
   frames: SseSource;
   /** Names the stream in the log line an unexpected failure writes. */
   label: string;
-  resume?: SseResume | (() => SseResume);
+  resume?: SseResume;
   heartbeatMs?: number;
   maxLifetimeMs?: number;
 }): Promise<void> => {

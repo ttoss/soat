@@ -228,6 +228,29 @@ describe('pipeSse', () => {
     }
   });
 
+  test('the end frame carries resume as it reads when the lifetime closes the stream', async () => {
+    const source = controlledSource();
+    const resume = { generation_id: 'gen_resume', after_seq: 0 };
+    const server = await serve({ source, maxLifetimeMs: 50, resume });
+    try {
+      const response = await fetch(server.url);
+      source.push({ id: '3', data: { seq: 3 } });
+      resume.after_seq = 3;
+
+      const text = await readUntil({ response });
+
+      expect(text).toBe(
+        'id: 3\ndata: {"seq":3}\n\n' +
+          'event: end\ndata: {"reason":"max_lifetime","generation_id":"gen_resume","after_seq":3}\n\n'
+      );
+      source.finish();
+      await source.drained;
+      await server.piped();
+    } finally {
+      await server.close();
+    }
+  });
+
   test('a client that leaves ends the response and the source still drains', async () => {
     const source = controlledSource();
     const server = await serve({ source });
