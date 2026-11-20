@@ -14,6 +14,7 @@ import {
   isResourceAlreadyGone,
   sanitizeAppliedProperties,
 } from './formationsApplyHelpers';
+import { propertyComparisonFor } from './formationsComparison';
 import { mergeWithPrevious } from './formationsProperties';
 import { clearablePropertiesOf } from './formationsRegistry';
 import {
@@ -25,6 +26,7 @@ import {
   type FormationActor,
   type FormationEvent,
   formationFailure,
+  type ResourceDeclaration,
 } from './formationsTypes';
 import type { StoredError } from './storedError';
 
@@ -236,6 +238,7 @@ const mergeWithLastApplied = (args: {
   existing: ResourceRow;
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
+  deployed: ResourceDeclaration | undefined;
 }): ReturnType<typeof mergeWithPrevious> & {
   lastApplied: Record<string, unknown>;
 } => {
@@ -248,6 +251,13 @@ const mergeWithLastApplied = (args: {
     previous: lastApplied,
     lastApplied,
     clearable: clearablePropertiesOf(args.resourceType),
+    comparison: propertyComparisonFor({
+      declared: {
+        type: args.resourceType,
+        properties: args.resolvedProperties,
+      },
+      deployed: args.deployed,
+    }),
   });
   return { ...merge, lastApplied };
 };
@@ -275,6 +285,8 @@ export const applyUpdateChange = async (args: {
   events: FormationEvent[];
   /** Collects the disposal a replacement here defers to the end of the apply. */
   pendingCleanups: PendingCleanup[];
+  /** This resource in the template the formation last deployed. */
+  deployed: ResourceDeclaration | undefined;
 }): Promise<AppliedUpdate | null> => {
   const { resourceRow, existing, resourceType, logicalId } = args;
   const { resolvedProperties, projectId, actor, resolvedIds, events } = args;
@@ -282,6 +294,7 @@ export const applyUpdateChange = async (args: {
     existing,
     resourceType,
     resolvedProperties,
+    deployed: args.deployed,
   });
   // `resourceRow` is `existing` here, so the update below mutates it — reading
   // the previous id afterwards would hand the replacement's own id to the

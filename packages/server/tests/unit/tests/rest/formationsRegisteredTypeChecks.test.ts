@@ -567,3 +567,110 @@ describe('POST /api/v1/formations — `ref_attr` outputs of an operator-register
     });
   });
 });
+
+describe('POST /api/v1/formations/plan — a write-only property no read returns', () => {
+  withRegisteredType({
+    capabilities: ['read'],
+    writeOnlyProperties: ['config'],
+  });
+
+  const channel = (config: unknown) => {
+    return channelTemplate({ name: 'Support', kind: 'whatsapp', config });
+  };
+
+  const deployed = async (args: {
+    template: unknown;
+    parameters?: Record<string, string>;
+  }) => {
+    handler.replies.create = {
+      status: 200,
+      body: { physical_resource_id: 'chn_wo' },
+    };
+    handler.replies.read = {
+      status: 200,
+      body: {
+        exists: true,
+        physical_resource_id: 'chn_wo',
+        properties: { name: 'Support', kind: 'whatsapp' },
+      },
+    };
+    formationCounter += 1;
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/formations')
+      .send({
+        project_id: projectId,
+        name: `registered-type-checks-${String(formationCounter)}`,
+        template: args.template,
+        ...(args.parameters ? { parameters: args.parameters } : {}),
+      });
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  };
+
+  test('the template a formation read returns plans as no-op', async () => {
+    const formationId = await deployed({
+      template: channel({ mode: 'members' }),
+    });
+    const read = await authenticatedTestClient(userToken).get(
+      `/api/v1/formations/${formationId}`
+    );
+    expect(read.status).toBe(200);
+    expect(read.body.template.resources.Chan.properties.config).toEqual({
+      no_echo: true,
+    });
+
+    const res = await plan({ formationId, template: read.body.template });
+
+    expect(res.status).toBe(200);
+    expect(res.body.changes[0].action).toBe('no-op');
+  });
+
+  test('the deployed literal plans as no-op', async () => {
+    const formationId = await deployed({
+      template: channel({ mode: 'members' }),
+    });
+
+    const res = await plan({
+      formationId,
+      template: channel({ mode: 'members' }),
+    });
+
+    expect(res.body.changes[0].action).toBe('no-op');
+  });
+
+  test('a changed literal plans as update', async () => {
+    const formationId = await deployed({
+      template: channel({ mode: 'members' }),
+    });
+
+    const res = await plan({
+      formationId,
+      template: channel({ mode: 'allowlist' }),
+    });
+
+    expect(res.body.changes[0].action).toBe('update');
+  });
+
+  test('a value from a parameter plans as update, as it may resolve differently', async () => {
+    const template = {
+      parameters: { Mode: { type: 'string' } },
+      ...channel({ mode: { param: 'Mode' } }),
+    };
+    const formationId = await deployed({
+      template,
+      parameters: { Mode: 'members' },
+    });
+
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/formations/plan')
+      .send({
+        project_id: projectId,
+        formation_id: formationId,
+        template,
+        parameters: { Mode: 'members' },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.changes[0].action).toBe('update');
+  });
+});

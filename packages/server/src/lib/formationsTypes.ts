@@ -320,6 +320,14 @@ export type FormationModule = {
     alsoDeleting: ReadonlySet<string>;
   }) => Promise<StoredError | null>;
   /**
+   * The properties with every default the type's schema declares filled in, so
+   * a declaration that omits a default and a read that carries it compare
+   * equal. Used only to compare; what is sent is the declaration as written.
+   */
+  withSchemaDefaults: (
+    properties: Record<string, unknown>
+  ) => Record<string, unknown>;
+  /**
    * Read the current live state of a resource and return its properties in
    * the same snake_case format used by the formation template. Returns null
    * if the resource no longer exists (drift).

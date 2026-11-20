@@ -7,6 +7,7 @@ import createDebug from 'debug';
 import type { db } from 'src/db';
 
 import { isResourceAlreadyGone } from './formationsApplyHelpers';
+import { propertyComparisonFor } from './formationsComparison';
 import { mergeWithPrevious } from './formationsProperties';
 import { clearablePropertiesOf } from './formationsRegistry';
 import {
@@ -113,6 +114,13 @@ const restoreProperties = (args: {
     previous: {},
     lastApplied: args.resourceRow.lastAppliedProperties ?? {},
     clearable: clearablePropertiesOf(args.resourceRow.resourceType),
+    comparison: propertyComparisonFor({
+      declared: {
+        type: args.resourceRow.resourceType,
+        properties: args.previousProperties,
+      },
+      deployed: undefined,
+    }),
   }).merged;
 };
 

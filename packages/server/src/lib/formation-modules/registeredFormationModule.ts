@@ -37,6 +37,7 @@ import type {
   UpdateOutcome,
   ValidationError,
 } from '../formationsTypes';
+import { applySchemaDefaults } from '../openapiSchemaDefaults';
 import { isObjectRecord } from '../openapiSchemaFields';
 import { resolveInlineSchema } from '../openapiUnknownFields';
 import { findProjectPublicId } from '../projects';
@@ -465,6 +466,14 @@ export const buildRegisteredFormationModule = (args: {
     // what its `writer` declares for the deployer (`assertDeployerHolds`). See
     // `FormationModuleAuthorization`.
     authorization: { operatorRegistered: true },
+
+    withSchemaDefaults: (properties) => {
+      return applySchemaDefaults({
+        schema: registration.schema,
+        properties,
+        resolveRef: resolveInlineSchema,
+      });
+    },
 
     validateProperties: ({ properties, basePath }) => {
       return validate({ properties, basePath, forUpdate: false });

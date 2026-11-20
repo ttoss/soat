@@ -4,6 +4,7 @@ import {
   lookupAgentInternalId,
   lookupToolInternalId,
 } from 'src/lib/formationLookups';
+import { buildPropertyComparison } from 'src/lib/formationsComparison';
 import {
   buildAuditableParameters,
   buildDependencyGraph,
@@ -27,6 +28,8 @@ import {
   normalizeDeclaredProperties,
 } from 'src/lib/formationsProperties';
 import type { FormationTemplate } from 'src/lib/formationsTypes';
+import { applySchemaDefaults } from 'src/lib/openapiSchemaDefaults';
+import { resolveInlineSchema } from 'src/lib/openapiUnknownFields';
 
 describe('formationsHelpers', () => {
   // ── isRef ────────────────────────────────────────────────────────────────
@@ -870,24 +873,137 @@ describe('formationsHelpers', () => {
 
   // ── mergeWithPrevious ────────────────────────────────────────────────────
 
-  // The predicate `plan-formation` and apply now share. The first two cases are
-  // the divergences that made a plan disagree with the apply it previewed:
-  // apply's whole-object `JSON.stringify` comparison reported a change
-  // for both, plan's per-key comparison for neither.
+  // The predicate `plan-formation` and apply share: a whole-object comparison
+  // reports a change on the first two cases, a per-key one on neither.
   describe('mergeWithPrevious', () => {
+    const NODE_SCHEMA = {
+      type: 'object',
+      properties: {
+        nodes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              final: { type: 'boolean', default: false },
+            },
+          },
+        },
+      },
+    };
+    const SCHEMA = {
+      type: 'object',
+      properties: { definition: { allOf: [NODE_SCHEMA] } },
+    };
+
     const merge = (args: {
       resolved: Record<string, unknown>;
       previous: Record<string, unknown>;
       lastApplied?: Record<string, unknown>;
       clearable?: string[];
+      settled?: string[];
+      writeOnly?: string[];
     }) => {
       return mergeWithPrevious({
         resolved: args.resolved,
         previous: args.previous,
         lastApplied: args.lastApplied ?? {},
         clearable: new Set(args.clearable),
+        comparison: buildPropertyComparison({
+          withSchemaDefaults: (properties) => {
+            return applySchemaDefaults({
+              schema: SCHEMA,
+              properties,
+              resolveRef: resolveInlineSchema,
+            });
+          },
+          writeOnlyProperties: args.writeOnly ?? [],
+          settled: new Set(args.settled),
+        }),
       });
     };
+
+    test('a nested default omitted on one side is not a change', () => {
+      expect(
+        merge({
+          resolved: { definition: { nodes: [{ id: 'a' }] } },
+          previous: { definition: { nodes: [{ id: 'a', final: false }] } },
+        })
+      ).toEqual({
+        merged: { definition: { nodes: [{ id: 'a' }] } },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
+    });
+
+    test('a nested value differing from the default is a change', () => {
+      expect(
+        merge({
+          resolved: { definition: { nodes: [{ id: 'a' }] } },
+          previous: { definition: { nodes: [{ id: 'a', final: true }] } },
+        }).changed
+      ).toBe(true);
+    });
+
+    test('a default is not filled into an expression', () => {
+      expect(
+        merge({
+          resolved: { definition: { param: 'Definition' } },
+          previous: { definition: { param: 'Definition' } },
+        }).changed
+      ).toBe(false);
+    });
+
+    test('a property declared null that the read leaves out is not a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', metadata: null },
+          previous: { name: 'a' },
+        }).changed
+      ).toBe(false);
+    });
+
+    test('a property declared null over a held value is a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', metadata: null },
+          previous: { name: 'a', metadata: { topic: 'x' } },
+        }).changed
+      ).toBe(true);
+    });
+
+    test('a write-only property declared null is a change unless settled', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', auth: null },
+          previous: { name: 'a' },
+          writeOnly: ['auth'],
+        }).changed
+      ).toBe(true);
+    });
+
+    test('a settled property the previous state lacks is not a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', auth: { type: 'oauth' } },
+          previous: { name: 'a' },
+          settled: ['auth'],
+        })
+      ).toEqual({
+        merged: { name: 'a', auth: { type: 'oauth' } },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
+    });
+
+    test('an unsettled property the previous state lacks is a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', auth: { type: 'oauth' } },
+          previous: { name: 'a' },
+        }).changed
+      ).toBe(true);
+    });
 
     test('a previous key the template omits is not a change', () => {
       expect(
