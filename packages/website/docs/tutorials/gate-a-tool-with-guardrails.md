@@ -155,7 +155,7 @@ const { data: budgetTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'update-budget',
-    type: 'soat',
+    type: 'builtin',
     description: 'Stand-in for the sensitive action the guardrail gates',
     actions: ['get-project'],
     preset_parameters: { projectId: PROJECT_ID },

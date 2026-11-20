@@ -155,7 +155,7 @@ const { data: refundTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'issue-refund',
-    type: 'soat',
+    type: 'builtin',
     description: 'Stand-in for the sensitive action the approval gates',
     actions: ['get-project'],
     preset_parameters: { projectId: PROJECT_ID },

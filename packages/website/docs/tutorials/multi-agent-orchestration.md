@@ -267,7 +267,7 @@ const { data: readPoemTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'poem-read',
-    type: 'soat',
+    type: 'builtin',
     description: 'Read the shared poem document',
     actions: ['get-document'],
     preset_parameters: { documentId: POEM_DOC_ID },
@@ -279,7 +279,7 @@ const { data: writeStanzaTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'poem-write',
-    type: 'soat',
+    type: 'builtin',
     description: 'Update the shared poem document',
     actions: ['update-document'],
     preset_parameters: { documentId: POEM_DOC_ID },
@@ -533,7 +533,7 @@ const { data: callStanza1Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-1',
-    type: 'soat',
+    type: 'builtin',
     description: 'Call stanza 1 agent',
     actions: ['create-agent-generation'],
     preset_parameters: {
@@ -554,7 +554,7 @@ const { data: callStanza2Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-2',
-    type: 'soat',
+    type: 'builtin',
     description: 'Call stanza 2 agent',
     actions: ['create-agent-generation'],
     preset_parameters: {
@@ -575,7 +575,7 @@ const { data: callStanza3Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-3',
-    type: 'soat',
+    type: 'builtin',
     description: 'Call stanza 3 agent',
     actions: ['create-agent-generation'],
     preset_parameters: {
@@ -596,7 +596,7 @@ const { data: callStanza4Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-4',
-    type: 'soat',
+    type: 'builtin',
     description: 'Call stanza 4 agent',
     actions: ['create-agent-generation'],
     preset_parameters: {
@@ -617,7 +617,7 @@ const { data: readFinalPoemTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'read-final-poem',
-    type: 'soat',
+    type: 'builtin',
     description: 'Read the final poem from the shared document',
     actions: ['get-document'],
     preset_parameters: { documentId: POEM_DOC_ID },

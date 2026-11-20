@@ -629,7 +629,7 @@ export const collectToolScopedGuardrails = async (args: {
 
 /**
  * Applies the guardrail interceptor to every resolved tool produced by one
- * binding (one for most types; many for `mcp` / `soat`). A tool is gated only
+ * binding (one for most types; many for `mcp` / `builtin`). A tool is gated only
  * when at least one guardrail applies to it (project/agent base ∪ its own tool
  * scope) — otherwise it passes through untouched, so guardrail interception is
  * zero-overhead for tools nothing gates. Server tools are gated by wrapping

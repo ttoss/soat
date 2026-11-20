@@ -226,7 +226,7 @@ const { data: writePoemTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'persist-poem',
-    type: 'soat',
+    type: 'builtin',
     description: 'Write the completed poem to the shared document',
     actions: ['update-document'],
     preset_parameters: { documentId: POEM_DOC_ID },

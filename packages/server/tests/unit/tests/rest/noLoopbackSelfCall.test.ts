@@ -5,7 +5,7 @@ import { stripComments } from '../../../../../../tests/harness/sourceText.mjs';
 
 /**
  * Nothing on a tool surface reaches the platform over the network.
- * Both the agent-side `soat` tool and the MCP tool surface dispatch
+ * Both the agent-side `builtin` tool and the MCP tool surface dispatch
  * in-process, through the app's own middleware chain.
  *
  * This is a static check for the same reason `wireKeyContract` is one: the
@@ -69,7 +69,7 @@ describe('tool surfaces do not self-call over the loopback', () => {
     expect(code).not.toMatch(/\bfetch\s*\(/);
   });
 
-  test('the soat tool executor dispatches in-process rather than fetching', () => {
+  test('the builtin tool executor dispatches in-process rather than fetching', () => {
     const code = stripComments(
       readSource('lib/agentToolResolverExternalTools.ts')
     );

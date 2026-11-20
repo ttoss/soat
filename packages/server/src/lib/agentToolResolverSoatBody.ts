@@ -2,13 +2,12 @@ import type { ToolDefinition } from './soatTools';
 import { filterToolContext, withoutReservedPrefixKeys } from './toolContext';
 
 /**
- * What goes into the request body of a SOAT action a `soat` tool invokes: the
+ * What goes into the request body of a SOAT action a `builtin` tool invokes: the
  * operation's own body plus the ambient fields the action's schema declares it
- * accepts. Split out of `agentToolResolverExternalTools` because it is pure
- * body assembly with no outbound I/O of its own.
+ * accepts. Pure body assembly, with no outbound I/O of its own.
  */
 
-// A `soat` action propagates the bag to whatever it starts, so the allowlist
+// A `builtin` action propagates the bag to whatever it starts, so the allowlist
 // applies here too — unfiltered, it would be advisory on the one path that
 // carries context furthest. Reserved-prefix keys stay behind: the started work
 // holds the token's layer on its authority, and a write refuses them.

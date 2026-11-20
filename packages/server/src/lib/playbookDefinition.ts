@@ -25,7 +25,7 @@ export type PlaybookInput = {
 export type PlaybookExecutor = {
   type: PlaybookExecutorType;
   id: string;
-  /** A `tool` executor's action on a multi-action (`mcp`, `soat`) tool. */
+  /** A `tool` executor's action on a multi-action (`mcp`, `builtin`) tool. */
   operation_id?: string;
   /** JSON Logic over the node's inputs, as an orchestration's `input_mapping`. */
   input?: Record<string, JsonValue>;

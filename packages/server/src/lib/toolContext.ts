@@ -4,7 +4,7 @@ import { readStringBag } from './stringBag';
 
 /**
  * `tool_context` — the key/value map a caller injects so `http`, `mcp` and
- * `soat` tools can authorize against the caller's identity instead of trusting
+ * `builtin` tools can authorize against the caller's identity instead of trusting
  * data embedded in the prompt. Each entry is forwarded as one request header.
  *
  * Lives in its own module because both the tool resolver (which builds the
@@ -159,7 +159,7 @@ export const assertValidToolContextAllowlist = (
  * session record and its actor) and stamped at the generation chokepoint
  * (`buildGenerationContext`), so a caller cannot address them from any
  * generation entry point — direct agent, conversation, session, trigger,
- * orchestration or nested `soat` tool call.
+ * orchestration or nested `builtin` tool call.
  */
 export const RESERVED_TOOL_CONTEXT_KEYS = [
   'session_id',

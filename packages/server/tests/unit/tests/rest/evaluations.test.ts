@@ -3326,7 +3326,7 @@ describe('Evaluations', () => {
         expect(res.body.error.message).toMatch(/client tools/);
       });
 
-      test('rejects a soat tool with no action', async () => {
+      test('rejects a builtin tool with no action', async () => {
         const res = await asUser()
           .post('/api/v1/evals')
           .send({
@@ -3341,7 +3341,7 @@ describe('Evaluations', () => {
         expect(res.body.error.message).toMatch(/action is required/);
       });
 
-      test('accepts a soat tool whose action is a scorer preset', async () => {
+      test('accepts a builtin tool whose action is a scorer preset', async () => {
         const res = await asUser()
           .post('/api/v1/evals')
           .send({

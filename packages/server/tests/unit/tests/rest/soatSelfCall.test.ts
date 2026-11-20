@@ -11,7 +11,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * Covers the platform *self-call* path: a `soat` tool reaching the REST API
+ * Covers the platform *self-call* path: a `builtin` tool reaching the REST API
  * through `executeSoatTool`.
  *
  * The action is served in-process, with no listener, so these tests pass on
@@ -25,7 +25,7 @@ import { authenticatedTestClient } from '../../testClient';
  *   1. a non-2xx self-call must fail the tool call, not return the error body
  *      as a successful result;
  *   2. a run driven by the background worker must still carry a principal, so
- *      a `soat` tool node authenticates — and never exceeds the credential
+ *      a `builtin` tool node authenticates — and never exceeds the credential
  *      that started the run;
  *   3. the same holds for a workflow-dispatched *agent*, whose generation is
  *      just as request-less as a durable run.
@@ -302,7 +302,7 @@ describe('SOAT self-call', () => {
       return run!;
     };
 
-    test('a soat tool node authenticates as the principal that started the run', async () => {
+    test('a builtin tool node authenticates as the principal that started the run', async () => {
       const toolRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -388,7 +388,7 @@ describe('SOAT self-call', () => {
 
     /**
      * The end-to-end shape this whole mechanism exists for: a workflow state
-     * dispatches an orchestration, and that run moves the task on with a `soat`
+     * dispatches an orchestration, and that run moves the task on with a `builtin`
      * tool node. A task-dispatched run is always durable, so before runs
      * carried a principal this could not work at all — the self-call had no
      * credential.
@@ -667,12 +667,12 @@ describe('SOAT self-call', () => {
   /**
    * The agent half of the same dispatch. A workflow state with
    * `dispatch.kind: 'agent'` runs request-less exactly like an orchestration
-   * dispatch, so an agent holding a `soat` tool needs the same run-as identity —
+   * dispatch, so an agent holding a `builtin` tool needs the same run-as identity —
    * without one its self-call reaches the loopback unauthenticated.
    *
    * A local HTTP server stands in for the AI provider (the pattern used by
    * `rest/agentGeneration.test.ts`), so the real `ai.generateText` drives a real
-   * tool call over real HTTP: the first completion asks for the `soat` tool, the
+   * tool call over real HTTP: the first completion asks for the `builtin` tool, the
    * second answers with text once the tool result is back. The tool result the
    * model is handed is captured from the second request — that body is the
    * assertion, because it is the only place the *authenticated* answer becomes
@@ -749,7 +749,7 @@ describe('SOAT self-call', () => {
       return `http://127.0.0.1:${port}`;
     };
 
-    // An agent whose only tool is one `soat` action, so which action the model
+    // An agent whose only tool is one `builtin` action, so which action the model
     // reaches for is never in question.
     const createAgentWithSoatAction = async (args: {
       aiProviderId: string;
@@ -869,7 +869,7 @@ describe('SOAT self-call', () => {
       return poll.body;
     };
 
-    test('an agent dispatched by a workflow state authenticates its soat tool as the principal that started the chain', async () => {
+    test('an agent dispatched by a workflow state authenticates its builtin tool as the principal that started the chain', async () => {
       toolCall = {
         name: 'soat-agent-list-tool_list-tools',
         args: { project_id: projectId },
@@ -1164,7 +1164,7 @@ describe('SOAT self-call', () => {
       return undefined;
     };
 
-    test('a continuation authenticates its soat tool as the principal that started the chain', async () => {
+    test('a continuation authenticates its builtin tool as the principal that started the chain', async () => {
       const generationId = await proposingGeneration(userToken);
 
       toolCall = {

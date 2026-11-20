@@ -81,7 +81,7 @@ describe('shared parameters reach the tools that reference them', () => {
 
   /**
    * The name a `$ref` resolves to, for a query parameter. A header is never a
-   * tool input — a `soat` tool call carries a write precondition in the body —
+   * tool input — a `builtin` tool call carries a write precondition in the body —
    * so only the query half is measured here.
    */
   const queryParameterName = (ref: string): string | null => {

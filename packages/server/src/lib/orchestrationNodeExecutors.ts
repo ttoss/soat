@@ -164,7 +164,7 @@ export const executeAgentNode = async (args: {
   // retried node's generations apart without guessing from timestamps.
   nodeAttempt?: number;
   // The run's `tool_context`, forwarded to this generation so the agent's
-  // `http`/`mcp`/`soat` tool calls carry the caller's context headers.
+  // `http`/`mcp`/`builtin` tool calls carry the caller's context headers.
   toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
   const {

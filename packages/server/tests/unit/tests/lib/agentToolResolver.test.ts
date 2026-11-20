@@ -540,7 +540,7 @@ describe('buildSoatRequestBody - trace field injection scoping', () => {
     });
   });
 
-  // This body is how a `soat` tool hands the bag to whatever it
+  // This body is how a `builtin` tool hands the bag to whatever it
   // starts, so the tool's allowlist has to bound it here too — otherwise a
   // credential excluded from the tool's own headers still reaches every tool of
   // the nested generation.

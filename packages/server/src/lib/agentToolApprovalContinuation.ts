@@ -276,7 +276,7 @@ const executeApprovedAction = async (args: {
     action: proposed.action,
     input,
     // The approved action runs as the chain's principal too, not just the
-    // continuation that reports it — a proposed `soat` call is executed here,
+    // continuation that reports it — a proposed `builtin` call is executed here,
     // and without the credential it reaches the loopback unauthenticated.
     authority: args.authority,
     toolContext: args.toolContext,

@@ -31,7 +31,7 @@ const STANDALONE_TOOLS = new Set([
  *
  * No `app.listen(process.env.PORT)` is needed to match a base URL frozen at
  * import time, because nothing here goes out through `fetch` — the same
- * property `soatInProcessDispatch.test.ts` pins for the agent-side `soat`
+ * property `soatInProcessDispatch.test.ts` pins for the agent-side `builtin`
  * tool.
  */
 describe('MCP tools - happy path', () => {

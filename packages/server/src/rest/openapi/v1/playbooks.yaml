@@ -1845,7 +1845,7 @@ components:
           minLength: 1
           description: >-
             Only on a `tool` executor: which action of a multi-action (`mcp`,
-            `soat`) tool to call — the same selector an orchestration `tool`
+            `builtin`) tool to call — the same selector an orchestration `tool`
             node's `operation_id` is. Required by an `mcp` tool.
         input:
           type: object

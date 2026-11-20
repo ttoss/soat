@@ -405,7 +405,7 @@ const { data: listTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
-    type: 'soat',
+    type: 'builtin',
     actions: ['list-documents'],
   },
 });
@@ -414,7 +414,7 @@ const { data: readTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
-    type: 'soat',
+    type: 'builtin',
     actions: ['get-document'],
   },
 });
@@ -424,7 +424,7 @@ const { data: writeTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
-    type: 'soat',
+    type: 'builtin',
     actions: ['update-document'],
     preset_parameters: { document_id: publicDocId },
   },

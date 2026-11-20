@@ -81,7 +81,7 @@ A token may carry `tool_context`, a layer of keys its issuer pins for everything
 }
 ```
 
-- On every tool call the token makes, and every call its work starts (a generation's tool calls, nested `builtin` and `soat` calls, a `call-tool` relay, a manual trigger fire), a caller key the layer names is dropped in any casing and the layer's value is sent instead. A model or caller writing `tenant_id` gets the layer's value.
+- On every tool call the token makes, and every call its work starts (a generation's tool calls, nested `builtin` calls, a `call-tool` relay, a manual trigger fire), a caller key the layer names is dropped in any casing and the layer's value is sent instead. A model or caller writing `tenant_id` gets the layer's value.
 - A tool server calling back with the [assertion](./tools.md#tool-assertions) of a call the token or its work made, in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call), carries the layer too, stamped over its own credential's: its tool calls and the work it starts send the layer's value. A scheduled trigger firing carries no layer.
 - The stamp happens where the call enters the tool, after [admission](#admission): admission sees the caller's own `tool_context`.
 - Keys follow the [`tool_context` key grammar](./tools.md); a server identity key (`session_id`, `actor_id`, `actor_external_id`, `calling_project_id`) is `400 INVALID_TOOL_CONTEXT_KEY`.
