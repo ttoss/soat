@@ -931,6 +931,7 @@ components:
         trace_content_mode:
           type: string
           nullable: true
+          enum: [full, none, null]
           description: >-
             Agent-scope zero-retention setting (`full` or `none`). `null`
             inherits the project's setting. `full` is refused when the project's
@@ -938,6 +939,7 @@ components:
         on_approval_expiry:
           type: string
           nullable: true
+          enum: [terminate, react, null]
           description: >-
             What happens when a held tool call expires un-approved:
             `terminate` (the default when null) ends the chain, `react` spawns
@@ -1107,7 +1109,8 @@ components:
           description: Tool display name
         type:
           type: string
-          description: Tool type hint (e.g. http, mcp, builtin, pipeline)
+          enum: [http, client, mcp, builtin, pipeline]
+          description: Tool type (default http)
         description:
           type: string
           nullable: true
@@ -1804,7 +1807,8 @@ components:
           description: Human-readable label for the conversation
         status:
           type: string
-          description: Initial status of the conversation (open or closed)
+          enum: [open, closed]
+          description: Initial status of the conversation
         actor_id:
           x-soat-ref: actors
           type: string
@@ -2102,16 +2106,19 @@ components:
           description: Merged into the tool input before invocation (tool converters only)
         native_extraction:
           type: string
+          enum: [first, skip]
           description: >-
             For native types (PDF/text): `first` (default) converts only
             when native extraction yields no text; `skip` always converts.
         file_delivery:
           type: string
-          description: How the file reaches a tool converter — base64 (default) or download_url
+          enum: [base64, download_url]
+          description: How the file reaches a tool converter; `base64` is the default
         chunk_strategy:
           type: string
           nullable: true
-          description: Default chunk strategy (page/whole/size), overridable per ingest request
+          enum: [page, whole, size, null]
+          description: Default chunk strategy, overridable per ingest request
         chunk_size:
           type: integer
           nullable: true
@@ -2155,6 +2162,7 @@ components:
           description: Public ID of the destination memory store
         'on':
           type: string
+          enum: [generations.completed, conversation_messages.generated]
           description: >-
             `generations.completed` (once per completed turn, and the only
             event the built-in extractor may bind to) or

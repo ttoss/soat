@@ -61,6 +61,8 @@ const DOMAIN_LIFECYCLES: Record<string, string> = {
   'chains.yaml#GET /api/v1/chains.status':
     'a conversation chain and its budget',
   'conversations.yaml#ConversationRecord.status': 'a conversation is a thread',
+  'formations.yaml#ConversationResourceProperties.status':
+    'a conversation is a thread',
   'conversations.yaml#POST /api/v1/conversations.status':
     'a conversation is a thread',
   'conversations.yaml#PATCH /api/v1/conversations/{conversation_id}.status':
