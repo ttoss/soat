@@ -218,7 +218,7 @@ Nothing serializes generate calls on one conversation. Each turn reads the histo
 
 #### Streaming
 
-With `"stream": true` the response is `text/event-stream`. The message is persisted **only after** the stream completes; partial streams produce none. The final event carries `document_id`, `generation_id`, and `trace_id`.
+Generate does not stream. `"stream": true` answers `501 NOT_IMPLEMENTED` and runs nothing; omit `stream` or send `false`.
 
 ### Tool Context
 
