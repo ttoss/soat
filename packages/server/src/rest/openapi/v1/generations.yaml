@@ -1085,7 +1085,7 @@ components:
           type: string
           nullable: true
           description: The model's id for the call, as its step records it.
-          example: call_V1StGXR8Z5jdHi6B
+          example: V1StGXR8Z5jdHi6B
         step_index:
           type: integer
           nullable: true
