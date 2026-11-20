@@ -1603,6 +1603,10 @@ describe('Quotas', () => {
       const conversationRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/conversations')
         .send({ project_id: enfProjectId });
+      const conversationMessage = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${conversationRes.body.id}/messages`)
+        .send({ message: 'hello', role: 'user' });
+      expect(conversationMessage.status).toBe(201);
       const conversationBlocked = await authenticatedTestClient(adminToken)
         .post(
           `/api/v1/conversations/${conversationRes.body.id}/generate?wait=true`
@@ -1723,9 +1727,10 @@ describe('Quotas', () => {
       );
       expect(quotaRes.status).toBe(201);
 
-      await authenticatedTestClient(adminToken)
+      const bobMessage = await authenticatedTestClient(adminToken)
         .post(`/api/v1/sessions/${bob.sessionId}/messages`)
-        .send({ role: 'user', content: 'hello' });
+        .send({ message: 'hello' });
+      expect(bobMessage.status).toBe(201);
 
       const before = await db.UsageEvent.count({
         where: { projectId: projectInternalId },
@@ -1775,9 +1780,10 @@ describe('Quotas', () => {
       // Alice has spent nothing, so the same quota does not stop her — what
       // makes a null-ref quota per-actor rather than a project total. Her call
       // may still fail upstream; what this pins is that the gate did not stop it.
-      await authenticatedTestClient(adminToken)
+      const aliceMessage = await authenticatedTestClient(adminToken)
         .post(`/api/v1/sessions/${alice.sessionId}/messages`)
-        .send({ role: 'user', content: 'hello' });
+        .send({ message: 'hello' });
+      expect(aliceMessage.status).toBe(201);
 
       const allowed = await authenticatedTestClient(adminToken)
         .post(`/api/v1/sessions/${alice.sessionId}/generate?wait=true`)
