@@ -17,6 +17,7 @@ import {
   emitGenerationEvent,
   type GenerationRequiredActionWire,
 } from './generationEvents';
+import { appendGenerationSettled } from './generationProgress';
 import { provenanceStatusUpdates } from './generationProvenance';
 import {
   endGenerationSegment,
@@ -220,8 +221,19 @@ export const settleGeneration = async (args: {
   if (!gen) return false;
 
   const updates = await settledColumns({ gen, outcome });
-  const [settled] = await db.Generation.update(updates, {
-    where: { [Op.and]: [{ publicId: generationId }, fence] },
+  const settled = await db.sequelize.transaction(async (transaction) => {
+    const [count] = await db.Generation.update(updates, {
+      where: { [Op.and]: [{ publicId: generationId }, fence] },
+      transaction,
+    });
+    if (count > 0) {
+      await appendGenerationSettled({
+        generationDbId: gen.id as number,
+        status: outcome.status,
+        transaction,
+      });
+    }
+    return count;
   });
   // Won or lost, the segment's run is over; a write that threw keeps it, so
   // the failure path can still settle.

@@ -121,6 +121,25 @@ export const GENERATION_CONTENT_FIELDS = [
   'inputMessages',
 ] as const;
 
+/**
+ * Every column of `generation_progress_events`, each skeleton: none is in
+ * {@link GENERATION_CONTENT_FIELDS}, so neither a purge nor zero retention
+ * reaches the table. A tool's name, arguments and result, a step's text and an
+ * error are content and are never columns there.
+ */
+export const GENERATION_PROGRESS_COLUMNS = [
+  'id',
+  'generationId',
+  'seq',
+  'type',
+  'stepIndex',
+  'toolCallId',
+  'status',
+  'durationMs',
+  'childGenerationId',
+  'createdAt',
+] as const;
+
 /** The same set as a null-map, for a bulk `UPDATE`. */
 export const PURGED_GENERATION_CONTENT = {
   metadata: null,

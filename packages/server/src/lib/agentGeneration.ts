@@ -120,6 +120,10 @@ type ResolveContextArgs = {
   outputSchemaOverride?: Record<string, unknown>;
 };
 
+const parentCallOf = (authUser: AuthUser | undefined) => {
+  return authUser?.toolCall;
+};
+
 const resolveContextAndRecord = async (
   args: ResolveContextArgs
 ): Promise<GenerationContext> => {
@@ -194,6 +198,7 @@ const resolveContextAndRecord = async (
     retrieval: ctx.retrieval,
     provenance: provenanceForNewRow(ctx.provenance),
     idempotency: args.idempotency,
+    parentCall: parentCallOf(args.authUser),
   }).catch((error) => {
     // The one write failure that must not be swallowed: a claimed key means
     // another request already owns this generation.

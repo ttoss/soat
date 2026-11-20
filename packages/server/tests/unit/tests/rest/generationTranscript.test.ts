@@ -451,10 +451,9 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     );
   });
 
-  test('returns empty steps for a generation still in progress', async () => {
-    // The steps object is not written until the run finishes, so an unfinished
-    // turn has nothing to project. `status` disambiguates it from erased
-    // content, which is why `steps` stays a plain array.
+  test('returns empty steps for a generation that has ended none', async () => {
+    // `status` disambiguates a turn with no ended step from erased content,
+    // which is why `steps` stays a plain array.
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });
@@ -473,6 +472,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('running');
     expect(res.body.steps).toEqual([]);
+    expect(res.body.in_flight_tool_calls).toEqual([]);
     expect(res.body.output).toBeNull();
     // Not erased — the run simply has not produced steps yet.
     expect(res.body.content_redacted_at).toBeNull();

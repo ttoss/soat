@@ -1077,6 +1077,23 @@ components:
             null here — the ledger prices one event per generation, so a
             per-step price would disagree with it after any price change.
 
+    InFlightToolCall:
+      type: object
+      description: A tool call that started and has not finished.
+      properties:
+        tool_call_id:
+          type: string
+          nullable: true
+          description: The model's id for the call, as its step records it.
+          example: call_V1StGXR8Z5jdHi6B
+        step_index:
+          type: integer
+          nullable: true
+          description: Index of the step the call belongs to.
+          example: 1
+        started_at:
+          type: string
+          format: date-time
     GenerationTranscript:
       type: object
       description: >
@@ -1146,11 +1163,20 @@ components:
         steps:
           type: array
           description: >
-            The turn's steps in order. Empty for a run still in progress, and
-            for one whose content is unavailable — `status` and
-            `content_redacted_at` say which.
+            The turn's steps in order: for a running turn, the steps ended so
+            far. Empty for a turn with no ended step, and for one whose content
+            is unavailable — `status` and `content_redacted_at` say which.
           items:
             $ref: '#/components/schemas/TranscriptStep'
+        in_flight_tool_calls:
+          type: array
+          description: >
+            The tool calls a running turn started and has not finished, in
+            start order. Empty unless `status` is `running`. Ids and times
+            only, so present whatever the content mode; the call's name and
+            arguments arrive with its step.
+          items:
+            $ref: '#/components/schemas/InFlightToolCall'
         output:
           type: object
           nullable: true

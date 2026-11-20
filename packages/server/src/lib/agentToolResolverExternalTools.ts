@@ -99,6 +99,7 @@ export const executeSoatTool = async (args: {
             as: {
               authority: turnAuthority(args),
               actor: args.toolContext?.actor_id ?? null,
+              call: args.call,
             },
             headers: handoff.headers,
             body,

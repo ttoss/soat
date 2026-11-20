@@ -1,5 +1,6 @@
 import type { DB } from './db';
 import type { RefusedBy } from './lib/authorizationDenial';
+import type { ParentToolCall } from './lib/generationProgress';
 import type { PolicySets } from './lib/iam';
 import type { OnBehalfOf } from './lib/onBehalfOf';
 import type { LabeledPolicySets } from './lib/permissions';
@@ -91,6 +92,11 @@ export type AuthUser = {
    * firing began its chain and the work it drives.
    */
   work?: { trigger: string | null; work: string | null };
+  /**
+   * Set when a generation's tool call makes the request in-process: the
+   * generation the request starts points that call at itself.
+   */
+  toolCall?: ParentToolCall | null;
   /**
    * The end user the request serves, from the in-process work or the
    * `On-Behalf-Of` assertion that names one; never caller-written.

@@ -1,12 +1,18 @@
 import type { IncomingMessage } from 'node:http';
 
+import type { ParentToolCall } from './generationProgress';
 import type { WorkAuthority } from './workAuthority';
 
 /**
  * What an in-process request carries from the work making it: the authority
- * it runs under and the end user (actor) that work serves.
+ * it runs under, the end user (actor) that work serves and, from a
+ * generation's tool call, that call.
  */
-export type AttachedWork = { authority: WorkAuthority; actor: string | null };
+export type AttachedWork = {
+  authority: WorkAuthority;
+  actor: string | null;
+  call?: ParentToolCall | null;
+};
 
 /**
  * Keyed by the request object itself: no header carries it, so nothing

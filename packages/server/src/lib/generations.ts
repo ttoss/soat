@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { Transaction } from './dbTransaction';
 import {
   attributionColumns,
   conversationColumns,
@@ -20,6 +21,10 @@ import {
   mapGenerationWithUsage,
   type PersistedGeneration,
 } from './generationMapper';
+import {
+  appendGenerationStarted,
+  type ParentToolCall,
+} from './generationProgress';
 import {
   NO_PROVENANCE,
   provenanceColumns,
@@ -68,6 +73,31 @@ const generationIncludes = () => {
  * They must commit together, or a `Generation.create` failure orphans an
  * invisible Trace that still blocks `deleteAgent`.
  */
+const traceOfNewGeneration = async (helperArgs: {
+  args: {
+    traceId: string;
+    parentTraceId?: string | null;
+    rootTraceId?: string | null;
+    projectId: number;
+  };
+  agentDbId: number;
+  transaction: Transaction;
+}) => {
+  const { args, agentDbId, transaction } = helperArgs;
+  const [parentTraceDbId, rootTraceDbId] = await Promise.all([
+    findTraceDbId({ traceId: args.parentTraceId, transaction }),
+    findTraceDbId({ traceId: args.rootTraceId, transaction }),
+  ]);
+  return findOrCreateTrace({
+    traceId: args.traceId,
+    projectId: args.projectId,
+    agentDbId,
+    parentTraceDbId,
+    rootTraceDbId,
+    transaction,
+  });
+};
+
 const commitGenerationWithTrace = async (helperArgs: {
   args: GenerationAttribution &
     StartedWork & {
@@ -82,6 +112,7 @@ const commitGenerationWithTrace = async (helperArgs: {
       retrieval?: KnowledgeRetrieval;
       idempotency?: GenerationIdempotency;
       provenance?: ProvenanceCounts;
+      parentCall?: ParentToolCall | null;
     };
   agentDbId: number;
   initiatorDbId: number | null;
@@ -102,21 +133,9 @@ const commitGenerationWithTrace = async (helperArgs: {
   const lease = newGenerationLease();
 
   const gen = await db.sequelize.transaction(async (transaction) => {
-    const [parentTraceDbId, rootTraceDbId] = await Promise.all([
-      findTraceDbId({ traceId: args.parentTraceId, transaction }),
-      findTraceDbId({ traceId: args.rootTraceId, transaction }),
-    ]);
+    const trace = await traceOfNewGeneration({ args, agentDbId, transaction });
 
-    const trace = await findOrCreateTrace({
-      traceId: args.traceId,
-      projectId: args.projectId,
-      agentDbId,
-      parentTraceDbId,
-      rootTraceDbId,
-      transaction,
-    });
-
-    return db.Generation.create(
+    const created = await db.Generation.create(
       {
         publicId: args.publicId,
         projectId: args.projectId,
@@ -155,46 +174,54 @@ const commitGenerationWithTrace = async (helperArgs: {
       },
       { transaction }
     );
+    await appendGenerationStarted({
+      generationDbId: created.id as number,
+      generationId: args.publicId,
+      parentCall: args.parentCall,
+      transaction,
+    });
+    return created;
   });
   return { gen, lease };
 };
 
-const insertGenerationRecord = async (
-  args: GenerationAttribution &
-    StartedWork & {
-      publicId: string;
-      projectId: number;
-      agentId: string;
-      traceId: string;
-      parentTraceId?: string | null;
-      rootTraceId?: string | null;
-      // The chain this generation belongs to, resolved by `generationChain.ts`,
-      // which is the only writer of the column.
-      rootGenerationId?: string | null;
-      initiatorGenerationId?: string | null;
-      // The conversation this generation serves, when it serves one: the edge
-      // the memory assertions walk up from a generation.
-      conversation?: GenerationConversation;
-      // Public id of the session this generation serves. The end-user actor is
-      // derived from it (see resolveGenerationEndUser).
-      sessionId?: string | null;
-      // Public id of an actor named with no session; ignored beside a session.
-      actorId?: string | null;
-      metadata?: Record<string, unknown> | null;
-      // The turn's resolved input messages, recorded so the generation can later
-      // be promoted into an eval dataset item. Content, so zero-retention refuses
-      // it exactly as it refuses `metadata`.
-      inputMessages?: unknown[] | null;
-      // Measured, never caller-supplied. Not content — see the column.
-      toolSurface?: Record<string, unknown> | null;
-      retrieval?: KnowledgeRetrieval;
-      // A unique violation on it is the caller's retry losing the race.
-      idempotency?: GenerationIdempotency;
-      // What the turn's context already holds when it starts: its chain's
-      // counts, its input and its knowledge injection.
-      provenance?: ProvenanceCounts;
-    }
-) => {
+type NewGenerationRecord = GenerationAttribution &
+  StartedWork & {
+    publicId: string;
+    projectId: number;
+    agentId: string;
+    traceId: string;
+    parentTraceId?: string | null;
+    rootTraceId?: string | null;
+    // The chain this generation belongs to, resolved by `generationChain.ts`,
+    // which is the only writer of the column.
+    rootGenerationId?: string | null;
+    initiatorGenerationId?: string | null;
+    // The conversation this generation serves, when it serves one: the edge
+    // the memory assertions walk up from a generation.
+    conversation?: GenerationConversation;
+    // Public id of the session this generation serves. The end-user actor is
+    // derived from it (see resolveGenerationEndUser).
+    sessionId?: string | null;
+    // Public id of an actor named with no session; ignored beside a session.
+    actorId?: string | null;
+    metadata?: Record<string, unknown> | null;
+    // The turn's resolved input messages, recorded so the generation can later
+    // be promoted into an eval dataset item. Content, so zero-retention refuses
+    // it exactly as it refuses `metadata`.
+    inputMessages?: unknown[] | null;
+    // Measured, never caller-supplied. Not content — see the column.
+    toolSurface?: Record<string, unknown> | null;
+    retrieval?: KnowledgeRetrieval;
+    // A unique violation on it is the caller's retry losing the race.
+    idempotency?: GenerationIdempotency;
+    // What the turn's context already holds when it starts: its chain's
+    // counts, its input and its knowledge injection.
+    provenance?: ProvenanceCounts;
+    parentCall?: ParentToolCall | null;
+  };
+
+const insertGenerationRecord = async (args: NewGenerationRecord) => {
   const [agent, initiatorGeneration] = await Promise.all([
     // The agent that is running: the project's own, or one shared with it.
     agentReferences.find({

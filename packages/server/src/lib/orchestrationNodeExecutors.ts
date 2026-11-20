@@ -280,9 +280,8 @@ export const executeToolNode = async (args: {
       ? (result as Record<string, unknown>)
       : { result };
 
-  // The run-scoped call site: a tool node has no agent in scope. Threading no
-  // `ActivityCallContext` is what keeps the resolver's own `recordToolActivity`
-  // from recording the same call twice. Fire-and-forget.
+  // The run-scoped call site: a tool node runs in no generation, so no
+  // generation instrumentation records it. Fire-and-forget.
   void emitActivityEntry({
     projectId: args.projectId,
     kind: 'action_executed',
