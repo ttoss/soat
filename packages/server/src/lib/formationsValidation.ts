@@ -1,6 +1,7 @@
 import { load } from 'js-yaml';
 
 import { buildDependencyGraph, dependencyCycles } from './formationsHelpers';
+import { parameterDeclarationErrors } from './formationsParameters';
 import { normalizeDeclaredProperties } from './formationsProperties';
 import {
   validateOutputRefs,
@@ -261,13 +262,12 @@ const validateParametersSection = (
       });
       continue;
     }
-    const declObj = decl as Record<string, unknown>;
-    if (declObj.type !== undefined && typeof declObj.type !== 'string') {
-      errors.push({
-        path: `parameters.${name}.type`,
-        message: '`type` must be a string',
-      });
-    }
+    errors.push(
+      ...parameterDeclarationErrors({
+        name,
+        decl: decl as Record<string, unknown>,
+      })
+    );
   }
   return errors;
 };

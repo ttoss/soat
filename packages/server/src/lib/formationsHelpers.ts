@@ -1,4 +1,5 @@
 import { type Dag, topologicalWaves } from './dag';
+import { parameterText, resolveParameterValues } from './formationsParameters';
 import type {
   FormationTemplate,
   ParameterDeclaration,
@@ -171,7 +172,7 @@ export const collectParamRefs = (value: unknown): string[] => {
 
 export const resolveParamExpressions = (
   value: unknown,
-  resolvedParams: Map<string, string>,
+  resolvedParams: Map<string, unknown>,
   resourceLogicalIds?: Set<string>
 ): unknown => {
   if (isParam(value)) {
@@ -199,7 +200,7 @@ export const resolveParamExpressions = (
           hasUnresolved = true;
           return original;
         }
-        return resolved;
+        return parameterText(resolved);
       }
     );
     // If any (non-body) param in the interpolation was kept/omitted, drop the
@@ -227,28 +228,6 @@ export const resolveParamExpressions = (
   return value;
 };
 
-export const buildResolvedParamsMap = (
-  template: FormationTemplate,
-  provided?: Record<string, string>
-): Map<string, string> => {
-  const resolved = new Map<string, string>();
-  if (!template.parameters) return resolved;
-
-  for (const [name, decl] of Object.entries(template.parameters)) {
-    const providedValue = provided?.[name];
-    if (providedValue !== undefined) {
-      resolved.set(name, providedValue);
-    } else if (decl.default !== undefined) {
-      resolved.set(name, decl.default);
-    }
-    // A parameter declared `use_previous_value` and not supplied is left
-    // unresolved on purpose: its `{ param: ... }` expression resolves to
-    // `undefined`, the field is dropped, and the existing value is preserved.
-  }
-
-  return resolved;
-};
-
 // Placeholder written to `resolvedParameters` for `no_echo` parameters so a
 // deploy's parameter set stays auditable without persisting the sensitive value.
 const MASKED_PARAMETER_VALUE = '***';
@@ -265,12 +244,12 @@ export const buildAuditableParameters = (
   provided?: Record<string, string>
 ): Record<string, string> | null => {
   if (!template.parameters) return null;
-  const resolved = buildResolvedParamsMap(template, provided);
+  const resolved = resolveParameterValues(template, provided);
   const result: Record<string, string> = {};
   for (const [name, decl] of Object.entries(template.parameters)) {
     const value = resolved.get(name);
     if (value === undefined) continue;
-    result[name] = decl.no_echo ? MASKED_PARAMETER_VALUE : value;
+    result[name] = decl.no_echo ? MASKED_PARAMETER_VALUE : parameterText(value);
   }
   return Object.keys(result).length > 0 ? result : null;
 };
@@ -284,7 +263,7 @@ export const resolveWorkingTemplate = (args: {
   parameters?: Record<string, string>;
 }): FormationTemplate => {
   const { template, parameters } = args;
-  const resolvedParamsMap = buildResolvedParamsMap(template, parameters);
+  const resolvedParamsMap = resolveParameterValues(template, parameters);
   const hasParameters =
     !!template.parameters && Object.keys(template.parameters).length > 0;
   if (!hasParameters && resolvedParamsMap.size === 0) return template;

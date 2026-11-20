@@ -7,7 +7,6 @@ import {
 import {
   buildAuditableParameters,
   buildDependencyGraph,
-  buildResolvedParamsMap,
   collectParamRefs,
   collectRefAttrs,
   collectRefs,
@@ -22,6 +21,7 @@ import {
   resolveWorkingTemplate,
   topologicalSort,
 } from 'src/lib/formationsHelpers';
+import { resolveParameterValues } from 'src/lib/formationsParameters';
 import {
   mergeWithPrevious,
   normalizeDeclaredProperties,
@@ -437,12 +437,12 @@ describe('formationsHelpers', () => {
     });
   });
 
-  // ── buildResolvedParamsMap ────────────────────────────────────────────────
+  // ── resolveParameterValues ────────────────────────────────────────────────
 
-  describe('buildResolvedParamsMap', () => {
+  describe('resolveParameterValues', () => {
     test('returns empty map when template has no parameters', () => {
       const template: FormationTemplate = { resources: {} };
-      expect(buildResolvedParamsMap(template)).toEqual(new Map());
+      expect(resolveParameterValues(template)).toEqual(new Map());
     });
 
     test('uses provided values over defaults', () => {
@@ -450,7 +450,7 @@ describe('formationsHelpers', () => {
         resources: {},
         parameters: { env: { default: 'dev' } },
       };
-      const map = buildResolvedParamsMap(template, { env: 'prod' });
+      const map = resolveParameterValues(template, { env: 'prod' });
       expect(map.get('env')).toBe('prod');
     });
 
@@ -459,7 +459,7 @@ describe('formationsHelpers', () => {
         resources: {},
         parameters: { env: { default: 'dev' } },
       };
-      const map = buildResolvedParamsMap(template);
+      const map = resolveParameterValues(template);
       expect(map.get('env')).toBe('dev');
     });
 
@@ -468,7 +468,7 @@ describe('formationsHelpers', () => {
         resources: {},
         parameters: { required: {} },
       };
-      const map = buildResolvedParamsMap(template);
+      const map = resolveParameterValues(template);
       expect(map.has('required')).toBe(false);
     });
 
@@ -480,9 +480,56 @@ describe('formationsHelpers', () => {
           secret: { use_previous_value: true },
         },
       };
-      const map = buildResolvedParamsMap(template, { env: 'prod' });
+      const map = resolveParameterValues(template, { env: 'prod' });
       expect(map.get('env')).toBe('prod');
       expect(map.has('secret')).toBe(false);
+    });
+
+    test.each([
+      ['number', '5', 5],
+      ['number', '-1.5', -1.5],
+      ['list', '["a", 1]', ['a', 1]],
+      ['list', '[]', []],
+      ['string', '[1]', '[1]'],
+    ])('a provided %s value %s resolves typed', (type, value, expected) => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: { P: { type } },
+      };
+      expect(resolveParameterValues(template, { P: value }).get('P')).toEqual(
+        expected
+      );
+    });
+
+    test('a number or list default given as a string resolves typed', () => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: {
+          N: { type: 'number', default: '3' },
+          L: { type: 'list', default: '["x"]' },
+        },
+      };
+      const map = resolveParameterValues(template);
+      expect(map.get('N')).toBe(3);
+      expect(map.get('L')).toEqual(['x']);
+    });
+
+    test.each([
+      ['number', ''],
+      ['number', '1e999'],
+      ['number', '0x'],
+      ['list', 'a,b'],
+      ['list', '"a"'],
+    ])('refuses a %s value %p', (type, value) => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: { P: { type } },
+      };
+      expect(() => {
+        return resolveParameterValues(template, { P: value });
+      }).toThrow(
+        expect.objectContaining({ code: 'FORMATION_INVALID_PARAMETERS' })
+      );
     });
   });
 

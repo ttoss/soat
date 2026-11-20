@@ -4,11 +4,8 @@ import {
   collectApplyAuthorizationRequests,
   collectAuthorizationDenials,
 } from './formationsAuthorization';
-import {
-  buildDependencyGraph,
-  buildResolvedParamsMap,
-  topologicalSort,
-} from './formationsHelpers';
+import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
+import { resolveParameterValues } from './formationsParameters';
 import {
   computeOrphanedPlanChanges,
   planResourceChange,
@@ -55,7 +52,7 @@ export const planFormation = async (args: {
     }
   }
 
-  const resolvedParams = buildResolvedParamsMap(args.template, args.parameters);
+  const resolvedParams = resolveParameterValues(args.template, args.parameters);
   const templateResourceKeys = new Set(Object.keys(args.template.resources));
 
   const changes: PlanChange[] = await Promise.all(

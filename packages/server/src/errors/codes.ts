@@ -392,6 +392,11 @@ export const ERROR_CODES = {
     description:
       'The formation template declares one or more required parameters (no default, not satisfied by use_previous_value) that were not supplied or were provided as an empty string.',
   },
+  FORMATION_INVALID_PARAMETERS: {
+    httpStatus: 400,
+    description:
+      "A supplied parameter value does not parse as the parameter's declared `type`: a `number` takes a numeric string, a `list` a JSON array. `meta.details` names each parameter.",
+  },
   FORMATION_DELETE_FAILED: {
     httpStatus: 409,
     description:

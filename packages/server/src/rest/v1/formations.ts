@@ -23,6 +23,10 @@ import {
   validateFormationTemplateAsync,
 } from 'src/lib/formations';
 import { deployableTemplate } from 'src/lib/formationsDeployTemplate';
+import {
+  parameterValueErrors,
+  resolveParameterValues,
+} from 'src/lib/formationsParameters';
 import type { FormationAuthorizationRequest } from 'src/lib/formationsTypes';
 import { buildSrn } from 'src/lib/iam';
 import { namesRequestTag } from 'src/lib/iamConditionKeys';
@@ -157,19 +161,21 @@ const assertStaticMetadata = (metadata: unknown): void => {
   );
 };
 
-const assertNoMissingParams = (
+// Refused here, before the formation is created, rather than as a failed apply.
+const assertDeployableParams = (
   template: FormationTemplate,
   provided: Record<string, string> | undefined,
   forUpdate = false
 ): void => {
   const missing = getMissingParams(template, provided, forUpdate);
-  if (missing.length === 0) return;
-  const details = missingParamsToErrors(missing);
-  throw new DomainError(
-    'FORMATION_MISSING_PARAMETERS',
-    `Missing required parameters: ${missing.join(', ')}`,
-    { details }
-  );
+  if (missing.length > 0) {
+    throw new DomainError(
+      'FORMATION_MISSING_PARAMETERS',
+      `Missing required parameters: ${missing.join(', ')}`,
+      { details: missingParamsToErrors(missing) }
+    );
+  }
+  resolveParameterValues(template, provided);
 };
 
 formationsRouter.post('/formations/validate', async (ctx: Context) => {
@@ -190,9 +196,16 @@ formationsRouter.post('/formations/validate', async (ctx: Context) => {
       parsedTemplate as FormationTemplate,
       body.parameters
     );
-    if (missing.length > 0) {
+    const errors = [
+      ...missingParamsToErrors(missing),
+      ...parameterValueErrors(
+        parsedTemplate as FormationTemplate,
+        body.parameters
+      ),
+    ];
+    if (errors.length > 0) {
       validation.valid = false;
-      validation.errors.push(...missingParamsToErrors(missing));
+      validation.errors.push(...errors);
     }
   }
 
@@ -262,7 +275,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     projectPublicId,
   });
 
-  assertNoMissingParams(parsedTemplate, body.parameters);
+  assertDeployableParams(parsedTemplate, body.parameters);
   const metadata = readNullableMetadataBag(body.metadata);
   assertStaticMetadata(metadata);
 
@@ -359,7 +372,7 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
       projectPublicId: formation.project_id,
       stored: { formationId: formation.id },
     });
-    assertNoMissingParams(parsedTemplate, body.parameters, true);
+    assertDeployableParams(parsedTemplate, body.parameters, true);
   }
 
   const updated = await updateFormation({
