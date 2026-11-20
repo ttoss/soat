@@ -58,6 +58,7 @@ const NOT_NULL_FOREIGN_KEYS = [
   'formation_resources.formation_id',
   'formations.project_id',
   'generation_chains.project_id',
+  'generation_progress_events.generation_id',
   'generations.project_id',
   'generations.trace_id',
   'guardrail_evaluations.project_id',

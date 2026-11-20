@@ -389,6 +389,7 @@ export const authMiddleware = async (ctx: Context, next: Next) => {
       ...authUser,
       work: { trigger: work.authority.trigger, work: work.authority.work },
       actor: work.actor,
+      toolCall: work.call ?? null,
     };
     await next();
     return;

@@ -41,6 +41,7 @@ import {
   persistGuardrailEvaluations,
 } from './guardrailEvaluationRecord';
 import { isPlainObject } from './plainObject';
+import { heldToolResult } from './toolCallOutcome';
 import { toolCallRunsAs } from './toolCallRunsAs';
 import { gatePresetsOf, mergePresetParameters } from './toolPresetParameters';
 import type { WorkAuthority } from './workAuthority';
@@ -564,7 +565,13 @@ const buildGuardedExecute = (args: {
       return args.originalExecute(outcome.cleanArgs, ...rest);
     }
     // `result` is always set for non-`execute` decisions.
-    return outcome.result ?? BLOCK_RESULTS.blocked;
+    return heldToolResult({
+      result: outcome.result ?? BLOCK_RESULTS.blocked,
+      status:
+        outcome.decision === 'route_to_approval'
+          ? 'pending_approval'
+          : outcome.decision,
+    });
   };
 };
 

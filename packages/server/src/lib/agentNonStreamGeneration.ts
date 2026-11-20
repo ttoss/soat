@@ -147,14 +147,11 @@ const callGenerateText = async (args: {
   onStepEnd: (step: unknown) => void;
   stepTarget: TraceStepTarget;
 }) => {
-  const hasTools = Object.keys(args.resolvedTools).length > 0;
-
   try {
     return await generateText({
       model: args.model,
       instructions: args.system,
       messages: args.nonSystemMessages as ModelMessage[],
-      tools: hasTools ? args.resolvedTools : undefined,
       toolChoice: args.toolChoice,
       prepareStep: args.prepareStep,
       stopWhen: resolveStopWhen(args.typedAgent),
@@ -162,6 +159,7 @@ const callGenerateText = async (args: {
       ...segmentCallOptions({
         generationId: args.generationId,
         steps: { target: args.stepTarget, firstIndex: 0 },
+        tools: args.resolvedTools,
         signal: args.abortSignal,
         onStepEnd: args.onStepEnd,
       }),
@@ -639,10 +637,6 @@ export const runToolOutputsGeneration = async (args: {
       model: args.pending.resolvedModel,
       instructions: args.system,
       messages: args.nonSystemMessages as ModelMessage[],
-      tools:
-        Object.keys(args.pending.resolvedTools).length > 0
-          ? args.pending.resolvedTools
-          : undefined,
       prepareStep: buildPrepareStep({
         stepRules: args.pending.agentConfig.stepRules,
         logContext: 'non_stream',
@@ -664,6 +658,7 @@ export const runToolOutputsGeneration = async (args: {
       ...segmentCallOptions({
         generationId: args.generationId,
         steps: { target: args.pending, firstIndex: stepsAlreadySpent },
+        tools: args.pending.resolvedTools,
         onStepEnd: (step) => {
           ranSteps.push(step);
         },

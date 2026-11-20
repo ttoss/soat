@@ -6,7 +6,7 @@ import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
 import {
   type ActivityCallContext,
-  recordToolActivity,
+  markToolActivity,
   recordToolResolutionFailure,
 } from './agentToolActivity';
 import { resolvedActionName } from './agentToolApproval';
@@ -1359,7 +1359,7 @@ export const resolveEphemeralAgentTool = async (args: {
     }),
   });
   const mapped = wrapToolsWithOutputMapping({
-    tools: recordToolActivity({
+    tools: markToolActivity({
       tools,
       toolId: null,
       toolType: typedTool.type,
@@ -1524,10 +1524,8 @@ const resolveReferenceBinding = async (args: {
       toolGuardrails,
     }),
   });
-  // Activity recording sits innermost, so it only fires for a call that actually
-  // reached (and returned from) the tool — see `recordToolActivity`.
   const tools = admitSharedBinding({
-    tools: recordToolActivity({
+    tools: markToolActivity({
       tools: resolved,
       toolId: typedTool.publicId,
       toolType: typedTool.type,

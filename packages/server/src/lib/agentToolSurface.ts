@@ -16,6 +16,7 @@ import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
 import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
 import type { GenerationProvenance } from './generationProvenance';
+import { heldToolResult } from './toolCallOutcome';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -78,7 +79,12 @@ const relayDenialsAsResults = (args: {
                 signal: executeArgs[1]?.abortSignal,
               });
             } catch (error) {
-              if (isAuthorizationDenial(error)) return denialToolResult(error);
+              if (isAuthorizationDenial(error)) {
+                return heldToolResult({
+                  result: denialToolResult(error),
+                  status: 'denied',
+                });
+              }
               throw error;
             }
           },

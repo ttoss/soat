@@ -8,10 +8,15 @@
  * a settle fences by is always the one its own claim wrote.
  */
 import { Op } from '@ttoss/postgresdb';
+import type { Tool } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  type GenerationInstrumentation,
+  generationInstrumentation,
+} from './generationInstrumentation';
 import {
   durationFromEnv,
   holdLease,
@@ -197,7 +202,7 @@ export const segmentLeaseToken = (generationId: string): string | undefined => {
   return segments.get(generationId)?.token;
 };
 
-/** Renews the lease at a progress boundary: a step ending. */
+/** Renews the lease at a progress boundary: a step or a tool call ending. */
 const noteSegmentProgress = (generationId: string): void => {
   const segment = segments.get(generationId);
   if (!segment) return;
@@ -214,9 +219,11 @@ const stepNumberOf = (step: unknown): number | undefined => {
 };
 
 /**
- * The cancellation, timeout and progress every model call of a segment runs
- * under: the segment's deadline and lease, plus `signal` (the request, a
- * session superseding the turn). The SDK hands the signal to every tool.
+ * The cancellation, timeout, progress and tool set every model call of a
+ * segment runs under: the segment's deadline and lease, plus `signal` (the
+ * request, a session superseding the turn). The SDK hands the signal to every
+ * tool. `tools` goes to the SDK only from here, so the instrumentation reads
+ * the set the call runs.
  *
  * Each step is recorded as it ends, at `steps.firstIndex` (the steps the turn
  * spent before this call) plus its number; the SDK awaits it before going on.
@@ -224,9 +231,14 @@ const stepNumberOf = (step: unknown): number | undefined => {
 export const segmentCallOptions = (args: {
   generationId: string;
   steps: { target: TraceStepTarget; firstIndex: number };
+  tools: Record<string, Tool>;
   signal?: AbortSignal;
   onStepEnd?: (step: unknown) => void;
-}): {
+}): Pick<
+  GenerationInstrumentation,
+  'onStepStart' | 'onToolExecutionStart' | 'onToolExecutionEnd'
+> & {
+  tools: Record<string, Tool> | undefined;
   abortSignal?: AbortSignal;
   timeout: { stepMs: number };
   onStepEnd: (step: unknown) => Promise<void>;
@@ -235,10 +247,22 @@ export const segmentCallOptions = (args: {
   const signals = [own, args.signal].filter((signal) => {
     return signal !== undefined;
   });
+  const instrumentation = generationInstrumentation({
+    generationId: args.generationId,
+    firstIndex: args.steps.firstIndex,
+    tools: args.tools,
+  });
   let ended = 0;
   return {
+    tools: Object.keys(args.tools).length > 0 ? args.tools : undefined,
     abortSignal: signals.length > 1 ? AbortSignal.any(signals) : signals[0],
     timeout: { stepMs: modelCallTimeoutMs() },
+    onStepStart: instrumentation.onStepStart,
+    onToolExecutionStart: instrumentation.onToolExecutionStart,
+    onToolExecutionEnd: async (event) => {
+      noteSegmentProgress(args.generationId);
+      await instrumentation.onToolExecutionEnd(event);
+    },
     onStepEnd: async (step) => {
       noteSegmentProgress(args.generationId);
       args.onStepEnd?.(step);
@@ -250,6 +274,7 @@ export const segmentCallOptions = (args: {
         stepNumber,
         step,
       });
+      await instrumentation.stepEnded(stepNumber);
     },
   };
 };

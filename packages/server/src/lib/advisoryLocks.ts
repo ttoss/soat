@@ -16,6 +16,7 @@ const ADVISORY_LOCK_NAMESPACES = {
   firstAdminBootstrap: 0x50a7_c002,
   oauthConnectionRefresh: 0x50a7_c003,
   taskDependencyGraph: 0x50a7_c004,
+  generationProgress: 0x50a7_c005,
 } as const;
 
 /**

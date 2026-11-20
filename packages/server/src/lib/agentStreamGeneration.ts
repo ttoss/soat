@@ -352,7 +352,6 @@ export const runStreamGeneration = async (
     maxRetries: routedMaxRetries(args.model),
     instructions: system,
     messages: nonSystemMessages as ModelMessage[],
-    tools: toolCount > 0 ? args.resolvedTools : undefined,
     toolChoice: args.toolChoice,
     prepareStep,
     stopWhen: resolveStopWhen(args.typedAgent),
@@ -360,6 +359,7 @@ export const runStreamGeneration = async (
     ...segmentCallOptions({
       generationId: args.generationId,
       steps: { target: turnStepTarget(args), firstIndex: 0 },
+      tools: args.resolvedTools,
       signal: args.abortSignal,
     }),
     onError: ({ error }) => {

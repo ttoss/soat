@@ -5,6 +5,7 @@ import createDebug from 'debug';
 
 import type { Context } from '../Context';
 import { DomainError } from '../errors';
+import type { ParentToolCall } from './generationProgress';
 import { attachWork } from './inProcessAuthority';
 import { isPlainObject } from './plainObject';
 import { type WorkAuthority, workAuthorityMissing } from './workAuthority';
@@ -172,7 +173,11 @@ const toWireBody = (args: {
  * holds none) and the end user it serves, or a caller's `Authorization` value.
  */
 export type DispatchAs =
-  | { authority: WorkAuthority | null; actor: string | null }
+  | {
+      authority: WorkAuthority | null;
+      actor: string | null;
+      call?: ParentToolCall | null;
+    }
   | { authorization: string };
 
 export const dispatchApiRequest = async (args: {
@@ -204,7 +209,10 @@ export const dispatchApiRequest = async (args: {
         work: `The call to ${method} ${args.path}`,
       });
     }
-    attachWork({ req, work: { authority: as.authority, actor: as.actor } });
+    attachWork({
+      req,
+      work: { authority: as.authority, actor: as.actor, call: as.call },
+    });
   }
   const ctx: Context = app.createContext(req, new ServerResponse(req));
 

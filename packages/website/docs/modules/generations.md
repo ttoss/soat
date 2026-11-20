@@ -258,9 +258,10 @@ curl https://api.example.com/api/v1/generations/gen_abc/transcript \
 </TabItem>
 </Tabs>
 
-The transcript is **assembled at read time** from the generation record and its step
-files in the trace; there is no transcript table and no extra write on the generation path, so
-it always reflects the current records.
+The transcript is **assembled at read time** from the generation record, its step
+files in the trace and its [progress rows](#progress-rows); there is no transcript table, so
+it always reflects the current records. A step file is written when its step ends, so a
+running turn's `steps` are the steps ended so far.
 
 Requires `traces:GetTrace` in addition to `generations:GetGeneration`, since the response
 merges content from both resources.
@@ -272,14 +273,19 @@ payloads, passed through exactly as recorded.
 The stored steps are **projected**, never forwarded; their on-disk shape belongs to the
 `ai` package.
 
+`in_flight_tool_calls` lists, for a `running` turn, the tool calls started and not ended:
+`tool_call_id`, `step_index` and `started_at`. It is empty in every other status. Being ids
+and times, it is present under zero retention too; the call's name and arguments arrive
+with its step.
+
 Two states return `200` with a skeleton rather than an error, so a caller never has to
 distinguish "no content" from "no such generation":
 
-| State                         | `status`  | `input` / `output` | `steps` | `content_redacted_at`           |
-| ----------------------------- | --------- | ------------------ | ------- | ------------------------------- |
-| Still running or paused       | `running`, `requires_action` | `null` | the steps ended so far | `null`          |
-| Never stored (zero-retention) | terminal  | `null`             | `[]`    | set, principal `zero_retention` |
-| Erased by a purge or sweep    | terminal  | `null`             | `[]`    | set, purging principal          |
+| State                         | `status`                     | `input` / `output` | `steps`                | `content_redacted_at`           |
+| ----------------------------- | ---------------------------- | ------------------ | ---------------------- | ------------------------------- |
+| Still running or paused       | `running`, `requires_action` | `null`             | the steps ended so far | `null`                          |
+| Never stored (zero-retention) | terminal                     | `null`             | `[]`                   | set, principal `zero_retention` |
+| Erased by a purge or sweep    | terminal                     | `null`             | `[]`                   | set, purging principal          |
 
 `step_count` survives all three, being a counter rather than content. It counts **this
 turn's** steps: when a `trace_id` groups several generations, the trace's own `step_count`
@@ -289,6 +295,36 @@ covers every one of them, while each transcript reports only its own slice — s
 A purged generation returns the skeleton even though its step files in the trace may still
 exist (see the warning under [Content Purge](#content-purge)); the redaction marker
 governs the whole transcript.
+
+### Progress rows
+
+While a turn runs, the server records what happens as ordered rows, one instrumentation
+point for every way a tool is bound (stored, inline, `builtin`, `mcp`, knowledge and
+`write_memory`):
+
+| Type                                                                         | Written                                                               | Fields                                                |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------- |
+| `generations.started`                                                        | with the generation record                                            | —                                                     |
+| `generations.step_started`, `generations.step_ended`                         | as a model step starts and ends                                       | `step_index`                                          |
+| `generations.tool_call_started`                                              | before the tool runs                                                  | `step_index`, `tool_call_id`                          |
+| `generations.tool_call_ended`                                                | when the call ends                                                    | `step_index`, `tool_call_id`, `status`, `duration_ms` |
+| `generations.sub_generation_started`                                         | in the parent's rows, when a `builtin` call starts another generation | `tool_call_id`, `child_generation_id`                 |
+| `generations.completed`, `generations.failed`, `generations.requires_action` | with the settle                                                       | `status`                                              |
+
+A tool call's `status` says what answered it:
+
+| `status`              | Meaning                                                         |
+| --------------------- | --------------------------------------------------------------- |
+| `executed`            | the tool ran and returned                                       |
+| `failed`              | the tool ran and threw                                          |
+| `blocked`, `tripwire` | a [guardrail](./guardrails.md) stopped it; the tool did not run |
+| `pending_approval`    | a guardrail routed it to an approval; the tool did not run      |
+| `denied`              | the agent's authority refused it; the tool did not run          |
+
+Rows hold ids, indexes, statuses and durations, never a tool's name, arguments, result or
+an error: none is content, so they survive a [purge](#content-purge) and are written on a
+zero-retention agent. `child_generation_id` is recorded whether or not a reader of the
+parent may read the child.
 
 ### What the turn cost, and what it cost to ask
 

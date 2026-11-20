@@ -13,9 +13,8 @@ const log = createDebug('soat:activity');
  * the guardrail context does, kept separate so the feed does not depend on a
  * guardrail applying.
  *
- * Absent on callers with no agent in scope: the orchestration tool-node executor
- * emits `action_executed` at its own call site (it has a node, not an agent), so
- * it passes no context here and never double-records.
+ * The orchestration tool-node executor emits `action_executed` at its own call
+ * site: a tool node has a node, not an agent, and runs in no generation.
  */
 export type ActivityCallContext = {
   projectId: number;
@@ -24,88 +23,81 @@ export type ActivityCallContext = {
   orchestrationRunId?: string | null;
 };
 
-/**
- * Wraps one resolved tool's `execute` so a **successful** call records an
- * `action_executed` entry. Applied innermost — inside the guardrail interceptor —
- * which is what makes the recording mean "the tool actually ran": a call the
- * guardrail blocks, trips, or routes to approval never reaches this wrapper, and
- * neither does one whose target throws.
- */
-const buildRecordedExecute = (args: {
-  originalExecute: NonNullable<Tool['execute']>;
+/** What a tool's executed call is recorded as on the activity feed. */
+export type ToolActivity = {
   toolId: string | null;
   action: string;
   activity: ActivityCallContext;
-}): NonNullable<Tool['execute']> => {
-  return async (...executeArgs) => {
-    const result = await args.originalExecute(...executeArgs);
-    // Fire-and-forget, mirroring the orchestration executor: `emitActivityEntry`
-    // swallows its own failures, so a recording hiccup can never fail or delay
-    // the tool result the model is waiting on.
-    void emitActivityEntry({
-      projectId: args.activity.projectId,
-      kind: 'action_executed',
-      summary: `Tool '${args.action}' executed by agent '${args.activity.agentId}'`,
-      detail: {
-        action: args.action,
-        toolId: args.toolId,
-      },
-      orchestrationRunId: args.activity.orchestrationRunId ?? null,
-      agentId: args.activity.agentId,
-      generationId: args.activity.generationId ?? null,
-      refId: args.toolId,
-    });
-    return result;
-  };
+};
+
+const TOOL_ACTIVITY: unique symbol = Symbol('soat.toolActivity');
+
+type MarkedTool = Tool & { [TOOL_ACTIVITY]?: ToolActivity };
+
+export const toolActivityOf = (resolved: Tool): ToolActivity | undefined => {
+  const marked: MarkedTool = resolved;
+  return marked[TOOL_ACTIVITY];
 };
 
 /**
- * Records every server-executed tool produced by one binding (one for most
- * types; many for `mcp` / `soat`) on the activity feed, attributed to the
- * turn's {@link ActivityCallContext}.
+ * Marks every server-executed tool produced by one binding (one for most
+ * types; many for `mcp` / `soat`) with what its executed call records on the
+ * activity feed. The mark survives every wrapper (each spreads the tool);
+ * `recordToolCall` (`generationInstrumentation.ts`) reads it.
  *
- * Client tools are skipped: they have no server-side `execute` — the call is
- * handed to the client, so the platform never executed the action and cannot
- * attest that it happened.
+ * Client tools are skipped: the call is handed to the client, so the platform
+ * never executed the action and cannot attest that it happened.
  */
-export const recordToolActivity = (args: {
+export const markToolActivity = (args: {
   tools: Record<string, Tool>;
   toolId: string | null;
   toolType: string;
   toolName: string;
   activity: ActivityCallContext;
 }): Record<string, Tool> => {
-  const { activity } = args;
-
-  log(
-    'recordToolActivity: agentId=%s toolName=%s tools=%d',
-    activity.agentId,
-    args.toolName,
-    Object.keys(args.tools).length
-  );
-
-  const recorded: Record<string, Tool> = {};
+  const marked: Record<string, Tool> = {};
   for (const [key, resolvedTool] of Object.entries(args.tools)) {
     if (!resolvedTool.execute) {
-      recorded[key] = resolvedTool;
+      marked[key] = resolvedTool;
       continue;
     }
-    recorded[key] = {
-      ...resolvedTool,
-      execute: buildRecordedExecute({
-        originalExecute: resolvedTool.execute,
-        // An inline (ephemeral) tool has no persisted id to reference.
-        toolId: args.toolId || null,
-        action: resolvedActionName({
-          type: args.toolType,
-          toolName: args.toolName,
-          key,
-        }),
-        activity,
+    const mark: ToolActivity = {
+      // An inline (ephemeral) tool has no persisted id to reference.
+      toolId: args.toolId || null,
+      action: resolvedActionName({
+        type: args.toolType,
+        toolName: args.toolName,
+        key,
       }),
+      activity: args.activity,
     };
+    const markedTool: MarkedTool = { ...resolvedTool, [TOOL_ACTIVITY]: mark };
+    marked[key] = markedTool;
   }
-  return recorded;
+  return marked;
+};
+
+/**
+ * Records an `action_executed` entry for a call that reached its tool and
+ * returned. Fire-and-forget: `emitActivityEntry` swallows its own failures,
+ * so a recording hiccup never fails or delays the tool result.
+ */
+export const recordToolExecuted = (mark: ToolActivity): void => {
+  log(
+    'recordToolExecuted: agentId=%s action=%s',
+    mark.activity.agentId,
+    mark.action
+  );
+  void emitActivityEntry({
+    projectId: mark.activity.projectId,
+    kind: 'action_executed',
+    summary: `Tool '${mark.action}' executed by agent '${mark.activity.agentId}'`,
+    detail: { action: mark.action, toolId: mark.toolId },
+    orchestrationRunId: mark.activity.orchestrationRunId ?? null,
+    agentId: mark.activity.agentId,
+    generationId: mark.activity.generationId ?? null,
+    refId: mark.toolId,
+  });
 };
 
 /**

@@ -15,6 +15,10 @@
 import createDebug from 'debug';
 
 import {
+  findInFlightToolCalls,
+  type InFlightToolCall,
+} from './generationProgress';
+import {
   generationStepCount,
   type GenerationWithTrace,
   loadGenerationWithTrace,
@@ -65,6 +69,7 @@ export type GenerationTranscript = {
   step_count: number;
   input: unknown[] | null;
   steps: TranscriptStep[];
+  in_flight_tool_calls: InFlightToolCall[];
   output: { content: string | null; finish_reason: string | null } | null;
   error: Record<string, unknown> | null;
   content_redacted_at: Date | null;
@@ -308,8 +313,10 @@ const resolveTranscriptContent = async (
  *   it; `content_redacted_by_principal_id` distinguishes the two. Matches the
  *   traces module, where a purged trace reads back as a skeleton so the erasure
  *   is provable rather than indistinguishable from a 404.
- * - **Still running** — `steps` holds the steps ended so far and `output` is
- *   null until the turn settles; `status` disambiguates.
+ * - **Still running** — `steps` holds the steps ended so far,
+ *   `in_flight_tool_calls` the tool calls started and not ended (skeleton, so
+ *   present under zero retention too), and `output` is null until the turn
+ *   settles; `status` disambiguates.
  *
  * `step_count` survives both, being a counter rather than content.
  */
@@ -350,6 +357,10 @@ export const getGenerationTranscript = async (args: {
     step_count: generationStepCount(generation),
     input,
     steps,
+    in_flight_tool_calls:
+      generation.status === 'running'
+        ? await findInFlightToolCalls({ generationDbId: generation.id })
+        : [],
     output: OPEN_STATUSES.has(generation.status) ? null : deriveOutput(steps),
     error: generation.error,
     content_redacted_at: generation.contentRedactedAt,
