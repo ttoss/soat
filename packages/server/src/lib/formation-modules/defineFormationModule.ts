@@ -26,7 +26,9 @@ import type {
   FormationModuleAuthorization,
   ValidationError,
 } from '../formationsTypes';
+import { applySchemaDefaults } from '../openapiSchemaDefaults';
 import { nullableFields } from '../openapiSchemaFields';
+import { resolveSchemaRef } from '../openapiSpec';
 import { findProjectPublicId } from '../projects';
 import type { StoredError } from '../storedError';
 import type { ModuleOpenApiSpec } from './formationSpecLoader';
@@ -514,6 +516,14 @@ export const defineFormationModule = <TResource>(
   return {
     resourceType,
     authorization: definition.authorization,
+
+    withSchemaDefaults: (properties) => {
+      return applySchemaDefaults({
+        schema: loadModuleSchema({ schemaName }),
+        properties,
+        resolveRef: resolveSchemaRef,
+      });
+    },
 
     validateProperties: ({
       properties,

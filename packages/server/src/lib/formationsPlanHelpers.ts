@@ -1,6 +1,7 @@
 import type { db } from 'src/db';
 
 import { isOrphanedResource } from './formationsApplyHelpers';
+import { propertyComparisonFor } from './formationsComparison';
 import { resolveParamExpressions, resolveRefs } from './formationsHelpers';
 import {
   mergeWithPrevious,
@@ -53,6 +54,7 @@ const buildComparedChange = (args: {
   templateResourceKeys: Set<string>;
   current: Record<string, unknown>;
   lastApplied: Record<string, unknown>;
+  deployed: ResourceDeclaration | undefined;
 }): PlanChange => {
   const {
     logicalId,
@@ -77,6 +79,10 @@ const buildComparedChange = (args: {
     previous: current,
     lastApplied,
     clearable: clearablePropertiesOf(decl.type),
+    comparison: propertyComparisonFor({
+      declared: decl,
+      deployed: args.deployed,
+    }),
   });
   return {
     logicalId,
@@ -96,6 +102,8 @@ export const planResourceChange = async (args: {
   existingMap: Map<string, string>;
   templateResourceKeys: Set<string>;
   lastAppliedProperties?: Record<string, unknown> | null;
+  /** This resource in the template the formation last deployed. */
+  deployed: ResourceDeclaration | undefined;
 }): Promise<PlanChange> => {
   const {
     logicalId,

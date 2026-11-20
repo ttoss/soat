@@ -176,6 +176,27 @@ const expectGone = async (args: {
 };
 
 /**
+ * The template a formation read returns, planned again, changes nothing: a
+ * default the runtime fills or a write-only value it cannot read back is not a
+ * difference.
+ */
+const expectStoredTemplateSettled = async (args: {
+  fx: FormationModuleFixtures;
+  formationId: string;
+}) => {
+  const read = await authenticatedTestClient(args.fx.adminToken).get(
+    `/api/v1/formations/${args.formationId}`
+  );
+  expect(read.status).toBe(200);
+  const change = await planChange({
+    fx: args.fx,
+    formationId: args.formationId,
+    template: read.body.template,
+  });
+  expect(change.action).toBe('no-op');
+};
+
+/**
  * Deploys the case, reads it back through a plan, applies its update and reads
  * that back, then tears the formation down and checks the resource is gone.
  */
@@ -203,6 +224,7 @@ export const runRoundTrip = async (args: {
     template: templateOf(testCase.type, spec.create),
   });
   expect(unchanged.diff.current).toMatchObject(spec.expectRead);
+  await expectStoredTemplateSettled({ fx, formationId: created.body.id });
 
   if (spec.update) {
     const updated = await client
@@ -223,6 +245,7 @@ export const runRoundTrip = async (args: {
     for (const field of spec.absentAfterUpdate ?? []) {
       expect(afterUpdate.diff.current).not.toHaveProperty(field);
     }
+    await expectStoredTemplateSettled({ fx, formationId: created.body.id });
   }
 
   const deleted = await client.delete(`/api/v1/formations/${created.body.id}`);

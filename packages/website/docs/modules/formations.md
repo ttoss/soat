@@ -527,7 +527,7 @@ Each entry in `plan-formation`'s `changes[]` carries a `diff` object alongside `
 | `diff.desired` | object         | Resolved desired-state properties, after parameter and `ref`/`sub` substitution — credential-bearing properties read as `{ "no_echo": true }`, see [Secrets in Templates](#secrets-in-templates) |
 | `diff.current` | object \| null | Current properties being compared against — `null` when there is nothing to compare (a `create`, an unregistered resource type, or a failed read)                                                |
 
-For a type whose live state can be read back (most), `diff.current` is the resource as it exists today; for a write-only type (currently only `secret`), it is the last-applied snapshot on the formation resource, which `update-formation` also diffs against.
+For a type whose live state can be read back (most), `diff.current` is the resource as it exists today; for a write-only type (`secret`), it is the last-applied snapshot on the formation resource, which `update-formation` also diffs against.
 
 The `formation_id` a plan compares against is looked up in the plan's project only. An id that names no formation there, including one owned by another project, is treated as absent: every resource plans as a `create`, and nothing about the other project's formation is returned.
 
@@ -537,6 +537,8 @@ Plan and apply share one change rule:
 - A property the last apply declared and the template now omits is **removed**: a nullable one is cleared (`null` in `diff.desired`, an `update`); any other keeps its value, shown in `diff.desired`. Operator-registered types keep every omitted property.
 - A property is nullable in its type's properties schema only when the resource's update can clear it, so a declared `null` and an omitted nullable property both clear it. A property set only at creation, or one the update cannot clear (a policy's `name`, a webhook's `description`), refuses `null`.
 - Comparison is **structural**; key order in a nested value bag is not a change.
+- A **schema default** is not a change: both sides are compared with every `default` the type's properties schema declares filled in, at every depth, so a playbook node omitting `final` equals one read back with `final: false`.
+- A **write-only property** compares equal when its declaration is the literal the formation last deployed, including one sent back as `{ "no_echo": true }`; any other value, or one holding a `param`, `ref` or `sub`, is a change.
 - A property resolving to `undefined` (a kept `use_previous_value` parameter) reuses the previous value, or is dropped when there is none.
 
 ### A Formation Only Does What the Caller Could Do Directly
@@ -700,7 +702,7 @@ The same list masks the property on every read of a stored template and in a pla
 
 Consequences:
 
-- **A write-only property always looks changed**: with nothing stored to compare against, every deploy sends it again (the handler is expected to be idempotent), so the resource never reports "no changes".
+- **A write-only property is compared with its last deployed declaration**: the literal the formation last deployed is not a change; a new literal, or a value from a `param`, `ref` or `sub`, is, and is sent again (the handler is expected to be idempotent). See [Plan Diff](#plan-diff).
 - **`read` should not return it either**: a credential echoed in `read.properties` goes straight back into the drift comparison.
 
 #### Overriding a built-in type

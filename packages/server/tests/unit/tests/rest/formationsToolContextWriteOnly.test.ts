@@ -3,13 +3,9 @@ import { authenticatedTestClient } from '../../testClient';
 
 /**
  * A Trigger's `tool_context` is write-only: `findTrigger` never returns it
- * (`toolContextCarrier.ts`), so `plan-formation`'s live-read diff can never
- * confirm a declared literal still matches. `triggersFormationModule`'s
- * `writeOnlyProperties: ['tool_context']` is what keeps `applyUpdateChange`
- * from persisting the raw value into `lastAppliedProperties` to make its own
- * diff agree with a live read that plan already never gets — a plan and the
- * apply it previews reporting different actions for the same unchanged
- * template is the defect this pins closed.
+ * (`toolContextCarrier.ts`), and `lastAppliedProperties` never stores it. A
+ * literal equal to the one the formation last deployed is what the trigger
+ * holds, so plan and apply both settle it; a different literal is an update.
  */
 describe('Formations: tool_context is write-only on a Trigger', () => {
   let userToken: string;
@@ -94,7 +90,7 @@ describe('Formations: tool_context is write-only on a Trigger', () => {
     triggerFormationId = res.body.id;
   });
 
-  test('plan-formation reports update for the unchanged literal, not no-op', async () => {
+  test('plan-formation reports no-op for the unchanged literal', async () => {
     const res = await authenticatedTestClient(userToken)
       .post('/api/v1/formations/plan')
       .send({
@@ -108,11 +104,11 @@ describe('Formations: tool_context is write-only on a Trigger', () => {
       return c.logical_id === 'MyTrigger';
     });
     expect(triggerChange).toBeDefined();
-    expect(triggerChange.action).toBe('update');
+    expect(triggerChange.action).toBe('no-op');
     expect(triggerChange.diff.current).not.toHaveProperty('tool_context');
   });
 
-  test('re-applying the unchanged literal still performs an update, not a no-op', async () => {
+  test('re-applying the unchanged literal is a no-op', async () => {
     const res = await authenticatedTestClient(userToken)
       .put(`/api/v1/formations/${triggerFormationId}`)
       .send({ template: templateFor('v1') });
@@ -133,6 +129,22 @@ describe('Formations: tool_context is write-only on a Trigger', () => {
     const triggerEvent = updateOp.events.find((e: { logical_id: string }) => {
       return e.logical_id === 'MyTrigger';
     });
-    expect(triggerEvent.action).toBe('update');
+    expect(triggerEvent.action).toBe('no-op');
+  });
+
+  test('plan-formation reports update for a changed literal', async () => {
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/formations/plan')
+      .send({
+        project_id: projectId,
+        formation_id: triggerFormationId,
+        template: templateFor('v2'),
+      });
+
+    expect(res.status).toBe(200);
+    const triggerChange = res.body.changes.find((c: { logical_id: string }) => {
+      return c.logical_id === 'MyTrigger';
+    });
+    expect(triggerChange.action).toBe('update');
   });
 });

@@ -128,6 +128,8 @@ export const processResourceChange = async (args: {
   actor: FormationActor;
   formationId: number;
   pendingCleanups: PendingCleanup[];
+  /** This resource in the template the formation last deployed. */
+  deployed: ResourceDeclaration | undefined;
 }): Promise<AppliedChange | null> => {
   const {
     logicalId,
@@ -185,6 +187,7 @@ export const processResourceChange = async (args: {
       resolvedIds,
       events,
       pendingCleanups: args.pendingCleanups,
+      deployed: args.deployed,
     });
     return update ? { kind: 'update', resourceRow, update } : null;
   } catch (error) {
@@ -232,6 +235,8 @@ const runResourceChanges = async (args: {
         actor: args.actor,
         formationId: args.formationId,
         pendingCleanups: args.pendingCleanups,
+        deployed: (args.formation.template as FormationTemplate | null)
+          ?.resources[logicalId],
       });
       if (change) applied.push(change);
     } catch (error) {

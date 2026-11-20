@@ -13,6 +13,7 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
+import type { PropertyComparison } from './formationsComparison';
 import { normalizePropertyKeys } from './resource-inputs/normalizers';
 
 /**
@@ -49,13 +50,15 @@ export const normalizeDeclaredProperties = (
  *
  * `plan-formation` and apply both need this verdict, so it is defined once: two
  * implementations disagree, and comparing `JSON.stringify` of the whole object
- * reports a change on differing key order alone.
+ * reports a change on differing key order alone. Both sides are compared
+ * through `comparison` (`formationsComparison.ts`).
  */
 export const mergeWithPrevious = (args: {
   resolved: Record<string, unknown>;
   previous: Record<string, unknown>;
   lastApplied: Record<string, unknown>;
   clearable: ReadonlySet<string>;
+  comparison: PropertyComparison;
 }): {
   merged: Record<string, unknown>;
   changed: boolean;
@@ -80,8 +83,11 @@ export const mergeWithPrevious = (args: {
       merged[key] = previous[key];
     }
   }
-  const changed = Object.entries(merged).some(([key, value]) => {
-    return !isDeepStrictEqual(previous[key], value);
+  const desired = args.comparison.withDefaults(merged);
+  const current = args.comparison.withDefaults(previous);
+  const changed = Object.keys(merged).some((key) => {
+    if (args.comparison.settled.has(key)) return false;
+    return !isDeepStrictEqual(current[key], desired[key]);
   });
   const snapshot = Object.fromEntries(
     Object.entries(merged).filter(([key]) => {

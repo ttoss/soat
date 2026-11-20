@@ -27,6 +27,8 @@ import {
   normalizeDeclaredProperties,
 } from 'src/lib/formationsProperties';
 import type { FormationTemplate } from 'src/lib/formationsTypes';
+import { applySchemaDefaults } from 'src/lib/openapiSchemaDefaults';
+import { resolveInlineSchema } from 'src/lib/openapiUnknownFields';
 
 describe('formationsHelpers', () => {
   // ── isRef ────────────────────────────────────────────────────────────────
@@ -870,24 +872,107 @@ describe('formationsHelpers', () => {
 
   // ── mergeWithPrevious ────────────────────────────────────────────────────
 
-  // The predicate `plan-formation` and apply now share. The first two cases are
-  // the divergences that made a plan disagree with the apply it previewed:
-  // apply's whole-object `JSON.stringify` comparison reported a change
-  // for both, plan's per-key comparison for neither.
+  // The predicate `plan-formation` and apply share: a whole-object comparison
+  // reports a change on the first two cases, a per-key one on neither.
   describe('mergeWithPrevious', () => {
+    const NODE_SCHEMA = {
+      type: 'object',
+      properties: {
+        nodes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              final: { type: 'boolean', default: false },
+            },
+          },
+        },
+      },
+    };
+    const SCHEMA = {
+      type: 'object',
+      properties: { definition: { allOf: [NODE_SCHEMA] } },
+    };
+
     const merge = (args: {
       resolved: Record<string, unknown>;
       previous: Record<string, unknown>;
       lastApplied?: Record<string, unknown>;
       clearable?: string[];
+      settled?: string[];
     }) => {
       return mergeWithPrevious({
         resolved: args.resolved,
         previous: args.previous,
         lastApplied: args.lastApplied ?? {},
         clearable: new Set(args.clearable),
+        comparison: {
+          withDefaults: (properties) => {
+            return applySchemaDefaults({
+              schema: SCHEMA,
+              properties,
+              resolveRef: resolveInlineSchema,
+            });
+          },
+          settled: new Set(args.settled),
+        },
       });
     };
+
+    test('a nested default omitted on one side is not a change', () => {
+      expect(
+        merge({
+          resolved: { definition: { nodes: [{ id: 'a' }] } },
+          previous: { definition: { nodes: [{ id: 'a', final: false }] } },
+        })
+      ).toEqual({
+        merged: { definition: { nodes: [{ id: 'a' }] } },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
+    });
+
+    test('a nested value differing from the default is a change', () => {
+      expect(
+        merge({
+          resolved: { definition: { nodes: [{ id: 'a' }] } },
+          previous: { definition: { nodes: [{ id: 'a', final: true }] } },
+        }).changed
+      ).toBe(true);
+    });
+
+    test('a default is not filled into an expression', () => {
+      expect(
+        merge({
+          resolved: { definition: { param: 'Definition' } },
+          previous: { definition: { param: 'Definition' } },
+        }).changed
+      ).toBe(false);
+    });
+
+    test('a settled property the previous state lacks is not a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', auth: { type: 'oauth' } },
+          previous: { name: 'a' },
+          settled: ['auth'],
+        })
+      ).toEqual({
+        merged: { name: 'a', auth: { type: 'oauth' } },
+        changed: false,
+        snapshot: expect.any(Object),
+      });
+    });
+
+    test('an unsettled property the previous state lacks is a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', auth: { type: 'oauth' } },
+          previous: { name: 'a' },
+        }).changed
+      ).toBe(true);
+    });
 
     test('a previous key the template omits is not a change', () => {
       expect(
