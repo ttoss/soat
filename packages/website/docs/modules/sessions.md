@@ -225,6 +225,8 @@ When `auto_generate` is `true`, `POST .../messages` saves the user message **and
 
 The explicit `POST .../generate` endpoint works regardless of this setting.
 
+`POST .../generate` on a session with no message yet answers `400 NO_MESSAGE_TO_ANSWER`, in either `wait` mode, and records no generation.
+
 Whichever request starts the turn — `.../messages` (auto-generated or debounced) or `.../generate` — its `builtin` calls run as that request's caller, capped by the agent's [`policy_ids`](./agents.md#execution-identity), and the generation records that caller as its [`acted_as`](./generations.md#acting-principal). A `.../tool-outputs` request resumes it under that authority held to its own ([a resume only narrows](./generations.md#acting-principal)).
 
 ### Message Delay (Debounce)
