@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.122.0](https://github.com/ttoss/soat/compare/v0.121.0...v0.122.0) (2026-11-20)
+
+* fix(server)!: resolve a message's document in the turn's project (#2056) ([02c7e16](https://github.com/ttoss/soat/commit/02c7e16d2c754c8791a56fb3ed36042b2c6443aa)), closes [#2056](https://github.com/ttoss/soat/issues/2056)
+
+### Bug Fixes
+
+* **formations:** a deploy-time parameter value takes its declared type ([#2050](https://github.com/ttoss/soat/issues/2050)) ([4dff4f8](https://github.com/ttoss/soat/commit/4dff4f80c7ac2ad7badd19f9e74d5d143d409d73))
+* **formations:** check a nested template property's enum at validation ([#2059](https://github.com/ttoss/soat/issues/2059)) ([c210db6](https://github.com/ttoss/soat/commit/c210db658393510ec941376ada32fa6b4a8ecaec))
+* **formations:** plan an unchanged stored template as no-op ([#2052](https://github.com/ttoss/soat/issues/2052)) ([155c62d](https://github.com/ttoss/soat/commit/155c62d387606b392e4d7a7b8d1f9a8a98471b45))
+* **formations:** template enums match the create route's enums ([#2057](https://github.com/ttoss/soat/issues/2057)) ([1be5b95](https://github.com/ttoss/soat/commit/1be5b9573b43c6c9591cdb31f3e8a3d9b7b65942))
+* **generations:** refuse a turn with no message to answer with 400 ([#2055](https://github.com/ttoss/soat/issues/2055)) ([1f6bb32](https://github.com/ttoss/soat/commit/1f6bb321117ca29062e76ae079602affd20e8c32))
+* **server:** name the builtin tool type where docs and errors say soat ([#2054](https://github.com/ttoss/soat/issues/2054)) ([c5b5f9f](https://github.com/ttoss/soat/commit/c5b5f9f74b650a0c8347d72f7e2741c9790870cd))
+
+### Features
+
+* **generations:** one settle chokepoint, lease, deadline and abort, orphan sweep ([#2048](https://github.com/ttoss/soat/issues/2048)) ([705bf4b](https://github.com/ttoss/soat/commit/705bf4b49e20d6745ad73527efdc17f66fb511e1))
+* **generations:** record progress rows from one instrumentation point ([#2051](https://github.com/ttoss/soat/issues/2051)) ([e225380](https://github.com/ttoss/soat/commit/e225380fe85dc0d4e8a3a605b971e86c5333acab))
+* **generations:** stream a generation's events and session/conversation turns ([#2058](https://github.com/ttoss/soat/issues/2058)) ([c82b6e1](https://github.com/ttoss/soat/commit/c82b6e1e98c70fc0dd08e4ad66cb2079d3230388)), closes [#2033](https://github.com/ttoss/soat/issues/2033)
+* **iam:** declare every srn type an operation's action is checked on ([#2060](https://github.com/ttoss/soat/issues/2060)) ([58b9faf](https://github.com/ttoss/soat/commit/58b9fafee09d5d6992e534fef2cd596ed5ddab57))
+* **server:** publish the admission request and refusal in the openapi spec ([#2047](https://github.com/ttoss/soat/issues/2047)) ([a9b3476](https://github.com/ttoss/soat/commit/a9b3476080738b9c20f14c38a7370498ba5aaddc))
+
 # [0.121.0](https://github.com/ttoss/soat/compare/v0.120.0...v0.121.0) (2026-11-19)
 
 * feat(server)!: an iam token pins a tool_context layer over every call it starts (#2045) ([a4b9392](https://github.com/ttoss/soat/commit/a4b9392b0ff1abf31dfbb7598ab19789f04a6902)), closes [#2045](https://github.com/ttoss/soat/issues/2045)
