@@ -668,7 +668,7 @@ describe('Tools', () => {
       expect(response.status).toBe(422);
     });
 
-    test('the retired `soat` tool type is rejected at write time', async () => {
+    test('an unsupported `soat` tool type is rejected at write time', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -683,7 +683,7 @@ describe('Tools', () => {
       );
     });
 
-    test('calling a soat tool without action returns 400 with operationId in error message', async () => {
+    test('calling a builtin tool without action returns 400 with operationId in error message', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
         .send({});
@@ -691,7 +691,7 @@ describe('Tools', () => {
       expect(response.body.error.message).toMatch(/operationId/i);
     });
 
-    test('calling a soat tool via preset_parameters.action does not return operationId-required error', async () => {
+    test('calling a builtin tool via preset_parameters.action does not return operationId-required error', async () => {
       const presetToolRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2416,7 +2416,7 @@ describe('Tools', () => {
       }
     });
 
-    test('calling a soat tool with an action not on the tool returns 400', async () => {
+    test('calling a builtin tool with an action not on the tool returns 400', async () => {
       const callRes = await authenticatedTestClient(adminToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
         .send({ action: 'delete-everything' });
@@ -2426,7 +2426,7 @@ describe('Tools', () => {
       expect(callRes.body.error.message).toMatch(/not available on this tool/i);
     });
 
-    test('creating a soat tool with an action unknown to the SOAT registry returns 400', async () => {
+    test('creating a builtin tool with an action unknown to the SOAT registry returns 400', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2456,7 +2456,7 @@ describe('Tools', () => {
       ['get-webhook-secret'],
       ['rotate-trigger-secret'],
       ['update-ai-provider-prices'],
-    ])('creating a soat tool bound to %s returns 400', async (action) => {
+    ])('creating a builtin tool bound to %s returns 400', async (action) => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2471,7 +2471,7 @@ describe('Tools', () => {
       expect(createRes.body.error.message).toMatch(action);
     });
 
-    test('updating a soat tool onto an excluded action returns 400', async () => {
+    test('updating a builtin tool onto an excluded action returns 400', async () => {
       const updateRes = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/tools/${soatToolId}`)
         .send({ actions: ['approve-approval'] });
@@ -2497,7 +2497,7 @@ describe('Tools', () => {
       expect(excluded.body.error.message).not.toMatch(/[Uu]nknown/);
     });
 
-    test('creating a soat tool with an operationId-style action name is rejected with a kebab-case suggestion', async () => {
+    test('creating a builtin tool with an operationId-style action name is rejected with a kebab-case suggestion', async () => {
       // A common mistake: using the OpenAPI operationId (camelCase, e.g. "searchKnowledge")
       // instead of the MCP tool name (kebab-case, e.g. "search-knowledge").
       const createRes = await authenticatedTestClient(adminToken)
@@ -2515,7 +2515,7 @@ describe('Tools', () => {
       expect(createRes.body.error.message).toMatch(/search-knowledge/);
     });
 
-    test('updating a soat tool with an action unknown to the SOAT registry returns 400', async () => {
+    test('updating a builtin tool with an action unknown to the SOAT registry returns 400', async () => {
       const updateRes = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/tools/${soatToolId}`)
         .send({ actions: ['not-a-real-soat-action'] });

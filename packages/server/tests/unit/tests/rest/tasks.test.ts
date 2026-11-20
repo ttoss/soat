@@ -4319,7 +4319,7 @@ describe('Tasks', () => {
     });
 
     // A budget keyed on `principal.kind` would miss this half entirely: a
-    // dispatch's `soat` tool calls `transition-task` under the stored authority
+    // dispatch's `builtin` tool calls `transition-task` under the stored authority
     // of the user who started the chain, so the hop names that user like a
     // person clicking a button but for the `work` it carries.
     describe('a transition stored work makes', () => {

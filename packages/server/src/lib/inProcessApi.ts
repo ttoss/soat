@@ -24,7 +24,7 @@ const SYNTHETIC_HOST = 'localhost';
  *
  * It bounds the *wait*, not the work, exactly as an aborted fetch would:
  * aborting a request never stops the handler on the other end, it only stops
- * the client listening for the answer. An agent whose `soat` tool reaches a
+ * the client listening for the answer. An agent whose `builtin` tool reaches a
  * genuinely stuck action still gets its tool call back instead of hanging for
  * the rest of the generation.
  */
@@ -151,7 +151,7 @@ const toWireBody = (args: {
 
 /**
  * Serves one API request against this process's own app, with no network — the
- * seam a `soat` tool calls instead of fetching `http://localhost:$PORT`.
+ * seam a `builtin` tool calls instead of fetching `http://localhost:$PORT`.
  *
  * It runs **the app's real middleware stack** against a synthetic request and
  * reads the response off the resulting Koa context. Running the stack, rather

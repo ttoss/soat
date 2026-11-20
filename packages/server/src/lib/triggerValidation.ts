@@ -202,7 +202,7 @@ const assertTargetExists = async (args: {
  * Resolves a trigger's target within the project and enforces target-specific
  * rules:
  * - the target must exist in the same project and match `targetType`;
- * - `soat`/`mcp` tool targets require an `action`; other tool types reject it;
+ * - `builtin`/`mcp` tool targets require an `action`; other tool types reject it;
  * - `client` tools cannot execute server-side and are rejected outright.
  *
  * Throws `DomainError` on any violation.

@@ -36,7 +36,7 @@ import type { WorkAuthority } from './workAuthority';
 const log = createDebug('soat:tools');
 
 /**
- * Invokes a SOAT platform action on behalf of a `soat` tool.
+ * Invokes a SOAT platform action on behalf of a `builtin` tool.
  *
  * Served in-process via `dispatchApiRequest` rather than over loopback:
  * the app's real middleware chain still runs, so permission checks, validation,
@@ -84,7 +84,7 @@ export const executeSoatTool = async (args: {
     // parameters only, discarding every `in: query` parameter the action
     // advertises.
     path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
-    log('soat tool execute: %s %s %s', toolId, args.def.method, path);
+    log('builtin tool execute: %s %s %s', toolId, args.def.method, path);
     // The non-2xx rule is `dispatchApiRequestOrThrow`'s, shared with the MCP
     // surface; only the error is this caller's: `meta.tool_status_code` is
     // what `isRetriableError` reads to keep a 4xx from being retried.
@@ -104,7 +104,7 @@ export const executeSoatTool = async (args: {
             headers: handoff.headers,
             body,
             wrapError: (response) => {
-              log('soat tool result: %s status=%d', toolId, response.status);
+              log('builtin tool result: %s status=%d', toolId, response.status);
               const denial = readForwardedDenial({ body: response.body });
               if (denial) return denial;
               return builtinActionError({
@@ -118,7 +118,7 @@ export const executeSoatTool = async (args: {
       },
     });
   } catch (error) {
-    log('soat tool error: %s', toolId);
+    log('builtin tool error: %s', toolId);
     args.logToolCallingError({
       toolName: toolId,
       toolType: 'builtin',

@@ -117,7 +117,7 @@ export const callSoatTool = async (
   if (!action) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'operationId is required for soat tools.'
+      'operationId is required for builtin tools.'
     );
   }
   if (!tool.actions?.includes(action)) {

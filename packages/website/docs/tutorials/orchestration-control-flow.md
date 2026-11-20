@@ -212,7 +212,7 @@ const { data: checkTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'read-project',
-    type: 'soat',
+    type: 'builtin',
     description: 'Read this project so the poll node can check readiness',
     actions: ['get-project'],
     preset_parameters: { projectId: PROJECT_ID },

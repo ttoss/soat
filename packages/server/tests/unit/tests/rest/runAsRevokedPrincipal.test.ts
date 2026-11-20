@@ -10,10 +10,10 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  * drives it. When the principal it names is gone by then — the API key
  * revoked, the user deleted — the run must not act at all: falling back to the
  * key's owning user would widen the run's reach to everything that user may
- * do. Its `soat` self-calls resolve no caller and are refused
+ * do. Its `builtin` self-calls resolve no caller and are refused
  * `WORK_AUTHORITY_MISSING`.
  *
- * Each run lists the project's tools through a `soat` tool node, which an
+ * Each run lists the project's tools through a `builtin` tool node, which an
  * owner-scoped credential would answer successfully.
  */
 

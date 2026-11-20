@@ -81,7 +81,7 @@ export const injectApprovalJustificationSchema = (
 
 /**
  * The resolved action name frozen onto the item for resolution-time execution.
- * For `soat` tools each action resolves to a `<toolName>_<action>` entry, so the
+ * For `builtin` tools each action resolves to a `<toolName>_<action>` entry, so the
  * action is recovered by stripping the tool-name prefix; for `mcp` the entry key
  * already *is* the action; for every other type the key is the tool's own name.
  */

@@ -2,7 +2,7 @@ import { validatePolicyActions } from 'src/lib/iam';
 import { soatTools } from 'src/lib/soatTools';
 
 /**
- * Every `soat` tool action must resolve to an IAM action a policy author is
+ * Every `builtin` tool action must resolve to an IAM action a policy author is
  * allowed to write.
  *
  * an agent's `policy_ids` are evaluated at runtime against `def.iamAction ?? def.name`
@@ -46,7 +46,7 @@ const PERMISSIONLESS_OPERATIONS = new Map([
   ],
 ]);
 
-describe('soat tool IAM action contract (real OpenAPI specs)', () => {
+describe('soatTools IAM action contract (real OpenAPI specs)', () => {
   test('derives a tool surface from the specs on disk', () => {
     expect(soatTools.length).toBeGreaterThan(0);
   });

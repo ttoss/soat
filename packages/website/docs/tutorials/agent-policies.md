@@ -364,7 +364,7 @@ const { data: writeTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
-    type: 'soat',
+    type: 'builtin',
     actions: ['update-document'],
     preset_parameters: { document_id: docId },
   },

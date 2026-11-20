@@ -80,7 +80,7 @@ import {
   withReleasingGuardrails,
 } from './usageToolRecording';
 import { type WorkAuthority, workOf } from './workAuthority';
-// Re-exported from its own module (both http and soat tool paths throw it).
+// Re-exported from its own module (both http and builtin tool paths throw it).
 export { HttpToolError } from './httpToolError';
 
 const log = createDebug('soat:toolResolver');
@@ -966,7 +966,7 @@ type AgentToolRow = {
 /**
  * Wraps every resolved AI-SDK tool's `execute` with {@link applyToolOutputMapping}
  * so the model receives the reshaped result instead of the tool's raw output.
- * A single wrap point here covers `http`, `mcp`, `soat`, and `pipeline` — the
+ * A single wrap point here covers `http`, `mcp`, `builtin`, and `pipeline` — the
  * only tool types that produce an `execute` function; `client` tools have none.
  */
 const wrapExecuteWithOutputMapping = (args: {
@@ -987,7 +987,7 @@ const wrapExecuteWithOutputMapping = (args: {
 /**
  * The parameter schema to hand the justification-field injector, or `undefined`
  * to skip injection. Only `http` and `pipeline` tools carry their full
- * model-visible schema in `typedTool.parameters`; `mcp`/`soat` schemas are
+ * model-visible schema in `typedTool.parameters`; `mcp`/`builtin` schemas are
  * remote/per-action, so those are gated without justification-field injection.
  */
 const localInjectableSchema = (

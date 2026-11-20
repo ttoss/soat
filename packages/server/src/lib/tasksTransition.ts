@@ -85,7 +85,7 @@ type TransitionArgs = {
   toolId?: string | null;
   /**
    * True when stored work made the request (`ctx.authUser.work`). Such a move
-   * is a dispatch's own `soat` tool continuing the chain — machinery, not a
+   * is a dispatch's own `builtin` tool continuing the chain — machinery, not a
    * person directing it — even though it names a user or an API key. Without
    * this the composed cycle is invisible here; see `isChainHop`.
    */

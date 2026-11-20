@@ -6,7 +6,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, workAuthorityOf } from '../../testClient';
 
 /**
- * Pins the in-process dispatch path: a `soat` tool reaches the platform
+ * Pins the in-process dispatch path: a `builtin` tool reaches the platform
  * by running the app's own middleware stack against a synthetic request,
  * instead of making an HTTP request to `http://localhost:$PORT`.
  *

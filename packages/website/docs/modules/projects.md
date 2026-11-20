@@ -273,7 +273,7 @@ While `paused_at` is set:
 
 A generation, node or eval item already in flight finishes. Reads and writes keep working, so the project can be inspected and fixed while paused — including writes that embed content, such as document ingestion and memory writes, which are not starts. `loop` / `sub_orchestration` children started under the pause are born paused.
 
-Pausing is idempotent and keeps the first reason. [`POST /api/v1/projects/{project_id}/resume`](/docs/api/projects/resume-project) (`projects:ResumeProject`) answers `409 PROJECT_NOT_PAUSED` on a running project, and is not offered to agents as a `soat` tool: deciding to spend again is left to a person or an explicit credential.
+Pausing is idempotent and keeps the first reason. [`POST /api/v1/projects/{project_id}/resume`](/docs/api/projects/resume-project) (`projects:ResumeProject`) answers `409 PROJECT_NOT_PAUSED` on a running project, and is not offered to agents as a `builtin` action: deciding to spend again is left to a person or an explicit credential.
 
 The resume hands back only what the pause held. A run or task an operator paused before the project was paused keeps its own pause; resuming one run or task on its own while the project is paused is `409 PROJECT_PAUSED`.
 

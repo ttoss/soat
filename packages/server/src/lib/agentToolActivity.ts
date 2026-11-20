@@ -41,7 +41,7 @@ export const toolActivityOf = (resolved: Tool): ToolActivity | undefined => {
 
 /**
  * Marks every server-executed tool produced by one binding (one for most
- * types; many for `mcp` / `soat`) with what its executed call records on the
+ * types; many for `mcp` / `builtin`) with what its executed call records on the
  * activity feed. The mark survives every wrapper (each spreads the tool);
  * `recordToolCall` (`generationInstrumentation.ts`) reads it.
  *

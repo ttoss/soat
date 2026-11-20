@@ -732,7 +732,7 @@ const { data: knowledgeTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'manuals',
-    type: 'soat',
+    type: 'builtin',
     description: 'Searches the ingested product manuals for relevant passages',
     actions: ['search-knowledge'],
     preset_parameters: { projectId: PROJECT_ID, documentPaths: ['/manuals/'] },
