@@ -562,6 +562,20 @@
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
       "routes": []
     },
+    "NO_MESSAGE_TO_ANSWER": {
+      "http_status": 400,
+      "hint": "Add a message first (POST /api/v1/sessions/{session_id}/messages or POST /api/v1/conversations/{conversation_id}/messages), then generate again.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/sessions/{session_id}/messages"
+        },
+        {
+          "method": "POST",
+          "path": "/conversations/{conversation_id}/messages"
+        }
+      ]
+    },
     "OAUTH_CALLBACK_FAILED": {
       "http_status": 400,
       "hint": "Start the connection again with POST /api/v1/oauth-connections and send the person to the new authorize_url; each state is single-use and expires in 10 minutes.",

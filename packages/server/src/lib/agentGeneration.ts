@@ -21,7 +21,10 @@ import {
   type ReplayedGeneration,
   type RequestedGenerationArgs,
 } from './generationIdempotency';
-import { type GenerationInputMessage } from './generationInputMessages';
+import {
+  assertTurnHasMessage,
+  type GenerationInputMessage,
+} from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { provenanceForNewRow } from './generationProvenance';
 import { createGenerationRecord } from './generations';
@@ -309,6 +312,7 @@ const prepareGeneration = async (
   // Rejects a key that could not become a header before any provider call or
   // metering happens, covering every path but the session's own write-time check.
   assertValidToolContext(args.toolContext);
+  assertTurnHasMessage({ messages: args.messages });
   await gateGenerationStart(args);
 
   // A run node's, an eval item's or a decision's turn was admitted with its

@@ -992,6 +992,29 @@ describe('Sessions', () => {
       expect(response.status).toBe(404);
     });
 
+    test.each(['?wait=true', '?wait=false'])(
+      'a session with no message answers 400 NO_MESSAGE_TO_ANSWER (%s)',
+      async (query) => {
+        const empty = await authenticatedTestClient(userToken)
+          .post('/api/v1/sessions')
+          .send({ agent_id: agentId, name: 'Empty Before Generate' });
+
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${empty.body.id}/generate${query}`)
+          .send({});
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('NO_MESSAGE_TO_ANSWER');
+        const session = await db.Session.findOne({
+          where: { publicId: empty.body.id },
+        });
+        const generations = await db.Generation.count({
+          where: { sessionId: session?.id },
+        });
+        expect(generations).toBe(0);
+      }
+    );
+
     test('background by default: request without wait returns 202 accepted', async () => {
       // Add a message first so there is something to generate from
       await authenticatedTestClient(userToken)

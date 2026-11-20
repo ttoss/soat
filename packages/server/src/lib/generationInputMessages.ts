@@ -1,15 +1,32 @@
 import type { AuthUser } from '../Context';
+import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
 import { countOf, type GenerationProvenance } from './generationProvenance';
 import {
   type ResolvableMessageContent,
   resolveMessageContent,
 } from './messageContent';
+import { withoutSystemMessages } from './modelMessages';
 import type { WorkAuthority } from './workAuthority';
 
 export type GenerationInputMessage = {
   role: string;
   content: ResolvableMessageContent | unknown;
+};
+
+/**
+ * The provider refuses a prompt whose only content is system instructions, so a
+ * turn with nothing to answer is the caller's error, refused before it is
+ * recorded rather than failed by the provider.
+ */
+export const assertTurnHasMessage = (args: {
+  messages: GenerationInputMessage[];
+}): void => {
+  if (withoutSystemMessages(args.messages).length > 0) return;
+  throw new DomainError(
+    'NO_MESSAGE_TO_ANSWER',
+    'The turn has no message to answer. Add a message, then generate again.'
+  );
 };
 
 /**

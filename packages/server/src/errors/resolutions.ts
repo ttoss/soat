@@ -161,6 +161,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The agent allows one open session per actor. Reuse the session named in `meta.session_id`, or close it first.',
   SESSION_EXPIRED:
     "Open a new session; an expired one cannot be revived. Raise the agent's session TTL if this happens sooner than the workload needs.",
+  NO_MESSAGE_TO_ANSWER:
+    'Add a message first ({{POST /sessions/{session_id}/messages}} or {{POST /conversations/{conversation_id}/messages}}), then generate again.',
   SESSION_CLOSED:
     'The session is closed and accepts no further messages. Open a new one, or fork this one to keep its history.',
   MEMORY_ALREADY_INVALIDATED:

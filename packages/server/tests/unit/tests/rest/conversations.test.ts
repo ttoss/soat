@@ -1194,6 +1194,11 @@ describe('Conversations', () => {
         });
       expect(agentRes.status).toBe(201);
 
+      const added = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/messages`)
+        .send({ message: 'Hello', role: 'user' });
+      expect(added.status).toBe(201);
+
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/generate`)
         .send({ agent_id: agentRes.body.id });
@@ -1210,6 +1215,37 @@ describe('Conversations', () => {
       expect(generation.status).toBe(200);
       expect(generation.body.agent_id).toBe(agentRes.body.id);
     });
+
+    test.each(['?wait=true', ''])(
+      'a conversation with no message answers 400 NO_MESSAGE_TO_ANSWER (%s)',
+      async (query) => {
+        const aiProvRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/ai-providers')
+          .send({
+            project_id: projectId,
+            name: `EmptyConversationProvider${query}`,
+            provider: 'openai',
+            default_model: 'gpt-4o',
+          });
+        const agentRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/agents')
+          .send({
+            ai_provider_id: aiProvRes.body.id,
+            project_id: projectId,
+            name: `Empty Conversation Agent${query}`,
+          });
+        const empty = await authenticatedTestClient(userToken)
+          .post('/api/v1/conversations')
+          .send({ project_id: projectId });
+
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/conversations/${empty.body.id}/generate${query}`)
+          .send({ agent_id: agentRes.body.id });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('NO_MESSAGE_TO_ANSWER');
+      }
+    );
 
     test('background mode still resolves the agent synchronously (404)', async () => {
       const res = await authenticatedTestClient(userToken)

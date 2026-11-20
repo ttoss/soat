@@ -74,6 +74,11 @@ export const ERROR_CODES = {
     description:
       'An unexpected error occurred during agent generation. Check the trace for details.',
   },
+  NO_MESSAGE_TO_ANSWER: {
+    httpStatus: 400,
+    description:
+      'The turn carries no `user` or `assistant` message for the agent to answer, such as a session or conversation with no message yet. Refused before a generation is recorded.',
+  },
   GENERATION_NOT_FOUND: {
     httpStatus: 404,
     description:
