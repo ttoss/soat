@@ -10,6 +10,10 @@
  * disagree about what a field list means — a template deploying green on a
  * nested key its own route answers `400` for.
  *
+ * The same walk reports the values a level's `enum` does not list
+ * ({@link collectEnumViolations}), so a template's enum check reaches every
+ * depth its unknown-key check reaches.
+ *
  * The walk only ever *reads* the value. It reports; each caller decides whether
  * to throw or accumulate, and how to word the refusal.
  */
@@ -175,15 +179,19 @@ const closedUnionFields = (
 };
 
 /**
- * One frame's reading: the keys its level does not declare, and the frames its
- * present properties open. A frame with nothing to judge a key against — a
+ * One frame's reading: the keys its level does not declare, the frames its
+ * present properties open, and the level itself when it is a closed object
+ * whose fields are known. A frame with nothing to judge a key against — a
  * scalar, an opaque value, an open level, an unresolvable `$ref` — reads as
- * neither.
+ * none of them.
  */
-const readFrame = (
-  frame: WalkFrame,
-  options: WalkOptions
-): { unknown: UnknownField[]; children: WalkFrame[] } => {
+type FrameReading = {
+  unknown: UnknownField[];
+  children: WalkFrame[];
+  level?: Level;
+};
+
+const readFrame = (frame: WalkFrame, options: WalkOptions): FrameReading => {
   const nothing = { unknown: [], children: [] };
 
   const schema = options.resolveRef(frame.schema);
@@ -213,7 +221,29 @@ const readFrame = (
       allowedFields: [...allowedFields],
     }),
     children: childFrames(level, options),
+    level,
   };
+};
+
+const readAllFrames = (
+  args: { schema: unknown; value: unknown },
+  options: WalkOptions
+): FrameReading[] => {
+  const readings: FrameReading[] = [];
+  const stack: WalkFrame[] = [
+    { schema: args.schema, value: args.value, path: '' },
+  ];
+
+  while (stack.length > 0) {
+    const frame = stack.pop();
+    if (!frame) continue;
+
+    const reading = readFrame(frame, options);
+    readings.push(reading);
+    stack.push(...reading.children);
+  }
+
+  return readings;
 };
 
 /**
@@ -231,19 +261,38 @@ export const collectUnknownFields = (
   args: { schema: unknown; value: unknown },
   options: WalkOptions
 ): UnknownField[] => {
-  const out: UnknownField[] = [];
-  const stack: WalkFrame[] = [
-    { schema: args.schema, value: args.value, path: '' },
-  ];
+  return readAllFrames(args, options).flatMap((reading) => {
+    return reading.unknown;
+  });
+};
 
-  while (stack.length > 0) {
-    const frame = stack.pop();
-    if (!frame) continue;
+/** A present value its property's `enum` does not list. */
+export type EnumViolation = {
+  /** Dotted path from the walked root: `reasoning.effort`. */
+  path: string;
+  allowed: unknown[];
+};
 
-    const { unknown, children } = readFrame(frame, options);
-    out.push(...unknown);
-    stack.push(...children);
-  }
-
-  return out;
+/**
+ * Walks the levels {@link collectUnknownFields} reads and reports each present
+ * property value its schema's `enum` does not list. An opaque value stands for
+ * a value resolved later, so it is never judged; a level inside a union is not
+ * descended, since which branch's enum applies is the handler's question.
+ */
+export const collectEnumViolations = (
+  args: { schema: unknown; value: unknown },
+  options: WalkOptions
+): EnumViolation[] => {
+  return readAllFrames(args, options).flatMap(({ level }) => {
+    if (!level) return [];
+    return Object.entries(level.schema.properties).flatMap(
+      ([propName, rawProp]) => {
+        const value = level.value[propName];
+        if (value === undefined || options.isOpaque?.(value)) return [];
+        const allowed = options.resolveRef(rawProp)?.enum;
+        if (!Array.isArray(allowed) || allowed.includes(value)) return [];
+        return [{ path: joinPath(level.path, propName), allowed }];
+      }
+    );
+  });
 };

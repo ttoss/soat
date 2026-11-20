@@ -66,9 +66,11 @@ pass it → `read` returns it (if declared).
 - The field list is such a rule and lives in the schema: the route
   (`requestValidation.ts`) and the template (`pushUnknownFieldErrors`) refuse
   an undeclared key through one walk, `lib/openapiUnknownFields.ts`, at every
-  depth the schema declares.
-- Declare a nested object's fields in **both** the REST spec and the
-  `*ResourceProperties` schema, or the two paths diverge.
+  depth the schema declares; the template's enum check (`pushFieldEnumErrors`)
+  reads the same walk.
+- Declare a nested object's fields and enums in **both** the REST spec and the
+  `*ResourceProperties` schema, or the two paths diverge
+  (`formationsCreateEnumParity.test.ts` holds the enums).
 - An object with no `properties` is a free-form bag, never read.
 - `tests/unit/tests/lib/openapiClosedSchemas.test.ts` holds the declared lists
   closed.

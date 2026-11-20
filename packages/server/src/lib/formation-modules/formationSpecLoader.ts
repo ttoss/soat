@@ -19,7 +19,10 @@ import {
 } from '../openapiSchemaFields';
 import { resolveSchemaRef } from '../openapiSpec';
 import type { SchemaRefResolver } from '../openapiUnknownFields';
-import { collectUnknownFields } from '../openapiUnknownFields';
+import {
+  collectEnumViolations,
+  collectUnknownFields,
+} from '../openapiUnknownFields';
 
 const log = createDebug('soat:formations:specLoader');
 
@@ -248,39 +251,32 @@ export const pushRequiredFieldErrors = (args: {
 };
 
 /**
- * Refuses a value the schema's `enum` does not list.
- *
- * Separate from the type check because it is a *value* constraint, and because
- * it is what turns a declared enum into an actual refusal: nothing read `enum`
- * before, so a bad `provider` slug travelled all the way to the Postgres enum
- * and surfaced as the driver's own text against a half-built stack, mid-apply.
- * Declared once in the spec, enforced for every resource type that declares one.
+ * Refuses a value the schema's `enum` does not list, at every depth
+ * {@link pushUnknownFieldErrors} reads, so a bad value is reported at validate
+ * time rather than by the lib or the Postgres enum mid-apply. A
+ * `ref`/`param`/`sub` resolves at deploy time and is never judged.
  */
 export const pushFieldEnumErrors = (args: {
-  spec: ModuleOpenApiSpec;
+  schema: SchemaWithProperties;
   properties: Record<string, unknown>;
   basePath: string;
   errors: ValidationError[];
   /**
-   * Fields `pushFieldTypeErrors` already flagged. A `scope: 7` is one mistake,
-   * and reporting both "must be a string" and "must be one of" for it is noise
-   * — worse than noise at apply time, where only `errors[0]` is ever thrown.
+   * Top-level fields `pushFieldTypeErrors` already flagged: a `scope: 7` is one
+   * mistake, and at apply time only `errors[0]` is ever thrown.
    */
-  skipFields?: Set<string>;
+  skipFields: Set<string>;
 }): void => {
-  for (const [fieldName, fieldSpec] of Object.entries(args.spec.fieldSpecs)) {
-    const allowed = fieldSpec.enumValues;
-    if (!allowed || args.skipFields?.has(fieldName)) continue;
+  const violations = collectEnumViolations(
+    { schema: args.schema, value: args.properties },
+    { resolveRef: resolveSchemaRef, isOpaque: isFormationExpression }
+  );
 
-    const value = args.properties[fieldName];
-    // A `ref`/`param`/`sub` resolves at deploy time, so checking it here would
-    // refuse every parameterised template.
-    if (value === undefined || isFormationExpression(value)) continue;
-    if (allowed.includes(value)) continue;
-
+  for (const violation of violations) {
+    if (args.skipFields.has(violation.path)) continue;
     args.errors.push({
-      path: `${args.basePath}.${fieldName}`,
-      message: `\`${fieldName}\` must be one of: ${allowed
+      path: `${args.basePath}.${violation.path}`,
+      message: `\`${violation.path}\` must be one of: ${violation.allowed
         .map((member) => {
           return String(member);
         })

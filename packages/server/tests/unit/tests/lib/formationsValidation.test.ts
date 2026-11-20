@@ -534,6 +534,40 @@ describe('validateFormationTemplate', () => {
     ).toBe(false);
   });
 
+  const agentWithReasoning = (reasoning: unknown) => {
+    return {
+      parameters: { Effort: { type: 'string' } },
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: { name: 'bot', ai_provider_id: 'aip_x', reasoning },
+        },
+      },
+    };
+  };
+
+  test('returns invalid for an out-of-enum value below the top level', () => {
+    const result = validateFormationTemplate(
+      agentWithReasoning({ effort: 'max' })
+    );
+
+    expect(result.errors).toEqual([
+      {
+        path: 'resources.MyAgent.properties.reasoning.effort',
+        message: '`reasoning.effort` must be one of: none, low, medium, high',
+      },
+    ]);
+  });
+
+  test.each([{ effort: 'high' }, { effort: { param: 'Effort' } }, null])(
+    'accepts a nested enum value the schema lists or an expression: %j',
+    (reasoning) => {
+      const result = validateFormationTemplate(agentWithReasoning(reasoning));
+
+      expect(result.errors).toEqual([]);
+    }
+  );
+
   // ── deletion_policy ────────────────────────────────────────────────────
 
   test('returns invalid when deletion_policy is an unsupported value', () => {

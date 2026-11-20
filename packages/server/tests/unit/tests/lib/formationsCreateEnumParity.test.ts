@@ -1,18 +1,22 @@
 import { schemaNameForResourceType } from 'src/lib/formation-modules/defineFormationModule';
-import { loadModuleSpec } from 'src/lib/formation-modules/formationSpecLoader';
+import { loadModuleSchema } from 'src/lib/formation-modules/formationSpecLoader';
 import {
   builtInResourceTypes,
   getFormationModule,
 } from 'src/lib/formationsRegistry';
+import { validateFormationTemplate } from 'src/lib/formationsValidation';
+import { isObjectRecord } from 'src/lib/openapiSchemaFields';
 import {
   getMergedOpenApiSpec,
   getRouteRequestSchema,
   resolveSchemaRef,
 } from 'src/lib/openapiSpec';
+import { isOpenOrAmbiguous } from 'src/lib/openapiUnknownFields';
 
-// A template field the create route constrains to an enum carries the same
-// enum in its `*ResourceProperties` schema, where `pushFieldEnumErrors` checks
-// it; without it `validate` and create accept a value the apply then fails on.
+// A template field the create route constrains to an enum, at any depth,
+// carries the same enum in its `*ResourceProperties` schema, and `validate`
+// refuses a value outside it; otherwise `validate` and create accept a value
+// the apply then fails on.
 
 /** Types whose create action names no single `POST` route. */
 const CREATE_ROUTES: Record<string, string | null> = {
@@ -53,20 +57,73 @@ const createRouteFor = (resourceType: string): string | null => {
   return routes[0][0];
 };
 
-/** Each create body field's enum, following a field-level `$ref`. */
-const createEnums = (route: string): Record<string, unknown[]> => {
-  const schema = getRouteRequestSchema({ method: 'post', path: route });
-  const properties = schema?.properties;
-  if (typeof properties !== 'object' || properties === null) return {};
+/**
+ * Each enum a schema declares, keyed by its dotted path, at every closed object
+ * level the template walk descends (an array of objects as index `0`).
+ */
+const enumsByPath = (
+  schema: unknown,
+  prefix = '',
+  seen: ReadonlySet<unknown> = new Set()
+): Record<string, unknown[]> => {
+  const level = resolveSchemaRef(schema);
+  if (!level || seen.has(level) || isOpenOrAmbiguous(level)) return {};
+  const properties = level.properties;
+  if (!isObjectRecord(properties)) return {};
+
+  const inner = new Set([...seen, level]);
   return Object.fromEntries(
     Object.entries(properties).flatMap(([field, fieldSchema]) => {
-      const values = resolveSchemaRef(fieldSchema)?.enum;
-      return Array.isArray(values) ? [[field, values]] : [];
+      const path = prefix ? `${prefix}.${field}` : field;
+      const resolved = resolveSchemaRef(fieldSchema);
+      if (Array.isArray(resolved?.enum)) return [[path, resolved.enum]];
+      const items = resolveSchemaRef(resolved?.items);
+      return Object.entries(
+        items
+          ? enumsByPath(items, `${path}.0`, inner)
+          : enumsByPath(resolved, path, inner)
+      );
     })
   );
 };
 
+/** Properties carrying `value` at a dotted path (`0` is an array index). */
+const propertiesAt = (path: string, value: unknown): unknown => {
+  return path
+    .split('.')
+    .reverse()
+    .reduce<unknown>((inner, segment) => {
+      return segment === '0' ? [inner] : { [segment]: inner };
+    }, value);
+};
+
 const RESOURCE_TYPES = [...builtInResourceTypes()].sort();
+
+const templateSchema = (resourceType: string) => {
+  return loadModuleSchema({
+    schemaName: schemaNameForResourceType(resourceType),
+  });
+};
+
+const templateEnums = (resourceType: string) => {
+  return enumsByPath(templateSchema(resourceType));
+};
+
+/** Whether the schema declares every segment of a dotted path. */
+const declaresPath = (schema: unknown, path: string): boolean => {
+  let level = resolveSchemaRef(schema);
+  for (const segment of path.split('.')) {
+    if (!level) return false;
+    if (segment === '0') {
+      level = resolveSchemaRef(level.items);
+      continue;
+    }
+    const properties = level.properties;
+    if (!isObjectRecord(properties) || !(segment in properties)) return false;
+    level = resolveSchemaRef(properties[segment]);
+  }
+  return level !== null;
+};
 
 describe('formation enums match the create route', () => {
   test.each(RESOURCE_TYPES)(
@@ -74,26 +131,51 @@ describe('formation enums match the create route', () => {
     (resourceType) => {
       const route = createRouteFor(resourceType);
       if (route === null) return;
-      const template = loadModuleSpec({
-        schemaName: schemaNameForResourceType(resourceType),
+      const declaredEnums = templateEnums(resourceType);
+      const createSchema = getRouteRequestSchema({
+        method: 'post',
+        path: route,
       });
 
-      const divergent = Object.entries(createEnums(route)).flatMap(
+      const divergent = Object.entries(enumsByPath(createSchema)).flatMap(
         ([field, allowed]) => {
-          const declared = template.fieldSpecs[field];
-          if (!declared) return [];
-          const extra = (declared.enumValues ?? []).filter((value) => {
+          if (!declaresPath(templateSchema(resourceType), field)) return [];
+          const declared = declaredEnums[field];
+          const extra = (declared ?? []).filter((value) => {
             return value !== null && !allowed.includes(value);
           });
-          return declared.enumValues && extra.length === 0
+          return declared && extra.length === 0
             ? []
             : [
-                `${field}: template ${JSON.stringify(declared.enumValues)}, create ${JSON.stringify(allowed)}`,
+                `${field}: template ${JSON.stringify(declared)}, create ${JSON.stringify(allowed)}`,
               ];
         }
       );
 
       expect(divergent).toEqual([]);
+    }
+  );
+
+  test.each(RESOURCE_TYPES)(
+    '%s validate refuses a value outside every enum it declares',
+    (resourceType) => {
+      const unchecked = Object.keys(templateEnums(resourceType)).filter(
+        (path) => {
+          const { errors } = validateFormationTemplate({
+            resources: {
+              R: {
+                type: resourceType,
+                properties: propertiesAt(path, 'not-an-enum-member'),
+              },
+            },
+          });
+          return !errors.some((error) => {
+            return error.path === `resources.R.properties.${path}`;
+          });
+        }
+      );
+
+      expect(unchecked).toEqual([]);
     }
   );
 });
