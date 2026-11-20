@@ -1,8 +1,9 @@
 /**
  * How `plan-formation` and apply decide whether a declared property differs
- * from what the resource holds: through the type's schema defaults on both
- * sides, and with a write-only property the resource cannot read back settled
- * when its declaration is the one the formation last deployed.
+ * from what the resource holds: an empty (`null`) property and an absent one
+ * are the same, the type's schema defaults fill both sides, and a write-only
+ * property the resource cannot read back is settled when its declaration is the
+ * one the formation last deployed.
  */
 
 import { isDeepStrictEqual } from 'node:util';
@@ -14,9 +15,7 @@ import type { ResourceDeclaration } from './formationsTypes';
 
 export type PropertyComparison = {
   /** Both sides of the comparison pass through this before they are compared. */
-  withDefaults: (
-    properties: Record<string, unknown>
-  ) => Record<string, unknown>;
+  comparable: (properties: Record<string, unknown>) => Record<string, unknown>;
   /** Properties that compare equal whatever the other side holds. */
   settled: ReadonlySet<string>;
 };
@@ -51,6 +50,33 @@ const settledWriteOnlyProperties = (args: {
 };
 
 /**
+ * A read leaves an empty property out, so a top-level `null` compares as
+ * absent. Not for a write-only property: no read returns it, so absent there
+ * says nothing about whether it holds a value.
+ */
+export const buildPropertyComparison = (args: {
+  withSchemaDefaults: (
+    properties: Record<string, unknown>
+  ) => Record<string, unknown>;
+  writeOnlyProperties: readonly string[];
+  settled: ReadonlySet<string>;
+}): PropertyComparison => {
+  const writeOnly = new Set(args.writeOnlyProperties);
+  return {
+    comparable: (properties) => {
+      return args.withSchemaDefaults(
+        Object.fromEntries(
+          Object.entries(properties).filter(([key, value]) => {
+            return value !== null || writeOnly.has(key);
+          })
+        )
+      );
+    },
+    settled: args.settled,
+  };
+};
+
+/**
  * The comparison for one declared resource. `deployed` is its declaration in
  * the template the formation last deployed, `undefined` when there is none.
  */
@@ -59,10 +85,11 @@ export const propertyComparisonFor = (args: {
   deployed: ResourceDeclaration | undefined;
 }): PropertyComparison => {
   const module = getFormationModule({ resourceType: args.declared.type });
-  return {
-    withDefaults: (properties) => {
+  return buildPropertyComparison({
+    withSchemaDefaults: (properties) => {
       return module ? module.withSchemaDefaults(properties) : properties;
     },
+    writeOnlyProperties: module?.writeOnlyProperties ?? [],
     settled: settledWriteOnlyProperties(args),
-  };
+  });
 };

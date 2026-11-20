@@ -537,6 +537,7 @@ Plan and apply share one change rule:
 - A property the last apply declared and the template now omits is **removed**: a nullable one is cleared (`null` in `diff.desired`, an `update`); any other keeps its value, shown in `diff.desired`. Operator-registered types keep every omitted property.
 - A property is nullable in its type's properties schema only when the resource's update can clear it, so a declared `null` and an omitted nullable property both clear it. A property set only at creation, or one the update cannot clear (a policy's `name`, a webhook's `description`), refuses `null`.
 - Comparison is **structural**; key order in a nested value bag is not a change.
+- An **empty property** is not a change: a declared `null` equals a property the read leaves out, except a write-only one, which no read returns.
 - A **schema default** is not a change: both sides are compared with every `default` the type's properties schema declares filled in, at every depth, so a playbook node omitting `final` equals one read back with `final: false`.
 - A **write-only property** compares equal when its declaration is the literal the formation last deployed, including one sent back as `{ "no_echo": true }`; any other value, or one holding a `param`, `ref` or `sub`, is a change.
 - A property resolving to `undefined` (a kept `use_previous_value` parameter) reuses the previous value, or is dropped when there is none.

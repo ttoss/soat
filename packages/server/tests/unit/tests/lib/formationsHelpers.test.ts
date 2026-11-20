@@ -4,6 +4,7 @@ import {
   lookupAgentInternalId,
   lookupToolInternalId,
 } from 'src/lib/formationLookups';
+import { buildPropertyComparison } from 'src/lib/formationsComparison';
 import {
   buildAuditableParameters,
   buildDependencyGraph,
@@ -901,22 +902,24 @@ describe('formationsHelpers', () => {
       lastApplied?: Record<string, unknown>;
       clearable?: string[];
       settled?: string[];
+      writeOnly?: string[];
     }) => {
       return mergeWithPrevious({
         resolved: args.resolved,
         previous: args.previous,
         lastApplied: args.lastApplied ?? {},
         clearable: new Set(args.clearable),
-        comparison: {
-          withDefaults: (properties) => {
+        comparison: buildPropertyComparison({
+          withSchemaDefaults: (properties) => {
             return applySchemaDefaults({
               schema: SCHEMA,
               properties,
               resolveRef: resolveInlineSchema,
             });
           },
+          writeOnlyProperties: args.writeOnly ?? [],
           settled: new Set(args.settled),
-        },
+        }),
       });
     };
 
@@ -949,6 +952,34 @@ describe('formationsHelpers', () => {
           previous: { definition: { param: 'Definition' } },
         }).changed
       ).toBe(false);
+    });
+
+    test('a property declared null that the read leaves out is not a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', metadata: null },
+          previous: { name: 'a' },
+        }).changed
+      ).toBe(false);
+    });
+
+    test('a property declared null over a held value is a change', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', metadata: null },
+          previous: { name: 'a', metadata: { topic: 'x' } },
+        }).changed
+      ).toBe(true);
+    });
+
+    test('a write-only property declared null is a change unless settled', () => {
+      expect(
+        merge({
+          resolved: { name: 'a', auth: null },
+          previous: { name: 'a' },
+          writeOnly: ['auth'],
+        }).changed
+      ).toBe(true);
     });
 
     test('a settled property the previous state lacks is not a change', () => {

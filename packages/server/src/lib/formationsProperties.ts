@@ -83,8 +83,8 @@ export const mergeWithPrevious = (args: {
       merged[key] = previous[key];
     }
   }
-  const desired = args.comparison.withDefaults(merged);
-  const current = args.comparison.withDefaults(previous);
+  const desired = args.comparison.comparable(merged);
+  const current = args.comparison.comparable(previous);
   const changed = Object.keys(merged).some((key) => {
     if (args.comparison.settled.has(key)) return false;
     return !isDeepStrictEqual(current[key], desired[key]);
