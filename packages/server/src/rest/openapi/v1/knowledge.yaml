@@ -28,6 +28,10 @@ paths:
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
       x-iam-resource-type: document
+      x-iam-also-checked-on:
+        - resource_type: memory_store
+          pinned_by: memory_store_ids
+        - resource_type: memory
       requestBody:
         required: true
         content:

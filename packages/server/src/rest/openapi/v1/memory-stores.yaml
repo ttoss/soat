@@ -517,6 +517,8 @@ paths:
       operationId: exportMemories
       x-iam-action: memories:ExportMemories
       x-iam-resource-type: memory_store
+      x-iam-also-checked-on:
+        - resource_type: memory
       # Not a tool: the response is a stream with no JSON projection, and an
       # export is deliberately unbounded, so the callable form of "read the
       # memories" is `listMemories`, which is paged.

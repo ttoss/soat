@@ -28,6 +28,9 @@ paths:
       operationId: listMemories
       x-iam-action: memories:ListMemories
       x-iam-resource-type: memory
+      x-iam-also-checked-on:
+        - resource_type: memory_store
+          pinned_by: memory_store_id
       parameters:
         - name: memory_store_id
           in: query

@@ -255,6 +255,8 @@ paths:
       operationId: listCollectionItems
       x-iam-action: collections:ListCollectionItems
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: './structured-filters.yaml#/components/parameters/DataQuery'
@@ -301,6 +303,9 @@ paths:
       operationId: getCollectionItem
       x-iam-action: collections:GetCollectionItem
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
+          pinned_by: key
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -337,6 +342,9 @@ paths:
       operationId: putCollectionItem
       x-iam-action: collections:PutCollectionItem
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
+          pinned_by: key
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -413,6 +421,9 @@ paths:
       operationId: updateCollectionItem
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
+          pinned_by: key
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -480,6 +491,9 @@ paths:
       operationId: deleteCollectionItem
       x-iam-action: collections:DeleteCollectionItem
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
+          pinned_by: key
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -511,6 +525,9 @@ paths:
       operationId: getCollectionItemTags
       x-iam-action: collections:GetCollectionItem
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
+          pinned_by: key
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -541,6 +558,9 @@ paths:
       operationId: replaceCollectionItemTags
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
+          pinned_by: key
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
@@ -595,6 +615,9 @@ paths:
       operationId: mergeCollectionItemTags
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
+      x-iam-also-checked-on:
+        - resource_type: collection_item
+          pinned_by: key
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/ItemKey'
