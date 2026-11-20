@@ -50,7 +50,9 @@ paths:
                     type: string
                   description: >
                     Runtime parameter values that override or supply template
-                    parameter defaults. Keys must match parameter names declared
+                    parameter defaults. Each value is a string that takes its
+                    declaration's `type` (a numeric string for `number`, a
+                    JSON array for `list`). Keys must match parameter names declared
                     in `template.parameters`. When provided, the validation
                     result also reports required parameters that are still
                     missing after applying these values.
@@ -123,7 +125,9 @@ paths:
                     type: string
                   description: >
                     Runtime parameter values that override or supply template
-                    parameter defaults. Keys must match parameter names declared
+                    parameter defaults. Each value is a string that takes its
+                    declaration's `type` (a numeric string for `number`, a
+                    JSON array for `list`). Keys must match parameter names declared
                     in `template.parameters`. A parameter declared with
                     `use_previous_value: true` may be omitted to reuse its
                     stored value.
@@ -260,7 +264,9 @@ paths:
                     type: string
                   description: >
                     Runtime parameter values that override or supply template
-                    parameter defaults. Keys must match parameter names declared
+                    parameter defaults. Each value is a string that takes its
+                    declaration's `type` (a numeric string for `number`, a
+                    JSON array for `list`). Keys must match parameter names declared
                     in `template.parameters`. Required parameters (those without
                     a default) must be provided here.
                   nullable: true
@@ -421,7 +427,9 @@ paths:
                     type: string
                   description: >
                     Runtime parameter values that override or supply template
-                    parameter defaults. Keys must match parameter names declared
+                    parameter defaults. Each value is a string that takes its
+                    declaration's `type` (a numeric string for `number`, a
+                    JSON array for `list`). Keys must match parameter names declared
                     in `template.parameters`. Required parameters (those without
                     a default) must be provided here, unless the parameter is
                     declared with `use_previous_value: true`, in which case
@@ -702,12 +710,24 @@ components:
       properties:
         type:
           type: string
-          description: Parameter type (currently only 'string' is supported)
+          enum: [string, number, list]
+          description: >
+            The value's type; omitted means `string`. A supplied value is a
+            string and takes this type: `number` parses a numeric string,
+            `list` a JSON array. One that does not parse is refused with
+            400 FORMATION_INVALID_PARAMETERS.
           example: string
         default:
-          type: string
-          description: Default value used when the parameter is not supplied at deploy time
+          description: >
+            Default value used when the parameter is not supplied at deploy
+            time, of the declared `type`: a string, a number, or an array (or
+            its string form for `number` and `list`).
           nullable: true
+          oneOf:
+            - type: string
+            - type: number
+            - type: array
+              items: {}
         description:
           type: string
           description: Human-readable description of what this parameter represents

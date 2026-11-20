@@ -187,11 +187,26 @@ Parameters inject deploy-time values without changing the template:
 
 | Field                | Required | Description                                                                                                         |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `type`               | No       | Parameter type; currently only `"string"` is supported                                                              |
-| `default`            | No       | Default value used when the parameter is not provided at deploy time                                                |
+| `type`               | No       | `string` (when omitted), `number` or `list` — see [Parameter Types](#parameter-types)                               |
+| `default`            | No       | Default value used when the parameter is not provided at deploy time, of the declared `type`                        |
 | `description`        | No       | Human-readable description of the parameter's purpose                                                               |
 | `no_echo`            | No       | When `true`, signals that the value is sensitive and should not be logged or displayed                              |
 | `use_previous_value` | No       | When `true`, omitting the parameter **on update** reuses its previously stored value instead of failing as required |
+
+#### Parameter Types
+
+A deploy-time value is always a string; it takes the parameter's declared `type`, so a `{ "param": … }` expression resolves to a typed value:
+
+| `type`   | Supplied value                 | Resolves to  | `default`                    |
+| -------- | ------------------------------ | ------------ | ---------------------------- |
+| `string` | any string                     | the string   | a string                     |
+| `number` | a numeric string, `"5"`        | `5`          | a number, or its string form |
+| `list`   | a JSON array, `"[\"infra/\"]"` | `["infra/"]` | an array, or its JSON string |
+
+- A value that does not parse as its type is refused with `400 FORMATION_INVALID_PARAMETERS` on plan, create and update, and is an entry in `errors` on validate; `meta.details` names each parameter.
+- An unknown `type`, or a `default` that does not parse as its `type`, fails template validation.
+- A `{ "sub": … }` embeds a `number` or `list` as its JSON text; `resolved_parameters` records it the same way.
+- A JSON Logic guard reads the typed value: `{ "in": [{ "var": "task.payload.path" }, { "param": "Paths" }] }` tests list membership, and `{ "<": [{ "var": "task.payload.rounds" }, { "param": "LimitN" }] }` compares numbers.
 
 #### Parameter Expressions
 

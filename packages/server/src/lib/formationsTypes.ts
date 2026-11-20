@@ -21,7 +21,8 @@ export type SubExpression = { sub: string };
 
 export type ParameterDeclaration = {
   type?: string;
-  default?: string;
+  /** A value of the declared `type`; a `number` or `list` default may be its string form. */
+  default?: unknown;
   description?: string;
   no_echo?: boolean;
   /**

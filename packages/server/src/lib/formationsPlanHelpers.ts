@@ -17,7 +17,7 @@ import type { PlanChange, ResourceDeclaration } from './formationsTypes';
 // failing the whole call.
 const resolveParamExpressionsForDiff = (args: {
   decl: ResourceDeclaration;
-  resolvedParams: Map<string, string>;
+  resolvedParams: Map<string, unknown>;
   templateResourceKeys: Set<string>;
   existingMap: Map<string, string>;
 }): Record<string, unknown> => {
@@ -48,7 +48,7 @@ const buildComparedChange = (args: {
   logicalId: string;
   decl: ResourceDeclaration;
   physicalResourceId: string;
-  resolvedParams: Map<string, string>;
+  resolvedParams: Map<string, unknown>;
   existingMap: Map<string, string>;
   templateResourceKeys: Set<string>;
   current: Record<string, unknown>;
@@ -92,7 +92,7 @@ export const planResourceChange = async (args: {
   decl: ResourceDeclaration;
   physicalResourceId: string | undefined;
   projectId: number;
-  resolvedParams: Map<string, string>;
+  resolvedParams: Map<string, unknown>;
   existingMap: Map<string, string>;
   templateResourceKeys: Set<string>;
   lastAppliedProperties?: Record<string, unknown> | null;
