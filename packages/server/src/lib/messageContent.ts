@@ -132,10 +132,13 @@ const assertToolAllowedForAgent = (args: {
 
 /**
  * What the caller names in a turn's messages is read as the caller
- * (`callerNamedAuthority`), whatever the agent runs as.
+ * (`callerNamedAuthority`), whatever the agent runs as. The lookup is held to
+ * the turn's project before any check, so a document elsewhere answers as a
+ * made-up id does instead of a refusal naming its project.
  */
 const resolveDocumentContent = async (args: {
   content: DocumentMessageContent;
+  turnProjectId: number;
   authority: WorkAuthority | null;
   authUser?: AuthUser;
   agentAuthority?: AgentAuthority;
@@ -144,7 +147,10 @@ const resolveDocumentContent = async (args: {
   documentId: string;
   provenance: ProvenanceMetric;
 }> => {
-  const document = await getDocument({ id: args.content.document_id });
+  const document = await getDocument({
+    id: args.content.document_id,
+    projectIds: [args.turnProjectId],
+  });
 
   if (!document || !document.project_id) {
     throw new DomainError(
@@ -242,6 +248,8 @@ const resolveToolOutputContent = async (args: {
 
 export const resolveMessageContent = async (args: {
   content: ResolvableMessageContent;
+  /** The project the turn runs in, where a named document resolves. */
+  turnProjectId: number;
   projectIds?: number[];
   authority: WorkAuthority | null;
   authUser?: AuthUser;
@@ -261,6 +269,7 @@ export const resolveMessageContent = async (args: {
   if (isDocumentMessageContent(args.content)) {
     return resolveDocumentContent({
       content: args.content,
+      turnProjectId: args.turnProjectId,
       authority: args.authority,
       authUser: args.authUser,
       agentAuthority: args.agentAuthority,

@@ -32,7 +32,7 @@ import { assertCreatedDocumentMetadataValid } from './metadataSchemas';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
-import { projectScopeWhere } from './projectScope';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { toResourceRef } from './resourceVersions';
 import {
   applyFilterWhere,
@@ -190,8 +190,11 @@ export const getDocumentSourceContent = async (args: {
   return readFileContent(doc.file);
 };
 
-export const getDocument = async (args: { id: string }) => {
-  const doc = await fetchDocumentWithContext(args.id);
+export const getDocument = async (args: {
+  id: string;
+  projectIds?: ProjectScope;
+}) => {
+  const doc = await fetchDocumentWithContext(args.id, args.projectIds);
 
   if (!doc) return null;
 

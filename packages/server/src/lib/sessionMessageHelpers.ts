@@ -30,6 +30,7 @@ export const assertSessionMessageInput = (args: {
 
 export const addResolvedSessionUserMessage = async (args: {
   conversationId: string;
+  projectId: number;
   actorId?: string | null;
   message?: string;
   documentId?: string;
@@ -38,6 +39,7 @@ export const addResolvedSessionUserMessage = async (args: {
   idempotencyDigest?: string;
 }) => {
   const resolvedContent = await resolveMessageContent({
+    turnProjectId: args.projectId,
     authority: captureAuthority({ authUser: args.authUser }),
     content: args.documentId
       ? { type: 'document', document_id: args.documentId }

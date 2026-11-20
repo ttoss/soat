@@ -212,11 +212,13 @@ export const deleteChat = async (args: { id: string }): Promise<void> => {
 
 const resolveMessages = async (args: {
   messages: ChatMessageInput[];
+  turnProjectId: number;
   authUser: AuthUser;
 }): Promise<ChatMessage[]> => {
   const resolved = await Promise.all(
     args.messages.map(async (message) => {
       const resolvedContent = await resolveMessageContent({
+        turnProjectId: args.turnProjectId,
         authority: captureAuthority({ authUser: args.authUser }),
         content:
           'documentId' in message
@@ -339,11 +341,6 @@ const prepareChatCompletion = async (args: ChatCompletionArgs) => {
       })
     : null;
 
-  const resolvedMessages = await resolveMessages({
-    messages: args.messages,
-    authUser: args.authUser,
-  });
-
   const resolvedModel = typedChat
     ? await resolveChatScopedModel({ typedChat, model: args.model })
     : await resolveChatModel({
@@ -352,6 +349,12 @@ const prepareChatCompletion = async (args: ChatCompletionArgs) => {
         aiProviderId: args.aiProviderId as string,
         model: args.model,
       });
+
+  const resolvedMessages = await resolveMessages({
+    messages: args.messages,
+    turnProjectId: resolvedModel.projectId,
+    authUser: args.authUser,
+  });
   await assertProjectAcceptsWork({ projectId: resolvedModel.projectId });
   await assertProjectSpendWithinQuota({ projectId: resolvedModel.projectId });
 

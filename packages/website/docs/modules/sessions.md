@@ -54,7 +54,7 @@ A session's messages are its conversation's [Conversation Messages](./conversati
 When creating a session message (`POST .../messages`), send exactly one of:
 
 - `message`: raw text body
-- `document_id`: public ID of an existing document (its content is used as the message text)
+- `document_id`: public ID of an existing document in the session's project (its content is used as the message text); one in another project answers `404 RESOURCE_NOT_FOUND`, as an unknown id does
 
 An optional `idempotency_key` string can accompany either variant — see [Idempotency](#idempotency).
 

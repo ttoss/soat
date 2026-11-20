@@ -280,6 +280,7 @@ export const addSessionMessage = async (args: {
 
   const { resolvedContent, userMsg } = await addResolvedSessionUserMessage({
     conversationId: conversation.publicId,
+    projectId: conversation.projectId,
     actorId: actor?.publicId ?? null,
     message: args.message,
     documentId: args.documentId,
