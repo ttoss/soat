@@ -1,0 +1,456 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import ts from 'typescript';
+
+/**
+ * Reads, from a route's source, the authorization checks its handlers reach
+ * and the SRN types each names. Read by `iamAlsoCheckedOn.test.mjs`.
+ */
+
+const serverRoot = fileURLToPath(
+  new URL('../../packages/server', import.meta.url)
+);
+const routesDir = path.join(serverRoot, 'src/rest/v1');
+
+/** Calls not followed: each is a path taken instead of the route's own check. */
+const ALTERNATIVE_PATHS = new Map([
+  [
+    'authorizeSharedUse',
+    "a share grantee's credential checks the shared resource instead of its own project",
+  ],
+]);
+
+/** Calls naming a `resourceType` without checking it. */
+const NOT_CHECKS = new Set(['buildResourceTagContext', 'buildSrn']);
+
+/** Properties a check's `action` may sit under: `check: { action }`. */
+const CHECK_CARRIERS = new Set(['check', 'checks']);
+
+export const ROUTE_METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+
+/** A tag route set mounts these methods on its `path`. */
+const TAG_ROUTE_METHODS = ['get', 'put', 'patch'];
+
+/** A check naming no action of its own: the caller's. */
+export const INHERIT = 'inherit';
+
+const sources = new Map();
+const parse = (file) => {
+  if (!sources.has(file)) {
+    sources.set(
+      file,
+      ts.createSourceFile(
+        file,
+        fs.readFileSync(file, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true
+      )
+    );
+  }
+  return sources.get(file);
+};
+
+const resolveImport = (from, specifier) => {
+  const base = specifier.startsWith('src/')
+    ? path.join(serverRoot, specifier)
+    : specifier.startsWith('.')
+      ? path.resolve(path.dirname(from), specifier)
+      : undefined;
+  if (!base) return undefined;
+  return [`${base}.ts`, path.join(base, 'index.ts')].find((candidate) => {
+    return fs.existsSync(candidate);
+  });
+};
+
+const propName = (node) => {
+  return (ts.isPropertyAssignment(node) ||
+    ts.isShorthandPropertyAssignment(node)) &&
+    !ts.isComputedPropertyName(node.name)
+    ? node.name.text
+    : undefined;
+};
+
+const calleeName = (call) => {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) return callee.text;
+  if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
+  return undefined;
+};
+
+const literalProp = (node, name) => {
+  if (!node || !ts.isObjectLiteralExpression(node)) return undefined;
+  const prop = node.properties.find((candidate) => {
+    return propName(candidate) === name;
+  });
+  return prop &&
+    ts.isPropertyAssignment(prop) &&
+    ts.isStringLiteralLike(prop.initializer)
+    ? prop.initializer.text
+    : undefined;
+};
+
+const isFunction = (node) => {
+  return (
+    node !== undefined &&
+    (ts.isArrowFunction(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isFunctionDeclaration(node))
+  );
+};
+
+const addImports = (bindings, file, statement) => {
+  const target = resolveImport(file, statement.moduleSpecifier.text);
+  const named = statement.importClause?.namedBindings;
+  if (!target || !named || !ts.isNamedImports(named)) return;
+  for (const element of named.elements) {
+    bindings.imports.set(element.name.text, {
+      file: target,
+      name: (element.propertyName ?? element.name).text,
+    });
+  }
+};
+
+const addDeclaration = (bindings, { name, initializer }) => {
+  if (!ts.isIdentifier(name) || !initializer) return;
+  if (ts.isStringLiteralLike(initializer)) {
+    bindings.consts.set(name.text, initializer.text);
+  } else if (isFunction(initializer)) {
+    bindings.functions.set(name.text, initializer);
+  } else if (ts.isCallExpression(initializer)) {
+    // `makeItemRouteAuthorizer({ resourceType: 'collection', … })`
+    const type = literalProp(initializer.arguments[0], 'resourceType');
+    if (type) bindings.typed.set(name.text, type);
+  }
+};
+
+/** A file's top-level functions, string consts, imports and typed factories. */
+const bindingsCache = new Map();
+const bindingsOf = (file) => {
+  if (bindingsCache.has(file)) return bindingsCache.get(file);
+  const bindings = {
+    functions: new Map(),
+    consts: new Map(),
+    imports: new Map(),
+    typed: new Map(),
+  };
+  bindingsCache.set(file, bindings);
+  for (const statement of parse(file).statements) {
+    if (ts.isImportDeclaration(statement)) {
+      addImports(bindings, file, statement);
+    } else if (ts.isFunctionDeclaration(statement) && statement.name) {
+      bindings.functions.set(statement.name.text, statement);
+    } else if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        addDeclaration(bindings, declaration);
+      }
+    }
+  }
+  return bindings;
+};
+
+/** `name` as `file` sees it: its own binding, else the one it imports. */
+const lookup = (file, name, kind) => {
+  const own = bindingsOf(file);
+  if (own[kind].has(name)) return { file, value: own[kind].get(name) };
+  const imported = own.imports.get(name);
+  if (!imported) return undefined;
+  const value = bindingsOf(imported.file)[kind].get(imported.name);
+  return value === undefined ? undefined : { file: imported.file, value };
+};
+
+/** The `action` a call's arguments name, at their top or under a carrier. */
+const actionExpression = (call) => {
+  let expression;
+  const visit = (node) => {
+    if (expression) return;
+    const name = propName(node);
+    if (name === 'action') {
+      expression = ts.isPropertyAssignment(node) ? node.initializer : node.name;
+      return;
+    }
+    if (name !== undefined && !CHECK_CARRIERS.has(name)) return;
+    if (ts.isCallExpression(node) && NOT_CHECKS.has(calleeName(node))) return;
+    ts.forEachChild(node, visit);
+  };
+  for (const arg of call.arguments) visit(arg);
+  return expression;
+};
+
+const isCheck = (call) => {
+  return (
+    /^compile/.test(calleeName(call) ?? '') ||
+    actionExpression(call) !== undefined
+  );
+};
+
+/**
+ * Whether a bare `action` passes the caller's through: a callback's parameter
+ * (`ACTIONS.map((action) => …)`) names another action.
+ */
+const passesCallerAction = (identifier) => {
+  for (let node = identifier.parent; node; node = node.parent) {
+    if (!ts.isFunctionLike(node)) continue;
+    const declares = node.parameters.some((parameter) => {
+      return (
+        ts.isIdentifier(parameter.name) &&
+        parameter.name.text === identifier.text
+      );
+    });
+    if (declares) return !ts.isCallExpression(node.parent);
+  }
+  return true;
+};
+
+/**
+ * The actions a check call may name: the literals it can take, or `INHERIT`
+ * when it names none or passes the caller's through (`action`, `args.action`).
+ */
+const actionsOf = (file, call) => {
+  const expression = actionExpression(call);
+  if (!expression) return [INHERIT];
+  const literals = (node) => {
+    if (ts.isStringLiteralLike(node)) return [node.text];
+    if (ts.isConditionalExpression(node)) {
+      return [...literals(node.whenTrue), ...literals(node.whenFalse)];
+    }
+    if (ts.isParenthesizedExpression(node)) return literals(node.expression);
+    if (ts.isIdentifier(node)) {
+      const found = lookup(file, node.text, 'consts');
+      if (found) return [found.value];
+      return node.text === 'action' && passesCallerAction(node)
+        ? [INHERIT]
+        : [];
+    }
+    return /\.action$/.test(node.getText()) ? [INHERIT] : [];
+  };
+  return literals(expression);
+};
+
+/** The literal actions the checks written in `fn` itself name. */
+const ownActions = (file, fn) => {
+  const actions = new Set();
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && isCheck(node)) {
+      for (const action of actionsOf(file, node)) {
+        if (action !== INHERIT) actions.add(action);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(fn);
+  return [...actions];
+};
+
+const resourceTypeLiteral = (node) => {
+  return propName(node) === 'resourceType' &&
+    ts.isPropertyAssignment(node) &&
+    ts.isStringLiteralLike(node.initializer)
+    ? node.initializer.text
+    : undefined;
+};
+
+/** The identifier a property's value names: `{ resource }`, `{ resource: x }`. */
+const referenceOf = (node) => {
+  if (ts.isShorthandPropertyAssignment(node)) return node.name;
+  return ts.isPropertyAssignment(node) && ts.isIdentifier(node.initializer)
+    ? node.initializer
+    : undefined;
+};
+
+/**
+ * Literal SRN types in `node`, following identifiers to the local values they
+ * name; an array of them (`resources: [...]`) is one group, any of which passes.
+ */
+const typeGroupsIn = (node, locals) => {
+  const groups = [];
+  const flat = (inner) => {
+    const found = [];
+    const visit = (child) => {
+      const type = resourceTypeLiteral(child);
+      if (type) found.push(type);
+      ts.forEachChild(child, visit);
+    };
+    visit(inner);
+    return found;
+  };
+  const visit = (child) => {
+    if (
+      ts.isCallExpression(child) &&
+      calleeName(child) === 'buildResourceTagContext'
+    ) {
+      return;
+    }
+    if (ts.isArrayLiteralExpression(child)) {
+      const group = flat(child);
+      if (group.length > 0) groups.push(group);
+      return;
+    }
+    const reference = referenceOf(child);
+    if (reference && locals.has(reference.text)) {
+      visit(locals.get(reference.text));
+      return;
+    }
+    const type = resourceTypeLiteral(child);
+    if (type) {
+      groups.push([type]);
+      return;
+    }
+    ts.forEachChild(child, visit);
+  };
+  visit(node);
+  return groups;
+};
+
+/** `collectionAccess.authorizeRead(…)`: a check on its factory's type. */
+const typedCheck = (file, call) => {
+  const callee = call.expression;
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    !ts.isIdentifier(callee.expression)
+  ) {
+    return undefined;
+  }
+  const typed = lookup(file, callee.expression.text, 'typed');
+  return typed && (isCheck(call) || /^authorize/.test(callee.name.text))
+    ? { actions: actionsOf(file, call), types: [typed.value] }
+    : undefined;
+};
+
+/** A check call's actions; `compileFor({ resourceType })` takes its body's. */
+const checkActions = (file, call, target) => {
+  const named = actionsOf(file, call);
+  const own = target ? ownActions(target.file, target.value) : [];
+  return named.length === 1 && named[0] === INHERIT && own.length > 0
+    ? own
+    : named;
+};
+
+/**
+ * Every check `node` reaches, following the functions it calls or hands over
+ * by name, across files: `{ actions, types }`, where several `types` are one
+ * check passing on any of them.
+ */
+const checksIn = (args) => {
+  const { file, node, seen } = args;
+  const checks = [];
+  const locals = new Map();
+
+  const follow = (target, name, callerActions) => {
+    const key = `${target.file}#${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    for (const check of checksIn({
+      file: target.file,
+      node: target.value,
+      seen,
+    })) {
+      checks.push({
+        ...check,
+        actions: check.actions.flatMap((action) => {
+          return action === INHERIT ? callerActions : [action];
+        }),
+      });
+    }
+  };
+
+  const resolveFunction = (name) => {
+    const local = locals.get(name);
+    return isFunction(local)
+      ? { file, value: local }
+      : lookup(file, name, 'functions');
+  };
+
+  const visitCall = (call) => {
+    const typed = typedCheck(file, call);
+    if (typed) checks.push(typed);
+    const callee = call.expression;
+    const target = ts.isIdentifier(callee)
+      ? resolveFunction(callee.text)
+      : undefined;
+    if (isCheck(call) && !NOT_CHECKS.has(calleeName(call))) {
+      const actions = checkActions(file, call, target);
+      for (const arg of call.arguments) {
+        for (const types of typeGroupsIn(arg, locals)) {
+          checks.push({ actions, types });
+        }
+      }
+    }
+    if (target) follow(target, callee.text, actionsOf(file, call));
+  };
+
+  const visit = (child) => {
+    if (
+      ts.isVariableDeclaration(child) &&
+      ts.isIdentifier(child.name) &&
+      child.initializer
+    ) {
+      locals.set(child.name.text, child.initializer);
+    }
+    if (
+      ts.isIdentifier(child) &&
+      ts.isPropertyAssignment(child.parent) &&
+      child.parent.initializer === child
+    ) {
+      // `resolve: resolveItemForTags`
+      const target = resolveFunction(child.text);
+      if (target) follow(target, child.text, [INHERIT]);
+    }
+    if (ts.isCallExpression(child)) {
+      if (ALTERNATIVE_PATHS.has(calleeName(child))) return;
+      visitCall(child);
+    }
+    ts.forEachChild(child, visit);
+  };
+  visit(node);
+  return checks;
+};
+
+const specPath = (route) => {
+  return `/api/v1${route.replace(/:(\w+)/g, '{$1}')}`;
+};
+
+/** Each route a router file mounts, with the checks its handlers reach. */
+export const routeChecks = () => {
+  const routes = new Map();
+  const add = (key, file, nodes) => {
+    const seen = new Set();
+    routes.set(
+      key,
+      nodes.flatMap((node) => {
+        return checksIn({ file, node, seen });
+      })
+    );
+  };
+  for (const name of fs.readdirSync(routesDir).sort()) {
+    if (!name.endsWith('.ts')) continue;
+    const file = path.join(routesDir, name);
+    const visit = (node) => {
+      if (ts.isCallExpression(node)) {
+        const [first, ...rest] = node.arguments;
+        const method = calleeName(node);
+        if (
+          ROUTE_METHODS.includes(method) &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          /Router$/.test(node.expression.expression.getText()) &&
+          first &&
+          ts.isStringLiteralLike(first)
+        ) {
+          add(`${method} ${specPath(first.text)}`, file, rest);
+          return;
+        }
+        const tagPath = literalProp(first, 'path');
+        if (method === 'registerTagRoutes' && tagPath) {
+          for (const verb of TAG_ROUTE_METHODS) {
+            add(`${verb} ${specPath(tagPath)}`, file, [first]);
+          }
+          return;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parse(file));
+  }
+  return routes;
+};
