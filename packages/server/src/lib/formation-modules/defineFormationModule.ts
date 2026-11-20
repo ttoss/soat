@@ -227,7 +227,7 @@ const buildValidator = <TResource>(args: {
       errors,
     });
     pushFieldEnumErrors({
-      spec,
+      schema: loadModuleSchema({ schemaName }),
       properties,
       basePath,
       errors,

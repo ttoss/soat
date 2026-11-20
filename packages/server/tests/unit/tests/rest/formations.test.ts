@@ -4412,6 +4412,101 @@ resources:
     });
   });
 
+  // ── nested enum values ──────────────────────────────────────────────────
+
+  describe('Formation agent with an out-of-enum nested value', () => {
+    let aiProviderId: string;
+
+    const agentProperties = (reasoning: unknown) => {
+      return {
+        ai_provider_id: aiProviderId,
+        name: 'nested-enum-agent',
+        reasoning,
+      };
+    };
+
+    const template = (reasoning: unknown) => {
+      return {
+        parameters: { Effort: { type: 'string' } },
+        resources: {
+          NestedEnumAgent: {
+            type: 'agent',
+            properties: agentProperties(reasoning),
+          },
+        },
+      };
+    };
+
+    beforeAll(async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'FormationNestedEnumProvider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      aiProviderId = aiProvRes.body.id;
+    });
+
+    test('validate reports the value by its dotted path', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: template({ effort: 'max' }) });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual([
+        {
+          path: 'resources.NestedEnumAgent.properties.reasoning.effort',
+          message: '`reasoning.effort` must be one of: none, low, medium, high',
+        },
+      ]);
+    });
+
+    test('the same value is refused on the resource route', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({ project_id: projectId, ...agentProperties({ effort: 'max' }) });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a deploy carrying the value is refused before any apply', async () => {
+      const name = `nested-enum-formation-${Date.now()}`;
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name,
+          template: template({ effort: 'max' }),
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations?project_id=${projectId}`
+      );
+      expect(
+        listRes.body.data.some((formation: { name: string }) => {
+          return formation.name === name;
+        })
+      ).toBe(false);
+    });
+
+    test('an expression at that depth validates', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: template({ effort: { param: 'Effort' } }) });
+
+      expect(res.status).toBe(200);
+      expect(res.body.errors).toEqual([]);
+      expect(res.body.valid).toBe(true);
+    });
+  });
+
   // ── secret references via sub expressions ────────────────────────────────
 
   describe('Formation tool referencing a formation-created secret via sub', () => {
