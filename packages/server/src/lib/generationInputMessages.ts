@@ -25,6 +25,7 @@ export type GenerationInputMessage = {
  * known to have come from the request.
  */
 export const resolveGenerationInputMessages = async (args: {
+  turnProjectId: number;
   projectIds?: number[];
   messages: GenerationInputMessage[];
   authority: WorkAuthority | null;
@@ -47,6 +48,7 @@ export const resolveGenerationInputMessages = async (args: {
 
       const resolvedContent = await resolveMessageContent({
         content: message.content as ResolvableMessageContent,
+        turnProjectId: args.turnProjectId,
         projectIds: args.projectIds,
         authority: args.authority,
         authUser: args.authUser,

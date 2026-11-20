@@ -380,7 +380,7 @@ When `content.type` is `tool_output`, the server executes the referenced tool be
 
 `tool_id` is required. `output_path` is an optional jq expression over the result (e.g. `.items[] | select(.lang == "pt-BR") | .text`); omitted, the whole output is used. `builtin` and `mcp` tools also take `action`.
 
-When `content.type` is `document` (`{ "type": "document", "document_id": "doc_abc123" }`), the document's content is used.
+When `content.type` is `document` (`{ "type": "document", "document_id": "doc_abc123" }`), the document's content is used. The document is looked up in the project the generation runs in: one in another project answers `404 RESOURCE_NOT_FOUND`, as an unknown id does.
 
 ### Streaming
 

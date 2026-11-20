@@ -2,6 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
 import { emitResourceEvent } from './eventBus';
+import { type ProjectScope, projectScopeWhere } from './projectScope';
 import type { SoatEventTypeFor } from './soatEvents';
 
 /**
@@ -20,22 +21,26 @@ export type LoadedDoc = InstanceType<(typeof db)['Document']> & {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fileAndProjectInclude = (): any[] => {
+const fileAndProjectInclude = (projectIds?: ProjectScope): any[] => {
   return [
     {
       model: db.File,
       as: 'file',
       include: [{ model: db.Project, as: 'project' }],
+      ...(projectIds === undefined
+        ? {}
+        : { where: projectScopeWhere({ projectIds }), required: true }),
     },
   ];
 };
 
 export const fetchDocumentWithContext = (
-  publicId: string
+  publicId: string,
+  projectIds?: ProjectScope
 ): Promise<LoadedDoc | null> => {
   return db.Document.findOne({
     where: { publicId },
-    include: fileAndProjectInclude(),
+    include: fileAndProjectInclude(projectIds),
   }) as Promise<LoadedDoc | null>;
 };
 

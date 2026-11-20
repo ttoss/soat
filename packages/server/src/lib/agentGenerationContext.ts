@@ -310,6 +310,10 @@ const turnProvenance = async (args: {
   return provenance;
 };
 
+const boundToolIds = (typedAgent: TypedAgent): string[] => {
+  return splitToolBindings(readAgentToolBindings(typedAgent)).toolIds;
+};
+
 export const buildGenerationContext = async (
   args: BuildGenerationContextArgs
 ): Promise<GenerationContext> => {
@@ -329,12 +333,12 @@ export const buildGenerationContext = async (
   });
 
   const resolvedMessages = await resolveGenerationInputMessages({
+    turnProjectId: typedAgent.project.id,
     projectIds: args.projectIds,
     messages: args.messages,
     authority: args.authority,
     authUser: args.authUser,
-    allowedToolIds: splitToolBindings(readAgentToolBindings(typedAgent))
-      .toolIds,
+    allowedToolIds: boundToolIds(typedAgent),
     agentAuthority,
     toolContext, // identity-pinned, not the raw caller bag
     provenance,
