@@ -455,6 +455,47 @@ describe('Streamed agent generations', () => {
       const generation = await settledGenerationOf(agentId);
       expect(generation.status).toBe('completed');
     });
+
+    test('carries the progress rows as progress frames, without step content', async () => {
+      const agentId = await createAgent();
+
+      const res = await stream(agentId);
+
+      const blocks = res.text.split('\n\n').filter((block) => {
+        return block.includes('data: ');
+      });
+      const progress = blocks
+        .filter((block) => {
+          return block.includes('event: progress');
+        })
+        .map((block) => {
+          const data = block.split('\n').find((line) => {
+            return line.startsWith('data: ');
+          });
+          return JSON.parse((data ?? '').slice('data: '.length)) as {
+            seq: number;
+            type: string;
+            step: unknown;
+          };
+        });
+      expect(progress[0]).toMatchObject({
+        seq: 1,
+        type: 'generations.started',
+      });
+      expect(
+        progress.map((event) => {
+          return event.type;
+        })
+      ).toContain('generations.step_ended');
+      expect(
+        progress.every((event) => {
+          return event.step === null;
+        })
+      ).toBe(true);
+      // The answer's own frames stay unnamed, and the last data is [DONE].
+      expect(blocks.at(-1)).toBe('data: [DONE]');
+      expect(blocks.at(-2)).not.toContain('event: progress');
+    });
   });
 
   describe('POST /api/v1/agents/{agent_id}/generate (stream: true) — client tool', () => {

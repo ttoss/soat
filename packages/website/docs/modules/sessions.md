@@ -309,6 +309,28 @@ These three keys are always taken from the session and actor: a caller-provided 
 
 When a new generation request arrives while a previous one is in flight, the server **cancels the previous generation** and starts a fresh one, so the model always sees the complete message history.
 
+A session's generations, the one in flight included, are listed by [`GET /generations?session_id=`](/docs/api/generations/list-generations).
+
+### Streaming a turn
+
+`"stream": true` in the body answers Server-Sent Events instead of the `202`. It implies waiting: with `?wait=false` it is `400 VALIDATION_FAILED`.
+
+```
+event: accepted
+data: {"status":"accepted","session_id":"sess_...","generation_id":"gen_...","trace_id":"trace_..."}
+
+id: 3
+event: progress
+data: {"seq":3,"type":"generations.tool_call_started","step_index":0,"tool_call_id":"call_...", ...}
+
+data: [DONE]
+```
+
+- The `accepted` frame is the `202` body. The frames after it are the generation's [events](./generations.md#following-a-generation): one per step and tool call starting and ending, each ended step with its content, until the generation settles.
+- Step content needs `traces:GetTrace` on the turn's trace; without it every `step` is `null`.
+- A stream closes after 5 minutes with an `end` event carrying `reason: "max_lifetime"`, `generation_id` and `after_seq`; continue on [`GET /generations/{generation_id}/events`](/docs/api/generations/list-generation-events) from that `after_seq`.
+- The tool call has no `stream`; it waits for the reply.
+
 ### Debugging (Session, Generation, Trace)
 
 Each call to `POST .../generate` returns `generation_id` and `trace_id`. Store these alongside `session_id`:

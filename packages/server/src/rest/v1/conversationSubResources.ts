@@ -1,7 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { acceptTurn } from 'src/lib/acceptedTurn';
 import {
   generateConversationMessage,
   resolveConversationAndAgent,
@@ -24,6 +23,7 @@ import { assertAllowedUnder } from 'src/lib/turnAuthority';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import { requireConversationAccess } from './conversationHelpers';
+import { resolveStreamWait, respondAcceptedTurn } from './generationStream';
 import {
   type AuthenticatedContext,
   parsePagination,
@@ -221,12 +221,8 @@ conversationSubResourcesRouter.post(
       tool_context?: unknown;
     };
 
-    if (body.stream) {
-      throw new DomainError(
-        'NOT_IMPLEMENTED',
-        'Streaming is not implemented in v1. Omit stream or set false.'
-      );
-    }
+    const stream = body.stream === true;
+    const wait = resolveStreamWait({ ctx, stream });
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
@@ -274,10 +270,14 @@ conversationSubResourcesRouter.post(
       ],
     });
 
-    if (ctx.query['wait'] !== 'true') {
+    if (stream || !wait) {
       // The reply lands as a conversation message; a failure after the
       // record exists is on the generation the caller polls.
-      const accepted = await acceptTurn({
+      await respondAcceptedTurn({
+        ctx,
+        stream,
+        handle: { conversation_id: ctx.params.conversation_id },
+        label: 'conversation generate stream',
         start: async (onRecorded) => {
           const result = await generateConversationMessage({
             ...turn,
@@ -289,14 +289,6 @@ conversationSubResourcesRouter.post(
           };
         },
       });
-
-      ctx.status = 202;
-      ctx.body = {
-        status: 'accepted',
-        conversation_id: ctx.params.conversation_id,
-        generation_id: accepted.generationId,
-        trace_id: accepted.traceId,
-      };
       return;
     }
 

@@ -437,8 +437,9 @@ paths:
         and the `content_redacted_*` fields say which happened.
         `content_redacted_by_principal_id` is `zero_retention` when the content
         was never stored, and the purging principal's ID when it was erased
-        later. A generation that is still running returns the same shape with
-        an empty `steps`; `status` disambiguates the two.
+        later. A generation that is still running returns the steps it has
+        ended so far and its `in_flight_tool_calls`; `status` says it runs.
+        To follow it as it runs, read `GET /api/v1/generations/{generation_id}/events`.
       operationId: getGenerationTranscript
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
@@ -466,6 +467,115 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Generation not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+
+  /api/v1/generations/{generation_id}/events:
+    get:
+      tags:
+        - Generations
+      summary: List a generation's events
+      description: >
+        The generation's transcript, incrementally: its progress rows in `seq`
+        order, after `after_seq`. Each `generations.step_ended` row carries the
+        step it ended as a `TranscriptStep`; the other rows say when a step or a
+        tool call started and ended, and which generation a tool call started.
+
+
+        Step content and tool names are the trace's content: reading them needs
+        `traces:GetTrace` on the generation's trace beside
+        `generations:GetGeneration`, and is refused with `403` without it.
+        `progress_only=true` asks for the rows alone (`step` is null), which
+        `generations:GetGeneration` alone allows. Content is re-read on every page: once a purge erases it, or
+        under zero-retention, `step` is null.
+
+
+        `stream=true` answers `text/event-stream` instead and follows the
+        generation until it settles (`completed`, `failed` or
+        `requires_action`), or stops running without a settle row. Each row is
+        one `event: progress` frame whose `id` is its `seq`; the stream ends
+        with `data: [DONE]`. A `: heartbeat` comment is sent every 15 seconds.
+        After 5 minutes the stream ends with `event: end` and
+        `data: {"reason": "max_lifetime", "generation_id": "...", "after_seq": N}`:
+        reconnect with that `after_seq`, or let an `EventSource` reconnect with
+        its `Last-Event-ID` header, which this route reads as `after_seq`. Every
+        reconnect is authorized afresh.
+      operationId: listGenerationEvents
+      x-iam-action: generations:GetGeneration
+      x-iam-resource-type: generation
+      parameters:
+        - name: generation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of the generation
+        - name: after_seq
+          in: query
+          required: false
+          description: >
+            Return the rows after this `seq`. Defaults to the `Last-Event-ID`
+            header when sent, else `0` (from the first row).
+          schema:
+            type: integer
+            minimum: 0
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+        - name: progress_only
+          in: query
+          required: false
+          description: >
+            When `true`, the rows without step content, which needs no
+            `traces:GetTrace`.
+          schema:
+            type: boolean
+            default: false
+        - name: stream
+          in: query
+          required: false
+          # A tool call is one request and one result: it cannot hold a stream
+          # open, so the mode is hidden and a tool reads pages.
+          x-soat-tool-unsupported: true
+          description: >
+            When `true`, answer `text/event-stream` and follow the generation
+            until it settles.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: A page of the generation's events, or their stream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationEventsPage'
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/GenerationEventStream'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: >-
+            Forbidden: no `generations:GetGeneration` on the generation, or no
+            `traces:GetTrace` on its trace without `progress_only=true`
           content:
             application/json:
               schema:
@@ -1033,6 +1143,114 @@ components:
             the fields the thrown error carried (`name`, `status`, …) in
             `meta`.
           example: null
+
+    GenerationEvent:
+      type: object
+      description: >
+        One progress row of a generation. Ids, positions, statuses and times
+        only, except `step`, which carries an ended step's content.
+      required:
+        - seq
+        - type
+        - created_at
+      properties:
+        seq:
+          type: integer
+          description: >
+            Position of the row in the generation's sequence, from 1 and
+            gapless; the cursor `after_seq` reads after.
+          example: 3
+        type:
+          type: string
+          enum:
+            - generations.started
+            - generations.step_started
+            - generations.step_ended
+            - generations.tool_call_started
+            - generations.tool_call_ended
+            - generations.sub_generation_started
+            - generations.completed
+            - generations.failed
+            - generations.requires_action
+          example: generations.tool_call_ended
+        step_index:
+          type: integer
+          nullable: true
+          description: Index of the step the row belongs to.
+          example: 0
+        tool_call_id:
+          type: string
+          nullable: true
+          description: The model's id for the tool call the row belongs to.
+          example: V1StGXR8Z5jdHi6B
+        status:
+          type: string
+          nullable: true
+          description: >
+            How a tool call ended (`executed`, `failed`, or the status of a call
+            something else answered), or the settled status on a settle row.
+          example: executed
+        duration_ms:
+          type: integer
+          nullable: true
+          description: How long the tool call ran, on `generations.tool_call_ended`.
+          example: 412
+        child_generation_id:
+          x-soat-ref: generations
+          type: string
+          nullable: true
+          description: >
+            The generation a tool call started, on
+            `generations.sub_generation_started`.
+          example: gen_V1StGXR8Z5jdHi6B
+        created_at:
+          type: string
+          format: date-time
+        step:
+          allOf:
+            - $ref: '#/components/schemas/TranscriptStep'
+          nullable: true
+          description: >
+            The step a `generations.step_ended` row ended, with its tool calls
+            and results. Null on every other row, with `progress_only=true`,
+            and when the content is unavailable.
+
+    GenerationEventsPage:
+      allOf:
+        - $ref: './pagination.yaml#/components/schemas/Page'
+        - type: object
+          required:
+            - generation_id
+            - status
+          properties:
+            generation_id:
+              x-soat-ref: generations
+              type: string
+              example: gen_V1StGXR8Z5jdHi6B
+            status:
+              type: string
+              description: >
+                The generation's status when the page was read. While it is
+                `running`, read on from the last row's `seq` as `after_seq`.
+              enum: [running, requires_action, completed, failed]
+              example: running
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/GenerationEvent'
+
+    GenerationEventStream:
+      type: string
+      description: >
+        SSE frames. Each progress row is an `event: progress` frame with
+        `id: <seq>` and the `GenerationEvent` as `data`. The stream ends with
+        `data: [DONE]` once the generation settles or stops running. A
+        `: heartbeat` comment is sent every 15 seconds. After 5 minutes it ends
+        with `event: end` and `data: {"reason": "max_lifetime",
+        "generation_id": "...", "after_seq": N}`; reconnect from that
+        `after_seq`, or with the last frame's `id` as `Last-Event-ID`. A
+        failure after the stream opened is a terminal
+        `data: {"error": {...}}` frame without `[DONE]`.
 
     TranscriptStep:
       type: object

@@ -22,6 +22,11 @@
       "description": "Read a generation's turn as an ordered transcript of steps, tool calls and results (also requires traces:GetTrace)"
     },
     {
+      "operationId": "listGenerationEvents",
+      "action": "generations:GetGeneration",
+      "description": "Read a generation's progress rows and ended steps incrementally, or follow them as SSE (step content also requires traces:GetTrace)"
+    },
+    {
       "operationId": "updateGeneration",
       "action": "generations:UpdateGeneration",
       "description": "Attach caller-supplied metadata to a generation record"

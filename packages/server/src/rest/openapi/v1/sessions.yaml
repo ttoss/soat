@@ -363,7 +363,9 @@ paths:
         conversation. Background by default: returns `202 Accepted` with the
         generation's id once its record exists. Pass ?wait=true to block and
         receive the assistant reply (or a requires_action status if the agent
-        needs client tool outputs) in the response.
+        needs client tool outputs) in the response. Pass `stream: true` in the
+        body to receive the turn's events as SSE, one frame per step and tool
+        call, until it settles; `stream: true` with `?wait=false` is `400`.
       operationId: generateSessionResponse
       x-iam-action: agents:SendSessionMessage
       x-iam-resource-type: session
@@ -386,11 +388,24 @@ paths:
               $ref: '#/components/schemas/GenerateSessionRequest'
       responses:
         '200':
-          description: Agent reply or requires_action (only when `?wait=true`)
+          description: >-
+            Agent reply or requires_action (only when `?wait=true`), or the
+            turn's event stream (with `stream: true`)
           content:
             application/json:
               schema:
                 $ref: './conversations.yaml#/components/schemas/GenerateConversationMessageResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  With `stream: true`: first an `event: accepted` frame whose
+                  `data` is the `202` body, then the generation's events as on
+                  `GET /api/v1/generations/{generation_id}/events?stream=true`,
+                  one `event: progress` frame per row, ending with
+                  `data: [DONE]` when the generation settles. Step content
+                  needs `traces:GetTrace` on the trace; without it the frames
+                  carry the rows only (`step` is null).
         '202':
           description: >-
             Generation accepted and running in the background (default, when
@@ -1147,6 +1162,15 @@ components:
           type: string
           description: Optional model override
           example: gpt-4o
+        stream:
+          type: boolean
+          default: false
+          # A tool call is one request and one result: it cannot hold a stream
+          # open, so the mode is hidden and the call waits for the reply.
+          x-soat-tool-unsupported: true
+          description: >-
+            When true, the response is the turn's event stream (SSE) at step
+            granularity. Implies waiting; `?wait=false` with it is `400`.
         tool_context:
           type: object
           additionalProperties:

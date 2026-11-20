@@ -23,6 +23,7 @@ import { captureAuthority } from 'src/lib/workAuthority';
 
 import { authorizeAgentWrite } from './agentAccess';
 import { authorizeGenerationResume } from './generations';
+import { resolveStreamWait, withProgressFrames } from './generationStream';
 import { parseToolContextBody } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
 import { authorizeSharedUse } from './sharedAccess';
@@ -49,15 +50,23 @@ async function* framesOf(
 /**
  * The `200` goes out before the provider is called, so a failure becomes the
  * terminal error frame. The stream's error is the one the generation records.
+ * Text frames carry no SSE event name; the progress rows interleaved with them
+ * are `progress` events.
  */
 const sendStreamResponse = async (args: {
   ctx: Context;
   result: ReadableStream<StreamedGenerationPart>;
   recorded: GenerationIds | undefined;
 }): Promise<void> => {
+  const text = framesOf(args.result);
   await serveSse({
     ctx: args.ctx,
-    frames: framesOf(args.result),
+    frames: args.recorded
+      ? withProgressFrames({
+          frames: text,
+          generationId: args.recorded.generationId,
+        })
+      : text,
     label: 'agentGeneration stream',
     resume: args.recorded && {
       generation_id: args.recorded.generationId,
@@ -184,23 +193,6 @@ const runWaitedGeneration = (args: {
     : createGeneration({ ...generationArgs, stream, onRecorded });
 };
 
-/**
- * Resolves whether this request blocks. Background is the default; a stream
- * holds the request open by definition, so `stream: true` implies waiting, and
- * asking for both a stream and a background run is contradictory rather than
- * silently resolved either way.
- */
-const resolveWait = (args: { ctx: Context; stream?: boolean }): boolean => {
-  const requested = args.ctx.query['wait'];
-  if (args.stream === true && requested === 'false') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'stream and wait=false are mutually exclusive: a streamed generation must hold the request open. Omit stream, or omit wait=false.'
-    );
-  }
-  return requested === 'true' || args.stream === true;
-};
-
 agentGenerationRouter.post(
   '/agents/:agent_id/generate',
   async (ctx: Context) => {
@@ -241,7 +233,7 @@ agentGenerationRouter.post(
       runProjectId: shared?.projectId,
     });
 
-    if (!resolveWait({ ctx, stream: body.stream })) {
+    if (!resolveStreamWait({ ctx, stream: body.stream })) {
       respondAccepted({ ctx, accepted: await startGeneration(generationArgs) });
       return;
     }

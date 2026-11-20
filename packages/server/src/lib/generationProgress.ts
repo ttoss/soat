@@ -4,11 +4,19 @@
  * lifecycle rows are written in the transaction of the write they describe
  * (`generations.ts`, `generationSettle.ts`).
  */
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { lockForTransaction } from './advisoryLocks';
 import type { Transaction } from './dbTransaction';
+import { notifyGenerationProgress } from './generationWakeup';
+import {
+  type ListFilters,
+  type Page,
+  type PageRequest,
+  paginatedList,
+} from './pagination';
 import type { HeldToolCallStatus } from './toolCallOutcome';
 
 const log = createDebug('soat:generation-progress');
@@ -74,6 +82,7 @@ export const appendProgressEvent = async (args: {
     },
     { transaction }
   );
+  await notifyGenerationProgress({ generationDbId, transaction });
 };
 
 /**
@@ -179,7 +188,8 @@ export const appendGenerationStarted = async (args: {
   });
 };
 
-const SETTLED_TYPES = {
+/** The row each settled status writes; a follower stops after one. */
+export const SETTLED_PROGRESS_TYPES = {
   completed: 'generations.completed',
   failed: 'generations.failed',
   requires_action: 'generations.requires_action',
@@ -188,12 +198,68 @@ const SETTLED_TYPES = {
 /** The row a settle writes, in the settle's own transaction. */
 export const appendGenerationSettled = (args: {
   generationDbId: number;
-  status: keyof typeof SETTLED_TYPES;
+  status: keyof typeof SETTLED_PROGRESS_TYPES;
   transaction: Transaction;
 }): Promise<void> => {
   return appendProgressEvent({
     generationDbId: args.generationDbId,
-    fact: { type: SETTLED_TYPES[args.status], status: args.status },
+    fact: { type: SETTLED_PROGRESS_TYPES[args.status], status: args.status },
     transaction: args.transaction,
+  });
+};
+
+/** A progress row as it is stored. */
+export type ProgressRow = {
+  seq: number;
+  type: string;
+  stepIndex: number | null;
+  toolCallId: string | null;
+  status: string | null;
+  durationMs: number | null;
+  childGenerationId: string | null;
+  createdAt: Date;
+};
+
+/** Up to `limit` of the generation's rows after `afterSeq`, in `seq` order. */
+export const readProgressRows = (args: {
+  generationDbId: number;
+  afterSeq: number;
+  limit: number;
+}): Promise<ProgressRow[]> => {
+  return db.GenerationProgressEvent.findAll({
+    where: {
+      generationId: args.generationDbId,
+      seq: { [Op.gt]: args.afterSeq },
+    },
+    order: [['seq', 'ASC']],
+    limit: args.limit,
+  });
+};
+
+/** A page of the generation's rows after `afterSeq`; `seq` is its keyset. */
+export const pageProgressRows = (
+  args: PageRequest & {
+    generationDbId: number;
+    afterSeq: number;
+    filters: ListFilters;
+  }
+): Promise<Page<ProgressRow>> => {
+  log('pageProgressRows: generation=%d', args.generationDbId);
+  return paginatedList({
+    limit: args.limit,
+    cursor: args.cursor,
+    filters: args.filters,
+    where: {
+      generationId: args.generationDbId,
+      seq: { [Op.gt]: args.afterSeq },
+    },
+    order: [['seq', 'ASC']],
+    tiebreak: [],
+    query: ({ where, limit, order }) => {
+      return db.GenerationProgressEvent.findAll({ where, limit, order });
+    },
+    map: (row): ProgressRow => {
+      return row;
+    },
   });
 };
