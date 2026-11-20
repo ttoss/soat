@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.122.0](https://github.com/ttoss/soat/compare/v0.121.0...v0.122.0) (2026-11-20)
+
+### Features
+
+* **generations:** one settle chokepoint, lease, deadline and abort, orphan sweep ([#2048](https://github.com/ttoss/soat/issues/2048)) ([705bf4b](https://github.com/ttoss/soat/commit/705bf4b49e20d6745ad73527efdc17f66fb511e1))
+* **generations:** record progress rows from one instrumentation point ([#2051](https://github.com/ttoss/soat/issues/2051)) ([e225380](https://github.com/ttoss/soat/commit/e225380fe85dc0d4e8a3a605b971e86c5333acab))
+
 # [0.121.0](https://github.com/ttoss/soat/compare/v0.120.0...v0.121.0) (2026-11-19)
 
 **Note:** Version bump only for package @soat/postgresdb
