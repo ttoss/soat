@@ -534,6 +534,9 @@ components:
         stream:
           type: boolean
           default: false
+          # A tool call is one request and one result: it cannot hold a stream
+          # open, so the mode is hidden and the call returns the completion.
+          x-soat-tool-unsupported: true
           description: >
             When `true` the response is an SSE stream of delta chunks.
             When `false` (default) a single JSON object is returned.

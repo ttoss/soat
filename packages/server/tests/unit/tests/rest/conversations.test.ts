@@ -1127,11 +1127,12 @@ describe('Conversations', () => {
       expect(res.status).toBe(400);
     });
 
-    test('returns 501 when stream is requested', async () => {
+    test('returns 400 when stream is requested with wait=false', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=false`)
         .send({ agent_id: 'agt_test', stream: true });
-      expect(res.status).toBe(501);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('returns 404 for unknown agent', async () => {

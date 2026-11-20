@@ -26,6 +26,13 @@ export type SseFrame = { data: unknown; id?: string; event?: string };
 /** Where a stream closed by its lifetime resumes, e.g. `{ generation_id }`. */
 export type SseResume = Record<string, unknown>;
 
+/**
+ * The frames to serve. A function is handed a signal aborted once the stream
+ * stops writing, for a source that should stop then rather than be drained.
+ */
+export type SseSource =
+  AsyncIterable<SseFrame> | ((stopped: AbortSignal) => AsyncIterable<SseFrame>);
+
 const formatFrame = (frame: SseFrame): string => {
   const id = frame.id === undefined ? '' : `id: ${frame.id}\n`;
   const event = frame.event === undefined ? '' : `event: ${frame.event}\n`;
@@ -61,13 +68,14 @@ const closingFrame = (args: {
  * as `text/event-stream`. A completed source ends with `data: [DONE]`; a
  * failed one with `data: {"error": StoredError}` (a `DomainError` as
  * thrown, anything else `INTERNAL_ERROR`) and no `[DONE]`; a stream
- * outliving `maxLifetimeMs` with an `end` event carrying `resume`. Once the
- * client leaves or the lifetime ends, the source is still drained unwritten,
- * so the work behind it settles as it would have.
+ * outliving `maxLifetimeMs` with an `end` event carrying `resume`, read as
+ * it closes. Once the client leaves or the lifetime ends, an
+ * iterable source is still drained unwritten, so the work behind it settles
+ * as it would have; a function source is told to stop.
  */
 export const pipeSse = async (args: {
   res: ServerResponse;
-  frames: AsyncIterable<SseFrame>;
+  frames: SseSource;
   /** Names the stream in the log line an unexpected failure writes. */
   label: string;
   resume?: SseResume;
@@ -86,10 +94,12 @@ export const pipeSse = async (args: {
   res.flushHeaders();
 
   let stopped: Outcome | null = null;
+  const stopping = new AbortController();
   const timers: { heartbeat?: NodeJS.Timeout; lifetime?: NodeJS.Timeout } = {};
   const stop = (outcome: Outcome) => {
     if (stopped) return;
     stopped = outcome;
+    stopping.abort();
     clearInterval(timers.heartbeat);
     clearTimeout(timers.lifetime);
     const frame = closingFrame({ outcome, resume: args.resume });
@@ -111,7 +121,11 @@ export const pipeSse = async (args: {
   res.on('close', onClose);
 
   try {
-    for await (const frame of args.frames) {
+    const frames =
+      typeof args.frames === 'function'
+        ? args.frames(stopping.signal)
+        : args.frames;
+    for await (const frame of frames) {
       if (!stopped) res.write(formatFrame(frame));
     }
     stop({ kind: 'completed' });

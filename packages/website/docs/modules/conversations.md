@@ -220,7 +220,7 @@ Nothing serializes generate calls on one conversation. Each turn reads the histo
 
 #### Streaming
 
-Generate does not stream. `"stream": true` answers `501 NOT_IMPLEMENTED` and runs nothing; omit `stream` or send `false`.
+`"stream": true` answers Server-Sent Events at step granularity, the [session stream](./sessions.md#streaming-a-turn)'s shape with `conversation_id` in the `accepted` frame. It implies waiting: with `?wait=false` it is `400 VALIDATION_FAILED`.
 
 ### Tool Context
 

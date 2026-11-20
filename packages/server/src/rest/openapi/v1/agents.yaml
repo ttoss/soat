@@ -453,6 +453,12 @@ paths:
                 type: string
                 description: >
                   SSE stream of delta chunks ending with `data: [DONE]`.
+                  Delta chunks carry no `event` name. Interleaved with them,
+                  the generation's progress rows arrive as `event: progress`
+                  frames (`id` is the row's `seq`, `data` a `GenerationEvent`
+                  with `step` null): when each step and tool call starts and
+                  ends. The final result or error frame stays the last data
+                  frame.
 
 
                   A turn that pauses on a `client` tool ends with one more frame

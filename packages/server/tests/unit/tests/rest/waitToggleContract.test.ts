@@ -193,7 +193,58 @@ const acceptedResponses = (): Array<{ label: string; fields: string[] }> => {
   return found;
 };
 
+/** Each operation whose body declares `stream`, with what it declares beside. */
+const streamOperations = (): Array<{
+  label: string;
+  waitsInQuery: boolean;
+  refusesBoth: boolean;
+  servesEventStream: boolean;
+}> => {
+  const found: ReturnType<typeof streamOperations> = [];
+  for (const file of readdirSync(SPEC_DIR).filter((name) => {
+    return name.endsWith('.yaml');
+  })) {
+    const doc = parseYaml(
+      readFileSync(join(SPEC_DIR, file), 'utf-8')
+    ) as SpecFile;
+    for (const [path, pathItem] of Object.entries(doc.paths ?? {})) {
+      for (const [method, operation] of Object.entries(pathItem)) {
+        if (!HTTP_METHODS.has(method)) continue;
+        const body = operation.requestBody?.content?.['application/json'];
+        const fields = propertiesOf({ doc, schema: body?.schema ?? {} });
+        if (!fields.includes('stream')) continue;
+        const ok = (operation.responses?.['200'] ?? {}) as {
+          content?: Record<string, unknown>;
+        };
+        found.push({
+          label: `${method.toUpperCase()} ${path} (${file})`,
+          waitsInQuery: waitsInQuery(operation),
+          refusesBoth: '400' in (operation.responses ?? {}),
+          servesEventStream: 'text/event-stream' in (ok.content ?? {}),
+        });
+      }
+    }
+  }
+  return found;
+};
+
 describe('wait toggle contract', () => {
+  test('a streamed generation implies wait and refuses `wait=false` with it', () => {
+    // `stream: true` holds the request open, so it is a blocking call: the
+    // endpoint that also takes `wait` answers the pair with a `400`.
+    const streamed = streamOperations().filter((operation) => {
+      return operation.waitsInQuery;
+    });
+    expect(streamed.length).toBeGreaterThan(0);
+    for (const operation of streamed) {
+      expect(operation).toEqual({
+        ...operation,
+        refusesBoth: true,
+        servesEventStream: true,
+      });
+    }
+  });
+
   test('no operation declares the retired `async` toggle', () => {
     const offenders = allOperations()
       .filter(({ operation }) => {

@@ -41,6 +41,28 @@ const grantPolicy = async (args: {
 };
 
 /**
+ * Bootstrap creates one admin per database, and each test file has its own
+ * database and module registry: the first setup's admin serves every later one.
+ */
+let fileAdmin: { username: string; password: string } | undefined;
+
+const adminTokenFor = async (args: { prefix: string }): Promise<string> => {
+  const admin = fileAdmin ?? {
+    username: `${args.prefix}admin`,
+    password: 'supersecret',
+  };
+  if (!fileAdmin) {
+    const res = await testClient.post('/api/v1/users/bootstrap').send(admin);
+    if (res.status === 201) fileAdmin = admin;
+  }
+  const token = await loginAs(admin.username, admin.password);
+  if (!token) {
+    throw new Error(`setupProjectWithUsers: ${admin.username} cannot log in`);
+  }
+  return token;
+};
+
+/**
  * Drives the bootstrap→admin→user→project→policy→noPerm sequence. `prefix`
  * keeps usernames and project names unique per test file.
  *
@@ -63,11 +85,7 @@ export async function setupProjectWithUsers(
     createNoPermUser = true,
   } = args;
 
-  await testClient
-    .post('/api/v1/users/bootstrap')
-    .send({ username: `${prefix}admin`, password: 'supersecret' });
-
-  const adminToken = await loginAs(`${prefix}admin`, 'supersecret');
+  const adminToken = await adminTokenFor({ prefix });
 
   const createUserRes = await authenticatedTestClient(adminToken)
     .post('/api/v1/users')

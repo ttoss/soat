@@ -2,19 +2,22 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { purgeGenerationContent } from 'src/lib/contentPurge';
+import { listGenerationEvents } from 'src/lib/generationEventFeed';
 import { getGenerationMemoryAssertions } from 'src/lib/generationMemoryAssertions';
 import {
   GENERATION_STATUSES,
   generations,
   getGeneration,
-  getGenerationTraceId,
   listGenerations,
   updateGenerationMetadata,
 } from 'src/lib/generations';
 import { getGenerationTranscript } from 'src/lib/generationTranscript';
 import { validateMetadataBag } from 'src/lib/metadataBag';
-import { traceRows } from 'src/lib/traces';
 
+import {
+  authorizeGenerationContent,
+  serveGenerationEvents,
+} from './generationStream';
 import {
   parseEnumListQuery,
   parsePagination,
@@ -174,31 +177,81 @@ generationsRouter.get(
     });
 
     // The response merges generation columns with the trace's steps, so the
-    // caller must be allowed to read both — otherwise `GetGeneration` alone
-    // would silently widen to cover trace content reachable today only through
-    // `GET /traces/{id}`. Deriving authority from exactly the two resources
-    // projected also keeps it from drifting from them later; each is
-    // now named by its own SRN.
-    //
-    // A refusal here stays `403` rather than hiding: the generation read above
-    // already succeeded, so the caller knows the turn exists, and every
-    // generation has a trace. There is nothing left to conceal.
-    const traceId = await getGenerationTraceId({
-      id: ctx.params.generation_id,
-    });
-    await authorizeResource({
+    // caller must be allowed to read both.
+    await authorizeGenerationContent({
       ctx,
-      scope: await traceRows.findScope({ id: traceId }),
-      resourceType: 'trace',
-      resourceId: traceId,
-      label: 'Trace',
-      action: 'traces:GetTrace',
+      generationId: ctx.params.generation_id,
       onDenied: 'refuse',
     });
 
     ctx.body = await getGenerationTranscript({
       generationId: ctx.params.generation_id,
       projectIds: projectIds ?? undefined,
+    });
+  }
+);
+
+/** `after_seq`, else the `Last-Event-ID` an `EventSource` reconnect sends. */
+const parseAfterSeq = (ctx: Context): number => {
+  const header = ctx.get('last-event-id');
+  const raw = ctx.query['after_seq'] ?? (header === '' ? undefined : header);
+  if (raw === undefined) return 0;
+  const value =
+    typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(value)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `after_seq must be an integer of at least 0; got ${JSON.stringify(raw)}.`,
+      { field: 'after_seq' }
+    );
+  }
+  return value;
+};
+
+/**
+ * @openapi
+ * GET /api/v1/generations/{generation_id}/events
+ * operationId: listGenerationEvents
+ * The generation's transcript, incrementally: its progress rows after
+ * `after_seq`, each ended step carrying its content. `stream=true` serves them
+ * as SSE until the generation settles; `progress_only=true` leaves the
+ * content out, and with it the need for `traces:GetTrace`.
+ */
+generationsRouter.get(
+  '/generations/:generation_id/events',
+  async (ctx: Context) => {
+    const { projectIds } = await generationAccess.authorizeRead({
+      ctx,
+      action: 'generations:GetGeneration',
+    });
+    const generationId = ctx.params.generation_id;
+    const includeContent = ctx.query['progress_only'] !== 'true';
+    if (includeContent) {
+      await authorizeGenerationContent({
+        ctx,
+        generationId,
+        onDenied: 'refuse',
+      });
+    }
+    const afterSeq = parseAfterSeq(ctx);
+
+    if (ctx.query['stream'] === 'true') {
+      await serveGenerationEvents({
+        ctx,
+        generationId,
+        afterSeq,
+        includeContent,
+        label: 'generation events',
+      });
+      return;
+    }
+
+    ctx.body = await listGenerationEvents({
+      generationId,
+      projectIds: projectIds ?? undefined,
+      afterSeq,
+      includeContent,
+      ...parsePagination(ctx),
     });
   }
 );

@@ -1,7 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { acceptTurn } from 'src/lib/acceptedTurn';
 import { forkSession, listSessionForks } from 'src/lib/sessionFork';
 import {
   addSessionMessage,
@@ -14,6 +13,7 @@ import { assertNoSystemTagKeys } from 'src/lib/tags';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import { authorizeGenerationResume } from './generations';
+import { resolveStreamWait, respondAcceptedTurn } from './generationStream';
 import {
   type AuthenticatedContext,
   parseNullableToolContextBody,
@@ -106,10 +106,11 @@ sessionSubResourcesRouter.post(
     const body =
       (ctx.request.body as {
         model?: string;
+        stream?: boolean;
         tool_context?: unknown;
       }) ?? {};
-    // Background by default; ?wait=true blocks until the generation settles.
-    const wait = ctx.query['wait'] === 'true';
+    const stream = body.stream === true;
+    const wait = resolveStreamWait({ ctx, stream });
 
     const turn = {
       agentId,
@@ -120,8 +121,12 @@ sessionSubResourcesRouter.post(
       authUser: ctx.authUser,
     };
 
-    if (!wait) {
-      const accepted = await acceptTurn({
+    if (stream || !wait) {
+      await respondAcceptedTurn({
+        ctx,
+        stream,
+        handle: { session_id: ctx.params.session_id },
+        label: 'session generate stream',
         start: async (onRecorded) => {
           const result = await generateSessionResponse({ ...turn, onRecorded });
           return {
@@ -130,13 +135,6 @@ sessionSubResourcesRouter.post(
           };
         },
       });
-      ctx.status = 202;
-      ctx.body = {
-        status: 'accepted',
-        session_id: ctx.params.session_id,
-        generation_id: accepted.generationId,
-        trace_id: accepted.traceId,
-      };
       return;
     }
 

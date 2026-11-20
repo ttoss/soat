@@ -555,7 +555,14 @@ paths:
                   description: Optional model override.
                 stream:
                   type: boolean
-                  description: If true, stream tokens via SSE. NOT IMPLEMENTED in v1 — returns 501.
+                  default: false
+                  # A tool call is one request and one result: it cannot hold
+                  # a stream open, so the mode is hidden and the call waits.
+                  x-soat-tool-unsupported: true
+                  description: >-
+                    When true, the response is the turn's event stream (SSE) at
+                    step granularity. Implies waiting; `?wait=false` with it is
+                    `400`.
                 tool_context:
                   type: object
                   additionalProperties:
@@ -572,11 +579,24 @@ paths:
                     `400 INVALID_TOOL_CONTEXT_KEY`.
       responses:
         '200':
-          description: Generation completed or requires action (only when `?wait=true`)
+          description: >-
+            Generation completed or requires action (only when `?wait=true`),
+            or the turn's event stream (with `stream: true`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenerateConversationMessageResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  With `stream: true`: first an `event: accepted` frame whose
+                  `data` is the `202` body, then the generation's events as on
+                  `GET /api/v1/generations/{generation_id}/events?stream=true`,
+                  one `event: progress` frame per row, ending with
+                  `data: [DONE]` when the generation settles. Step content
+                  needs `traces:GetTrace` on the trace; without it the frames
+                  carry the rows only (`step` is null).
         '202':
           description: Generation accepted and running in the background (default, when `wait` is omitted or `false`). The generation record already exists, so `generation_id` is pollable via `GET /api/v1/generations/{generation_id}`; the reply is persisted as a ConversationMessage when it completes.
           content:
@@ -647,12 +667,6 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
-        '501':
-          description: Streaming not implemented
-          content:
-            application/json:
-              schema:
-                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '4XX':
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':

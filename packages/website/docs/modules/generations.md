@@ -326,6 +326,45 @@ an error: none is content, so they survive a [purge](#content-purge) and are wri
 zero-retention agent. `child_generation_id` is recorded whether or not a reader of the
 parent may read the child.
 
+### Following a generation
+
+[`GET /generations/{generation_id}/events`](/docs/api/generations/list-generation-events) reads the [progress rows](#progress-rows) after `after_seq`, in `seq` order. Each `generations.step_ended` row carries the step it ended in `step`, shaped as a [transcript](#transcript) step; every other row has `step: null`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-generation-events --generation-id gen_abc --after-seq 3
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.generations.listGenerationEvents({
+  path: { generation_id: 'gen_abc' },
+  query: { after_seq: 3 },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -N "https://api.example.com/api/v1/generations/gen_abc/events?stream=true" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+- **As a page**, the answer is a list page (`limit`, `cursor`, `next_cursor`) carrying the generation's `status`. While it is `running`, read on with the last row's `seq` as `after_seq`.
+- **As a stream**, `stream=true` answers Server-Sent Events: one `event: progress` frame per row, `id` its `seq`, until the generation settles (`completed`, `failed` or `requires_action`) or stops running, then `data: [DONE]`. A row written on another server reaches the stream at once. A stream closes after 5 minutes with `event: end` and `{"reason": "max_lifetime", "generation_id": "...", "after_seq": N}`; reconnect from that `after_seq`, or let an `EventSource` send `Last-Event-ID`, which the route reads as `after_seq`. Tool calls have no stream: their schema omits `stream`.
+- **Access** is checked on every request, reconnects included. Step content and tool names are the trace's, so the route needs `traces:GetTrace` beside `generations:GetGeneration`, and answers `403` without it. `progress_only=true` asks for the rows alone, which `generations:GetGeneration` allows. Content is re-read on every read: once a [purge](#content-purge) erases it, or under zero retention, `step` is `null`.
+
+A [session](./sessions.md#streaming-a-turn) or [conversation](./conversations.md) turn started with `stream: true` serves the same stream.
+
 ### What the turn cost, and what it cost to ask
 
 Two different figures, deliberately kept apart.

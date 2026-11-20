@@ -401,6 +401,14 @@ data: {"id":"gen_...","trace_id":"trace_...","status":"requires_action","ai_prov
 data: [DONE]
 ```
 
+The generation's [progress rows](./generations.md#progress-rows) arrive between the text frames as `event: progress` frames, `id` the row's `seq` and `step` always `null`: when each step and tool call starts and ends. Text frames carry no `event` name, so a client reading only unnamed frames sees the answer alone. The final result or error frame stays the last data frame. A step's content is read through [`GET /generations/{generation_id}/events`](/docs/api/generations/list-generation-events).
+
+```
+id: 3
+event: progress
+data: {"seq":3,"type":"generations.tool_call_started","step_index":0,"tool_call_id":"call_...","status":null,"duration_ms":null,"child_generation_id":null,"created_at":"...","step":null}
+```
+
 REST/SDK/CLI only: the `create-agent-generation` tool (MCP client or an agent's `builtin` tool) is one request returning one result, so it has no `stream` and returns the completed generation.
 
 #### Upstream provider errors on a stream

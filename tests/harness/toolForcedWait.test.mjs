@@ -234,3 +234,44 @@ describe('wait on the tool surface', () => {
     assert.deepEqual(toolNamesIn(chosenPart), chosen);
   });
 });
+
+/** Every `stream` query parameter or body property, with its owner. */
+const streamFields = () => {
+  const found = [];
+  const walk = (node, owner) => {
+    if (!node || typeof node !== 'object') return;
+    const key = node.operationId ?? owner;
+    if (node.in === 'query' && node.name === 'stream') found.push([key, node]);
+    if (node.properties?.stream) found.push([key, node.properties.stream]);
+    for (const value of Object.values(node)) walk(value, key);
+  };
+  for (const spec of loadSpecs()) {
+    walk(spec.paths, undefined);
+    for (const [name, schema] of Object.entries(
+      spec.components?.schemas ?? {}
+    )) {
+      walk(schema, name);
+    }
+  }
+  return found;
+};
+
+/**
+ * A tool call is one request and one result, so it cannot hold a stream open:
+ * every `stream` is hidden from the tool schema.
+ */
+describe('stream on the tool surface', () => {
+  test('every stream is hidden from tool calls', () => {
+    const fields = streamFields();
+    assert.ok(fields.length > 0);
+    const exposed = fields
+      .filter(([, field]) => {
+        return field['x-soat-tool-unsupported'] !== true;
+      })
+      .map(([owner]) => {
+        return owner;
+      });
+
+    assert.deepEqual(exposed, []);
+  });
+});
