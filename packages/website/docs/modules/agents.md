@@ -1048,7 +1048,7 @@ Until then `promote` is `409 Conflict` with error code `PROMOTION_GATE_UNMET`. F
 
 #### Claims a version holds
 
-A version holds the [claim](./evaluations.md#the-claim) of every eval in the agent's project whose newest `completed` run recorded against this agent and pinned to that version carries one, with that run's `verdict`. A newer run revokes an older one; a run with no claim holds none. [`GET /api/v1/agents/{agent_id}/versions/{version}/claims`](/docs/api/agents/list-agent-version-claims) lists them by `eval_id`, each with `eval_run_id`, `claim`, `verdict`, `verdict_reasons` and `settled_at`.
+A version holds the [claim](./evaluations.md#the-claim) of every eval in the agent's project whose newest `completed` run recorded against this agent and pinned to that version carries one. A newer run revokes an older one; a run with no claim holds none. The claim's `verdict` is the run's, made worse by every rule the run's recorded [`evidence`](./evaluations.md#evidence) declares beyond its items: production traffic of the version (`live`) and the run's age (`max_run_age_days`), each adding its reason. The run's own verdict never moves; the gate and the comparison below read the claim's. [`GET /api/v1/agents/{agent_id}/versions/{version}/claims`](/docs/api/agents/list-agent-version-claims) lists them by `eval_id`, each with `eval_run_id`, `claim`, `verdict`, `verdict_reasons` and `settled_at`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1081,6 +1081,8 @@ curl https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/versions/1/cla
 `promote` keeps every claim the stable version supports: after the gate, each one must read `supported` on the canary too, or be named in the release's `released_claims`. Otherwise the call is `409 PROMOTION_CLAIM_UNMET`, whose `meta` carries the `eval_id`, the stable version's `claim`, `stable_version`, `canary_version`, and the canary's `eval_run_id`, `verdict` and `verdict_reasons` (`null` when it has no run). A claim the stable version does not support is not required, and `abort` is never blocked.
 
 `released_claims` names evals in the agent's project, unique; anything else is `400 VALIDATION_FAILED` when the release is set. The version that goes live records them; re-setting the release without `released_claims` requires every claim again.
+
+The version that goes live also records the claims it held, as the claims read served them at that moment: production keeps moving the live read, and the record keeps what the promotion stood on. [`GET /api/v1/agents/{agent_id}/versions/{version}/promotion-claims`](/docs/api/agents/list-agent-version-promotion-claims) lists them by `eval_id`; a version no promotion made live has none. Deleting an eval removes its runs, and with them the claim from every live read; the [audit log](./audit-log.md) records the deletion.
 
 #### Which version served a generation
 

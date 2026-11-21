@@ -819,6 +819,66 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
+  /api/v1/agents/{agent_id}/versions/{version}/promotion-claims:
+    get:
+      tags:
+        - Agent Versions
+      summary: List the claims a promotion recorded on an agent version
+      description: >
+        Returns the claims this version held when a promotion made it live,
+        each as the claims read served it then, with the verdict production
+        gave it at that moment. Empty for a version no promotion made live.
+        The live read is `GET /api/v1/agents/{agent_id}/versions/{version}/claims`.
+      operationId: listAgentVersionPromotionClaims
+      x-iam-action: agents:GetAgentVersion
+      x-iam-resource-type: agent
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/AgentVersionNumber'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The recorded claims, by `eval_id`
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/VersionClaim'
+        '400':
+          description: Bad Request — version is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+
   /api/v1/agents/{agent_id}/versions/{version}/restore:
     post:
       tags:
@@ -991,8 +1051,11 @@ paths:
         `released_claims`. Otherwise the call is a `409 PROMOTION_CLAIM_UNMET`
         whose `meta` names the `eval_id`, the stable version's `claim`, and the
         canary's `eval_run_id`, `verdict` and `verdict_reasons` (null when it
-        has no run). The version that goes live records the release's
-        `released_claims`.
+        has no run). Both sides read the claim's verdict, which adds the
+        production rules and the run age the eval's evidence declares. The
+        version that goes live records the claims it held (`GET
+        /api/v1/agents/{agent_id}/versions/{version}/promotion-claims`) and the
+        release's `released_claims`.
       operationId: promoteAgentRelease
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent

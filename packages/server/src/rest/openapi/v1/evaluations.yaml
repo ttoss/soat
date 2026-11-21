@@ -2047,6 +2047,75 @@ components:
             type: string
             minLength: 1
           example: [pix, card, boleto]
+        live:
+          type: object
+          additionalProperties: false
+          required: [window_days]
+          description: >-
+            Rules over the agent version's production traffic in the last
+            `window_days`, read by its claim's verdict and never by the run's:
+            generations of that version that finished (`completed` or
+            `failed`), not started by an eval run, and the guardrail
+            evaluations and approvals linked to them.
+          properties:
+            window_days:
+              type: integer
+              minimum: 1
+              example: 14
+            min_served_generations:
+              type: integer
+              minimum: 1
+              description: Fewer served generations than this is `insufficient`.
+              example: 200
+            guardrail_tripwires:
+              type: object
+              additionalProperties: false
+              required: [max]
+              description: >-
+                More tripwires than `max` is `refuted`; nothing served is
+                `insufficient`.
+              properties:
+                max:
+                  type: integer
+                  minimum: 0
+                  example: 0
+            approval_rejections:
+              type: object
+              additionalProperties: false
+              required: [max_rate, min_decided]
+              description: >-
+                Rejected over decided approvals above `max_rate` is `refuted`;
+                fewer than `min_decided` decided is `insufficient`.
+              properties:
+                max_rate:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  example: 0.05
+                min_decided:
+                  type: integer
+                  minimum: 1
+                  example: 20
+            run_failures:
+              type: object
+              additionalProperties: false
+              required: [max_rate]
+              description: >-
+                Failed over served generations above `max_rate` is `refuted`;
+                nothing served is `insufficient`.
+              properties:
+                max_rate:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  example: 0.01
+        max_run_age_days:
+          type: integer
+          minimum: 1
+          description: >-
+            A claim whose speaking run finished longer ago than this is
+            `insufficient`.
+          example: 30
     VerdictReason:
       type: object
       additionalProperties: false
@@ -2064,10 +2133,14 @@ components:
           properties:
             kind:
               type: string
-              enum: [run, group]
+              enum: [run, group, live, age]
+              description: >-
+                `run` and `group` judge the run's items; `live` (a production
+                rule) and `age` judge a claim and appear only on a claim's
+                reasons.
             name:
               type: string
-              description: The group, on a `group` scope
+              description: The group on a `group` scope; the rule on a `live` scope
               example: boleto
         verdict:
           type: string

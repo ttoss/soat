@@ -47,6 +47,11 @@
       "description": "List the claims an agent version holds"
     },
     {
+      "operationId": "listAgentVersionPromotionClaims",
+      "action": "agents:GetAgentVersion",
+      "description": "List the claims a promotion recorded on an agent version"
+    },
+    {
       "operationId": "restoreAgentVersion",
       "action": "agents:RestoreAgentVersion",
       "description": "Restore an archived agent config as a new version"

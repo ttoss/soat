@@ -6,6 +6,7 @@
  * within a module rather than across layers.
  */
 import { DomainError } from '../errors';
+import { parseLiveEvidence } from './claimLiveEvidence';
 import { validateMetadataBag } from './metadataBag';
 import { isPlainObject } from './plainObject';
 
@@ -91,7 +92,11 @@ export const validateGroupBy = (value: unknown): string | null => {
   return null;
 };
 
-const EVIDENCE_KEYS: ReadonlySet<string> = new Set(['required_groups']);
+const EVIDENCE_KEYS: ReadonlySet<string> = new Set([
+  'required_groups',
+  'live',
+  'max_run_age_days',
+]);
 
 /** Non-empty, unique group names, and a `group_by` to read them from. */
 const validateRequiredGroups = (args: {
@@ -117,6 +122,19 @@ const validateRequiredGroups = (args: {
   return null;
 };
 
+/** The rules the claims read applies beyond the run: production and age. */
+const claimSideProblem = (evidence: Record<string, unknown>): string | null => {
+  if (evidence.live !== undefined) {
+    const parsed = parseLiveEvidence(evidence.live);
+    if ('problem' in parsed) return parsed.problem;
+  }
+  const age = evidence.max_run_age_days;
+  if (age !== undefined && !(Number.isInteger(age) && Number(age) >= 1)) {
+    return 'evidence.max_run_age_days must be a positive integer.';
+  }
+  return null;
+};
+
 /**
  * The `evidence` object, judged with the `group_by` it will be stored beside:
  * a required group names a value of that key, so requiring one with no key to
@@ -135,11 +153,15 @@ export const validateEvidence = (args: {
   });
   if (extra !== undefined) return `evidence.${extra} is not a known rule.`;
 
-  if (evidence.required_groups === undefined) return null;
-  return validateRequiredGroups({
-    groups: evidence.required_groups,
-    groupBy: args.groupBy,
-  });
+  return (
+    claimSideProblem(evidence) ??
+    (evidence.required_groups === undefined
+      ? null
+      : validateRequiredGroups({
+          groups: evidence.required_groups,
+          groupBy: args.groupBy,
+        }))
+  );
 };
 
 /** What a run of an eval tests: one shape on the eval, the run and the event. */

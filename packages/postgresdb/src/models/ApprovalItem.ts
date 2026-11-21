@@ -41,6 +41,11 @@ import { Project } from './Project';
       unique: true,
       fields: ['task_id', 'idempotency_key'],
     },
+    // The claims read counts a version's approvals by its generations.
+    {
+      name: 'approval_items_generation_id_idx',
+      fields: ['generation_id'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: ApprovalItem) => {

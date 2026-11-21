@@ -110,6 +110,15 @@ export class AgentVersion extends Model {
   @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare releasedClaims: string[] | null;
 
+  /**
+   * The claims this version held when a promotion made it live, each as the
+   * claims read served it then. A copy: production keeps moving the claims
+   * read, and this records what the promotion stood on. Null for a version no
+   * promotion made live.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare claims: Record<string, unknown>[] | null;
+
   /** Who produced this version; null for a write with no principal. */
   @Column({ type: DataType.STRING(16), allowNull: true })
   declare createdByPrincipalType: string | null;

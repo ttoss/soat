@@ -449,7 +449,10 @@ export const promoteAgentRelease = async (args: {
     agent: agentRef(agent),
     version: release.canary_version,
   });
-  await requireClaimsHeld({ agent: agentRef(agent), release });
+  const claims = await requireClaimsHeld({
+    agent: agentRef(agent),
+    release,
+  });
 
   // Pins the canary explicitly instead of assuming the live row still holds it:
   // an edit landing mid-rollout would otherwise get promoted in its place.
@@ -460,7 +463,11 @@ export const promoteAgentRelease = async (args: {
     label: `promoted v${release.canary_version}`,
     createdBy: args.createdBy,
     writer: args.writer,
-    promotion: { evalRunDbId, releasedClaims: release.released_claims },
+    promotion: {
+      evalRunDbId,
+      claims,
+      releasedClaims: release.released_claims,
+    },
   });
 };
 
