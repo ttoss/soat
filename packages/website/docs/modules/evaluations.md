@@ -81,6 +81,8 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `pass_threshold` | number | 0–1, or `null` to report without gating; see [Pass semantics](#pass-semantics) |
 | `group_by` | string | A key of the items' `metadata` a run rolls its scores up by, or `null`; see [Grouped aggregates](#grouped-aggregates) |
 | `policy_ids` | string[] | Required on create. The policies every run acts under; see [Run authority](#run-authority) |
+| `evidence` | object \| null | The rules a run's verdict reads beyond the threshold; see [Evidence](#evidence) |
+| `claim` | object \| null | `{ statement, population, limits }`, what a run of the eval tests; see [The claim](#the-claim) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 An `agent_id` or `dataset_id` naming a resource in another project is rejected with `400`.
@@ -93,12 +95,12 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `eval_id` | string | ID of the eval this run belongs to |
 | `agent_id` | string \| null | The agent every item ran against, resolved when the run was created; kept after that agent is deleted. `null` on a run that recorded none; see [Version pinning](#version-pinning) |
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
-| `definition` | object \| null | The eval's `scorers`, `pass_threshold` and `group_by` as they were when the run was created, which every item is scored and the run settled by; see [Version pinning](#version-pinning) |
+| `definition` | object \| null | The eval's `scorers`, `pass_threshold`, `group_by` and `evidence` as they were when the run was created, which every item is scored and the run settled by; see [Version pinning](#version-pinning). `null` on a run that recorded none |
+| `claim` | object \| null | The eval's `claim` as it was when the run was created: what this run tested; see [The claim](#the-claim). `null` when the eval stated none |
 | `decider_versions` | object \| null | Scorer name → the decider version each [`decider` scorer](#decider-scorers-decider) grades under, resolved when the run started; `null` when the eval has none |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `cancelled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
-| `definition` | object \| null | The eval's `scorers`, `pass_threshold`, `group_by` and `evidence` as they were at run start; see [Version pinning](#version-pinning). `null` on a run that recorded none |
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a cancelled run |
 | `verdict` | string \| null | `supported` \| `refuted` \| `insufficient`; see [Pass semantics](#pass-semantics). `null` when the run has no threshold, until it completes, and on a cancelled or failed run |
 | `verdict_reasons` | array \| null | `[{ scope, verdict, reason }]`, one per judged scope, the run first; `scope` is `{ kind: "run" }` or `{ kind: "group", name }`. `null` when `verdict` is |
@@ -580,6 +582,33 @@ omitting it keeps it.
 An unknown key, `required_groups` without `group_by`, an empty or repeated name, and
 clearing `group_by` while groups are required are `400 VALIDATION_FAILED`.
 
+### The claim
+
+`claim` on the eval states what its runs test, and each run copies it when created, so a
+run reports the claim it tested, never the eval's current wording. `null` states none; on
+update, a claim replaces the stored one whole, `null` clears it and omitting it keeps it.
+
+| Key | Content |
+| --- | --- |
+| `statement` | Required. The sentence a `supported` verdict backs |
+| `population` | Who or what the dataset's items are drawn from, or `null` |
+| `limits` | Conditions the verdict does not cover, or `null` |
+
+```json
+{
+  "claim": {
+    "statement": "Answers a billing question from the account's own invoices, or says it cannot",
+    "population": "Billing tickets from retail customers, 2026",
+    "limits": ["English only", "No refunds above the agent's approval limit"]
+  }
+}
+```
+
+The run's [`eval_runs.completed`](#lifecycle-webhooks) event and a blocked
+[promotion gate](./agents.md#eval-gated-promotion) carry the run's `claim` beside its
+`verdict`. A missing or empty `statement`, an empty `population` or limit, and an unknown
+key are `400 VALIDATION_FAILED`. Writing one: [Eval Design — The claim](../advanced/eval-design.md#the-claim).
+
 ### Errors are not zeros
 
 An item whose generation did not complete (e.g. paused in `requires_action` for
@@ -934,7 +963,7 @@ Two [webhook](./webhooks.md) events carry a run's outcome:
 | `eval_runs.completed` | A run reached a terminal status with its items scored |
 | `eval_runs.failed` | A run could not be executed to completion |
 
-Both carry the [eval run](#eval-run) in `data`, `verdict`, `verdict_reasons` and `aggregate_scores` included,
+Both carry the [eval run](#eval-run) in `data`, `claim`, `verdict`, `verdict_reasons` and `aggregate_scores` included,
 so a promotion gate needs no second call. Exactly one event fires per terminal run.
 
 ### Eval spend is separable from production spend

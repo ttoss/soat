@@ -161,6 +161,7 @@ export const requirePromotionGate = async (args: {
         agent_version: args.version,
         ...(run && {
           eval_run_id: run.publicId,
+          claim: run.claim ?? null,
           verdict: run.verdict,
           verdict_reasons: run.verdictReasons,
         }),

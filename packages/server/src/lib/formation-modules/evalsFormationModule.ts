@@ -27,6 +27,7 @@ export const evalsFormationModule = defineFormationModule({
       groupBy: properties.group_by,
       policyIds: toNullableArray<string>(properties.policy_ids),
       evidence: properties.evidence,
+      claim: properties.claim,
     });
   },
 
@@ -47,6 +48,7 @@ export const evalsFormationModule = defineFormationModule({
       groupBy: properties.group_by,
       policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
       evidence: properties.evidence,
+      claim: properties.claim,
     });
   },
 

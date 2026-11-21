@@ -396,6 +396,7 @@ export const startEvalRun = async (args: {
     agentPublicId: plan.agent.publicId,
     agentVersion: plan.agentVersion,
     definition: storedEvalRunDefinition({ definition: plan.definition }),
+    claim: plan.evaluation.claim ?? null,
     deciderVersions: plan.deciderVersions,
     // A queued run has not started yet — `startedAt` is stamped by the first
     // worker that picks up one of its items.

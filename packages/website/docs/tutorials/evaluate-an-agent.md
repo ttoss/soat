@@ -268,6 +268,8 @@ A [content purge](/docs/tutorials/data-retention-and-zero-retention) never delet
 
 An eval freezes the criteria: agent under test, dataset, scorers, and the threshold the verdict gates on. Scorer config lives on the eval, not the agent, so two runs are judged the same way and their comparison measures the agent.
 
+The [`claim`](/docs/modules/evaluations#the-claim) states what a passing run backs, over which inputs, and what it does not cover; each run copies it.
+
 A run starts the agent on every item under the eval's `policy_ids` ([Evaluations — Run authority](/docs/modules/evaluations#run-authority)); the policy below allows that and nothing else.
 
 Two deterministic scorers:
@@ -292,9 +294,10 @@ EVAL_ID=$(soat create-eval \
   --dataset-id "$DATASET_ID" \
   --policy-ids '["'"$POLICY_ID"'"]' \
   --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"contains","value":"billing@example.com"}]' \
-  --pass-threshold 0.67 | jq -r '.id')
+  --pass-threshold 0.67 \
+  --claim '{"statement":"Answers a billing question and hands off to billing@example.com","population":"Billing questions from customers","limits":["English only"]}' | jq -r '.id')
 
-soat get-eval --eval-id "$EVAL_ID" | jq '{name, pass_threshold, scorers}'
+soat get-eval --eval-id "$EVAL_ID" | jq '{name, pass_threshold, scorers, claim}'
 ```
 
 </TabItem>
@@ -322,6 +325,11 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
       { type: 'contains', value: 'billing@example.com' },
     ],
     pass_threshold: 0.67,
+    claim: {
+      statement: 'Answers a billing question and hands off to billing@example.com',
+      population: 'Billing questions from customers',
+      limits: ['English only'],
+    },
   },
 });
 ```
@@ -336,7 +344,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
 
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"billing-regression\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"policy_ids\":[\"$POLICY_ID\"],\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"contains\",\"value\":\"billing@example.com\"}],\"pass_threshold\":0.67}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"billing-regression\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"policy_ids\":[\"$POLICY_ID\"],\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"contains\",\"value\":\"billing@example.com\"}],\"pass_threshold\":0.67,\"claim\":{\"statement\":\"Answers a billing question and hands off to billing@example.com\",\"population\":\"Billing questions from customers\",\"limits\":[\"English only\"]}}" | jq -r '.id')
 ```
 
 </TabItem>
