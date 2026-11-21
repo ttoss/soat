@@ -18,4 +18,13 @@ describe('dispatchMcpApiRequest outside an MCP request', () => {
     await expect(call).rejects.toThrow(Error);
     await expect(call).rejects.not.toThrow(/^HTTP \d{3}$/);
   });
+
+  test('an answer with no error envelope surfaces its status', async () => {
+    const call = dispatchMcpApiRequest({
+      method: 'GET',
+      url: '/no-such-page',
+    });
+
+    await expect(call).rejects.toThrow(/^HTTP 404$/);
+  });
 });
