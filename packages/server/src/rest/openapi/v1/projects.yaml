@@ -183,7 +183,8 @@ paths:
         (`agent_policy_ids`), its orchestration concurrency limit
         (`max_concurrent_runs`), its continuation-chain ceiling
         (`max_chain_generations`), its orchestration nesting bound
-        (`max_orchestration_run_depth`), its inherited model route
+        (`max_orchestration_run_depth`), its schedule-trigger interval floor
+        (`min_trigger_interval_seconds`, admin only), its inherited model route
         (`default_model_route_id`), its read-auditing opt-in
         (`audit_reads_enabled`), its priced-model requirement
         (`require_priced_model`), its trace-content retention window
@@ -284,6 +285,17 @@ paths:
                     deployment's — which is what makes it a bound a graph
                     author cannot opt out of. A refused child fails its parent
                     run with `ORCHESTRATION_RUN_DEPTH_LIMIT`.
+                min_trigger_interval_seconds:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+                  example: 3600
+                  description: >-
+                    Seconds a schedule trigger's `cron` must leave between its
+                    two closest firings. A trigger create or update below it is
+                    `400 TRIGGER_INTERVAL_BELOW_FLOOR`; a trigger stored before
+                    the floor was set keeps firing until its next update. `null`
+                    clears the floor. Writable by an admin only, else `403`.
                 default_model_route_id:
                   x-soat-ref: model-routes
                   type: string
@@ -816,6 +828,15 @@ components:
             project may reach before the engine refuses to start the next child.
             `null` means no project bound (the default), leaving the
             deployment-wide one. The effective bound is the smaller of the two.
+          example: null
+        min_trigger_interval_seconds:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >-
+            Seconds a schedule trigger's `cron` must leave between its two
+            closest firings, checked on every trigger create and update. `null`
+            means no floor (the default).
           example: null
         default_model_route_id:
           x-soat-ref: model-routes

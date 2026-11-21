@@ -23,7 +23,10 @@ import {
   principalFromAuthUser,
   type RequestPrincipal,
 } from 'src/lib/principals';
-import { toStoredToolContext } from 'src/lib/toolContext';
+import {
+  assertNoReservedPrefixKeys,
+  toStoredToolContext,
+} from 'src/lib/toolContext';
 import { readWritePrecondition } from 'src/lib/writePrecondition';
 import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
@@ -98,6 +101,14 @@ export const assertCredentialProjectScope = (args: {
  * Intersect it into the resource shape a permission helper accepts.
  */
 /**
+ * What a route answers for a key under the deployment's reserved prefix:
+ * `refuse` it (`400 INVALID_TOOL_CONTEXT_KEY`), or `pass` it to a rule of the
+ * route's own — the IAM token route, where `iam:PinReservedToolContext` decides,
+ * and a tool call's root bag, where the token's layer is stamped over it.
+ */
+export type ReservedPrefixAnswer = 'refuse' | 'pass';
+
+/**
  * A `tool_context` bag off a request body, where `null` clears a stored bag: a
  * non-string value is `400` (`toStoredToolContext`), and the keys are left
  * exactly as the caller wrote them, for the key check in `toolContext.ts` to
@@ -105,21 +116,29 @@ export const assertCredentialProjectScope = (args: {
  * rewritten).
  *
  * Every route reads the field through this or {@link parseToolContextBody}
- * (`toolContextBodyContract.test.ts`), so a malformed bag is refused before any
- * work is queued: two entry points that disagree about what a malformed bag
- * means is how one of them ends up failing open.
+ * (`tests/harness/toolContextBody.test.mjs`), so a malformed bag or a reserved
+ * key is refused before any work is queued.
  */
-export const parseNullableToolContextBody = (
-  raw: unknown
-): Record<string, string> | null | undefined => {
-  return toStoredToolContext(raw);
+export const parseNullableToolContextBody = (args: {
+  raw: unknown;
+  reservedPrefix: ReservedPrefixAnswer;
+}): Record<string, string> | null | undefined => {
+  const toolContext = toStoredToolContext(args.raw);
+  if (toolContext && args.reservedPrefix === 'refuse') {
+    assertNoReservedPrefixKeys({
+      field: 'tool_context',
+      keys: Object.keys(toolContext),
+    });
+  }
+  return toolContext;
 };
 
 /** {@link parseNullableToolContextBody} where `null` means no bag. */
-export const parseToolContextBody = (
-  raw: unknown
-): Record<string, string> | undefined => {
-  return parseNullableToolContextBody(raw) ?? undefined;
+export const parseToolContextBody = (args: {
+  raw: unknown;
+  reservedPrefix: ReservedPrefixAnswer;
+}): Record<string, string> | undefined => {
+  return parseNullableToolContextBody(args) ?? undefined;
 };
 
 export type ProjectOwned = { project_id: string | undefined };

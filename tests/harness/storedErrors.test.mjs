@@ -59,6 +59,7 @@ const FORMATION_BOOT_MODULES = [
   'formation-modules/defineFormationModule.ts',
   'formation-modules/formationSpecLoader.ts',
   'formationResourceTypeConfig.ts',
+  'formationResourceTypeConfigFile.ts',
   'formationsHelpers.ts',
   'formationsRegistry.ts',
 ];

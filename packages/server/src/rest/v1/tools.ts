@@ -460,7 +460,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     // tool trusts, and only a validated `actor_id` is stamped back.
     toolContext: await pinCallerActorToolContext({
       toolContext: sanitizeCallerToolContext(
-        parseToolContextBody(body.tool_context)
+        parseToolContextBody({ raw: body.tool_context, reservedPrefix: 'pass' })
       ),
       actorId,
       projectId,

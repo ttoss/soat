@@ -43,7 +43,7 @@ const buildBedrockEmbeddingModel = (args: {
     // The whole embedding stack is configured by the operator, so an instance
     // role is the intended credential here. The opt-in that gates the same
     // fallback answers for tenant-written provider records, which this is not.
-    allowAmbientCredentials: true,
+    ambientFor: { operator: true },
   });
   return createAmazonBedrock(credentials).textEmbeddingModel(args.model);
 };

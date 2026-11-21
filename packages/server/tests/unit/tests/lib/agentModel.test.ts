@@ -7,6 +7,8 @@ import { egressGuardedFetch } from 'src/lib/egressFetch';
 
 import { buildUnaliasedModel } from '../../fixtures/unaliasedModel';
 
+const TENANT_PROJECT = 'proj_tenant';
+
 // The returned model exposes enough (`modelId`, `config.provider`, `config.url`)
 // to assert the wiring landed, rather than only that `buildModel` didn't throw.
 
@@ -292,13 +294,17 @@ describe('buildModel', () => {
 describe('resolveVertexSettings', () => {
   test('treats a plain non-JSON secret as an express-mode API key', () => {
     expect(
-      resolveVertexSettings({ secretValue: 'AIzaSyExpressModeKey' })
+      resolveVertexSettings({
+        project: TENANT_PROJECT,
+        secretValue: 'AIzaSyExpressModeKey',
+      })
     ).toEqual({ apiKey: 'AIzaSyExpressModeKey' });
   });
 
   test('uses apiKey from a JSON secret', () => {
     expect(
       resolveVertexSettings({
+        project: TENANT_PROJECT,
         secretValue: JSON.stringify({ apiKey: 'AIzaFromJson' }),
       })
     ).toEqual({ apiKey: 'AIzaFromJson' });
@@ -309,6 +315,7 @@ describe('resolveVertexSettings', () => {
     (secretValue) => {
       expect(() => {
         return resolveVertexSettings({
+          project: TENANT_PROJECT,
           secretValue,
           config: { apiKey: 'AIzaFromConfig' },
         });
@@ -321,6 +328,7 @@ describe('resolveVertexSettings', () => {
   test('uses service-account credentials from a JSON key file secret', () => {
     expect(
       resolveVertexSettings({
+        project: TENANT_PROJECT,
         secretValue: SERVICE_ACCOUNT_SECRET,
         config: { location: 'europe-west4' },
       })
@@ -338,6 +346,7 @@ describe('resolveVertexSettings', () => {
 
   test('config.project takes precedence over the key file project_id', () => {
     const settings = resolveVertexSettings({
+      project: TENANT_PROJECT,
       secretValue: SERVICE_ACCOUNT_SECRET,
       config: { project: 'override-project' },
     });
@@ -351,6 +360,7 @@ describe('resolveVertexSettings', () => {
     withAmbientCredentials('true', () => {
       expect(
         resolveVertexSettings({
+          project: TENANT_PROJECT,
           secretValue: null,
           config: { project: 'adc-project', location: 'global' },
         })
@@ -362,6 +372,7 @@ describe('resolveVertexSettings', () => {
     withAmbientCredentials('true', () => {
       expect(() => {
         return resolveVertexSettings({
+          project: TENANT_PROJECT,
           secretValue: JSON.stringify({
             project_id: 'sa-project',
             client_email: 'vertex@sa-project.iam.gserviceaccount.com',
@@ -376,7 +387,10 @@ describe('resolveVertexSettings', () => {
   test('throws when no project can be resolved for a non-express provider', () => {
     withAmbientCredentials('true', () => {
       expect(() => {
-        return resolveVertexSettings({ secretValue: null });
+        return resolveVertexSettings({
+          project: TENANT_PROJECT,
+          secretValue: null,
+        });
       }).toThrow(DomainError);
     });
   });
@@ -387,7 +401,10 @@ describe('resolveVertexSettings', () => {
 describe('resolveBedrockCredentials', () => {
   test('falls back to the AWS default credential chain when nothing is provided', () => {
     withAmbientCredentials('true', () => {
-      const result = resolveBedrockCredentials({ secretValue: null });
+      const result = resolveBedrockCredentials({
+        ambientFor: { project: TENANT_PROJECT },
+        secretValue: null,
+      });
       expect(result.region).toBe('us-east-1');
       expect('credentialProvider' in result).toBe(true);
       if ('credentialProvider' in result) {
@@ -400,6 +417,7 @@ describe('resolveBedrockCredentials', () => {
     withAmbientCredentials('true', () => {
       expect(() => {
         return resolveBedrockCredentials({
+          ambientFor: { project: TENANT_PROJECT },
           secretValue: JSON.stringify({ accessKeyId: 'AKIAIOSFODNN7EXAMPLE' }),
         });
       }).toThrow(
@@ -415,6 +433,7 @@ describe('resolveBedrockCredentials', () => {
     });
     expect(
       resolveBedrockCredentials({
+        ambientFor: { project: TENANT_PROJECT },
         secretValue: credentials,
         config: { region: 'us-west-2' },
       })
@@ -429,7 +448,10 @@ describe('resolveBedrockCredentials', () => {
   test('refuses a secret that is neither JSON nor an ABSK token even where the default chain is allowed', () => {
     withAmbientCredentials('true', () => {
       expect(() => {
-        return resolveBedrockCredentials({ secretValue: 'not-valid-json' });
+        return resolveBedrockCredentials({
+          ambientFor: { project: TENANT_PROJECT },
+          secretValue: 'not-valid-json',
+        });
       }).toThrow(
         expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
       );
@@ -439,6 +461,7 @@ describe('resolveBedrockCredentials', () => {
   test('uses apiKey from a JSON secret', () => {
     expect(
       resolveBedrockCredentials({
+        ambientFor: { project: TENANT_PROJECT },
         secretValue: JSON.stringify({ apiKey: 'ABSK-test-key' }),
       })
     ).toEqual({ region: 'us-east-1', apiKey: 'ABSK-test-key' });
@@ -446,7 +469,10 @@ describe('resolveBedrockCredentials', () => {
 
   test('treats a plain ABSK-prefixed secret as a bearer apiKey', () => {
     expect(
-      resolveBedrockCredentials({ secretValue: 'ABSKsomeplainkey' })
+      resolveBedrockCredentials({
+        ambientFor: { project: TENANT_PROJECT },
+        secretValue: 'ABSKsomeplainkey',
+      })
     ).toEqual({ region: 'us-east-1', apiKey: 'ABSKsomeplainkey' });
   });
 
@@ -455,6 +481,7 @@ describe('resolveBedrockCredentials', () => {
     (secretValue) => {
       expect(() => {
         return resolveBedrockCredentials({
+          ambientFor: { project: TENANT_PROJECT },
           secretValue,
           config: { apiKey: 'ABSKfromconfig' },
         });
@@ -474,6 +501,7 @@ describe('config values spliced into a provider URL', () => {
   test('refuses a vertex location that would move the host', () => {
     expect(() => {
       return resolveVertexSettings({
+        project: TENANT_PROJECT,
         secretValue: SERVICE_ACCOUNT_SECRET,
         config: { project: 'p', location: 'evil.example.com/' },
       });
@@ -483,6 +511,7 @@ describe('config values spliced into a provider URL', () => {
   test('refuses a vertex project that would move the path', () => {
     expect(() => {
       return resolveVertexSettings({
+        project: TENANT_PROJECT,
         secretValue: SERVICE_ACCOUNT_SECRET,
         config: { project: 'p/../../evil', location: 'us-central1' },
       });
@@ -492,6 +521,7 @@ describe('config values spliced into a provider URL', () => {
   test('keeps a real vertex location working', () => {
     expect(
       resolveVertexSettings({
+        project: TENANT_PROJECT,
         secretValue: SERVICE_ACCOUNT_SECRET,
         config: { project: 'my-project', location: 'europe-west4' },
       })
@@ -501,6 +531,7 @@ describe('config values spliced into a provider URL', () => {
   test('refuses a bedrock region that would move the host', () => {
     expect(() => {
       return resolveBedrockCredentials({
+        ambientFor: { project: TENANT_PROJECT },
         secretValue: JSON.stringify({ apiKey: 'ABSKkey' }),
         config: { region: 'evil.example.com/' },
       });
@@ -572,6 +603,7 @@ describe('a record that links no credential of its own', () => {
     withAmbientCredentials(undefined, () => {
       expect(() => {
         return resolveBedrockCredentials({
+          ambientFor: { project: TENANT_PROJECT },
           secretValue: null,
           config: { region: 'us-east-1' },
         });
@@ -585,6 +617,7 @@ describe('a record that links no credential of its own', () => {
     withAmbientCredentials(undefined, () => {
       expect(() => {
         return resolveVertexSettings({
+          project: TENANT_PROJECT,
           secretValue: null,
           config: { project: 'my-project', location: 'us-central1' },
         });
@@ -598,6 +631,7 @@ describe('a record that links no credential of its own', () => {
     withAmbientCredentials('true', () => {
       expect(
         resolveBedrockCredentials({
+          ambientFor: { project: TENANT_PROJECT },
           secretValue: null,
           config: { region: 'us-east-1' },
         })
@@ -609,10 +643,36 @@ describe('a record that links no credential of its own', () => {
     withAmbientCredentials('true', () => {
       expect(
         resolveVertexSettings({
+          project: TENANT_PROJECT,
           secretValue: null,
           config: { project: 'my-project', location: 'us-central1' },
         })
       ).toEqual({ project: 'my-project', location: 'us-central1' });
+    });
+  });
+
+  test('builds only for the projects the operator names', () => {
+    withAmbientCredentials('true', () => {
+      process.env.AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS = 'proj_named';
+      try {
+        const build = (projectPublicId: string) => {
+          return buildUnaliasedModel({
+            projectPublicId,
+            provider: 'bedrock',
+            secretValue: null,
+            model: 'anthropic.claude-3-haiku-20240307-v1:0',
+            config: { region: 'us-east-1' },
+          });
+        };
+        expect(build('proj_named')).toBeDefined();
+        expect(() => {
+          return build(TENANT_PROJECT);
+        }).toThrow(
+          expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+        );
+      } finally {
+        delete process.env.AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS;
+      }
     });
   });
 
@@ -669,9 +729,9 @@ describe('a record that links no credential of its own', () => {
     withAmbientCredentials(undefined, () => {
       expect(
         resolveBedrockCredentials({
+          ambientFor: { operator: true },
           secretValue: null,
           config: { region: 'us-east-1' },
-          allowAmbientCredentials: true,
         })
       ).toHaveProperty('credentialProvider');
     });
