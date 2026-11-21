@@ -20,6 +20,7 @@ import {
 import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
+import { aiProviderReferences } from './resourceReferences';
 
 const log = createDebug('soat:model-routes');
 
@@ -99,17 +100,14 @@ const assertTargetProvidersInProject = async (args: {
     ),
   ];
 
-  const found = await db.AiProvider.findAll({
-    where: { publicId: publicIds, projectId: args.projectId },
+  const found = await aiProviderReferences.findMany({
+    ids: publicIds,
+    projectId: args.projectId,
+    reach: 'project',
   });
-  const foundIds = new Set(
-    found.map((provider) => {
-      return provider.publicId;
-    })
-  );
 
   for (const publicId of publicIds) {
-    if (!foundIds.has(publicId)) {
+    if (!found.has(publicId)) {
       throw new DomainError(
         'AI_PROVIDER_NOT_FOUND',
         `AI provider '${publicId}' not found in this project.`
@@ -117,9 +115,7 @@ const assertTargetProvidersInProject = async (args: {
     }
   }
   for (const target of args.targets) {
-    const aiProvider = found.find((provider) => {
-      return provider.publicId === target.ai_provider_id;
-    });
+    const aiProvider = found.get(target.ai_provider_id);
     if (aiProvider) assertModelOffered({ aiProvider, model: target.model });
   }
 };

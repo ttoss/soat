@@ -4,7 +4,7 @@ import { findShareableType } from './shareableTypes';
 import { PUBLIC_GRANTEE } from './shares';
 
 /**
- * Where a tool, agent, memory store or document named by id — in a stored
+ * Where a tool, agent, memory store, document or AI provider named by id — in a stored
  * field or in a request that runs it — is resolved: in `projectId`, the
  * project of the row or run that holds the reference, never the caller's
  * scope, so a credential reaching several projects cannot let one project's
@@ -21,6 +21,7 @@ type ToolRow = InstanceType<(typeof db)['Tool']>;
 type AgentRow = InstanceType<(typeof db)['Agent']>;
 type MemoryStoreRow = InstanceType<(typeof db)['MemoryStore']>;
 type DocumentRow = InstanceType<(typeof db)['Document']>;
+type AiProviderRow = InstanceType<(typeof db)['AiProvider']>;
 
 /**
  * `'shares'` also resolves a resource another project shares with
@@ -208,6 +209,16 @@ export const documentReferences: ReferenceResolver<DocumentRow> =
     resourceType: 'document',
     notFoundCode: 'VALIDATION_FAILED',
     label: 'Document',
+  });
+
+export const aiProviderReferences: ReferenceResolver<AiProviderRow> =
+  makeReferenceResolver({
+    findAll: (where) => {
+      return db.AiProvider.findAll({ where });
+    },
+    resourceType: 'ai_provider',
+    notFoundCode: 'AI_PROVIDER_NOT_FOUND',
+    label: 'AI provider',
   });
 
 /**

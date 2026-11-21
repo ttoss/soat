@@ -11,6 +11,7 @@ import {
   type CompletionAttribution,
   resolveConsumerModelRoute,
 } from './modelRoutes';
+import { aiProviderReferences } from './resourceReferences';
 
 const log = createDebug('soat:completion-model');
 
@@ -38,8 +39,10 @@ const assertOverrideInProject = async (args: {
   aiProviderId: string;
   projectId: number;
 }): Promise<void> => {
-  const override = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId, projectId: args.projectId },
+  const override = await aiProviderReferences.find({
+    id: args.aiProviderId,
+    projectId: args.projectId,
+    reach: 'project',
   });
   if (!override) {
     throw new DomainError(

@@ -5,6 +5,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { sumComponentCostUsd } from './priceCompute';
+import { aiProviderReferences } from './resourceReferences';
 import {
   type GenerationTurnFacts,
   priceAgentResource,
@@ -57,11 +58,10 @@ const resolveBillingProvider = async (args: {
   servedAiProviderId?: string | null;
 }): Promise<{ id: number; provider: string } | null> => {
   if (args.servedAiProviderId) {
-    const served = await db.AiProvider.findOne({
-      where: {
-        publicId: args.servedAiProviderId,
-        projectId: args.agentProjectId,
-      },
+    const served = await aiProviderReferences.find({
+      id: args.servedAiProviderId,
+      projectId: args.agentProjectId,
+      reach: 'project',
     });
     // Falls through to the pin when the row is gone (a delete racing the turn),
     // rather than dropping the attribution the pin would still have given.
