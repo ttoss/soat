@@ -17,8 +17,10 @@ import { assertNoConfigCredential } from './aiProviderConfigSecrets';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
 import {
   answeringAs,
-  type ModelAliasing,
-  resolveVendorModel,
+  buildForwardedModel,
+  type ModelEndpoint,
+  type ModelProvider,
+  resolveServedModel,
 } from './aiProviderModelAliases';
 import {
   assertAmbientCredentialsAllowed,
@@ -474,37 +476,46 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   custom: buildSimpleOpenAiCompatModel,
 };
 
-/** A provider row as `resolveAiProviderSecret` hands it out. */
-export type ModelProvider = ModelAliasing & {
-  provider: AiProviderSlug;
-  secretValue: string | null;
-  baseUrl?: string;
-  config?: Record<string, unknown>;
+const buildVendorModel = (args: {
+  endpoint: ModelEndpoint;
+  vendorModel: string;
+}): LanguageModel => {
+  const { endpoint } = args;
+  const builder = PROVIDER_BUILDERS[endpoint.provider];
+  if (!builder) {
+    throw new Error(`Unsupported AI provider: ${endpoint.provider}`);
+  }
+  return builder({
+    provider: endpoint.provider,
+    secretValue: endpoint.secretValue,
+    model: args.vendorModel,
+    baseUrl: endpoint.baseUrl,
+    config: endpoint.config,
+  });
 };
 
 /**
  * The one place a model name reaches a vendor client
  * (`tests/harness/vendorModelChokepoint.test.mjs`): `model` is the name stored
- * beside the provider, an alias resolves to its vendor id here, and the built
- * model answers the alias.
+ * beside the provider, an alias resolves here to its vendor id (and, when it
+ * forwards, its target's endpoint), and the built model answers the alias.
  */
 export const buildModel = (args: {
   aiProvider: ModelProvider;
   model: string;
 }): LanguageModel => {
   const { aiProvider } = args;
-  const builder = PROVIDER_BUILDERS[aiProvider.provider];
-  if (!builder) {
-    throw new Error(`Unsupported AI provider: ${aiProvider.provider}`);
+  const { vendorModel, forwardedTo } = resolveServedModel(args);
+  if (forwardedTo !== null) {
+    return buildForwardedModel({
+      aiProvider,
+      alias: args.model,
+      targetId: forwardedTo,
+      vendorModel,
+      build: buildVendorModel,
+    });
   }
-  const vendorModel = resolveVendorModel(args);
-  const model = builder({
-    provider: aiProvider.provider,
-    secretValue: aiProvider.secretValue,
-    model: vendorModel,
-    baseUrl: aiProvider.baseUrl,
-    config: aiProvider.config,
-  });
+  const model = buildVendorModel({ endpoint: aiProvider, vendorModel });
   if (vendorModel === args.model) return model;
   if (typeof model === 'string') return model;
   return wrapLanguageModel({

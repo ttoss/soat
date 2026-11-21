@@ -1,17 +1,20 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
 import { db } from 'src/db';
-import { DomainError } from 'src/errors';
-import { findModelRoutesReferencingProvider } from 'src/lib/modelRouteReferences';
 import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { decryptValue } from 'src/lib/secrets';
 import type { IsAllowedFn } from 'src/middleware/authProjectResolvers';
 
 import { assertLinkedSecretUsable } from './agentModel';
+import { assertAliasTargets } from './aiProviderAliasTargets';
 import { assertAiProviderConfig } from './aiProviderConfigValidation';
 import {
   assertModelAliases,
   assertModelOffered,
+  forwardedProviderIds,
+  forwardsEveryModel,
+  type ModelAliases,
+  type ModelEndpoint,
 } from './aiProviderModelAliases';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
@@ -100,7 +103,10 @@ const readLinkedSecretValue = async (
 const assertProviderCredential = async (args: {
   provider: AiProviderSlug;
   secretId?: number | null;
+  modelAliases: ModelAliases | null;
+  modelAliasesOnly: boolean;
 }) => {
+  if (forwardsEveryModel(args)) return;
   assertAiProviderCarriesCredential(args);
   if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
   assertLinkedSecretUsable({
@@ -139,19 +145,21 @@ export const createAiProvider = async (args: {
   defaultModel: string;
   baseUrl?: string;
   config?: Record<string, unknown>;
-  modelAliases?: Record<string, string>;
+  modelAliases?: ModelAliases;
   modelAliasesOnly?: boolean;
   requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   await assertEndpointSecretUse(args);
   assertModelAliases(args.modelAliases);
-  assertModelOffered({
-    aiProvider: {
-      modelAliases: args.modelAliases ?? null,
-      modelAliasesOnly: args.modelAliasesOnly ?? false,
-    },
-    model: args.defaultModel,
+  const aliasing = {
+    modelAliases: args.modelAliases ?? null,
+    modelAliasesOnly: args.modelAliasesOnly ?? false,
+  };
+  assertModelOffered({ aiProvider: aliasing, model: args.defaultModel });
+  await assertAliasTargets({
+    projectId: args.projectId,
+    modelAliases: aliasing.modelAliases,
   });
   assertAiProviderConfig({
     provider: args.provider,
@@ -161,6 +169,7 @@ export const createAiProvider = async (args: {
   await assertProviderCredential({
     provider: args.provider,
     secretId: args.secretId,
+    ...aliasing,
   });
 
   const instance = await db.AiProvider.create({
@@ -185,7 +194,7 @@ type AiProviderFieldUpdates = {
   defaultModel?: string;
   baseUrl?: string | null;
   config?: Record<string, unknown> | null;
-  modelAliases?: Record<string, string> | null;
+  modelAliases?: ModelAliases | null;
   modelAliasesOnly?: boolean;
   requirePricedModel?: boolean;
 };
@@ -220,7 +229,7 @@ export const updateAiProvider = async (args: {
   defaultModel?: string;
   baseUrl?: string | null;
   config?: Record<string, unknown> | null;
-  modelAliases?: Record<string, string> | null;
+  modelAliases?: ModelAliases | null;
   modelAliasesOnly?: boolean;
   requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
@@ -231,6 +240,13 @@ export const updateAiProvider = async (args: {
 
   applyAiProviderFields({ instance, fields: args });
   assertModelOffered({ aiProvider: instance, model: instance.defaultModel });
+  if (args.modelAliases !== undefined) {
+    await assertAliasTargets({
+      projectId: instance.projectId,
+      publicId: instance.publicId,
+      modelAliases: instance.modelAliases,
+    });
+  }
 
   if (args.secretId !== undefined || args.baseUrl !== undefined) {
     await assertEndpointSecretUse({
@@ -252,6 +268,8 @@ export const updateAiProvider = async (args: {
   await assertProviderCredential({
     provider: instance.provider,
     secretId: instance.secretId,
+    modelAliases: instance.modelAliases,
+    modelAliasesOnly: instance.modelAliasesOnly,
   });
 
   await instance.save();
@@ -280,126 +298,6 @@ export const assertModelOfferedByProvider = async (args: {
   if (row) assertModelOffered({ aiProvider: row, model: args.model });
 };
 
-// A single provider can power many chats, so the 409 lists a workable sample
-// rather than an unbounded blob; the counts still report true totals.
-const DEPENDENT_ID_SAMPLE_CAP = 20;
-
-// Hard references (chats/agents) always block deletion — removing a provider
-// must never cascade into deleting someone's work. Soft dependents are
-// bookkeeping meaningful only relative to the provider, so `force` clears them.
-const collectAiProviderDependents = async (args: {
-  aiProviderId: number;
-  aiProviderPublicId: string;
-  projectId: number;
-}) => {
-  const aiProviderId = args.aiProviderId;
-  const where = { aiProviderId };
-  const attributes = ['publicId'];
-
-  const [chats, agents, modelRoutes] = await Promise.all([
-    db.Chat.findAll({ where, attributes }),
-    db.Agent.findAll({ where, attributes }),
-    // A route target names its provider inside JSONB, so no FK protects it —
-    // the reference is live all the same (see `modelRouteReferences`).
-    findModelRoutesReferencingProvider({
-      projectId: args.projectId,
-      aiProviderPublicId: args.aiProviderPublicId,
-    }),
-  ]);
-
-  const [priceOverrideCount, usageEventCount] = await Promise.all([
-    db.PriceBook.count({ where }),
-    db.UsageEvent.count({ where }),
-  ]);
-
-  const hardCount = chats.length + agents.length + modelRoutes.length;
-  const softCount = priceOverrideCount + usageEventCount;
-
-  const sample = (rows: { publicId: string }[]): string[] => {
-    return rows.slice(0, DEPENDENT_ID_SAMPLE_CAP).map((r) => {
-      return r.publicId;
-    });
-  };
-
-  const meta = {
-    chat_count: chats.length,
-    chat_ids: sample(chats),
-    agent_count: agents.length,
-    agent_ids: sample(agents),
-    model_route_count: modelRoutes.length,
-    model_route_ids: sample(modelRoutes),
-    price_override_count: priceOverrideCount,
-    usage_event_count: usageEventCount,
-    // True only when the block is caused solely by soft dependents, i.e. a
-    // `force=true` retry would succeed. Hard references make this false.
-    forcible: hardCount === 0,
-  };
-
-  return {
-    chats,
-    agents,
-    modelRoutes,
-    hardCount,
-    softCount,
-    meta,
-  };
-};
-
-export const deleteAiProvider = async (args: {
-  id: string;
-  force?: boolean;
-}) => {
-  const instance = await db.AiProvider.findOne({
-    where: { publicId: args.id },
-  });
-  if (!instance) return null;
-
-  const { chats, agents, modelRoutes, hardCount, softCount, meta } =
-    await collectAiProviderDependents({
-      aiProviderId: instance.id,
-      aiProviderPublicId: instance.publicId,
-      projectId: instance.projectId,
-    });
-
-  if (hardCount > 0) {
-    const parts = [
-      chats.length > 0 ? `${chats.length} chat(s)` : null,
-      agents.length > 0 ? `${agents.length} agent(s)` : null,
-      modelRoutes.length > 0 ? `${modelRoutes.length} model route(s)` : null,
-    ].filter(Boolean);
-    throw new DomainError(
-      'AI_PROVIDER_HAS_DEPENDENTS',
-      `AI provider '${args.id}' is in use by ${parts.join(', ')} and cannot be deleted. Delete or repoint them before deleting the provider (force does not override live references).`,
-      meta
-    );
-  }
-
-  if (softCount > 0 && !args.force) {
-    throw new DomainError(
-      'AI_PROVIDER_HAS_DEPENDENTS',
-      `AI provider '${args.id}' has ${meta.price_override_count} price override(s) and ${meta.usage_event_count} usage record(s). Retry with force=true to delete its overrides and unlink usage history.`,
-      meta
-    );
-  }
-
-  // Price overrides are dropped as meaningless without the provider;
-  // usage/generation rows survive with the link nulled, preserving the
-  // as-billed receipt.
-  const aiProviderId = instance.id;
-  await db.sequelize.transaction(async (transaction) => {
-    if (softCount > 0) {
-      await db.PriceBook.destroy({ where: { aiProviderId }, transaction });
-      await db.UsageEvent.update(
-        { aiProviderId: null },
-        { where: { aiProviderId }, transaction }
-      );
-    }
-    await instance.destroy({ transaction });
-  });
-
-  return 'deleted' as const;
-};
-
 /**
  * The provider's credential, for the project that is about to generate with it.
  *
@@ -422,6 +320,23 @@ export const resolveAiProviderSecret = async (args: {
 
   const decryptedValue = await readLinkedSecretValue(instance.secretId);
 
+  // A forwarded alias calls its target's endpoint; a target that no longer
+  // resolves is left out, and `buildModel` refuses the alias that names it.
+  const targetRows = await aiProviderReferences.findMany({
+    ids: forwardedProviderIds(instance.modelAliases),
+    projectId: args.projectId,
+    reach: 'project',
+  });
+  const aliasTargets: Record<string, ModelEndpoint> = {};
+  for (const [publicId, target] of targetRows) {
+    aliasTargets[publicId] = {
+      provider: target.provider,
+      baseUrl: target.baseUrl ?? undefined,
+      config: target.config ?? undefined,
+      secretValue: await readLinkedSecretValue(target.secretId),
+    };
+  }
+
   return {
     // Internal ids, for callers that must attribute usage to the exact provider
     // instance and its project (a project may hold several providers of the
@@ -436,5 +351,6 @@ export const resolveAiProviderSecret = async (args: {
     modelAliases: instance.modelAliases,
     modelAliasesOnly: instance.modelAliasesOnly,
     secretValue: decryptedValue,
+    aliasTargets,
   };
 };

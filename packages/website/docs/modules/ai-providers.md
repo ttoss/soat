@@ -33,7 +33,7 @@ An AI provider is a named configuration that tells the system how to reach a spe
 | `default_model` | string           | Default model name sent to the provider API               |
 | `base_url`      | string \| null   | Override base URL (optional, useful for self-hosted LLMs) |
 | `config`        | object \| null   | Arbitrary provider-specific configuration object          |
-| `model_aliases` | object           | Alias → model id sent to the vendor; `{}` when none (see [Model aliases](#model-aliases)) |
+| `model_aliases` | object           | Alias → model id sent to the vendor, or `{ ai_provider_id, model }` another provider of the project serves; `{}` when none (see [Model aliases](#model-aliases)) |
 | `model_aliases_only` | boolean     | Refuse a model that is not one of `model_aliases` |
 | `require_priced_model` | boolean   | Refuse an agent generation on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
@@ -283,6 +283,28 @@ Wherever a model is named beside the provider (its `default_model`, an agent's `
 
 The [model listing](#listing-the-models-a-provider-can-run) reads neither field: it returns the vendor's ids, not the aliases.
 
+#### Forwarding an alias to another provider
+
+An alias may map to `{ ai_provider_id, model }`: another provider of the same project serves it, called with that provider's endpoint and credential and `model` as the vendor id. One provider id then offers models served by several sources:
+
+```json
+{
+  "provider": "openai",
+  "default_model": "fast",
+  "model_aliases_only": true,
+  "model_aliases": {
+    "fast": { "ai_provider_id": "aip_source_a", "model": "gpt-4o-mini" },
+    "smart": { "ai_provider_id": "aip_source_b", "model": "claude-sonnet-4" }
+  }
+}
+```
+
+- Everything but the vendor call answers the forwarding provider and the alias: reads, `output.model`, usage events (`ai_provider_id` and `model`), its [price overrides](#price-overrides) (priced by alias) and traces.
+- Errors name the forwarding provider and the alias only: `MODEL_NOT_OFFERED`, `MODEL_NOT_PRICED`, and `AI_PROVIDER_ERROR`, which keeps the vendor's status code (`meta.provider_status_code`) but never its message or body. A target that no longer resolves or cannot build is `400 AI_PROVIDER_MISCONFIGURED`.
+- A provider with `model_aliases_only: true` whose every alias forwards carries no credential of its own.
+- A forward is one hop: the target forwards nothing, is not the provider itself, and a provider other providers forward to may not forward. A target outside the project is refused. Each is `400 VALIDATION_FAILED` on the write.
+- A provider an alias forwards to cannot be deleted ([below](#deleting-a-provider)).
+
 ### Requiring a priced model
 
 `require_priced_model: true` on a provider refuses, with `409 MODEL_NOT_PRICED`, an agent generation on that provider whose model no price row covers, before the provider is called; a chat completion is not checked. It holds that provider alone: another provider of the project runs unpriced unless the [project's own flag](./projects.md#priced-models) is set. A route target is held when its provider sets it. Setting it needs `ai-providers:UpdateAiProvider`.
@@ -304,6 +326,7 @@ Both are authorized by the caller's access to the provider's own project (`ai-pr
 |---|---|---|
 | Chats, agents | **Live reference** | Always block with `409`. `force` does **not** override them — delete or repoint each resource first. |
 | [Model routes](./model-routes.md) whose targets name the provider | **Live reference** | Always block with `409`. A target references its provider by id inside the route's `targets`, so no foreign key protects it — the guard is explicit. Repoint or delete the route first. |
+| Providers whose `model_aliases` [forward to it](#forwarding-an-alias-to-another-provider) | **Live reference** | Always block with `409`, listed in `ai_provider_ids`. Repoint or remove those aliases first. |
 | Price overrides | **Soft dependent** | Block with `409` unless `force=true`, which **deletes** the overrides (meaningless without the provider). |
 | Usage/generation records | **Soft dependent** | Block with `409` unless `force=true`, which **unlinks** them, preserving the row, its as-billed receipt and its `ai_provider_id` ([Usage](./usage.md#attribution-outlives-deletion)). |
 
@@ -318,6 +341,7 @@ A delete with no dependents (or `force=true` and only soft dependents) returns `
       "chat_count": 2, "chat_ids": ["chat_01", "chat_02"],
       "agent_count": 1, "agent_ids": ["agent_01"],
       "model_route_count": 0, "model_route_ids": [],
+      "ai_provider_count": 0, "ai_provider_ids": [],
       "price_override_count": 0, "usage_event_count": 0,
       "forcible": false
     }
