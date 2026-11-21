@@ -5,11 +5,15 @@ import * as url from 'node:url';
 
 import { mergeOpenApiSpecs } from '@ttoss/openapi-codegen';
 
+import { ERROR_CODES } from '../../server/src/errors/codes';
+import { writeErrorCodes } from './errorCodes';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
 const MERGED_SPEC_FILE = path.resolve(__dirname, '../merged-spec.json');
 const SDK_ROOT = path.resolve(__dirname, '..');
+const ERROR_CODES_FILE = path.resolve(SDK_ROOT, 'src/generated/errorCodes.ts');
 
 /**
  * The prefix every REST operation shares. `oauth.yaml` also describes the
@@ -62,6 +66,8 @@ const main = async () => {
   } finally {
     fs.unlinkSync(MERGED_SPEC_FILE);
   }
+
+  writeErrorCodes({ codes: ERROR_CODES, outputFile: ERROR_CODES_FILE });
 
   console.log('SDK generation complete.');
 };
