@@ -235,6 +235,39 @@ describe('a sub-agent generation that outlives its builtin call', () => {
     expect(continuations.body.data[0].session_id).toBe(sessionId);
   });
 
+  test('a call whose bound passes before the generation is recorded still hands it off', async () => {
+    // A 1 ms bound passes while the child's record is still being written.
+    process.env.SOAT_TOOL_CALL_TIMEOUT_MS = '1';
+    script(
+      new Promise<StubReply>((resolve) => {
+        release = resolve;
+      })
+    );
+    const { sessionId, conversationId } = await newSessionWithMessage();
+    stub.completions.length = 0;
+
+    try {
+      const turn = await asAdmin().post(
+        `/api/v1/sessions/${sessionId}/generate?wait=true`
+      );
+      expect(turn.status).toBe(200);
+      const { raw, generationId } = dispatchResult();
+      expect(raw).toContain('"status":"running"');
+
+      release(textCompletion('Recorded late, reported anyway.'));
+      const texts = await waitForText(
+        conversationId,
+        'The sub-agent finished.'
+      );
+      const report = texts.find((text) => {
+        return text.includes(`Generation ${generationId} `);
+      });
+      expect(report).toContain('has completed');
+    } finally {
+      process.env.SOAT_TOOL_CALL_TIMEOUT_MS = HANDOFF_AFTER_MS;
+    }
+  });
+
   test('a sub-agent that fails is reported to the parent as failed', async () => {
     script(
       new Promise<StubReply>((resolve) => {
