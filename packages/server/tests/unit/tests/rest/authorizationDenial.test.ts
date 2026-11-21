@@ -97,7 +97,7 @@ describe('authorization denials', () => {
 
     const message = `Forbidden: user ${userId}'s policies deny tools:DeleteTool on ${resource}`;
     expect(res.body.result.isError).toBe(true);
-    expect(res.body.result.content[0].text).toBe(message);
+    expect(res.body.result.content[0].text).toBe(`FORBIDDEN: ${message}`);
     expect(res.body.result.structuredContent).toEqual({
       status: 403,
       error: {

@@ -1079,7 +1079,10 @@ describe('MCP tools - happy path', () => {
     });
     expect(res.body.result.isError).toBe(true);
     expect(res.body.result.content[0].text).toBe(
-      "source_id is required when source_type is 'conversation'"
+      "VALIDATION_FAILED: source_id is required when source_type is 'conversation'"
+    );
+    expect(res.body.result.structuredContent.error.code).toBe(
+      'VALIDATION_FAILED'
     );
   });
 
@@ -4533,7 +4536,7 @@ describe('MCP in-process dispatch', () => {
         error: { code: args.code, message: expect.any(String) },
       });
       expect(result.content[0].text).toBe(
-        result.structuredContent.error.message
+        `${args.code}: ${result.structuredContent.error.message}`
       );
     };
 
