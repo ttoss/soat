@@ -153,8 +153,10 @@ export const listAgentVersionClaims = async (args: {
       },
       version: args.version,
     })
+    // By code point, not locale: a page boundary must not move with the
+    // server's locale. Eval ids are unique, so no two compare equal.
   ).sort((a, b) => {
-    return a.eval_id.localeCompare(b.eval_id);
+    return a.eval_id < b.eval_id ? -1 : 1;
   });
 
   return pageOf({
