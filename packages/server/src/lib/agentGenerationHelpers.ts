@@ -20,6 +20,7 @@ import {
   mergePresetParameters,
   readClientToolPresets,
 } from './toolPresetParameters';
+import { splitVendorOptions } from './vendorOptions';
 import type { WorkAuthority } from './workAuthority';
 
 // ── Wire Mappers ──────────────────────────────────────────────────────────
@@ -316,6 +317,15 @@ const meterCompletedTurn = (args: {
   });
 };
 
+/** A completed turn's messages, in the shape a caller is served. */
+export const servedTurnMessages = (messages: unknown[]) => {
+  const split = splitVendorOptions({ messages });
+  return {
+    responseMessages: split.messages,
+    vendorOptions: split.vendorOptions,
+  };
+};
+
 export const buildCompletedGenerationResult = async (args: {
   generationId: string;
   traceId: string;
@@ -362,7 +372,7 @@ export const buildCompletedGenerationResult = async (args: {
       model,
       content: args.result.text,
       finishReason: args.result.finishReason,
-      responseMessages: args.result.responseMessages,
+      ...servedTurnMessages(args.result.responseMessages),
       ...(args.result.object !== undefined
         ? { object: args.result.object }
         : {}),
