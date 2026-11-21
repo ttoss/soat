@@ -76,7 +76,7 @@ const assertValidToolContextKeys = (keys: string[]): void => {
     if (existing !== undefined) {
       throw new DomainError(
         'INVALID_TOOL_CONTEXT_KEY',
-        `tool_context keys '${existing}' and '${key}' both map to the header ${header}; header names are case-insensitive, so one value would be silently dropped. Use a single key.`,
+        `tool_context keys '${existing}' and '${key}' both map to the header ${header}; header names are case-insensitive, so one value would be silently dropped.`,
         { keys: [existing, key], header }
       );
     }

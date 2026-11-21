@@ -58,7 +58,7 @@ To start work inside SOAT when an event fires, bind an [`event` trigger](./trigg
 | `attempts`        | number                              | Number of delivery attempts made                                                                                 |
 | `last_attempt_at` | string \| null                      | Timestamp of the most recent attempt                                                                             |
 | `next_attempt_at` | string \| null                      | When the next attempt becomes due; null once the delivery completed or exhausted its attempts                    |
-| `response_body`   | string \| null                      | First 1 KB of the response body returned by the receiver, or the reason a delivery was closed without an attempt |
+| `response_body`   | string \| null                      | First 1 KB of the response body returned by the receiver, or, for a delivery closed without an attempt, the reason as a [recorded failure](/docs/api#recorded-failures) |
 | `created_at`      | string                              | ISO 8601 creation timestamp                                                                                      |
 | `updated_at`      | string                              | ISO 8601 last-updated timestamp                                                                                  |
 
@@ -112,7 +112,7 @@ Deliveries are retried up to three times; each attempt is recorded in the delive
 
 The address the hostname **resolves to** passes the deployment's egress rule, re-checked on every redirect hop. A URL resolving inside the deployment's own network (loopback, RFC1918, link-local/cloud metadata, CGNAT, IPv6 ULA) is refused unless listed in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress).
 
-Such a delivery is closed as `failed` without a retry, `attempts` still `0`, the reason in `response_body`. `response_body` holds at most the first kilobyte of a real endpoint's answer; the rest is never read.
+Such a delivery is closed as `failed` without a retry, `attempts` still `0`, its [recorded failure](/docs/api#recorded-failures) in `response_body`. `response_body` holds at most the first kilobyte of a real endpoint's answer; the rest is never read.
 
 ### Delivery durability
 
@@ -173,7 +173,7 @@ Each webhook has a secret generated at creation, returned on create and rotation
 
 It is stored AES-256-GCM encrypted like [secrets](./secrets.md), keyed by `SECRETS_ENCRYPTION_KEY`, and decrypted only to sign deliveries or to answer that route. See [Configuration](/docs/self-hosting/configuration) for the impact of losing the key.
 
-A stored secret that is not valid ciphertext (encrypted under a changed `SECRETS_ENCRYPTION_KEY`) is refused: `GET .../secret` answers `500 SECRET_NOT_DECRYPTABLE`, and a delivery is recorded `failed` with the reason and `attempts: 0` rather than sent unsigned. Rotate the secret or restore the key.
+A stored secret that is not valid ciphertext (encrypted under a changed `SECRETS_ENCRYPTION_KEY`) is refused: `GET .../secret` answers `500 SECRET_NOT_DECRYPTABLE`, and a delivery is recorded `failed` with `attempts: 0` and the error in `response_body` rather than sent unsigned. Rotate the secret or restore the key.
 
 #### Verifying `X-Soat-Signature`
 

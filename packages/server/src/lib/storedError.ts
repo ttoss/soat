@@ -1,5 +1,6 @@
 import { DomainError } from '../errors';
 import { ERROR_CODES, type ErrorCode } from '../errors/codes';
+import { servedErrorMeta } from '../errors/errorBody';
 
 /** The `error` a resource records when its work fails, as its `GET` answers it. */
 export type StoredError = {
@@ -24,10 +25,11 @@ export const isErrorCode = (code: string): code is ErrorCode => {
 };
 
 const fromDomainError = (error: DomainError): StoredError => {
+  const meta = servedErrorMeta({ code: error.code, meta: error.meta });
   return {
     code: error.wireCode,
     message: error.message,
-    ...(error.meta !== undefined && { meta: error.meta }),
+    ...(meta !== undefined && { meta }),
   };
 };
 

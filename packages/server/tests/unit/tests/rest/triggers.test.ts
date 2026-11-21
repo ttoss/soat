@@ -1339,7 +1339,7 @@ describe('Triggers', () => {
     // A stored value this key cannot decrypt is never read as plaintext: it is
     // refused with a named error pointing at rotate-secret, rather than the raw
     // `unable to authenticate data` a bare decrypt would surface.
-    test('an undecryptable stored secret is refused, naming the remedy', async () => {
+    test('an undecryptable stored secret is refused, its hint naming the remedy', async () => {
       const row = await db.Trigger.findOne({
         where: { publicId: webhookTriggerId },
       });
@@ -1352,7 +1352,7 @@ describe('Triggers', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.error.code).toBe('SECRET_NOT_DECRYPTABLE');
-      expect(res.body.error.message).toMatch(/rotate/i);
+      expect(res.body.error.hint).toMatch(/rotate/i);
       // The undecryptable value is never echoed back in the failure.
       expect(JSON.stringify(res.body)).not.toContain(undecryptableSecret);
     });

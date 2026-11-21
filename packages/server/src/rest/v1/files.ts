@@ -256,7 +256,7 @@ filesRouter.post(
     if (!multipartFile && !body.content) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        'No file provided. Send multipart field "file" or base64 "content".'
+        'No file provided: the request carries neither multipart field "file" nor base64 "content".'
       );
     }
 

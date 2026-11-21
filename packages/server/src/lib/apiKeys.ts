@@ -119,7 +119,7 @@ export const boundKeyPolicyIds = (args: {
   throw new DomainError(
     'API_KEY_POLICY_BOUNDARY',
     'This API key is narrowed by policy_ids and cannot write a key outside ' +
-      'that boundary. Name a non-empty subset of its policy_ids.',
+      'that boundary.',
     {
       key_policy_ids: args.keyPolicyIds ?? [],
       requested_policy_ids: args.requestedPolicyIds ?? [],

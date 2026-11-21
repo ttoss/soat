@@ -58,7 +58,7 @@ export const buildAgentMessages = (
   }
   throw new DomainError(
     'TRIGGER_INPUT_INVALID',
-    'Agent trigger input is empty; provide `messages`, `message`, or a non-empty input object.'
+    'Agent trigger input is empty: it carries no `messages`, `message` or non-empty input object.'
   );
 };
 
