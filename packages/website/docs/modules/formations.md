@@ -713,6 +713,12 @@ An entry whose `name` is a built-in type and that sets `overrides_builtin: true`
 
 Resources of that type already in the resource ledger are handed to the handler as well, which does not know their ids: `read` reports them gone and the next deploy recreates them. Override a type only on a deployment whose ledger holds none.
 
+#### Disabling a built-in type
+
+`disabled_resource_types` in the same file lists built-in types the deployment does not serve. Validate answers `200` with `valid: false`, and plan and deploy answer `400 VALIDATION_FAILED`, for every template declaring one, whoever the caller is; the error lists only the types the deployment serves. The type's own routes are unchanged.
+
+A formation that already holds a resource of a disabled type can still be deleted, which tears that resource down. An update must drop the resource from its template, which deletes it.
+
 #### Replacement
 
 When an `update` answers with a different `physical_resource_id`, the resource record is re-pointed at it, every `ref` resolves to the new id, and the old resource is disposed of under the resource's `deletion_policy` (`retain` leaves it alive).
@@ -728,9 +734,9 @@ The un-deleted id stays on the record as pending cleanup; the next deploy and th
 
 ## Configuration
 
-| Environment Variable              | Required | Description                                                                                                                                      |
-| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `FORMATION_RESOURCE_TYPES_CONFIG` | No       | Path to a JSON file registering [custom resource types](#custom-resource-types). Unset (the default) means the built-in types are the whole set. |
+| Environment Variable              | Required | Description                                                                                                                                                                                                |
+| --------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FORMATION_RESOURCE_TYPES_CONFIG` | No       | Path to a JSON file registering [custom resource types](#custom-resource-types) and [disabling built-in ones](#disabling-a-built-in-type). Unset (the default) means the built-in types are the whole set. |
 
 ```json
 {
@@ -769,13 +775,16 @@ The un-deleted id stays on the record as pending cleanup; the next deploy and th
         "required": ["name", "kind"]
       }
     }
-  ]
+  ],
+  "disabled_resource_types": ["api_key", "chat"]
 }
 ```
 
+`resource_types` is required (`[]` registers nothing); `disabled_resource_types` is optional.
+
 The secret is referenced by variable **name**, never inlined, so the file carries nothing confidential. It is read **once, at boot**; changes take effect on the next restart.
 
-Every problem with the file is a **hard boot failure** naming the file and the offending entry: a built-in name without `overrides_builtin: true`, an `overrides_builtin` on a name that is not a built-in or that is not a boolean, a name that repeats within the file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that is unset or empty, a non-positive timeout, an unknown capability, a `write_only_properties` entry the schema does not declare, a missing or malformed `writer`, a `carries` property whose root the schema does not declare, a `writer` action `iam/check` does not answer on its type (IAM registrations load first), or a `schema` that is not an object schema.
+Every problem with the file is a **hard boot failure** naming the file and the offending entry: a built-in name without `overrides_builtin: true`, an `overrides_builtin` on a name that is not a built-in or that is not a boolean, a name that repeats within the file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that is unset or empty, a non-positive timeout, an unknown capability, a `write_only_properties` entry the schema does not declare, a missing or malformed `writer`, a `carries` property whose root the schema does not declare, a `writer` action `iam/check` does not answer on its type (IAM registrations load first), a `schema` that is not an object schema, or a `disabled_resource_types` entry that is not a built-in, repeats, or is also registered in `resource_types`.
 
 ## Examples
 

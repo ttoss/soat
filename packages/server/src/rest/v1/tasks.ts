@@ -209,7 +209,10 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     payload: body.payload,
     assignee: body.assignee,
     state: body.state,
-    toolContext: parseNullableToolContextBody(body.tool_context),
+    toolContext: parseNullableToolContextBody({
+      raw: body.tool_context,
+      reservedPrefix: 'refuse',
+    }),
     // Rejected before the task row exists, like every other metadata bag.
     metadata: parseMetadataBag(body.metadata),
   };
@@ -290,7 +293,10 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     tool_context?: unknown;
     payload?: Record<string, unknown>;
   };
-  const toolContext = parseNullableToolContextBody(body.tool_context);
+  const toolContext = parseNullableToolContextBody({
+    raw: body.tool_context,
+    reservedPrefix: 'refuse',
+  });
   const idempotencyKey = idempotencyKeyOf(ctx);
 
   ctx.body = await transitionTask({

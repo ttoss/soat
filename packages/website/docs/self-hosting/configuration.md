@@ -268,6 +268,7 @@ base URL: it dispatches in-process under the caller's permissions.
 | Variable                                | Default | Description                                                                               |
 | --------------------------------------- | ------- | ----------------------------------------------------------------------------------------- |
 | `AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS` | `false` | Whether an AI provider record that links no credential may sign with the deployment's own |
+| `AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS` | —   | Comma-separated project ids (`proj_...`) the opt-in above covers; unset or empty, every project |
 | `ANTHROPIC_FEDERATION_RULE_ID`          | —       | Anthropic federation rule (`fdrl_...`) the deployment's OIDC token is exchanged under     |
 | `ANTHROPIC_ORGANIZATION_ID`             | —       | Anthropic organization UUID                                                               |
 | `ANTHROPIC_SERVICE_ACCOUNT_ID`          | —       | Anthropic service account (`svac_...`) the token acts as                                  |
@@ -294,7 +295,10 @@ The fallback applies only to a record that links no secret. A record whose linke
 
 Set `true` only on a **single-tenant** deployment (an EC2 instance profile or
 ECS task role serving your own team); otherwise a tenant's record generates on
-the deployment's cloud account, quotas and IAM role.
+the deployment's cloud account, quotas and IAM role. On a deployment that also
+serves other tenants, set `AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS` to your own
+projects: any other project's credential-less record is refused at write and
+at use as if the opt-in were off.
 
 The embedding stack is unaffected: `EMBEDDING_PROVIDER` and its region are
 operator settings, so `bedrock` embeddings always use the AWS credential chain.
@@ -362,6 +366,14 @@ Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of
 Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not the price book (no AI provider record configures the embedding stack). Unset meters every embedding unpriced (`cost_usd` `null`; `0` on `ollama`, a local model) and logs a startup warning. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
 
 Change `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together. Dimensions may not exceed **2000**, the widest vector pgvector can build an HNSW index over; a larger model is refused at startup. Bedrock without `EMBEDDING_API_KEY` uses the AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
+
+### Formations
+
+| Variable                          | Default   | Description                                                                                                                                                                                                                   |
+| --------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FORMATION_RESOURCE_TYPES_CONFIG` | _(unset)_ | Path to a JSON file that registers [custom resource types](../modules/formations.md#custom-resource-types) and [disables built-in ones](../modules/formations.md#disabling-a-built-in-type). Unset serves every built-in type |
+
+Read once at boot; any problem in the file fails the boot. Shape and checks: [Formations configuration](../modules/formations.md#configuration).
 
 ## Docker Compose Example
 

@@ -242,7 +242,10 @@ conversationSubResourcesRouter.post(
       conversationId: ctx.params.conversation_id,
       agentId: body.agent_id,
       model: body.model,
-      toolContext: parseToolContextBody(body.tool_context),
+      toolContext: parseToolContextBody({
+        raw: body.tool_context,
+        reservedPrefix: 'refuse',
+      }),
       authority: captureAuthority({ authUser: ctx.authUser }),
       authUser: ctx.authUser,
     };

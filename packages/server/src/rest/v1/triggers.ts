@@ -154,7 +154,10 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     targetId: body.target_id,
     action: body.action,
     input: body.input,
-    toolContext: parseToolContextBody(body.tool_context),
+    toolContext: parseToolContextBody({
+      raw: body.tool_context,
+      reservedPrefix: 'refuse',
+    }),
     cron: body.cron,
     events: readTriggerEvents({
       events: body.events,
@@ -226,7 +229,10 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     policy_ids?: string[];
   };
 
-  const toolContext = parseNullableToolContextBody(body.tool_context);
+  const toolContext = parseNullableToolContextBody({
+    raw: body.tool_context,
+    reservedPrefix: 'refuse',
+  });
 
   const updated = await updateTrigger({
     id: ctx.params.trigger_id,
@@ -283,7 +289,10 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     tool_context?: unknown;
   };
 
-  const toolContext = parseToolContextBody(body.tool_context);
+  const toolContext = parseToolContextBody({
+    raw: body.tool_context,
+    reservedPrefix: 'refuse',
+  });
 
   if (carriesFields(body.input) || carriesFields(toolContext)) {
     await assertCallerMayStart({

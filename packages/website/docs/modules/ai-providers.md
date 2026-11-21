@@ -112,7 +112,7 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 
 > **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. A bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-A record that links no secret would use the default AWS credential chain (environment variables, instance profile, etc.) — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, such a record is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when it is used.
+A record that links no secret would use the default AWS credential chain (environment variables, instance profile, etc.) — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials), and, when [`AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS`](../self-hosting/configuration.md#provider-credentials) is set, only in the projects it names. Without it, or in a project it does not name, such a record is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when it is used. The same two settings govern `vertex` and `anthropic` below.
 
 A record that links a secret holding neither an `apiKey` nor a complete key pair never falls back to the deployment's credentials, whatever the setting: it is `400 AI_PROVIDER_MISCONFIGURED` at create, update, generation and model listing.
 

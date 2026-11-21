@@ -321,6 +321,31 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
     expect(toolRequests).toHaveLength(0);
   });
 
+  test('a key under the reserved prefix is refused and nothing is resolved', async () => {
+    const item = await seed();
+    const previousPrefix = process.env.SOAT_RESERVED_TOOL_CONTEXT_PREFIX;
+    process.env.SOAT_RESERVED_TOOL_CONTEXT_PREFIX = 'plat_';
+    try {
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/approvals/${item.id}/approve`)
+        .send({ tool_context: { plat_tenant: 'forged' } });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    } finally {
+      if (previousPrefix === undefined) {
+        delete process.env.SOAT_RESERVED_TOOL_CONTEXT_PREFIX;
+      } else {
+        process.env.SOAT_RESERVED_TOOL_CONTEXT_PREFIX = previousPrefix;
+      }
+    }
+
+    const row = await db.ApprovalItem.findOne({
+      where: { publicId: item.id },
+    });
+    expect(row!.status).toBe('pending');
+    expect(toolRequests).toHaveLength(0);
+  });
+
   describe('a preset the proposal resolved', () => {
     const seedCharge = () => {
       return emitApproval({

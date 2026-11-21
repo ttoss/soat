@@ -78,7 +78,10 @@ iamRouter.post('/iam/tokens', async (ctx: Context) => {
     throw callerDenied({ authUser: ctx.authUser, action, resource });
   }
   const body = ctx.request.body as Record<string, unknown>;
-  const toolContext = parseToolContextBody(body.tool_context);
+  const toolContext = parseToolContextBody({
+    raw: body.tool_context,
+    reservedPrefix: 'pass',
+  });
   ctx.status = 201;
   ctx.body = await createIamToken({
     issuer,

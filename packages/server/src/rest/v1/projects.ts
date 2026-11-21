@@ -140,6 +140,11 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
       body,
       'max_orchestration_run_depth'
     ),
+    // An explicit `null` clears the floor.
+    minTriggerIntervalSeconds: provided<number | null>(
+      body,
+      'min_trigger_interval_seconds'
+    ),
     // An explicit `null` clears the project default route.
     defaultModelRouteId: provided<string | null>(
       body,
@@ -182,6 +187,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     maxConcurrentRuns,
     maxChainGenerations,
     maxOrchestrationRunDepth,
+    minTriggerIntervalSeconds,
     defaultModelRouteId,
     auditReadsEnabled,
     requirePricedModel,
@@ -197,8 +203,17 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'name, guardrail_ids, agent_policy_ids, content_bound_tag_keys, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, require_priced_model, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
+      'name, guardrail_ids, agent_policy_ids, content_bound_tag_keys, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, min_trigger_interval_seconds, default_model_route_id, audit_reads_enabled, require_priced_model, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
     );
+  }
+
+  // The floor bounds what members may schedule, so only an admin sets it.
+  if (minTriggerIntervalSeconds !== undefined) {
+    await requireProjectAdmin({
+      ctx,
+      projectPublicId: ctx.params.project_id,
+      action: 'projects:UpdateProject',
+    });
   }
 
   if (guardrailIds !== undefined) {
@@ -224,6 +239,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     maxConcurrentRuns,
     maxChainGenerations,
     maxOrchestrationRunDepth,
+    minTriggerIntervalSeconds,
     defaultModelRouteId,
     auditReadsEnabled,
     requirePricedModel,
