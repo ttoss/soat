@@ -342,7 +342,9 @@ describe('MCP protocol fidelity', () => {
           return error_;
         }
       );
-      if (!(error instanceof DomainError)) throw new Error('not a DomainError');
+      if (!(error instanceof DomainError)) {
+        throw new Error(`not a DomainError: ${String(error)}`);
+      }
       return error;
     };
 
@@ -398,8 +400,8 @@ describe('MCP protocol fidelity', () => {
     );
 
     test('without an envelope is MCP_TOOL_ERROR on either trust', async () => {
-      failWith({ status: 409 });
       for (const trust of ['catalog', 'stored'] as const) {
+        failWith({ status: 409 });
         const error = await thrown(trust);
         expect(error.code).toBe('MCP_TOOL_ERROR');
         expect(error.meta).toEqual({ mcp_tool: 'link', mcp_url: MCP_URL });
