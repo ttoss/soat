@@ -166,11 +166,9 @@ describe('a project floor on schedule triggers', () => {
       .api()
       .get(`/api/v1/generations/${res.body.id}/transcript`);
     const [failed] = transcript.body.steps[0].tool_results;
-    expect(failed.error.meta.tool_status_code).toBe(400);
-    expect(failed.error.meta.tool_error.code).toBe(
-      'TRIGGER_INTERVAL_BELOW_FLOOR'
-    );
-    expect(failed.error.meta.tool_error.meta).toMatchObject(REFUSAL_META);
+    expect(failed.result.status).toBe(400);
+    expect(failed.result.error.code).toBe('TRIGGER_INTERVAL_BELOW_FLOOR');
+    expect(failed.result.error.meta).toMatchObject(REFUSAL_META);
   });
 
   test("refuses a formation's resolved cron below the floor", async () => {

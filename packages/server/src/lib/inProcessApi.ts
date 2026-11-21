@@ -7,7 +7,6 @@ import type { Context } from '../Context';
 import { DomainError } from '../errors';
 import type { ParentToolCall } from './generationProgress';
 import { attachWork } from './inProcessAuthority';
-import { isPlainObject } from './plainObject';
 import { type WorkAuthority, workAuthorityMissing } from './workAuthority';
 
 const log = createDebug('soat:inprocess');
@@ -234,33 +233,12 @@ export const dispatchApiRequest = async (args: {
 };
 
 /**
- * Work's own refusal, raised as itself rather than as the action's failure:
- * one answer for work holding no authority, whichever path reaches it.
- */
-const workRefusalOf = (response: InProcessApiResponse): DomainError | null => {
-  const error = isPlainObject(response.body) ? response.body.error : undefined;
-  if (!isPlainObject(error) || error.code !== 'WORK_AUTHORITY_MISSING') {
-    return null;
-  }
-  return new DomainError(
-    'WORK_AUTHORITY_MISSING',
-    String(error.message),
-    isPlainObject(error.meta) ? error.meta : undefined
-  );
-};
-
-/**
  * Dispatches an API request and resolves with its body **only** when the status
  * says the action succeeded.
  *
- * Returning an error body as data made an unauthorized action
- * indistinguishable from a successful one: an orchestration tool node stored
- * the error as its artifact and carried on, and the MCP surface rendered a `401`
- * as a tool result for years.
- *
- * Both callers reach the platform the same way; all that differs is how a
- * failure is spelled — a `TOOL_HTTP_ERROR` carrying the status for the agent's
- * retry logic, a plain `Error` for MCP — which is what `wrapError` supplies.
+ * An error body returned as data would make a refused action indistinguishable
+ * from a successful one. Both callers reach the platform the same way; how a
+ * failure is spelled is the caller's `wrapError`.
  */
 export const dispatchApiRequestOrThrow = async (args: {
   method: string;
@@ -280,10 +258,7 @@ export const dispatchApiRequestOrThrow = async (args: {
   });
 
   if (response.status < 200 || response.status >= 300) {
-    throw (
-      ('authority' in args.as && workRefusalOf(response)) ||
-      args.wrapError(response)
-    );
+    throw args.wrapError(response);
   }
 
   return response.body;

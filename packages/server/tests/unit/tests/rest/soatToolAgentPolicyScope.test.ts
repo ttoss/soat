@@ -1,10 +1,7 @@
 import type { Tool } from 'ai';
 import { resolveSoatTools } from 'src/lib/agentToolResolverExternalTools';
-import {
-  denialToolResult,
-  isAuthorizationDenial,
-} from 'src/lib/authorizationDenial';
 import type { PolicyDocument } from 'src/lib/iam';
+import { toolErrorAnswer } from 'src/lib/toolErrorRelay';
 import type { WorkAuthority } from 'src/lib/workAuthority';
 
 import { agentRefusal } from '../../fixtures/agentRefusal';
@@ -75,8 +72,9 @@ describe('a builtin tool is bounded by the resource its arguments name', () => {
         { messages: [], toolCallId: 'call_1', context: undefined }
       )) as { id?: string };
     } catch (error) {
-      if (!isAuthorizationDenial(error)) throw error;
-      return denialToolResult(error);
+      const answer = toolErrorAnswer(error);
+      if (!answer) throw error;
+      return answer.result;
     }
   };
 
