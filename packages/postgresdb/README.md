@@ -123,7 +123,8 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-16-expire-work-without-authority` | every unfinished generation, orchestration run, playbook execution and task without `authority` ended: generations and playbook executions `failed`, orchestration runs `expired`, each with a `WORK_AUTHORITY_MISSING` error; tasks `closed` in their current state; finished rows untouched, nothing backfilled |
 | `2026-11-18-eval-run-cancel-action` | `evaluations:CancelEvalRun` added beside every `evaluations:RunEval` in a stored policy statement (`policies.document`, `formations.template`, `formation_resources.last_applied_properties`), Allow and Deny alike |
 | `2026-11-18-usage-event-model-aliases` | `usage_events.model` under a vendor model id renamed to the one alias of the event's provider that targets it; an id two aliases target, or none, kept; no other column written |
-| `2026-11-21-eval-run-verdict` | `evals.evidence` (`json`), the rules a verdict reads beyond the threshold; `eval_runs.verdict` and `eval_runs.verdict_reasons`. `eval_runs.passed` is kept unwritten until its contract |
+| `2026-11-21-eval-run-verdict` | `evals.evidence` (`json`), the rules a verdict reads beyond the threshold; `eval_runs.verdict` and `eval_runs.verdict_reasons` beside `eval_runs.passed` |
+| `2026-11-21-eval-run-drop-passed` | `eval_runs.passed` dropped; `eval_runs.verdict` replaces it |
 
 Run them from the server package, which owns the entrypoint:
 
