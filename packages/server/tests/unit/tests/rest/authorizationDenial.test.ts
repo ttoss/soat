@@ -95,12 +95,15 @@ describe('authorization denials', () => {
         },
       });
 
+    const message = `Forbidden: user ${userId}'s policies deny tools:DeleteTool on ${resource}`;
     expect(res.body.result.isError).toBe(true);
-    expect(JSON.parse(res.body.result.content[0].text)).toEqual({
+    expect(res.body.result.content[0].text).toBe(`FORBIDDEN: ${message}`);
+    expect(res.body.result.structuredContent).toEqual({
+      status: 403,
       error: {
         code: 'FORBIDDEN',
         ...forbiddenHints(),
-        message: `Forbidden: user ${userId}'s policies deny tools:DeleteTool on ${resource}`,
+        message,
         meta: {
           action: 'tools:DeleteTool',
           resource,

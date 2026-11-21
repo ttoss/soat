@@ -32,7 +32,6 @@ describe('tool error relay chokepoint', () => {
   test('every relayed tool error goes through toolCallError', () => {
     assert.deepEqual(filesMatching(/\btoolCallError\(/), [
       'lib/mcpProtocol.ts',
-      'mcp/dispatchApi.ts',
     ]);
   });
 

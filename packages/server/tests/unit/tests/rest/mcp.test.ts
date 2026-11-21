@@ -1079,7 +1079,10 @@ describe('MCP tools - happy path', () => {
     });
     expect(res.body.result.isError).toBe(true);
     expect(res.body.result.content[0].text).toBe(
-      "source_id is required when source_type is 'conversation'"
+      "VALIDATION_FAILED: source_id is required when source_type is 'conversation'"
+    );
+    expect(res.body.result.structuredContent.error.code).toBe(
+      'VALIDATION_FAILED'
     );
   });
 
@@ -2993,8 +2996,6 @@ describe('MCP tools - happy path', () => {
       );
     });
 
-    // PATCH/DELETE-backed MCP tools surfaced a DomainError body as the literal
-    // "[object Object]" while the equivalent GET tool surfaced it cleanly.
     test('get-orchestration surfaces a readable not-found message', async () => {
       const res = await mcpCall('get-orchestration', {
         orchestration_id: 'orch_doesnotexist',
@@ -4496,8 +4497,6 @@ describe('MCP in-process dispatch', () => {
     });
 
     expect(failed(res)).toBe(true);
-    // The real DomainError message, not the "[object Object]" the framework's
-    // own apiCall would have produced.
     expect(resultText(res)).toMatch(/not found/i);
     expect(resultText(res)).not.toContain('[object Object]');
   });
@@ -4509,6 +4508,75 @@ describe('MCP in-process dispatch', () => {
 
     expect(res.status).toBe(200);
     expect(JSON.parse(resultText(res)).id).toBe(projectId);
+  });
+
+  describe('a failed call carries the REST error envelope', () => {
+    type EnvelopeResponse = {
+      body: {
+        result: {
+          isError?: boolean;
+          content: Array<{ text: string }>;
+          structuredContent: {
+            status: number;
+            error: { code: string; message: string; meta?: unknown };
+          };
+        };
+      };
+    };
+
+    const expectEnvelope = (args: {
+      res: EnvelopeResponse;
+      status: number;
+      code: string;
+    }) => {
+      const { result } = args.res.body;
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        status: args.status,
+        error: { code: args.code, message: expect.any(String) },
+      });
+      expect(result.content[0].text).toBe(
+        `${args.code}: ${result.structuredContent.error.message}`
+      );
+    };
+
+    test('400', async () => {
+      const store = await callTool(adminToken, 'create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Envelope Store',
+      });
+      const res = await callTool(adminToken, 'create-memory', {
+        memory_store_id: JSON.parse(resultText(store)).id,
+        content: 'Missing its source.',
+        source_type: 'conversation',
+      });
+      expectEnvelope({ res, status: 400, code: 'VALIDATION_FAILED' });
+    });
+
+    test('403', async () => {
+      const res = await callTool(unprivilegedToken, 'create-memory-store', {
+        project_id: projectId,
+        name: 'Refused',
+      });
+      expectEnvelope({ res, status: 403, code: 'FORBIDDEN' });
+      expect(res.body.result.structuredContent.error.meta).toMatchObject({
+        action: 'memories:CreateMemoryStore',
+      });
+    });
+
+    test('409', async () => {
+      const declare = () => {
+        return callTool(adminToken, 'create-metadata-schema', {
+          project_id: projectId,
+          resource_type: 'document',
+          path_prefix: '/mcp-envelope',
+          schema: { type: 'object' },
+        });
+      };
+      await declare();
+      const res = await declare();
+      expectEnvelope({ res, status: 409, code: 'NAME_CONFLICT' });
+    });
   });
 });
 
