@@ -357,6 +357,45 @@ describe('Shared AI providers', () => {
       expect(Number(events.body.data[0].cost_usd)).toBeCloseTo(0.006);
     });
 
+    test('a shared facade serves its forwarded alias on the target in the publisher project', async () => {
+      const facade = await admin()
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: publisherId,
+          name: 'Shared facade',
+          provider: 'anthropic',
+          default_model: 'served',
+          model_aliases: {
+            served: {
+              ai_provider_id: sharedProviderId,
+              model: 'claude-shared-test',
+            },
+          },
+          model_aliases_only: true,
+        });
+      expect(facade.status).toBe(201);
+      await share(facade.body.id);
+      const agent = await pinAgent({
+        providerId: facade.body.id,
+        model: 'served',
+      });
+      expect(agent.status).toBe(201);
+
+      const response = await generate(agent.body.id);
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('completed');
+
+      const events = await grantee().get('/api/v1/usage/events').query({
+        meter_type: 'llm_tokens',
+        generation_id: response.body.id,
+      });
+      expect(events.body.data[0]).toMatchObject({
+        project_id: granteeId,
+        ai_provider_id: facade.body.id,
+        model: 'served',
+      });
+    });
+
     test('a vendor failure reaches the grantee without the vendor detail', async () => {
       const agent = await pinAgent({ providerId: sharedProviderId });
       const ownAgent = await admin().post('/api/v1/agents').send({

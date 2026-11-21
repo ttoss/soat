@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import type { BedrockCredentials } from './agentModel';
+import type { BedrockCredentials } from './linkedProviderSecret';
 
 const log = createDebug('soat:provider-models');
 

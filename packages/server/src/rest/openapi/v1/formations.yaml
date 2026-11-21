@@ -1087,8 +1087,8 @@ components:
           type: object
           nullable: true
           additionalProperties:
-            type: string
-          description: Alias → the model id sent to the vendor.
+            $ref: './ai-providers.yaml#/components/schemas/ModelAliasTarget'
+          description: Alias → the model id sent to the vendor, or `{ ai_provider_id, model }` naming another provider of the project that serves it.
         model_aliases_only:
           type: boolean
           description: When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).
