@@ -14,17 +14,16 @@
  *
  * - a **read** a caller may not perform is `404`, so a resource in a project
  *   they cannot see — or one their policy does not name — does not announce its
- *   existence;
+ *   existence, unless a policy's declared `denial` refused it: that answers as
+ *   a write does;
  * - a **write** is `403`, so a caller who can read a resource is told plainly
  *   that changing it is refused — unless the resource is in a project
  *   they reach for nothing, where that would leak existence and it is `404`
  *   instead. See {@link beyondReach}.
  *
  * Which one a route picks follows what its **action** does, not which helper it
- * had reached for. Most routes agree either way — a read used the read helper —
- * but `evaluations.ts` reached for `requireProjectAccess` on its reads too, and
- * preserving that literally would have turned a cross-project read from `404`
- * into `403`, announcing across a tenant boundary that a dataset exists.
+ * reaches for: a cross-project read answered `403` would announce across a
+ * tenant boundary that the resource exists.
  *
  * An id that names nothing at all is `404` under both.
  *
@@ -37,7 +36,7 @@
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
-import { callerDenied } from 'src/lib/authorizationDenial';
+import { callerDenied, requestRefusal } from 'src/lib/authorizationDenial';
 import { buildSrn, policySetsConcernProject } from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { findSharedUse } from 'src/lib/resourceReferences';
@@ -184,6 +183,24 @@ export const resourceRefusal = async (args: {
 };
 
 /**
+ * A refusal a policy's declared `denial` decided: a read it refuses answers
+ * as a write does, since the denial is a statement for the caller to read.
+ */
+const refusedWithDenial = (args: {
+  ctx: Context & { authUser: AuthUser };
+  args: { action: string };
+  resource: string;
+}): boolean => {
+  return (
+    requestRefusal({
+      authUser: args.ctx.authUser,
+      action: args.args.action,
+      resource: args.resource,
+    }).denial !== null
+  );
+};
+
+/**
  * One by-id check: returns when the caller may perform it, else throws
  * {@link resourceRefusal}'s answer for it.
  */
@@ -290,7 +307,12 @@ export const authorizeResource = async (args: {
   });
 
   if (!allowed) {
-    if (args.onDenied === 'hide') throw notFound;
+    if (
+      args.onDenied === 'hide' &&
+      !refusedWithDenial({ ctx, args, resource })
+    ) {
+      throw notFound;
+    }
     throw await resourceRefusal({
       ctx,
       projectPublicId: args.scope.projectPublicId,
