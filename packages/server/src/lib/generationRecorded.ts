@@ -34,7 +34,7 @@ export const whenGenerationRecorded = (args: {
   idempotencyKey: string;
 }): { recorded: Promise<void>; cancel: () => void } => {
   const key = args.idempotencyKey;
-  let wake: () => void = () => {};
+  let wake!: () => void;
   const recorded = new Promise<void>((resolve) => {
     wake = resolve;
   });

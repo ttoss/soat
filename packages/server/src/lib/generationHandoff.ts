@@ -164,6 +164,14 @@ const handOffRunningGeneration = async (args: {
   };
 };
 
+const CALL_FAILED = Symbol('callFailed');
+
+type CallFailure = { [CALL_FAILED]: unknown };
+
+const isCallFailure = (value: unknown): value is CallFailure => {
+  return typeof value === 'object' && value !== null && CALL_FAILED in value;
+};
+
 /**
  * Past the bound, the generation `key` names once it is recorded. The bound
  * can pass while the call is still writing that record, so a missing row is
@@ -181,28 +189,20 @@ const handOffWhenRecorded = async <T>(args: {
   });
   if (!parent) return null;
   const projectId = parent.projectId as number;
-  const settled = args.pending.then(
-    (value) => {
-      return { kind: 'settled' as const, value };
-    },
-    (error: unknown) => {
-      return { kind: 'failed' as const, error };
-    }
-  );
+  const outcome = args.pending.catch((error: unknown): CallFailure => {
+    return { [CALL_FAILED]: error };
+  });
   for (;;) {
     const watch = whenGenerationRecorded({ idempotencyKey: args.key });
     try {
       const child = await handOffRunningGeneration({ ...args, projectId });
       if (child) return child;
       log('handOffWhenRecorded: key=%s not recorded yet', args.key);
-      const first = await Promise.race([
-        watch.recorded.then(() => {
-          return { kind: 'recorded' as const };
-        }),
-        settled,
-      ]);
-      if (first.kind === 'settled') return first.value;
-      if (first.kind === 'failed') throw first.error;
+      // `undefined` is the record announced: read it again.
+      const first = await Promise.race([watch.recorded, outcome]);
+      if (first === undefined) continue;
+      if (isCallFailure(first)) throw first[CALL_FAILED];
+      return first;
     } finally {
       watch.cancel();
     }
