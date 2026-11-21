@@ -9,10 +9,10 @@ const log = createDebug('soat:model-routes:breaker');
  * commits. A cold node re-learns an outage within `failure_threshold` requests,
  * and multi-node deployments may briefly disagree — accepted.
  *
- * Keyed by `(ai_provider_db_id, model)` and therefore **shared across routes**:
- * a dead backend is dead whichever route noticed. The *counter* is shared; the
- * *policy* comes from the route evaluating the target, so two routes may hold
- * different opinions about when to start skipping.
+ * Keyed by `(consuming project, ai_provider_db_id, model)`: shared across one
+ * project's routes, never across projects, because one provider may serve many
+ * projects and one project's failures (its quota, its inputs) must not fail
+ * another over. The *policy* comes from the route evaluating the target.
  */
 type BreakerState = {
   consecutiveFailures: number;
@@ -21,11 +21,15 @@ type BreakerState = {
 
 const breakerStates = new Map<string, BreakerState>();
 
-export const modelRouteBreakerKey = (args: {
+export type BreakerTarget = {
+  /** The project consuming the route, not the provider's owner. */
+  projectId: number;
   aiProviderDbId: number;
   model: string;
-}): string => {
-  return `${args.aiProviderDbId}:${args.model}`;
+};
+
+const breakerKey = (target: BreakerTarget): string => {
+  return `${target.projectId}:${target.aiProviderDbId}:${target.model}`;
 };
 
 /**
@@ -35,12 +39,12 @@ export const modelRouteBreakerKey = (args: {
  * further failure re-opens the breaker).
  */
 export const isTargetTripped = (args: {
-  key: string;
+  target: BreakerTarget;
   failureThreshold: number;
   cooldownSeconds: number;
   now?: number;
 }): boolean => {
-  const state = breakerStates.get(args.key);
+  const state = breakerStates.get(breakerKey(args.target));
   if (!state) return false;
   if (state.consecutiveFailures < args.failureThreshold) return false;
   const now = args.now ?? Date.now();
@@ -48,26 +52,28 @@ export const isTargetTripped = (args: {
 };
 
 export const recordTargetFailure = (args: {
-  key: string;
+  target: BreakerTarget;
   now?: number;
 }): void => {
-  const state = breakerStates.get(args.key) ?? {
+  const key = breakerKey(args.target);
+  const state = breakerStates.get(key) ?? {
     consecutiveFailures: 0,
     lastFailureAt: 0,
   };
   state.consecutiveFailures += 1;
   state.lastFailureAt = args.now ?? Date.now();
-  breakerStates.set(args.key, state);
+  breakerStates.set(key, state);
   log(
     'recordTargetFailure: key=%s consecutiveFailures=%d',
-    args.key,
+    key,
     state.consecutiveFailures
   );
 };
 
-export const recordTargetSuccess = (args: { key: string }): void => {
-  if (breakerStates.delete(args.key)) {
-    log('recordTargetSuccess: key=%s reset', args.key);
+export const recordTargetSuccess = (args: { target: BreakerTarget }): void => {
+  const key = breakerKey(args.target);
+  if (breakerStates.delete(key)) {
+    log('recordTargetSuccess: key=%s reset', key);
   }
 };
 

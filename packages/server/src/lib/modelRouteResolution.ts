@@ -150,6 +150,7 @@ export const buildRoutedModel = async (args: {
 
   return createRoutedModel({
     routeId: args.route.id,
+    projectId: args.projectId,
     retryOn: args.route.retry_on,
     failureThreshold: args.route.failure_threshold,
     cooldownSeconds: args.route.cooldown_seconds,

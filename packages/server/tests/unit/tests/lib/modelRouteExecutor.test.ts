@@ -145,9 +145,11 @@ const buildRoute = (args: {
   failureThreshold?: number;
   cooldownSeconds?: number;
   routeId?: string;
+  projectId?: number;
 }) => {
   return createRoutedModel({
     routeId: args.routeId ?? 'route_test0000000000',
+    projectId: args.projectId ?? 1,
     retryOn: args.retryOn ?? ['provider_error', 'timeout', 'rate_limited'],
     failureThreshold: args.failureThreshold ?? 3,
     cooldownSeconds: args.cooldownSeconds ?? 60,
@@ -519,6 +521,7 @@ describe('createRoutedModel circuit breaker', () => {
 
   const failingRoute = (args: {
     routeId?: string;
+    projectId?: number;
     failureThreshold?: number;
     cooldownSeconds?: number;
   }) => {
@@ -581,7 +584,7 @@ describe('createRoutedModel circuit breaker', () => {
     expect(fallback.calls()).toBe(0);
   });
 
-  test('breaker state is shared by every route pointing at the same backend', async () => {
+  test('breaker state is shared by every route of one project pointing at the same backend', async () => {
     const routeA = failingRoute({
       routeId: 'route_a0000000000000',
       failureThreshold: 1,
@@ -591,7 +594,7 @@ describe('createRoutedModel circuit breaker', () => {
       failureThreshold: 1,
     });
 
-    // One failure through route A trips the shared (provider, model) key...
+    // One failure through route A trips the project's (provider, model) key...
     await generate(routeA.model);
     expect(routeA.primary.calls()).toBe(1);
 
@@ -600,6 +603,26 @@ describe('createRoutedModel circuit breaker', () => {
     expect(routeB.primary.calls()).toBe(0);
     expect(routeB.fallback.calls()).toBe(1);
     expect(readRoutingMetadata(routeB.model)?.target_index).toBe(1);
+  });
+
+  test("one project's failures on a shared provider do not trip another project's route", async () => {
+    const routeA = failingRoute({
+      routeId: 'route_a0000000000000',
+      projectId: 1,
+      failureThreshold: 1,
+    });
+    const routeB = failingRoute({
+      routeId: 'route_b0000000000000',
+      projectId: 2,
+      failureThreshold: 1,
+    });
+
+    await generate(routeA.model);
+    expect(routeA.primary.calls()).toBe(1);
+
+    await generate(routeB.model);
+    expect(routeB.primary.calls()).toBe(1);
+    expect(routeB.fallback.calls()).toBe(1);
   });
 
   test('probes the first target rather than failing when every target is tripped', async () => {
