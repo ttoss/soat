@@ -295,7 +295,7 @@ describe('MCP tool arguments', () => {
       arguments: { agent_id: 'agent_x', colour: 'blue' },
     });
     expect(undeclared.isError).toBe(true);
-    expect(undeclared.content?.[0]?.text).toContain('additional properties');
+    expect(undeclared.content?.[0]?.text).toContain('colour');
   });
 
   test('accept the minimal arguments of every tool, each alternative once', async () => {

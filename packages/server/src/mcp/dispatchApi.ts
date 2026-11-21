@@ -1,10 +1,7 @@
-import {
-  ApiError,
-  errorBodyMessage,
-  getApiHeaders,
-} from '@ttoss/http-server-mcp';
+import { ApiError, getApiHeaders } from '@ttoss/http-server-mcp';
 
 import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
+import { readToolErrorEnvelope } from '../lib/toolErrorRelay';
 
 /**
  * Serves one REST-backed MCP tool call against this process's own app.
@@ -14,8 +11,9 @@ import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
  * boundary without a socket, a JSON round trip, or a listening port.
  *
  * A non-2xx answer throws `ApiError`, which `registerTools` answers as an
- * `isError` result: the message as text and the REST envelope as
- * `structuredContent`.
+ * `isError` result: the API's message as text and the REST envelope as
+ * `structuredContent`. The text is the message alone, not the package's
+ * `errorBodyMessage` (`CODE: message`): the code is in `structuredContent`.
  */
 export const dispatchMcpApiRequest = async (args: {
   method: string;
@@ -33,7 +31,8 @@ export const dispatchMcpApiRequest = async (args: {
     body: args.body,
     wrapError: (response) => {
       return new ApiError({
-        message: errorBodyMessage(response.body) ?? `HTTP ${response.status}`,
+        message:
+          readToolErrorEnvelope(response)?.message ?? `HTTP ${response.status}`,
         status: response.status,
         body: response.body,
       });
