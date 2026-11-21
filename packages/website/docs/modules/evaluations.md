@@ -81,7 +81,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `pass_threshold` | number | 0–1, or `null` to report without gating; see [Pass semantics](#pass-semantics) |
 | `group_by` | string | A key of the items' `metadata` a run rolls its scores up by, or `null`; see [Grouped aggregates](#grouped-aggregates) |
 | `policy_ids` | string[] | Required on create. The policies every run acts under; see [Run authority](#run-authority) |
-| `evidence` | object \| null | The rules a run's verdict reads beyond the threshold; see [Evidence](#evidence) |
+| `evidence` | object \| null | The rules beyond the threshold, read by the run's verdict or its claim's; see [Evidence](#evidence) |
 | `claim` | object \| null | `{ statement, population, limits }`, what a run of the eval tests; see [The claim](#the-claim) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
@@ -567,8 +567,9 @@ which scope decided it.
 
 ### Evidence
 
-`evidence` on the eval holds the rules a run's verdict reads beyond the threshold, and the
-run copies it onto `definition`. `null` declares none; on update, `null` clears it and
+`evidence` on the eval holds the rules beyond the threshold: `required_groups` is read by
+the run's verdict, `live` and `max_run_age_days` only by its [claim's
+verdict](./agents.md#claims-a-version-holds). The run copies it onto `definition`. `null` declares none; on update, `null` clears it and
 omitting it keeps it.
 
 | Key | Rule |

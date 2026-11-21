@@ -2032,8 +2032,9 @@ components:
       nullable: true
       additionalProperties: false
       description: >-
-        The rules a run's verdict reads beyond the threshold. Null declares
-        none.
+        The rules beyond the threshold: `required_groups` is read by the
+        run's verdict, `live` and `max_run_age_days` only by its claim's
+        verdict. Null declares none.
       properties:
         required_groups:
           type: array

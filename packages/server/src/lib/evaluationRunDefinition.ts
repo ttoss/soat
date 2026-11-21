@@ -8,7 +8,10 @@ import { type LiveEvidence, parseLiveEvidence } from './claimLiveEvidence';
 import { scorerList } from './evaluationScorerValidation';
 import { isPlainObject } from './plainObject';
 
-/** The rules a verdict reads beyond the threshold, in the wire shape. */
+/**
+ * The rules beyond the threshold, in the wire shape: `required_groups` for the
+ * run's verdict, `live` and `max_run_age_days` for its claim's.
+ */
 export type EvalEvidence = {
   required_groups?: string[];
   live?: LiveEvidence;
