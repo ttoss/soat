@@ -38,4 +38,12 @@ describe('the claim verdict has one home', () => {
     }
     assert.ok(readers.includes('agentVersionClaims.ts'));
   });
+
+  // A version served for months holds hundreds of runs per eval; loading
+  // them all to keep the newest grows every claims read and every promotion.
+  test('the speaking runs of a version are picked in SQL, one per eval', () => {
+    const source = readFileSync(`${LIB}agentVersionClaims.ts`, 'utf-8');
+    assert.match(source, /DISTINCT ON \(r\."eval_id"\)/);
+    assert.doesNotMatch(source, /EvalRun\.findAll\(\{\s*where: \{\s*agentPublicId/);
+  });
 });

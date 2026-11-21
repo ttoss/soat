@@ -4,6 +4,7 @@ import { db } from '../db';
 import { agents } from './agentAccessor';
 import { agentVersionStore } from './agentVersionSnapshot';
 import { type Page, pageOf } from './pagination';
+import { isPlainObject } from './plainObject';
 import { toResourceRef } from './resourceVersions';
 
 const log = createDebug('soat:agents');
@@ -61,37 +62,47 @@ export const speakingRun = async (args: {
   });
 };
 
-/** The speaking run of every eval in the agent's project, keyed by eval id. */
+/**
+ * The speaking run of every eval in the agent's project, keyed by eval id.
+ * Picked in SQL, one per eval: a version served for months holds hundreds of
+ * runs per eval, and only the newest of each is read.
+ */
 export const speakingRuns = async (args: {
   agent: AgentRef;
   version: number;
 }): Promise<Map<string, EvalRunRow>> => {
-  const runs = await db.EvalRun.findAll({
-    where: {
-      agentPublicId: args.agent.publicId,
-      agentVersion: args.version,
-      status: COMPLETED_RUN_STATUS,
-    },
-    include: [
-      {
-        model: db.Eval,
-        as: 'eval',
-        attributes: ['publicId'],
-        where: { projectId: args.agent.projectId },
-        required: true,
+  const [newest] = await db.sequelize.query(
+    `SELECT DISTINCT ON (r."eval_id") r."id"
+       FROM "eval_runs" r
+       JOIN "evals" e ON e."id" = r."eval_id"
+      WHERE r."agent_public_id" = :agentPublicId
+        AND r."agent_version" = :version
+        AND r."status" = :status
+        AND e."project_id" = :projectId
+      ORDER BY r."eval_id", r."created_at" DESC, r."id" DESC`,
+    {
+      replacements: {
+        agentPublicId: args.agent.publicId,
+        version: args.version,
+        status: COMPLETED_RUN_STATUS,
+        projectId: args.agent.projectId,
       },
-    ],
-    order: [
-      ['createdAt', 'DESC'],
-      ['id', 'DESC'],
-    ],
+    }
+  );
+  const ids = newest.flatMap((row) => {
+    return isPlainObject(row) && typeof row.id === 'number' ? [row.id] : [];
   });
+  if (ids.length === 0) return new Map();
 
-  const byEval = new Map<string, EvalRunRow>();
-  for (const run of runs) {
-    if (!byEval.has(run.eval.publicId)) byEval.set(run.eval.publicId, run);
-  }
-  return byEval;
+  const runs = await db.EvalRun.findAll({
+    where: { id: ids },
+    include: [{ model: db.Eval, as: 'eval', attributes: ['publicId'] }],
+  });
+  return new Map(
+    runs.map((run) => {
+      return [run.eval.publicId, run];
+    })
+  );
 };
 
 /** A claim as the claims read serves it and a promoted version records it. */
