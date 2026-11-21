@@ -67,6 +67,7 @@ import { evalRunDefinition } from './2026-11-15-evalRunDefinition';
 import { expireWorkWithoutAuthority } from './2026-11-16-expireWorkWithoutAuthority';
 import { evalRunCancelAction } from './2026-11-18-evalRunCancelAction';
 import { usageEventModelAliases } from './2026-11-18-usageEventModelAliases';
+import { evalRunDropPassed } from './2026-11-21-evalRunDropPassed';
 import { evalRunVerdict } from './2026-11-21-evalRunVerdict';
 
 /**
@@ -157,4 +158,5 @@ export const MIGRATIONS: Migration[] = [
   evalRunCancelAction,
   usageEventModelAliases,
   evalRunVerdict,
+  evalRunDropPassed,
 ];

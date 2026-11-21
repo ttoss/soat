@@ -164,45 +164,32 @@ const handOffRunningGeneration = async (args: {
   };
 };
 
-const CALL_FAILED = Symbol('callFailed');
-
-type CallFailure = { [CALL_FAILED]: unknown };
-
-const isCallFailure = (value: unknown): value is CallFailure => {
-  return typeof value === 'object' && value !== null && CALL_FAILED in value;
-};
-
 /**
  * Past the bound, the generation `key` names once it is recorded. The bound
  * can pass while the call is still writing that record, so a missing row is
  * waited for, not taken as a timeout; the call settling first answers with
- * its own result or error. `null` when the parent is gone.
+ * its own result or error.
  */
 const handOffWhenRecorded = async <T>(args: {
   key: string;
   call: HandoffCall;
   pending: Promise<T>;
-}): Promise<T | Record<string, unknown> | null> => {
+}): Promise<T | Record<string, unknown>> => {
   const parent = await db.Generation.findOne({
     where: { publicId: args.call.generationId },
     attributes: ['projectId'],
+    rejectOnEmpty: true,
   });
-  if (!parent) return null;
   const projectId = parent.projectId as number;
-  const outcome = args.pending.catch((error: unknown): CallFailure => {
-    return { [CALL_FAILED]: error };
-  });
   for (;;) {
     const watch = whenGenerationRecorded({ idempotencyKey: args.key });
     try {
       const child = await handOffRunningGeneration({ ...args, projectId });
       if (child) return child;
       log('handOffWhenRecorded: key=%s not recorded yet', args.key);
-      // `undefined` is the record announced: read it again.
-      const first = await Promise.race([watch.recorded, outcome]);
-      if (first === undefined) continue;
-      if (isCallFailure(first)) throw first[CALL_FAILED];
-      return first;
+      // An announced record reads `undefined`: look it up again.
+      const settled = await Promise.race([watch.recorded, args.pending]);
+      if (settled !== undefined) return settled;
     } finally {
       watch.cancel();
     }
@@ -252,13 +239,9 @@ export const handoffFor = (args: {
         promise,
         ms: toolCallTimeoutMs(),
         label: `Builtin action '${args.def.name}'`,
-      }).catch(async (error: unknown) => {
-        const handedOff =
-          key && call && isTimeoutError({ error })
-            ? await handOffWhenRecorded({ key, call, pending: promise })
-            : null;
-        if (handedOff !== null) return handedOff;
-        throw error;
+      }).catch((error: unknown) => {
+        if (!key || !call || !isTimeoutError({ error })) throw error;
+        return handOffWhenRecorded({ key, call, pending: promise });
       });
     },
   };
