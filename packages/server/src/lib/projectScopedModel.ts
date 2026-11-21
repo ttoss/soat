@@ -12,7 +12,6 @@ import type { LanguageModel } from 'ai';
 import createDebug from 'debug';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import { buildModel } from './agentModel';
 import {
@@ -20,6 +19,7 @@ import {
   type CompletionAttribution,
   resolveConsumerModelRoute,
 } from './modelRoutes';
+import { aiProviderReferences } from './resourceReferences';
 
 const log = createDebug('soat:model');
 
@@ -73,8 +73,10 @@ export const resolveProjectScopedModel = async (args: {
     );
   }
 
-  const provider = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId, projectId: args.projectId },
+  const provider = await aiProviderReferences.find({
+    id: args.aiProviderId,
+    projectId: args.projectId,
+    reach: 'project',
   });
   if (!provider) {
     throw new DomainError(
