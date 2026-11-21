@@ -11,6 +11,7 @@ import { secretRefIds } from './secretUse';
 import type { StartableType } from './startActions';
 import { serverSideToolProblem } from './toolsCallDispatch';
 import { validateTriggerEventFilter } from './triggerEventFilter';
+import { assertCronMeetsIntervalFloor } from './triggerIntervalFloor';
 import { assertWriterHolds, startOf, type Writer } from './writerRule';
 
 export const TRIGGER_TYPES = [
@@ -281,8 +282,8 @@ export const resolveAndValidateTarget = async (args: {
 };
 
 /**
- * Runs the full config validation for a trigger (shape → cron → target →
- * event reads). Shared by create and update so the rules live in one place.
+ * Runs the full config validation for a trigger (shape → cron → the
+ * project's interval floor → target → event reads). Shared by create and update so the rules live in one place.
  */
 export const assertTriggerConfigValid = async (args: {
   type: string;
@@ -308,6 +309,10 @@ export const assertTriggerConfigValid = async (args: {
   });
   if (args.type === 'schedule' && args.cron) {
     validateCronExpression(args.cron);
+    await assertCronMeetsIntervalFloor({
+      projectId: args.projectId,
+      cron: args.cron,
+    });
   }
   if (args.validateTarget !== false) {
     await resolveAndValidateTarget({

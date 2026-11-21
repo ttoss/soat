@@ -1225,6 +1225,16 @@
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
       "routes": []
     },
+    "TRIGGER_INTERVAL_BELOW_FLOOR": {
+      "http_status": 400,
+      "hint": "Space the `cron`'s firings at least `meta.min_trigger_interval_seconds` apart, or ask an admin to lower the floor with `PATCH /api/v1/projects/{project_id}`.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/projects/{project_id}"
+        }
+      ]
+    },
     "TRIGGER_NOT_ACTIVE": {
       "http_status": 409,
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
