@@ -139,7 +139,7 @@ const toWireBody = (args: {
     body.destroy();
     throw new DomainError(
       'TOOL_CALL_NOT_SUPPORTED',
-      `Action ${args.method} ${args.path} streams binary content, which cannot be returned as a tool result. Use the base64 variant of the action instead.`
+      `Action ${args.method} ${args.path} streams binary content, which cannot be returned as a tool result; its base64 variant can.`
     );
   }
 

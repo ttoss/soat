@@ -249,7 +249,7 @@ export const getActiveStorageProvider = (): FileStorageProvider => {
   if (provider === 's3') return buildS3Provider();
   throw new DomainError(
     'FILE_STORAGE_MISCONFIGURED',
-    `Unknown FILES_STORAGE_PROVIDER '${provider}'. Use 'local' or 's3'.`
+    `Unknown FILES_STORAGE_PROVIDER '${provider}': the providers are 'local' and 's3'.`
   );
 };
 

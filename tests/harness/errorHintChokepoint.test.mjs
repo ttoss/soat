@@ -45,11 +45,23 @@ describe('error hint chokepoint', () => {
    * name routes as tokens (`errors/hintRoutes.ts`); a literal path would name
    * a route the deployment does not serve.
    */
-  test('no hint names a route as a literal /api/v1/ path', () => {
+  test('no hint names a route or the OpenAPI document as a literal path', () => {
     const hints = code(path.join(srcDir, 'errors/resolutions.ts'));
     const literal = hints.split('\n').filter((line) => {
-      return line.includes('/api/v1/');
+      return line.includes('/api/v1/') || line.includes('openapi.json');
     });
     assert.deepEqual(literal, []);
+  });
+
+  /**
+   * `omit_meta` holds on every surface only while each writer of an error's
+   * `meta` filters it through `servedErrorMeta`.
+   */
+  test('every writer of error meta filters it through servedErrorMeta', () => {
+    const writers = ['errors/errorBody.ts', 'lib/storedError.ts'];
+    const missing = writers.filter((file) => {
+      return !/\bservedErrorMeta\(/.test(code(path.join(srcDir, file)));
+    });
+    assert.deepEqual(missing, []);
   });
 });

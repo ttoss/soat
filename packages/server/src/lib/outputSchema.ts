@@ -99,6 +99,6 @@ export const assertStreamingSupportsOutputSchema = (
   if (!outputSchema) return;
   throw new DomainError(
     'OUTPUT_SCHEMA_STREAMING_UNSUPPORTED',
-    'Streaming generation does not support output_schema. Set stream to false, or remove output_schema from the agent.'
+    'Streaming generation does not support output_schema.'
   );
 };

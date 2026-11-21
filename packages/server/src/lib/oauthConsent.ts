@@ -42,7 +42,7 @@ export const buildConsentScopes = (selection: ConsentSelection): string[] => {
     if (modules.length === 0) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        'Select at least one module to grant.'
+        'The consent grants no module.'
       );
     }
     const known = listModuleNames();
@@ -65,7 +65,7 @@ export const buildConsentScopes = (selection: ConsentSelection): string[] => {
   if (actions.length === 0) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'Select at least one permission to grant.'
+      'The consent grants no permission.'
     );
   }
   const known = listAllActions();

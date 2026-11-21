@@ -200,7 +200,7 @@ const assertNoDeciders = async (args: {
   if (deciderCount === 0) return;
   throw new DomainError(
     'AGENT_HAS_DEPENDENTS',
-    `Agent '${args.publicId}' is the agent of ${String(deciderCount)} decider(s); delete or repoint them first.`,
+    `Agent '${args.publicId}' is the agent of ${String(deciderCount)} decider(s), which block its deletion.`,
     { decider_count: deciderCount }
   );
 };

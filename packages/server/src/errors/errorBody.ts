@@ -1,4 +1,5 @@
 import type { ErrorCode } from './codes';
+import { omittedErrorMeta } from './hintOverrides';
 import { docsUrlFor, resolutionFor } from './resolutions';
 
 const envFlag = (name: string): boolean => {
@@ -23,6 +24,24 @@ export const errorDocsUrlOmitted = (): boolean => {
 };
 
 /**
+ * `meta` without the keys the deployment omits for `code`
+ * (`SOAT_ERROR_HINTS_CONFIG`'s `omit_meta`): the one filter every surface that
+ * carries an error's `meta` (a response body, a stored error) goes through.
+ */
+export const servedErrorMeta = (args: {
+  code: string;
+  meta: Record<string, unknown> | undefined;
+}): Record<string, unknown> | undefined => {
+  const omitted = omittedErrorMeta({ code: args.code });
+  if (args.meta === undefined || omitted.length === 0) return args.meta;
+  return Object.fromEntries(
+    Object.entries(args.meta).filter(([key]) => {
+      return !omitted.includes(key);
+    })
+  );
+};
+
+/**
  * The response body, in the one shape the API has: `{ error: { code, message,
  * hint?, docs_url?, meta? } }`. The only writer of `hint` and `docs_url`
  * (`tests/harness/errorHintChokepoint.test.mjs`), so every surface that relays
@@ -36,6 +55,7 @@ export const errorBody = (args: {
   message: string;
   meta?: Record<string, unknown>;
 }) => {
+  const meta = servedErrorMeta({ code: args.code, meta: args.meta });
   return {
     error: {
       code: args.wireCode ?? args.code,
@@ -44,7 +64,7 @@ export const errorBody = (args: {
       ...(!errorDocsUrlOmitted() && {
         docs_url: docsUrlFor({ code: args.code }),
       }),
-      ...(args.meta !== undefined && { meta: args.meta }),
+      ...(meta !== undefined && { meta }),
     },
   };
 };

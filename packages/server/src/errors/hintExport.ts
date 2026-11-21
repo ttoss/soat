@@ -1,5 +1,10 @@
 import { ERROR_CODES, type ErrorCode } from './codes';
-import { type HintRoute, hintRoutes, renderHint } from './hintRoutes';
+import {
+  DEFAULT_OPENAPI_DOCUMENT,
+  type HintRoute,
+  hintRoutes,
+  renderHint,
+} from './hintRoutes';
 import { ERROR_RESOLUTIONS, STATUS_RESOLUTIONS } from './resolutions';
 
 /**
@@ -15,7 +20,11 @@ type ExportedHint = { hint: string; routes: HintRoute[] };
 
 const exported = (template: string): ExportedHint => {
   return {
-    hint: renderHint({ template, prefix: EXPORT_ROUTE_PREFIX }),
+    hint: renderHint({
+      template,
+      prefix: EXPORT_ROUTE_PREFIX,
+      openapiDocument: DEFAULT_OPENAPI_DOCUMENT,
+    }),
     routes: hintRoutes({ template }),
   };
 };

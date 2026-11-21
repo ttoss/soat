@@ -117,7 +117,7 @@ export const insertMessage = async (args: {
     );
     throw new DomainError(
       'CONVERSATION_POSITION_CONFLICT',
-      'Another write took this message position at the same time. Nothing was written; retry the write.'
+      'Another write took this message position at the same time; nothing was written.'
     );
   }
 };

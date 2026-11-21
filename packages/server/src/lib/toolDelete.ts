@@ -40,7 +40,7 @@ export const deleteTool = async (args: {
   if ((acceptedShareCount > 0 || ingestionRuleCount > 0) && !args.force) {
     throw new DomainError(
       'TOOL_HAS_DEPENDENTS',
-      `Tool '${tool.publicId}' is shared with ${acceptedShareCount} project(s) that accepted it and converts for ${ingestionRuleCount} ingestion rule(s); retry with force=true to revoke the shares and leave the rules without a converter.`,
+      `Tool '${tool.publicId}' is shared with ${acceptedShareCount} project(s) that accepted it and converts for ${ingestionRuleCount} ingestion rule(s); force=true revokes the shares and leaves the rules without a converter.`,
       {
         accepted_share_count: acceptedShareCount,
         ingestion_rule_count: ingestionRuleCount,
