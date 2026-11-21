@@ -101,7 +101,7 @@ describe('Agent version claims — live evidence', () => {
     agentId: string;
     version: number;
     count: number;
-    status?: 'completed' | 'failed';
+    status?: 'completed' | 'failed' | 'running' | 'requires_action';
     source?: string | null;
     startedAt?: Date;
   }): Promise<string[]> => {
@@ -253,11 +253,11 @@ describe('Agent version claims — live evidence', () => {
       const agentId = await createTwoVersionAgent();
       const evidence = {
         live: {
-          window_days: 14,
+          window: '30d',
           min_served_generations: 2,
           guardrail_tripwires: { max: 0 },
           approval_rejections: { max_rate: 0.05, min_decided: 20 },
-          run_failures: { max_rate: 0.01 },
+          generation_failures: { max_rate: 0.01 },
         },
         max_run_age_days: 30,
       };
@@ -273,14 +273,11 @@ describe('Agent version claims — live evidence', () => {
     });
 
     test.each([
-      [
-        'live without window_days',
-        { live: { guardrail_tripwires: { max: 0 } } },
-      ],
-      ['an unknown live rule', { live: { window_days: 7, exceptions: {} } }],
+      ['live without window', { live: { guardrail_tripwires: { max: 0 } } }],
+      ['an unknown live rule', { live: { window: '7d', exceptions: {} } }],
       [
         'a rejection rate without min_decided',
-        { live: { window_days: 7, approval_rejections: { max_rate: 0.1 } } },
+        { live: { window: '7d', approval_rejections: { max_rate: 0.1 } } },
       ],
       ['max_run_age_days 0', { max_run_age_days: 0 }],
     ])('is refused with %s', async (_label, evidence) => {
@@ -295,7 +292,7 @@ describe('Agent version claims — live evidence', () => {
     test('a tripwire on a served generation refutes the claim, not the run', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, guardrail_tripwires: { max: 0 } },
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
       });
       const created = await run({ evalId, version: 2 });
       const [served] = await serve({ agentId, version: 2, count: 1 });
@@ -316,7 +313,7 @@ describe('Agent version claims — live evidence', () => {
     test("the rules are the run's: clearing the eval's evidence after the run changes nothing", async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, guardrail_tripwires: { max: 0 } },
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
       });
       await run({ evalId, version: 2 });
       const [served] = await serve({ agentId, version: 2, count: 1 });
@@ -330,10 +327,10 @@ describe('Agent version claims — live evidence', () => {
       expect(claim?.verdict).toBe('refuted');
     });
 
-    test('an eval run, another version and a generation before the window are not served volume', async () => {
+    test('an eval run, another version, a generation before the window and one still in flight are not served volume', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, min_served_generations: 2 },
+        live: { window: '7d', min_served_generations: 2 },
       });
       await run({ evalId, version: 2 });
       await serve({ agentId, version: 2, count: 1 });
@@ -345,6 +342,8 @@ describe('Agent version claims — live evidence', () => {
         count: 3,
         startedAt: new Date(Date.now() - 8 * DAY_MS),
       });
+      await serve({ agentId, version: 2, count: 3, status: 'running' });
+      await serve({ agentId, version: 2, count: 3, status: 'requires_action' });
 
       const claim = await claimOf(agentId, 2, evalId);
       expect(claim?.verdict).toBe('insufficient');
@@ -356,7 +355,7 @@ describe('Agent version claims — live evidence', () => {
     test('a tripwire on another version does not count', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, guardrail_tripwires: { max: 0 } },
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
       });
       await run({ evalId, version: 2 });
       await serve({ agentId, version: 2, count: 1 });
@@ -366,27 +365,29 @@ describe('Agent version claims — live evidence', () => {
       expect((await claimOf(agentId, 2, evalId))?.verdict).toBe('supported');
     });
 
-    test('failed served generations refute a run_failures rule', async () => {
+    test('failed served generations refute a generation_failures rule', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, run_failures: { max_rate: 0.1 } },
+        live: { window: '7d', generation_failures: { max_rate: 0.1 } },
       });
       await run({ evalId, version: 2 });
       await serve({ agentId, version: 2, count: 1 });
       await serve({ agentId, version: 2, count: 1, status: 'failed' });
 
       const claim = await claimOf(agentId, 2, evalId);
-      expect(liveReason(claim!.verdict_reasons, 'run_failures')).toMatchObject({
+      expect(
+        liveReason(claim!.verdict_reasons, 'generation_failures')
+      ).toMatchObject({
         verdict: 'refuted',
       });
     });
 
-    test('rejected approvals on served generations refute an approval_rejections rule', async () => {
+    test('rejected over decided approvals refute an approval_rejections rule; pending and expired are not decided', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
         live: {
-          window_days: 7,
-          approval_rejections: { max_rate: 0.5, min_decided: 2 },
+          window: '7d',
+          approval_rejections: { max_rate: 0.4, min_decided: 2 },
         },
       });
       await run({ evalId, version: 2 });
@@ -396,8 +397,9 @@ describe('Agent version claims — live evidence', () => {
         count: 3,
       });
       await approval(first!, 'rejected');
-      await approval(second!, 'rejected');
+      await approval(second!, 'approved');
       await approval(third!, 'pending');
+      await approval(third!, 'expired');
 
       const claim = await claimOf(agentId, 2, evalId);
       expect(
@@ -453,7 +455,7 @@ describe('Agent version claims — live evidence', () => {
     test('a gate whose canary trips a guardrail blocks promotion', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, guardrail_tripwires: { max: 0 } },
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
       });
       await run({ evalId, version: 2 });
       const [served] = await serve({ agentId, version: 2, count: 1 });
@@ -474,7 +476,7 @@ describe('Agent version claims — live evidence', () => {
     test('a stable claim the canary loses in production blocks promotion', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, guardrail_tripwires: { max: 0 } },
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
       });
       await run({ evalId, version: 1 });
       await run({ evalId, version: 2 });
@@ -494,7 +496,7 @@ describe('Agent version claims — live evidence', () => {
     test('records the claims a promotion stood on, unmoved by a later run', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
-        live: { window_days: 7, min_served_generations: 1 },
+        live: { window: '7d', min_served_generations: 1 },
       });
       const canaryRun = await run({ evalId, version: 2 });
       await serve({ agentId, version: 2, count: 1 });

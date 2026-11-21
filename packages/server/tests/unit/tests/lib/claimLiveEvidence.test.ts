@@ -43,38 +43,38 @@ describe('claimLiveEvidence', () => {
   describe('parseLiveEvidence', () => {
     test('reads every rule', () => {
       const live = {
-        window_days: 14,
+        window: '30d',
         min_served_generations: 200,
         guardrail_tripwires: { max: 0 },
         approval_rejections: { max_rate: 0.05, min_decided: 20 },
-        run_failures: { max_rate: 0.01 },
+        generation_failures: { max_rate: 0.01 },
       };
       expect(parseLiveEvidence(live)).toEqual({ live });
     });
 
     test.each([
       ['a non-object', 'live'],
-      ['no window_days', { guardrail_tripwires: { max: 0 } }],
-      ['window_days 0', { window_days: 0 }],
-      ['a fractional window', { window_days: 1.5 }],
-      ['an unknown rule', { window_days: 7, exceptions: { max: 0 } }],
+      ['no window', { guardrail_tripwires: { max: 0 } }],
+      ['a window the platform does not serve', { window: '14d' }],
+      ['a numeric window', { window: 7 }],
+      ['an unknown rule', { window: '7d', exceptions: { max: 0 } }],
       [
         'a negative tripwire max',
-        { window_days: 7, guardrail_tripwires: { max: -1 } },
+        { window: '7d', guardrail_tripwires: { max: -1 } },
       ],
       [
         'an unknown key inside a rule',
-        { window_days: 7, guardrail_tripwires: { max: 0, min: 1 } },
+        { window: '7d', guardrail_tripwires: { max: 0, min: 1 } },
       ],
-      ['a rate above 1', { window_days: 7, run_failures: { max_rate: 1.5 } }],
+      [
+        'a rate above 1',
+        { window: '7d', generation_failures: { max_rate: 1.5 } },
+      ],
       [
         'a rejection rate without min_decided',
-        { window_days: 7, approval_rejections: { max_rate: 0.1 } },
+        { window: '7d', approval_rejections: { max_rate: 0.1 } },
       ],
-      [
-        'min_served_generations 0',
-        { window_days: 7, min_served_generations: 0 },
-      ],
+      ['min_served_generations 0', { window: '7d', min_served_generations: 0 }],
     ])('refuses %s', (_label, value) => {
       expect(parseLiveEvidence(value)).toEqual({
         problem: expect.stringContaining('evidence.live'),
@@ -85,7 +85,7 @@ describe('claimLiveEvidence', () => {
   describe('liveReasons', () => {
     test('one reason per declared rule, none for an undeclared one', () => {
       const parsed = parseLiveEvidence({
-        window_days: 7,
+        window: '7d',
         guardrail_tripwires: { max: 0 },
       });
       if (!('live' in parsed)) throw new Error(parsed.problem);
@@ -104,7 +104,7 @@ describe('claimLiveEvidence', () => {
     ])('min_served_generations: %s', (_label, served, verdict) => {
       expect(
         verdictOf({
-          live: { window_days: 7, min_served_generations: 200 },
+          live: { window: '7d', min_served_generations: 200 },
           counts: counts({ served }),
           rule: 'min_served_generations',
         })
@@ -118,7 +118,7 @@ describe('claimLiveEvidence', () => {
     ])('guardrail_tripwires: %s', (_label, overrides, verdict) => {
       expect(
         verdictOf({
-          live: { window_days: 7, guardrail_tripwires: { max: 0 } },
+          live: { window: '7d', guardrail_tripwires: { max: 0 } },
           counts: counts(overrides),
           rule: 'guardrail_tripwires',
         })
@@ -133,7 +133,7 @@ describe('claimLiveEvidence', () => {
       expect(
         verdictOf({
           live: {
-            window_days: 7,
+            window: '7d',
             approval_rejections: { max_rate: 0.05, min_decided: 20 },
           },
           counts: counts(overrides),
@@ -146,12 +146,12 @@ describe('claimLiveEvidence', () => {
       ['a rate above the max', { failed: 2 }, 'refuted'],
       ['a rate at the max', { failed: 1 }, 'supported'],
       ['nothing served', { served: 0 }, 'insufficient'],
-    ])('run_failures: %s', (_label, overrides, verdict) => {
+    ])('generation_failures: %s', (_label, overrides, verdict) => {
       expect(
         verdictOf({
-          live: { window_days: 7, run_failures: { max_rate: 0.01 } },
+          live: { window: '7d', generation_failures: { max_rate: 0.01 } },
           counts: counts(overrides),
-          rule: 'run_failures',
+          rule: 'generation_failures',
         })
       ).toBe(verdict);
     });
@@ -201,6 +201,12 @@ describe('claimLiveEvidence', () => {
       expect(ageReason({ maxDays: 30, finishedAt: null, now })?.verdict).toBe(
         'insufficient'
       );
+    });
+
+    test('a run exactly at the limit is supported', () => {
+      expect(
+        ageReason({ maxDays: 30, finishedAt: daysAgo(30), now })?.verdict
+      ).toBe('supported');
     });
 
     test('a run within the limit is supported', () => {

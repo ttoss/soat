@@ -47,3 +47,39 @@ describe('the claim verdict has one home', () => {
     assert.doesNotMatch(source, /EvalRun\.findAll\(\{\s*where: \{\s*agentPublicId/);
   });
 });
+
+/**
+ * The rolling windows production is counted over are stated once,
+ * `rollingWindows.ts`: a guardrail's `runtime.*` keys and an eval's
+ * `evidence.live` both name a window from it, and the spec lists the same.
+ */
+describe('the rolling windows are stated once', () => {
+  const windows = () => {
+    const source = readFileSync(`${LIB}rollingWindows.ts`, 'utf-8');
+    const [, list] = /ROLLING_WINDOWS = \[([^\]]+)\]/.exec(source);
+    return list.match(/'[^']+'/g).map((token) => {
+      return token.slice(1, -1);
+    });
+  };
+
+  test('no other module spells a window token', () => {
+    const spellers = libFiles().filter((file) => {
+      return /'30d'/.test(readFileSync(`${LIB}${file}`, 'utf-8'));
+    });
+    assert.deepEqual(spellers, ['rollingWindows.ts']);
+  });
+
+  test('evidence.live.window lists the same windows in the spec', () => {
+    const spec = readFileSync(
+      `${ROOT}packages/server/src/rest/openapi/v1/evaluations.yaml`,
+      'utf-8'
+    );
+    const [, list] = /window:\s+type: string\s+enum: \[([^\]]+)\]/.exec(spec);
+    assert.deepEqual(
+      list.match(/'[^']+'/g).map((token) => {
+        return token.slice(1, -1);
+      }),
+      windows()
+    );
+  });
+});

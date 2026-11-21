@@ -2051,18 +2051,21 @@ components:
         live:
           type: object
           additionalProperties: false
-          required: [window_days]
+          required: [window]
           description: >-
-            Rules over the agent version's production traffic in the last
-            `window_days`, read by its claim's verdict and never by the run's:
+            Rules over the agent version's production traffic in a rolling
+            `window`, read by its claim's verdict and never by the run's:
             generations of that version that finished (`completed` or
             `failed`), not started by an eval run, and the guardrail
             evaluations and approvals linked to them.
           properties:
-            window_days:
-              type: integer
-              minimum: 1
-              example: 14
+            window:
+              type: string
+              enum: ['1h', '24h', '7d', '30d']
+              description: >-
+                The rolling window, ending at the read. The same windows a
+                guardrail's `runtime.*` keys name.
+              example: 7d
             min_served_generations:
               type: integer
               minimum: 1
@@ -2097,7 +2100,7 @@ components:
                   type: integer
                   minimum: 1
                   example: 20
-            run_failures:
+            generation_failures:
               type: object
               additionalProperties: false
               required: [max_rate]

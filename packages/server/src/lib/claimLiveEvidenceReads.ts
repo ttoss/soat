@@ -3,10 +3,9 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { type LiveCounts, liveCountsOf } from './claimLiveEvidence';
 import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
+import { type RollingWindow, rollingWindowStart } from './rollingWindows';
 
 const log = createDebug('soat:agents');
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** A generation that reached one of these served traffic; the rest is in flight. */
 const SERVED_STATUSES = ['completed', 'failed'];
@@ -15,7 +14,7 @@ const SERVED_STATUSES = ['completed', 'failed'];
 const DECIDED_STATUSES = ['approved', 'rejected'];
 
 /**
- * One agent version's production over the last `windowDays`: the generations
+ * One agent version's production over a rolling `window`: the generations
  * of that version that finished, started by anything but an eval run, and
  * the guardrail tripwires and approvals linked to them by generation id. A
  * row with no generation link says nothing about a version and is not read.
@@ -23,14 +22,14 @@ const DECIDED_STATUSES = ['approved', 'rejected'];
 export const readLiveCounts = async (args: {
   agentDbId: number;
   version: number;
-  windowDays: number;
+  window: RollingWindow;
   now: Date;
 }): Promise<LiveCounts> => {
   log(
-    'readLiveCounts: agentDbId=%d version=%d windowDays=%d',
+    'readLiveCounts: agentDbId=%d version=%d window=%s',
     args.agentDbId,
     args.version,
-    args.windowDays
+    args.window
   );
 
   const [rows] = await db.sequelize.query(
@@ -64,7 +63,7 @@ export const readLiveCounts = async (args: {
         version: args.version,
         servedStatuses: SERVED_STATUSES,
         decidedStatuses: DECIDED_STATUSES,
-        since: new Date(args.now.getTime() - args.windowDays * DAY_MS),
+        since: rollingWindowStart({ window: args.window, now: args.now }),
         evalSource: EVAL_USAGE_SOURCE,
       },
     }

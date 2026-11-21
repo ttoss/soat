@@ -16,6 +16,7 @@ import {
 import { type Page, pageOf } from './pagination';
 import { isPlainObject } from './plainObject';
 import { toResourceRef } from './resourceVersions';
+import type { RollingWindow } from './rollingWindows';
 
 const log = createDebug('soat:agents');
 
@@ -123,7 +124,7 @@ export type ClaimReading = {
   agent: AgentRef;
   version: number;
   now: Date;
-  counts: (windowDays: number) => Promise<LiveCounts>;
+  counts: (window: RollingWindow) => Promise<LiveCounts>;
 };
 
 export const claimReading = (args: {
@@ -131,21 +132,21 @@ export const claimReading = (args: {
   version: number;
 }): ClaimReading => {
   const now = new Date();
-  const byWindow = new Map<number, Promise<LiveCounts>>();
+  const byWindow = new Map<RollingWindow, Promise<LiveCounts>>();
   return {
     agent: args.agent,
     version: args.version,
     now,
-    counts: (windowDays) => {
+    counts: (window) => {
       const read =
-        byWindow.get(windowDays) ??
+        byWindow.get(window) ??
         readLiveCounts({
           agentDbId: args.agent.dbId,
           version: args.version,
-          windowDays,
+          window,
           now,
         });
-      byWindow.set(windowDays, read);
+      byWindow.set(window, read);
       return read;
     },
   };
@@ -162,7 +163,7 @@ const claimSideReasons = async (args: {
     reasons.push(
       ...liveReasons({
         live: evidence.live,
-        counts: await args.reading.counts(evidence.live.window_days),
+        counts: await args.reading.counts(evidence.live.window),
       })
     );
   }

@@ -9,13 +9,18 @@
  */
 import type { Verdict, VerdictReason } from './evaluationVerdict';
 import { isPlainObject } from './plainObject';
+import {
+  isRollingWindow,
+  ROLLING_WINDOWS,
+  type RollingWindow,
+} from './rollingWindows';
 
 export type LiveEvidence = {
-  window_days: number;
+  window: RollingWindow;
   min_served_generations?: number;
   guardrail_tripwires?: { max: number };
   approval_rejections?: { max_rate: number; min_decided: number };
-  run_failures?: { max_rate: number };
+  generation_failures?: { max_rate: number };
 };
 
 /** One version's production over a window, as the claims read counts it. */
@@ -59,11 +64,16 @@ const RATE: FieldCheck = {
 const RULE_FIELDS: Record<string, Record<string, FieldCheck>> = {
   guardrail_tripwires: { max: COUNT },
   approval_rejections: { max_rate: RATE, min_decided: POSITIVE },
-  run_failures: { max_rate: RATE },
+  generation_failures: { max_rate: RATE },
+};
+
+const WINDOW: FieldCheck = {
+  test: isRollingWindow,
+  expects: `one of ${ROLLING_WINDOWS.join(', ')}`,
 };
 
 const SCALAR_FIELDS: Record<string, FieldCheck> = {
-  window_days: POSITIVE,
+  window: WINDOW,
   min_served_generations: POSITIVE,
 };
 
@@ -90,9 +100,7 @@ const liveProblem = (live: Record<string, unknown>): string | null => {
     return !(key in RULE_FIELDS) && !(key in SCALAR_FIELDS);
   });
   if (extra !== undefined) return `evidence.live.${extra} is not a known rule.`;
-  if (live.window_days === undefined) {
-    return 'evidence.live.window_days is required.';
-  }
+  if (live.window === undefined) return 'evidence.live.window is required.';
   for (const [key, check] of Object.entries(SCALAR_FIELDS)) {
     if (live[key] !== undefined && !check.test(live[key])) {
       return `evidence.live.${key} must be ${check.expects}.`;
@@ -250,8 +258,11 @@ export const liveReasons = (args: {
       judgeRejections(live.approval_rejections, counts),
     ]);
   }
-  if (live.run_failures !== undefined) {
-    judged.push(['run_failures', judgeFailures(live.run_failures, counts)]);
+  if (live.generation_failures !== undefined) {
+    judged.push([
+      'generation_failures',
+      judgeFailures(live.generation_failures, counts),
+    ]);
   }
   return judged.map(([name, judgement]) => {
     return { scope: { kind: 'live', name }, ...judgement };

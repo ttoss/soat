@@ -586,7 +586,8 @@ An unknown key, `required_groups` without `group_by`, an empty or repeated name,
 clearing `group_by` while groups are required are `400 VALIDATION_FAILED`.
 
 `live` reads the generations of the agent version that finished (`completed` or `failed`) in
-the last `window_days`, excluding those an eval run started, and the guardrail evaluations and
+the rolling `window` (`1h`, `24h`, `7d` or `30d`, the windows a guardrail's
+[`runtime.*` keys](./guardrails.md) name), excluding those an eval run started, and the guardrail evaluations and
 approvals linked to them by `generation_id`. A row with no generation link is not read. Each
 declared rule adds a reason with `scope: { kind: "live", name: <rule> }`:
 
@@ -595,24 +596,24 @@ declared rule adds a reason with `scope: { kind: "live", name: <rule> }`:
 | `min_served_generations` | never | fewer served generations than the minimum |
 | `guardrail_tripwires: { max }` | more tripwires than `max` | nothing served |
 | `approval_rejections: { max_rate, min_decided }` | rejected over decided (`approved` or `rejected`) above `max_rate` | fewer than `min_decided` decided |
-| `run_failures: { max_rate }` | failed over served above `max_rate` | nothing served |
+| `generation_failures: { max_rate }` | failed over served above `max_rate` | nothing served |
 
 ```json
 {
   "evidence": {
     "live": {
-      "window_days": 14,
+      "window": "7d",
       "min_served_generations": 200,
       "guardrail_tripwires": { "max": 0 },
       "approval_rejections": { "max_rate": 0.05, "min_decided": 20 },
-      "run_failures": { "max_rate": 0.01 }
+      "generation_failures": { "max_rate": 0.01 }
     },
     "max_run_age_days": 30
   }
 }
 ```
 
-`window_days` is required and a positive integer; a rate is between 0 and 1; a rate rule on
+`window` is required; a rate is between 0 and 1; a rate rule on
 approvals needs `min_decided`. A run settles on its items alone: `live` and
 `max_run_age_days` never move `EvalRun.verdict`.
 
