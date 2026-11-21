@@ -14,8 +14,10 @@ export const buildUnaliasedModel = (args: {
     aiProvider: {
       projectPublicId: 'proj_tenant',
       ...args,
+      publicId: 'aip_unaliased',
       modelAliases: null,
       modelAliasesOnly: false,
+      grantee: null,
     },
     model: args.model,
   });

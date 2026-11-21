@@ -15,8 +15,12 @@ import {
 } from './aiProviderModelAliases';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
-import { aiProviderReferences } from './resourceReferences';
+import {
+  aiProviderReferences,
+  type ReferenceReach,
+} from './resourceReferences';
 import { assertSecretUseAllowed } from './secretUse';
+import { countAcceptedShares, revokeResourceShares } from './shareLifecycle';
 
 const getAiProviderIncludes = () => {
   return [
@@ -289,7 +293,7 @@ export const assertModelOfferedByProvider = async (args: {
   const row = await aiProviderReferences.find({
     id: args.aiProviderId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
   if (row) assertModelOffered({ aiProvider: row, model: args.model });
 };
@@ -308,11 +312,14 @@ const collectAiProviderDependents = async (args: {
 }) => {
   const aiProviderId = args.aiProviderId;
   const where = { aiProviderId };
+  // A grantee's chats and agents are not the publisher's to see or repoint:
+  // the accepted shares stand for them, and `force` revokes those.
+  const ownWhere = { aiProviderId, projectId: args.projectId };
   const attributes = ['publicId'];
 
   const [chats, agents, modelRoutes] = await Promise.all([
-    db.Chat.findAll({ where, attributes }),
-    db.Agent.findAll({ where, attributes }),
+    db.Chat.findAll({ where: ownWhere, attributes }),
+    db.Agent.findAll({ where: ownWhere, attributes }),
     // A route target names its provider inside JSONB, so no FK protects it —
     // the reference is live all the same (see `modelRouteReferences`).
     findModelRoutesReferencingProvider({
@@ -321,13 +328,18 @@ const collectAiProviderDependents = async (args: {
     }),
   ]);
 
-  const [priceOverrideCount, usageEventCount] = await Promise.all([
-    db.PriceBook.count({ where }),
-    db.UsageEvent.count({ where }),
-  ]);
+  const [priceOverrideCount, usageEventCount, acceptedShareCount] =
+    await Promise.all([
+      db.PriceBook.count({ where }),
+      db.UsageEvent.count({ where }),
+      countAcceptedShares({
+        resourceType: 'aiProvider',
+        resourceId: args.aiProviderPublicId,
+      }),
+    ]);
 
   const hardCount = chats.length + agents.length + modelRoutes.length;
-  const softCount = priceOverrideCount + usageEventCount;
+  const softCount = priceOverrideCount + usageEventCount + acceptedShareCount;
 
   const sample = (rows: { publicId: string }[]): string[] => {
     return rows.slice(0, DEPENDENT_ID_SAMPLE_CAP).map((r) => {
@@ -344,6 +356,7 @@ const collectAiProviderDependents = async (args: {
     model_route_ids: sample(modelRoutes),
     price_override_count: priceOverrideCount,
     usage_event_count: usageEventCount,
+    accepted_share_count: acceptedShareCount,
     // True only when the block is caused solely by soft dependents, i.e. a
     // `force=true` retry would succeed. Hard references make this false.
     forcible: hardCount === 0,
@@ -391,10 +404,15 @@ export const deleteAiProvider = async (args: {
   if (softCount > 0 && !args.force) {
     throw new DomainError(
       'AI_PROVIDER_HAS_DEPENDENTS',
-      `AI provider '${args.id}' has ${meta.price_override_count} price override(s) and ${meta.usage_event_count} usage record(s), which block its deletion without force=true.`,
+      `AI provider '${args.id}' has ${meta.price_override_count} price override(s), ${meta.usage_event_count} usage record(s) and ${meta.accepted_share_count} accepted share(s), which block its deletion without force=true.`,
       meta
     );
   }
+
+  await revokeResourceShares({
+    resourceType: 'aiProvider',
+    resourceId: instance.publicId,
+  });
 
   // Price overrides are dropped as meaningless without the provider;
   // usage/generation rows survive with the link nulled, preserving the
@@ -421,16 +439,19 @@ export const deleteAiProvider = async (args: {
  * that hands out a decrypted provider secret: an optional filter is one a new
  * caller can leave off, and the write-time guards it backs up cannot reach a
  * row that is already stored. A provider in another project resolves to `null`,
- * exactly as one that does not exist.
+ * exactly as one that does not exist, unless `reach` is `'shares'` and an
+ * accepted share grants it; `grantee` then names `projectId`, so the model
+ * built from it counts against the share and hides the vendor's failures.
  */
 export const resolveAiProviderSecret = async (args: {
   aiProviderId: string;
   projectId: number;
+  reach: ReferenceReach;
 }) => {
   const instance = await aiProviderReferences.find({
     id: args.aiProviderId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: args.reach,
   });
   if (!instance) return null;
 
@@ -451,5 +472,6 @@ export const resolveAiProviderSecret = async (args: {
     modelAliases: instance.modelAliases,
     modelAliasesOnly: instance.modelAliasesOnly,
     secretValue: decryptedValue,
+    grantee: instance.projectId === args.projectId ? null : args.projectId,
   };
 };

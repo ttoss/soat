@@ -280,11 +280,10 @@ export const assertAgentReferencesExist = async (
 };
 
 /**
- * The internal id of a provider **in this project**. A pin is where the pinning
- * resource's generations get their credential, so one that crossed the project
- * boundary would have this project's agent generate on another project's
- * secret — and the caller's own reach is not the boundary, since a principal
- * may legitimately hold both projects.
+ * The internal id of a provider in this project or shared with it through an
+ * accepted share. A pin is where the pinning resource's generations get their
+ * credential, so the caller's own reach is not the boundary: a principal may
+ * hold both projects, and only a share lends one project's secret to another.
  */
 export const resolveAiProviderDbId = async (args: {
   publicId: string;
@@ -293,7 +292,7 @@ export const resolveAiProviderDbId = async (args: {
   const aiProvider = await aiProviderReferences.find({
     id: args.publicId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
   return aiProvider ? (aiProvider.id as number) : null;
 };

@@ -61,7 +61,7 @@ const resolveBillingProvider = async (args: {
     const served = await aiProviderReferences.find({
       id: args.servedAiProviderId,
       projectId: args.agentProjectId,
-      reach: 'project',
+      reach: 'shares',
     });
     // Falls through to the pin when the row is gone (a delete racing the turn),
     // rather than dropping the attribution the pin would still have given.
