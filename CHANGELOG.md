@@ -3,6 +3,40 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.124.0](https://github.com/ttoss/soat/compare/v0.123.1...v0.124.0) (2026-11-21)
+
+* fix(tools)!: relay a native builtin action's error as its rest call answers it (#2084) ([7d9950b](https://github.com/ttoss/soat/commit/7d9950b535ec872b255b1d38e5f449fb77c9c090)), closes [#2084](https://github.com/ttoss/soat/issues/2084)
+* feat(generations)!: store vendor options apart from a message and never serve them (#2076) ([7efc82e](https://github.com/ttoss/soat/commit/7efc82e17bce233857f1ac77873da0455c78e46e)), closes [#2076](https://github.com/ttoss/soat/issues/2076)
+* feat(iam)!: refuse a reserved-prefix tool_context key on every carrier (#2077) ([252922e](https://github.com/ttoss/soat/commit/252922ea0cc01b48dd8cb7dc3327e16198142150)), closes [#2077](https://github.com/ttoss/soat/issues/2077)
+
+### Bug Fixes
+
+* **model-routes:** key the breaker by the consuming project ([#2085](https://github.com/ttoss/soat/issues/2085)) ([84e8709](https://github.com/ttoss/soat/commit/84e8709465640f9fb7f8a258829ca9ac50761121))
+
+### Features
+
+* **ai-providers:** a model alias may forward to another provider of the project ([#2081](https://github.com/ttoss/soat/issues/2081)) ([f163479](https://github.com/ttoss/soat/commit/f163479de54d6026ad47bdb3e175738008f26e1a))
+* **ai-providers:** ambient credentials serve only the projects a deployment names ([#2074](https://github.com/ttoss/soat/issues/2074)) ([dcd88d6](https://github.com/ttoss/soat/commit/dcd88d6d494c1fb75a162d168aed038ecfe8e848))
+* **ai-providers:** share an ai provider so a grantee generates through it ([#2082](https://github.com/ttoss/soat/issues/2082)) ([5935807](https://github.com/ttoss/soat/commit/59358075089e38fef27d27d39f7ae7dae0774003))
+* **errors:** a message states the fact; advice lives in hint ([#2078](https://github.com/ttoss/soat/issues/2078)) ([9ce9813](https://github.com/ttoss/soat/commit/9ce98133e0343f04d39bc6a9291f1675aaa861f7))
+* **evaluations:** the claim on the eval, copied onto each run ([#2080](https://github.com/ttoss/soat/issues/2080)) ([8cec1a2](https://github.com/ttoss/soat/commit/8cec1a242276294f633449d480c3bc36d12b36d5)), closes [#1556](https://github.com/ttoss/soat/issues/1556)
+* **formations:** a deployment disables built-in resource types ([#2072](https://github.com/ttoss/soat/issues/2072)) ([b84b8c6](https://github.com/ttoss/soat/commit/b84b8c6183e5b640313ddb14577c89cec27b5437))
+* **iam:** a denial carries the code the denying policy supplies ([#2079](https://github.com/ttoss/soat/issues/2079)) ([8a60014](https://github.com/ttoss/soat/commit/8a60014c84111c907a5a7947f6c5d78e4c45955d))
+* **projects:** a project-bound credential implies its project on every route ([#2073](https://github.com/ttoss/soat/issues/2073)) ([16e3f68](https://github.com/ttoss/soat/commit/16e3f68a9da202e885495e8d58901e5bde3b0eef))
+* **triggers:** a project's min_trigger_interval_seconds floors schedule triggers ([#2075](https://github.com/ttoss/soat/issues/2075)) ([518f4e7](https://github.com/ttoss/soat/commit/518f4e76226cebf822339d837c92cf4cb4f5c983))
+
+### BREAKING CHANGES
+
+* `output.response_messages` and stored trace steps carry no
+  `providerOptions`; the vendor state a replay needs stays in the runtime.
+* a generation, session message or generate, approval, trigger
+  firing, conversation generate, evaluation or orchestration run whose
+  `tool_context` names a reserved-prefix key is 400 instead of having the key
+  dropped; `POST /formations/validate` answers such a template with 400.
+* a native `builtin` action's error answers its REST status
+  and code instead of `502 TOOL_HTTP_ERROR`; an agent's tool result for a
+  relayed error is `{ status, error }`.
+
 ## [0.123.1](https://github.com/ttoss/soat/compare/v0.123.0...v0.123.1) (2026-11-21)
 
 ### Bug Fixes
