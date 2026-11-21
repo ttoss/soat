@@ -6,11 +6,13 @@ import { authenticatedTestClient } from '../../testClient';
 
 /**
  * An eval-gated promotion (the agents module doc — Eval-gated promotion) is
- * satisfied only by a passing run whose own `agent_id` is the agent being
+ * satisfied only by a supported run whose own `agent_id` is the agent being
  * promoted: an Eval is editable, so the agent it names today says nothing
  * about the agent a past run executed. Authentication and permission on
  * `promote` are covered in `agentVersions.test.ts`.
  */
+const ITEM_COUNT = 4;
+
 describe('POST /api/v1/agents/{agent_id}/release/promote — the run agent', () => {
   let userToken: string;
   let userPolicyId: string;
@@ -49,28 +51,31 @@ describe('POST /api/v1/agents/{agent_id}/release/promote — the run agent', () 
         agent_id: agentId,
         dataset_id: datasetId,
         scorers: [{ type: 'exact_match' }],
-        pass_threshold: 1,
+        // Four of four clear 0.5 (interval low ≈ 0.51).
+        pass_threshold: 0.5,
       });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };
 
   const passingRun = async (evalId: string): Promise<string> => {
-    mockCreateGeneration.mockResolvedValueOnce({
-      id: `gen_gate_${evalId}`,
-      traceId: `trc_gate_${evalId}`,
-      status: 'completed' as const,
-      output: {
-        model: 'test-model',
-        content: 'Paris',
-        finishReason: 'stop' as const,
-      },
-    });
+    for (let index = 0; index < ITEM_COUNT; index += 1) {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: `gen_gate_${evalId}_${index}`,
+        traceId: `trc_gate_${evalId}_${index}`,
+        status: 'completed' as const,
+        output: {
+          model: 'test-model',
+          content: 'Paris',
+          finishReason: 'stop' as const,
+        },
+      });
+    }
     const res = await asUser()
       .post(`/api/v1/evals/${evalId}/runs`)
       .send({ wait: true, agent_version: 2 });
     expect(res.status).toBe(201);
-    expect(res.body.passed).toBe(true);
+    expect(res.body.verdict).toBe('supported');
     return res.body.id as string;
   };
 
@@ -123,20 +128,22 @@ describe('POST /api/v1/agents/{agent_id}/release/promote — the run agent', () 
       .post('/api/v1/datasets')
       .send({ project_id: projectId, name: 'gate-agent-dataset' });
     datasetId = dataset.body.id;
-    const item = await asUser()
-      .post(`/api/v1/datasets/${datasetId}/items`)
-      .send({
-        input: [{ role: 'user', content: 'Capital of France?' }],
-        expected_output: 'Paris',
-      });
-    expect(item.status).toBe(201);
+    for (let index = 0; index < ITEM_COUNT; index += 1) {
+      const item = await asUser()
+        .post(`/api/v1/datasets/${datasetId}/items`)
+        .send({
+          input: [{ role: 'user', content: `Capital of France? ${index}` }],
+          expected_output: 'Paris',
+        });
+      expect(item.status).toBe(201);
+    }
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  test('a passing run of the promoted agent satisfies the gate', async () => {
+  test('a supported run of the promoted agent satisfies the gate', async () => {
     const agentId = await twoVersionAgent('own');
     const evalId = await createGateEval(agentId);
     await passingRun(evalId);
@@ -148,7 +155,7 @@ describe('POST /api/v1/agents/{agent_id}/release/promote — the run agent', () 
     expect(res.body.active_release).toBeNull();
   });
 
-  test('a passing run of another agent at the same version does not satisfy the gate', async () => {
+  test('a supported run of another agent at the same version does not satisfy the gate', async () => {
     const otherId = await twoVersionAgent('other');
     const evalId = await createGateEval(otherId);
     await passingRun(evalId);
@@ -166,7 +173,7 @@ describe('POST /api/v1/agents/{agent_id}/release/promote — the run agent', () 
     expect(res.body.error.code).toBe('PROMOTION_GATE_UNMET');
   });
 
-  test('a passing run that recorded no agent does not satisfy the gate', async () => {
+  test('a supported run that recorded no agent does not satisfy the gate', async () => {
     const agentId = await twoVersionAgent('unrecorded');
     const evalId = await createGateEval(agentId);
     const runId = await passingRun(evalId);

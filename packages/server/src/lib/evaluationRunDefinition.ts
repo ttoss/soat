@@ -1,16 +1,31 @@
 /**
- * What a run is graded by: its Eval's `scorers`, `pass_threshold` and
- * `group_by`, copied onto the run when it is created (the evaluations module
+ * What a run is graded by: its Eval's `scorers`, `pass_threshold`, `group_by`
+ * and `evidence`, copied onto the run when it is created (the evaluations module
  * doc — Version pinning). Every item and the settle read this copy, so an edit
  * to the Eval reaches only runs created after it.
  */
 import { scorerList } from './evaluationScorerValidation';
 import { isPlainObject } from './plainObject';
 
+/** The rules a verdict reads beyond the threshold, in the wire shape. */
+export type EvalEvidence = { required_groups?: string[] };
+
 export type EvalRunDefinition = {
   scorers: unknown[];
   passThreshold: number | null;
   groupBy: string | null;
+  evidence: EvalEvidence | null;
+};
+
+const evidenceOf = (value: unknown): EvalEvidence | null => {
+  if (!isPlainObject(value)) return null;
+  const groups = value.required_groups;
+  if (!Array.isArray(groups)) return {};
+  return {
+    required_groups: groups.filter((group): group is string => {
+      return typeof group === 'string';
+    }),
+  };
 };
 
 /** The definition a run created now records, from its Eval's current row. */
@@ -19,13 +34,15 @@ export const evalRunDefinitionOf = (args: {
     scorers: unknown;
     passThreshold: string | null;
     groupBy: string | null;
+    evidence: unknown;
   };
 }): EvalRunDefinition => {
-  const { scorers, passThreshold, groupBy } = args.evaluation;
+  const { scorers, passThreshold, groupBy, evidence } = args.evaluation;
   return {
     scorers: scorerList(scorers),
     passThreshold: passThreshold === null ? null : Number(passThreshold),
     groupBy,
+    evidence: evidenceOf(evidence),
   };
 };
 
@@ -37,6 +54,7 @@ export const storedEvalRunDefinition = (args: {
     scorers: args.definition.scorers,
     pass_threshold: args.definition.passThreshold,
     group_by: args.definition.groupBy,
+    evidence: args.definition.evidence,
   };
 };
 
@@ -55,5 +73,6 @@ export const readEvalRunDefinition = (args: {
     passThreshold:
       typeof stored.pass_threshold === 'number' ? stored.pass_threshold : null,
     groupBy: typeof stored.group_by === 'string' ? stored.group_by : null,
+    evidence: evidenceOf(stored.evidence),
   };
 };

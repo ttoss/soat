@@ -185,7 +185,7 @@ describe('Evaluations — a run records its agent and definition', () => {
     ).toBe(true);
   });
 
-  test('a queued run settles `passed` on the threshold it started with', async () => {
+  test('a queued run settles its verdict on the threshold it started with', async () => {
     const evalId = await createEval({
       scorers: [{ type: 'contains', value: 'never-said' }],
       pass_threshold: 0.9,
@@ -198,7 +198,32 @@ describe('Evaluations — a run records its agent and definition', () => {
     const run = await readRun(evalId, runId);
     expect(run.status).toBe('completed');
     expect(run.definition.pass_threshold).toBe(0.9);
-    expect(run.passed).toBe(false);
+    // 0 of 2 under 0.9 refutes; under the edited 0 it would be supported.
+    expect(run.verdict).toBe('refuted');
+  });
+
+  test('a queued run settles on the evidence it started with', async () => {
+    // At threshold 0 the run's own interval is supported; only the required
+    // group, which no item belongs to, holds it at insufficient.
+    const evalId = await createEval({
+      pass_threshold: 0,
+      group_by: 'kind',
+      evidence: { required_groups: ['absent'] },
+    });
+    const runId = await startQueuedRun(evalId);
+
+    await updateEval(evalId, { evidence: null });
+    await drainEvalQueueOnce();
+
+    const run = await readRun(evalId, runId);
+    expect(run.status).toBe('completed');
+    expect(run.verdict).toBe('insufficient');
+    expect(run.verdict_reasons).toContainEqual(
+      expect.objectContaining({
+        scope: { kind: 'group', name: 'absent' },
+        verdict: 'insufficient',
+      })
+    );
   });
 
   test('a queued run executes every item against the agent it started with', async () => {
@@ -216,13 +241,17 @@ describe('Evaluations — a run records its agent and definition', () => {
   });
 
   test('start, get and list return the agent and definition at start', async () => {
-    const evalId = await createEval({ group_by: 'kind' });
+    const evalId = await createEval({
+      group_by: 'kind',
+      evidence: { required_groups: ['refusal'] },
+    });
     const expected = {
       agent_id: firstAgentId,
       definition: {
         scorers: [{ type: 'contains', value: 'refund' }],
         pass_threshold: 0.5,
         group_by: 'kind',
+        evidence: { required_groups: ['refusal'] },
       },
     };
 
@@ -237,6 +266,7 @@ describe('Evaluations — a run records its agent and definition', () => {
       scorers: [{ type: 'exact_match' }],
       pass_threshold: 0.1,
       group_by: 'tier',
+      evidence: null,
     });
 
     expect(await readRun(evalId, started.body.id)).toMatchObject(expected);
@@ -267,7 +297,7 @@ describe('Evaluations — a run records its agent and definition', () => {
     expect(res.status).toBe(201);
     expect(res.body.definition).not.toBeNull();
     expect(res.body.definition.pass_threshold).toBeNull();
-    expect(res.body.passed).toBeNull();
+    expect(res.body.verdict).toBeNull();
   });
 
   test('the eval_runs.completed payload carries the agent and definition', async () => {
