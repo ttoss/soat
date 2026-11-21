@@ -4,9 +4,11 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents, type MappedAgent } from './agentAccessor';
 import {
-  recordPromotionEvalRun,
+  recordPromotion,
+  requireClaimsHeld,
   requirePromotionGate,
   resolvePromotionGate,
+  resolveReleasedClaims,
   validatePromotionGateInput,
 } from './agentPromotionGate';
 import { readAgentRunAs } from './agentRunAs';
@@ -83,6 +85,7 @@ export const mapAgentVersion = (
     // Wire-only: a restore replays the stored row, never this projection.
     config: redactAgentToolSecrets(fields.config),
     eval_run_id: versionEvalRunId(version),
+    released_claims: version.get('releasedClaims') ?? null,
   };
 };
 
@@ -298,6 +301,7 @@ export const setAgentRelease = async (args: {
   canaryVersion: unknown;
   canaryPercent: unknown;
   promotionGate?: unknown;
+  releasedClaims?: unknown;
   writer: Writer;
 }): Promise<MappedAgent> => {
   log(
@@ -333,6 +337,10 @@ export const setAgentRelease = async (args: {
     promotion_gate: await resolvePromotionGate({
       agent: agentRef(agent),
       promotionGate: args.promotionGate,
+    }),
+    released_claims: await resolveReleasedClaims({
+      agent: agentRef(agent),
+      releasedClaims: args.releasedClaims,
     }),
   };
 
@@ -380,7 +388,10 @@ const settleRelease = async (args: {
   label: string;
   createdBy: RequestPrincipal | null;
   writer: Writer;
-  evalRunDbId?: number | null;
+  promotion?: Omit<
+    Parameters<typeof recordPromotion>[0],
+    'agentDbId' | 'version'
+  >;
 }): Promise<MappedAgent> => {
   await agentVersionArchive.applyArchivedVersion({
     projectIds: args.projectIds,
@@ -401,11 +412,13 @@ const settleRelease = async (args: {
 
   // The version the apply left live — a freshly archived one, or the settled
   // version itself when the live row already held its config.
-  await recordPromotionEvalRun({
-    agentDbId: agent.id as number,
-    version: agent.version,
-    evalRunDbId: args.evalRunDbId ?? null,
-  });
+  if (args.promotion) {
+    await recordPromotion({
+      agentDbId: agent.id as number,
+      version: agent.version,
+      ...args.promotion,
+    });
+  }
 
   return getAgent({ projectIds: args.projectIds, id: args.agentId });
 };
@@ -436,6 +449,7 @@ export const promoteAgentRelease = async (args: {
     agent: agentRef(agent),
     version: release.canary_version,
   });
+  await requireClaimsHeld({ agent: agentRef(agent), release });
 
   // Pins the canary explicitly instead of assuming the live row still holds it:
   // an edit landing mid-rollout would otherwise get promoted in its place.
@@ -446,7 +460,7 @@ export const promoteAgentRelease = async (args: {
     label: `promoted v${release.canary_version}`,
     createdBy: args.createdBy,
     writer: args.writer,
-    evalRunDbId,
+    promotion: { evalRunDbId, releasedClaims: release.released_claims },
   });
 };
 

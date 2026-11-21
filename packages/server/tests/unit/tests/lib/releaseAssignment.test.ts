@@ -20,6 +20,7 @@ describe('releaseAssignment', () => {
     canary_version: 4,
     canary_percent: 20,
     promotion_gate: null,
+    released_claims: [],
   };
 
   describe('bucketForKey', () => {
@@ -124,10 +125,11 @@ describe('releaseAssignment', () => {
         canary_version: 4,
         canary_percent: 20,
         promotion_gate: null,
+        released_claims: [],
       });
     });
 
-    test('reads a gated release, and a pre-Phase-3 row as ungated', () => {
+    test('reads a gated release, and a row without the key as ungated', () => {
       expect(
         parseActiveRelease({ ...release, promotion_gate: 'eval_abc' })
           ?.promotion_gate
@@ -142,6 +144,7 @@ describe('releaseAssignment', () => {
         canary_version: 4,
         canary_percent: 20,
         promotion_gate: null,
+        released_claims: [],
       });
     });
 
@@ -151,6 +154,27 @@ describe('releaseAssignment', () => {
       // NO_ACTIVE_RELEASE instead of promoting a canary nothing validated.
       expect(parseActiveRelease({ ...release, promotion_gate: 42 })).toBeNull();
       expect(parseActiveRelease({ ...release, promotion_gate: '' })).toBeNull();
+    });
+
+    test('reads released_claims, and a row without the key as releasing none', () => {
+      expect(
+        parseActiveRelease({ ...release, released_claims: ['eval_a'] })
+          ?.released_claims
+      ).toEqual(['eval_a']);
+
+      const { released_claims: _released, ...unreleased } = release;
+      expect(parseActiveRelease(unreleased)?.released_claims).toEqual([]);
+    });
+
+    test('malformed released_claims read as releasing none', () => {
+      // The strict reading keeps every claim required and the split serving;
+      // dropping the release, as a malformed gate does, would move traffic.
+      for (const releasedClaims of ['eval_a', [''], ['a', 'a'], [1]]) {
+        expect(
+          parseActiveRelease({ ...release, released_claims: releasedClaims })
+            ?.released_claims
+        ).toEqual([]);
+      }
     });
 
     test('returns null for an absent release', () => {

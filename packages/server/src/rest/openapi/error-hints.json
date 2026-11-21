@@ -937,6 +937,11 @@
         }
       ]
     },
+    "PROMOTION_CLAIM_UNMET": {
+      "http_status": 409,
+      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "routes": []
+    },
     "PROMOTION_GATE_UNMET": {
       "http_status": 409,
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",

@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
  * resolves an identity key and asks this module which version to serve, so the
  * split is reproducible in tests and identical across server processes.
  *
- * Agents are the only resource with release *semantics* today — what a release
+ * Agents are the only resource with release *semantics* — what a release
  * targets differs per resource (the version serving a generation, the version
  * new runs start on, the version new tasks are created into), so that meaning
  * stays with each resource rather than being guessed at here.
@@ -34,6 +34,12 @@ export type ActiveRelease = {
    * never which version a request is served.
    */
   promotion_gate: string | null;
+  /**
+   * Eval ids whose claims the canary need not keep: a claim the stable
+   * version supports and the canary does not blocks `promote` unless named
+   * here. Assignment ignores it too.
+   */
+  released_claims: string[];
 };
 
 export type ReleaseAssignment = {
@@ -62,9 +68,8 @@ const MALFORMED_GATE = Symbol('malformed promotion_gate');
 /**
  * Reads the stored `promotion_gate`.
  *
- * An **absent** key is "no gate": every release stored before Phase 3 lacks it,
- * and so does every ungated one since, so treating it as unreadable would drop a
- * running rollout back to the live config.
+ * An **absent** key is "no gate": an ungated release may lack it, so treating
+ * it as unreadable would drop a running rollout back to the live config.
  *
  * A key that is present but malformed is the opposite case — it was written to
  * constrain promotion, so it takes the release down with it (see
@@ -78,6 +83,24 @@ const readPromotionGate = (
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string' || value === '') return MALFORMED_GATE;
   return value;
+};
+
+/** Non-empty, unique ids: the shape `released_claims` is written and read in. */
+export const isEvalIdList = (value: unknown): value is string[] => {
+  if (!Array.isArray(value)) return false;
+  const ids = value.filter((id): id is string => {
+    return typeof id === 'string' && id !== '';
+  });
+  return ids.length === value.length && new Set(ids).size === ids.length;
+};
+
+/**
+ * Reads the stored `released_claims`. Unlike a gate, an unreadable list reads
+ * as releasing none: that is already the strict reading, since every claim
+ * stays required, while taking the release down would move traffic.
+ */
+const readReleasedClaims = (value: unknown): string[] => {
+  return isEvalIdList(value) ? value : [];
 };
 
 /**
@@ -111,6 +134,7 @@ export const parseActiveRelease = (value: unknown): ActiveRelease | null => {
     canary_version: candidate.canary_version,
     canary_percent: candidate.canary_percent,
     promotion_gate: gate,
+    released_claims: readReleasedClaims(candidate.released_claims),
   };
 };
 

@@ -103,6 +103,13 @@ export class AgentVersion extends Model {
   )
   declare evalRun: EvalRun | null;
 
+  /**
+   * Eval ids of the claims the release gave up when it promoted this
+   * version. Null for a version no promotion made live.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare releasedClaims: string[] | null;
+
   /** Who produced this version; null for a write with no principal. */
   @Column({ type: DataType.STRING(16), allowNull: true })
   declare createdByPrincipalType: string | null;

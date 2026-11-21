@@ -69,28 +69,30 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 
 Immutable archive of one config version, written on create and on every config-changing write.
 
-| Field                       | Type        | Description                                                                                                                                                 |
-| --------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                        | string      | Unique identifier (`agver_` prefix)                                                                                                                         |
-| `agent_id`                  | string      | Agent this version belongs to                                                                                                                               |
-| `version`                   | number      | The archived version number                                                                                                                                 |
-| `config`                    | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures)                                           |
-| `label`                     | string/null | Optional human tag, e.g. `tone-change`                                                                                                                      |
-| `eval_run_id`               | string/null | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion) |
-| `created_by_principal_type` | string/null | [Principal](./audit-log.md#principals) that produced this version: `user` or `api_key`                                                                      |
-| `created_by_principal_id`   | string/null | Public id of that principal — the key's own `key_…` when a key acted, else `user_…`                                                                         |
-| `created_at`                | string      | ISO 8601 creation timestamp                                                                                                                                 |
+| Field                       | Type          | Description                                                                                                                                                               |
+| --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | string        | Unique identifier (`agver_` prefix)                                                                                                                                       |
+| `agent_id`                  | string        | Agent this version belongs to                                                                                                                                             |
+| `version`                   | number        | The archived version number                                                                                                                                               |
+| `config`                    | object        | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures)                                                         |
+| `label`                     | string/null   | Optional human tag, e.g. `tone-change`                                                                                                                                    |
+| `eval_run_id`               | string/null   | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion)               |
+| `released_claims`           | string[]/null | Evals whose claims the release gave up when it promoted this version; `null` for a version no promotion made live — see [Claims a version holds](#claims-a-version-holds) |
+| `created_by_principal_type` | string/null   | [Principal](./audit-log.md#principals) that produced this version: `user` or `api_key`                                                                                    |
+| `created_by_principal_id`   | string/null   | Public id of that principal — the key's own `key_…` when a key acted, else `user_…`                                                                                       |
+| `created_at`                | string        | ISO 8601 creation timestamp                                                                                                                                               |
 
 ### Agent Release
 
 The `active_release` object on an agent, not a standalone resource: set with `set-agent-release`, cleared by `promote-agent-release` or `abort-agent-release`.
 
-| Field            | Type        | Description                                                                                                                                                                            |
-| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stable_version` | number      | Version served to traffic not assigned to the canary                                                                                                                                   |
-| `canary_version` | number      | Version under trial. Must differ from `stable_version`                                                                                                                                 |
-| `canary_percent` | number      | Percentage of traffic (`0`–`100`) assigned to `canary_version`                                                                                                                         |
-| `promotion_gate` | string/null | [Eval](./evaluations.md) that must be green against `canary_version` before `promote` is allowed, or `null` for an ungated rollout — see [Eval-gated promotion](#eval-gated-promotion) |
+| Field             | Type        | Description                                                                                                                                                                            |
+| ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stable_version`  | number      | Version served to traffic not assigned to the canary                                                                                                                                   |
+| `canary_version`  | number      | Version under trial. Must differ from `stable_version`                                                                                                                                 |
+| `canary_percent`  | number      | Percentage of traffic (`0`–`100`) assigned to `canary_version`                                                                                                                         |
+| `promotion_gate`  | string/null | [Eval](./evaluations.md) that must be green against `canary_version` before `promote` is allowed, or `null` for an ungated rollout — see [Eval-gated promotion](#eval-gated-promotion) |
+| `released_claims` | string[]    | Evals whose claims the canary need not keep; empty when the release gives none up — see [Claims a version holds](#claims-a-version-holds)                                              |
 
 ### Generation
 
@@ -1043,6 +1045,42 @@ curl -X POST https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/releas
 </Tabs>
 
 Until then `promote` is `409 Conflict` with error code `PROMOTION_GATE_UNMET`. Fail-closed: a run against another version or another agent, a newest run that reads `insufficient` or `refuted`, a run that recorded no agent or verdict and a deleted gate eval all block; `abort` is never blocked; the gate does not run the eval. The clearing run is recorded as `eval_run_id` on the version that goes live; re-setting the release without `promotion_gate` drops the gate.
+
+#### Claims a version holds
+
+A version holds the [claim](./evaluations.md#the-claim) of every eval in the agent's project whose newest `completed` run recorded against this agent and pinned to that version carries one, with that run's `verdict`. A newer run revokes an older one; a run with no claim holds none. [`GET /api/v1/agents/{agent_id}/versions/{version}/claims`](/docs/api/agents/list-agent-version-claims) lists them by `eval_id`, each with `eval_run_id`, `claim`, `verdict`, `verdict_reasons` and `settled_at`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-agent-version-claims --agent-id agent_V1StGXR8Z5jdHi6B --version 1
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const claims = await soat.agentVersions.listAgentVersionClaims({
+  path: { agent_id: 'agent_V1StGXR8Z5jdHi6B', version: 1 },
+});
+if (claims.error) throw new Error(JSON.stringify(claims.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B/versions/1/claims \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+`promote` keeps every claim the stable version supports: after the gate, each one must read `supported` on the canary too, or be named in the release's `released_claims`. Otherwise the call is `409 PROMOTION_CLAIM_UNMET`, whose `meta` carries the `eval_id`, the stable version's `claim`, `stable_version`, `canary_version`, and the canary's `eval_run_id`, `verdict` and `verdict_reasons` (`null` when it has no run). A claim the stable version does not support is not required, and `abort` is never blocked.
+
+`released_claims` names evals in the agent's project, unique; anything else is `400 VALIDATION_FAILED` when the release is set. The version that goes live records them; re-setting the release without `released_claims` requires every claim again.
 
 #### Which version served a generation
 

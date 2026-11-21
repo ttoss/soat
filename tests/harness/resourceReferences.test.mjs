@@ -89,6 +89,7 @@ pinReferences({
     'lib/agentNonStreamGeneration.ts':
       "reads tools by name inside the running agent's project",
     'lib/agents.ts': "lists the caller's agents",
+    'lib/agentVersionClaims.ts': "the agent's own version routes",
     'lib/agentVersions.ts': "the agent's own version routes",
     'lib/aiProviderDeletion.ts': "lists a provider's dependents",
     'lib/completionModel.ts':

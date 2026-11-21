@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { listAgentVersionClaims } from 'src/lib/agentVersionClaims';
 import {
   abortAgentRelease,
   getAgentVersion,
@@ -81,6 +82,28 @@ agentVersionsRouter.get(
 
 /**
  * @openapi
+ * /api/v1/agents/{agent_id}/versions/{version}/claims:
+ *   get:
+ *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1versions~1{version}~1claims/get'
+ */
+agentVersionsRouter.get(
+  '/agents/:agent_id/versions/:version/claims',
+  async (ctx: Context) => {
+    const { projectIds } = await authorizeAgentRead({
+      ctx,
+      action: 'agents:GetAgentVersion',
+    });
+    ctx.body = await listAgentVersionClaims({
+      projectIds,
+      agentId: ctx.params.agent_id,
+      version: parseVersionParam(ctx.params.version),
+      ...parsePagination(ctx),
+    });
+  }
+);
+
+/**
+ * @openapi
  * /api/v1/agents/{agent_id}/versions/{version}/restore:
  *   post:
  *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1versions~1{version}~1restore/post'
@@ -125,6 +148,7 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
     canary_version?: unknown;
     canary_percent?: unknown;
     promotion_gate?: unknown;
+    released_claims?: unknown;
   };
 
   // Shape validation lives in the lib so the rule has one home; the handler
@@ -137,6 +161,7 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
       canaryVersion: body.canary_version,
       canaryPercent: body.canary_percent,
       promotionGate: body.promotion_gate,
+      releasedClaims: body.released_claims,
       writer: ctx.authUser,
     })
   );
