@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import {
   type AgentRef,
   claimReading,
+  runClaimOf,
   speakingRun,
   speakingRuns,
   type VersionClaim,
@@ -99,7 +100,9 @@ const pickRunEvidence = (claim: VersionClaim) => {
  * Enforces the gate, returning the run row id to record on the promoted
  * version — or null when the release carries no gate.
  *
- * Fails closed: the speaking run must read `supported`. No run, a run whose
+ * Fails closed: the claim verdict of the speaking run (the run's verdict, made
+ * worse by the production and run-age rules it recorded) must read
+ * `supported`. No run, a run whose
  * verdict is `insufficient` or `refuted`, a run of another agent or version, a
  * run that recorded no agent or verdict, or a deleted eval is the same
  * `409`. The point of the gate is that promotion is impossible without
@@ -136,7 +139,7 @@ export const requirePromotionGate = async (args: {
     throw new DomainError(
       'PROMOTION_GATE_UNMET',
       claim
-        ? `Promotion gate '${args.gate}' reads ${String(claim.verdict)} on its newest run against version ${args.version} of agent '${args.agent.publicId}'.`
+        ? `Promotion gate '${args.gate}' reads ${String(claim.verdict)} for its claim on the newest run against version ${args.version} of agent '${args.agent.publicId}'.`
         : `Promotion gate '${args.gate}' has no completed eval run against version ${args.version} of agent '${args.agent.publicId}'.`,
       {
         promotion_gate: args.gate,
@@ -190,12 +193,15 @@ export const resolveReleasedClaims = async (args: {
 };
 
 /**
- * The pawl on promotion: every claim the stable version supports, the canary
- * supports too, unless the release names its eval in `released_claims`. A
- * refuted, insufficient or missing canary run is the same `409`, so "cannot
- * tell" never resolves to "allowed". Both sides read the claim verdict, so a
- * canary losing a claim in production is refused as surely as one whose run
- * does. Returns the canary's claims, which the promoted version records.
+ * The pawl on promotion: every claim the stable version's run supports, the
+ * canary supports too, unless the release names its eval in `released_claims`.
+ * The stable side is judged by its run alone, so a claim it demonstrated stays
+ * required when its traffic stops (a canary at 100%) or its run ages. The
+ * canary side is judged by its claim verdict, production and run age
+ * included, so a canary losing a claim in production is refused as surely as
+ * one whose run does. A refuted, insufficient or missing canary claim is the
+ * same `409`, so "cannot tell" never resolves to "allowed". Returns the
+ * canary's claims, which the promoted version records.
  */
 export const requireClaimsHeld = async (args: {
   agent: AgentRef;
@@ -212,10 +218,14 @@ export const requireClaimsHeld = async (args: {
   const released = new Set(args.release.released_claims);
   const canaryRuns = await speakingRuns({ agent: args.agent, version: canary });
   const canaryReading = claimReading({ agent: args.agent, version: canary });
-  const held = await versionClaimsOf({
-    runs: await speakingRuns({ agent: args.agent, version: stable }),
-    reading: claimReading({ agent: args.agent, version: stable }),
-  });
+  const stableRuns = await speakingRuns({ agent: args.agent, version: stable });
+  const held = [...stableRuns]
+    .filter(([, run]) => {
+      return run.claim !== null;
+    })
+    .map(([evalId, run]) => {
+      return runClaimOf({ evalId, run });
+    });
   for (const claim of held) {
     if (claim.verdict !== 'supported' || released.has(claim.eval_id)) continue;
     const run = canaryRuns.get(claim.eval_id);
@@ -248,8 +258,8 @@ export const requireClaimsHeld = async (args: {
 
 /**
  * Records what a promotion stood on, on the version it made live: the run that
- * cleared the gate, the claims the version held as they read then, and the
- * claims the release gave up.
+ * cleared the gate, the claims the promoted canary version held as they read
+ * then, and the claims the release gave up.
  *
  * Written after the config apply rather than threaded through it, because the
  * version being stamped is only known then: an apply archives a new version

@@ -826,9 +826,10 @@ paths:
         - Agent Versions
       summary: List the claims a promotion recorded on an agent version
       description: >
-        Returns the claims this version held when a promotion made it live,
-        each as the claims read served it then, with the verdict production
-        gave it at that moment. Empty for a version no promotion made live.
+        Returns the claims the promoted canary version held when a promotion
+        made this version live, by `eval_id`, each as the claims read served it
+        then, with the verdict production gave it at that moment. Empty for a
+        version no promotion made live.
         The live read is `GET /api/v1/agents/{agent_id}/versions/{version}/claims`.
       operationId: listAgentVersionPromotionClaims
       x-iam-action: agents:GetAgentVersion
@@ -1048,15 +1049,16 @@ paths:
         the version that goes live.
 
 
-        Every claim the stable version supports
-        (`GET /api/v1/agents/{agent_id}/versions/{version}/claims`) must be
-        supported by the canary too, unless the release names its eval in
-        `released_claims`. Otherwise the call is a `409 PROMOTION_CLAIM_UNMET`
-        whose `meta` names the `eval_id`, the stable version's `claim`, and the
-        canary's `eval_run_id`, `verdict` and `verdict_reasons` (null when it
-        has no run). Both sides read the claim's verdict, which adds the
-        production rules and the run age the eval's evidence declares. The
-        version that goes live records the claims it held (`GET
+        Every claim the stable version's run supports must be supported by the
+        canary too, unless the release names its eval in `released_claims`.
+        The stable side is judged by its run's verdict alone, so a claim it
+        demonstrated stays required when its traffic stops or its run ages;
+        the canary side by its claim's verdict, which adds the production
+        rules and the run age its run recorded. Otherwise the call is a
+        `409 PROMOTION_CLAIM_UNMET` whose `meta` names the `eval_id`, the
+        stable version's `claim`, and the canary's `eval_run_id`, `verdict`
+        and `verdict_reasons` (null when it has no run). The version that goes
+        live records the claims the canary held (`GET
         /api/v1/agents/{agent_id}/versions/{version}/promotion-claims`) and the
         release's `released_claims`.
       operationId: promoteAgentRelease

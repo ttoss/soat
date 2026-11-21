@@ -4,8 +4,8 @@
  * says about the counts of one agent version's production traffic.
  *
  * Pure: the claims read (`agentVersionClaims.ts`) hands it the counts. The
- * eval's validator and the run's recorded definition read `evidence.live`
- * through {@link parseLiveEvidence}, so the shape is stated once.
+ * eval's validator and the run's recorded definition both read `evidence.live`
+ * through {@link parseLiveEvidence}, so neither checks the shape on its own.
  */
 import type { Verdict, VerdictReason } from './evaluationVerdict';
 import { isPlainObject } from './plainObject';
@@ -86,7 +86,7 @@ const ruleProblem = (args: {
   const { rule } = args;
   if (!isPlainObject(rule)) return `${path} must be an object.`;
   const extra = Object.keys(rule).find((key) => {
-    return !(key in args.fields);
+    return !Object.hasOwn(args.fields, key);
   });
   if (extra !== undefined) return `${path}.${extra} is not a known field.`;
   const wrong = Object.entries(args.fields).find(([key, check]) => {
@@ -97,7 +97,9 @@ const ruleProblem = (args: {
 
 const liveProblem = (live: Record<string, unknown>): string | null => {
   const extra = Object.keys(live).find((key) => {
-    return !(key in RULE_FIELDS) && !(key in SCALAR_FIELDS);
+    return (
+      !Object.hasOwn(RULE_FIELDS, key) && !Object.hasOwn(SCALAR_FIELDS, key)
+    );
   });
   if (extra !== undefined) return `evidence.live.${extra} is not a known rule.`;
   if (live.window === undefined) return 'evidence.live.window is required.';
@@ -155,7 +157,8 @@ const figure = (value: number): string => {
 
 type Judgement = { verdict: Verdict; reason: string };
 
-const judgeServed = (min: number, counts: LiveCounts): Judgement => {
+const judgeServed = (args: { min: number; counts: LiveCounts }): Judgement => {
+  const { min, counts } = args;
   return counts.served >= min
     ? {
         verdict: 'supported',
@@ -167,7 +170,11 @@ const judgeServed = (min: number, counts: LiveCounts): Judgement => {
       };
 };
 
-const judgeTripwires = (max: number, counts: LiveCounts): Judgement => {
+const judgeTripwires = (args: {
+  max: number;
+  counts: LiveCounts;
+}): Judgement => {
+  const { max, counts } = args;
   if (counts.served === 0) {
     return { verdict: 'insufficient', reason: 'nothing served' };
   }
@@ -200,10 +207,11 @@ const judgeRate = (args: {
       };
 };
 
-const judgeRejections = (
-  rule: { max_rate: number; min_decided: number },
-  counts: LiveCounts
-): Judgement => {
+const judgeRejections = (args: {
+  rule: { max_rate: number; min_decided: number };
+  counts: LiveCounts;
+}): Judgement => {
+  const { rule, counts } = args;
   if (counts.decided < rule.min_decided) {
     return {
       verdict: 'insufficient',
@@ -218,10 +226,11 @@ const judgeRejections = (
   });
 };
 
-const judgeFailures = (
-  rule: { max_rate: number },
-  counts: LiveCounts
-): Judgement => {
+const judgeFailures = (args: {
+  rule: { max_rate: number };
+  counts: LiveCounts;
+}): Judgement => {
+  const { rule, counts } = args;
   if (counts.served === 0) {
     return { verdict: 'insufficient', reason: 'nothing served' };
   }
@@ -233,7 +242,10 @@ const judgeFailures = (
   });
 };
 
-/** One reason per rule `live` declares, in declaration order of the rules. */
+/**
+ * One reason per rule `live` declares, in this module's fixed order of the
+ * rules, whatever order the caller wrote them in.
+ */
 export const liveReasons = (args: {
   live: LiveEvidence;
   counts: LiveCounts;
@@ -243,25 +255,25 @@ export const liveReasons = (args: {
   if (live.min_served_generations !== undefined) {
     judged.push([
       'min_served_generations',
-      judgeServed(live.min_served_generations, counts),
+      judgeServed({ min: live.min_served_generations, counts }),
     ]);
   }
   if (live.guardrail_tripwires !== undefined) {
     judged.push([
       'guardrail_tripwires',
-      judgeTripwires(live.guardrail_tripwires.max, counts),
+      judgeTripwires({ max: live.guardrail_tripwires.max, counts }),
     ]);
   }
   if (live.approval_rejections !== undefined) {
     judged.push([
       'approval_rejections',
-      judgeRejections(live.approval_rejections, counts),
+      judgeRejections({ rule: live.approval_rejections, counts }),
     ]);
   }
   if (live.generation_failures !== undefined) {
     judged.push([
       'generation_failures',
-      judgeFailures(live.generation_failures, counts),
+      judgeFailures({ rule: live.generation_failures, counts }),
     ]);
   }
   return judged.map(([name, judgement]) => {
@@ -272,21 +284,27 @@ export const liveReasons = (args: {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Whether the run speaking for a claim is recent enough to stand for it. A run
- * that recorded no finish time cannot show its age, so it reads as too old.
+ * Whether the run speaking for a claim is recent enough to stand for it:
+ * finished no longer ago than `maxDays` whole days, to the millisecond. A run
+ * that recorded no finish time cannot show its age, so it is insufficient.
  */
 export const ageReason = (args: {
   maxDays: number;
   finishedAt: Date | null;
   now: Date;
 }): VerdictReason => {
-  const days =
-    args.finishedAt === null
-      ? Number.POSITIVE_INFINITY
-      : Math.floor((args.now.getTime() - args.finishedAt.getTime()) / DAY_MS);
+  if (args.finishedAt === null) {
+    return {
+      scope: { kind: 'age' },
+      verdict: 'insufficient',
+      reason: 'run has no finish time',
+    };
+  }
+  const elapsed = args.now.getTime() - args.finishedAt.getTime();
+  const days = Math.floor(elapsed / DAY_MS);
   return {
     scope: { kind: 'age' },
-    ...(days > args.maxDays
+    ...(elapsed > args.maxDays * DAY_MS
       ? {
           verdict: 'insufficient' as const,
           reason: `run finished ${days} days ago, older than ${args.maxDays}`,
@@ -295,5 +313,19 @@ export const ageReason = (args: {
           verdict: 'supported' as const,
           reason: `run finished ${days} days ago, within ${args.maxDays}`,
         }),
+  };
+};
+
+/**
+ * The reason a run's recorded `evidence.live` gives when it no longer reads
+ * against the rules: a rule nobody can evaluate is insufficient evidence,
+ * never a rule that passed.
+ */
+export const unreadableLiveReason = (): VerdictReason => {
+  return {
+    scope: { kind: 'live', name: 'unreadable' },
+    verdict: 'insufficient',
+    reason:
+      'the evidence.live recorded on the run does not read against the rules',
   };
 };

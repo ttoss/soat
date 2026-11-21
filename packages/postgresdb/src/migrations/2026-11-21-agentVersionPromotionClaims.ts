@@ -2,7 +2,7 @@ import { defineMigration } from '@ttoss/postgresdb';
 
 /**
  * `agent_versions.claims`, the claims a promotion stood on. Nothing to fill:
- * no promotion recorded its claims before this column exists.
+ * a version promoted without the column has no recorded claims.
  */
 export const agentVersionPromotionClaims = defineMigration({
   name: '2026-11-21-agent-version-promotion-claims',

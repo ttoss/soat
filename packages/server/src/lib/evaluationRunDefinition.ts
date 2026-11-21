@@ -14,7 +14,8 @@ import { isPlainObject } from './plainObject';
  */
 export type EvalEvidence = {
   required_groups?: string[];
-  live?: LiveEvidence;
+  /** `unreadable` when the run recorded a `live` the rules no longer read. */
+  live?: LiveEvidence | 'unreadable';
   max_run_age_days?: number;
 };
 
@@ -36,17 +37,24 @@ const requiredGroupsOf = (
   };
 };
 
+/** A recorded `live`, or `unreadable` when the rules no longer read it. */
+const liveOf = (value: unknown): Pick<EvalEvidence, 'live'> => {
+  if (value === undefined || value === null) return {};
+  const parsed = parseLiveEvidence(value);
+  return { live: 'live' in parsed ? parsed.live : 'unreadable' };
+};
+
 /**
- * Every rule the evidence declares, read as the Eval's validator wrote it; a
- * key it cannot read is left out rather than guessed.
+ * Every rule the evidence declares, read as the Eval's validator wrote it. A
+ * recorded `live` that no longer reads is kept as `unreadable`, so the claim
+ * it governs reads insufficient instead of passing without it.
  */
 const evidenceOf = (value: unknown): EvalEvidence | null => {
   if (!isPlainObject(value)) return null;
-  const live = parseLiveEvidence(value.live);
   const age = value.max_run_age_days;
   return {
     ...requiredGroupsOf(value.required_groups),
-    ...('live' in live && { live: live.live }),
+    ...liveOf(value.live),
     ...(typeof age === 'number' && { max_run_age_days: age }),
   };
 };

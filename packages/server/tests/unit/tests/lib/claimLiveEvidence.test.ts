@@ -5,6 +5,7 @@ import {
   liveReasons,
   parseLiveEvidence,
 } from 'src/lib/claimLiveEvidence';
+import { isVerdict } from 'src/lib/evaluationVerdict';
 
 /**
  * The live rules a claim reads beyond its run (the evaluations module doc —
@@ -75,6 +76,11 @@ describe('claimLiveEvidence', () => {
         { window: '7d', approval_rejections: { max_rate: 0.1 } },
       ],
       ['min_served_generations 0', { window: '7d', min_served_generations: 0 }],
+      ['a rule named after an Object property', { window: '7d', toString: 1 }],
+      [
+        'a field named after an Object property',
+        { window: '7d', guardrail_tripwires: { max: 0, constructor: 1 } },
+      ],
     ])('refuses %s', (_label, value) => {
       expect(parseLiveEvidence(value)).toEqual({
         problem: expect.stringContaining('evidence.live'),
@@ -197,10 +203,22 @@ describe('claimLiveEvidence', () => {
       });
     });
 
-    test('a run with no finish time reads as too old', () => {
-      expect(ageReason({ maxDays: 30, finishedAt: null, now })?.verdict).toBe(
-        'insufficient'
-      );
+    test('a run with no finish time is insufficient and says why', () => {
+      expect(ageReason({ maxDays: 30, finishedAt: null, now })).toEqual({
+        scope: { kind: 'age' },
+        verdict: 'insufficient',
+        reason: 'run has no finish time',
+      });
+    });
+
+    test('a run an hour past the limit is older than it', () => {
+      expect(
+        ageReason({
+          maxDays: 30,
+          finishedAt: new Date(daysAgo(30).getTime() - 60 * 60 * 1000),
+          now,
+        }).verdict
+      ).toBe('insufficient');
     });
 
     test('a run exactly at the limit is supported', () => {
@@ -213,6 +231,14 @@ describe('claimLiveEvidence', () => {
       expect(
         ageReason({ maxDays: 30, finishedAt: daysAgo(29), now })?.verdict
       ).toBe('supported');
+    });
+  });
+
+  describe('isVerdict', () => {
+    test('reads only the three verdicts, never an Object property', () => {
+      expect(isVerdict('supported')).toBe(true);
+      expect(isVerdict('toString')).toBe(false);
+      expect(isVerdict('constructor')).toBe(false);
     });
   });
 });

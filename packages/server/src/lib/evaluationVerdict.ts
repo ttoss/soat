@@ -63,18 +63,18 @@ export const intervalVerdict = (args: {
 
 /** A stored verdict, read back: anything else is no verdict. */
 export const isVerdict = (value: unknown): value is Verdict => {
-  return typeof value === 'string' && value in SEVERITY;
+  return typeof value === 'string' && Object.hasOwn(SEVERITY, value);
 };
 
 /** The more severe of two verdicts. */
-export const worseOf = (a: Verdict, b: Verdict): Verdict => {
-  return SEVERITY[b] > SEVERITY[a] ? b : a;
+export const worseOf = (args: { a: Verdict; b: Verdict }): Verdict => {
+  return SEVERITY[args.b] > SEVERITY[args.a] ? args.b : args.a;
 };
 
 /** The most severe verdict: `refuted` over `insufficient` over `supported`. */
 export const worstVerdict = (reasons: VerdictReason[]): Verdict => {
   return reasons.reduce<Verdict>((worst, { verdict }) => {
-    return worseOf(worst, verdict);
+    return worseOf({ a: worst, b: verdict });
   }, 'supported');
 };
 

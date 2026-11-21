@@ -3,7 +3,12 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { agents } from './agentAccessor';
 import { agentVersionStore } from './agentVersionSnapshot';
-import { ageReason, type LiveCounts, liveReasons } from './claimLiveEvidence';
+import {
+  ageReason,
+  type LiveCounts,
+  liveReasons,
+  unreadableLiveReason,
+} from './claimLiveEvidence';
 import { readLiveCounts } from './claimLiveEvidenceReads';
 import { readEvalRunDefinition } from './evaluationRunDefinition';
 import {
@@ -50,6 +55,12 @@ export const speakingRun = async (args: {
   agent: AgentRef;
   version: number;
 }): Promise<EvalRunRow | null> => {
+  log(
+    'speakingRun: eval=%s agent=%s version=%d',
+    args.evalPublicId,
+    args.agent.publicId,
+    args.version
+  );
   const evaluation = await db.Eval.findOne({
     where: { publicId: args.evalPublicId, projectId: args.agent.projectId },
     attributes: ['id'],
@@ -82,6 +93,7 @@ export const speakingRuns = async (args: {
   agent: AgentRef;
   version: number;
 }): Promise<Map<string, EvalRunRow>> => {
+  log('speakingRuns: agent=%s version=%d', args.agent.publicId, args.version);
   const [newest] = await db.sequelize.query(
     `SELECT DISTINCT ON (r."eval_id") r."id"
        FROM "eval_runs" r
@@ -131,6 +143,7 @@ export const claimReading = (args: {
   agent: AgentRef;
   version: number;
 }): ClaimReading => {
+  log('claimReading: agent=%s version=%d', args.agent.publicId, args.version);
   const now = new Date();
   const byWindow = new Map<RollingWindow, Promise<LiveCounts>>();
   return {
@@ -159,7 +172,9 @@ const claimSideReasons = async (args: {
 }): Promise<VerdictReason[]> => {
   const evidence = readEvalRunDefinition({ run: args.run })?.evidence;
   const reasons: VerdictReason[] = [];
-  if (evidence?.live) {
+  if (evidence?.live === 'unreadable') {
+    reasons.push(unreadableLiveReason());
+  } else if (evidence?.live) {
     reasons.push(
       ...liveReasons({
         live: evidence.live,
@@ -190,43 +205,75 @@ export type VersionClaim = {
 };
 
 /**
+ * A claim as its run settled it, before any rule beyond the run: the pawl
+ * judges the stable side by this, so a claim the stable version demonstrated
+ * stays required when its traffic stops or its run ages.
+ */
+export const runClaimOf = (args: {
+  evalId: string;
+  run: EvalRunRow;
+}): VersionClaim => {
+  const { run } = args;
+  return {
+    eval_id: args.evalId,
+    eval_run_id: run.publicId,
+    claim: run.claim,
+    verdict: isVerdict(run.verdict) ? run.verdict : null,
+    verdict_reasons: run.verdictReasons,
+    settled_at: run.finishedAt,
+  };
+};
+
+/**
  * A claim and its verdict: the run's verdict, made worse by every rule the
  * run's recorded evidence declares beyond its items (production, age). The
- * run's own verdict never moves. No verdict when the run has none.
+ * run's own verdict never moves. A run with no verdict gives a claim with no
+ * verdict and only the run's reasons: nothing beyond it is read.
  */
 export const versionClaimOf = async (args: {
   evalId: string;
   run: EvalRunRow;
   reading: ClaimReading;
 }): Promise<VersionClaim> => {
-  const { run } = args;
-  const extra = await claimSideReasons({ run, reading: args.reading });
-  const reasons = [...(run.verdictReasons ?? []), ...extra];
+  log('versionClaimOf: eval=%s run=%s', args.evalId, args.run.publicId);
+  const settled = runClaimOf(args);
+  if (settled.verdict === null) return settled;
+
+  const extra = await claimSideReasons({
+    run: args.run,
+    reading: args.reading,
+  });
   return {
-    eval_id: args.evalId,
-    eval_run_id: run.publicId,
-    claim: run.claim,
-    verdict: isVerdict(run.verdict)
-      ? worseOf(run.verdict, worstVerdict(extra))
-      : null,
-    verdict_reasons: reasons.length > 0 ? reasons : run.verdictReasons,
-    settled_at: run.finishedAt,
+    ...settled,
+    verdict: worseOf({ a: settled.verdict, b: worstVerdict(extra) }),
+    verdict_reasons: [...(args.run.verdictReasons ?? []), ...extra],
   };
 };
 
-/** Every claim the speaking runs carry; a run with none holds none. */
+/** By code point, not locale: a page boundary must not move with the server's locale. */
+const byEvalId = (a: VersionClaim, b: VersionClaim): number => {
+  return a.eval_id < b.eval_id ? -1 : 1;
+};
+
+/**
+ * Every claim the speaking runs carry, by `eval_id`; a run with none holds
+ * none. The claims read and the record a promotion writes both come from
+ * here, so both are in the same order.
+ */
 export const versionClaimsOf = async (args: {
   runs: Map<string, EvalRunRow>;
   reading: ClaimReading;
 }): Promise<VersionClaim[]> => {
+  log('versionClaimsOf: runs=%d', args.runs.size);
   const claimed = [...args.runs].filter(([, run]) => {
     return run.claim !== null;
   });
-  return Promise.all(
+  const claims = await Promise.all(
     claimed.map(([evalId, run]) => {
       return versionClaimOf({ evalId, run, reading: args.reading });
     })
   );
+  return claims.sort(byEvalId);
 };
 
 /** The agent a version read names, within the caller's projects, and its version row. */
@@ -268,22 +315,16 @@ export const listAgentVersionClaims = async (args: {
   );
 
   const { agent } = await findVersion(args);
-  const claims = (
-    await versionClaimsOf({
-      runs: await speakingRuns({ agent, version: args.version }),
-      reading: claimReading({ agent, version: args.version }),
-    })
-  ).sort((a, b) => {
-    // By code point, not locale: a page boundary must not move with the
-    // server's locale. Eval ids are unique, so no two compare equal.
-    return a.eval_id < b.eval_id ? -1 : 1;
+  const claims = await versionClaimsOf({
+    runs: await speakingRuns({ agent, version: args.version }),
+    reading: claimReading({ agent, version: args.version }),
   });
 
   return pageOf({
     items: claims,
     limit: args.limit,
     cursor: args.cursor,
-    filters: { agentId: args.agentId, version: args.version },
+    filters: { list: 'claims', agentId: args.agentId, version: args.version },
   });
 };
 
@@ -307,6 +348,10 @@ export const listAgentVersionPromotionClaims = async (args: {
     items: Array.isArray(recorded) ? recorded : [],
     limit: args.limit,
     cursor: args.cursor,
-    filters: { agentId: args.agentId, version: args.version },
+    filters: {
+      list: 'promotion-claims',
+      agentId: args.agentId,
+      version: args.version,
+    },
   });
 };

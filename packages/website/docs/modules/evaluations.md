@@ -585,9 +585,9 @@ omitting it keeps it.
 An unknown key, `required_groups` without `group_by`, an empty or repeated name, and
 clearing `group_by` while groups are required are `400 VALIDATION_FAILED`.
 
-`live` reads the generations of the agent version that finished (`completed` or `failed`) in
-the rolling `window` (`1h`, `24h`, `7d` or `30d`, the windows a guardrail's
-[`runtime.*` keys](./guardrails.md) name), excluding those an eval run started, and the guardrail evaluations and
+`live` reads the generations of the agent version that started in the rolling `window` (`1h`,
+`24h`, `7d` or `30d`, the rolling windows a guardrail's [`runtime.*` keys](./guardrails.md)
+name; not `total`) and finished (`completed` or `failed`), excluding those an eval run started, and the guardrail evaluations and
 approvals linked to them by `generation_id`. A row with no generation link is not read. Each
 declared rule adds a reason with `scope: { kind: "live", name: <rule> }`:
 
