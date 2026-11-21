@@ -12,6 +12,12 @@ import { authenticatedTestClient } from '../../testClient';
 
 type Message = { role: string; content: string };
 
+const GATE_CLAIM = {
+  statement: 'The canary names capitals correctly.',
+  population: null,
+  limits: ['European capitals only'],
+};
+
 describe('Promotion gate — the evidence it reads', () => {
   let adminToken: string;
   let userToken: string;
@@ -78,6 +84,7 @@ describe('Promotion gate — the evidence it reads', () => {
         dataset_id: datasetId,
         scorers: [{ type: 'contains', value: 'Paris' }],
         pass_threshold: 0.9,
+        claim: GATE_CLAIM,
       });
     expect(res.status).toBe(201);
     return res.body.id as string;
@@ -181,7 +188,7 @@ describe('Promotion gate — the evidence it reads', () => {
     expect(res.body.active_release).toBeNull();
   });
 
-  test('an insufficient run blocks and names its verdict and reasons', async () => {
+  test('an insufficient run blocks and names its claim, verdict and reasons', async () => {
     const agentId = await createTwoVersionAgent();
     const evalId = await createEval4Items90(agentId);
     await gate(agentId, evalId);
@@ -196,6 +203,7 @@ describe('Promotion gate — the evidence it reads', () => {
       promotion_gate: evalId,
       agent_version: 2,
       eval_run_id: run.id,
+      claim: GATE_CLAIM,
       verdict: 'insufficient',
       verdict_reasons: [expect.objectContaining({ scope: { kind: 'run' } })],
     });
