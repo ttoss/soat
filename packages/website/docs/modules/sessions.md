@@ -182,7 +182,7 @@ curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
 
 **Fork by reference, not by copy.** The fork gets its own [conversation](./conversations.md) whose messages point at the **same [Document](./documents.md) rows** as the parent; only the ordering is duplicated. One stored copy of the content means a retention purge erases it from parent and fork together.
 
-**Replay, never re-invoke.** Recorded tool calls and their results ride along on the copied messages and are replayed as model input on the fork's next turn. Forking never calls a tool, so a fork cannot send an email or charge a card a second time; a forked turn sees the tool data **as it was**, which suits comparison, not resuming a session for real.
+**Replay, never re-invoke.** Recorded tool calls and their results ride along on the copied messages, with the [vendor options](./generations.md#vendor-options) stored beside them, and are replayed as model input on the fork's next turn. Forking never calls a tool, so a fork cannot send an email or charge a card a second time; a forked turn sees the tool data **as it was**, which suits comparison, not resuming a session for real.
 
 **The fork is inert.** `auto_generate` is `false` and no generation is triggered; drive the branch with `POST .../messages` and `POST .../generate`. It starts without an actor, because [single session per actor](#single-session-per-actor) allows one open session per (agent, actor) pair and inheriting the parent's actor would make forking impossible for those agents.
 

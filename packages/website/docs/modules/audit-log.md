@@ -132,7 +132,7 @@ Entries are never updated or deleted through the API; the model layer rejects up
 
 [`GET /api/v1/audit-log/export`](/docs/api/audit-log/export-audit-entries) streams a project's entries as newline-delimited JSON, oldest first, same fields as the read API, for archival and shipping to a SIEM, data lake, or an LGPD/GDPR subject-access request.
 
-- `project_id` is **required**.
+- `project_id` names the project, or a [project-bound credential](./projects.md#project-selection) implies its own.
 - Every list filter (`action`, `principal_id`, `resource_public_id`, `resource_srn`, `from`, `to`) applies identically.
 - The response streams and pages internally.
 - Authorized by `audit:ExportAuditEntries`, separate from `audit:ListAuditEntries`.

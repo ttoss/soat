@@ -58,7 +58,7 @@ const assertSyncIngestible = (
   if (size > max) {
     throw new DomainError(
       'FILE_TOO_LARGE_FOR_SYNC',
-      `File is ${size} bytes, which exceeds the ${max}-byte synchronous ingestion limit. Retry in background mode (omit ?wait=true) and poll GET /documents/{id}/status.`
+      `File is ${size} bytes, which exceeds the ${max}-byte synchronous ingestion limit.`
     );
   }
 };
@@ -128,7 +128,7 @@ const createDocumentOrThrowConflict = async (args: {
       });
       throw new DomainError(
         'FILE_ALREADY_INGESTED',
-        `File '${args.fileId}' already backs Document '${existing?.publicId}'. Use POST /documents/${existing?.publicId}/ingest to re-process it, or upload a new copy of the file to ingest it separately.`,
+        `File '${args.fileId}' already backs Document '${existing?.publicId}'.`,
         { file_id: args.fileId, document_id: existing?.publicId }
       );
     }
@@ -181,7 +181,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
       // may arrive arbitrarily later — the converter must respond inline.
       throw new DomainError(
         'CONVERTER_FAILED',
-        `Converter '${resolved.converterId}' deferred with { status: "pending" }, which synchronous ingestion (?wait=true) cannot wait for. Retry without ?wait=true.`
+        `Converter '${resolved.converterId}' deferred with { status: "pending" }, which synchronous ingestion (?wait=true) cannot wait for.`
       );
     }
 

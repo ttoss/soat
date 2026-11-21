@@ -917,8 +917,8 @@ paths:
         of the eval it names that was recorded against this agent (`agent_id`)
         and pinned to the canary version (`agent_version`) must read `verdict:
         supported`. A newer run revokes an older one. Otherwise the call is a
-        `409`, whose `meta` names that run's `eval_run_id`, `verdict` and
-        `verdict_reasons` when there is one, and the rollout is left running
+        `409`, whose `meta` names that run's `eval_run_id`, `claim`, `verdict`
+        and `verdict_reasons` when there is one, and the rollout is left running
         untouched. The run that cleared the gate is recorded as `eval_run_id` on
         the version that goes live.
       operationId: promoteAgentRelease
@@ -2451,7 +2451,10 @@ components:
             response_messages:
               type: array
               nullable: true
-              description: Full AI SDK response messages (tool calls, tool results, final text)
+              description: >-
+                Full AI SDK response messages (tool calls, tool results,
+                reasoning, final text), without `providerOptions`: the vendor
+                state a replay needs is stored apart and never served.
               items:
                 type: object
             object:

@@ -25,7 +25,7 @@ export const assertTurnHasMessage = (args: {
   if (withoutSystemMessages(args.messages).length > 0) return;
   throw new DomainError(
     'NO_MESSAGE_TO_ANSWER',
-    'The turn has no message to answer. Add a message, then generate again.'
+    'The turn has no message to answer.'
   );
 };
 

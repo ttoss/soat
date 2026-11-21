@@ -11,6 +11,7 @@ import {
   validatePolicyDocument,
 } from './iam';
 import { isPlainObject } from './plainObject';
+import { carriesDenial } from './policyDenial';
 import { type PrincipalBound, serializeBound } from './principalBound';
 import { signToken } from './signedTokens';
 import { parseToolContextLayer } from './toolContextLayer';
@@ -133,6 +134,10 @@ const parsePolicy = (args: { policy: unknown }): PrincipalBound => {
       validation.errors
     );
   }
+  // A denial is written only on a stored policy, by an unrestricted admin.
+  if (carriesDenial(document)) {
+    throw policyInvalid('policy may not carry a statement denial.');
+  }
   return { policy: document };
 };
 
@@ -144,7 +149,7 @@ const parseBoundBody = async (args: {
   if ((policy === undefined) === (policyIds === undefined)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'Send exactly one of policy and policy_ids.'
+      'policy and policy_ids are mutually exclusive, and one is required.'
     );
   }
   return policy === undefined

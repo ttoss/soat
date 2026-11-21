@@ -125,6 +125,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-18-usage-event-model-aliases` | `usage_events.model` under a vendor model id renamed to the one alias of the event's provider that targets it; an id two aliases target, or none, kept; no other column written |
 | `2026-11-21-eval-run-verdict` | `evals.evidence` (`json`), the rules a verdict reads beyond the threshold; `eval_runs.verdict` and `eval_runs.verdict_reasons` beside `eval_runs.passed` |
 | `2026-11-21-eval-run-drop-passed` | `eval_runs.passed` dropped; `eval_runs.verdict` replaces it |
+| `2026-11-21-eval-claim` | `evals.claim` and `eval_runs.claim` (`json`), the claim an eval's runs test and the copy each run takes at creation; nothing filled |
 
 Run them from the server package, which owns the entrypoint:
 

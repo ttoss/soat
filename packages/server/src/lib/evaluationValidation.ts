@@ -142,6 +142,85 @@ export const validateEvidence = (args: {
   });
 };
 
+/** What a run of an eval tests: one shape on the eval, the run and the event. */
+export type EvalClaim = {
+  statement: string;
+  population: string | null;
+  limits: string[] | null;
+};
+
+const CLAIM_KEYS: ReadonlySet<string> = new Set([
+  'statement',
+  'population',
+  'limits',
+]);
+
+const isText = (value: unknown): value is string => {
+  return typeof value === 'string' && value.trim() !== '';
+};
+
+const claimProblem = (claim: Record<string, unknown>): string | null => {
+  const extra = Object.keys(claim).find((key) => {
+    return !CLAIM_KEYS.has(key);
+  });
+  if (extra !== undefined) return `claim.${extra} is not a known field.`;
+  if (!isText(claim.statement)) {
+    return 'claim.statement is required and must be a non-empty string.';
+  }
+  if (claim.population != null && !isText(claim.population)) {
+    return 'claim.population must be a non-empty string, or null.';
+  }
+  if (claim.limits == null) return null;
+  if (!Array.isArray(claim.limits)) {
+    return 'claim.limits must be an array of non-empty strings, or null.';
+  }
+  const index = claim.limits.findIndex((limit) => {
+    return !isText(limit);
+  });
+  return index === -1
+    ? null
+    : `claim.limits.${index} must be a non-empty string.`;
+};
+
+type ClaimInput = {
+  statement: string;
+  population?: string | null;
+  limits?: string[] | null;
+};
+
+const isClaimInput = (claim: Record<string, unknown>): claim is ClaimInput => {
+  return claimProblem(claim) === null;
+};
+
+/**
+ * The `claim` as stored: every field present, so an omitted `population` or
+ * `limits` reads `null` everywhere the claim is served. `undefined` leaves the
+ * field untouched; `null` clears it.
+ */
+export const requireClaim = (claim: unknown): EvalClaim | null | undefined => {
+  if (claim === undefined || claim === null) return claim;
+  if (!isPlainObject(claim)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'claim must be an object, or null.'
+    );
+  }
+  if (!isClaimInput(claim)) {
+    throw new DomainError('VALIDATION_FAILED', String(claimProblem(claim)));
+  }
+  return {
+    statement: claim.statement,
+    population: claim.population ?? null,
+    limits: claim.limits ?? null,
+  };
+};
+
+/** The `claim` an update writes, or nothing when it leaves the claim untouched. */
+export const claimUpdate = (claim: unknown): { claim?: EvalClaim | null } => {
+  const stored = requireClaim(claim);
+  return stored === undefined ? {} : { claim: stored };
+};
+
 /** Turns a validator's message into the `400` the route surfaces. */
 export const assertValid = (message: string | null): void => {
   if (message) throw new DomainError('VALIDATION_FAILED', message);

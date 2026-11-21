@@ -43,7 +43,7 @@ const resolveParentDatasetId = async (args: {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `dataset_id is immutable: item '${args.itemId}' belongs to '${item.dataset_id}'. Declare a new dataset_item instead.`
+      `dataset_id is immutable: item '${args.itemId}' belongs to '${item.dataset_id}'.`
     );
   }
   return item.dataset_id;

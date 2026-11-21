@@ -261,8 +261,10 @@ paths:
       parameters:
         - name: project_id
           in: query
-          required: true
-          description: Project public ID to aggregate usage for
+          required: false
+          description: >-
+            Project public ID to aggregate usage for; a project-bound credential
+            implies its own
           schema:
             type: string
         - name: group_by

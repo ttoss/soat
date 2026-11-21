@@ -14,6 +14,7 @@ import {
   sumProvenance,
 } from './generationProvenance';
 import { agentReferences } from './resourceReferences';
+import { joinVendorOptions, readVendorOptions } from './vendorOptions';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
@@ -78,7 +79,10 @@ const buildConversationHistory = async (args: {
       // Expand stored AI SDK response messages (tool calls, tool results, final
       // text) so the LLM sees the full tool-use chain on subsequent turns.
       if (Array.isArray(responseMessages) && responseMessages.length > 0) {
-        return responseMessages as Array<{ role: string; content: unknown }>;
+        return joinVendorOptions({
+          messages: responseMessages,
+          vendorOptions: readVendorOptions(msg.vendorOptions),
+        }) as Array<{ role: string; content: unknown }>;
       }
       return [await buildMessageEntry({ msg })];
     })
@@ -306,6 +310,7 @@ const storeGeneratedTurn = async (args: {
       responseMessages && responseMessages.length > 0
         ? responseMessages
         : undefined,
+    vendorOptions: args.output?.vendorOptions,
     provenance: await readGenerationProvenance({
       generationId: args.generationId,
       withoutReplayed: true,

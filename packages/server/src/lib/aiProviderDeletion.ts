@@ -105,7 +105,7 @@ export const deleteAiProvider = async (args: {
     ].filter(Boolean);
     throw new DomainError(
       'AI_PROVIDER_HAS_DEPENDENTS',
-      `AI provider '${args.id}' is in use by ${parts.join(', ')} and cannot be deleted. Delete or repoint them before deleting the provider (force does not override live references).`,
+      `AI provider '${args.id}' is in use by ${parts.join(', ')} and cannot be deleted, with or without force.`,
       meta
     );
   }
@@ -113,7 +113,7 @@ export const deleteAiProvider = async (args: {
   if (softCount > 0 && !args.force) {
     throw new DomainError(
       'AI_PROVIDER_HAS_DEPENDENTS',
-      `AI provider '${args.id}' has ${meta.price_override_count} price override(s) and ${meta.usage_event_count} usage record(s). Retry with force=true to delete its overrides and unlink usage history.`,
+      `AI provider '${args.id}' has ${meta.price_override_count} price override(s) and ${meta.usage_event_count} usage record(s), which block its deletion without force=true.`,
       meta
     );
   }

@@ -162,7 +162,7 @@ sharesRouter.get('/shares/:share_id/references', async (ctx: Context) => {
   if (party.side === 'publisher') {
     throw new DomainError(
       'VALIDATION_FAILED',
-      "References are a grantee's own resources; name the grantee project in project_id.",
+      "References are a grantee's own resources; project_id must name the grantee project.",
       { field: 'project_id' }
     );
   }
@@ -238,7 +238,7 @@ sharesRouter.post('/shares/:share_id/accept', async (ctx: Context) => {
   if (party.side === 'publisher') {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'A project cannot accept its own share; name the grantee project in project_id.',
+      'A project cannot accept its own share; project_id must name the grantee project.',
       { field: 'project_id' }
     );
   }

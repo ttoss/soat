@@ -3,6 +3,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import {
+  declareDenialCodes,
+  isDeclaredDenialCode,
+  parseDenialCodes,
+} from 'src/errors';
+import {
   IAM_REGISTRATIONS_CONFIG_ENV,
   initIamRegistrations,
   isRegisteredIamModule,
@@ -135,20 +140,86 @@ describe('loadIamRegistrationConfig', () => {
   });
 });
 
+describe('parseDenialCodes', () => {
+  const parseCodes = (config: unknown) => {
+    return parseDenialCodes({ config, source: 'cfg' });
+  };
+
+  test('returns each declared code with its hint', () => {
+    const codes = parseCodes({
+      denial_codes: [{ code: 'PLAN_REQUIRED', hint: 'Upgrade the plan.' }],
+    });
+
+    expect([...codes]).toEqual([['PLAN_REQUIRED', 'Upgrade the plan.']]);
+  });
+
+  test.each([null, {}])('declares nothing for %p', (config) => {
+    expect(parseCodes(config).size).toBe(0);
+  });
+
+  test.each([
+    [{ denial_codes: {} }, '`denial_codes` must be an array'],
+    [{ denial_codes: ['X'] }, 'denial_codes[0] must be an object'],
+    [{ denial_codes: [{ code: 'lower', hint: 'h' }] }, '.code must match'],
+    [{ denial_codes: [{ hint: 'h' }] }, '.code must match'],
+    [
+      { denial_codes: [{ code: 'FORBIDDEN', hint: 'h' }] },
+      "'FORBIDDEN' is already defined",
+    ],
+    [
+      {
+        denial_codes: [
+          { code: 'PLAN_REQUIRED', hint: 'h' },
+          { code: 'PLAN_REQUIRED', hint: 'h' },
+        ],
+      },
+      "denial_codes[1].code 'PLAN_REQUIRED' is already defined",
+    ],
+    [
+      { denial_codes: [{ code: 'PLAN_REQUIRED', hint: ' ' }] },
+      '.hint must be a non-empty string',
+    ],
+    [
+      { denial_codes: [{ code: 'PLAN_REQUIRED' }] },
+      '.hint must be a non-empty string',
+    ],
+  ])('rejects %j', (config, message) => {
+    expect(() => {
+      return parseCodes(config);
+    }).toThrow(message);
+  });
+});
+
 describe('initIamRegistrations', () => {
   afterEach(() => {
     delete process.env[IAM_REGISTRATIONS_CONFIG_ENV];
     unregisterIamModules({ modules: ['channels'] });
+    declareDenialCodes({ codes: new Map() });
   });
 
-  test('registers the modules the configured file declares', () => {
+  test('registers the modules and denial codes the configured file declares', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iam-reg-'));
     const file = path.join(dir, 'iam.json');
-    fs.writeFileSync(file, JSON.stringify({ modules: [CHANNELS] }));
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        modules: [CHANNELS],
+        denial_codes: [{ code: 'PLAN_REQUIRED', hint: 'Upgrade the plan.' }],
+      })
+    );
     process.env[IAM_REGISTRATIONS_CONFIG_ENV] = file;
 
     initIamRegistrations();
 
     expect(isRegisteredIamModule('channels')).toBe(true);
+    expect(isDeclaredDenialCode('PLAN_REQUIRED')).toBe(true);
+  });
+
+  test('declares no denial code when no file is configured', () => {
+    declareDenialCodes({ codes: new Map([['PLAN_REQUIRED', 'h']]) });
+
+    initIamRegistrations();
+
+    expect(isDeclaredDenialCode('PLAN_REQUIRED')).toBe(false);
   });
 });

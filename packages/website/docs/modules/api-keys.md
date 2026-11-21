@@ -71,7 +71,7 @@ With a project-scoped key `project_id` is **optional** on requests:
   {
     "error": {
       "code": "API_KEY_PROJECT_SCOPE",
-      "message": "This API key is scoped to project 'proj_A' and cannot access project 'proj_B'. Mint a key scoped to 'proj_B' (or an unscoped key) to operate there.",
+      "message": "This API key is scoped to project 'proj_A' and cannot act on project 'proj_B'.",
       "meta": { "scoped_project": "proj_A", "requested_project": "proj_B" }
     }
   }
