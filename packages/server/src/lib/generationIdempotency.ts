@@ -8,6 +8,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { agents } from './agentAccessor';
 import type { CreateGenerationArgs } from './agentGeneration';
+import { announceGenerationRecorded } from './generationRecorded';
 import { claimIdempotencyKey, idempotencyKeyReused } from './idempotencyClaim';
 import { stableDigest } from './stableDigest';
 
@@ -134,8 +135,11 @@ export const claimKeyedGeneration = async <Prep>(args: {
         idempotency,
       });
     },
-    create: () => {
-      return args.prepare({ ...request, idempotency });
+    create: async () => {
+      const prepared = await args.prepare({ ...request, idempotency });
+      // The record exists once `prepare` returns: a handoff may be waiting on it.
+      announceGenerationRecorded({ idempotencyKey: idempotency.key });
+      return prepared;
     },
   });
   return 'replayed' in claimed
