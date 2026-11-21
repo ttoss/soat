@@ -280,7 +280,7 @@ const assertNotInUse = async (args: {
   if (references.length === 0) return;
   throw new DomainError(
     'SHARE_IN_USE',
-    `This project still names the resource of share '${args.share.publicId}'; pass force=true to revoke anyway.`,
+    `This project still names the resource of share '${args.share.publicId}'.`,
     { references }
   );
 };

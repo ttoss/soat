@@ -397,6 +397,31 @@ components:
             they round-trip exactly as written: `iam:ResourceTag/cost_center`
             selects the tag `cost_center`, not `costCenter`.
           example: { StringEquals: { 'iam:ResourceTag/env': 'prod' } }
+        denial:
+          $ref: '#/components/schemas/PolicyDenial'
+    PolicyDenial:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      description: >-
+        On a `Deny` only: what a request this statement denies answers in place
+        of `FORBIDDEN`. `code` is one the deployment declares; `meta` is added
+        beside `action`, `resource` and `denied_by`. Only an unrestricted admin
+        writes a policy carrying one (`403 POLICY_DENIAL_RESERVED`).
+      properties:
+        code:
+          type: string
+          example: PLAN_FEATURE_NOT_INCLUDED
+        message:
+          type: string
+          example: Guardrails are not included in this plan.
+        meta:
+          type: object
+          additionalProperties: true
+          description: Snake_case keys, none of `action`, `resource`, `denied_by`.
+          example: { feature: guardrails }
     PolicyDocument:
       type: object
       required:

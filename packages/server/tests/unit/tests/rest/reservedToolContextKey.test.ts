@@ -154,8 +154,8 @@ describe('a reserved-prefix tool_context key', () => {
       .get(`/api/v1/generations/${res.body.id}/transcript`);
     expect(transcript.status).toBe(200);
     const [failed] = transcript.body.steps[0].tool_results;
-    expect(failed.error.meta.tool_status_code).toBe(400);
-    expect(failed.error.meta.tool_error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    expect(failed.result.status).toBe(400);
+    expect(failed.result.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
   });
 
   describe('in a formation template', () => {

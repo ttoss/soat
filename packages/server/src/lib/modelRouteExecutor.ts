@@ -2,8 +2,8 @@ import type { LanguageModel } from 'ai';
 import createDebug from 'debug';
 
 import {
+  type BreakerTarget,
   isTargetTripped,
-  modelRouteBreakerKey,
   recordTargetFailure,
   recordTargetSuccess,
 } from './modelRouteBreaker';
@@ -34,7 +34,7 @@ export type RoutedTarget = {
   index: number;
   /** Public id of the target's AI provider, reported in routing metadata. */
   aiProviderId: string;
-  /** Internal provider id — half of the shared circuit-breaker key. */
+  /** Internal provider id, part of the circuit-breaker key. */
   aiProviderDbId: number;
   modelName: string;
   timeoutMs: number | null;
@@ -64,6 +64,8 @@ export type RoutingMetadata = {
 
 export type RoutedModelSpec = {
   routeId: string;
+  /** The project consuming the route; scopes its breaker state. */
+  projectId: number;
   retryOn: readonly ModelRouteErrorClass[];
   failureThreshold: number;
   cooldownSeconds: number;
@@ -165,13 +167,21 @@ const composeAttemptSignal = (args: {
  * refusing to call would turn a transient outage into a hard `cooldown_seconds`
  * outage even after the provider recovered.
  */
+const breakerTarget = (args: {
+  spec: RoutedModelSpec;
+  target: RoutedTarget;
+}): BreakerTarget => {
+  return {
+    projectId: args.spec.projectId,
+    aiProviderDbId: args.target.aiProviderDbId,
+    model: args.target.modelName,
+  };
+};
+
 const selectTargets = (spec: RoutedModelSpec): RoutedTarget[] => {
   const eligible = spec.targets.filter((target) => {
     return !isTargetTripped({
-      key: modelRouteBreakerKey({
-        aiProviderDbId: target.aiProviderDbId,
-        model: target.modelName,
-      }),
+      target: breakerTarget({ spec, target }),
       failureThreshold: spec.failureThreshold,
       cooldownSeconds: spec.cooldownSeconds,
     });
@@ -195,10 +205,7 @@ const runWithFallback = async <T>(args: {
 
   for (const target of targets) {
     targetsTried += 1;
-    const breakerKey = modelRouteBreakerKey({
-      aiProviderDbId: target.aiProviderDbId,
-      model: target.modelName,
-    });
+    const breaker = breakerTarget({ spec, target });
 
     for (let attempt = 0; attempt <= target.maxRetries; attempt += 1) {
       try {
@@ -212,7 +219,7 @@ const runWithFallback = async <T>(args: {
             }),
           },
         });
-        recordTargetSuccess({ key: breakerKey });
+        recordTargetSuccess({ target: breaker });
         routing.attempts.push({
           target_index: target.index,
           ai_provider_id: target.aiProviderId,
@@ -250,7 +257,7 @@ const runWithFallback = async <T>(args: {
           throw error;
         }
 
-        recordTargetFailure({ key: breakerKey });
+        recordTargetFailure({ target: breaker });
       }
     }
   }

@@ -13,7 +13,7 @@
     },
     "ACTOR_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "ADMISSION_REFUSED": {
@@ -28,17 +28,22 @@
     },
     "AGENT_AND_CHAT_EXCLUSIVE": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "AGENT_HAS_DEPENDENTS": {
       "http_status": 409,
-      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
-      "routes": []
+      "hint": "Delete the deciders that name the agent (`meta.decider_count`), or point them at another agent with `PATCH /api/v1/deciders/{decider_id}`; they block deletion even under `force=true`. Generations, traces, accepted shares and ingestion rules block only until `force=true`.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/deciders/{decider_id}"
+        }
+      ]
     },
     "AGENT_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "AGENT_RUN_AS_REQUIRES_POLICIES": {
@@ -63,7 +68,7 @@
     },
     "AI_PROVIDER_HAS_DEPENDENTS": {
       "http_status": 409,
-      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
+      "hint": "Delete or repoint the agents, chats and model routes that reference the provider, then delete it; `force` does not override them. Price overrides, usage records and accepted shares (`meta.forcible`) block only until `force=true`, which drops the overrides, unlinks usage history and revokes the shares.",
       "routes": []
     },
     "AI_PROVIDER_MISCONFIGURED": {
@@ -73,7 +78,7 @@
     },
     "AI_PROVIDER_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "API_KEY_POLICY_BOUNDARY": {
@@ -83,7 +88,7 @@
     },
     "API_KEY_PROJECT_SCOPE": {
       "http_status": 403,
-      "hint": "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use an unscoped credential.",
+      "hint": "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use a credential scoped to the target project, or an unscoped one.",
       "routes": []
     },
     "APPROVAL_ALREADY_RESOLVED": {
@@ -98,7 +103,7 @@
     },
     "APPROVAL_INVALID_EDIT": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "APPROVAL_NOT_FOUND": {
@@ -108,7 +113,7 @@
     },
     "APPROVAL_REASON_REQUIRED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "BOOTSTRAP_ALREADY_COMPLETED": {
@@ -133,7 +138,7 @@
     },
     "CHAT_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "CONVERSATION_POSITION_CONFLICT": {
@@ -148,7 +153,7 @@
     },
     "CONVERTER_FAILED": {
       "http_status": 422,
-      "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
+      "hint": "The message names the converter and how it failed. A tool converter that defers with `{ status: \"pending\" }` runs only without `wait=true`; otherwise fix the converter's tool or agent and ingest again.",
       "routes": []
     },
     "CONVERTER_OUTPUT_INVALID": {
@@ -242,8 +247,13 @@
     },
     "FILE_ALREADY_INGESTED": {
       "http_status": 409,
-      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
-      "routes": []
+      "hint": "Re-process the existing document with `POST /api/v1/documents/{document_id}/ingest` (`meta.document_id`), or upload a new copy of the file to ingest it separately.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/documents/{document_id}/ingest"
+        }
+      ]
     },
     "FILE_DOWNLOAD_URL_NOT_CONFIGURED": {
       "http_status": 500,
@@ -257,12 +267,12 @@
     },
     "FILE_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "FILE_PARSE_FAILED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "FILE_STORAGE_MISCONFIGURED": {
@@ -297,17 +307,17 @@
     },
     "FORMATION_INVALID_METADATA": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "FORMATION_INVALID_PARAMETERS": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "FORMATION_MISSING_PARAMETERS": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "FORMATION_REPLACE_CLEANUP_FAILED": {
@@ -367,7 +377,7 @@
     },
     "GUARDRAIL_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "HOOK_DELIVERY_REPLAYED": {
@@ -377,7 +387,7 @@
     },
     "HOOK_INVALID_JSON": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "HOOK_PAYLOAD_TOO_LARGE": {
@@ -422,7 +432,7 @@
     },
     "INGESTION_RULE_VALIDATION_FAILED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "INGESTION_TIMEOUT": {
@@ -437,32 +447,32 @@
     },
     "INVALID_CRON_EXPRESSION": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "INVALID_CURSOR": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "INVALID_EVENT_PATTERN": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "INVALID_OUTPUT_SCHEMA": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "INVALID_TEMPLATE_TOKEN": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "INVALID_TOOL_CONTEXT_KEY": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Rename the `tool_context` keys in `meta.keys` so each maps to a header of its own.",
       "routes": []
     },
     "LITERAL_CREDENTIAL": {
@@ -492,17 +502,17 @@
     },
     "MEMORY_RULE_VALIDATION_FAILED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "MEMORY_STORE_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "MISSING_TOOL_CONTEXT_KEY": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Send a `tool_context` carrying `meta.key`, or call the tool through an entry point that forwards one.",
       "routes": []
     },
     "MODEL_LISTING_FAILED": {
@@ -512,7 +522,7 @@
     },
     "MODEL_LISTING_UNSUPPORTED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "MODEL_NOT_OFFERED": {
@@ -549,7 +559,7 @@
     },
     "MODEL_ROUTE_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "NAME_CONFLICT": {
@@ -593,7 +603,7 @@
     },
     "OAUTH_CLIENT_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "OAUTH_CONNECTION_REFRESH_FAILED": {
@@ -628,7 +638,7 @@
     },
     "ORCHESTRATION_HUMAN_NODE_MISMATCH": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "ORCHESTRATION_MAX_ITERATIONS_EXCEEDED": {
@@ -688,8 +698,13 @@
     },
     "ORCHESTRATION_RUN_PAUSED": {
       "http_status": 409,
-      "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
-      "routes": []
+      "hint": "Resume the run with `POST /api/v1/orchestration-runs/{orchestration_run_id}/resume`, then retry.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/orchestration-runs/{orchestration_run_id}/resume"
+        }
+      ]
     },
     "ORCHESTRATION_VALIDATION_FAILED": {
       "http_status": 400,
@@ -703,7 +718,7 @@
     },
     "OUTPUT_SCHEMA_STREAMING_UNSUPPORTED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Set `stream` to false, or remove `output_schema` from the agent or the request.",
       "routes": []
     },
     "OUTPUT_SCHEMA_VALIDATION_FAILED": {
@@ -713,7 +728,7 @@
     },
     "PDF_PARSE_FAILED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "PIPELINE_DEPTH_EXCEEDED": {
@@ -723,7 +738,7 @@
     },
     "PIPELINE_INVALID_STEP": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "PIPELINE_STEP_FAILED": {
@@ -846,6 +861,11 @@
         }
       ]
     },
+    "POLICY_DENIAL_RESERVED": {
+      "http_status": 403,
+      "hint": "Remove `denial` from every statement, or have an unrestricted admin write the policy.",
+      "routes": []
+    },
     "POLICY_GRANT_NOT_HELD": {
       "http_status": 403,
       "hint": "Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.",
@@ -879,7 +899,7 @@
     },
     "POLICY_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "POLICY_OUTSIDE_PROJECT": {
@@ -983,17 +1003,17 @@
     },
     "REQUEST_REJECTED": {
       "http_status": 400,
-      "hint": "The HTTP layer rejected the request before it reached a handler — path, method, content type, or size. The message names the reason; `/openapi.json` lists every path and method.",
+      "hint": "The HTTP layer rejected the request before it reached a handler — path, method, content type, or size. The message names the reason; `/api/v1/openapi.json` lists every path and method.",
       "routes": []
     },
     "RESERVED_PATH": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "RESERVED_TAG_KEY": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "RESOURCE_NOT_FOUND": {
@@ -1008,12 +1028,12 @@
     },
     "SECRET_NOT_DECRYPTABLE": {
       "http_status": 500,
-      "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
+      "hint": "Rotate the secret to replace it, or have the deployment operator restore the original `SECRETS_ENCRYPTION_KEY`, which recovers every secret written under it.",
       "routes": []
     },
     "SECRET_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "SESSION_CLOSED": {
@@ -1028,7 +1048,7 @@
     },
     "SESSION_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "SHARE_CAP_EXCEEDED": {
@@ -1063,7 +1083,7 @@
     },
     "SYSTEM_MESSAGE_NOT_ALLOWED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TASK_AUTOMATION_CHAIN_LIMIT": {
@@ -1098,7 +1118,7 @@
     },
     "TASK_GUARD_REJECTED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TASK_MIGRATION_CONFLICT": {
@@ -1128,12 +1148,12 @@
     },
     "TASK_PAYLOAD_INVALID": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TASK_STATE_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TASK_TRANSITION_CONFLICT": {
@@ -1143,7 +1163,7 @@
     },
     "TASK_TRANSITION_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TEXT_ENCODED_TOOL_CALL": {
@@ -1197,7 +1217,7 @@
     },
     "TOOL_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TOOL_RESPONSE_TOO_LARGE": {
@@ -1212,7 +1232,7 @@
     },
     "TRIGGER_ACTION_NOT_ALLOWED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TRIGGER_CAUSATION_LIMIT": {
@@ -1227,7 +1247,7 @@
     },
     "TRIGGER_INPUT_INVALID": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TRIGGER_INTERVAL_BELOW_FLOOR": {
@@ -1252,12 +1272,12 @@
     },
     "TRIGGER_TARGET_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "TRIGGER_TYPE_IMMUTABLE": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "UNAUTHORIZED": {
@@ -1297,7 +1317,7 @@
     },
     "VALIDATION_FAILED": {
       "http_status": 400,
-      "hint": "Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.",
+      "hint": "Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/api/v1/openapi.json`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.",
       "routes": []
     },
     "VERSION_CONFLICT": {
@@ -1322,12 +1342,12 @@
     },
     "WORKFLOW_VALIDATION_FAILED": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "WORKFLOW_VERSION_NOT_FOUND": {
       "http_status": 400,
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "WORK_AUTHORITY_MISSING": {
@@ -1338,7 +1358,7 @@
   },
   "status_fallbacks": {
     "400": {
-      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.",
+      "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
     "401": {

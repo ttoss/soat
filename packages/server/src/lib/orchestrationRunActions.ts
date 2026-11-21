@@ -193,7 +193,7 @@ export const submitHumanInput = async (args: {
   if (isRunPaused(run))
     throw new DomainError(
       'ORCHESTRATION_RUN_PAUSED',
-      `Run '${args.runPublicId}' is paused; resume it before submitting human input.`
+      `Run '${args.runPublicId}' is paused and takes no human input.`
     );
 
   // A node parked on child runs takes their outcome, never a caller's payload.

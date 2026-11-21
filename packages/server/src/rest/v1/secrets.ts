@@ -18,8 +18,7 @@ const secretsRouter = new Router<Context>();
 /**
  * These routes name the secret's own SRN; the shared preamble adds the
  * tenant-boundary half, so a credential pinned to another project gets its own
- * `API_KEY_PROJECT_SCOPE` with the remedy in the message rather than an opaque
- * `Forbidden`.
+ * `API_KEY_PROJECT_SCOPE` rather than an opaque `Forbidden`.
  *
  * `refuse` on the read too. Whether a denied read should hide the secret
  * instead — as tools and agents do — is a contract change of its own, not a

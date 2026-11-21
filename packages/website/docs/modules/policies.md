@@ -53,6 +53,8 @@ Each statement has an `effect` (`Allow` or `Deny`), `action` strings, and option
 }
 ```
 
+A `Deny` statement may carry a `denial` naming the code and message its refusal answers; only an unrestricted admin writes one ([IAM — Denial codes](./iam.md#denial-codes)).
+
 Format and evaluation: [IAM — Policy Documents](./iam.md#policy-documents). Example: [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
 
 ### Project and Global Policies

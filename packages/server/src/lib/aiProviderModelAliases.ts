@@ -48,7 +48,7 @@ export const assertModelOffered = (args: {
     : 'This AI provider';
   throw new DomainError(
     'MODEL_NOT_OFFERED',
-    `${subject} serves only its model_aliases; '${model}' is not one of them.`,
+    `${subject} does not serve '${model}'.`,
     { ai_provider_id: aiProvider.publicId ?? null, model }
   );
 };

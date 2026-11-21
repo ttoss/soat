@@ -56,7 +56,7 @@ describe('error resolutions', () => {
     expect(ERROR_RESOLUTIONS.AGENT_NOT_FOUND).toBeUndefined();
     expect(ERROR_CODES.AGENT_NOT_FOUND.httpStatus).toBe(400);
     expect(resolutionFor({ code: 'AGENT_NOT_FOUND' })).toBe(
-      STATUS_RESOLUTIONS[400]
+      renderHint({ template: STATUS_RESOLUTIONS[400] })
     );
   });
 

@@ -288,7 +288,7 @@ const substituteTokens = (args: {
           'MISSING_TOOL_CONTEXT_KEY',
           args.toolContext
             ? `${args.location.description} references '${original}', but the key '${key}' is not present in the tool_context for this call.`
-            : `${args.location.description} references '${original}', but this call carries no tool_context. Supply one, or call the tool through an entry point that forwards it.`,
+            : `${args.location.description} references '${original}', but this call carries no tool_context.`,
           { key, ...args.location.meta }
         );
       }

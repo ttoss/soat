@@ -1,4 +1,5 @@
-import { DomainError, errorBody } from '../errors';
+import { DomainError, isDeclaredDenialCode } from '../errors';
+import type { PolicyDenial } from './iam';
 import { isPlainObject } from './plainObject';
 import { principalFromAuthUser } from './principals';
 import type { ResourceGrantPrincipalType } from './resourceGrantCarriers';
@@ -29,13 +30,23 @@ export type DeniedPrincipal = {
 };
 
 /**
- * Whose set refused the last denied check of `action` (on `resource`), as the
+ * Whose set refused a check, and the `denial` of the `Deny` statement that
+ * decided it (`null` when none declares one, or nothing but a missing `Allow`
+ * refused).
+ */
+export type Refusal = {
+  principal: DeniedPrincipal;
+  denial: PolicyDenial | null;
+};
+
+/**
+ * The refusal of the last denied check of `action` (on `resource`), as the
  * authorizer that ran it recorded; `undefined` when none did.
  */
 export type RefusedBy = (args: {
   action: string;
   resource: string | null;
-}) => DeniedPrincipal | undefined;
+}) => Refusal | undefined;
 
 export type DeniedAction = { action: string; resource: string | null };
 
@@ -81,25 +92,31 @@ export const authorizationDenialMessage = (args: {
 /**
  * Every `FORBIDDEN` the server raises. `meta` names the first denied action
  * and resource and who denied it; `extra` adds a site's own fields beside them.
+ * A policy's `denial` answers its own code and message and adds its `meta`.
  */
 export const authorizationDenied = (args: {
   principal: DeniedPrincipal;
+  denial: PolicyDenial | null;
   denied: [DeniedAction, ...DeniedAction[]];
   extra?: Record<string, unknown>;
 }): DomainError => {
   const [first] = args.denied;
+  const { denial } = args;
   return new DomainError(
     'FORBIDDEN',
-    authorizationDenialMessage({
-      principal: args.principal,
-      denied: args.denied,
-    }),
+    denial?.message ??
+      authorizationDenialMessage({
+        principal: args.principal,
+        denied: args.denied,
+      }),
     {
+      ...denial?.meta,
       ...args.extra,
       action: first.action,
       resource: first.resource,
       denied_by: { type: args.principal.type, id: args.principal.id },
-    }
+    },
+    denial ? { relayed: { code: denial.code, httpStatus: 403 } } : undefined
   );
 };
 
@@ -117,19 +134,19 @@ type RefusableAuthUser = {
 };
 
 /**
- * Whose set refused the request's check of `action` on `resource`: the one its
- * authorizer recorded, else the credential.
+ * The refusal of the request's check of `action` on `resource`: the one its
+ * authorizer recorded, else the credential's with no denial.
  */
-export const refusingPrincipal = (args: {
+export const requestRefusal = (args: {
   authUser: RefusableAuthUser;
   action: string;
   resource: string | null;
-}): DeniedPrincipal => {
+}): Refusal => {
   return (
     args.authUser.isAllowed?.refusedBy?.({
       action: args.action,
       resource: args.resource,
-    }) ?? callerPrincipal(args.authUser)
+    }) ?? { principal: callerPrincipal(args.authUser), denial: null }
   );
 };
 
@@ -141,7 +158,7 @@ export const callerDenied = (args: {
   extra?: Record<string, unknown>;
 }): DomainError => {
   return authorizationDenied({
-    principal: refusingPrincipal(args),
+    ...requestRefusal(args),
     denied: [{ action: args.action, resource: args.resource }],
     extra: args.extra,
   });
@@ -155,22 +172,18 @@ export const agentDenied = (args: {
 }): DomainError => {
   return authorizationDenied({
     principal: { type: 'agent', id: args.agentId },
+    denial: null,
     denied: [{ action: args.action, resource: args.resource }],
   });
 };
 
-export const isAuthorizationDenial = (error: unknown): error is DomainError => {
-  return error instanceof DomainError && error.code === 'FORBIDDEN';
+/** A declared denial code relays as a `FORBIDDEN`; `null` for any other. */
+export const denialCodeOf = (code: string): 'FORBIDDEN' | null => {
+  return isDeclaredDenialCode(code) ? 'FORBIDDEN' : null;
 };
 
-/** A denial as a tool result the model reads: the body a REST call answers. */
-export const denialToolResult = (denial: DomainError) => {
-  return errorBody({
-    code: denial.code,
-    wireCode: denial.wireCode,
-    message: denial.message,
-    meta: denial.meta,
-  });
+export const isAuthorizationDenial = (error: unknown): error is DomainError => {
+  return error instanceof DomainError && error.code === 'FORBIDDEN';
 };
 
 const PRINCIPAL_TYPES = Object.keys(PRINCIPAL_LABELS);
@@ -182,49 +195,6 @@ export const isDeniedPrincipal = (value: unknown): value is DeniedPrincipal => {
     PRINCIPAL_TYPES.includes(value.type) &&
     (typeof value.id === 'string' || value.id === null)
   );
-};
-
-const parseJson = (value: unknown): unknown => {
-  if (typeof value !== 'string') return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return undefined;
-  }
-};
-
-/**
- * The denial a forwarded answer carries — a REST error body or a tool result,
- * as an object or its JSON text — so a forwarder relays the same code, action,
- * resource, principal and message; `extra` adds the forwarder's own fields.
- * `null` for anything else.
- */
-export const readForwardedDenial = (args: {
-  body: unknown;
-  extra?: Record<string, unknown>;
-}): DomainError | null => {
-  const body = parseJson(args.body);
-  const error = isPlainObject(body) ? body.error : undefined;
-  if (
-    !isPlainObject(error) ||
-    error.code !== 'FORBIDDEN' ||
-    typeof error.message !== 'string'
-  ) {
-    return null;
-  }
-  const meta = error.meta;
-  if (
-    !isPlainObject(meta) ||
-    typeof meta.action !== 'string' ||
-    !(typeof meta.resource === 'string' || meta.resource === null) ||
-    !isDeniedPrincipal(meta.denied_by)
-  ) {
-    return null;
-  }
-  return new DomainError('FORBIDDEN', error.message, {
-    ...args.extra,
-    ...meta,
-  });
 };
 
 /**

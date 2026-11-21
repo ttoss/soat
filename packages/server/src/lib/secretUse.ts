@@ -90,10 +90,10 @@ export const assertSecretUseAllowed = async (args: {
     };
   });
   throw authorizationDenied({
-    principal: args.isAllowed.refusedBy?.(first) ?? {
-      type: 'caller',
-      id: null,
-    },
+    ...(args.isAllowed.refusedBy?.(first) ?? {
+      principal: { type: 'caller', id: null },
+      denial: null,
+    }),
     denied: [first, ...rest],
     extra: { secret_ids: denied },
   });

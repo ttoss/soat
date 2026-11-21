@@ -14,6 +14,7 @@ import { readFileBuffer } from './fileStorage';
 import type { ProvenanceCounts } from './generationProvenance';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
+import type { PublicMessages, VendorOptions } from './vendorOptions';
 
 export const MESSAGE_ROLES = ['user', 'assistant'] as const;
 
@@ -156,7 +157,8 @@ type AddConversationMessageArgs = {
   agentId?: string | null;
   position?: number;
   metadata?: Record<string, unknown>;
-  responseMessages?: unknown[];
+  responseMessages?: PublicMessages;
+  vendorOptions?: VendorOptions;
   idempotencyKey?: string | null;
   idempotencyDigest?: string | null;
   provenance: ProvenanceCounts;
@@ -211,6 +213,7 @@ const createTextMessage = async (
     position: args.position,
     metadata: args.metadata,
     responseMessages: args.responseMessages,
+    vendorOptions: args.vendorOptions,
     idempotencyKey: args.idempotencyKey ?? null,
     idempotencyDigest: args.idempotencyDigest,
     provenance: args.provenance,

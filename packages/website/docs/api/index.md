@@ -73,8 +73,8 @@ Errors return a 4xx or 5xx status with a structured body:
 }
 ```
 
-`code` is stable and safe to branch on; `message` describes this occurrence;
-`hint` says what to do; `docs_url` points at that code's section on the
+`code` is stable and safe to branch on; `message` states what was refused in
+this occurrence, never what to do about it; `hint` says what to do; `docs_url` points at that code's section on the
 [Error Codes](/docs/error-codes) page; `meta` is optional, present only for
 some codes.
 
@@ -94,7 +94,8 @@ some codes.
 Each also carries `hint` and `docs_url`, unless the deployment sets
 [`SOAT_OMIT_ERROR_HINTS` or `SOAT_OMIT_ERROR_DOCS_URL`](/docs/self-hosting/configuration#server):
 then no error carries that field, on any surface. A `hint` names routes under
-the deployment's prefix, and the deployment may replace a code's hint.
+the deployment's prefix, and the deployment may replace a code's hint or leave
+keys out of its `meta`.
 
 The full catalog (every `error.code`, its HTTP status, meaning and remedy) is
 generated from the server source and published at [/errors.json](/errors.json),

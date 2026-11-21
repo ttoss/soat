@@ -175,6 +175,7 @@ describe('authorization denials', () => {
     });
 
     expect(results[0]).toEqual({
+      status: 403,
       error: {
         code: 'FORBIDDEN',
         ...forbiddenHints(),

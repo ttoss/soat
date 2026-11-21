@@ -4,10 +4,13 @@
  * server with short intervals. Framing and error frames are covered at the
  * routes (`agentGeneration.test.ts`, `chats.test.ts`).
  */
+import * as fs from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
-import { DomainError } from 'src/errors';
+import { DomainError, initErrorHintOverrides } from 'src/errors';
 import { pipeSse, type SseFrame } from 'src/lib/sse';
 
 type Source = {
@@ -178,6 +181,37 @@ describe('pipeSse', () => {
       );
     } finally {
       jest.restoreAllMocks();
+      await server.close();
+    }
+  });
+
+  test("a failure's meta omits the keys the deployment's omit_meta names", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sse-omit-meta-'));
+    const config = path.join(dir, 'hints.json');
+    fs.writeFileSync(
+      config,
+      JSON.stringify({ omit_meta: { AI_PROVIDER_ERROR: ['chat_ids'] } })
+    );
+    initErrorHintOverrides({ env: { SOAT_ERROR_HINTS_CONFIG: config } });
+    const source = controlledSource();
+    const server = await serve({ source });
+    try {
+      const response = await fetch(server.url);
+      source.fail(
+        new DomainError('AI_PROVIDER_ERROR', 'Provider returned 503', {
+          chat_ids: ['chat_a'],
+          provider_status: 503,
+        })
+      );
+
+      const text = await readUntil({ response });
+
+      expect(text).toBe(
+        'data: {"error":{"code":"AI_PROVIDER_ERROR","message":"Provider returned 503","meta":{"provider_status":503}}}\n\n'
+      );
+    } finally {
+      initErrorHintOverrides({ env: {} });
+      fs.rmSync(dir, { recursive: true, force: true });
       await server.close();
     }
   });

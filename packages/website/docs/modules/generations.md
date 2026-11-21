@@ -225,6 +225,10 @@ Together with `agent_version`, it answers "which playbook version produced this 
 
 It is written by the server when the turn starts and cannot be set by a caller. Being pointers and no text, it is not content: it survives a [purge](#content-purge) and is written even on a zero-retention agent.
 
+### Vendor options
+
+A model's answer carries vendor-specific state its next call needs back: a reasoning signature, an item id, encrypted reasoning. The runtime stores it beside the turn's messages and rejoins it only when it builds a model call, so `output.response_messages`, the [transcript](#transcript), the stored trace steps, stream frames, webhooks and a `builtin` read of any of them carry no `providerOptions`, for every provider.
+
 ### Transcript
 
 [`GET /generations/{generation_id}/transcript`](/docs/api/generations/get-generation-transcript) reads one turn back step by step: what it
@@ -313,13 +317,13 @@ point for every way a tool is bound (stored, inline, `builtin`, `mcp`, knowledge
 
 A tool call's `status` says what answered it:
 
-| `status`              | Meaning                                                         |
-| --------------------- | --------------------------------------------------------------- |
-| `executed`            | the tool ran and returned                                       |
-| `failed`              | the tool ran and threw                                          |
-| `blocked`, `tripwire` | a [guardrail](./guardrails.md) stopped it; the tool did not run |
-| `pending_approval`    | a guardrail routed it to an approval; the tool did not run      |
-| `denied`              | the agent's authority refused it; the tool did not run          |
+| `status`              | Meaning                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| `executed`            | the tool ran and returned                                          |
+| `failed`              | the tool ran and threw, or answered an error relayed as its result |
+| `blocked`, `tripwire` | a [guardrail](./guardrails.md) stopped it; the tool did not run    |
+| `pending_approval`    | a guardrail routed it to an approval; the tool did not run         |
+| `denied`              | the agent's authority refused it; the tool did not run             |
 
 Rows hold ids, indexes, statuses and durations, never a tool's name, arguments, result or
 an error: none is content, so they survive a [purge](#content-purge) and are written on a

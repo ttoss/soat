@@ -123,9 +123,8 @@ describe('SOAT self-call', () => {
       // The self-call 404s, and that has to reach the caller as a failure:
       // returning the body as a successful tool result leaves a caller unable
       // to tell failure from data.
-      expect(response.status).toBe(502);
-      expect(response.body.error.code).toBe('TOOL_HTTP_ERROR');
-      expect(response.body.error.meta.tool_status_code).toBe(404);
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
     test('a soat action missing a path argument is refused naming it', async () => {

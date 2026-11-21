@@ -296,15 +296,20 @@ A **per-provider price override** is a [price-book](./usage.md#pricebook) row bo
 
 Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's rates. The `provider` slug is taken from the AI provider itself; supply the model, rates, and `effective_from`. `effective_from` must be in the future once the `(model, component)` has a price row (past prices are immutable; ship corrections as new future-dated rows), but a **first** price for a `(model, component)` nothing prices yet may be dated now or earlier, so a generation before the row lands is not metered at zero permanently. A refused row is named in `error.meta` (`provider`, `model`, `component`, `effective_from`). See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
 
+### Sharing a provider
+
+A provider is a [shareable type](./shares.md#shareable-types): a share granting `ai-providers:UseAiProvider` lets the grantee project generate through it without a provider record of its own. See [Using a shared AI provider](./shares.md#using-a-shared-ai-provider).
+
 ### Deleting a provider
 
 [`DELETE /api/v1/ai-providers/{ai_provider_id}`](/docs/api/ai-providers/delete-ai-provider) classifies everything that references the provider into two kinds:
 
 | Dependent | Kind | Behavior |
 |---|---|---|
-| Chats, agents | **Live reference** | Always block with `409`. `force` does **not** override them — delete or repoint each resource first. |
+| Chats, agents of the provider's project | **Live reference** | Always block with `409`. `force` does **not** override them — delete or repoint each resource first. |
 | [Model routes](./model-routes.md) whose targets name the provider | **Live reference** | Always block with `409`. A target references its provider by id inside the route's `targets`, so no foreign key protects it — the guard is explicit. Repoint or delete the route first. |
 | Price overrides | **Soft dependent** | Block with `409` unless `force=true`, which **deletes** the overrides (meaningless without the provider). |
+| Shares another project has accepted | **Soft dependent** | Block with `409` unless `force=true`, which **revokes** them. The grantee's agents and chats pinned to the provider then fall back to their project's default route. |
 | Usage/generation records | **Soft dependent** | Block with `409` unless `force=true`, which **unlinks** them, preserving the row, its as-billed receipt and its `ai_provider_id` ([Usage](./usage.md#attribution-outlives-deletion)). |
 
 A delete with no dependents (or `force=true` and only soft dependents) returns `204`. On a `409` the response carries `error.code = "AI_PROVIDER_HAS_DEPENDENTS"` and an `error.meta` describing what blocked it:
@@ -319,6 +324,7 @@ A delete with no dependents (or `force=true` and only soft dependents) returns `
       "agent_count": 1, "agent_ids": ["agent_01"],
       "model_route_count": 0, "model_route_ids": [],
       "price_override_count": 0, "usage_event_count": 0,
+      "accepted_share_count": 0,
       "forcible": false
     }
   }

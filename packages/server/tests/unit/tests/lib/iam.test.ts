@@ -362,7 +362,7 @@ describe('IAM', () => {
           policies: [bound],
           action: 'memories:GetMemoryStore',
           context: { 'iam:ResourceTag/owner': 'team-act_1' },
-        })
+        }).allowed
       ).toBe(true);
     });
 
@@ -394,7 +394,7 @@ describe('IAM', () => {
           policies: [bound],
           action: 'memories:GetMemoryStore',
           context: { 'iam:ResourceTag/owner': '${iam:ActorId}' },
-        })
+        }).allowed
       ).toBe(false);
     });
   });
@@ -659,7 +659,7 @@ describe('IAM', () => {
           policies: [scopedPolicy],
           action: 'files:GetFile',
           resources: ['srn:proj_B:file:file_1', 'srn:proj_A:file:file_1'],
-        })
+        }).allowed
       ).toBe(true);
     });
 
@@ -679,7 +679,7 @@ describe('IAM', () => {
           action: 'files:GetFile',
           resources: ['srn:proj_A:file:file_1'],
           context: {},
-        })
+        }).allowed
       ).toBe(false);
     });
 
@@ -689,7 +689,7 @@ describe('IAM', () => {
           policies: [scopedPolicy],
           action: 'files:GetFile',
           resources: ['srn:proj_Z:file:file_1'],
-        })
+        }).allowed
       ).toBe(false);
     });
   });
@@ -866,10 +866,41 @@ describe('IAM', () => {
       statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
     };
 
+    test('carries the denial of the first matching Deny', () => {
+      const denial = { code: 'PLAN_LIMIT', message: 'Not in this plan.' };
+      const decision = evaluatePolicies({
+        policies: [
+          allowPolicy,
+          {
+            statement: [
+              { effect: 'Deny', action: ['files:DeleteFile'] },
+              { effect: 'Deny', action: ['files:GetFile'], denial },
+            ],
+          },
+          denyPolicy,
+        ],
+        action: 'files:GetFile',
+      });
+
+      expect(decision).toEqual({ allowed: false, denial });
+    });
+
+    test('carries no denial for a Deny without one or an unmatched action', () => {
+      expect(
+        evaluatePolicies({
+          policies: [allowPolicy, denyPolicy],
+          action: 'files:GetFile',
+        })
+      ).toEqual({ allowed: false, denial: null });
+      expect(
+        evaluatePolicies({ policies: [], action: 'files:GetFile' })
+      ).toEqual({ allowed: false, denial: null });
+    });
+
     test('returns false when no policies', () => {
-      expect(evaluatePolicies({ policies: [], action: 'files:GetFile' })).toBe(
-        false
-      );
+      expect(
+        evaluatePolicies({ policies: [], action: 'files:GetFile' }).allowed
+      ).toBe(false);
     });
 
     test('returns false when no matching statements', () => {
@@ -877,13 +908,14 @@ describe('IAM', () => {
         evaluatePolicies({
           policies: [allowPolicy],
           action: 'files:DeleteFile',
-        })
+        }).allowed
       ).toBe(false);
     });
 
     test('returns true when Allow matches', () => {
       expect(
         evaluatePolicies({ policies: [allowPolicy], action: 'files:GetFile' })
+          .allowed
       ).toBe(true);
     });
 
@@ -892,7 +924,7 @@ describe('IAM', () => {
         evaluatePolicies({
           policies: [allowPolicy, denyPolicy],
           action: 'files:GetFile',
-        })
+        }).allowed
       ).toBe(false);
     });
 
@@ -901,7 +933,7 @@ describe('IAM', () => {
         evaluatePolicies({
           policies: [denyPolicy, allowPolicy],
           action: 'files:GetFile',
-        })
+        }).allowed
       ).toBe(false);
     });
 
@@ -920,14 +952,14 @@ describe('IAM', () => {
           policies: [scopedPolicy],
           action: 'files:GetFile',
           resource: 'srn:proj_A:file:file_123',
-        })
+        }).allowed
       ).toBe(true);
       expect(
         evaluatePolicies({
           policies: [scopedPolicy],
           action: 'files:GetFile',
           resource: 'srn:proj_B:file:file_123',
-        })
+        }).allowed
       ).toBe(false);
     });
 
@@ -946,14 +978,14 @@ describe('IAM', () => {
           policies: [condPolicy],
           action: 'files:GetFile',
           context: { 'soat:tag:env': 'prod' },
-        })
+        }).allowed
       ).toBe(true);
       expect(
         evaluatePolicies({
           policies: [condPolicy],
           action: 'files:GetFile',
           context: { 'soat:tag:env': 'dev' },
-        })
+        }).allowed
       ).toBe(false);
     });
   });
