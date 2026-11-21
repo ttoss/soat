@@ -190,6 +190,23 @@ describe('Agent version claims', () => {
       expect(older.verdict).toBe('supported');
     });
 
+    test('lists one claim per eval, ordered by eval_id', async () => {
+      const agentId = await createTwoVersionAgent();
+      const first = await createClaimEval(agentId);
+      const second = await createClaimEval(agentId);
+      await run({ evalId: first, version: 1, reply: 'Paris' });
+      await run({ evalId: second, version: 1, reply: 'Paris' });
+
+      const res = await claimsOf(agentId, 1);
+
+      expect(res.status).toBe(200);
+      expect(
+        (res.body.data as Array<{ eval_id: string }>).map((claim) => {
+          return claim.eval_id;
+        })
+      ).toEqual([first, second].sort());
+    });
+
     test('a version with no run holds no claim', async () => {
       const agentId = await createTwoVersionAgent();
       await createClaimEval(agentId);
