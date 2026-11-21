@@ -13,12 +13,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
-const entryProblem = (args: {
+/** The entry as `{ code, hint }`, or what is wrong with it. */
+const parseEntry = (args: {
   entry: unknown;
   parsed: ReadonlyMap<string, string>;
-}): string | null => {
-  const code = isRecord(args.entry) ? args.entry.code : undefined;
-  const hint = isRecord(args.entry) ? args.entry.hint : undefined;
+}): { code: string; hint: string } | string => {
+  if (!isRecord(args.entry)) return ' must be an object';
+  const { code, hint } = args.entry;
   if (typeof code !== 'string' || !CODE_PATTERN.test(code)) {
     return `.code must match ${CODE_PATTERN.source}`;
   }
@@ -28,7 +29,7 @@ const entryProblem = (args: {
   if (typeof hint !== 'string' || hint.trim() === '') {
     return '.hint must be a non-empty string';
   }
-  return null;
+  return { code, hint };
 };
 
 /** Throws on anything but an absent key or `[{ code, hint }]` of new codes. */
@@ -43,10 +44,11 @@ export const parseDenialCodes = (args: {
   if (entries === undefined) return new Map();
   if (!Array.isArray(entries)) return fail('`denial_codes` must be an array');
   const parsed = new Map<string, string>();
-  for (const [index, entry] of entries.entries()) {
-    const problem = entryProblem({ entry, parsed });
-    if (problem) return fail(`denial_codes[${index}]${problem}`);
-    if (isRecord(entry)) parsed.set(String(entry.code), String(entry.hint));
+  for (const [index, raw] of entries.entries()) {
+    const entry = parseEntry({ entry: raw, parsed });
+    if (typeof entry === 'string')
+      return fail(`denial_codes[${index}]${entry}`);
+    parsed.set(entry.code, entry.hint);
   }
   return parsed;
 };
