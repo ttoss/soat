@@ -31,6 +31,7 @@ const filesMatching = (pattern) => {
 describe('tool error relay chokepoint', () => {
   test('every relayed tool error goes through toolCallError', () => {
     assert.deepEqual(filesMatching(/\btoolCallError\(/), [
+      'lib/agentToolResolverExternalTools.ts',
       'lib/mcpProtocol.ts',
     ]);
   });
@@ -43,7 +44,12 @@ describe('tool error relay chokepoint', () => {
 
   test('no relay branches on one error code', () => {
     const keyed = /\bcode\s*[!=]==?\s*['"][A-Z]|case\s+['"][A-Z][A-Z_]+['"]/;
-    for (const file of ['lib/toolErrorRelay.ts', 'lib/mcpProtocol.ts']) {
+    for (const file of [
+      'lib/toolErrorRelay.ts',
+      'lib/mcpProtocol.ts',
+      'lib/agentToolResolverExternalTools.ts',
+      'lib/inProcessApi.ts',
+    ]) {
       assert.doesNotMatch(code(file), keyed, file);
     }
   });

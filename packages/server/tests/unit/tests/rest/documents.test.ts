@@ -1367,7 +1367,7 @@ describe('Documents', () => {
 
         expect(ingestRes.status).toBe(413);
         expect(ingestRes.body.error.code).toBe('FILE_TOO_LARGE_FOR_SYNC');
-        expect(ingestRes.body.error.message).toMatch(/background/i);
+        expect(ingestRes.body.error.hint).toMatch(/without `wait=true`/);
       } finally {
         if (prev === undefined) delete process.env.SYNC_INGESTION_MAX_BYTES;
         else process.env.SYNC_INGESTION_MAX_BYTES = prev;

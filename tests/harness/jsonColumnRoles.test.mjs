@@ -43,6 +43,7 @@ const ROLES = {
     'Collection.schema',
     'ConversationMessage.metadata',
     'ConversationMessage.responseMessages',
+    'ConversationMessage.vendorOptions',
     'DatasetItem.input',
     'DatasetItem.metadata',
     'Decider.questions',

@@ -84,9 +84,8 @@ const assertValid = (message: string | null): void => {
 };
 
 /**
- * Every target must reference an AI provider in the **route's own project** —
- * mirroring the cross-project guard `resolveCompletionModel` already applies —
- * so a route can never borrow another project's provider secret.
+ * Every target must reference an AI provider in the route's own project or
+ * shared with it, so a route never borrows another project's secret unlent.
  */
 const assertTargetProvidersInProject = async (args: {
   projectId: number;
@@ -103,7 +102,7 @@ const assertTargetProvidersInProject = async (args: {
   const found = await aiProviderReferences.findMany({
     ids: publicIds,
     projectId: args.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
 
   for (const publicId of publicIds) {

@@ -22,12 +22,12 @@ import {
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
-import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
 import { expireChainIfSettled } from './generationChains';
 import { countStoredToolResult } from './generationProvenance';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { toolCallRunsAs } from './toolCallRunsAs';
+import { toolErrorAnswer } from './toolErrorRelay';
 import { callTool } from './tools';
 import { meterNativeToolExecution } from './usageToolRecording';
 import {
@@ -453,10 +453,9 @@ const runToolCallContinuation = async (args: {
         toolContext: args.toolContext,
       }).catch((error: unknown) => {
         log('executeApprovedAction failed id=%s %o', item.id, error);
-        // A refusal keeps the code, action and principal a model reads elsewhere.
-        return isAuthorizationDenial(error)
-          ? denialToolResult(error)
-          : { error: errorMessage(error) };
+        // An error this API relays or decides keeps the code and meta a model
+        // reads elsewhere.
+        return toolErrorAnswer(error)?.result ?? { error: errorMessage(error) };
       });
     }
 

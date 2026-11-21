@@ -59,7 +59,7 @@ export const policiesFormationModule = defineFormationModule({
     }
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties, projectId, actor }) => {
     const result = await createPolicy({
       project: {
         id: projectId,
@@ -68,6 +68,7 @@ export const policiesFormationModule = defineFormationModule({
       name: toOptionalString(properties.name) ?? undefined,
       description: toOptionalString(properties.description) ?? undefined,
       document: properties.document as PolicyDocument,
+      writerUnrestricted: actor.unrestricted,
     });
 
     if ('invalid' in result) {
@@ -87,6 +88,7 @@ export const policiesFormationModule = defineFormationModule({
       description: toOptionalString(properties.description) ?? undefined,
       document: properties.document as PolicyDocument,
       writerPolicies: actor.getPolicies,
+      writerUnrestricted: actor.unrestricted,
     });
 
     if ('invalid' in result) {

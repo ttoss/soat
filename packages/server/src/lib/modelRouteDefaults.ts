@@ -82,7 +82,7 @@ export const assertModelBindingResolvable = async (args: {
 
   throw new DomainError(
     'VALIDATION_FAILED',
-    `This ${args.resourceLabel} binds neither ai_provider_id nor model_route_id, and its project has no default_model_route_id to inherit; set one of them.`
+    `This ${args.resourceLabel} binds neither ai_provider_id nor model_route_id, and its project has no default_model_route_id to inherit.`
   );
 };
 
@@ -118,7 +118,7 @@ export const assertJudgeScorersResolvable = async (args: {
 
   throw new DomainError(
     'VALIDATION_FAILED',
-    `scorers.${index} (llm_judge) pins no ai_provider_id, and its project has no default_model_route_id to inherit; set one of them.`
+    `scorers.${index} (llm_judge) pins no ai_provider_id, and its project has no default_model_route_id to inherit.`
   );
 };
 

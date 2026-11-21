@@ -114,6 +114,11 @@ export class ConversationMessage extends Model {
   })
   declare responseMessages: unknown[] | null;
 
+  // The `providerOptions` lifted off `responseMessages`, rejoined only when a
+  // model call is built from them (server `lib/vendorOptions.ts`).
+  @Column({ type: DataType.JSON, allowNull: true, field: 'vendor_options' })
+  declare vendorOptions: unknown[] | null;
+
   // The provenance counts the message's content feeds a turn it is sent to:
   // the resolved block of a user message, or what an assistant message's turn
   // read beyond the messages it was sent (`generationProvenance.ts`).

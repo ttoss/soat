@@ -170,7 +170,7 @@ describe('Model route failover through agent generation', () => {
   });
 
   beforeEach(() => {
-    // Breaker state is process-wide and keyed by (provider, model); each test
+    // Breaker state is process-wide and keyed by (project, provider, model); each test
     // provisions its own providers, but resetting keeps them independent of
     // ordering.
     resetModelRouteBreakers();

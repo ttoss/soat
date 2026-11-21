@@ -120,10 +120,8 @@ describe('SOAT in-process dispatch', () => {
         input: { agent_id: 'agent_nonexistent' },
       });
 
-    expect(response.status).toBe(502);
-    expect(response.body.error.code).toBe('TOOL_HTTP_ERROR');
-    expect(response.body.error.meta.tool_status_code).toBe(404);
-    expect(response.body.error.meta.tool_method).toBe('GET');
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
   });
 
   test('a 204 action returns an empty result instead of failing to parse one', async () => {

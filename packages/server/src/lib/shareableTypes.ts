@@ -80,6 +80,41 @@ export const SHAREABLE_TYPES: Readonly<Record<string, ShareableType>> = {
       return { id: agent.publicId, name: agent.name };
     },
   },
+  // Never the credential, `base_url`, `config` or prices: a grantee only
+  // generates through it.
+  aiProvider: {
+    module: 'ai-providers',
+    actions: ['ai-providers:UseAiProvider'],
+    notFoundCode: 'AI_PROVIDER_NOT_FOUND',
+    secretIds: async ({ projectId, id }) => {
+      const provider = await db.AiProvider.findOne({
+        where: { publicId: id, projectId },
+        attributes: ['secretId'],
+        include: [{ model: db.Secret, as: 'secret', attributes: ['publicId'] }],
+      });
+      return provider?.secret ? [provider.secret.publicId] : [];
+    },
+    findProjection: async ({ projectId, id }) => {
+      const provider = await db.AiProvider.findOne({
+        where: { publicId: id, projectId },
+        attributes: [
+          'publicId',
+          'name',
+          'provider',
+          'defaultModel',
+          'modelAliases',
+        ],
+      });
+      if (!provider) return null;
+      return {
+        id: provider.publicId,
+        name: provider.name,
+        provider: provider.provider,
+        default_model: provider.defaultModel,
+        model_alias_names: Object.keys(provider.modelAliases ?? {}),
+      };
+    },
+  },
 };
 
 export const findShareableType = (

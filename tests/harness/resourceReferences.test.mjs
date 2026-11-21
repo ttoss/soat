@@ -146,5 +146,6 @@ pinReferences({
     'lib/priceBook.ts':
       "reads the price route's own provider, or an operator's global row",
     'lib/scopedIdFilters.ts': 'narrows a listing already scoped to the caller',
+    'lib/shareableTypes.ts': 'the publisher reading its own resource',
   },
 });

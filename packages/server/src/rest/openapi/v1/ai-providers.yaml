@@ -289,7 +289,11 @@ paths:
       tags:
         - AI Providers
       summary: Get an AI provider
-      description: Returns a specific AI provider configuration
+      description: >
+        Returns a specific AI provider configuration. A credential scoped to a
+        project the provider is shared with, through an accepted share, reads
+        its `id`, `name`, `provider`, `default_model` and `model_alias_names`
+        only.
       operationId: getAiProvider
       x-iam-action: ai-providers:GetAiProvider
       x-iam-resource-type: aiProvider
@@ -334,6 +338,11 @@ paths:
                     additionalProperties:
                       type: string
                     description: 'Alias → the model id sent to the vendor. A model named beside this provider may be an alias; reads, usage and traces answer the alias, and only the vendor call uses the id. Empty when the provider has none.'
+                  model_alias_names:
+                    type: array
+                    items:
+                      type: string
+                    description: 'The alias names of `model_aliases`, on a shared projection only.'
                   model_aliases_only:
                     type: boolean
                     description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
@@ -483,14 +492,17 @@ paths:
         Deletes an AI provider configuration.
 
 
-        Live references — chats, agents, and model routes whose
-        targets name this provider — always block deletion with
+        Live references — the provider project's chats, agents, and model
+        routes whose targets name this provider — always block deletion with
         `409 AI_PROVIDER_HAS_DEPENDENTS`; `force` does
         not override them, so delete or repoint those resources first. Soft
-        dependents — price overrides and usage/generation records — also block
-        with `409` unless `force=true`, which deletes the provider's price
-        overrides and unlinks its usage history, preserving those rows: each
-        usage event keeps the provider's id as its `ai_provider_id`.
+        dependents — price overrides, usage/generation records and shares
+        another project has accepted — also block with `409` unless
+        `force=true`, which deletes the provider's price overrides, revokes
+        its shares and unlinks its usage history, preserving those rows: each
+        usage event keeps the provider's id as its `ai_provider_id`. A grantee
+        project's agents and chats pinned to the provider fall back to that
+        project's default route.
         The `409` body's `error.meta`
         reports the counts, a sample of offending IDs, and a `forcible` flag that
         is `true` when a `force=true` retry would succeed.
@@ -508,8 +520,9 @@ paths:
           in: query
           required: false
           description: >
-            When `true`, delete the provider's price overrides and unlink its
-            usage history so a provider with only soft dependents can be
+            When `true`, delete the provider's price overrides, revoke its
+            shares and unlink its usage history so a provider with only soft
+            dependents can be
             removed. Has no effect on live references (chats, agents, model
             routes), which always block deletion.
           schema:

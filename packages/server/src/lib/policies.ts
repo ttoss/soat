@@ -7,6 +7,7 @@ import type { PolicyDocument } from './iam';
 import { validatePolicyActions, validatePolicyDocument } from './iam';
 import { emptyPage, paginatedList } from './pagination';
 import { findPolicyDependents } from './policyCarriers';
+import { assertMayWriteDenial } from './policyDenial';
 import {
   assertWriterHoldsAttachedEdit,
   type GetWriterPolicies,
@@ -148,10 +149,13 @@ export const createPolicy = async (args: {
   document: PolicyDocument;
   /** Omit for a global policy. */
   project?: { id: number; publicId: string };
+  /** Whether the writer may write a statement `denial`. */
+  writerUnrestricted: boolean;
 }): Promise<
   ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
 > => {
   log('createPolicy: project=%s', args.project?.publicId);
+  assertMayWriteDenial(args);
   const validation = validatePolicy({
     document: args.document,
     project: args.project ?? null,
@@ -179,9 +183,12 @@ export const updatePolicy = async (args: {
   document: PolicyDocument;
   /** The writer's policy sets, which must hold the edit where it is attached. */
   writerPolicies: GetWriterPolicies;
+  /** Whether the writer may write a statement `denial`. */
+  writerUnrestricted: boolean;
 }): Promise<
   ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
 > => {
+  assertMayWriteDenial(args);
   const structural = validatePolicy({ document: args.document, project: null });
   if (!structural.valid) {
     return { invalid: true, errors: structural.errors };

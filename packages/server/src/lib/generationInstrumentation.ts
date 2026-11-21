@@ -13,7 +13,7 @@ import {
   recordProgress,
   type ToolCallStatus,
 } from './generationProgress';
-import { heldStatusOf } from './toolCallOutcome';
+import { markedStatusOf } from './toolCallOutcome';
 
 const log = createDebug('soat:generation-progress');
 
@@ -30,7 +30,7 @@ const toolCallStatusOf = (
   toolOutput: ToolCallEndEvent['toolOutput']
 ): ToolCallStatus => {
   if (toolOutput.type === 'tool-error') return 'failed';
-  return heldStatusOf(toolOutput.output) ?? 'executed';
+  return markedStatusOf(toolOutput.output) ?? 'executed';
 };
 
 export type GenerationInstrumentation = {

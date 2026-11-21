@@ -147,6 +147,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
       description: body.description,
       document: body.document as PolicyDocument,
       project,
+      writerUnrestricted: ctx.authUser.unrestricted,
     })
   );
 });
@@ -186,6 +187,7 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
       description,
       document: document as PolicyDocument,
       writerPolicies: ctx.authUser.getPolicies,
+      writerUnrestricted: ctx.authUser.unrestricted,
     })
   );
 });

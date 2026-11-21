@@ -104,7 +104,7 @@ describe('error hints', () => {
         project_id: projectId,
         name: 'errorhints-get-agent',
         type: 'builtin',
-        actions: ['get-agent'],
+        actions: ['get-agent', 'create-trigger'],
       });
     expect(toolRes.status).toBe(201);
     getAgentToolId = toolRes.body.id;
@@ -204,7 +204,12 @@ describe('error hints', () => {
       .send({ action: 'get-agent', input: { agent_id: 'agent_nonexistent' } });
   };
 
-  const failedRunError = async () => {
+  const failedRunError = async (
+    call: { operationId: string; input: Record<string, unknown> } = {
+      operationId: 'get-agent',
+      input: { agent_id: 'agent_nonexistent' },
+    }
+  ) => {
     const orchestrationRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/orchestrations')
       .send({
@@ -215,8 +220,8 @@ describe('error hints', () => {
             id: 'call',
             type: 'tool',
             tool_id: getAgentToolId,
-            operation_id: 'get-agent',
-            input_mapping: { agent_id: 'agent_nonexistent' },
+            operation_id: call.operationId,
+            input_mapping: call.input,
           },
         ],
         edges: [],
@@ -246,17 +251,14 @@ describe('error hints', () => {
 
     test('a failed builtin action relays a body carrying both', async () => {
       const response = await withHintsOmitted(false, failedBuiltinCall);
-      expect(response.status).toBe(502);
+      expect(response.status).toBe(404);
       expect(response.body.error.hint).toEqual(expect.any(String));
-      const relayed = response.body.error.meta.tool_error;
-      expect(relayed.hint).toEqual(expect.any(String));
-      expect(relayed.docs_url).toEqual(expect.any(String));
+      expect(response.body.error.docs_url).toEqual(expect.any(String));
     });
 
-    test('a failed orchestration run stores the relayed body with both', async () => {
+    test('a failed orchestration run stores the relayed code', async () => {
       const error = await withHintsOmitted(false, failedRunError);
-      expect(error.code).toBe('TOOL_HTTP_ERROR');
-      expect(JSON.stringify(error)).toMatch(HINT_KEYS);
+      expect(error.code).toBe('RESOURCE_NOT_FOUND');
     });
   });
 
@@ -270,8 +272,7 @@ describe('error hints', () => {
 
     test('a failed builtin action carries neither, outside or relayed', async () => {
       const response = await withHintsOmitted(true, failedBuiltinCall);
-      expect(response.status).toBe(502);
-      expect(response.body.error.meta.tool_status_code).toBe(404);
+      expect(response.status).toBe(404);
       expect(JSON.stringify(response.body)).not.toMatch(HINT_KEYS);
     });
 
@@ -290,7 +291,7 @@ describe('error hints', () => {
 
     test('a failed orchestration run stores neither', async () => {
       const error = await withHintsOmitted(true, failedRunError);
-      expect(error.code).toBe('TOOL_HTTP_ERROR');
+      expect(error.code).toBe('RESOURCE_NOT_FOUND');
       expect(JSON.stringify(error)).not.toMatch(HINT_KEYS);
     });
   });
@@ -343,6 +344,35 @@ describe('error hints', () => {
     });
   });
 
+  describe('SOAT_OPENAPI_DOCUMENT_PATH', () => {
+    const unknownField = () => {
+      return authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({ project_id: projectId, not_a_field: true });
+    };
+
+    test('a fallback hint names the document at the path set', async () => {
+      const response = await withEnv(
+        {
+          SOAT_OPENAPI_DOCUMENT_PATH: '/v1/openapi.json',
+          SOAT_ROUTE_PREFIX: '/v1/projects/{project_id}',
+        },
+        unknownField
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error.hint).toContain('`/v1/openapi.json`');
+    });
+
+    test('unset, a fallback hint names /api/v1/openapi.json', async () => {
+      const response = await withEnv(
+        { SOAT_OPENAPI_DOCUMENT_PATH: undefined },
+        unknownField
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error.hint).toContain('`/api/v1/openapi.json`');
+    });
+  });
+
   describe('SOAT_ERROR_HINTS_CONFIG', () => {
     let dir: string;
 
@@ -386,6 +416,60 @@ describe('error hints', () => {
       );
     });
 
+    test('omit_meta leaves the named keys out of a REST error', async () => {
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: `errorhints-omit-${Date.now()}`,
+          provider: 'ollama',
+          default_model: 'stub-model',
+        });
+      expect(providerRes.status).toBe(201);
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({ project_id: projectId, ai_provider_id: providerRes.body.id });
+      expect(agentRes.status).toBe(201);
+      initErrorHintOverrides({
+        env: {
+          SOAT_ERROR_HINTS_CONFIG: writeConfig({
+            omit_meta: {
+              AI_PROVIDER_HAS_DEPENDENTS: ['chat_count', 'chat_ids'],
+            },
+          }),
+        },
+      });
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/ai-providers/${providerRes.body.id}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
+      expect(response.body.error.meta.chat_count).toBeUndefined();
+      expect(response.body.error.meta.chat_ids).toBeUndefined();
+      expect(response.body.error.meta.agent_count).toBe(1);
+    });
+
+    test('omit_meta leaves the named keys out of a stored error', async () => {
+      initErrorHintOverrides({
+        env: {
+          SOAT_ERROR_HINTS_CONFIG: writeConfig({
+            omit_meta: { VALIDATION_FAILED: ['invalid_fields'] },
+          }),
+        },
+      });
+
+      const error = await failedRunError({
+        operationId: 'create-trigger',
+        input: { project_id: projectId, name: 'x', type: 'schedule', cron: 42 },
+      });
+
+      expect(error.code).toBe('VALIDATION_FAILED');
+      expect(error.meta?.invalid_fields).toBeUndefined();
+      expect(error.meta?.missing_fields).toBeDefined();
+    });
+
     test('an override naming a code the runtime does not define fails boot', () => {
       expect(() => {
         return withEnvSync(
@@ -404,6 +488,10 @@ describe('error hints', () => {
       ['an unknown top-level key', { hints: {}, extra: true }],
       ['hints not an object', { hints: 'x' }],
       ['an empty hint', { hints: { RESOURCE_NOT_FOUND: ' ' } }],
+      ['omit_meta not an object', { omit_meta: [] }],
+      ['omit_meta naming an unknown code', { omit_meta: { NOPE: ['a'] } }],
+      ['omit_meta keys not a list', { omit_meta: { FORBIDDEN: 'action' } }],
+      ['omit_meta with no keys', { omit_meta: { FORBIDDEN: [] } }],
     ])('a config with %s fails boot', (_label, config) => {
       expect(() => {
         return initErrorHintOverrides({

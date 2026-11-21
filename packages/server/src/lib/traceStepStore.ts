@@ -19,12 +19,24 @@ import {
   resolveTraceContentModeForAgent,
   ZERO_RETENTION_PRINCIPAL,
 } from './traceContentPolicy';
+import { splitVendorOptions } from './vendorOptions';
 
 const log = createDebug('soat:traces');
 
 const OMITTED_PREFIX = '[omitted:';
 
 const STEP_INDEX_DIGITS = 6;
+
+// Nothing replays a step, so its messages' vendor options are not kept.
+const withoutVendorOptions = (
+  response: Record<string, unknown>
+): Record<string, unknown> => {
+  if (!Array.isArray(response.messages)) return response;
+  return {
+    ...response,
+    messages: splitVendorOptions({ messages: response.messages }).messages,
+  };
+};
 
 const withoutProviderModel = (step: unknown): unknown => {
   if (!step || typeof step !== 'object' || Array.isArray(step)) return step;
@@ -36,7 +48,7 @@ const withoutProviderModel = (step: unknown): unknown => {
   const { modelId: _modelId, ...responseRest } = Object.fromEntries(
     Object.entries(response)
   );
-  return { ...rest, response: responseRest };
+  return { ...rest, response: withoutVendorOptions(responseRest) };
 };
 
 /**
@@ -48,7 +60,8 @@ const withoutProviderModel = (step: unknown): unknown => {
  * answer) is replaced by its size: a trace records the call, not the file.
  *
  * A step's `model` and `response.modelId` are dropped: they name the provider's
- * own model id, not the model the generation was asked for.
+ * own model id, not the model the generation was asked for. So are the vendor
+ * options on `response.messages` (`vendorOptions.ts`).
  */
 export const serializeSteps = (steps: unknown[]): unknown[] => {
   const parsed = JSON.parse(

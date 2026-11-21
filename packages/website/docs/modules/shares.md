@@ -56,14 +56,15 @@ A share is the record and its lifecycle. What a share lets a grantee reference a
 
 The types a share may name, and what it may grant on each, are one fixed table. An action outside it is `400 VALIDATION_FAILED`, and no write action is grantable.
 
-| Type    | Grantable actions              | `projection`                                                                                    |
-| ------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `tool`  | `tools:CallTool`               | `id`, `name`, `description`, `parameters` — never `execute`, `mcp`, headers or `output_mapping` |
-| `agent` | `agents:CreateAgentGeneration` | `id`, `name` — never instructions, provider or tools                                            |
+| Type         | Grantable actions              | `projection`                                                                                                     |
+| ------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `tool`       | `tools:CallTool`               | `id`, `name`, `description`, `parameters` — never `execute`, `mcp`, headers or `output_mapping`                  |
+| `agent`      | `agents:CreateAgentGeneration` | `id`, `name` — never instructions, provider or tools                                                             |
+| `aiProvider` | `ai-providers:UseAiProvider`   | `id`, `name`, `provider`, `default_model`, `model_alias_names` — never the secret, `base_url`, `config` or prices |
 
-`resource` names one concrete resource in the publishing project. There is no wildcard: `srn:proj_P:tool:*` would grant tools that do not exist yet, so ten tools are ten shares. A resource in another project is `400 VALIDATION_FAILED`, and one that does not exist is `400 TOOL_NOT_FOUND` / `400 AGENT_NOT_FOUND`.
+`resource` names one concrete resource in the publishing project. There is no wildcard: `srn:proj_P:tool:*` would grant tools that do not exist yet, so ten tools are ten shares. A resource in another project is `400 VALIDATION_FAILED`, and one that does not exist is `400 TOOL_NOT_FOUND` / `400 AGENT_NOT_FOUND` / `400 AI_PROVIDER_NOT_FOUND`.
 
-A share grants no more than its writer holds. Creating one, or changing its `cap`, needs every action it grants on the resource and `secrets:UseSecret` on every secret the resource sends (a tool's `execute`, `mcp` and `pipeline`; an agent's inline tools), else `403 ACTION_NOT_HELD` or `403 FORBIDDEN`.
+A share grants no more than its writer holds. Creating one, or changing its `cap`, needs every action it grants on the resource and `secrets:UseSecret` on every secret the resource sends (a tool's `execute`, `mcp` and `pipeline`; an agent's inline tools; an AI provider's credential), else `403 ACTION_NOT_HELD` or `403 FORBIDDEN`.
 
 ### Grantee and acceptance
 
@@ -97,7 +98,9 @@ Accepting a suspended share records the acceptance, which grants nothing until t
 
 | `type`           | Names it in                                                       |
 | ---------------- | ----------------------------------------------------------------- |
-| `agent`          | `tool_bindings`, `active_tool_ids`, `step_rules`, `guardrail_ids` |
+| `agent`          | `tool_bindings`, `active_tool_ids`, `step_rules`, `guardrail_ids`, `ai_provider_id`, `model_route_id` |
+| `chat`           | `ai_provider_id`                                                  |
+| `model_route`    | a target                                                          |
 | `tool`           | a `pipeline` step, `preset_parameters`, `guardrail_ids`           |
 | `guardrail`      | `context_tool_id`                                                 |
 | `decider`        | `agent_id`, `tool_id`                                             |
@@ -117,11 +120,12 @@ So a shared tool bound by a local agent lists that agent, the orchestrations and
 
 A share's `cap` bounds what each accepting project may spend of the publisher's credentials and the target's rate limit: `{ "calls": 1000, "window": "rolling_1h" }` admits 1,000 calls per acceptance per window. `window` is one of `rolling_1m`, `rolling_1h`, `rolling_24h` and `calendar_month`, fixed and aligned like a [quota](./quotas.md)'s window: `rolling_1h` resets on the hour. Set it on create or with [`PATCH /api/v1/shares/{share_id}`](/docs/api/shares/update-share) (`shares:UpdateShare`); `null` removes it, and the next call reads the new value.
 
-A call is one tool call or one agent turn through the share, wherever it starts. A call past the cap reaches nothing and is not metered:
+A call is one tool call, one agent turn or one model call on a shared AI provider through the share, wherever it starts. A call past the cap reaches nothing and is not metered:
 
 - a direct call answers `429 SHARE_CAP_EXCEEDED` with a `Retry-After` header and `meta.retry_after`;
 - inside a generation it is the call's tool error, and the turn goes on;
-- in an ingestion converter the document fails with `CONVERTER_FAILED`.
+- in an ingestion converter the document fails with `CONVERTER_FAILED`;
+- on a shared AI provider the generation fails with `429 SHARE_CAP_EXCEEDED`.
 
 Each refusal writes a `share_cap_exceeded` [activity](./activity.md) entry in the consumer project, with the share as `ref_id`. The publisher's own calls are never capped.
 
@@ -186,9 +190,22 @@ A turn that pauses for client tool outputs or a tool-call approval is resumed on
 
 Deleting the agent in the publisher's project leaves the grantee's records in place: its generations, traces and sessions keep `agent_id`, and a session whose agent is gone answers a new turn with `400 AGENT_NOT_FOUND`.
 
+### Using a shared AI provider
+
+Once a project accepts a share of an AI provider, the project names it by id wherever it names a provider: an agent's `ai_provider_id`, a [model route](./model-routes.md) target, a chat, a chat completion override, a memory rule, an eval judge and a [formation](./formations.md) resource. Without an accepted share the same id is `400 AI_PROVIDER_NOT_FOUND`.
+
+A model call through the share:
+
+- **Runs on the publisher's credential**: its secret, `base_url`, `config` and model aliases.
+- **Is governed by the grantee**: the call is recorded in the grantee project, under its quotas and retention.
+- **Is metered in the grantee**: its `llm_tokens` events belong to the grantee, with `ai_provider_id` naming the shared provider, priced from the publisher's price book. `require_priced_model` on the provider refuses an unpriced model before the call. See [Usage](./usage.md#calls-through-a-share).
+- **Hides the vendor's answer**: a vendor failure is `502 AI_PROVIDER_ERROR` with a generic message, without the vendor's status or body.
+
+The grantee reads the provider's projection with [`GET /api/v1/ai-providers/{ai_provider_id}`](/docs/api/ai-providers/get-ai-provider). Updating, deleting, pricing it and listing its vendor models stay the publisher's: those routes answer `404` to the grantee.
+
 ### Accepted shares are dependents
 
-[`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS` and [`DELETE /api/v1/agents/{agent_id}`](/docs/api/agents/delete-agent) answers `409 AGENT_HAS_DEPENDENTS` while another project has an active acceptance of a live share, with `meta.accepted_share_count`. `force=true` revokes the shares, then deletes. Any delete of a shared resource revokes its remaining shares, accepted or not.
+[`DELETE /api/v1/tools/{tool_id}`](/docs/api/tools/delete-tool) answers `409 TOOL_HAS_DEPENDENTS`, [`DELETE /api/v1/agents/{agent_id}`](/docs/api/agents/delete-agent) answers `409 AGENT_HAS_DEPENDENTS` and [`DELETE /api/v1/ai-providers/{ai_provider_id}`](/docs/api/ai-providers/delete-ai-provider) answers `409 AI_PROVIDER_HAS_DEPENDENTS` while another project has an active acceptance of a live share, with `meta.accepted_share_count`. `force=true` revokes the shares, then deletes. Any delete of a shared resource revokes its remaining shares, accepted or not.
 
 Deleting a consumer project removes its acceptances; deleting the publisher project with `force=true` removes its shares.
 

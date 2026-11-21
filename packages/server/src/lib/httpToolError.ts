@@ -6,8 +6,7 @@ import { isFetchFailure } from './providerError';
  * `toHttpToolDomainError` (agentToolResolver) maps it to a `TOOL_HTTP_ERROR`
  * `DomainError` so the real upstream status survives to the caller instead of
  * a generic 500, and so `isRetriableError` can read `meta.tool_status_code` to
- * tell a terminal 4xx from a transient 5xx. A builtin action's failure is
- * `builtinActionError`.
+ * tell a terminal 4xx from a transient 5xx.
  */
 export class HttpToolError extends Error {
   status: number;
