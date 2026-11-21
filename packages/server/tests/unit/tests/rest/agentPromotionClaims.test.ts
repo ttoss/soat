@@ -217,6 +217,11 @@ describe('Agent version claims', () => {
       expect(res.body.data).toEqual([]);
     });
 
+    test('an unknown agent is 404', async () => {
+      const res = await claimsOf('agent_doesnotexist0000', 1);
+      expect(res.status).toBe(404);
+    });
+
     test('an unknown version is 404', async () => {
       const agentId = await createTwoVersionAgent();
       const res = await claimsOf(agentId, 99);
@@ -342,6 +347,22 @@ describe('Agent version claims', () => {
       expect(reset.body.active_release.released_claims).toEqual([]);
 
       expect((await promote(agentId)).status).toBe(409);
+    });
+
+    test('a gate whose eval was deleted mid-rollout blocks promotion', async () => {
+      const agentId = await createTwoVersionAgent();
+      const gateEval = await createClaimEval(agentId);
+      await run({ evalId: gateEval, version: 2, reply: 'Paris' });
+      expect(
+        (await release(agentId, { promotion_gate: gateEval })).status
+      ).toBe(200);
+      expect((await asAdmin().delete(`/api/v1/evals/${gateEval}`)).status).toBe(
+        204
+      );
+
+      const res = await promote(agentId);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PROMOTION_GATE_UNMET');
     });
 
     test('the gate is checked before the claims', async () => {
