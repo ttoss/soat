@@ -15,7 +15,7 @@ import {
 import { hasKnowledgeFilters, knowledgeScopes } from './agentKnowledgeScopes';
 import { NATIVE_PROPOSAL_PREFIX } from './agentToolApproval';
 import type { ToolBinding } from './agentToolNames';
-import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
+import { isAuthorizationDenial } from './authorizationDenial';
 import type { EmbeddingBilling } from './embedding';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { buildSrn } from './iam';
@@ -29,6 +29,7 @@ import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
 import { agentReferences } from './resourceReferences';
 import { buildResourceTagContext } from './tags';
+import { errorToolResult } from './toolErrorRelay';
 import { assertAllowedUnder, turnAuthority } from './turnAuthority';
 import {
   meterNativeToolExecution,
@@ -278,7 +279,7 @@ const writeMemoryAsAgent = async (
   } catch (error) {
     if (!isAuthorizationDenial(error)) throw error;
     log('writeMemoryAsAgent: denied %s', error.message);
-    return denialToolResult(error);
+    return errorToolResult(error);
   }
   const actorId = await resolveOwnerActorDbId({
     actorId: args.actorId,

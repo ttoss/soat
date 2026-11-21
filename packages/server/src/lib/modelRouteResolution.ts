@@ -94,6 +94,7 @@ const buildRoutedTarget = async (args: {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.target.ai_provider_id,
     projectId: args.projectId,
+    reach: 'shares',
   });
   if (!resolved) {
     throw new DomainError(
@@ -149,6 +150,7 @@ export const buildRoutedModel = async (args: {
 
   return createRoutedModel({
     routeId: args.route.id,
+    projectId: args.projectId,
     retryOn: args.route.retry_on,
     failureThreshold: args.route.failure_threshold,
     cooldownSeconds: args.route.cooldown_seconds,

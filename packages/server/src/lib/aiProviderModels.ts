@@ -531,6 +531,7 @@ export const listAiProviderModels = async (args: {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.aiProviderId,
     projectId: owner.projectId,
+    reach: 'project',
   });
   /* istanbul ignore next -- the row was just read; only a delete racing this
      call resolves it away. */

@@ -300,7 +300,7 @@ const resolveReceipt = async (args: {
   if (args.orchestrationRunId && args.generationId) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'generation_id and orchestration_run_id are mutually exclusive — supply exactly one.'
+      'generation_id and orchestration_run_id are mutually exclusive, and one is required.'
     );
   }
 

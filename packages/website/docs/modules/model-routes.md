@@ -227,7 +227,7 @@ After `failure_threshold` consecutive retryable failures, a target is skipped fo
 
 Breaker state is **in-process per node**, not persisted (provider health is a hot-path hint stale within seconds). A cold node re-learns an outage within `failure_threshold` requests; nodes may briefly disagree.
 
-State is keyed by `(provider, model)` and **shared across routes**; the *policy* (`failure_threshold` / `cooldown_seconds`) belongs to the evaluating route, so two routes may start skipping at different points.
+State is keyed by `(consuming project, provider, model)`: **shared across one project's routes**, never across projects, so one project's failures on a provider other projects also use never skip that target for them. The *policy* (`failure_threshold` / `cooldown_seconds`) belongs to the evaluating route, so two routes may start skipping at different points.
 
 If the breaker would skip *every* target, the first is probed anyway, so a transient outage does not become a hard `cooldown_seconds` outage.
 

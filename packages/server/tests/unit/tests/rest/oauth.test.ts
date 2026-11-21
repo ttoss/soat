@@ -133,9 +133,7 @@ describe('OAuth consent API', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.message).toBe(
-        'Select at least one module to grant.'
-      );
+      expect(res.body.error.message).toBe('The consent grants no module.');
     });
 
     test('400 on an unknown action', async () => {

@@ -349,7 +349,7 @@ describe('Project default model route', () => {
   });
 
   beforeEach(() => {
-    // Breaker state is process-wide and keyed by (provider, model); every test
+    // Breaker state is process-wide and keyed by (project, provider, model); every test
     // here drives the same failing target, so it must be reset between them.
     resetModelRouteBreakers();
   });

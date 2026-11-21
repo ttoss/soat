@@ -111,7 +111,7 @@ const bodyPrecondition = (body: unknown): number | null => {
   if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `${PRECONDITION_FIELD} must be an integer of at least 1, not ${JSON.stringify(raw)}. Omit it to state no precondition.`
+      `${PRECONDITION_FIELD} must be an integer of at least 1, not ${JSON.stringify(raw)}; omitted, it states no precondition.`
     );
   }
 

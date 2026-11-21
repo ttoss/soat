@@ -293,8 +293,8 @@ describe('AI provider model_aliases', () => {
             model: 'other',
           },
         });
-      expect(res.body.error.meta.tool_status_code).toBe(400);
-      expect(res.body.error.meta.tool_error.code).toBe('MODEL_NOT_OFFERED');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MODEL_NOT_OFFERED');
     });
 
     test('a formation agent fails its apply with MODEL_NOT_OFFERED', async () => {

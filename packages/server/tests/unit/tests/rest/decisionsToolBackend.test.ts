@@ -986,7 +986,7 @@ describe('Decisions — tool backend', () => {
       expect(res.body.status).toBe('failed');
       expect(res.body.error.code).toBe('PIPELINE_STEP_FAILED');
       // A read the caller may not make answers as if the decider did not exist.
-      expect(res.body.error.message).toMatch(/HTTP 404/);
+      expect(res.body.error.message).toMatch(/not found/);
     });
   });
 });

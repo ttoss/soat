@@ -556,6 +556,7 @@ describe('IAM tokens', () => {
 
       expect((await readThroughTurn(key)).id).toBe(documentId);
       expect(await readThroughTurn(token)).toEqual({
+        status: 403,
         error: {
           code: 'FORBIDDEN',
           ...forbiddenHints(),

@@ -1,10 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import {
-  callerPrincipal,
-  refusingPrincipal,
-} from 'src/lib/authorizationDenial';
+import { callerPrincipal, requestRefusal } from 'src/lib/authorizationDenial';
 import {
   createFormation,
   deleteFormation,
@@ -105,9 +102,9 @@ const formationAuthorizer = (args: {
       return {
         allowed,
         resource,
-        deniedBy: unknownTag
-          ? callerPrincipal(authUser)
-          : refusingPrincipal({ authUser, action: request.action, resource }),
+        refusal: unknownTag
+          ? { principal: callerPrincipal(authUser), denial: null }
+          : requestRefusal({ authUser, action: request.action, resource }),
       };
     },
   };
@@ -127,6 +124,7 @@ const formationActorOf = (
     onBehalfOfPrincipal: ctx.authUser.onBehalfOfPrincipal,
     keyPolicyBoundary: ctx.authUser.apiKeyPolicyIds,
     narrowed: ctx.authUser.narrowing === 'beyond_key',
+    unrestricted: ctx.authUser.unrestricted,
     recordRefusal: (action) => {
       recordAuthorizationDecision(ctx, { action, allowed: false });
     },

@@ -70,10 +70,11 @@ describe('a builtin tool presetting path_prefix on create-document', () => {
         return error_;
       }
     );
-    expect(error).toBeInstanceOf(DomainError);
-    const { meta } = error as DomainError;
-    expect(meta?.tool_status_code).toBe(400);
-    return (meta?.tool_error as { code: string }).code;
+    if (!(error instanceof DomainError)) {
+      throw new Error(`not a DomainError: ${String(error)}`);
+    }
+    expect(error.httpStatus).toBe(400);
+    return error.wireCode;
   };
 
   beforeAll(async () => {

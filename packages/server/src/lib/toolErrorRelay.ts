@@ -3,7 +3,8 @@
  * answer or an MCP `structuredContent` carries — and what it becomes, by who
  * registered the tool.
  */
-import { DomainError } from '../errors';
+import { DomainError, errorBody } from '../errors';
+import { denialCodeOf, isAuthorizationDenial } from './authorizationDenial';
 import { isPlainObject } from './plainObject';
 import { isErrorCode } from './storedError';
 
@@ -50,15 +51,18 @@ export const readToolErrorEnvelope = (args: {
   };
 };
 
+/** The code a relayed one is under here, which picks its hint and docs. */
+const localCode = (code: string) => {
+  if (isErrorCode(code)) return code;
+  return denialCodeOf(code) ?? 'BUILTIN_ACTION_FAILED';
+};
+
 /** A catalog action's error as REST answers it: status, code, message, meta. */
 const relayed = (envelope: ToolErrorEnvelope): DomainError => {
   const { status, code, message, meta } = envelope;
-  return new DomainError(
-    isErrorCode(code) ? code : 'BUILTIN_ACTION_FAILED',
-    message,
-    meta,
-    { relayed: { code, httpStatus: status } }
-  );
+  return new DomainError(localCode(code), message, meta, {
+    relayed: { code, httpStatus: status },
+  });
 };
 
 /** A stored tool's error under `meta.upstream_*`, beside the site's own meta. */
@@ -88,4 +92,41 @@ export const toolCallError = (args: {
     return relayed(args.envelope);
   }
   return args.wrap(args.envelope);
+};
+
+/**
+ * An error as a tool result the model reads: what a REST call answers, its
+ * status beside its body, the shape `/mcp` answers as `structuredContent`.
+ */
+export const errorToolResult = (error: DomainError) => {
+  return {
+    status: error.httpStatus,
+    ...errorBody({
+      code: error.code,
+      wireCode: error.wireCode,
+      message: error.message,
+      meta: error.meta,
+    }),
+  };
+};
+
+/**
+ * What a failed call answers the model in a turn: an error this API relays or
+ * decides is the body REST answers, so the model keeps its code and meta.
+ * `null` for any other error, which fails the call.
+ */
+export const toolErrorAnswer = (
+  error: unknown
+): {
+  result: ReturnType<typeof errorToolResult>;
+  status: 'denied' | 'failed';
+} | null => {
+  if (!(error instanceof DomainError)) return null;
+  const { relayed } = error;
+  const denied = isAuthorizationDenial(error);
+  if (!denied && !relayed) return null;
+  return {
+    result: errorToolResult(error),
+    status: denied ? 'denied' : 'failed',
+  };
 };

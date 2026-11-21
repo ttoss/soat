@@ -17,7 +17,7 @@ import {
   type PageRequest,
   paginatedList,
 } from './pagination';
-import type { HeldToolCallStatus } from './toolCallOutcome';
+import type { MarkedToolCallStatus } from './toolCallOutcome';
 
 const log = createDebug('soat:generation-progress');
 
@@ -36,7 +36,7 @@ export const PROGRESS_EVENT_TYPES = [
 export type ProgressEventType = (typeof PROGRESS_EVENT_TYPES)[number];
 
 /** How a tool call ended: it ran, it threw, or something answered for it. */
-export type ToolCallStatus = 'executed' | 'failed' | HeldToolCallStatus;
+export type ToolCallStatus = 'executed' | MarkedToolCallStatus;
 
 export type ProgressFact = {
   type: ProgressEventType;

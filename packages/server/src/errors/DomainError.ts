@@ -17,6 +17,8 @@ export class DomainError extends Error {
   public readonly wireCode: string;
   public readonly httpStatus: number;
   public readonly meta: Record<string, unknown> | undefined;
+  /** Another party decided it: its status and code are answered as given. */
+  public readonly relayed: boolean;
 
   constructor(
     code: ErrorCode,
@@ -31,6 +33,7 @@ export class DomainError extends Error {
     this.httpStatus =
       options?.relayed?.httpStatus ?? ERROR_CODES[code].httpStatus;
     this.meta = meta;
+    this.relayed = options?.relayed !== undefined;
 
     // `meta` reaches the wire as-is (error bodies, MCP results, stored
     // `StoredError`s), whose contract is snake_case. Its top-level keys are

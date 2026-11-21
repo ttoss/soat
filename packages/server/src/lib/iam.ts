@@ -10,6 +10,10 @@ import {
 } from './iamRegistrations';
 import { listAllActions, listModuleNames } from './permissionCatalog';
 import {
+  collectUndeclaredDenialCodeErrors,
+  validateDenialField,
+} from './policyDenial';
+import {
   hasUnboundPolicyVariable,
   unknownPolicyVariables,
 } from './policyVariables';
@@ -23,12 +27,26 @@ export type Condition = {
   [operator in ConditionOperator]?: Record<string, string>;
 };
 
+/**
+ * What a `Deny` statement answers when it decides a request: a deployment's
+ * declared `code`, its `message`, and `meta` beside the denial's own.
+ */
+export type PolicyDenial = {
+  code: string;
+  message: string;
+  meta?: Record<string, unknown>;
+};
+
 export type Statement = {
   effect: Effect;
   action: string[];
   resource?: string[];
   condition?: Condition;
+  denial?: PolicyDenial;
 };
+
+/** A check's answer: the `denial` of the `Deny` statement that decided it. */
+export type PolicyDecision = { allowed: boolean; denial: PolicyDenial | null };
 
 export type PolicyDocument = {
   statement: Statement[];
@@ -216,6 +234,12 @@ const validateStatement = (
   validateActionField(stmtObj.action, prefix, errors);
   validateResourceField(stmtObj.resource, prefix, errors);
   validateConditionField(stmtObj.condition, prefix, errors);
+  validateDenialField({
+    denial: stmtObj.denial,
+    effect: stmtObj.effect,
+    prefix,
+    errors,
+  });
 };
 
 export const validatePolicyDocument = (
@@ -309,6 +333,7 @@ export const validatePolicyActions = (
   for (const [index, stmt] of d.statement.entries()) {
     collectUnknownActionErrors({ stmt, index, errors });
   }
+  collectUndeclaredDenialCodeErrors({ doc, errors });
 
   return { valid: errors.length === 0, errors };
 };
@@ -411,60 +436,50 @@ export const statementMatches = (args: {
   return true;
 };
 
+/** The first matching `Deny` statement, else whether an `Allow` matched. */
+const decideForResource = (args: {
+  policies: PolicyDocument[];
+  action: string;
+  resource: string;
+  context: Record<string, string>;
+}): { deny: Statement } | { allowed: boolean } => {
+  let allowed = false;
+  for (const policy of args.policies) {
+    for (const statement of policy.statement) {
+      if (!statementMatches({ statement, ...args })) continue;
+      if (statement.effect === 'Deny') return { deny: statement };
+      allowed = true;
+    }
+  }
+  return { allowed };
+};
+
+/** Every candidate resource must escape every `Deny`; one must match an `Allow`. */
+const decide = (args: {
+  policies: PolicyDocument[];
+  action: string;
+  resources: string[];
+  context?: Record<string, string>;
+}): PolicyDecision => {
+  const context = args.context ?? {};
+  let allowed = false;
+  for (const resource of args.resources) {
+    const result = decideForResource({ ...args, resource, context });
+    if ('deny' in result) {
+      return { allowed: false, denial: result.deny.denial ?? null };
+    }
+    allowed = allowed || result.allowed;
+  }
+  return { allowed, denial: null };
+};
+
 export const evaluatePolicies = (args: {
   policies: PolicyDocument[];
   action: string;
   resource?: string;
   context?: Record<string, string>;
-}): boolean => {
-  const resource = args.resource ?? '*';
-  const context = args.context ?? {};
-
-  let allowed = false;
-
-  for (const policy of args.policies) {
-    for (const statement of policy.statement) {
-      if (
-        statementMatches({ statement, action: args.action, resource, context })
-      ) {
-        if (statement.effect === 'Deny') {
-          return false; // Explicit deny, short-circuit
-        }
-        allowed = true;
-      }
-    }
-  }
-
-  return allowed;
-};
-
-const checkPoliciesForResource = (args: {
-  resource: string;
-  policies: PolicyDocument[];
-  action: string;
-  context: Record<string, string>;
-}): { denied: boolean; allowed: boolean } => {
-  let allowed = false;
-
-  for (const policy of args.policies) {
-    for (const statement of policy.statement) {
-      if (
-        statementMatches({
-          statement,
-          action: args.action,
-          resource: args.resource,
-          context: args.context,
-        })
-      ) {
-        if (statement.effect === 'Deny') {
-          return { denied: true, allowed: false };
-        }
-        allowed = true;
-      }
-    }
-  }
-
-  return { denied: false, allowed };
+}): PolicyDecision => {
+  return decide({ ...args, resources: [args.resource ?? '*'] });
 };
 
 /**
@@ -477,26 +492,8 @@ export const evaluatePoliciesMultiResource = (args: {
   action: string;
   resources: string[];
   context?: Record<string, string>;
-}): boolean => {
-  const context = args.context ?? {};
-  let allowed = false;
-
-  for (const resource of args.resources) {
-    const result = checkPoliciesForResource({
-      resource,
-      policies: args.policies,
-      action: args.action,
-      context,
-    });
-    if (result.denied) {
-      return false;
-    }
-    if (result.allowed) {
-      allowed = true;
-    }
-  }
-
-  return allowed;
+}): PolicyDecision => {
+  return decide(args);
 };
 
 export {

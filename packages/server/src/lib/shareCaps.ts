@@ -10,6 +10,7 @@ import {
   windowKeyFor,
   windowResetsAt,
 } from './quotaWindows';
+import type { SharedUseType } from './resourceReferences';
 import { parseShareCap } from './shareCapShape';
 import { shareResourceSrn } from './shares';
 
@@ -27,7 +28,7 @@ type CappedAcceptance = InstanceType<(typeof db)['ShareAcceptance']> & {
  * of it carries no cap.
  */
 const findCappedAcceptance = async (args: {
-  resourceType: 'tool' | 'agent';
+  resourceType: SharedUseType;
   resourceId: string;
   projectId: number;
 }): Promise<CappedAcceptance | null> => {
@@ -96,7 +97,7 @@ const countCall = async (args: {
  * so a refused one reaches nothing and is not metered.
  */
 export const admitSharedCall = async (args: {
-  resourceType: 'tool' | 'agent';
+  resourceType: SharedUseType;
   resourceId: string;
   projectId: number;
 }): Promise<void> => {
@@ -137,7 +138,7 @@ export const admitSharedCall = async (args: {
   });
   throw new DomainError(
     'SHARE_CAP_EXCEEDED',
-    `Share '${share.publicId}' allows ${String(cap.calls)} call(s) per ${cap.window}; retry after ${String(retryAfter)}s.`,
+    `Share '${share.publicId}' allows ${String(cap.calls)} call(s) per ${cap.window}; the window resets in ${String(retryAfter)}s.`,
     {
       share_id: share.publicId,
       calls: cap.calls,

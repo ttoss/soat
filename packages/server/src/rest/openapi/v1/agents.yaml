@@ -2651,7 +2651,10 @@ components:
             response_messages:
               type: array
               nullable: true
-              description: Full AI SDK response messages (tool calls, tool results, final text)
+              description: >-
+                Full AI SDK response messages (tool calls, tool results,
+                reasoning, final text), without `providerOptions`: the vendor
+                state a replay needs is stored apart and never served.
               items:
                 type: object
             object:

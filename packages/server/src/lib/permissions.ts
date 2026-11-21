@@ -1,9 +1,14 @@
 import createDebug from 'debug';
 
-import type { DeniedPrincipal, RefusedBy } from './authorizationDenial';
+import type {
+  DeniedPrincipal,
+  Refusal,
+  RefusedBy,
+} from './authorizationDenial';
 import {
   evaluatePolicies,
   evaluatePoliciesMultiResource,
+  type PolicyDecision,
   type PolicyDocument,
   type PolicySets,
 } from './iam';
@@ -53,7 +58,7 @@ const evalDocs = (args: {
   resource?: string;
   resources?: string[];
   context?: Record<string, string>;
-}): boolean => {
+}): PolicyDecision => {
   if (args.resources && args.resources.length > 0) {
     return evaluatePoliciesMultiResource({
       policies: args.policies,
@@ -95,10 +100,30 @@ type PolicySetsCheck = {
 };
 
 /**
+ * The first group refusing `check`, with the denial of the `Deny` that
+ * decided it. A group holding no set allows nothing, as one holding an empty
+ * set.
+ */
+const findRefusal = async (args: {
+  groups: LabeledPolicySets;
+  check: PolicySetsCheck;
+}): Promise<Refusal | undefined> => {
+  for (const { principal, sets } of args.groups) {
+    if (sets.length === 0) return { principal, denial: null };
+    for (const policies of sets) {
+      const decision = evalDocs({ policies, ...args.check });
+      if (!decision.allowed) return { principal, denial: decision.denial };
+    }
+  }
+  return undefined;
+};
+
+/**
  * Authorizer over policy sets that must each allow the request, confined to
  * one project. `getSets` is read per check, so a revoked policy takes effect
  * on the next one. `refusedBy` names the first group whose set refused a
- * check; a refusal by the project guards names none.
+ * check and the denial that set's `Deny` declares; a refusal by the project
+ * guards names none.
  */
 export const createPolicySetsIsAllowed = (args: {
   projectPublicId?: string;
@@ -106,7 +131,7 @@ export const createPolicySetsIsAllowed = (args: {
 }): ((reqArgs: PolicySetsCheck) => Promise<boolean>) & {
   refusedBy: RefusedBy;
 } => {
-  const refusals = new Map<string, DeniedPrincipal>();
+  const refusals = new Map<string, Refusal>();
   const check = async (reqArgs: PolicySetsCheck): Promise<boolean> => {
     if (
       !hasProjectPublicId({
@@ -125,22 +150,11 @@ export const createPolicySetsIsAllowed = (args: {
       return false;
     }
 
-    // A group holding no set allows nothing, as one holding an empty set.
-    const refusing = (await args.getSets()).find(({ sets }) => {
-      return (
-        sets.length === 0 ||
-        !sets.every((policies) => {
-          return evalDocs({
-            policies,
-            action: reqArgs.action,
-            resource: reqArgs.resource,
-            resources: reqArgs.resources,
-            context: reqArgs.context,
-          });
-        })
-      );
+    const refusal = await findRefusal({
+      groups: await args.getSets(),
+      check: reqArgs,
     });
-    if (!refusing) return true;
+    if (!refusal) return true;
     const resources = [
       ...(reqArgs.resource === undefined ? [] : [reqArgs.resource]),
       ...(reqArgs.resources ?? []),
@@ -151,7 +165,7 @@ export const createPolicySetsIsAllowed = (args: {
         return refusalKey(reqArgs.action, resource);
       }),
     ]) {
-      refusals.set(key, refusing.principal);
+      refusals.set(key, refusal);
     }
     return false;
   };

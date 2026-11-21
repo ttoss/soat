@@ -32,8 +32,9 @@ export type ResolvedCompletionModel = {
 };
 
 /**
- * An `aiProviderId` override must belong to the agent's project, otherwise the
- * completion config could borrow another project's provider secret.
+ * An `aiProviderId` override must belong to the agent's project or be shared
+ * with it, otherwise the completion config could borrow another project's
+ * provider secret.
  */
 const assertOverrideInProject = async (args: {
   aiProviderId: string;
@@ -42,7 +43,7 @@ const assertOverrideInProject = async (args: {
   const override = await aiProviderReferences.find({
     id: args.aiProviderId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
   if (!override) {
     throw new DomainError(
@@ -65,6 +66,7 @@ const resolvePinnedCompletionModel = async (args: {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.providerId,
     projectId: args.projectId,
+    reach: 'shares',
   });
 
   if (!resolved) {

@@ -910,6 +910,8 @@ components:
           type: string
           enum:
             - agent
+            - chat
+            - model_route
             - tool
             - guardrail
             - decider

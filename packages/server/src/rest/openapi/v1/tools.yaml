@@ -611,20 +611,15 @@ paths:
             Upstream tool target error (TOOL_HTTP_ERROR). Returned when an
             `http`-type tool's target responds with a non-2xx status. The
             error `meta` carries the real upstream `tool_status_code`,
-            `tool_response_body`, `tool_url`, and `tool_method`. For a
-            `builtin` action the message is `Builtin action '<action>'
-            failed: HTTP <status> <code>: <message>`, and `meta` carries
-            `tool_status_code`, `tool_action`, `tool_method` and `tool_error`,
-            the action's error object. A target that
+            `tool_response_body`, `tool_url`, and `tool_method`. A target that
             never answers (`http` or `mcp`) is `TOOL_UNREACHABLE`, its message
             naming the network failure and its `meta` the `tool_url` and
             `tool_method`. An `mcp` tool whose server answers a failure is
             `MCP_TOOL_ERROR`, `meta` carrying `mcp_tool`, `mcp_url` and, when
             the failed result carries the REST error envelope as
             `structuredContent`, `upstream_status`, `upstream_code`,
-            `upstream_message` and `upstream_meta`. A `builtin` action the
-            deployment adds answers that envelope under its own status and
-            code instead.
+            `upstream_message` and `upstream_meta`. A `builtin` action answers
+            its error as its REST call does, under its own status and code.
           content:
             application/json:
               schema:

@@ -216,18 +216,33 @@ export const aiProviderReferences: ReferenceResolver<AiProviderRow> =
     findAll: (where) => {
       return db.AiProvider.findAll({ where });
     },
-    resourceType: 'ai_provider',
+    resourceType: 'aiProvider',
     notFoundCode: 'AI_PROVIDER_NOT_FOUND',
     label: 'AI provider',
   });
 
+export type SharedUseType = 'tool' | 'agent' | 'aiProvider';
+
+const SHARED_USE_RESOLVERS: Readonly<
+  Record<
+    SharedUseType,
+    | ReferenceResolver<ToolRow>
+    | ReferenceResolver<AgentRow>
+    | ReferenceResolver<AiProviderRow>
+  >
+> = {
+  tool: toolReferences,
+  agent: agentReferences,
+  aiProvider: aiProviderReferences,
+};
+
 /**
- * Where a tool or agent is used through a share by a caller confined to
+ * Where a resource is used through a share by a caller confined to
  * `projectPublicId`: that project's id and the owner's, or `null` when the
  * resource is the project's own or no accepted share reaches it.
  */
 export const findSharedUse = async (args: {
-  resourceType: 'tool' | 'agent';
+  resourceType: SharedUseType;
   id: string;
   projectPublicId: string;
 }): Promise<{
@@ -240,9 +255,7 @@ export const findSharedUse = async (args: {
     attributes: ['id'],
   });
   if (!project) return null;
-  const resolver =
-    args.resourceType === 'tool' ? toolReferences : agentReferences;
-  const row = await resolver.find({
+  const row = await SHARED_USE_RESOLVERS[args.resourceType].find({
     id: args.id,
     projectId: project.id,
     reach: 'shares',

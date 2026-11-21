@@ -80,7 +80,7 @@ describe('project authorizer names the set that refused', () => {
 
     expect(
       isAllowed.refusedBy({ action: 'documents:DeleteDocument', resource })
-    ).toEqual(bound);
+    ).toEqual({ principal: bound, denial: null });
   });
 
   test('names the first refusing set where both refuse', async () => {
@@ -88,7 +88,7 @@ describe('project authorizer names the set that refused', () => {
 
     expect(
       isAllowed.refusedBy({ action: 'tools:GetTool', resource: null })
-    ).toEqual(key);
+    ).toEqual({ principal: key, denial: null });
   });
 
   test('names none for a refusal by the project scope', async () => {

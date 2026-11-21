@@ -9,6 +9,7 @@ import {
   type ProvenanceCounts,
 } from './generationProvenance';
 import { isUniqueViolationOf } from './uniqueViolation';
+import type { PublicMessages, VendorOptions } from './vendorOptions';
 
 const log = createDebug('soat:conversationMessages');
 
@@ -64,7 +65,8 @@ export const insertMessage = async (args: {
   agentId?: number | null;
   position?: number;
   metadata?: Record<string, unknown>;
-  responseMessages?: unknown[];
+  responseMessages?: PublicMessages;
+  vendorOptions?: VendorOptions;
   idempotencyKey: string | null;
   idempotencyDigest?: string | null;
   /** What the message's content feeds a turn it is sent to. */
@@ -100,6 +102,7 @@ export const insertMessage = async (args: {
           position,
           metadata: args.metadata ?? null,
           responseMessages: args.responseMessages ?? null,
+          vendorOptions: args.vendorOptions?.length ? args.vendorOptions : null,
           ...provenanceColumns(args.provenance),
           idempotencyKey: args.idempotencyKey,
           idempotencyDigest: args.idempotencyKey
@@ -117,7 +120,7 @@ export const insertMessage = async (args: {
     );
     throw new DomainError(
       'CONVERSATION_POSITION_CONFLICT',
-      'Another write took this message position at the same time. Nothing was written; retry the write.'
+      'Another write took this message position at the same time; nothing was written.'
     );
   }
 };

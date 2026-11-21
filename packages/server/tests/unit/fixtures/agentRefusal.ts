@@ -14,11 +14,12 @@ export const forbiddenHints = () => {
 
 /**
  * The tool result a model reads when agent `agentId`'s `policy_ids` refuse
- * `action`, whatever resource the call named: the body a REST refusal answers,
- * `hint` and `docs_url` included.
+ * `action`, whatever resource the call named: what a REST refusal answers,
+ * its status beside its body, `hint` and `docs_url` included.
  */
 export const agentRefusal = (args: { agentId: string; action: string }) => {
   return {
+    status: 403,
     error: {
       code: 'FORBIDDEN',
       message: expect.stringMatching(
