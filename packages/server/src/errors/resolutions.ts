@@ -244,6 +244,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `{{POST /orchestrations/validate}}` reports every problem at once.',
   ORCHESTRATION_CYCLE_DETECTED:
     'The graph has a cycle, so no topological order exists. Break the cycle named in `meta` — a loop belongs in a workflow, not a DAG.',
+  TRIGGER_INTERVAL_BELOW_FLOOR:
+    "Space the `cron`'s firings at least `meta.min_trigger_interval_seconds` apart, or ask an admin to lower the floor with `{{PATCH /projects/{project_id}}}`.",
   ORCHESTRATION_RUN_DEPTH_LIMIT:
     'Nesting is recursing: follow `parent_orchestration_run_id` up from the failed run to find the `sub_orchestration` (or `loop`) node that names a graph already in the chain, and repoint it. If the composition is legitimately this deep, raise the project bound with `{{PATCH /projects/{project_id}}}` (`max_orchestration_run_depth`) — `meta.limit_source` says whether the project or the deployment set the number that refused it.',
   UPLOAD_TOKEN_EXPIRED:

@@ -710,6 +710,11 @@ export const ERROR_CODES = {
     description:
       'The cron expression is invalid. Triggers require a strict 5-field cron expression evaluated in UTC.',
   },
+  TRIGGER_INTERVAL_BELOW_FLOOR: {
+    httpStatus: 400,
+    description:
+      "A schedule trigger's `cron` fires more often than its project's `min_trigger_interval_seconds` allows. Returned by a trigger create or update on every path; `meta` carries `min_trigger_interval_seconds`, the `interval_seconds` measured between the cron's two closest firings, and the `cron`.",
+  },
   TRIGGER_CAUSATION_LIMIT: {
     httpStatus: 409,
     description:

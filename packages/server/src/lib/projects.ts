@@ -38,6 +38,7 @@ export const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     max_concurrent_runs: project.maxConcurrentRuns,
     max_chain_generations: project.maxChainGenerations,
     max_orchestration_run_depth: project.maxOrchestrationRunDepth,
+    min_trigger_interval_seconds: project.minTriggerIntervalSeconds,
     audit_reads_enabled: project.auditReadsEnabled,
     require_priced_model: project.requirePricedModel,
     default_conversation_retrieval: project.defaultConversationRetrieval,
@@ -84,6 +85,14 @@ const validateMaxOrchestrationRunDepth = (value: unknown): string | null => {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     return 'max_orchestration_run_depth must be an integer >= 1, or null to clear it.';
+  }
+  return null;
+};
+
+const validateMinTriggerIntervalSeconds = (value: unknown): string | null => {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    return 'min_trigger_interval_seconds must be an integer >= 1, or null to clear it.';
   }
   return null;
 };
@@ -278,6 +287,7 @@ const PROJECT_UPDATABLE_FIELDS = [
   'maxConcurrentRuns',
   'maxChainGenerations',
   'maxOrchestrationRunDepth',
+  'minTriggerIntervalSeconds',
   'auditReadsEnabled',
   'requirePricedModel',
   'defaultConversationRetrieval',
@@ -307,6 +317,7 @@ const PROJECT_SCALAR_VALIDATORS: Partial<
   maxConcurrentRuns: validateMaxConcurrentRuns,
   maxChainGenerations: validateMaxChainGenerations,
   maxOrchestrationRunDepth: validateMaxOrchestrationRunDepth,
+  minTriggerIntervalSeconds: validateMinTriggerIntervalSeconds,
   requirePricedModel: validateRequirePricedModel,
   traceContentRetentionDays: validateTraceContentRetentionDays,
   traceContentMode: validateTraceContentMode,
@@ -332,6 +343,7 @@ export const updateProject = async (args: {
   maxConcurrentRuns?: number | null;
   maxChainGenerations?: number | null;
   maxOrchestrationRunDepth?: number | null;
+  minTriggerIntervalSeconds?: number | null;
   auditReadsEnabled?: boolean;
   requirePricedModel?: boolean;
   defaultConversationRetrieval?: RetrievalMode;
