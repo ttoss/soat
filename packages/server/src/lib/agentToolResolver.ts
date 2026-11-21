@@ -18,7 +18,6 @@ import type { BindingGate, ToolBinding } from './agentToolNames';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
 import type { UnavailableToolSink } from './agentToolUnavailable';
-import { readForwardedDenial } from './authorizationDenial';
 import { resolveAddedBuiltinActions } from './builtinAddedActions';
 import { withOutboundToolHeaders } from './causationHeader';
 import { HttpToolError, toToolUnreachableError } from './httpToolError';
@@ -312,14 +311,8 @@ export const toHttpToolDomainError = (error: unknown): DomainError | null => {
     return null;
   }
 
-  const denial = readForwardedDenial({
-    body: error.body,
-    extra: { tool_url: error.url, tool_method: error.method },
-  });
-  if (denial) return denial;
-
-  // Meta keys are
-  // written in snake_case to match the external REST contract.
+  // A stored tool's answer is data: its body, whatever code it names, stays in
+  // `tool_response_body` and never becomes this response's code.
   return new DomainError(
     'TOOL_HTTP_ERROR',
     `Tool target returned HTTP ${error.status}: ${error.message}`,
@@ -888,6 +881,7 @@ const resolveMcpToolEntry = async (args: {
       meter: args.meter,
       toolContext,
       contextKeys: typedTool.contextKeys,
+      trust: 'stored',
     });
     return await resolveMcpTools({
       transport,

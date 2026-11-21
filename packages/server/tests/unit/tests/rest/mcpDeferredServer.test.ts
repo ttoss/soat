@@ -177,6 +177,7 @@ describe('MCP bindings over a deferred server', () => {
           credentialHeaders: [],
           headers: MCP_HEADERS,
           identity: null,
+          trust: 'stored',
         },
         typedTool: lists,
         logToolCallingError: jest.fn(),

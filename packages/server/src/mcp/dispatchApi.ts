@@ -3,10 +3,10 @@ import { getApiHeaders } from '@ttoss/http-server-mcp';
 import {
   denialToolResult,
   isAuthorizationDenial,
-  readForwardedDenial,
 } from '../lib/authorizationDenial';
 import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
 import { isPlainObject } from '../lib/plainObject';
+import { readToolErrorEnvelope, toolCallError } from '../lib/toolErrorRelay';
 
 /**
  * Whether a REST error response carries a readable message. Every non-2xx body
@@ -50,13 +50,17 @@ export const dispatchMcpApiRequest = async (args: {
     as: { authorization: getApiHeaders().authorization ?? '' },
     body: args.body,
     wrapError: (response) => {
-      const denial = readForwardedDenial({ body: response.body });
-      if (denial) return denial;
-      return new Error(
-        hasErrorMessage(response.body)
-          ? response.body.error.message
-          : `HTTP ${response.status}`
-      );
+      return toolCallError({
+        trust: 'catalog',
+        envelope: readToolErrorEnvelope(response),
+        wrap: () => {
+          return new Error(
+            hasErrorMessage(response.body)
+              ? response.body.error.message
+              : `HTTP ${response.status}`
+          );
+        },
+      });
     },
   });
 };

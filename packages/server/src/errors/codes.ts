@@ -665,6 +665,11 @@ export const ERROR_CODES = {
     description:
       "An http-type tool call or a builtin action returned a non-2xx response. For an http tool, the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url` and `tool_method`; for a builtin action, `tool_status_code`, `tool_action` (the operation id), `tool_method` and `tool_error` (the action's error object), and the message names the status, code and message the model is shown.",
   },
+  BUILTIN_ACTION_FAILED: {
+    httpStatus: 502,
+    description:
+      "A builtin action the deployment adds answered an error whose code this API does not define. The response carries the action's own status, `code`, `message` and `meta`, as its REST answer does, not this code; this entry documents where such an answer comes from.",
+  },
   TOOL_RESPONSE_TOO_LARGE: {
     httpStatus: 502,
     description:
@@ -673,7 +678,7 @@ export const ERROR_CODES = {
   MCP_TOOL_ERROR: {
     httpStatus: 502,
     description:
-      'An mcp-type tool call reached the MCP server and came back a failure: a JSON-RPC `error` member, or a result the server flagged `isError`. Also a `GET /tools/{tool_id}/actions` whose `tools/list` failed or could not be read. The error `meta` carries the tool name and the server URL. Distinct from `TOOL_HTTP_ERROR`, which is the transport itself refusing the call.',
+      "An mcp-type tool call reached the MCP server and came back a failure: a JSON-RPC `error` member, or a result the server flagged `isError`. Also a `GET /tools/{tool_id}/actions` whose `tools/list` failed or could not be read. The error `meta` carries `mcp_tool` and `mcp_url`; when the failed result carries a REST error envelope as `structuredContent` (`{ status, error: { code, message, meta } }`), also `upstream_status`, `upstream_code`, `upstream_message` and `upstream_meta`. The server's code is never this response's: it does not change how this API routes or retries the call. Distinct from `TOOL_HTTP_ERROR`, which is the transport itself refusing the call.",
   },
   TOOL_CALL_FAILED: {
     httpStatus: 500,

@@ -1,6 +1,8 @@
 import { asSchema } from 'ai';
+import { DomainError } from 'src/errors';
 import { resolveMcpTools } from 'src/lib/agentToolResolverMcp';
-import { McpToolError } from 'src/lib/mcpProtocol';
+import { isRetriableError } from 'src/lib/orchestrationRetry';
+import type { ToolTrust } from 'src/lib/toolErrorRelay';
 
 import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
 
@@ -33,6 +35,7 @@ describe('MCP protocol fidelity', () => {
       Accept: 'application/json, text/event-stream',
     },
     identity: null,
+    trust: 'stored' as const,
   };
 
   const jsonResponse = (body: unknown) => {
@@ -64,10 +67,10 @@ describe('MCP protocol fidelity', () => {
     return { listCursors };
   };
 
-  const resolve = async () => {
+  const resolve = async (trust: ToolTrust = 'stored') => {
     return resolveMcpTools({
       meter: UNMETERED,
-      transport: TRANSPORT,
+      transport: { ...TRANSPORT, trust },
       typedTool: {},
       logToolCallingError: jest.fn(),
     });
@@ -266,7 +269,9 @@ describe('MCP protocol fidelity', () => {
 
       const tools = await resolve();
 
-      await expect(executeOnly(tools)).rejects.toThrow(McpToolError);
+      await expect(executeOnly(tools)).rejects.toMatchObject({
+        code: 'MCP_TOOL_ERROR',
+      });
       await expect(executeOnly(tools)).rejects.toThrow(/upstream rate limit/);
     });
 
@@ -283,7 +288,9 @@ describe('MCP protocol fidelity', () => {
         typedTool: {},
         logToolCallingError,
       });
-      await expect(executeOnly(tools)).rejects.toThrow(McpToolError);
+      await expect(executeOnly(tools)).rejects.toMatchObject({
+        code: 'MCP_TOOL_ERROR',
+      });
 
       expect(logToolCallingError).toHaveBeenCalledWith(
         expect.objectContaining({ toolName: 'flaky', toolType: 'mcp' })
@@ -298,11 +305,105 @@ describe('MCP protocol fidelity', () => {
 
       const tools = await resolve();
 
-      // Before, the whole envelope came back as the tool's result and the model
-      // read a protocol refusal as an answer.
+      // A protocol refusal is a failure, never a result the model reads as an
+      // answer.
       await expect(executeOnly(tools)).rejects.toThrow(
         /-32602: Invalid params/
       );
+    });
+  });
+
+  describe('a structured tool error', () => {
+    const cycle = {
+      status: 409,
+      error: {
+        code: 'TASK_DEPENDENCY_CYCLE',
+        message: 'The dependency closes a cycle.',
+        meta: { task_id: 'task_1' },
+      },
+    };
+
+    const failWith = (structuredContent: unknown) => {
+      stubMcpServer({
+        pages: [{ tools: [{ name: 'link' }] }],
+        call: {
+          result: {
+            isError: true,
+            content: [{ type: 'text', text: 'refused' }],
+            structuredContent,
+          },
+        },
+      });
+    };
+
+    const thrown = async (trust: ToolTrust): Promise<DomainError> => {
+      const error: unknown = await executeOnly(await resolve(trust)).catch(
+        (error_: unknown) => {
+          return error_;
+        }
+      );
+      if (!(error instanceof DomainError)) throw new Error('not a DomainError');
+      return error;
+    };
+
+    test('from the catalog is relayed with its own status and code', async () => {
+      failWith(cycle);
+      const error = await thrown('catalog');
+      expect(error.httpStatus).toBe(409);
+      expect(error.wireCode).toBe('TASK_DEPENDENCY_CYCLE');
+      expect(error.message).toBe('The dependency closes a cycle.');
+      expect(error.meta).toEqual({ task_id: 'task_1' });
+      expect(isRetriableError(error)).toBe(false);
+    });
+
+    test('from the catalog keeps a code this API defines', async () => {
+      failWith({
+        status: 403,
+        error: { code: 'FORBIDDEN', message: 'Forbidden: no.' },
+      });
+      const error = await thrown('catalog');
+      expect(error.code).toBe('FORBIDDEN');
+      expect(error.httpStatus).toBe(403);
+    });
+
+    test('from a stored tool is MCP_TOOL_ERROR carrying it as upstream_*', async () => {
+      failWith(cycle);
+      const error = await thrown('stored');
+      expect(error.code).toBe('MCP_TOOL_ERROR');
+      expect(error.httpStatus).toBe(502);
+      expect(error.meta).toEqual({
+        mcp_tool: 'link',
+        mcp_url: MCP_URL,
+        upstream_status: 409,
+        upstream_code: 'TASK_DEPENDENCY_CYCLE',
+        upstream_message: 'The dependency closes a cycle.',
+        upstream_meta: { task_id: 'task_1' },
+      });
+    });
+
+    test.each([
+      ['FORBIDDEN', 403],
+      ['OUTPUT_SCHEMA_VALIDATION_FAILED', 422],
+      ['VALIDATION_FAILED', 400],
+    ])(
+      'from a stored tool, %s never changes routing or retries',
+      async (code, status) => {
+        failWith({ status, error: { code, message: 'upstream' } });
+        const error = await thrown('stored');
+        expect(error.code).toBe('MCP_TOOL_ERROR');
+        expect(error.wireCode).toBe('MCP_TOOL_ERROR');
+        expect(error.httpStatus).toBe(502);
+        expect(isRetriableError(error)).toBe(true);
+      }
+    );
+
+    test('without an envelope is MCP_TOOL_ERROR on either trust', async () => {
+      failWith({ status: 409 });
+      for (const trust of ['catalog', 'stored'] as const) {
+        const error = await thrown(trust);
+        expect(error.code).toBe('MCP_TOOL_ERROR');
+        expect(error.meta).toEqual({ mcp_tool: 'link', mcp_url: MCP_URL });
+      }
     });
   });
 

@@ -14,6 +14,7 @@ import {
 } from './toolAssertion';
 import { buildContextHeaders } from './toolContext';
 import { fetchWithEgressGuard } from './toolEgress';
+import type { ToolTrust } from './toolErrorRelay';
 import {
   resolveToolHeaderTemplates,
   secretBearingHeaderNames,
@@ -40,6 +41,8 @@ export type McpTransport = {
   // The `headers` whose template names a secret: never sent to another origin.
   credentialHeaders: readonly string[];
   identity: ToolAssertionIdentity | null;
+  // Who registered the server: how its structured errors are relayed.
+  trust: ToolTrust;
 };
 
 const identityOf = async (args: {
@@ -77,8 +80,10 @@ export const openMcpTransport = async (args: {
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
+  trust: ToolTrust;
 }): Promise<McpTransport> => {
   const { projectId } = args.meter;
+  const { trust } = args;
   const { url } = args.mcp;
   const { value: fetchUrl, secrets: urlSecrets } =
     await resolveSecretRefsWithValues({ value: url, projectId });
@@ -105,6 +110,7 @@ export const openMcpTransport = async (args: {
       headers,
       credentialHeaders,
       identity: null,
+      trust,
     };
   }
   // Validated here so a bad name fails before the first request, not on it.
@@ -115,7 +121,15 @@ export const openMcpTransport = async (args: {
     identity.toolId,
     identity.projectId
   );
-  return { url, fetchUrl, urlSecrets, headers, credentialHeaders, identity };
+  return {
+    url,
+    fetchUrl,
+    urlSecrets,
+    headers,
+    credentialHeaders,
+    identity,
+    trust,
+  };
 };
 
 /**

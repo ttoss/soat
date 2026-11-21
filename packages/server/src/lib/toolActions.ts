@@ -48,6 +48,7 @@ export const listToolActions = async (
       sender: { caller: args.caller, authority: null },
     },
     contextKeys: tool.contextKeys,
+    trust: 'stored',
   });
   let failure = 'tools/list failed';
   const listing = await fetchMcpToolListing({

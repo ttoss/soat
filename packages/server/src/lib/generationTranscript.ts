@@ -130,10 +130,15 @@ const projectToolCalls = (
 
 const TOOL_CALL_FAILED_MESSAGE = 'The tool call failed.';
 
+/** A relayed error records the code it was answered with, not its entry. */
+const wireCodeOf = (args: { code: string; wireCode: unknown }): string => {
+  return typeof args.wireCode === 'string' ? args.wireCode : args.code;
+};
+
 /**
  * A stored tool failure as a failure reason. The stored value is the thrown
  * error serialized field by field (`serializeSteps`), so a `DomainError` keeps
- * its code and meta, and any other error is `TOOL_CALL_FAILED` with every field
+ * its wire code and meta, and any other error is `TOOL_CALL_FAILED` with every field
  * but its message in `meta`.
  */
 const toolFailure = (stored: unknown): StoredError => {
@@ -153,7 +158,7 @@ const toolFailure = (stored: unknown): StoredError => {
       : TOOL_CALL_FAILED_MESSAGE;
   if (typeof fields.code === 'string' && isErrorCode(fields.code)) {
     return {
-      code: fields.code,
+      code: wireCodeOf({ code: fields.code, wireCode: fields.wireCode }),
       message,
       ...(isPlainObject(fields.meta) && { meta: fields.meta }),
     };

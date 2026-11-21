@@ -317,7 +317,7 @@ Discovery follows `nextCursor` until the catalogue is exhausted, so a paginated 
 
 A call's `structured_content` is the result when the server sends one; otherwise the `content` blocks, text blocks joined and parsed as JSON when they are JSON, and handed over as the block array when any block is not text (an image is never flattened away).
 
-A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`, a `{{secret:}}` value in the URL shown as its reference. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
+A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`, a `{{secret:}}` value in the URL shown as its reference. A failed result carrying the REST error envelope as `structuredContent` (`{ status, error: { code, message, meta } }`) adds it as `meta.upstream_status`, `upstream_code`, `upstream_message` and `upstream_meta`: the server's code is data, never this response's, so a stored server answering `FORBIDDEN` or a retryable code changes neither how the call is routed nor whether it is retried. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
 
 An answer over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is refused while it streams: a listing resolves nothing, a call is `502 TOOL_RESPONSE_TOO_LARGE`.
 
@@ -389,6 +389,8 @@ A non-2xx action response is `502 TOOL_HTTP_ERROR`, its message `Builtin action 
 | `tool_action` | The action's name (operation id) |
 | `tool_method` | The action's HTTP method |
 | `tool_error` | The action's error object (`code`, `message`, `meta`) |
+
+An added action is the deployment's own, so its failed result carrying the REST error envelope as `structuredContent` is relayed as REST answers it: the same status, `code`, `message` and `meta`. One without the envelope is `502 MCP_TOOL_ERROR`, as for an [`mcp` tool](#mcp).
 
 A generation's [transcript](./generations.md#transcript) keeps the same code and `meta` for the failed call. A `204 No Content` answer (every `delete-*`) yields `null`.
 

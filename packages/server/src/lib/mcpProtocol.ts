@@ -7,30 +7,15 @@
  * (`agentToolResolverMcp.ts`) share one reading of the protocol rather than
  * each keeping the subset it happened to need.
  */
-import { readForwardedDenial } from './authorizationDenial';
+import { DomainError } from '../errors';
 import { readToolResponseBody } from './httpToolResponse';
 import { isPlainObject } from './plainObject';
-
-/**
- * A tool call that reached the server and came back a failure — a JSON-RPC
- * `error` member, or a result the server flagged `isError`.
- *
- * Thrown rather than returned: the AI SDK turns a throw into a tool error the
- * model sees and can react to, which is what a failure is. Returned, it
- * reaches the model as a successful result whose text happens to describe a
- * failure, and nothing records that the call failed.
- */
-export class McpToolError extends Error {
-  toolName: string;
-  url: string;
-
-  constructor(args: { message: string; toolName: string; url: string }) {
-    super(args.message);
-    this.name = 'McpToolError';
-    this.toolName = args.toolName;
-    this.url = args.url;
-  }
-}
+import {
+  readToolErrorEnvelope,
+  toolCallError,
+  type ToolTrust,
+  upstreamErrorMeta,
+} from './toolErrorRelay';
 
 /**
  * The JSON-RPC message in a `text/event-stream` answer. The resolver's own
@@ -159,38 +144,63 @@ const describeFailure = (result: McpCallResult | null): string => {
 };
 
 /**
- * Turns a `tools/call` answer into the tool's output, throwing
- * {@link McpToolError} for either kind of failure the protocol can report, or
- * the server's own authorization denial, relayed as it answered it.
+ * A tool call that reached the server and came back a failure: a JSON-RPC
+ * `error` member, or a result the server flagged `isError`.
+ *
+ * Thrown rather than returned: the AI SDK turns a throw into a tool error the
+ * model sees and can react to. Returned, it reaches the model as a successful
+ * result whose text happens to describe a failure.
+ */
+const mcpToolError = (args: {
+  message: string;
+  toolName: string;
+  url: string;
+  meta?: Record<string, unknown>;
+}): DomainError => {
+  return new DomainError('MCP_TOOL_ERROR', args.message, {
+    mcp_tool: args.toolName,
+    mcp_url: args.url,
+    ...args.meta,
+  });
+};
+
+/**
+ * Turns a `tools/call` answer into the tool's output, throwing for either kind
+ * of failure the protocol can report. A failed result's `structuredContent`
+ * envelope is read once, for every code, and relayed by `trust`.
  */
 export const readMcpCallResult = (args: {
   body: unknown;
   toolName: string;
   url: string;
+  trust: ToolTrust;
 }): unknown => {
   const errorReason = jsonRpcErrorReason({
     body: args.body,
     method: 'tools/call',
   });
   if (errorReason !== null) {
-    throw new McpToolError({
-      message: errorReason,
-      toolName: args.toolName,
-      url: args.url,
-    });
+    throw mcpToolError({ ...args, message: errorReason });
   }
 
   const result = readResult(args.body);
   if (result?.isError === true) {
-    const denial = readForwardedDenial({
-      body: result.structuredContent ?? joinedText(contentBlocks(result)),
-      extra: { mcp_tool: args.toolName, mcp_url: args.url },
-    });
-    if (denial) throw denial;
-    throw new McpToolError({
-      message: `tools/call reported a tool error: ${describeFailure(result)}`,
-      toolName: args.toolName,
-      url: args.url,
+    const structured = isPlainObject(result.structuredContent)
+      ? result.structuredContent
+      : {};
+    throw toolCallError({
+      trust: args.trust,
+      envelope: readToolErrorEnvelope({
+        status: structured.status,
+        body: structured,
+      }),
+      wrap: (envelope) => {
+        return mcpToolError({
+          ...args,
+          message: `tools/call reported a tool error: ${describeFailure(result)}`,
+          meta: upstreamErrorMeta(envelope),
+        });
+      },
     });
   }
 

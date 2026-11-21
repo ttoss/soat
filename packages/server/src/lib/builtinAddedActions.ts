@@ -30,6 +30,7 @@ const openTransport = (args: AddedBinding & { url: string }) => {
     meter: args.meter,
     toolContext: args.toolContext,
     contextKeys: args.contextKeys,
+    trust: 'catalog',
   });
 };
 
