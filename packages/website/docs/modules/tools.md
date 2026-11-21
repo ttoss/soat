@@ -381,18 +381,9 @@ Create/update validates every entry against the deployment's [builtin catalog](.
 
 Both are named `{name}_{action}`, take `preset_parameters`, `tool_context`, `context_keys` and guardrails alike, and are called directly with `action`. A stored tool naming an action the catalog no longer offers keeps it; the agent's surface leaves it out and a direct call is `400`.
 
-A non-2xx action response is `502 TOOL_HTTP_ERROR`, its message `Builtin action '<action>' failed: HTTP <status> <code>: <message>`. In an agent turn that message is the tool result the model reads, so it can tell a refused write from a bad field; `hint` and `docs_url` never reach it. Error `meta`:
+A non-2xx action response is relayed as its REST call answers it: the same status, `code`, `message` and `meta`, whether the action is native or added. A `4xx` is therefore never retried by an orchestration step and a `5xx` is. In an agent turn the relayed error is the tool result the model reads, its status beside the REST error body (`{ "status", "error": { "code", "message", "meta" } }`), so it can tell a refused write from a bad field. An added action's failed result without the REST error envelope as `structuredContent` is `502 MCP_TOOL_ERROR`, as for an [`mcp` tool](#mcp); a native action's non-2xx answer without an error body is `502 BUILTIN_ACTION_FAILED`, `meta` carrying `tool_status_code`, `tool_action` and `tool_method`.
 
-| Key | Value |
-| --- | --- |
-| `tool_status_code` | The action's HTTP status |
-| `tool_action` | The action's name (operation id) |
-| `tool_method` | The action's HTTP method |
-| `tool_error` | The action's error object (`code`, `message`, `meta`) |
-
-An added action is the deployment's own, so its failed result carrying the REST error envelope as `structuredContent` is relayed as REST answers it: the same status, `code`, `message` and `meta`. One without the envelope is `502 MCP_TOOL_ERROR`, as for an [`mcp` tool](#mcp).
-
-A generation's [transcript](./generations.md#transcript) keeps the same code and `meta` for the failed call. A `204 No Content` answer (every `delete-*`) yields `null`.
+A generation's [transcript](./generations.md#transcript) records that answer as the call's result. A `204 No Content` answer (every `delete-*`) yields `null`.
 
 An action runs through the same request stack as its REST route, so a write the deployment's [admission service](./iam.md#admission) is asked about is asked here too; its refusal is the action's non-2xx response.
 

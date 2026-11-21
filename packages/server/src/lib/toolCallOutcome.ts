@@ -1,33 +1,35 @@
 /**
- * How a tool call the SDK reports as a result ended when the tool never ran:
- * a guardrail held it, or authorization refused it. The wrapper that answers
- * in the tool's place marks its answer here, keyed by the object itself, so
- * the mark never reaches the model and a tool cannot forge it by its output.
+ * How a tool call the SDK reports as a result ended when it did not succeed:
+ * a guardrail held it, authorization refused it, or it failed with an error
+ * the model reads as its result. The wrapper that answers marks its answer
+ * here, keyed by the object itself, so the mark never reaches the model and a
+ * tool cannot forge it by its output.
  */
-export const HELD_TOOL_CALL_STATUSES = [
+export const MARKED_TOOL_CALL_STATUSES = [
   'blocked',
   'tripwire',
   'pending_approval',
   'denied',
+  'failed',
 ] as const;
 
-export type HeldToolCallStatus = (typeof HELD_TOOL_CALL_STATUSES)[number];
+export type MarkedToolCallStatus = (typeof MARKED_TOOL_CALL_STATUSES)[number];
 
-const HELD = new WeakMap<object, HeldToolCallStatus>();
+const MARKED = new WeakMap<object, MarkedToolCallStatus>();
 
-/** A copy of `result` marked held: a shared constant is never marked. */
-export const heldToolResult = <T extends object>(args: {
+/** A copy of `result` marked with `status`: a shared constant is never marked. */
+export const markedToolResult = <T extends object>(args: {
   result: T;
-  status: HeldToolCallStatus;
+  status: MarkedToolCallStatus;
 }): T => {
   const answer = { ...args.result };
-  HELD.set(answer, args.status);
+  MARKED.set(answer, args.status);
   return answer;
 };
 
-export const heldStatusOf = (
+export const markedStatusOf = (
   output: unknown
-): HeldToolCallStatus | undefined => {
+): MarkedToolCallStatus | undefined => {
   if (typeof output !== 'object' || output === null) return undefined;
-  return HELD.get(output);
+  return MARKED.get(output);
 };

@@ -8,19 +8,19 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
+import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
-import { readForwardedDenial } from './authorizationDenial';
 import {
   builtinActionToolName,
   findBuiltinAction,
 } from './builtinActionCatalog';
-import { builtinActionError } from './builtinActionError';
 import { type LogToolCallingError } from './externalToolCall';
 import { type HandoffCall, handoffFor } from './generationHandoff';
 import { dispatchApiRequestOrThrow } from './inProcessApi';
 import { withoutAgentExcludedActions } from './soatAgentActions';
 import { buildSoatActionTarget, type ToolDefinition } from './soatTools';
+import { readToolErrorEnvelope, toolCallError } from './toolErrorRelay';
 import {
   mergePresetParameters,
   stripPresetKeysFromSchema,
@@ -34,6 +34,23 @@ import {
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:tools');
+
+/** A non-2xx answer with no error envelope (a redirect, an unmatched route). */
+const unansweredActionError = (args: {
+  action: string;
+  method: string;
+  status: number;
+}): DomainError => {
+  return new DomainError(
+    'BUILTIN_ACTION_FAILED',
+    `Builtin action '${args.action}' failed: HTTP ${args.status}`,
+    {
+      tool_status_code: args.status,
+      tool_action: args.action,
+      tool_method: args.method,
+    }
+  );
+};
 
 /**
  * Invokes a SOAT platform action on behalf of a `builtin` tool.
@@ -86,8 +103,8 @@ export const executeSoatTool = async (args: {
     path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
     log('builtin tool execute: %s %s %s', toolId, args.def.method, path);
     // The non-2xx rule is `dispatchApiRequestOrThrow`'s, shared with the MCP
-    // surface; only the error is this caller's: `meta.tool_status_code` is
-    // what `isRetriableError` reads to keep a 4xx from being retried.
+    // surface; the error is relayed as REST answers it, so `isRetriableError`
+    // reads its own status.
     return await meterToolExecution({
       meter: args.meter,
       send: (markSent) => {
@@ -105,12 +122,16 @@ export const executeSoatTool = async (args: {
             body,
             wrapError: (response) => {
               log('builtin tool result: %s status=%d', toolId, response.status);
-              const denial = readForwardedDenial({ body: response.body });
-              if (denial) return denial;
-              return builtinActionError({
-                action: args.def.name,
-                method: args.def.method,
-                response,
+              return toolCallError({
+                trust: 'catalog',
+                envelope: readToolErrorEnvelope(response),
+                wrap: () => {
+                  return unansweredActionError({
+                    action: args.def.name,
+                    method: args.def.method,
+                    status: response.status,
+                  });
+                },
               });
             },
           })

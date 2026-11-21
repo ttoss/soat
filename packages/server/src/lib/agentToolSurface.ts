@@ -14,9 +14,9 @@ import { gateAndMergeBindings } from './agentToolNames';
 import { resolveAgentToolBindings } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
 import { collectUnavailableTools } from './agentToolUnavailable';
-import { denialToolResult, isAuthorizationDenial } from './authorizationDenial';
 import type { GenerationProvenance } from './generationProvenance';
-import { heldToolResult } from './toolCallOutcome';
+import { markedToolResult } from './toolCallOutcome';
+import { toolErrorAnswer } from './toolErrorRelay';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -55,11 +55,11 @@ const untilAborted = <T>(args: {
 };
 
 /**
- * Every tool runs under the segment's abort signal. A denial thrown inside any
- * tool reaches the model as the tool result a refusal answers, with its `code`
- * and `meta`, not the AI SDK's error string.
+ * Every tool runs under the segment's abort signal. An error this API relays
+ * or decides (`toolErrorAnswer`) reaches the model as the body REST answers,
+ * with its `code` and `meta`, not the AI SDK's error string.
  */
-const relayDenialsAsResults = (args: {
+const relayErrorsAsResults = (args: {
   tools: Record<string, Tool>;
 }): Record<string, Tool> => {
   return Object.fromEntries(
@@ -79,13 +79,9 @@ const relayDenialsAsResults = (args: {
                 signal: executeArgs[1]?.abortSignal,
               });
             } catch (error) {
-              if (isAuthorizationDenial(error)) {
-                return heldToolResult({
-                  result: denialToolResult(error),
-                  status: 'denied',
-                });
-              }
-              throw error;
+              const answer = toolErrorAnswer(error);
+              if (!answer) throw error;
+              return markedToolResult(answer);
             }
           },
         },
@@ -196,7 +192,7 @@ export const resolveAgentToolSurface = async (args: {
       : [];
 
   return {
-    tools: relayDenialsAsResults({
+    tools: relayErrorsAsResults({
       tools: gateAndMergeBindings({
         bindings: [...bindings, ...knowledgeBindings],
         guardrail,
