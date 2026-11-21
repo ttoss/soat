@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { servedTurnMessages } from 'src/lib/agentGenerationHelpers';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -325,7 +326,7 @@ describe('Session forking', () => {
           model: 'test-model',
           content: 'It is sunny.',
           finishReason: 'stop',
-          responseMessages: [
+          ...servedTurnMessages([
             {
               role: 'assistant',
               content: [
@@ -349,7 +350,7 @@ describe('Session forking', () => {
               ],
             },
             { role: 'assistant', content: 'It is sunny.' },
-          ],
+          ]),
         },
       });
 

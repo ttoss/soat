@@ -4239,11 +4239,23 @@ describe('Tasks', () => {
           })
         ).body.id;
 
+        const findRejection = () => {
+          return events.find((e) => {
+            return (
+              e.type === 'tasks.automation_rejected' && e.resourceId === taskId
+            );
+          });
+        };
+        // The rejection event is emitted after the `unrouted` write commits,
+        // so wait for both.
         const settled = await pollTask({
           token: userToken,
           taskId,
           predicate: (t) => {
-            return t.automation_status === 'unrouted';
+            return (
+              t.automation_status === 'unrouted' &&
+              findRejection() !== undefined
+            );
           },
         });
 
@@ -4253,11 +4265,7 @@ describe('Tasks', () => {
         expect(settled.automation_chain_depth).toBe(LIMIT);
 
         // The bound is surfaced, not a silent stop.
-        const rejection = events.find((e) => {
-          return (
-            e.type === 'tasks.automation_rejected' && e.resourceId === taskId
-          );
-        });
+        const rejection = findRejection();
         expect(rejection).toBeDefined();
         expect(rejection!.data.transition).toBe('respin');
         expect(rejection!.data.error_code).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
