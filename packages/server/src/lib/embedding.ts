@@ -4,8 +4,8 @@ import { type EmbeddingModel, embedMany } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { resolveBedrockCredentials } from './agentModel';
 import type { GenerationEndUser } from './generationAttribution';
+import { resolveBedrockCredentials } from './linkedProviderSecret';
 import { recordEmbeddingUsage } from './usageEmbeddingRecording';
 
 const log = createDebug('soat:embedding');

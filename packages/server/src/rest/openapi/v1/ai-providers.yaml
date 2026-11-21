@@ -87,8 +87,8 @@ paths:
                             model_aliases:
                               type: object
                               additionalProperties:
-                                type: string
-                              description: 'Alias → the model id sent to the vendor. A model named beside this provider may be an alias; reads, usage and traces answer the alias, and only the vendor call uses the id. Empty when the provider has none.'
+                                $ref: '#/components/schemas/ModelAliasTarget'
+                              description: 'Alias → the model id sent to the vendor, or `{ ai_provider_id, model }` naming another provider of the project that serves it. A model named beside this provider may be an alias; reads, usage, prices and traces answer the alias and this provider, and only the vendor call uses the target and the id. Empty when the provider has none.'
                             model_aliases_only:
                               type: boolean
                               description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
@@ -204,8 +204,8 @@ paths:
                 model_aliases:
                   type: object
                   additionalProperties:
-                    type: string
-                  description: 'Alias → the model id sent to the vendor.'
+                    $ref: '#/components/schemas/ModelAliasTarget'
+                  description: 'Alias → the model id sent to the vendor, or `{ ai_provider_id, model }` naming another provider of the project that serves it.'
                   example:
                     fast: gpt-4o-mini
                 model_aliases_only:
@@ -235,8 +235,8 @@ paths:
                   model_aliases:
                     type: object
                     additionalProperties:
-                      type: string
-                    description: 'Alias → the model id sent to the vendor. A model named beside this provider may be an alias; reads, usage and traces answer the alias, and only the vendor call uses the id. Empty when the provider has none.'
+                      $ref: '#/components/schemas/ModelAliasTarget'
+                    description: 'Alias → the model id sent to the vendor, or `{ ai_provider_id, model }` naming another provider of the project that serves it. A model named beside this provider may be an alias; reads, usage, prices and traces answer the alias and this provider, and only the vendor call uses the target and the id. Empty when the provider has none.'
                   model_aliases_only:
                     type: boolean
                     description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
@@ -332,8 +332,8 @@ paths:
                   model_aliases:
                     type: object
                     additionalProperties:
-                      type: string
-                    description: 'Alias → the model id sent to the vendor. A model named beside this provider may be an alias; reads, usage and traces answer the alias, and only the vendor call uses the id. Empty when the provider has none.'
+                      $ref: '#/components/schemas/ModelAliasTarget'
+                    description: 'Alias → the model id sent to the vendor, or `{ ai_provider_id, model }` naming another provider of the project that serves it. A model named beside this provider may be an alias; reads, usage, prices and traces answer the alias and this provider, and only the vendor call uses the target and the id. Empty when the provider has none.'
                   model_aliases_only:
                     type: boolean
                     description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
@@ -428,8 +428,8 @@ paths:
                   type: object
                   nullable: true
                   additionalProperties:
-                    type: string
-                  description: 'Alias → the model id sent to the vendor. Replaces the whole map; `null` clears it.'
+                    $ref: '#/components/schemas/ModelAliasTarget'
+                  description: 'Alias → the model id sent to the vendor, or `{ ai_provider_id, model }` naming another provider of the project that serves it. Replaces the whole map; `null` clears it.'
                   example:
                     fast: gpt-4o-mini
                 model_aliases_only:
@@ -483,8 +483,9 @@ paths:
         Deletes an AI provider configuration.
 
 
-        Live references — chats, agents, and model routes whose
-        targets name this provider — always block deletion with
+        Live references — chats, agents, model routes whose targets name
+        this provider, and providers whose `model_aliases` forward to it
+        (`meta.ai_provider_ids`) — always block deletion with
         `409 AI_PROVIDER_HAS_DEPENDENTS`; `force` does
         not override them, so delete or repoint those resources first. Soft
         dependents — price overrides and usage/generation records — also block
@@ -796,6 +797,31 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:
   schemas:
+    ModelAliasTarget:
+      description: >
+        The model id sent to the vendor, or another provider of the same
+        project and the model id sent to its vendor. A forward is one hop: its
+        target forwards nothing, and is never the provider holding the alias.
+      oneOf:
+        - type: string
+          minLength: 1
+        - type: object
+          required:
+            - ai_provider_id
+            - model
+          additionalProperties: false
+          properties:
+            ai_provider_id:
+              x-soat-ref: ai-providers
+              type: string
+              description: The provider whose endpoint and credential serve the alias
+              example: aip_V1StGXR8Z5jdHi6B
+            model:
+              type: string
+              minLength: 1
+              description: The model id sent to that provider's vendor
+              example: gpt-4o-mini
+
     ProviderPrice:
       type: object
       properties:

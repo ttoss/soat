@@ -1,9 +1,7 @@
 import { DomainError } from 'src/errors';
-import {
-  resolveBedrockCredentials,
-  resolveVertexSettings,
-} from 'src/lib/agentModel';
+import { resolveVertexSettings } from 'src/lib/agentModel';
 import { egressGuardedFetch } from 'src/lib/egressFetch';
+import { resolveBedrockCredentials } from 'src/lib/linkedProviderSecret';
 
 import { buildUnaliasedModel } from '../../fixtures/unaliasedModel';
 

@@ -5,7 +5,7 @@ import { GoogleAuth } from 'google-auth-library';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { VertexSettings } from './agentModel';
-import { resolveBedrockCredentials, resolveVertexSettings } from './agentModel';
+import { resolveVertexSettings } from './agentModel';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
 import {
   ANTHROPIC_VERSION,
@@ -29,6 +29,7 @@ import type {
   BedrockModelSummary,
 } from './bedrockModelCatalog';
 import { defaultListFoundationModels } from './bedrockModelCatalog';
+import { resolveBedrockCredentials } from './linkedProviderSecret';
 import { type Page, pageOf } from './pagination';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 

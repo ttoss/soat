@@ -16,6 +16,7 @@ export const buildUnaliasedModel = (args: {
       ...args,
       modelAliases: null,
       modelAliasesOnly: false,
+      aliasTargets: {},
     },
     model: args.model,
   });
