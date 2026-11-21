@@ -34,6 +34,11 @@ import { Eval } from './Eval';
       name: 'eval_runs_eval_id_created_at_idx',
       fields: ['eval_id', 'created_at'],
     },
+    // The claims read picks a version's newest run per eval.
+    {
+      name: 'eval_runs_agent_public_id_agent_version_idx',
+      fields: ['agent_public_id', 'agent_version'],
+    },
   ],
   updatedAt: false,
   hooks: {
