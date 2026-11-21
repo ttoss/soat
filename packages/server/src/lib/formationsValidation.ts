@@ -11,6 +11,7 @@ import {
   getFormationModule,
   supportedResourceTypes,
 } from './formationsRegistry';
+import { assertNoReservedToolContextKeysIn } from './formationsToolContext';
 import type {
   FormationTemplate,
   ParameterDeclaration,
@@ -165,6 +166,12 @@ const runFormationModuleHooks = (args: {
   basePath: string;
   projectPublicId: string | null;
 }): { errors: ValidationError[]; warnings: ValidationError[] } => {
+  // Thrown rather than joined to the errors, so a reserved key answers with
+  // the code every other carrier refuses it with.
+  assertNoReservedToolContextKeysIn({
+    value: args.properties,
+    path: `${args.basePath}.properties`,
+  });
   const formationModule = getFormationModule({ resourceType: args.type });
   const hookArgs = {
     properties: isPlainObject(args.properties)
