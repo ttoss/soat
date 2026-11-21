@@ -70,6 +70,7 @@ export const resolveAgentModel = async (
   const resolved = await resolveAiProviderSecret({
     aiProviderId: typedAgent.aiProvider.publicId,
     projectId: ownerProjectId(typedAgent),
+    reach: 'shares',
   });
 
   if (!resolved) return { failure: 'provider_unresolvable' };

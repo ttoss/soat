@@ -72,7 +72,7 @@ export const resolveMemoryRuleRefs = async (args: {
     }),
     resolveRef({
       find: ({ id, projectId }) => {
-        return aiProviderReferences.find({ id, projectId, reach: 'project' });
+        return aiProviderReferences.find({ id, projectId, reach: 'shares' });
       },
       errorCode: 'AI_PROVIDER_NOT_FOUND',
       label: 'AI provider',

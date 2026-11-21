@@ -15,10 +15,12 @@ import {
 } from 'src/lib/aiProviders';
 import { buildSrn } from 'src/lib/iam';
 import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
+import { getShareProjection } from 'src/lib/shareableTypes';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
 import { resolveListScope } from './listScope';
 import { requireAllowed } from './resourceAccess';
+import { authorizeSharedUse } from './sharedAccess';
 
 const aiProvidersRouter = new Router<Context>();
 
@@ -65,6 +67,20 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
 });
 
 aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
+  const shared = await authorizeSharedUse({
+    ctx,
+    resourceType: 'aiProvider',
+    resourceId: ctx.params.ai_provider_id,
+    action: 'ai-providers:GetAiProvider',
+  });
+  if (shared) {
+    ctx.body = await getShareProjection({
+      resourceType: 'aiProvider',
+      id: ctx.params.ai_provider_id,
+      ownerProjectId: shared.ownerProjectId,
+    });
+    return;
+  }
   requireAuth(ctx);
 
   const provider = await getAiProvider({ id: ctx.params.ai_provider_id });

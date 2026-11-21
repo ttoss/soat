@@ -101,6 +101,7 @@ export const resolveChatModel = async (args: {
     ? await resolveAiProviderSecret({
         aiProviderId: args.aiProviderId,
         projectId: owner.projectId,
+        reach: 'project',
       })
     : null;
 

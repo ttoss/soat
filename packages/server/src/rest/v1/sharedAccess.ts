@@ -1,7 +1,7 @@
 import type { Context } from 'src/Context';
 import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
-import { findSharedUse } from 'src/lib/resourceReferences';
+import { findSharedUse, type SharedUseType } from 'src/lib/resourceReferences';
 
 import { requireAuth } from './helpers';
 
@@ -26,7 +26,7 @@ export type SharedAccess = {
  */
 export const authorizeSharedUse = async (args: {
   ctx: Context;
-  resourceType: 'tool' | 'agent';
+  resourceType: SharedUseType;
   resourceId: string;
   action: string;
 }): Promise<SharedAccess | null> => {
