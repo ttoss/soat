@@ -365,7 +365,10 @@ const applyModelBindingUpdates = async (args: {
 
   await assertModelBinding({
     projectId,
-    aiProviderId: effectiveValue(fields.aiProviderId, agent.aiProviderId),
+    aiProviderId: effectiveValue(
+      fields.aiProviderId,
+      agent.aiProvider?.publicId ?? null
+    ),
     modelRouteId: effectiveValue(fields.modelRouteId, agent.modelRouteId),
     model: effectiveValue(fields.model, agent.model),
   });

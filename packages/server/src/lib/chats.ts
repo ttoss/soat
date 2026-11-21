@@ -28,6 +28,7 @@ import { assertProjectAcceptsWork } from './projectPause';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 import { makeResourceAccessor } from './resourceAccessor';
+import { aiProviderReferences } from './resourceReferences';
 import { openAiUsageFromReported, readReportedUsage } from './usageTotals';
 import { captureAuthority } from './workAuthority';
 
@@ -129,8 +130,10 @@ export const createChat = async (args: {
   });
 
   const aiProvider = args.aiProviderId
-    ? await db.AiProvider.findOne({
-        where: { publicId: args.aiProviderId, projectId: args.projectId },
+    ? await aiProviderReferences.find({
+        id: args.aiProviderId,
+        projectId: args.projectId,
+        reach: 'project',
       })
     : null;
 

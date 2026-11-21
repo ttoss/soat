@@ -15,6 +15,7 @@ import {
 } from './aiProviderModelAliases';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
+import { aiProviderReferences } from './resourceReferences';
 import { assertSecretUseAllowed } from './secretUse';
 
 const getAiProviderIncludes = () => {
@@ -259,8 +260,8 @@ export const updateAiProvider = async (args: {
 
 /**
  * Refuses, at write time, a model a closed provider does not offer.
- * `aiProviderId` is a public id, or the internal one a stored row holds; one
- * that does not resolve is left to the caller's own not-found guard.
+ * An `aiProviderId` that does not resolve is left to the caller's own
+ * not-found guard.
  */
 export const assertModelOfferedByProvider = async (args: {
   projectId: number;
@@ -268,15 +269,13 @@ export const assertModelOfferedByProvider = async (args: {
   model: unknown;
 }): Promise<void> => {
   if (typeof args.model !== 'string' || args.model === '') return;
-  const key =
-    typeof args.aiProviderId === 'string'
-      ? { publicId: args.aiProviderId }
-      : typeof args.aiProviderId === 'number'
-        ? { id: args.aiProviderId }
-        : null;
-  if (!key) return;
-  const row = await db.AiProvider.findOne({
-    where: { ...key, projectId: args.projectId },
+  if (typeof args.aiProviderId !== 'string' || args.aiProviderId === '') {
+    return;
+  }
+  const row = await aiProviderReferences.find({
+    id: args.aiProviderId,
+    projectId: args.projectId,
+    reach: 'project',
   });
   if (row) assertModelOffered({ aiProvider: row, model: args.model });
 };
@@ -414,8 +413,10 @@ export const resolveAiProviderSecret = async (args: {
   aiProviderId: string;
   projectId: number;
 }) => {
-  const instance = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId, projectId: args.projectId },
+  const instance = await aiProviderReferences.find({
+    id: args.aiProviderId,
+    projectId: args.projectId,
+    reach: 'project',
   });
   if (!instance) return null;
 

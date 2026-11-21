@@ -19,12 +19,12 @@
  * `quota_unpriced` exception remains the backstop that names it.
  */
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import type { UnpricedRow } from './costEnforceability';
 import { resolveConsumerModelRoute } from './modelRouteDefaults';
 import { getEffectivePrice } from './priceBook';
+import { aiProviderReferences } from './resourceReferences';
 
 /**
  * The components every token event bills. The two cache dimensions are left
@@ -83,26 +83,18 @@ const resolveCandidates = async (
         },
       ];
 
-  const providers = await db.AiProvider.findAll({
-    where: {
-      publicId: bindings.map((binding) => {
-        return binding.aiProviderPublicId ?? '';
-      }),
-      projectId,
-    },
-    attributes: [
-      'id',
-      'publicId',
-      'provider',
-      'defaultModel',
-      'requirePricedModel',
-    ],
+  const providers = await aiProviderReferences.findMany({
+    ids: bindings.flatMap((binding) => {
+      return binding.aiProviderPublicId ? [binding.aiProviderPublicId] : [];
+    }),
+    projectId,
+    reach: 'project',
   });
 
   return bindings.flatMap((binding) => {
-    const provider = providers.find((row) => {
-      return row.publicId === binding.aiProviderPublicId;
-    });
+    const provider = binding.aiProviderPublicId
+      ? providers.get(binding.aiProviderPublicId)
+      : undefined;
     if (!provider) return [];
     return [
       {
