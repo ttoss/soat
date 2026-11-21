@@ -4,10 +4,15 @@ import * as path from 'node:path';
 
 import {
   FORMATION_RESOURCE_TYPES_CONFIG_ENV,
-  loadFormationResourceTypeConfig,
   parseFormationResourceTypeConfig,
 } from 'src/lib/formationResourceTypeConfig';
 import {
+  loadFormationResourceTypeConfig,
+  parseDisabledResourceTypes,
+} from 'src/lib/formationResourceTypeConfigFile';
+import {
+  disableFormationResourceTypes,
+  enableFormationResourceTypes,
   getFormationModule,
   initFormationResourceTypes,
   registerFormationResourceTypes,
@@ -593,13 +598,13 @@ describe('loadFormationResourceTypeConfig', () => {
     // types runs on the built-in resource types alone.
     expect(
       loadFormationResourceTypeConfig({ builtInTypes: BUILT_INS, env: {} })
-    ).toEqual([]);
+    ).toEqual({ registrations: [], disabledTypes: new Set() });
   });
 
   test('reads, parses and validates the named file', () => {
     writeConfig({ resource_types: [VALID_ENTRY] });
 
-    const registrations = loadFormationResourceTypeConfig({
+    const { registrations, disabledTypes } = loadFormationResourceTypeConfig({
       builtInTypes: BUILT_INS,
       env: { ...ENV, FORMATION_RESOURCE_TYPES_CONFIG: configPath },
     });
@@ -609,6 +614,7 @@ describe('loadFormationResourceTypeConfig', () => {
         return r.name;
       })
     ).toEqual(['channel']);
+    expect(disabledTypes).toEqual(new Set());
   });
 
   test('reads an entry that overrides a built-in', () => {
@@ -618,7 +624,9 @@ describe('loadFormationResourceTypeConfig', () => {
       ],
     });
 
-    const [registration] = loadFormationResourceTypeConfig({
+    const {
+      registrations: [registration],
+    } = loadFormationResourceTypeConfig({
       builtInTypes: BUILT_INS,
       env: { ...ENV, FORMATION_RESOURCE_TYPES_CONFIG: configPath },
     });
@@ -673,6 +681,41 @@ describe('loadFormationResourceTypeConfig', () => {
     expect(getFormationModule({ resourceType: 'channel' })).toBeUndefined();
   });
 
+  test('reads the built-ins the file disables', () => {
+    writeConfig({
+      resource_types: [VALID_ENTRY],
+      disabled_resource_types: ['tool'],
+    });
+
+    const { disabledTypes } = loadFormationResourceTypeConfig({
+      builtInTypes: BUILT_INS,
+      env: { ...ENV, FORMATION_RESOURCE_TYPES_CONFIG: configPath },
+    });
+
+    expect(disabledTypes).toEqual(new Set(['tool']));
+  });
+
+  test('a valid file disables its types in the live registry at boot', () => {
+    writeConfig({ resource_types: [], disabled_resource_types: ['chat'] });
+    const previous = process.env[FORMATION_RESOURCE_TYPES_CONFIG_ENV];
+    process.env[FORMATION_RESOURCE_TYPES_CONFIG_ENV] = configPath;
+
+    try {
+      initFormationResourceTypes();
+      expect(supportedResourceTypes().has('chat')).toBe(false);
+      expect(getFormationModule({ resourceType: 'chat' })).toBeDefined();
+    } finally {
+      enableFormationResourceTypes({ names: ['chat'] });
+      if (previous === undefined) {
+        delete process.env[FORMATION_RESOURCE_TYPES_CONFIG_ENV];
+      } else {
+        process.env[FORMATION_RESOURCE_TYPES_CONFIG_ENV] = previous;
+      }
+    }
+
+    expect(supportedResourceTypes().has('chat')).toBe(true);
+  });
+
   test('unregistering never removes a built-in type', () => {
     unregisterFormationResourceTypes({ names: ['agent'] });
     expect(getFormationModule({ resourceType: 'agent' })).toBeDefined();
@@ -681,20 +724,20 @@ describe('loadFormationResourceTypeConfig', () => {
 
 // ── Overriding a built-in ───────────────────────────────────────────────────
 
-describe('registerFormationResourceTypes — overriding a built-in', () => {
-  const webhookOverride = () => {
-    return parseFormationResourceTypeConfig({
-      config: {
-        resource_types: [
-          { ...VALID_ENTRY, name: 'webhook', overrides_builtin: true },
-        ],
-      },
-      builtInTypes: new Set(['webhook']),
-      env: ENV,
-      source: 'test',
-    })[0];
-  };
+const webhookOverride = () => {
+  return parseFormationResourceTypeConfig({
+    config: {
+      resource_types: [
+        { ...VALID_ENTRY, name: 'webhook', overrides_builtin: true },
+      ],
+    },
+    builtInTypes: new Set(['webhook']),
+    env: ENV,
+    source: 'test',
+  })[0];
+};
 
+describe('registerFormationResourceTypes — overriding a built-in', () => {
   test('replaces the built-in module, and unregistering restores it', () => {
     const builtIn = getFormationModule({ resourceType: 'webhook' });
     expect(builtIn?.authorization).not.toHaveProperty('operatorRegistered');
@@ -776,5 +819,101 @@ describe('registerFormationResourceTypes — overriding a built-in', () => {
     expect(
       getFormationModule({ resourceType: 'not_a_builtin' })
     ).toBeUndefined();
+  });
+});
+
+// ── Disabling built-in types ────────────────────────────────────────────────
+
+describe('parseDisabledResourceTypes', () => {
+  const parseDisabled = (config: unknown) => {
+    return parseDisabledResourceTypes({
+      config,
+      builtInTypes: BUILT_INS,
+      registrations: parse({ resource_types: [VALID_ENTRY] }),
+      source: '/etc/soat/formation-resource-types.json',
+    });
+  };
+
+  test('absent disables nothing', () => {
+    expect(parseDisabled({ resource_types: [] })).toEqual(new Set());
+  });
+
+  test('returns the built-ins named', () => {
+    expect(
+      parseDisabled({ disabled_resource_types: ['agent', 'tool'] })
+    ).toEqual(new Set(['agent', 'tool']));
+  });
+
+  test('rejects a value that is not an array of strings', () => {
+    for (const value of ['agent', [1], {}]) {
+      expect(() => {
+        return parseDisabled({ disabled_resource_types: value });
+      }).toThrow(/`disabled_resource_types` must be an array of strings/);
+    }
+  });
+
+  test('rejects a name that is not a built-in', () => {
+    expect(() => {
+      return parseDisabled({ disabled_resource_types: ['widget'] });
+    }).toThrow(/'widget' is not a built-in type/);
+  });
+
+  test('rejects a type the same file registers', () => {
+    const registrations = parse({
+      resource_types: [
+        { ...VALID_ENTRY, name: 'agent', overrides_builtin: true },
+      ],
+    });
+    expect(() => {
+      return parseDisabledResourceTypes({
+        config: { disabled_resource_types: ['agent'] },
+        builtInTypes: BUILT_INS,
+        registrations,
+        source: 'cfg.json',
+      });
+    }).toThrow(/'agent' is also registered in `resource_types`/);
+  });
+
+  test('rejects a name listed twice', () => {
+    expect(() => {
+      return parseDisabled({ disabled_resource_types: ['tool', 'tool'] });
+    }).toThrow(/'tool' is listed twice/);
+  });
+});
+
+describe('disableFormationResourceTypes', () => {
+  afterEach(() => {
+    enableFormationResourceTypes({ names: ['chat', 'webhook'] });
+    unregisterFormationResourceTypes({ names: ['webhook', 'channel'] });
+  });
+
+  test('a disabled built-in leaves the declarable set, not the registry', () => {
+    disableFormationResourceTypes({ names: ['chat'] });
+
+    expect(supportedResourceTypes().has('chat')).toBe(false);
+    expect(supportedResourceTypes().has('agent')).toBe(true);
+    expect(getFormationModule({ resourceType: 'chat' })).toBeDefined();
+  });
+
+  test('refuses a type that is not a built-in', () => {
+    expect(() => {
+      disableFormationResourceTypes({ names: ['not_a_builtin'] });
+    }).toThrow(/Cannot disable formation resource type 'not_a_builtin'/);
+  });
+
+  test('refuses a built-in a registration overrides', () => {
+    registerFormationResourceTypes({ registrations: [webhookOverride()] });
+
+    expect(() => {
+      disableFormationResourceTypes({ names: ['webhook'] });
+    }).toThrow(/Cannot disable formation resource type 'webhook'/);
+  });
+
+  test('refuses to register over a disabled type', () => {
+    disableFormationResourceTypes({ names: ['webhook'] });
+
+    expect(() => {
+      registerFormationResourceTypes({ registrations: [webhookOverride()] });
+    }).toThrow(/the deployment disables it/);
   });
 });
