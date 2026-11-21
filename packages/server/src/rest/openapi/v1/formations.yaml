@@ -1411,6 +1411,10 @@ components:
           description: The rules a run's verdict reads beyond the threshold.
           allOf:
             - $ref: './evaluations.yaml#/components/schemas/Evidence'
+        claim:
+          description: What a run of the eval tests; each run copies it.
+          allOf:
+            - $ref: './evaluations.yaml#/components/schemas/Claim'
 
     DocumentResourceProperties:
       description: >-

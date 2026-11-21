@@ -877,6 +877,8 @@ paths:
                   example: kind
                 evidence:
                   $ref: '#/components/schemas/Evidence'
+                claim:
+                  $ref: '#/components/schemas/Claim'
       responses:
         '201':
           description: Eval created successfully
@@ -1031,6 +1033,10 @@ paths:
                   description: Replaces the stored evidence; null clears it, omitting it leaves it unchanged.
                   allOf:
                     - $ref: '#/components/schemas/Evidence'
+                claim:
+                  description: Replaces the stored claim as a whole; null clears it, omitting it leaves it unchanged.
+                  allOf:
+                    - $ref: '#/components/schemas/Claim'
       responses:
         '200':
           description: Eval updated successfully
@@ -1980,12 +1986,47 @@ components:
           example: kind
         evidence:
           $ref: '#/components/schemas/Evidence'
+        claim:
+          $ref: '#/components/schemas/Claim'
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    Claim:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [statement]
+      description: >-
+        What a run of the eval tests: the statement a `supported` verdict
+        backs, the population its dataset stands for, and the limits outside
+        which the verdict says nothing. Each run copies it when created. Null
+        states none.
+      properties:
+        statement:
+          type: string
+          minLength: 1
+          description: The proposition the eval's verdict supports or refutes
+          example: The agent answers refund questions with the current policy.
+        population:
+          type: string
+          nullable: true
+          minLength: 1
+          description: >-
+            Who or what the dataset's items are drawn from; the verdict
+            generalizes to this and no further. Null when unstated.
+          example: Refund requests from retail customers, 2026
+        limits:
+          type: array
+          nullable: true
+          description: >-
+            Conditions the verdict does not cover. Null when unstated.
+          items:
+            type: string
+            minLength: 1
+          example: [English only, No escalations to a human]
     Evidence:
       type: object
       nullable: true
@@ -2262,6 +2303,13 @@ components:
           example: 3
         definition:
           $ref: '#/components/schemas/EvalRunDefinition'
+        claim:
+          description: >-
+            The eval's claim as it was when the run was created: what this run
+            tested. A later edit to the eval reaches only runs created after
+            it. Null when the eval stated none.
+          allOf:
+            - $ref: '#/components/schemas/Claim'
         decider_versions:
           type: object
           nullable: true

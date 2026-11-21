@@ -24,7 +24,7 @@ Write the sentence a passing run authorizes before the dataset: what the agent d
 | It knows how to use the tools | Calls `lookup_order` with the order id the customer gave, never with a guessed one |
 | It investigates well | Names the failing step of a run from its trace, for runs that errored in a tool call |
 
-A claim names an observable property and the inputs it holds over. One claim is one eval: when two kinds of input need different thresholds, give each its own dataset and eval. Write beside the claim what the eval does not establish, so a passing run is not read wider than its items.
+A claim names an observable property and the inputs it holds over. One claim is one eval: when two kinds of input need different thresholds, give each its own dataset and eval. Write beside the claim what the eval does not establish, so a passing run is not read wider than its items. Store it as the eval's [`claim`](../modules/evaluations.md#the-claim) — the `statement`, the `population` its items are drawn from, and its `limits` — and every run carries the claim it tested.
 
 ## The evidence the claim needs
 

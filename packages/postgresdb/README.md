@@ -124,6 +124,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-18-eval-run-cancel-action` | `evaluations:CancelEvalRun` added beside every `evaluations:RunEval` in a stored policy statement (`policies.document`, `formations.template`, `formation_resources.last_applied_properties`), Allow and Deny alike |
 | `2026-11-18-usage-event-model-aliases` | `usage_events.model` under a vendor model id renamed to the one alias of the event's provider that targets it; an id two aliases target, or none, kept; no other column written |
 | `2026-11-21-eval-run-verdict` | `evals.evidence` (`json`), the rules a verdict reads beyond the threshold; `eval_runs.verdict` and `eval_runs.verdict_reasons`. `eval_runs.passed` is kept unwritten until its contract |
+| `2026-11-21-eval-claim` | `evals.claim` and `eval_runs.claim` (`json`), the claim an eval's runs test and the copy each run takes at creation; nothing filled |
 
 Run them from the server package, which owns the entrypoint:
 

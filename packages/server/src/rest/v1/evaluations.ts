@@ -366,6 +366,7 @@ evaluationsRouter.post('/evals', async (ctx: Context) => {
     groupBy: body.group_by,
     policyIds: body.policy_ids as string[] | undefined,
     evidence: body.evidence,
+    claim: body.claim,
     writer: ctx.authUser,
   });
 });
@@ -426,6 +427,7 @@ evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
     groupBy: body.group_by,
     policyIds: body.policy_ids as string[] | undefined,
     evidence: body.evidence,
+    claim: body.claim,
     writer: ctx.authUser,
   });
 });
