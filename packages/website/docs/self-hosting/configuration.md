@@ -318,6 +318,7 @@ Mount a persistent volume here in Docker.
 | ---------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
 | `SOAT_TOOL_CALL_TIMEOUT_MS`        | `300000`  | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools)                  |
 | `TOOL_ASSERTION_PRIVATE_KEY`       | —         | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
+| `SOAT_RESERVED_TOOL_CONTEXT_PREFIX` | —        | A `tool_context` key prefix only an [IAM token's layer](../modules/iam.md#pinning-a-tool_context-layer) carries; see [IAM configuration](../modules/iam.md#configuration) |
 | `GENERATION_DEADLINE_MS`           | `1800000` | How long one running segment of a generation may run before it is cancelled and fails                            |
 | `GENERATION_MODEL_CALL_TIMEOUT_MS` | `600000`  | How long one model call (one step) may take before it is aborted                                                |
 | `GENERATION_LEASE_TTL_MS`          | `120000`  | How long a running generation's lease lasts unrenewed; the running process renews it three times per period     |

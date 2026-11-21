@@ -151,7 +151,7 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 }
 ```
 
-`meta` carries the `generation_id` and `trace_id` of the failed run for inspection via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
+`meta.provider_status_code` is the status the provider answered with, and `meta.provider_response_body` its raw response body, each present when the provider sent one; a network fault carries neither. `meta` also carries the `generation_id` and `trace_id` of the failed run for inspection via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
 
 ### Metadata
 

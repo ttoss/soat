@@ -35,7 +35,7 @@ An AI provider is a named configuration that tells the system how to reach a spe
 | `config`        | object \| null   | Arbitrary provider-specific configuration object          |
 | `model_aliases` | object           | Alias → model id sent to the vendor; `{}` when none (see [Model aliases](#model-aliases)) |
 | `model_aliases_only` | boolean     | Refuse a model that is not one of `model_aliases` |
-| `require_priced_model` | boolean   | Refuse a generation on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
+| `require_priced_model` | boolean   | Refuse an agent generation on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
 
@@ -182,7 +182,7 @@ These are the deployment's credentials, so the mode is available only where the 
 
 ### Listing the models a provider can run
 
-[`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that record's configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Reachable models are a property of the **credential**, not the slug.
+[`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that record's configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry, unless the provider names its models through [aliases](#model-aliases). Reachable models are a property of the **credential**, not the slug.
 
 Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
 
@@ -279,11 +279,13 @@ The record supplies the region and the IAM scope; the credential comes from the 
 
 Wherever a model is named beside the provider (its `default_model`, an agent's `model`, a [model route](./model-routes.md) target, a chat or chat completion `model`, a formation resource), an alias is accepted and stored as written. Reads, a generation's `output.model`, [usage](./usage.md) events, price rows and traces answer the alias; only the vendor call uses the id. A name that is not an alias reaches the vendor as written.
 
-`model_aliases_only: true` closes the catalog: a model that is not one of the aliases is `400 MODEL_NOT_OFFERED`, on the write that names it and on any call that would send it. Setting either field needs `ai-providers:UpdateAiProvider`.
+`model_aliases_only: true` closes the catalog: a model that is not one of the aliases is `400 MODEL_NOT_OFFERED`, with `meta.ai_provider_id` and `meta.model`. It is refused on the write that names it (the provider's own `default_model`, an agent, a chat, a model route target, and those resources in a formation) and on any call that would send it. Closing a catalog does not re-check what is already stored: a stored non-alias model is refused when it is called. Setting either field needs `ai-providers:UpdateAiProvider`.
+
+The [model listing](#listing-the-models-a-provider-can-run) reads neither field: it returns the vendor's ids, not the aliases.
 
 ### Requiring a priced model
 
-`require_priced_model: true` on a provider refuses, with `409 MODEL_NOT_PRICED`, a generation on that provider whose model no price row covers, before the provider is called. It holds that provider alone: another provider of the project runs unpriced unless the [project's own flag](./projects.md#priced-models) is set. A route target is held when its provider sets it. Setting it needs `ai-providers:UpdateAiProvider`.
+`require_priced_model: true` on a provider refuses, with `409 MODEL_NOT_PRICED`, an agent generation on that provider whose model no price row covers, before the provider is called; a chat completion is not checked. It holds that provider alone: another provider of the project runs unpriced unless the [project's own flag](./projects.md#priced-models) is set. A route target is held when its provider sets it. Setting it needs `ai-providers:UpdateAiProvider`.
 
 ### Price overrides
 
