@@ -11,6 +11,7 @@ import { subscriberReceivesEvent } from './eventMatching';
 import { soatHeader } from './headerPrefix';
 import { signatureHeader, timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
+import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { fetchWithEgressGuard } from './toolEgress';
 import { retryTransient } from './transientRetry';
 import { decryptWebhookSecret } from './webhooks';
@@ -155,6 +156,23 @@ const recordFailedAttempt = async (args: {
 };
 
 /**
+ * A refusal as `response_body` records it: a `DomainError` as a recorded
+ * failure, `{ error: { code, message, meta? } }`, so its code names the remedy.
+ */
+const closingReason = (error: unknown): string => {
+  if (error instanceof DomainError) {
+    return JSON.stringify({
+      error: toStoredError({
+        error,
+        opaque: INTERNAL_FAILURE,
+        label: 'webhook delivery',
+      }),
+    });
+  }
+  return error instanceof Error ? error.message : String(error);
+};
+
+/**
  * Ends a delivery without consuming an attempt: the cause is not something a
  * retry can fix, so the row is closed with the reason an operator needs rather
  * than left to burn its remaining attempts on the same failure. `attempts: 0`
@@ -214,10 +232,7 @@ const prepareAttempt = async (args: { delivery: DeliveryRow }) => {
       }),
     };
   } catch (error) {
-    await abandonDelivery({
-      delivery,
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    await abandonDelivery({ delivery, reason: closingReason(error) });
     return null;
   }
 };
@@ -308,7 +323,7 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
     // and each attempt would be one more probe of the host it names. So the
     // delivery is closed with the reason, the way an unsignable one is.
     if (error instanceof DomainError && error.code === 'TOOL_EGRESS_BLOCKED') {
-      await abandonDelivery({ delivery, reason: error.message });
+      await abandonDelivery({ delivery, reason: closingReason(error) });
       return;
     }
     await recordFailedAttempt({
