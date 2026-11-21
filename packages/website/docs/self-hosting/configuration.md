@@ -314,16 +314,16 @@ Mount a persistent volume here in Docker.
 
 ### Agent Generation
 
-| Variable                           | Default   | Description                                                                                                      |
-| ---------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
-| `SOAT_TOOL_CALL_TIMEOUT_MS`        | `300000`  | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools)                  |
-| `TOOL_ASSERTION_PRIVATE_KEY`       | —         | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request |
-| `SOAT_RESERVED_TOOL_CONTEXT_PREFIX` | —        | A `tool_context` key prefix only an [IAM token's layer](../modules/iam.md#pinning-a-tool_context-layer) carries; see [IAM configuration](../modules/iam.md#configuration) |
-| `GENERATION_DEADLINE_MS`           | `1800000` | How long one running segment of a generation may run before it is cancelled and fails                            |
-| `GENERATION_MODEL_CALL_TIMEOUT_MS` | `600000`  | How long one model call (one step) may take before it is aborted                                                |
-| `GENERATION_LEASE_TTL_MS`          | `120000`  | How long a running generation's lease lasts unrenewed; the running process renews it three times per period     |
-| `GENERATION_SWEEP_INTERVAL_MS`     | `60000`   | How often the sweep fails generations whose lease lapsed                                                         |
-| `GENERATION_SWEEP_DISABLED`        | —         | `true` turns the sweep off in this process                                                                       |
+| Variable                            | Default   | Description                                                                                                                                                               |
+| ----------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SOAT_TOOL_CALL_TIMEOUT_MS`         | `300000`  | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools)                                                                           |
+| `TOOL_ASSERTION_PRIVATE_KEY`        | —         | Ed25519 key (PEM) that signs a [tool assertion](../modules/tools.md#tool-assertions) on every `mcp` tool request                                                          |
+| `SOAT_RESERVED_TOOL_CONTEXT_PREFIX` | —         | A `tool_context` key prefix only an [IAM token's layer](../modules/iam.md#pinning-a-tool_context-layer) carries; see [IAM configuration](../modules/iam.md#configuration) |
+| `GENERATION_DEADLINE_MS`            | `1800000` | How long one running segment of a generation may run before it is cancelled and fails                                                                                     |
+| `GENERATION_MODEL_CALL_TIMEOUT_MS`  | `600000`  | How long one model call (one step) may take before it is aborted                                                                                                          |
+| `GENERATION_LEASE_TTL_MS`           | `120000`  | How long a running generation's lease lasts unrenewed; the running process renews it three times per period                                                               |
+| `GENERATION_SWEEP_INTERVAL_MS`      | `60000`   | How often the sweep fails generations whose lease lapsed                                                                                                                  |
+| `GENERATION_SWEEP_DISABLED`         | —         | `true` turns the sweep off in this process                                                                                                                                |
 
 A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation. A nested agent generation is the exception: the call answers with the running generation ([nested agent calls](../modules/agents.md#a-nested-generation-that-outlives-the-call)).
 
@@ -361,6 +361,14 @@ Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of
 Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not the price book (no AI provider record configures the embedding stack). Unset meters every embedding unpriced (`cost_usd` `null`; `0` on `ollama`, a local model) and logs a startup warning. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
 
 Change `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together. Dimensions may not exceed **2000**, the widest vector pgvector can build an HNSW index over; a larger model is refused at startup. Bedrock without `EMBEDDING_API_KEY` uses the AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
+
+### Formations
+
+| Variable                          | Default   | Description                                                                                                                                                                                                                   |
+| --------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FORMATION_RESOURCE_TYPES_CONFIG` | _(unset)_ | Path to a JSON file that registers [custom resource types](../modules/formations.md#custom-resource-types) and [disables built-in ones](../modules/formations.md#disabling-a-built-in-type). Unset serves every built-in type |
+
+Read once at boot; any problem in the file fails the boot. Shape and checks: [Formations configuration](../modules/formations.md#configuration).
 
 ## Docker Compose Example
 
