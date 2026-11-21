@@ -301,17 +301,18 @@ export const ageReason = (args: {
     };
   }
   const elapsed = args.now.getTime() - args.finishedAt.getTime();
-  const days = figure(elapsed / DAY_MS);
+  const thousandths = (elapsed / DAY_MS) * 1000;
+  // Rounded away from the limit, so the figure never reads on its other side.
   return {
     scope: { kind: 'age' },
     ...(elapsed > args.maxDays * DAY_MS
       ? {
           verdict: 'insufficient' as const,
-          reason: `run finished ${days} days ago, older than ${args.maxDays}`,
+          reason: `run finished ${Math.ceil(thousandths) / 1000} days ago, older than ${args.maxDays}`,
         }
       : {
           verdict: 'supported' as const,
-          reason: `run finished ${days} days ago, within ${args.maxDays}`,
+          reason: `run finished ${Math.floor(thousandths) / 1000} days ago, within ${args.maxDays}`,
         }),
   };
 };
