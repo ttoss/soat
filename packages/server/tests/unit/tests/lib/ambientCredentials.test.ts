@@ -4,6 +4,8 @@ import {
   assertAmbientCredentialsAllowed,
 } from 'src/lib/ambientCredentials';
 
+const TENANT_PROJECT = 'proj_tenant';
+
 const withFlag = (value: string | undefined, run: () => void) => {
   const previous = process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS;
   if (value === undefined) {
@@ -28,7 +30,10 @@ describe('assertAmbientCredentialsAllowed', () => {
     (provider) => {
       withFlag(undefined, () => {
         expect(() => {
-          return assertAmbientCredentialsAllowed({ provider });
+          return assertAmbientCredentialsAllowed({
+            project: TENANT_PROJECT,
+            provider,
+          });
         }).toThrow(
           expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
         );
@@ -39,13 +44,22 @@ describe('assertAmbientCredentialsAllowed', () => {
   test('names the deployment credential the record would have used', () => {
     withFlag(undefined, () => {
       expect(() => {
-        return assertAmbientCredentialsAllowed({ provider: 'vertex' });
+        return assertAmbientCredentialsAllowed({
+          project: TENANT_PROJECT,
+          provider: 'vertex',
+        });
       }).toThrow(/Application Default Credentials/);
       expect(() => {
-        return assertAmbientCredentialsAllowed({ provider: 'bedrock' });
+        return assertAmbientCredentialsAllowed({
+          project: TENANT_PROJECT,
+          provider: 'bedrock',
+        });
       }).toThrow(/AWS default credential chain/);
       expect(() => {
-        return assertAmbientCredentialsAllowed({ provider: 'anthropic' });
+        return assertAmbientCredentialsAllowed({
+          project: TENANT_PROJECT,
+          provider: 'anthropic',
+        });
       }).toThrow(/Anthropic workload identity federation/);
     });
   });
@@ -53,7 +67,10 @@ describe('assertAmbientCredentialsAllowed', () => {
   test('names the setting that would allow it', () => {
     withFlag(undefined, () => {
       expect(() => {
-        return assertAmbientCredentialsAllowed({ provider: 'bedrock' });
+        return assertAmbientCredentialsAllowed({
+          project: TENANT_PROJECT,
+          provider: 'bedrock',
+        });
       }).toThrow(/AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS/);
     });
   });
@@ -61,7 +78,10 @@ describe('assertAmbientCredentialsAllowed', () => {
   test('allows it when the operator opted in', () => {
     withFlag('true', () => {
       expect(() => {
-        return assertAmbientCredentialsAllowed({ provider: 'bedrock' });
+        return assertAmbientCredentialsAllowed({
+          project: TENANT_PROJECT,
+          provider: 'bedrock',
+        });
       }).not.toThrow();
     });
   });
@@ -74,7 +94,10 @@ describe('assertAmbientCredentialsAllowed', () => {
     (value) => {
       withFlag(value, () => {
         expect(() => {
-          return assertAmbientCredentialsAllowed({ provider: 'vertex' });
+          return assertAmbientCredentialsAllowed({
+            project: TENANT_PROJECT,
+            provider: 'vertex',
+          });
         }).toThrow(DomainError);
       });
     }
@@ -87,7 +110,10 @@ describe('assertAiProviderCarriesCredential', () => {
     (provider) => {
       withFlag(undefined, () => {
         expect(() => {
-          return assertAiProviderCarriesCredential({ provider });
+          return assertAiProviderCarriesCredential({
+            project: TENANT_PROJECT,
+            provider,
+          });
         }).toThrow(expect.objectContaining({ code: 'VALIDATION_FAILED' }));
       });
     }
@@ -96,7 +122,10 @@ describe('assertAiProviderCarriesCredential', () => {
   test('names secret_id as the field to fix', () => {
     withFlag(undefined, () => {
       try {
-        assertAiProviderCarriesCredential({ provider: 'bedrock' });
+        assertAiProviderCarriesCredential({
+          project: TENANT_PROJECT,
+          provider: 'bedrock',
+        });
         throw new Error('expected a refusal');
       } catch (error) {
         expect(error).toBeInstanceOf(DomainError);
@@ -110,7 +139,11 @@ describe('assertAiProviderCarriesCredential', () => {
     (provider) => {
       withFlag(undefined, () => {
         expect(() => {
-          return assertAiProviderCarriesCredential({ provider, secretId: 7 });
+          return assertAiProviderCarriesCredential({
+            project: TENANT_PROJECT,
+            provider,
+            secretId: 7,
+          });
         }).not.toThrow();
       });
     }
@@ -119,7 +152,10 @@ describe('assertAiProviderCarriesCredential', () => {
   test('accepts a credential-less record once the operator opted in', () => {
     withFlag('true', () => {
       expect(() => {
-        return assertAiProviderCarriesCredential({ provider: 'vertex' });
+        return assertAiProviderCarriesCredential({
+          project: TENANT_PROJECT,
+          provider: 'vertex',
+        });
       }).not.toThrow();
     });
   });
@@ -131,9 +167,99 @@ describe('assertAiProviderCarriesCredential', () => {
     (provider) => {
       withFlag(undefined, () => {
         expect(() => {
-          return assertAiProviderCarriesCredential({ provider });
+          return assertAiProviderCarriesCredential({
+            project: TENANT_PROJECT,
+            provider,
+          });
         }).not.toThrow();
       });
     }
   );
+});
+
+describe('AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS', () => {
+  const withProjects = (value: string | undefined, run: () => void) => {
+    const previous = process.env.AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS;
+    if (value === undefined) {
+      delete process.env.AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS;
+    } else {
+      process.env.AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS = value;
+    }
+    try {
+      run();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS;
+      } else {
+        process.env.AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS = previous;
+      }
+    }
+  };
+
+  test.each([undefined, '', ' , '])(
+    'covers every project when it is %p',
+    (value) => {
+      withFlag('true', () => {
+        withProjects(value, () => {
+          expect(() => {
+            return assertAmbientCredentialsAllowed({
+              project: 'proj_any',
+              provider: 'bedrock',
+            });
+          }).not.toThrow();
+        });
+      });
+    }
+  );
+
+  test('allows a named project at build and at write', () => {
+    withFlag('true', () => {
+      withProjects('proj_other, proj_tenant', () => {
+        expect(() => {
+          return assertAmbientCredentialsAllowed({
+            project: TENANT_PROJECT,
+            provider: 'vertex',
+          });
+        }).not.toThrow();
+        expect(() => {
+          return assertAiProviderCarriesCredential({
+            project: TENANT_PROJECT,
+            provider: 'vertex',
+          });
+        }).not.toThrow();
+      });
+    });
+  });
+
+  test('refuses any other project at build and at write', () => {
+    withFlag('true', () => {
+      withProjects('proj_other', () => {
+        expect(() => {
+          return assertAmbientCredentialsAllowed({
+            project: TENANT_PROJECT,
+            provider: 'anthropic',
+          });
+        }).toThrow(/AI_PROVIDER_AMBIENT_CREDENTIAL_PROJECTS does not name/);
+        expect(() => {
+          return assertAiProviderCarriesCredential({
+            project: TENANT_PROJECT,
+            provider: 'bedrock',
+          });
+        }).toThrow(expect.objectContaining({ code: 'VALIDATION_FAILED' }));
+      });
+    });
+  });
+
+  test('grants nothing without the opt-in', () => {
+    withFlag(undefined, () => {
+      withProjects(TENANT_PROJECT, () => {
+        expect(() => {
+          return assertAmbientCredentialsAllowed({
+            project: TENANT_PROJECT,
+            provider: 'bedrock',
+          });
+        }).toThrow(/AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS/);
+      });
+    });
+  });
 });
