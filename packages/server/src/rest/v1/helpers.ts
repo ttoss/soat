@@ -435,6 +435,16 @@ export const requireProjectAccess = async (args: {
  * `API_KEY_PROJECT_SCOPE` / `FORBIDDEN` otherwise.
  */
 /**
+ * The project a project-bound credential names: an API key's, or that of a
+ * token minted from one or consented for one.
+ */
+export const credentialProjectPublicId = (
+  authUser: NonNullable<Context['authUser']>
+): string | undefined => {
+  return authUser.apiKeyProjectPublicId ?? authUser.oauthProjectPublicId;
+};
+
+/**
  * The public id of the project a write targets: the explicit one, else the
  * project a scoped credential supplies.
  *
@@ -450,9 +460,7 @@ export const resolveWriteProjectPublicId = (args: {
   requireAuth(ctx);
 
   const projectPublicId =
-    args.projectPublicId ??
-    ctx.authUser.apiKeyProjectPublicId ??
-    ctx.authUser.oauthProjectPublicId;
+    args.projectPublicId ?? credentialProjectPublicId(ctx.authUser);
 
   if (!projectPublicId) {
     throw new DomainError('VALIDATION_FAILED', 'project_id is required');

@@ -353,7 +353,7 @@ The kinds are a declared set, not free text: a corpus many agents write into is 
 
 [`GET /api/v1/documents/export`](/docs/api/documents/export-documents) streams a project's documents as newline-delimited JSON, oldest first, one document object per line — the corpus as a file, for archiving it or moving it into another system.
 
-- `project_id` is **required**; `path_prefix` narrows it exactly as it narrows the listing.
+- `project_id` names the project, or a [project-bound credential](./projects.md#project-selection) implies its own; `path_prefix` narrows it exactly as it narrows the listing.
 - The rows are the rows [`GET /api/v1/documents`](/docs/api/documents/list-documents) returns for the same caller: a policy that hides a document hides it here, and withdrawn documents and the reserved `/.system/` root are left out.
 - The response streams and pages internally, so a project's size is not the request's size.
 - Authorized by `documents:ExportDocuments`, separate from `documents:ListDocuments`.
