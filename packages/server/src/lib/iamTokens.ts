@@ -11,6 +11,7 @@ import {
   validatePolicyDocument,
 } from './iam';
 import { isPlainObject } from './plainObject';
+import { carriesDenial } from './policyDenial';
 import { type PrincipalBound, serializeBound } from './principalBound';
 import { signToken } from './signedTokens';
 import { parseToolContextLayer } from './toolContextLayer';
@@ -132,6 +133,10 @@ const parsePolicy = (args: { policy: unknown }): PrincipalBound => {
       'policy is not a valid policy document.',
       validation.errors
     );
+  }
+  // A denial is written only on a stored policy, by an unrestricted admin.
+  if (carriesDenial(document)) {
+    throw policyInvalid('policy may not carry a statement denial.');
   }
   return { policy: document };
 };

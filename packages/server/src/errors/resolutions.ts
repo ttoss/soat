@@ -1,4 +1,5 @@
 import { ERROR_CODES } from './codes';
+import { denialCodeHint } from './denialCodes';
 import { docsBaseUrl } from './docsBaseUrl';
 import { errorHintOverride } from './hintOverrides';
 import { renderHint } from './hintRoutes';
@@ -85,6 +86,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Give the agent the policies it acts under in `policy_ids`, or set `run_as: caller` so the agent runs as its caller.',
   POLICY_GRANT_NOT_HELD:
     'Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.',
+  POLICY_DENIAL_RESERVED:
+    'Remove `denial` from every statement, or have an unrestricted admin write the policy.',
   POLICY_OUTSIDE_PROJECT:
     "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
   POLICY_HAS_DEPENDENTS:
@@ -320,9 +323,13 @@ const STATUS_BY_CODE = new Map<string, number>(
   })
 );
 
-const hintTemplateFor = (args: { code: string }): string => {
+const hintTemplateFor = (args: { code: string; wireCode?: string }): string => {
+  const declaredDenial =
+    args.wireCode === undefined ? undefined : denialCodeHint(args.wireCode);
   const chosen =
-    errorHintOverride({ code: args.code }) ?? ERROR_RESOLUTIONS[args.code];
+    declaredDenial ??
+    errorHintOverride({ code: args.code }) ??
+    ERROR_RESOLUTIONS[args.code];
   if (chosen) return chosen;
 
   const status = STATUS_BY_CODE.get(args.code);
@@ -337,7 +344,11 @@ const hintTemplateFor = (args: { code: string }): string => {
  * prefix. Never empty — the deployment's override, else an explicit entry,
  * else the status-class fallback, else `DEFAULT_RESOLUTION`.
  */
-export const resolutionFor = (args: { code: string }): string => {
+export const resolutionFor = (args: {
+  code: string;
+  /** A wire code the deployment declares as a denial code takes its hint. */
+  wireCode?: string;
+}): string => {
   return renderHint({ template: hintTemplateFor(args) });
 };
 

@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 
 import createDebug from 'debug';
 
+import { declareDenialCodes, parseDenialCodes } from '../errors';
 import { isObjectRecord } from './openapiSchemaFields';
 import { listModuleNames } from './permissionCatalog';
 
@@ -211,11 +212,10 @@ export const readIamRegistrationFile = (args: {
   }
 };
 
-export const loadIamRegistrationConfig = (args: {
-  env: Record<string, string | undefined>;
+const registrationsIn = (file: {
+  config: unknown;
+  source: string;
 }): IamModuleRegistration[] => {
-  const file = readIamRegistrationFile(args);
-  if (!file) return [];
   const registrations = parseIamRegistrationConfig(file);
   log(
     'registered %d IAM module(s): %s',
@@ -229,9 +229,19 @@ export const loadIamRegistrationConfig = (args: {
   return registrations;
 };
 
-/** Called once at boot; any problem throws, which fails the boot. */
+export const loadIamRegistrationConfig = (args: {
+  env: Record<string, string | undefined>;
+}): IamModuleRegistration[] => {
+  const file = readIamRegistrationFile(args);
+  return file ? registrationsIn(file) : [];
+};
+
+/**
+ * Called once at boot: registers the file's modules and declares its
+ * `denial_codes`. Any problem throws, which fails the boot.
+ */
 export const initIamRegistrations = (): void => {
-  registerIamModules({
-    registrations: loadIamRegistrationConfig({ env: process.env }),
-  });
+  const file = readIamRegistrationFile({ env: process.env });
+  registerIamModules({ registrations: file ? registrationsIn(file) : [] });
+  declareDenialCodes({ codes: file ? parseDenialCodes(file) : new Map() });
 };
