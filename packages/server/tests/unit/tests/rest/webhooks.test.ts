@@ -319,9 +319,7 @@ describe('Webhooks', () => {
       expect(response.status).toBe(500);
       expect(response.body.error.code).toBe('SECRET_NOT_DECRYPTABLE');
       expect(response.body.error.hint).toMatch(/rotate/i);
-      expect(JSON.stringify(response.body)).not.toContain(
-        plaintextSecret
-      );
+      expect(JSON.stringify(response.body)).not.toContain(plaintextSecret);
     });
   });
 
