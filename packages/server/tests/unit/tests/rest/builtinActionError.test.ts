@@ -1,3 +1,7 @@
+import { DomainError } from 'src/errors';
+import { executeSoatTool } from 'src/lib/agentToolResolverExternalTools';
+import { soatTools } from 'src/lib/soatTools';
+
 import {
   type AdmissionService,
   type Reply,
@@ -8,7 +12,12 @@ import {
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { nodeExecutionsOf } from '../../fixtures/nodeExecutions';
-import { authenticatedTestClient, loginAs } from '../../testClient';
+import { ORPHAN_AUTHORITY } from '../../fixtures/workAuthority';
+import {
+  authenticatedTestClient,
+  loginAs,
+  workAuthorityOfToken,
+} from '../../testClient';
 
 /**
  * A native builtin action's error is relayed as its REST call answers it: the
@@ -289,5 +298,61 @@ describe('an orchestration step on a failed native action', () => {
 
     expect(error.code).toBe('ADMISSION_UNAVAILABLE');
     expect(attempts).toBe(3);
+  });
+});
+
+describe('a native action answered with no error envelope', () => {
+  test('is BUILTIN_ACTION_FAILED carrying the status and the action', async () => {
+    const listTools = soatTools.find((def) => {
+      return def.name === 'list-tools';
+    });
+    expect(listTools).toBeDefined();
+    const logged: unknown[] = [];
+    const authority = await workAuthorityOfToken({
+      token: turn.adminToken,
+      project: turn.projectId,
+    });
+
+    const call = executeSoatTool({
+      toolName: 'unanswered',
+      // A target outside `/api/` answers Koa's bare 404, with no envelope.
+      def: {
+        ...listTools!,
+        path: () => {
+          return '/no-such-page';
+        },
+        query: undefined,
+      },
+      rawArgs: {},
+      meter: {
+        projectId: 0,
+        toolId: null,
+        workId: null,
+        attribution: {},
+        sender: { authority: ORPHAN_AUTHORITY },
+      },
+      authority,
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: ({ error }) => {
+        logged.push(error);
+      },
+    });
+
+    const error = await call.catch((error_: unknown) => {
+      return error_;
+    });
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error).toMatchObject({
+      code: 'BUILTIN_ACTION_FAILED',
+      httpStatus: 502,
+      meta: {
+        tool_status_code: 404,
+        tool_action: 'list-tools',
+        tool_method: listTools!.method,
+      },
+    });
+    expect(logged).toEqual([error]);
   });
 });
