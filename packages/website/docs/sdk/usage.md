@@ -185,3 +185,15 @@ const { data: actor, error } = await soat.actors.createActor({
 
 if (error) throw new Error(JSON.stringify(error));
 ```
+
+## Error codes
+
+`ERROR_CODES` maps every code an error body carries in `error.code` to the HTTP status the server answers it with; `ErrorCode` is its key type. It is generated from the server's registry at SDK build.
+
+```ts
+import { ERROR_CODES, type ErrorCode } from '@soat/sdk';
+
+const isNotFound = (code: ErrorCode) => {
+  return ERROR_CODES[code].httpStatus === 404;
+};
+```
