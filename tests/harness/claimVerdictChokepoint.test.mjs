@@ -17,8 +17,9 @@ const REASON_READERS = new Set([
   'evaluationRunReads.ts',
 ]);
 
+/** Every module under `lib/`, subfolders included, as a path from it. */
 const libFiles = () => {
-  return readdirSync(LIB).filter((file) => {
+  return readdirSync(LIB, { recursive: true }).filter((file) => {
     return file.endsWith('.ts');
   });
 };
