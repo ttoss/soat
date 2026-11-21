@@ -5,10 +5,11 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { redactAiProviderSecrets } from 'src/lib/aiProviderConfigSecrets';
+import { deleteAiProvider } from 'src/lib/aiProviderDeletion';
+import type { ModelAliases } from 'src/lib/aiProviderModelAliases';
 import { listAiProviderModels } from 'src/lib/aiProviderModels';
 import {
   createAiProvider,
-  deleteAiProvider,
   getAiProvider,
   listAiProviders,
   updateAiProvider,
@@ -32,7 +33,7 @@ type CreateAiProviderBody = {
   default_model?: string;
   base_url?: string;
   config?: Record<string, unknown>;
-  model_aliases?: Record<string, string>;
+  model_aliases?: ModelAliases;
   model_aliases_only?: boolean;
   require_priced_model?: boolean;
 };
@@ -262,7 +263,7 @@ aiProvidersRouter.patch(
       default_model?: string;
       base_url?: string | null;
       config?: Record<string, unknown> | null;
-      model_aliases?: Record<string, string> | null;
+      model_aliases?: ModelAliases | null;
       model_aliases_only?: boolean;
       require_priced_model?: boolean;
     };

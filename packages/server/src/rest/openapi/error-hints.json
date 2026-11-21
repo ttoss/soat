@@ -68,7 +68,7 @@
     },
     "AI_PROVIDER_HAS_DEPENDENTS": {
       "http_status": 409,
-      "hint": "Delete or repoint the agents, chats and model routes that reference the provider, then delete it; `force` does not override them. Price overrides, usage records and accepted shares (`meta.forcible`) block only until `force=true`, which drops the overrides, unlinks usage history and revokes the shares.",
+      "hint": "Delete or repoint the agents, chats, model routes and forwarding AI providers that reference the provider, then delete it; `force` does not override them. Price overrides, usage records and accepted shares (`meta.forcible`) block only until `force=true`, which drops the overrides, unlinks usage history and revokes the shares.",
       "routes": []
     },
     "AI_PROVIDER_MISCONFIGURED": {

@@ -4,9 +4,10 @@ import {
   configCredentialError,
   redactAiProviderSecrets,
 } from '../aiProviderConfigSecrets';
+import { deleteAiProvider } from '../aiProviderDeletion';
+import type { ModelAliases } from '../aiProviderModelAliases';
 import {
   createAiProvider,
-  deleteAiProvider,
   getAiProvider,
   updateAiProvider,
 } from '../aiProviders';
@@ -75,10 +76,8 @@ export const aiProvidersFormationModule = defineFormationModule({
         (toNullableObject(properties.config) as Record<string, unknown>) ??
         undefined,
       modelAliases:
-        (toNullableObject(properties.model_aliases) as Record<
-          string,
-          string
-        >) ?? undefined,
+        (toNullableObject(properties.model_aliases) as ModelAliases) ??
+        undefined,
       modelAliasesOnly: toOptionalBoolean(properties.model_aliases_only),
       requirePricedModel: toOptionalBoolean(properties.require_priced_model),
       isAllowed: actor.isAllowed,
@@ -108,7 +107,7 @@ export const aiProvidersFormationModule = defineFormationModule({
       config: toNullableObject(properties.config) as
         Record<string, unknown> | null | undefined,
       modelAliases: toNullableObject(properties.model_aliases) as
-        Record<string, string> | null | undefined,
+        ModelAliases | null | undefined,
       modelAliasesOnly: toOptionalBoolean(properties.model_aliases_only),
       requirePricedModel: toOptionalBoolean(properties.require_priced_model),
       isAllowed: actor.isAllowed,
