@@ -301,7 +301,7 @@ export const ageReason = (args: {
     };
   }
   const elapsed = args.now.getTime() - args.finishedAt.getTime();
-  const days = Math.floor(elapsed / DAY_MS);
+  const days = figure(elapsed / DAY_MS);
   return {
     scope: { kind: 'age' },
     ...(elapsed > args.maxDays * DAY_MS

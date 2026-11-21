@@ -171,14 +171,15 @@ const claimSideReasons = async (args: {
   reading: ClaimReading;
 }): Promise<VerdictReason[]> => {
   const evidence = readEvalRunDefinition({ run: args.run })?.evidence;
+  const live = evidence?.live;
   const reasons: VerdictReason[] = [];
-  if (evidence?.live === 'unreadable') {
+  if (live && 'unreadable' in live) {
     reasons.push(unreadableLiveReason());
-  } else if (evidence?.live) {
+  } else if (live) {
     reasons.push(
       ...liveReasons({
-        live: evidence.live,
-        counts: await args.reading.counts(evidence.live.window),
+        live,
+        counts: await args.reading.counts(live.window),
       })
     );
   }
@@ -213,6 +214,7 @@ export const runClaimOf = (args: {
   evalId: string;
   run: EvalRunRow;
 }): VersionClaim => {
+  log('runClaimOf: evalId=%s runId=%s', args.evalId, args.run.publicId);
   const { run } = args;
   return {
     eval_id: args.evalId,

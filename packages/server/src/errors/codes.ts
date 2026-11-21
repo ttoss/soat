@@ -267,7 +267,7 @@ export const ERROR_CODES = {
   PROMOTION_CLAIM_UNMET: {
     httpStatus: 409,
     description:
-      "The stable version supports a claim the canary version does not: its newest run of that eval reads refuted or insufficient, or there is none. Run the eval with agent_version pinned to the canary, name the eval in the release's released_claims to give the claim up, or abort the rollout.",
+      "The stable version supports a claim the canary version does not: its claim verdict on that eval (the newest run, with the live and age rules it records) reads refuted or insufficient, or it has no run. Run the eval with agent_version pinned to the canary, name the eval in the release's released_claims to give the claim up, or abort the rollout.",
   },
   NO_ACTIVE_RELEASE: {
     httpStatus: 409,

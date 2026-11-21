@@ -68,7 +68,7 @@ describe('the rolling windows are stated once', () => {
     const spellers = libFiles().filter((file) => {
       const source = readFileSync(`${LIB}${file}`, 'utf-8');
       return tokens.some((token) => {
-        return source.includes(`'${token}'`);
+        return new RegExp(`['"\`]${token}['"\`]`).test(source);
       });
     });
     assert.deepEqual(spellers, ['rollingWindows.ts']);

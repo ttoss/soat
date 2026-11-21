@@ -1,4 +1,6 @@
+import { app } from 'src/app';
 import { db } from 'src/db';
+import request from 'supertest';
 
 import {
   createScopedPrincipal,
@@ -468,6 +470,37 @@ describe('Agent version claims — live evidence', () => {
           },
         },
       });
+
+      const claim = await claimOf(agentId, 2, evalId);
+      expect(claim?.verdict).toBe('insufficient');
+      expect(liveReason(claim!.verdict_reasons, 'unreadable')).toMatchObject({
+        verdict: 'insufficient',
+      });
+    });
+
+    test('a run created from a live rule that no longer reads records it as written', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, {
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
+      });
+      const unreadable = { window: '14d', guardrail_tripwires: { max: 0 } };
+      await db.Eval.update(
+        { evidence: { live: unreadable } },
+        { where: { publicId: evalId } }
+      );
+
+      // The response contract describes the rules as they are; a value they no
+      // longer read is outside it by construction, so the bare app creates it.
+      const created = await request(app.callback())
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ wait: true, agent_version: 2 });
+      expect(created.status).toBe(201);
+      expect(created.body.definition.evidence).toEqual({ live: unreadable });
+      const stored = await db.EvalRun.findOne({
+        where: { publicId: created.body.id },
+      });
+      expect(stored!.definition?.evidence).toEqual({ live: unreadable });
 
       const claim = await claimOf(agentId, 2, evalId);
       expect(claim?.verdict).toBe('insufficient');

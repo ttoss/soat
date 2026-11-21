@@ -8,14 +8,16 @@ import { type LiveEvidence, parseLiveEvidence } from './claimLiveEvidence';
 import { scorerList } from './evaluationScorerValidation';
 import { isPlainObject } from './plainObject';
 
+/** A recorded `live` the rules no longer read, kept as it was written. */
+export type UnreadableLive = { unreadable: unknown };
+
 /**
  * The rules beyond the threshold, in the wire shape: `required_groups` for the
  * run's verdict, `live` and `max_run_age_days` for its claim's.
  */
 export type EvalEvidence = {
   required_groups?: string[];
-  /** `unreadable` when the run recorded a `live` the rules no longer read. */
-  live?: LiveEvidence | 'unreadable';
+  live?: LiveEvidence | UnreadableLive;
   max_run_age_days?: number;
 };
 
@@ -37,17 +39,16 @@ const requiredGroupsOf = (
   };
 };
 
-/** A recorded `live`, or `unreadable` when the rules no longer read it. */
 const liveOf = (value: unknown): Pick<EvalEvidence, 'live'> => {
   if (value === undefined || value === null) return {};
   const parsed = parseLiveEvidence(value);
-  return { live: 'live' in parsed ? parsed.live : 'unreadable' };
+  return { live: 'live' in parsed ? parsed.live : { unreadable: value } };
 };
 
 /**
  * Every rule the evidence declares, read as the Eval's validator wrote it. A
- * recorded `live` that no longer reads is kept as `unreadable`, so the claim
- * it governs reads insufficient instead of passing without it.
+ * recorded `live` that no longer reads is kept as {@link UnreadableLive}, so
+ * the claim it governs reads insufficient instead of passing without it.
  */
 const evidenceOf = (value: unknown): EvalEvidence | null => {
   if (!isPlainObject(value)) return null;
@@ -77,6 +78,16 @@ export const evalRunDefinitionOf = (args: {
   };
 };
 
+/** The evidence as written: an unreadable `live` goes back as it came. */
+const storedEvidence = (
+  evidence: EvalEvidence | null
+): Record<string, unknown> | null => {
+  if (evidence?.live === undefined || !('unreadable' in evidence.live)) {
+    return evidence;
+  }
+  return { ...evidence, live: evidence.live.unreadable };
+};
+
 /** The stored (and wire) form: `EvalRun.definition`. */
 export const storedEvalRunDefinition = (args: {
   definition: EvalRunDefinition;
@@ -85,7 +96,7 @@ export const storedEvalRunDefinition = (args: {
     scorers: args.definition.scorers,
     pass_threshold: args.definition.passThreshold,
     group_by: args.definition.groupBy,
-    evidence: args.definition.evidence,
+    evidence: storedEvidence(args.definition.evidence),
   };
 };
 

@@ -221,6 +221,16 @@ describe('claimLiveEvidence', () => {
       ).toBe('insufficient');
     });
 
+    test('the reason of a run an hour past the limit reads past the limit', () => {
+      expect(
+        ageReason({
+          maxDays: 30,
+          finishedAt: new Date(daysAgo(30).getTime() - 60 * 60 * 1000),
+          now,
+        }).reason
+      ).toBe('run finished 30.042 days ago, older than 30');
+    });
+
     test('a run exactly at the limit is supported', () => {
       expect(
         ageReason({ maxDays: 30, finishedAt: daysAgo(30), now })?.verdict
