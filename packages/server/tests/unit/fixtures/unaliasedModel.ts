@@ -8,9 +8,11 @@ export const buildUnaliasedModel = (args: {
   model: string;
   baseUrl?: string;
   config?: Record<string, unknown>;
+  projectPublicId?: string;
 }) => {
   return buildModel({
     aiProvider: {
+      projectPublicId: 'proj_tenant',
       ...args,
       publicId: 'aip_unaliased',
       modelAliases: null,

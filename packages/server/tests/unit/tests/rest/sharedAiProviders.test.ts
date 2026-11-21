@@ -7,6 +7,17 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 const VENDOR_DETAIL = 'vendor-secret-detail';
 
+const STREAM_MESSAGE = {
+  id: 'msg_stub',
+  type: 'message',
+  role: 'assistant',
+  model: 'claude-shared-test',
+  content: [],
+  stop_reason: null,
+  stop_sequence: null,
+  usage: { input_tokens: 4, output_tokens: 0 },
+};
+
 /**
  * A provider project P shares with project Q: Q's agents, routes and chats
  * generate through it on P's credential, metered in Q at P's prices, and Q
@@ -15,6 +26,7 @@ const VENDOR_DETAIL = 'vendor-secret-detail';
 describe('Shared AI providers', () => {
   let providerStub: Server;
   let failing = false;
+  let streamFailing = false;
   let adminToken: string;
   let publisherId: string;
   let granteeId: string;
@@ -33,6 +45,23 @@ describe('Shared AI providers', () => {
               type: 'error',
               error: { type: 'invalid_request_error', message: VENDOR_DETAIL },
             })
+          );
+          return;
+        }
+        if (streamFailing) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+          res.end(
+            [
+              { type: 'message_start', message: STREAM_MESSAGE },
+              {
+                type: 'error',
+                error: { type: 'overloaded_error', message: VENDOR_DETAIL },
+              },
+            ]
+              .map((event) => {
+                return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+              })
+              .join('')
           );
           return;
         }
@@ -130,6 +159,27 @@ describe('Shared AI providers', () => {
     return grantee()
       .post(`/api/v1/agents/${agentId}/generate?wait=true`)
       .send({ messages: [{ role: 'user', content: 'hello' }] });
+  };
+
+  const generateStream = (agentId: string) => {
+    return grantee()
+      .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+      .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
+  };
+
+  // A port that was just bound and released refuses connections.
+  const closedPortUrl = async (): Promise<string> => {
+    const probe = createServer();
+    await new Promise<void>((resolve) => {
+      probe.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = probe.address() as AddressInfo;
+    await new Promise<void>((resolve) => {
+      probe.close(() => {
+        resolve();
+      });
+    });
+    return `http://127.0.0.1:${port}`;
   };
 
   let baseUrl: string;
@@ -230,6 +280,46 @@ describe('Shared AI providers', () => {
     });
   });
 
+  describe('POST /api/v1/shares', () => {
+    test('a provider with no secret and no aliases shares as its projection', async () => {
+      const bare = await admin().post('/api/v1/ai-providers').send({
+        project_id: publisherId,
+        name: 'Bare',
+        provider: 'anthropic',
+        default_model: 'claude-shared-test',
+      });
+      expect(bare.status).toBe(201);
+      await share(bare.body.id);
+
+      const response = await grantee().get(
+        `/api/v1/ai-providers/${bare.body.id}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id: bare.body.id,
+        name: 'Bare',
+        provider: 'anthropic',
+        default_model: 'claude-shared-test',
+        model_alias_names: [],
+      });
+    });
+
+    test('a provider that does not exist is AI_PROVIDER_NOT_FOUND', async () => {
+      const response = await admin()
+        .post('/api/v1/shares')
+        .send({
+          project_id: publisherId,
+          resource: `srn:${publisherId}:aiProvider:aip_missing00000000000`,
+          actions: ['ai-providers:UseAiProvider'],
+          grantee: granteeId,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+    });
+  });
+
   describe('what the grantee cannot do', () => {
     test.each([
       ['patch', ''],
@@ -290,6 +380,44 @@ describe('Shared AI providers', () => {
       } finally {
         failing = false;
       }
+    });
+
+    test('a vendor failure opening a stream reaches the grantee without the vendor detail', async () => {
+      const agent = await pinAgent({ providerId: sharedProviderId });
+      failing = true;
+      try {
+        const response = await generateStream(agent.body.id);
+
+        expect(response.text).not.toContain(VENDOR_DETAIL);
+      } finally {
+        failing = false;
+      }
+    });
+
+    test('a streamed vendor error reaches the grantee without the vendor detail', async () => {
+      const agent = await pinAgent({ providerId: sharedProviderId });
+      streamFailing = true;
+      try {
+        const response = await generateStream(agent.body.id);
+
+        expect(response.text).not.toContain(VENDOR_DETAIL);
+      } finally {
+        streamFailing = false;
+      }
+    });
+
+    test('an unreachable shared provider answers the grantee 502', async () => {
+      const unreachableId = await createProvider({
+        name: 'Unreachable',
+        baseUrl: await closedPortUrl(),
+      });
+      await share(unreachableId);
+      const agent = await pinAgent({ providerId: unreachableId });
+
+      const response = await generate(agent.body.id);
+
+      expect(response.status).toBe(502);
+      expect(JSON.stringify(response.body)).not.toContain('127.0.0.1');
     });
 
     test('an unpriced model on a provider requiring prices is refused', async () => {

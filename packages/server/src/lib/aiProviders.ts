@@ -101,11 +101,23 @@ const readLinkedSecretValue = async (
   return secret?.encryptedValue ? decryptValue(secret.encryptedValue) : '';
 };
 
+const projectPublicIdOf = async (projectId: number): Promise<string> => {
+  const project = await db.Project.findByPk(projectId, {
+    attributes: ['publicId'],
+    rejectOnEmpty: true,
+  });
+  return project.publicId;
+};
+
 const assertProviderCredential = async (args: {
+  projectId: number;
   provider: AiProviderSlug;
   secretId?: number | null;
 }) => {
-  assertAiProviderCarriesCredential(args);
+  assertAiProviderCarriesCredential({
+    ...args,
+    project: await projectPublicIdOf(args.projectId),
+  });
   if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
   assertLinkedSecretUsable({
     provider: args.provider,
@@ -163,6 +175,7 @@ export const createAiProvider = async (args: {
     config: args.config,
   });
   await assertProviderCredential({
+    projectId: args.projectId,
     provider: args.provider,
     secretId: args.secretId,
   });
@@ -254,6 +267,7 @@ export const updateAiProvider = async (args: {
     config: instance.config,
   });
   await assertProviderCredential({
+    projectId: instance.projectId,
     provider: instance.provider,
     secretId: instance.secretId,
   });
@@ -449,6 +463,7 @@ export const resolveAiProviderSecret = async (args: {
     // same slug). Never surface these on an API response.
     id: instance.id as number,
     projectId: instance.projectId as number,
+    projectPublicId: await projectPublicIdOf(instance.projectId),
     provider: instance.provider,
     defaultModel: instance.defaultModel,
     baseUrl: instance.baseUrl ?? undefined,

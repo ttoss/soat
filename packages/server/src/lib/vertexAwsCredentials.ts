@@ -6,6 +6,7 @@ import type { AuthClient } from 'google-auth-library';
 import { AwsClient } from 'google-auth-library';
 
 import { DomainError } from '../errors';
+import type { VertexSettings } from './agentModel';
 
 const log = createDebug('soat:vertex-aws');
 
@@ -220,4 +221,29 @@ export const loadAwsExternalAccountAuthClient = (args?: {
 /** Test seam: drops the memoized client so a later call re-reads the file. */
 export const resetAwsExternalAccountAuthClientCache = () => {
   cachedAuthClient = undefined;
+};
+
+/**
+ * Attaches an AWS-federated auth client when Application Default Credentials
+ * are in play and the configured ADC file federates an AWS identity.
+ *
+ * Kept out of `resolveVertexSettings` so that stays a pure function of the
+ * provider record: this branch depends on the process environment and the file
+ * it names.
+ *
+ * Only the ADC case is touched. Express mode carries no `project`, and a linked
+ * service-account key already produced its own `googleAuthOptions` — both
+ * explicit choices the provider record made.
+ */
+export const withAwsWorkloadIdentity = (
+  settings: VertexSettings
+): VertexSettings => {
+  if (!('project' in settings) || settings.googleAuthOptions) {
+    return settings;
+  }
+  const authClient = loadAwsExternalAccountAuthClient();
+  if (!authClient) {
+    return settings;
+  }
+  return { ...settings, googleAuthOptions: { authClient } };
 };
