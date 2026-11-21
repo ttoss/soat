@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.124.0](https://github.com/ttoss/soat/compare/v0.123.1...v0.124.0) (2026-11-21)
+
+* feat(generations)!: store vendor options apart from a message and never serve them (#2076) ([7efc82e](https://github.com/ttoss/soat/commit/7efc82e17bce233857f1ac77873da0455c78e46e)), closes [#2076](https://github.com/ttoss/soat/issues/2076)
+
+### Features
+
+* **ai-providers:** a model alias may forward to another provider of the project ([#2081](https://github.com/ttoss/soat/issues/2081)) ([f163479](https://github.com/ttoss/soat/commit/f163479de54d6026ad47bdb3e175738008f26e1a))
+* **evaluations:** the claim on the eval, copied onto each run ([#2080](https://github.com/ttoss/soat/issues/2080)) ([8cec1a2](https://github.com/ttoss/soat/commit/8cec1a242276294f633449d480c3bc36d12b36d5)), closes [#1556](https://github.com/ttoss/soat/issues/1556)
+* **triggers:** a project's min_trigger_interval_seconds floors schedule triggers ([#2075](https://github.com/ttoss/soat/issues/2075)) ([518f4e7](https://github.com/ttoss/soat/commit/518f4e76226cebf822339d837c92cf4cb4f5c983))
+
+### BREAKING CHANGES
+
+* `output.response_messages` and stored trace steps carry no
+  `providerOptions`; the vendor state a replay needs stays in the runtime.
+
 ## [0.123.1](https://github.com/ttoss/soat/compare/v0.123.0...v0.123.1) (2026-11-21)
 
 ### Bug Fixes
