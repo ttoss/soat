@@ -29,6 +29,7 @@ import {
 } from './modelRoutes';
 import { isPlainObject } from './plainObject';
 import {
+  aiProviderReferences,
   documentReferences,
   memoryStoreReferences,
   toolReferences,
@@ -289,8 +290,10 @@ export const resolveAiProviderDbId = async (args: {
   publicId: string;
   projectId: number;
 }): Promise<number | null> => {
-  const aiProvider = await db.AiProvider.findOne({
-    where: { publicId: args.publicId, projectId: args.projectId },
+  const aiProvider = await aiProviderReferences.find({
+    id: args.publicId,
+    projectId: args.projectId,
+    reach: 'project',
   });
   return aiProvider ? (aiProvider.id as number) : null;
 };

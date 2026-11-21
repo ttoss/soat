@@ -1,7 +1,10 @@
-import { db } from '../db';
 import type { ErrorCode } from '../errors';
 import { DomainError } from '../errors';
-import { agentReferences, toolReferences } from './resourceReferences';
+import {
+  agentReferences,
+  aiProviderReferences,
+  toolReferences,
+} from './resourceReferences';
 
 /**
  * Resolves the public ids a memory-rule request carries to the internal ids the
@@ -68,10 +71,8 @@ export const resolveMemoryRuleRefs = async (args: {
       projectId: args.projectId,
     }),
     resolveRef({
-      find: (where) => {
-        return db.AiProvider.findOne({
-          where: { publicId: where.id, projectId: where.projectId },
-        });
+      find: ({ id, projectId }) => {
+        return aiProviderReferences.find({ id, projectId, reach: 'project' });
       },
       errorCode: 'AI_PROVIDER_NOT_FOUND',
       label: 'AI provider',
