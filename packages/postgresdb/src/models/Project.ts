@@ -65,6 +65,12 @@ export class Project extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare maxOrchestrationRunDepth: number | null;
 
+  // Seconds a schedule trigger's cron must leave between its two closest
+  // firings, `null` for no floor. Checked on every trigger create and update;
+  // a trigger stored before the floor was set keeps firing.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare minTriggerIntervalSeconds: number | null;
+
   // Inherited by consumers naming neither a route nor a provider; `null` forces
   // every consumer to bind explicitly. A public id rather than an
   // `@ForeignKey`, because `ModelRoute` already belongs to `Project` and the FK

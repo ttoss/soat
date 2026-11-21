@@ -5,7 +5,7 @@ import { GoogleAuth } from 'google-auth-library';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { VertexSettings } from './agentModel';
-import { resolveBedrockCredentials, resolveVertexSettings } from './agentModel';
+import { resolveVertexSettings } from './agentModel';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
 import {
   ANTHROPIC_VERSION,
@@ -29,6 +29,7 @@ import type {
   BedrockModelSummary,
 } from './bedrockModelCatalog';
 import { defaultListFoundationModels } from './bedrockModelCatalog';
+import { resolveBedrockCredentials } from './linkedProviderSecret';
 import { type Page, pageOf } from './pagination';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
@@ -70,6 +71,8 @@ export type VertexAccessTokenArgs = {
 };
 
 export type EnumerateProviderModelsArgs = {
+  /** The public id of the project the provider record belongs to. */
+  project: string;
   provider: AiProviderSlug;
   baseUrl?: string;
   config?: Record<string, unknown>;
@@ -131,7 +134,10 @@ const anthropicAuthHeader = async (
   if (linksSecret || usesAnthropicTenantEndpoint(args)) {
     return { 'x-api-key': requireSecret(args) };
   }
-  assertAmbientCredentialsAllowed({ provider: 'anthropic' });
+  assertAmbientCredentialsAllowed({
+    provider: 'anthropic',
+    project: args.project,
+  });
   const token = await (
     args.anthropicAccessToken ?? anthropicFederatedAccessToken
   )();
@@ -303,6 +309,7 @@ const enumerateVertex = async (
   // list: the project may come from the service-account key file, and the
   // linked key signs the call instead of whatever ADC the server holds.
   const settings = resolveVertexSettings({
+    project: args.project,
     secretValue: args.secretValue ?? null,
     config: args.config,
   });
@@ -382,6 +389,7 @@ const enumerateBedrock = async (
     ...resolveBedrockCredentials({
       secretValue: args.secretValue ?? null,
       config: args.config,
+      ambientFor: { project: args.project },
     }),
     region,
   };
@@ -532,6 +540,7 @@ export const listAiProviderModels = async (args: {
   }
 
   const catalogue = await enumerateProviderModels({
+    project: resolved.projectPublicId,
     provider: resolved.provider,
     baseUrl: resolved.baseUrl,
     config: resolved.config,

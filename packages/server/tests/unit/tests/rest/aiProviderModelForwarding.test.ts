@@ -3,9 +3,36 @@ import {
   type ChatCompletionsStub,
   providerFailure,
   startChatCompletionsStub,
+  type StubReply,
   textCompletion,
 } from '../../fixtures/chatCompletionsStub';
 import { authenticatedTestClient, testClient } from '../../testClient';
+
+/** A chat-completions SSE answer streaming `content`. */
+const streamedCompletion = (content: string): StubReply => {
+  const chunk = (payload: Record<string, unknown>): string => {
+    return `data: ${JSON.stringify({
+      id: 'chatcmpl-forwarded-stream',
+      object: 'chat.completion.chunk',
+      created: 0,
+      model: 'vendor-b-smart',
+      ...payload,
+    })}\n\n`;
+  };
+  return {
+    contentType: 'text/event-stream',
+    body: Buffer.from(
+      chunk({
+        choices: [{ index: 0, delta: { role: 'assistant', content } }],
+      }) +
+        chunk({
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+        }) +
+        'data: [DONE]\n\n'
+    ),
+  };
+};
 
 /**
  * A facade provider whose `model_aliases` forward to other providers of the
@@ -340,6 +367,49 @@ describe('AI provider model_aliases forwarding to another provider', () => {
       expect(res.status).toBe(200);
       expect(stubB.completions[before].body.model).toBe('vendor-b-smart');
       expect(res.body.model).toBe('smart');
+    });
+
+    const streamSmart = async () => {
+      return asAdmin()
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: facade,
+          model: 'smart',
+          messages: [{ role: 'user', content: 'hello' }],
+          stream: true,
+        });
+    };
+
+    test('a streamed forwarded alias is served by its target', async () => {
+      stubB.reply(streamedCompletion('streamed from b'));
+      const before = stubB.completions.length;
+      const res = await streamSmart();
+      expect(res.status).toBe(200);
+      expect(stubB.completions[before].body.model).toBe('vendor-b-smart');
+      expect(res.text).toContain('streamed from b');
+      expect(res.text).not.toContain('"error"');
+    });
+
+    test('a streamed vendor failure on a forwarded alias names the facade and the alias only', async () => {
+      stubB.reply(providerFailure(400));
+      const res = await streamSmart();
+      stubB.reply(textCompletion('recovered'));
+
+      expect(res.status).toBe(200);
+      const frame = res.text.split('\n').find((line) => {
+        return line.startsWith('data:') && line.includes('"error"');
+      });
+      expect(frame).toBeDefined();
+      const payload = JSON.parse((frame ?? '').slice('data:'.length)) as {
+        error: { code: string; message: string };
+      };
+      expect(payload.error.code).toBe('AI_PROVIDER_ERROR');
+      expect(payload.error.message).toContain(facade);
+      expect(payload.error.message).toContain("'smart'");
+      expect(res.text).not.toContain(sourceB);
+      expect(res.text).not.toContain('vendor-b-smart');
+      expect(res.text).not.toContain('ollama');
+      expect(res.text).not.toContain('upstream unavailable');
     });
   });
 });

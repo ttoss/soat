@@ -215,6 +215,8 @@ export const faultingAs = (args: {
 
 /** The endpoint a vendor call goes through: slug, credential and settings. */
 export type ModelEndpoint = {
+  /** The public id of the project the provider record belongs to. */
+  projectPublicId: string;
   provider: AiProviderSlug;
   secretValue: string | null;
   baseUrl?: string;

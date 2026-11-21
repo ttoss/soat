@@ -204,14 +204,14 @@ describe('IAM token tool_context layer', () => {
       expect(request.headers['x-soat-context-note']).toBe('kept');
     });
 
-    test('a generation tool call sends the layer over the body bag', async () => {
+    test('a generation tool call sends the layer beside the body bag', async () => {
       const res = await authenticatedTestClient(await layeredToken())
         .post(`/api/v1/agents/${httpAgentId}/generate?wait=true`)
         .send({
           messages: [
             proposeCalls([{ name: httpTool.name, args: { amount: 2 } }]),
           ],
-          tool_context: { plat_tenant: 'forged' },
+          tool_context: { note: 'caller' },
         });
 
       expect(res.status).toBe(200);
@@ -230,7 +230,7 @@ describe('IAM token tool_context layer', () => {
               },
             ]),
           ],
-          tool_context: { plat_tenant: 'forged' },
+          tool_context: { note: 'caller' },
         });
 
       expect(res.status).toBe(200);
@@ -315,7 +315,7 @@ describe('IAM token tool_context layer', () => {
               },
             ]),
           ],
-          tool_context: { plat_tenant: 'forged' },
+          tool_context: { note: 'caller' },
         });
 
       expect(res.status).toBe(200);

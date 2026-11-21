@@ -100,14 +100,26 @@ const readLinkedSecretValue = async (
   return secret?.encryptedValue ? decryptValue(secret.encryptedValue) : '';
 };
 
+const projectPublicIdOf = async (projectId: number): Promise<string> => {
+  const project = await db.Project.findByPk(projectId, {
+    attributes: ['publicId'],
+    rejectOnEmpty: true,
+  });
+  return project.publicId;
+};
+
 const assertProviderCredential = async (args: {
+  projectId: number;
   provider: AiProviderSlug;
   secretId?: number | null;
   modelAliases: ModelAliases | null;
   modelAliasesOnly: boolean;
 }) => {
   if (forwardsEveryModel(args)) return;
-  assertAiProviderCarriesCredential(args);
+  assertAiProviderCarriesCredential({
+    ...args,
+    project: await projectPublicIdOf(args.projectId),
+  });
   if (args.provider !== 'bedrock' && args.provider !== 'vertex') return;
   assertLinkedSecretUsable({
     provider: args.provider,
@@ -167,6 +179,7 @@ export const createAiProvider = async (args: {
     config: args.config,
   });
   await assertProviderCredential({
+    projectId: args.projectId,
     provider: args.provider,
     secretId: args.secretId,
     ...aliasing,
@@ -266,6 +279,7 @@ export const updateAiProvider = async (args: {
     config: instance.config,
   });
   await assertProviderCredential({
+    projectId: instance.projectId,
     provider: instance.provider,
     secretId: instance.secretId,
     modelAliases: instance.modelAliases,
@@ -320,16 +334,18 @@ export const resolveAiProviderSecret = async (args: {
 
   const decryptedValue = await readLinkedSecretValue(instance.secretId);
 
-  // A forwarded alias calls its target's endpoint; a target that no longer
-  // resolves is left out, and `buildModel` refuses the alias that names it.
+  // A forwarded alias calls its target's endpoint; a target that does not
+  // resolve is left out, and `buildModel` refuses the alias that names it.
   const targetRows = await aiProviderReferences.findMany({
     ids: forwardedProviderIds(instance.modelAliases),
     projectId: args.projectId,
     reach: 'project',
   });
+  const projectPublicId = await projectPublicIdOf(instance.projectId);
   const aliasTargets: Record<string, ModelEndpoint> = {};
   for (const [publicId, target] of targetRows) {
     aliasTargets[publicId] = {
+      projectPublicId,
       provider: target.provider,
       baseUrl: target.baseUrl ?? undefined,
       config: target.config ?? undefined,
@@ -343,6 +359,7 @@ export const resolveAiProviderSecret = async (args: {
     // same slug). Never surface these on an API response.
     id: instance.id as number,
     projectId: instance.projectId as number,
+    projectPublicId,
     provider: instance.provider,
     defaultModel: instance.defaultModel,
     baseUrl: instance.baseUrl ?? undefined,
