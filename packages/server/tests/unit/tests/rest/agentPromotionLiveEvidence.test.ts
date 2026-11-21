@@ -313,6 +313,23 @@ describe('Agent version claims — live evidence', () => {
       expect(runRead.body.verdict).toBe('supported');
     });
 
+    test("the rules are the run's: clearing the eval's evidence after the run changes nothing", async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, {
+        live: { window_days: 7, guardrail_tripwires: { max: 0 } },
+      });
+      await run({ evalId, version: 2 });
+      const [served] = await serve({ agentId, version: 2, count: 1 });
+      await tripwire(served!);
+      const edit = await asUser()
+        .put(`/api/v1/evals/${evalId}`)
+        .send({ evidence: null });
+      expect(edit.status).toBe(200);
+
+      const claim = await claimOf(agentId, 2, evalId);
+      expect(claim?.verdict).toBe('refuted');
+    });
+
     test('an eval run, another version and a generation before the window are not served volume', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
