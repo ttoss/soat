@@ -263,7 +263,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   AGENT_HAS_DEPENDENTS:
     'Delete the deciders that name the agent (`meta.decider_count`), or point them at another agent with `{{PATCH /deciders/{decider_id}}}`; they block deletion even under `force=true`. Generations, traces, accepted shares and ingestion rules block only until `force=true`.',
   AI_PROVIDER_HAS_DEPENDENTS:
-    'Delete or repoint the agents, chats and model routes that reference the provider, then delete it; `force` does not override them. Price overrides and usage records (`meta.forcible`) block only until `force=true`, which drops the overrides and unlinks usage history.',
+    'Delete or repoint the agents, chats and model routes that reference the provider, then delete it; `force` does not override them. Price overrides, usage records and accepted shares (`meta.forcible`) block only until `force=true`, which drops the overrides, unlinks usage history and revokes the shares.',
   FILE_ALREADY_INGESTED:
     'Re-process the existing document with `{{POST /documents/{document_id}/ingest}}` (`meta.document_id`), or upload a new copy of the file to ingest it separately.',
   CONVERTER_FAILED:

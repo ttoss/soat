@@ -317,13 +317,13 @@ point for every way a tool is bound (stored, inline, `builtin`, `mcp`, knowledge
 
 A tool call's `status` says what answered it:
 
-| `status`              | Meaning                                                         |
-| --------------------- | --------------------------------------------------------------- |
-| `executed`            | the tool ran and returned                                       |
-| `failed`              | the tool ran and threw                                          |
-| `blocked`, `tripwire` | a [guardrail](./guardrails.md) stopped it; the tool did not run |
-| `pending_approval`    | a guardrail routed it to an approval; the tool did not run      |
-| `denied`              | the agent's authority refused it; the tool did not run          |
+| `status`              | Meaning                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| `executed`            | the tool ran and returned                                          |
+| `failed`              | the tool ran and threw, or answered an error relayed as its result |
+| `blocked`, `tripwire` | a [guardrail](./guardrails.md) stopped it; the tool did not run    |
+| `pending_approval`    | a guardrail routed it to an approval; the tool did not run         |
+| `denied`              | the agent's authority refused it; the tool did not run             |
 
 Rows hold ids, indexes, statuses and durations, never a tool's name, arguments, result or
 an error: none is content, so they survive a [purge](#content-purge) and are written on a

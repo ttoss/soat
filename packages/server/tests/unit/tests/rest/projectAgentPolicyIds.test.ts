@@ -20,6 +20,7 @@ const ALLOW_ALL = { effect: 'Allow', action: ['*'], resource: ['*'] };
 
 const projectRefusal = (args: { projectId: string; action: string }) => {
   return {
+    status: 403,
     error: {
       code: 'FORBIDDEN',
       ...forbiddenHints(),

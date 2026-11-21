@@ -18,7 +18,10 @@ import {
 } from './aiProviderModelAliases';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
-import { aiProviderReferences } from './resourceReferences';
+import {
+  aiProviderReferences,
+  type ReferenceReach,
+} from './resourceReferences';
 import { assertSecretUseAllowed } from './secretUse';
 
 const getAiProviderIncludes = () => {
@@ -307,7 +310,7 @@ export const assertModelOfferedByProvider = async (args: {
   const row = await aiProviderReferences.find({
     id: args.aiProviderId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
   if (row) assertModelOffered({ aiProvider: row, model: args.model });
 };
@@ -319,16 +322,19 @@ export const assertModelOfferedByProvider = async (args: {
  * that hands out a decrypted provider secret: an optional filter is one a new
  * caller can leave off, and the write-time guards it backs up cannot reach a
  * row that is already stored. A provider in another project resolves to `null`,
- * exactly as one that does not exist.
+ * exactly as one that does not exist, unless `reach` is `'shares'` and an
+ * accepted share grants it; `grantee` then names `projectId`, so the model
+ * built from it counts against the share and hides the vendor's failures.
  */
 export const resolveAiProviderSecret = async (args: {
   aiProviderId: string;
   projectId: number;
+  reach: ReferenceReach;
 }) => {
   const instance = await aiProviderReferences.find({
     id: args.aiProviderId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: args.reach,
   });
   if (!instance) return null;
 
@@ -338,7 +344,7 @@ export const resolveAiProviderSecret = async (args: {
   // resolve is left out, and `buildModel` refuses the alias that names it.
   const targetRows = await aiProviderReferences.findMany({
     ids: forwardedProviderIds(instance.modelAliases),
-    projectId: args.projectId,
+    projectId: instance.projectId,
     reach: 'project',
   });
   const projectPublicId = await projectPublicIdOf(instance.projectId);
@@ -369,5 +375,6 @@ export const resolveAiProviderSecret = async (args: {
     modelAliasesOnly: instance.modelAliasesOnly,
     secretValue: decryptedValue,
     aliasTargets,
+    grantee: instance.projectId === args.projectId ? null : args.projectId,
   };
 };

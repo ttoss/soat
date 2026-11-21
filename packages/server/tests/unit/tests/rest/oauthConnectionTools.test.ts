@@ -326,6 +326,7 @@ describe('http tool auth oauth_connection', () => {
 
     const resource = `srn:${turn.projectId}:oauth_connection:${connectionId}`;
     expect(result).toEqual({
+      status: 403,
       error: {
         code: 'FORBIDDEN',
         ...forbiddenHints(),
@@ -358,6 +359,7 @@ describe('http tool auth oauth_connection', () => {
 
     const resource = `srn:${turn.projectId}:oauth_connection:${connectionId}`;
     expect(result).toEqual({
+      status: 403,
       error: {
         code: 'FORBIDDEN',
         ...forbiddenHints(),

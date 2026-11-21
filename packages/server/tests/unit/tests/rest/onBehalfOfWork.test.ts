@@ -166,6 +166,7 @@ describe('work a capped callback starts', () => {
 
       expect(JSON.parse(full.output)[0].id).toBe(documentId);
       expect(JSON.parse(capped.output)[0]).toEqual({
+        status: 403,
         error: {
           code: 'FORBIDDEN',
           ...forbiddenHints(),

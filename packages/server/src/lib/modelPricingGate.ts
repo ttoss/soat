@@ -88,7 +88,7 @@ const resolveCandidates = async (
       return binding.aiProviderPublicId ? [binding.aiProviderPublicId] : [];
     }),
     projectId,
-    reach: 'project',
+    reach: 'shares',
   });
 
   return bindings.flatMap((binding) => {

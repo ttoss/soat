@@ -39,7 +39,8 @@ import {
   type VertexSecret,
 } from './linkedProviderSecret';
 import { bedrockModelCaches, withoutBedrockCachePoints } from './promptCaching';
-import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
+import { throughShare } from './sharedProviderModel';
+import { withAwsWorkloadIdentity } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
   /** The public id of the project the provider record belongs to. */
@@ -208,29 +209,6 @@ export const assertLinkedSecretUsable = (args: {
   });
 };
 
-/**
- * Attaches an AWS-federated auth client when Application Default Credentials
- * are in play and the configured ADC file federates an AWS identity.
- *
- * Kept out of `resolveVertexSettings` so that stays a pure function of the
- * provider record: this branch depends on the process environment and the file
- * it names.
- *
- * Only the ADC case is touched. Express mode carries no `project`, and a linked
- * service-account key already produced its own `googleAuthOptions` — both
- * explicit choices the provider record made.
- */
-const withAwsWorkloadIdentity = (settings: VertexSettings): VertexSettings => {
-  if (!('project' in settings) || settings.googleAuthOptions) {
-    return settings;
-  }
-  const authClient = loadAwsExternalAccountAuthClient();
-  if (!authClient) {
-    return settings;
-  }
-  return { ...settings, googleAuthOptions: { authClient } };
-};
-
 const buildVertexModel = (args: BuildModelArgs): LanguageModel => {
   return createVertex({
     ...withAwsWorkloadIdentity(resolveVertexSettings(args)),
@@ -369,21 +347,33 @@ export const buildModel = (args: {
 }): LanguageModel => {
   const { aiProvider } = args;
   const { vendorModel, forwardedTo } = resolveServedModel(args);
-  if (forwardedTo !== null) {
-    return buildForwardedModel({
-      aiProvider,
-      alias: args.model,
-      targetId: forwardedTo,
-      vendorModel,
-      build: buildVendorModel,
-    });
+  const model =
+    forwardedTo === null
+      ? buildVendorModel({ endpoint: aiProvider, vendorModel })
+      : buildForwardedModel({
+          aiProvider,
+          alias: args.model,
+          targetId: forwardedTo,
+          vendorModel,
+          build: buildVendorModel,
+        });
+  const middleware = [
+    ...(forwardedTo === null && vendorModel !== args.model
+      ? [answeringAs(args.model)]
+      : []),
+    ...(aiProvider.grantee === null
+      ? []
+      : [
+          throughShare({
+            providerPublicId: aiProvider.publicId,
+            grantee: aiProvider.grantee,
+          }),
+        ]),
+  ];
+  if (middleware.length === 0) return model;
+  /* istanbul ignore next -- every builder returns a model object. */
+  if (typeof model === 'string') {
+    throw new Error(`Provider ${aiProvider.provider} built no model object.`);
   }
-  const model = buildVendorModel({ endpoint: aiProvider, vendorModel });
-  if (vendorModel === args.model) return model;
-  if (typeof model === 'string') return model;
-  return wrapLanguageModel({
-    model,
-    middleware: answeringAs(args.model),
-    modelId: args.model,
-  });
+  return wrapLanguageModel({ model, middleware, modelId: args.model });
 };

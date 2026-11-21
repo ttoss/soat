@@ -228,7 +228,12 @@ export type ModelEndpoint = {
  * of every provider its aliases forward to, keyed by public id.
  */
 export type ModelProvider = ModelAliasing &
-  ModelEndpoint & { aliasTargets: Record<string, ModelEndpoint> };
+  ModelEndpoint & {
+    publicId: string;
+    aliasTargets: Record<string, ModelEndpoint>;
+    /** The project generating through another project's provider, else `null`. */
+    grantee: number | null;
+  };
 
 /**
  * A forwarded alias is built on its target's endpoint, and every refusal or
@@ -244,7 +249,7 @@ export const buildForwardedModel = (args: {
     vendorModel: string;
   }) => LanguageModel;
 }): LanguageModel => {
-  const facadeId = args.aiProvider.publicId ?? '';
+  const facadeId = args.aiProvider.publicId;
   const misconfigured = new DomainError(
     'AI_PROVIDER_MISCONFIGURED',
     `AI provider '${facadeId}' cannot serve '${args.alias}': the provider it forwards to is missing or misconfigured.`,
