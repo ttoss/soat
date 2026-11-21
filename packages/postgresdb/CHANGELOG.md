@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.123.1](https://github.com/ttoss/soat/compare/v0.123.0...v0.123.1) (2026-11-21)
+
+### Bug Fixes
+
+* **generations:** handoff coverage no longer depends on timing; drop eval_runs.passed ([#2069](https://github.com/ttoss/soat/issues/2069)) ([cce65f1](https://github.com/ttoss/soat/commit/cce65f167af1bbe0a98a0cee3927dc0191266557))
+
 # [0.123.0](https://github.com/ttoss/soat/compare/v0.122.0...v0.123.0) (2026-11-21)
 
 * feat(evaluations)!: an eval run's verdict reads the evidence; a promotion gate requires supported (#2066) ([aef1026](https://github.com/ttoss/soat/commit/aef1026a3f6bfab68805c821b0227752be5c03ed)), closes [#2066](https://github.com/ttoss/soat/issues/2066)
