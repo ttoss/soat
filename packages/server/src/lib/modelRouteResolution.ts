@@ -94,6 +94,7 @@ const buildRoutedTarget = async (args: {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.target.ai_provider_id,
     projectId: args.projectId,
+    reach: 'shares',
   });
   if (!resolved) {
     throw new DomainError(

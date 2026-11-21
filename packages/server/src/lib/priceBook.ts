@@ -53,7 +53,8 @@ export const mapPrice = (
 /**
  * Returns the price row for one `(provider, model, component)`, resolving
  * most-specific first: a per-provider override (`aiProviderId` set) → a project
- * + provider-slug price (`projectId` set, `aiProviderId` null) → the global
+ * + provider-slug price (`projectId` set, `aiProviderId` null; the provider's
+ * project when there is one, else `projectId`) → the global
  * default (both null). Within each scope the latest row with
  * `effectiveFrom <= at` applies. Null when no row covers it (the caller records
  * the component with `cost_usd = null`).
@@ -82,9 +83,18 @@ export const getEffectivePrice = async (args: {
     if (override) return override;
   }
 
-  // Tier 2 — the project's rate for this provider slug.
+  // Tier 2 — the rate for this provider slug in the book of the provider's own
+  // project, which for a provider another project shares is the publisher's.
+  const bookProjectId =
+    args.aiProviderId === null
+      ? args.projectId
+      : ((
+          await db.AiProvider.findByPk(args.aiProviderId, {
+            attributes: ['projectId'],
+          })
+        )?.projectId ?? args.projectId);
   const projectPrice = await db.PriceBook.findOne({
-    where: { ...base, aiProviderId: null, projectId: args.projectId },
+    where: { ...base, aiProviderId: null, projectId: bookProjectId },
     order: [['effectiveFrom', 'DESC']],
   });
   if (projectPrice) return projectPrice;

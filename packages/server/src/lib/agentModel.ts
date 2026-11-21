@@ -31,6 +31,7 @@ import {
 } from './anthropicFederation';
 import { egressGuardedFetch } from './egressFetch';
 import { bedrockModelCaches, withoutBedrockCachePoints } from './promptCaching';
+import { throughShare } from './sharedProviderModel';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
@@ -476,10 +477,13 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
 
 /** A provider row as `resolveAiProviderSecret` hands it out. */
 export type ModelProvider = ModelAliasing & {
+  publicId: string;
   provider: AiProviderSlug;
   secretValue: string | null;
   baseUrl?: string;
   config?: Record<string, unknown>;
+  /** The project generating through another project's provider, else `null`. */
+  grantee: number | null;
 };
 
 /**
@@ -505,11 +509,21 @@ export const buildModel = (args: {
     baseUrl: aiProvider.baseUrl,
     config: aiProvider.config,
   });
-  if (vendorModel === args.model) return model;
-  if (typeof model === 'string') return model;
-  return wrapLanguageModel({
-    model,
-    middleware: answeringAs(args.model),
-    modelId: args.model,
-  });
+  const middleware = [
+    ...(vendorModel === args.model ? [] : [answeringAs(args.model)]),
+    ...(aiProvider.grantee === null
+      ? []
+      : [
+          throughShare({
+            providerPublicId: aiProvider.publicId,
+            grantee: aiProvider.grantee,
+          }),
+        ]),
+  ];
+  if (middleware.length === 0) return model;
+  /* istanbul ignore next -- every builder returns a model object. */
+  if (typeof model === 'string') {
+    throw new Error(`Provider ${aiProvider.provider} built no model object.`);
+  }
+  return wrapLanguageModel({ model, middleware, modelId: args.model });
 };

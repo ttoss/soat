@@ -10,7 +10,13 @@ export const buildUnaliasedModel = (args: {
   config?: Record<string, unknown>;
 }) => {
   return buildModel({
-    aiProvider: { ...args, modelAliases: null, modelAliasesOnly: false },
+    aiProvider: {
+      ...args,
+      publicId: 'aip_unaliased',
+      modelAliases: null,
+      modelAliasesOnly: false,
+      grantee: null,
+    },
     model: args.model,
   });
 };

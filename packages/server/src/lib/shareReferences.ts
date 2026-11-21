@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { type Page, pageOf } from './pagination';
+import { aiProviderReferences } from './resourceReferences';
 import {
   AGENT_NAMING_FIELDS,
   type Condition,
@@ -18,6 +19,8 @@ const log = createDebug('soat:shares');
 export type ShareReference = {
   type:
     | 'agent'
+    | 'chat'
+    | 'model_route'
     | 'tool'
     | 'guardrail'
     | 'decider'
@@ -37,7 +40,14 @@ const rowIdIn = (field: string, rowIds: number[]): Condition[] => {
 };
 
 /** The public ids found in the last round, and the row ids of its agents and tools. */
-type Frontier = { ids: string[]; agentRowIds: number[]; toolRowIds: number[] };
+type Frontier = {
+  ids: string[];
+  agentRowIds: number[];
+  toolRowIds: number[];
+  /** Rows named by a foreign key rather than by public id. */
+  aiProviderRowIds: number[];
+  modelRouteRowIds: number[];
+};
 
 type Row = { id?: number; publicId: string };
 
@@ -68,11 +78,31 @@ const HOLDERS: Holder[] = [
     find: (where) => {
       return db.Agent.findAll({ where, ...ROW });
     },
-    names: async ({ ids }, projectId) => {
+    names: async ({ ids, aiProviderRowIds, modelRouteRowIds }, projectId) => {
       return [
         ...jsonNames(AGENT_NAMING_FIELDS, ids),
         ...rowIdIn('id', await servedAgentRowIds({ projectId, ids })),
+        ...rowIdIn('aiProviderId', aiProviderRowIds),
+        ...rowIdIn('modelRouteId', modelRouteRowIds),
       ];
+    },
+  },
+  {
+    type: 'chat',
+    find: (where) => {
+      return db.Chat.findAll({ where, ...ROW });
+    },
+    names: ({ aiProviderRowIds }) => {
+      return rowIdIn('aiProviderId', aiProviderRowIds);
+    },
+  },
+  {
+    type: 'model_route',
+    find: (where) => {
+      return db.ModelRoute.findAll({ where, ...ROW });
+    },
+    names: ({ ids }) => {
+      return jsonNames(['targets'], ids);
     },
   },
   {
@@ -223,11 +253,13 @@ const frontierOf = (
     }),
     agentRowIds: rowIdsOf(rowsOf('agent')),
     toolRowIds: rowIdsOf(rowsOf('tool')),
+    aiProviderRowIds: [],
+    modelRouteRowIds: rowIdsOf(rowsOf('model_route')),
   };
 };
 
 /**
- * Every resource in `projectId` a run reaches the shared tool or agent
+ * Every resource in `projectId` a run reaches the shared resource
  * `resourceId` from — naming it, or naming one of the project's own resources
  * that does: what degrades if the project's acceptance is revoked. Answers
  * both `GET /shares/{id}/references` and the grantee's revoke refusal, so the
@@ -246,10 +278,20 @@ export const findShareReferences = async (args: {
   );
   const seen = new Set<string>([args.resourceId]);
   const found = new Map<ShareReference['type'], Row[]>();
+  const provider =
+    args.resourceType === 'aiProvider'
+      ? await aiProviderReferences.find({
+          id: args.resourceId,
+          projectId: args.projectId,
+          reach: 'shares',
+        })
+      : null;
   let frontier: Frontier = {
     ids: [args.resourceId],
     agentRowIds: [],
     toolRowIds: [],
+    aiProviderRowIds: provider ? [provider.id as number] : [],
+    modelRouteRowIds: [],
   };
 
   while (frontier.ids.length > 0) {

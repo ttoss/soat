@@ -1,11 +1,11 @@
 /**
  * Project-scoped model resolution for completions that have no agent to inherit
- * from (today: the `llm_judge` scorer's judge call).
+ * from (the `llm_judge` scorer's judge call).
  *
  * An agent-backed completion resolves its model from the agent's own binding;
  * a project-scoped one has no such owner, so resolution runs against the
- * project: an explicit `aiProviderId` (which must belong to `projectId`, so a
- * config can never borrow another project's provider secret), else the
+ * project: an explicit `aiProviderId` (which must belong to `projectId` or be
+ * shared with it, so a config never borrows a secret unlent), else the
  * project's `default_model_route_id`.
  */
 import type { LanguageModel } from 'ai';
@@ -76,7 +76,7 @@ export const resolveProjectScopedModel = async (args: {
   const provider = await aiProviderReferences.find({
     id: args.aiProviderId,
     projectId: args.projectId,
-    reach: 'project',
+    reach: 'shares',
   });
   if (!provider) {
     throw new DomainError(
@@ -88,6 +88,7 @@ export const resolveProjectScopedModel = async (args: {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.aiProviderId,
     projectId: args.projectId,
+    reach: 'shares',
   });
   if (!resolved) {
     throw new DomainError(

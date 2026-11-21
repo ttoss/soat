@@ -40,6 +40,11 @@
       "operationId": "updateAiProviderPrices",
       "action": "ai-providers:ManageAiProviderPrices",
       "description": "Upsert per-provider price overrides for an AI provider"
+    },
+    {
+      "operationId": "useAiProvider",
+      "action": "ai-providers:UseAiProvider",
+      "description": "Generate through an AI provider another project shares"
     }
   ]
 }

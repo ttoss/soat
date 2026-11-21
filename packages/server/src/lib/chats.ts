@@ -133,7 +133,7 @@ export const createChat = async (args: {
     ? await aiProviderReferences.find({
         id: args.aiProviderId,
         projectId: args.projectId,
-        reach: 'project',
+        reach: 'shares',
       })
     : null;
 
@@ -264,6 +264,7 @@ const resolveChatScopedModel = async (args: {
     ? await resolveAiProviderSecret({
         aiProviderId: typedChat.aiProvider.publicId,
         projectId,
+        reach: 'shares',
       })
     : null;
 
