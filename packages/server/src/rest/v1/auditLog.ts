@@ -58,7 +58,7 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
     ctx,
     action: 'audit:ExportAuditEntries',
     resourceType: 'audit',
-    projectSelector: 'required',
+    projectSelector: 'implied',
   });
 
   // The generator emits the snake_case read contract directly.

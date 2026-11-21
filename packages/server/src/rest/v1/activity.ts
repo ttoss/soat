@@ -56,7 +56,7 @@ activityRouter.get('/activity/export', async (ctx: Context) => {
     ctx,
     action: 'activity:ExportActivity',
     resourceType: 'activity',
-    projectSelector: 'required',
+    projectSelector: 'implied',
   });
 
   sendNdjson({

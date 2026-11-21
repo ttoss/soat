@@ -181,7 +181,7 @@ documentsRouter.get('/documents/export', async (ctx: Context) => {
     ctx,
     action: 'documents:ExportDocuments',
     resourceType: 'document',
-    projectSelector: 'required',
+    projectSelector: 'implied',
   });
 
   const { where: policyWhere, hasAccess } = await compileReadPolicy({

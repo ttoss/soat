@@ -18,6 +18,7 @@ import {
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
+  credentialProjectPublicId,
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
@@ -56,7 +57,8 @@ const parseVersionParam = (raw: string): number => {
 playbooksRouter.post('/playbooks/validate', async (ctx: Context) => {
   requireAuth(ctx);
   const body = ctx.request.body as Record<string, unknown>;
-  const projectPublicId = parseString(body.project_id);
+  const projectPublicId =
+    parseString(body.project_id) ?? credentialProjectPublicId(ctx.authUser);
   const playbookId = parseString(body.playbook_id);
   if (playbookId !== undefined && projectPublicId === undefined) {
     throw new DomainError(
