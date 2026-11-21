@@ -126,6 +126,7 @@ export const buildMcpToolExecute = (args: {
           }),
           toolName: args.mcpToolName,
           url: args.transport.url,
+          trust: args.transport.trust,
         });
       },
     });

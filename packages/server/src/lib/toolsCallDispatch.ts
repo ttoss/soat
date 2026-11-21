@@ -15,7 +15,6 @@ import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { type BuiltinAction, findBuiltinAction } from './builtinActionCatalog';
 import { callAddedBuiltinAction } from './builtinAddedActions';
 import { findDeferredProxy, innerToolName } from './mcpDeferredProxy';
-import { McpToolError } from './mcpProtocol';
 import { fetchMcpToolListing } from './mcpToolListing';
 import { type McpTransport, openMcpTransport } from './mcpTransport';
 import { buildContextHeaders } from './toolContext';
@@ -24,15 +23,6 @@ import type { ToolExecutionMeter } from './usageToolRecording';
 import type { WorkAuthority } from './workAuthority';
 
 const noopLogToolCallingError = () => {};
-
-const toMcpToolDomainError = (error: unknown): DomainError | null => {
-  if (!(error instanceof McpToolError)) return null;
-  // Meta keys are snake_case to match the external REST contract.
-  return new DomainError('MCP_TOOL_ERROR', error.message, {
-    mcp_tool: error.toolName,
-    mcp_url: error.url,
-  });
-};
 
 export const callHttpTool = (
   tool: CallableToolDefinition,
@@ -147,8 +137,6 @@ export const callSoatTool = async (
       toolContext: args.toolContext,
       contextKeys: tool.contextKeys,
       logToolCallingError: noopLogToolCallingError,
-    }).catch((error: unknown) => {
-      throw toMcpToolDomainError(error) ?? error;
     });
   }
   const { def } = found;
@@ -163,9 +151,6 @@ export const callSoatTool = async (
     contextKeys: tool.contextKeys,
     buildContextHeaders,
     logToolCallingError: noopLogToolCallingError,
-    // Same mapping `callHttpTool` applies: the self-call's real status reaches
-    // the caller as `meta.tool_status_code`, which is also what
-    // `isRetriableError` reads to keep a 4xx from being retried.
   }).catch((error: unknown) => {
     throw toHttpToolDomainError(error) ?? error;
   });
@@ -286,6 +271,7 @@ export const prepareMcpCall = async (args: {
     meter: args.meter,
     toolContext: args.toolContext,
     contextKeys: tool.contextKeys,
+    trust: 'stored',
   });
   const { schema, ...route } = await deferredRoute({
     tool,
@@ -310,11 +296,7 @@ export const callMcpTool = async (args: {
     meter: args.meter,
     // Presets are merged by `callResolvedTool` on this path, already resolved.
     logToolCallingError: noopLogToolCallingError,
-    // A tool the server itself reported as failed is a `502`, not the `500` an
-    // unmapped throw would be: the call reached the server and it answered.
-  })(args.mergedInput).catch((error: unknown) => {
-    throw toMcpToolDomainError(error) ?? error;
-  });
+  })(args.mergedInput);
 };
 
 export type ServerSideToolProblem = 'runs_on_client' | 'action_required';

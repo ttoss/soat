@@ -209,9 +209,8 @@ describe('authorization denials', () => {
           id: body.id,
           result: {
             isError: true,
-            content: [
-              { type: 'text', text: JSON.stringify({ error: denial }) },
-            ],
+            content: [{ type: 'text', text: String(denial.message) }],
+            structuredContent: { status: 403, error: denial },
           },
         },
       };
@@ -230,8 +229,19 @@ describe('authorization denials', () => {
     },
   };
 
-  test("an agent's mcp tool result carries the denial its server answers", async () => {
-    const { tool, url } = await createDenyingMcpTool(remoteDenial);
+  const upstreamDenial = (url: string) => {
+    return {
+      mcp_tool: 'create_memory',
+      mcp_url: url,
+      upstream_status: 403,
+      upstream_code: 'FORBIDDEN',
+      upstream_message: remoteDenial.message,
+      upstream_meta: remoteDenial.meta,
+    };
+  };
+
+  test("a stored mcp tool's denial is not this API's denial in a turn", async () => {
+    const { tool } = await createDenyingMcpTool(remoteDenial);
     const agentId = await turn.createAgent({
       tool_bindings: [{ tool_id: tool.id }],
     });
@@ -241,16 +251,10 @@ describe('authorization denials', () => {
       calls: [{ name: 'create_memory', args: {} }],
     });
 
-    expect(results[0]).toEqual({
-      error: {
-        ...remoteDenial,
-        ...forbiddenHints(),
-        meta: { ...remoteDenial.meta, mcp_tool: 'create_memory', mcp_url: url },
-      },
-    });
+    expect(JSON.stringify(results[0])).not.toMatch(/"code":"FORBIDDEN"/);
   });
 
-  test('an mcp tool relays the denial its server answers', async () => {
+  test('a stored mcp tool answers its denial as upstream_* of MCP_TOOL_ERROR', async () => {
     const { tool, url } = await createDenyingMcpTool(remoteDenial);
 
     const res = await turn
@@ -258,10 +262,8 @@ describe('authorization denials', () => {
       .post(`/api/v1/tools/${tool.id}/call`)
       .send({ action: 'create_memory', input: {} });
 
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatchObject({
-      ...remoteDenial,
-      meta: { ...remoteDenial.meta, mcp_tool: 'create_memory', mcp_url: url },
-    });
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe('MCP_TOOL_ERROR');
+    expect(res.body.error.meta).toEqual(upstreamDenial(url));
   });
 });

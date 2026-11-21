@@ -271,6 +271,46 @@ describe('POST /api/v1/tools/:tool_id/call — added action', () => {
     expect(res.body.error.code).toBe('MCP_TOOL_ERROR');
     expect(res.body.error.meta.mcp_tool).toBe('send-note');
   });
+
+  test('an error its server answers structured is relayed as REST answers it', async () => {
+    const tool = await createTool({
+      token: turn.adminToken,
+      projectId: turn.projectId,
+      actions: ['send-note'],
+    });
+    expect(tool.status).toBe(201);
+    turn.target.reply(NOTE_PATH, (body) => {
+      return {
+        body: {
+          jsonrpc: '2.0',
+          id: body.id,
+          result: {
+            isError: true,
+            content: [{ type: 'text', text: '409 The note closes a cycle.' }],
+            structuredContent: {
+              status: 409,
+              error: {
+                code: 'NOTE_CYCLE',
+                message: 'The note closes a cycle.',
+                meta: { note_id: 'note_1' },
+              },
+            },
+          },
+        },
+      };
+    });
+
+    const res = await authenticatedTestClient(turn.adminToken)
+      .post(`/api/v1/tools/${tool.body.id}/call`)
+      .send({ action: 'send-note', input: { text: 'direct' } });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatchObject({
+      code: 'NOTE_CYCLE',
+      message: 'The note closes a cycle.',
+      meta: { note_id: 'note_1' },
+    });
+  });
 });
 
 describe('POST /api/v1/agents/:agent_id/generate — added action', () => {

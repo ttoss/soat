@@ -3,25 +3,9 @@ import { getApiHeaders } from '@ttoss/http-server-mcp';
 import {
   denialToolResult,
   isAuthorizationDenial,
-  readForwardedDenial,
 } from '../lib/authorizationDenial';
 import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
-import { isPlainObject } from '../lib/plainObject';
-
-/**
- * Whether a REST error response carries a readable message. Every non-2xx body
- * is written by `middleware/errorLogger.ts`, whose only shape is
- * `{ error: { code, message, ... } }` (`.claude/rules/errors.md`).
- */
-const hasErrorMessage = (
-  body: unknown
-): body is { error: { message: string } } => {
-  return (
-    isPlainObject(body) &&
-    isPlainObject(body.error) &&
-    typeof body.error.message === 'string'
-  );
-};
+import { readToolErrorEnvelope, toolCallError } from '../lib/toolErrorRelay';
 
 /**
  * Serves one REST-backed MCP tool call against this process's own app.
@@ -50,13 +34,15 @@ export const dispatchMcpApiRequest = async (args: {
     as: { authorization: getApiHeaders().authorization ?? '' },
     body: args.body,
     wrapError: (response) => {
-      const denial = readForwardedDenial({ body: response.body });
-      if (denial) return denial;
-      return new Error(
-        hasErrorMessage(response.body)
-          ? response.body.error.message
-          : `HTTP ${response.status}`
-      );
+      return toolCallError({
+        trust: 'catalog',
+        envelope: readToolErrorEnvelope(response),
+        // Every `/api/` error answer is an envelope (`errorLogger`,
+        // `unansweredApiRequest`); only a body-less answer has none.
+        wrap: () => {
+          return new Error(`HTTP ${response.status}`);
+        },
+      });
     },
   });
 };

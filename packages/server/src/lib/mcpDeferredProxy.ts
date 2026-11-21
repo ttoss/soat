@@ -78,6 +78,7 @@ export const describeDeferredTools = async (args: {
       body: await parseJsonRpcBody({ response, url: args.transport.url }),
       toolName: args.proxy.describeName,
       url: args.transport.url,
+      trust: args.transport.trust,
     });
   } catch {
     // `describe` answers an error when it knows none of the names.

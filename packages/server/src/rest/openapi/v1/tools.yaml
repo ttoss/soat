@@ -618,7 +618,13 @@ paths:
             the action's error object. A target that
             never answers (`http` or `mcp`) is `TOOL_UNREACHABLE`, its message
             naming the network failure and its `meta` the `tool_url` and
-            `tool_method`.
+            `tool_method`. An `mcp` tool whose server answers a failure is
+            `MCP_TOOL_ERROR`, `meta` carrying `mcp_tool`, `mcp_url` and, when
+            the failed result carries the REST error envelope as
+            `structuredContent`, `upstream_status`, `upstream_code`,
+            `upstream_message` and `upstream_meta`. A `builtin` action the
+            deployment adds answers that envelope under its own status and
+            code instead.
           content:
             application/json:
               schema:
