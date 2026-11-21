@@ -2,7 +2,6 @@ import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 
 import { DomainError } from 'src/errors';
-import type { BedrockCredentials } from 'src/lib/agentModel';
 import type {
   BedrockListArgs,
   EnumerateProviderModelsArgs,
@@ -13,6 +12,7 @@ import {
   isModelListingSupported,
 } from 'src/lib/aiProviderModels';
 import { toBedrockClientConfig } from 'src/lib/bedrockModelCatalog';
+import type { BedrockCredentials } from 'src/lib/linkedProviderSecret';
 import { PROTOCOL_ANSWER_MAX_BYTES } from 'src/lib/requestBounds';
 
 /** Enumerates for a provider record of one tenant project. */

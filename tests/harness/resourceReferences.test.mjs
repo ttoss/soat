@@ -91,7 +91,7 @@ pinReferences({
     'lib/agents.ts': "lists the caller's agents",
     'lib/agentVersionClaims.ts': "the agent's own version routes",
     'lib/agentVersions.ts': "the agent's own version routes",
-    'lib/aiProviders.ts': "lists a provider's dependents",
+    'lib/aiProviderDeletion.ts': "lists a provider's dependents",
     'lib/completionModel.ts':
       'reads back the internal id of an agent already resolved',
     'lib/generationProvenance.ts':
@@ -136,9 +136,11 @@ pinReferences({
   models: ['AiProvider'],
   /** Module → why its `AiProvider` query is not a by-id reference. */
   notAReference: {
+    'lib/aiProviderAliasTargets.ts':
+      'scans a project for the providers whose aliases forward to one',
     'lib/aiProviderModels.ts': "reads the project of the route's own provider",
-    'lib/aiProviders.ts':
-      "lists the caller's providers and deletes the route's own",
+    'lib/aiProviderDeletion.ts': "deletes the route's own provider",
+    'lib/aiProviders.ts': "lists the caller's providers",
     'lib/chatCompletionModel.ts':
       "reads the project of the route's own provider",
     'lib/modelRouteAttribution.ts':

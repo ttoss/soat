@@ -17,6 +17,7 @@ export const buildUnaliasedModel = (args: {
       publicId: 'aip_unaliased',
       modelAliases: null,
       modelAliasesOnly: false,
+      aliasTargets: {},
       grantee: null,
     },
     model: args.model,
