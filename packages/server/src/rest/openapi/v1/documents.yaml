@@ -354,8 +354,8 @@ paths:
       description: >-
         Streams a project's documents as newline-delimited JSON — one document
         object per line, oldest first — for archiving the corpus or shipping it
-        into another system. `project_id` is required: the export is
-        per-project by design. The rows are the rows the listing returns for
+        into another system. The export is per-project: `project_id` names it,
+        or a project-bound credential implies its own. The rows are the rows the listing returns for
         the same caller, so a policy that hides a document hides it here too,
         and withdrawn documents and the reserved `/.system/` root are left out.
       operationId: exportDocuments
@@ -368,8 +368,9 @@ paths:
       parameters:
         - name: project_id
           in: query
-          required: true
-          description: Project whose documents are exported
+          description: >-
+            Project whose documents are exported; a project-bound credential
+            implies its own
           schema:
             type: string
             example: proj_V1StGXR8Z5jdHi6B
@@ -391,7 +392,7 @@ paths:
               schema:
                 type: string
         '400':
-          description: '`project_id` is required'
+          description: '`project_id` is missing and the credential names no project'
           content:
             application/json:
               schema:

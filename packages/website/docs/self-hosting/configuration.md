@@ -132,6 +132,14 @@ constraint owns the index.
 | `SOAT_ROUTE_PREFIX`        | `/api/v1` | The prefix routes named in a `hint` are rendered under, e.g. `/v1/projects/{project_id}` for a deployment serving the API under its own paths                                                                                                                           |
 | `SOAT_ERROR_HINTS_CONFIG`  | —         | Path to a JSON file `{ "hints": { "<CODE>": "<hint>" } }` whose entries replace the runtime's hint for that code. A route in a hint is written `{{PATCH /agents/{agent_id}}}`, relative to the prefix. A code the runtime does not define, or an empty hint, fails boot |
 
+### Project Selection
+
+| Variable                    | Default | Description                                                                                                                            |
+| --------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROJECT_ID_QUERY_DISABLED` | `false` | `true` takes `project_id` out of every route's query parameters, for a deployment that issues only [project-bound credentials](../modules/projects.md#project-selection) |
+
+With it on, `?project_id=` is `400 VALIDATION_FAILED` naming it in `unknown_query_parameters`, the served `/api/v1/openapi.json` and the MCP tools declare no `project_id` query parameter, and the project comes from the credential. A credential bound to no project then reaches per-project routes (the exports, the usage aggregate) by no means.
+
 ### Header Prefix
 
 | Variable             | Default   | Description                                |

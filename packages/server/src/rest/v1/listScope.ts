@@ -7,12 +7,12 @@ import { resolveReadProjectIds, resolveWriteProjectPublicId } from './helpers';
  * How a list route reads `?project_id`:
  * - `optional`: narrows to that project; absent, the list spans every project
  *   the caller reads (an unrestricted admin: every project).
- * - `required`: names the one project the route reads.
- * - `implied`: names the one project, else a scoped credential's own.
+ * - `implied`: names the one project the route reads, else a project-bound
+ *   credential's own; neither is `400`.
  * - `none`: the route declares no selector and spans every project the caller
  *   reads.
  */
-export type ProjectSelector = 'optional' | 'required' | 'implied' | 'none';
+export type ProjectSelector = 'optional' | 'implied' | 'none';
 
 export type ListScope = {
   /** `undefined` is no project filter; `[]` matches no project. */
@@ -39,9 +39,6 @@ const selectedProjectPublicId = (args: {
   const projectPublicId = queryProjectPublicId(args.ctx);
   if (args.projectSelector === 'implied') {
     return resolveWriteProjectPublicId({ ctx: args.ctx, projectPublicId });
-  }
-  if (args.projectSelector === 'required' && !projectPublicId) {
-    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
   return projectPublicId;
 };

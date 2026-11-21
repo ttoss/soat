@@ -10,6 +10,7 @@ import {
   hasProperties,
   isObjectRecord,
 } from './openapiSchemaFields';
+import { projectIdQueryDisabled, stripProjectIdQuery } from './projectIdQuery';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -91,13 +92,22 @@ export const loadMergedOpenApiSpec = (): MergedSpec => {
   return merged;
 };
 
-let cachedSpec: MergedSpec | null = null;
+const cachedSpecs = new Map<boolean, MergedSpec>();
 
+/**
+ * The deployment's contract: every check, the served document and the tool
+ * registry read it, so `PROJECT_ID_QUERY_DISABLED` reaches all of them at once.
+ */
 export const getMergedOpenApiSpec = (): MergedSpec => {
-  if (!cachedSpec) {
-    cachedSpec = loadMergedOpenApiSpec();
-  }
-  return cachedSpec;
+  const omitProjectIdQuery = projectIdQueryDisabled();
+  const cached = cachedSpecs.get(omitProjectIdQuery);
+  if (cached) return cached;
+  const loaded = loadMergedOpenApiSpec();
+  const spec = omitProjectIdQuery
+    ? { ...loaded, paths: stripProjectIdQuery(loaded.paths) }
+    : loaded;
+  cachedSpecs.set(omitProjectIdQuery, spec);
+  return spec;
 };
 
 // Request bodies arrive in the wire contract's snake_case, so the kernel keys

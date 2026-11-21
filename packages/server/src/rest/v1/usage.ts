@@ -152,7 +152,7 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
     ctx,
     action: 'usage:GetAggregate',
     resourceType: 'usage',
-    projectSelector: 'required',
+    projectSelector: 'implied',
   });
   const projectId = projectIds?.[0];
   if (projectId === undefined || projectPublicId === undefined) {
