@@ -15,10 +15,6 @@
  * inlined, so the file itself carries nothing confidential.
  */
 
-import * as fs from 'node:fs';
-
-import createDebug from 'debug';
-
 import {
   type FormationTypeWriter,
   parseFormationTypeWriter,
@@ -29,8 +25,6 @@ import {
   hasProperties,
   isObjectRecord,
 } from './openapiSchemaFields';
-
-const log = createDebug('soat:formations:resourceTypes');
 
 export const FORMATION_RESOURCE_TYPES_CONFIG_ENV =
   'FORMATION_RESOURCE_TYPES_CONFIG';
@@ -103,7 +97,7 @@ export type FormationResourceTypeRegistration = {
  */
 type ConfigFailure = (args: { source: string; message: string }) => never;
 
-const failFormationConfig: ConfigFailure = (args) => {
+export const failFormationConfig: ConfigFailure = (args) => {
   throw new Error(
     `Invalid formation resource type config (${args.source}): ${args.message}`
   );
@@ -408,80 +402,6 @@ export const parseFormationResourceTypeConfig = (args: {
     seen.add(registration.name);
     registrations.push(registration);
   }
-
-  return registrations;
-};
-
-// ── Loading ───────────────────────────────────────────────────────────────
-
-/**
- * Reads the registration file named by `FORMATION_RESOURCE_TYPES_CONFIG`, or
- * returns nothing when the variable is unset — the overwhelmingly common case,
- * and the one where a deployment runs on the built-in resource types alone.
- */
-export const loadFormationResourceTypeConfig = (args: {
-  builtInTypes: ReadonlySet<string>;
-  env: Record<string, string | undefined>;
-}): FormationResourceTypeRegistration[] => {
-  const source = args.env[FORMATION_RESOURCE_TYPES_CONFIG_ENV];
-  if (!source) return [];
-
-  log('loading formation resource type registrations from %s', source);
-
-  let raw: string;
-  try {
-    raw = fs.readFileSync(source, 'utf-8');
-  } catch (error) {
-    throw new Error(
-      `Could not read formation resource type config (${source}): ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      { cause: error }
-    );
-  }
-
-  let config: unknown;
-  try {
-    config = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(
-      `Could not parse formation resource type config (${source}): ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      { cause: error }
-    );
-  }
-
-  const registrations = parseFormationResourceTypeConfig({
-    config,
-    builtInTypes: args.builtInTypes,
-    env: args.env,
-    source,
-  });
-
-  const overrides = registrations.filter((registration) => {
-    return registration.overridesBuiltin;
-  });
-  if (overrides.length > 0) {
-    log(
-      'overriding built-in formation resource type(s): %s',
-      overrides
-        .map((registration) => {
-          return registration.name;
-        })
-        .join(', ')
-    );
-  }
-
-  log(
-    'registered %d custom formation resource type(s): %s',
-    registrations.length,
-    registrations
-      .map((registration) => {
-        return registration.name;
-      })
-      .join(', ')
-  );
 
   return registrations;
 };

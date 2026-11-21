@@ -32,7 +32,7 @@ import { triggersFormationModule } from './formation-modules/triggersFormationMo
 import { webhooksFormationModule } from './formation-modules/webhooksFormationModule';
 import { workflowsFormationModule } from './formation-modules/workflowsFormationModule';
 import type { FormationResourceTypeRegistration } from './formationResourceTypeConfig';
-import { loadFormationResourceTypeConfig } from './formationResourceTypeConfig';
+import { loadFormationResourceTypeConfig } from './formationResourceTypeConfigFile';
 import { declaredActionsOf } from './formationResourceTypeWriter';
 import type { FormationModule } from './formationsTypes';
 import { assertDeclaredActionsCheckable } from './iamCheck';
@@ -122,13 +122,22 @@ export const clearablePropertiesOf = (
 };
 
 /**
- * The resource types a formation template may declare — derived from the
- * registry rather than restated, so registering a module is the single step
- * that makes its type reachable. A hand-written copy of this set had already
- * fallen one entry behind, leaving `model_route` unusable.
+ * Built-ins the deployment turned off. Their modules stay registered, so a
+ * formation that already holds one still plans its teardown and deletes.
+ */
+const disabledResourceTypes = new Set<string>();
+
+/**
+ * The resource types a formation template may declare: the registry minus what
+ * the deployment disabled, derived rather than restated, so registering a
+ * module is the single step that makes its type reachable.
  */
 export const supportedResourceTypes = (): ReadonlySet<string> => {
-  return new Set(registeredModules.keys());
+  return new Set(
+    [...registeredModules.keys()].filter((type) => {
+      return !disabledResourceTypes.has(type);
+    })
+  );
 };
 
 // ── Operator-registered resource types ────────────────────────────────────
@@ -157,6 +166,11 @@ export const registerFormationResourceTypes = (args: {
         isBuiltIn
           ? `Cannot register formation resource type '${registration.name}': it is a built-in type and the registration does not override it`
           : `Cannot override formation resource type '${registration.name}': it is not a built-in type`
+      );
+    }
+    if (disabledResourceTypes.has(registration.name)) {
+      throw new Error(
+        `Cannot register formation resource type '${registration.name}': the deployment disables it`
       );
     }
     assertDeclaredActionsCheckable({
@@ -191,15 +205,43 @@ export const unregisterFormationResourceTypes = (args: {
 };
 
 /**
- * Loads the registration file, if the deployment named one, and registers what
- * it declares. Any problem throws, which fails the boot — see
+ * Takes built-in types out of what a template may declare. Only a built-in
+ * still served by its own module is disableable; anything else throws, as the
+ * parser does earlier with a message naming the file.
+ */
+export const disableFormationResourceTypes = (args: {
+  names: string[];
+}): void => {
+  for (const name of args.names) {
+    const builtIn = BUILT_IN_MODULES.get(name);
+    if (!builtIn || registeredModules.get(name) !== builtIn) {
+      throw new Error(
+        `Cannot disable formation resource type '${name}': only a built-in type the deployment does not override is disableable`
+      );
+    }
+    disabledResourceTypes.add(name);
+  }
+};
+
+/** Undoes `disableFormationResourceTypes`; exists for tests, like `unregister…`. */
+export const enableFormationResourceTypes = (args: {
+  names: string[];
+}): void => {
+  for (const name of args.names) {
+    disabledResourceTypes.delete(name);
+  }
+};
+
+/**
+ * Loads the registration file, if the deployment named one, then registers and
+ * disables what it declares. Any problem throws, which fails the boot — see
  * `formationResourceTypeConfig.ts` for why that is the right outcome.
  */
 export const initFormationResourceTypes = (): void => {
-  registerFormationResourceTypes({
-    registrations: loadFormationResourceTypeConfig({
-      builtInTypes: BUILT_IN_RESOURCE_TYPES,
-      env: process.env,
-    }),
+  const config = loadFormationResourceTypeConfig({
+    builtInTypes: BUILT_IN_RESOURCE_TYPES,
+    env: process.env,
   });
+  registerFormationResourceTypes({ registrations: config.registrations });
+  disableFormationResourceTypes({ names: [...config.disabledTypes] });
 };
