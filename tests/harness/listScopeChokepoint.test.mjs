@@ -145,12 +145,12 @@ test('no list route answers 403 to a caller permitted in no project', () => {
   assert.deepEqual(offenders, []);
 });
 
-test('exports require project_id through the chokepoint', () => {
+test('exports name one project through the chokepoint', () => {
   const offenders = scoped()
     .filter((route) => {
       return (
         route.path.endsWith('/export') &&
-        !/projectSelector:\s*'required'/.test(route.body)
+        !/projectSelector:\s*'implied'/.test(route.body)
       );
     })
     .map((route) => {

@@ -207,7 +207,7 @@ export const ERROR_CODES = {
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The AI provider still has dependents. Live references (chats, agents, model-route targets) always block deletion and must be deleted or repointed first. Soft dependents (price overrides, usage records) block only until force=true, which drops the overrides and unlinks usage history. The error meta reports the counts, a sample of offending IDs, and a `forcible` flag.',
+      'The AI provider still has dependents. Live references (chats, agents, model-route targets) always block deletion and must be deleted or repointed first. Soft dependents (price overrides, usage records, accepted shares) block only until force=true, which drops the overrides, unlinks usage history and revokes the shares. The error meta reports the counts, a sample of offending IDs, and a `forcible` flag.',
   },
   AGENT_HAS_DEPENDENTS: {
     httpStatus: 409,
@@ -310,7 +310,7 @@ export const ERROR_CODES = {
   FORBIDDEN: {
     httpStatus: 403,
     description:
-      "The action is refused by someone's policies: the caller's credential or what narrows it (an IAM token's bound, an `On-Behalf-Of` assertion's authority or its generation's execution identity), an agent's or a trigger's `policy_ids`, or a formation's deployer. `meta.action` and `meta.resource` name what was denied and `meta.denied_by` (`type`, `id`) whose policies denied it; the message names all three.",
+      "The action is refused by someone's policies: the caller's credential or what narrows it (an IAM token's bound, an `On-Behalf-Of` assertion's authority or its generation's execution identity), an agent's or a trigger's `policy_ids`, or a formation's deployer. `meta.action` and `meta.resource` name what was denied and `meta.denied_by` (`type`, `id`) whose policies denied it; the message names all three. When the deciding `Deny` statement carries a `denial`, the response answers its `code` (one the deployment declares) and `message`, with its `meta` beside these fields.",
   },
   API_KEY_POLICY_BOUNDARY: {
     httpStatus: 403,
@@ -321,6 +321,11 @@ export const ERROR_CODES = {
     httpStatus: 403,
     description:
       "The request creates or edits a resource carrying a policy (an agent, trigger, webhook or user), or edits a policy one carries, and the policy grants a permission the caller does not hold in that resource's project. A resource acting under a policy may do no more than whoever last wrote it. `meta.ungranted` lists each grant not held: `policy_id`, `statement` index, `action` and `resource`.",
+  },
+  POLICY_DENIAL_RESERVED: {
+    httpStatus: 403,
+    description:
+      'The policy document carries a statement `denial`, which only an unrestricted admin may write: a denial decides the code every caller under the policy reads.',
   },
   ACTION_NOT_HELD: {
     httpStatus: 403,

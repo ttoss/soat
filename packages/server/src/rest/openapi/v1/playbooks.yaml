@@ -158,7 +158,8 @@ paths:
         whose shape cannot be read is `400 VALIDATION_FAILED`, as on a write.
 
 
-        With `project_id`, the references are checked too, as a write there
+        With a project (`project_id`, or the one a project-bound credential
+        names), the references are checked too, as a write there
         would check them: the upstreams against that project's playbooks, and
         each executor the caller may start must exist (`EXECUTOR_NOT_FOUND`)
         and name an action its `mcp` tool allows (`EXECUTOR_ACTION_REQUIRED`,
@@ -186,7 +187,7 @@ paths:
         '400':
           description: >-
             Bad request — the definition's shape cannot be read, or
-            `playbook_id` is given without `project_id`
+            `playbook_id` is given without a project
           content:
             application/json:
               schema:
@@ -2113,7 +2114,8 @@ components:
         project_id:
           type: string
           description: >-
-            Also check the references against this project: the upstreams
+            Also check the references against this project (a project-bound
+            credential implies its own): the upstreams
             (`UNKNOWN_UPSTREAM`, and the `MISSING_NODE` and `UNKNOWN_FIELD` of
             what an upstream node pulls) and the executors
             (`EXECUTOR_NOT_FOUND`, `EXECUTOR_ACTION_REQUIRED`,
@@ -2124,7 +2126,7 @@ components:
           type: string
           description: >-
             The playbook the definition would update, so an upstream reading it
-            back is `UPSTREAM_CYCLE`. Requires `project_id`.
+            back is `UPSTREAM_CYCLE`. Requires a project.
           example: pbk_V1StGXR8Z5jdHi6B
         definition:
           description: The definition to check

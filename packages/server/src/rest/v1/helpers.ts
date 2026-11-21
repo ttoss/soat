@@ -32,7 +32,7 @@ import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
- * Throws an actionable `API_KEY_PROJECT_SCOPE` error when a project-scoped
+ * Throws `API_KEY_PROJECT_SCOPE` when a project-scoped
  * credential explicitly targets a different project than the one it is bound
  * to. This binding is enforced independently of the owner's role: an
  * admin-owned key is confined to its own project like any other.
@@ -67,11 +67,8 @@ export const assertCredentialProjectScope = (args: {
   const credential = authUser.apiKeyProjectPublicId ? 'API key' : 'OAuth token';
   const reason =
     requestedProjectPublicId === null
-      ? `cannot create or manage an unscoped credential. Use an unscoped ` +
-        `credential to do that.`
-      : `cannot access project '${requestedProjectPublicId}'. Mint a key ` +
-        `scoped to '${requestedProjectPublicId}' (or an unscoped key) to ` +
-        `operate there.`;
+      ? 'cannot create or manage an unscoped credential.'
+      : `cannot act on project '${requestedProjectPublicId}'.`;
 
   // Meta keys are snake_case to match the external REST contract.
   throw new DomainError(
@@ -435,6 +432,16 @@ export const requireProjectAccess = async (args: {
  * `API_KEY_PROJECT_SCOPE` / `FORBIDDEN` otherwise.
  */
 /**
+ * The project a project-bound credential names: an API key's, or that of a
+ * token minted from one or consented for one.
+ */
+export const credentialProjectPublicId = (
+  authUser: NonNullable<Context['authUser']>
+): string | undefined => {
+  return authUser.apiKeyProjectPublicId ?? authUser.oauthProjectPublicId;
+};
+
+/**
  * The public id of the project a write targets: the explicit one, else the
  * project a scoped credential supplies.
  *
@@ -450,9 +457,7 @@ export const resolveWriteProjectPublicId = (args: {
   requireAuth(ctx);
 
   const projectPublicId =
-    args.projectPublicId ??
-    ctx.authUser.apiKeyProjectPublicId ??
-    ctx.authUser.oauthProjectPublicId;
+    args.projectPublicId ?? credentialProjectPublicId(ctx.authUser);
 
   if (!projectPublicId) {
     throw new DomainError('VALIDATION_FAILED', 'project_id is required');

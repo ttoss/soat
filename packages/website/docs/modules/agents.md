@@ -955,7 +955,7 @@ Both write the winning version's config to the agent and clear the release (a mi
 
 #### Eval-gated promotion
 
-`promotion_gate` names an [eval](./evaluations.md); `promote` then reads the newest run of it that finished `completed`, was recorded against this agent (`agent_id`) and was pinned to the canary version (`agent_version`), and requires its [`verdict`](./evaluations.md#pass-semantics) to be `supported`. A newer run revokes an older one: a `supported` run followed by an `insufficient` or `refuted` one blocks. Otherwise the call is `409 PROMOTION_GATE_UNMET`, whose `meta` carries that run's `eval_run_id`, `verdict` and `verdict_reasons` when there is one.
+`promotion_gate` names an [eval](./evaluations.md); `promote` then reads the newest run of it that finished `completed`, was recorded against this agent (`agent_id`) and was pinned to the canary version (`agent_version`), and requires its [`verdict`](./evaluations.md#pass-semantics) to be `supported`. A newer run revokes an older one: a `supported` run followed by an `insufficient` or `refuted` one blocks. Otherwise the call is `409 PROMOTION_GATE_UNMET`, whose `meta` carries that run's `eval_run_id`, [`claim`](./evaluations.md#the-claim), `verdict` and `verdict_reasons` when there is one.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

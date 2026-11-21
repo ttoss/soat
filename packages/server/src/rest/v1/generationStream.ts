@@ -28,7 +28,7 @@ export const resolveStreamWait = (args: {
   if (args.stream === true && requested === 'false') {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'stream and wait=false are mutually exclusive: a streamed generation must hold the request open. Omit stream, or omit wait=false.'
+      'stream and wait=false are mutually exclusive: a streamed generation must hold the request open.'
     );
   }
   return requested === 'true' || args.stream === true;

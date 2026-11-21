@@ -87,6 +87,13 @@ export class EvalRun extends Model {
   declare definition: Record<string, unknown> | null;
 
   /**
+   * The Eval's `claim` as it was when the run was created: what this run
+   * tested, never the Eval's current wording. Null when the Eval stated none.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare claim: Record<string, unknown> | null;
+
+  /**
    * The decider version each `decider` scorer grades under, keyed by scorer
    * name and resolved at run start for the same reason as `agentVersion`.
    * Null when the eval has no decider scorer.

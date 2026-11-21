@@ -12,6 +12,7 @@ import type { LanguageModel, LanguageModelUsage, Tool } from 'ai';
 
 import { type AgentRunAs, readAgentRunAs } from './agentRunAs';
 import type { GenerationProvenance } from './generationProvenance';
+import type { PublicMessages, VendorOptions } from './vendorOptions';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -243,7 +244,9 @@ export type GenerationResult = {
     content: string;
     finishReason: string;
     /** Full AI SDK response messages from this generation (tool calls, tool results, final text). */
-    responseMessages?: Array<unknown>;
+    responseMessages?: PublicMessages;
+    /** What a replay of `responseMessages` needs back (`vendorOptions.ts`). */
+    vendorOptions?: VendorOptions;
     /** Structured object matching the agent's `outputSchema`, when configured. */
     object?: unknown;
   };

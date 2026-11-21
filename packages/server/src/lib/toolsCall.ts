@@ -86,7 +86,7 @@ export const assertEphemeralTypeSupported = (
   if (definition.type === 'pipeline') {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'Ephemeral tool definitions of type "pipeline" are not supported; create a persisted pipeline tool via POST /tools and reference it by ID instead.'
+      'Ephemeral tool definitions of type "pipeline" are not supported; a pipeline tool runs only persisted, referenced by ID.'
     );
   }
   // Pins are stored on the tool's row, which an inline definition does not have.
@@ -96,7 +96,7 @@ export const assertEphemeralTypeSupported = (
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'An inline mcp tool cannot set mcp.pin_definitions; create a persisted tool via POST /tools and reference it by ID instead.'
+      'An inline mcp tool cannot set mcp.pin_definitions; only a persisted tool, referenced by ID, can.'
     );
   }
 };

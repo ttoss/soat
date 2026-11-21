@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { db } from 'src/db';
+import { resolutionFor } from 'src/errors/resolutions';
 import { EVENT_READ_ACTIONS } from 'src/lib/eventReadActions';
 import { sweepDueWebhookDeliveries } from 'src/lib/webhookDispatcher';
 
@@ -766,10 +767,13 @@ describe('Webhook delivery', () => {
         },
       });
 
-      // Never attempted: no attempt counted, no status code, and the remedy.
+      // Never attempted: no attempt counted, no status code, and the recorded
+      // failure, whose code's hint names the remedy.
       expect(delivery.attempts).toBe(0);
       expect(delivery.status_code).toBeNull();
-      expect(delivery.response_body).toMatch(/rotate/i);
+      const { error } = JSON.parse(delivery.response_body ?? 'null');
+      expect(error.code).toBe('SECRET_NOT_DECRYPTABLE');
+      expect(resolutionFor({ code: error.code })).toMatch(/rotate/i);
       expect(callsTo(url)).toHaveLength(0);
     });
 
@@ -789,7 +793,9 @@ describe('Webhook delivery', () => {
       // No retry moves the URL, and each attempt would probe the host again.
       expect(delivery.attempts).toBe(0);
       expect(delivery.status_code).toBeNull();
-      expect(delivery.response_body).toMatch(/not publicly routable/i);
+      const { error } = JSON.parse(delivery.response_body ?? 'null');
+      expect(error.code).toBe('TOOL_EGRESS_BLOCKED');
+      expect(error.message).toMatch(/not publicly routable/i);
       expect(callsTo(url)).toHaveLength(0);
     });
   });

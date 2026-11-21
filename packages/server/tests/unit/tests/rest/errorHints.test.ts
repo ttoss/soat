@@ -343,6 +343,35 @@ describe('error hints', () => {
     });
   });
 
+  describe('SOAT_OPENAPI_DOCUMENT_PATH', () => {
+    const unknownField = () => {
+      return authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({ project_id: projectId, not_a_field: true });
+    };
+
+    test('a fallback hint names the document at the path set', async () => {
+      const response = await withEnv(
+        {
+          SOAT_OPENAPI_DOCUMENT_PATH: '/v1/openapi.json',
+          SOAT_ROUTE_PREFIX: '/v1/projects/{project_id}',
+        },
+        unknownField
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error.hint).toContain('`/v1/openapi.json`');
+    });
+
+    test('unset, a fallback hint names /api/v1/openapi.json', async () => {
+      const response = await withEnv(
+        { SOAT_OPENAPI_DOCUMENT_PATH: undefined },
+        unknownField
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error.hint).toContain('`/api/v1/openapi.json`');
+    });
+  });
+
   describe('SOAT_ERROR_HINTS_CONFIG', () => {
     let dir: string;
 
@@ -386,6 +415,56 @@ describe('error hints', () => {
       );
     });
 
+    test('omit_meta leaves the named keys out of a REST error', async () => {
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: `errorhints-omit-${Date.now()}`,
+          provider: 'ollama',
+          default_model: 'stub-model',
+        });
+      expect(providerRes.status).toBe(201);
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({ project_id: projectId, ai_provider_id: providerRes.body.id });
+      expect(agentRes.status).toBe(201);
+      initErrorHintOverrides({
+        env: {
+          SOAT_ERROR_HINTS_CONFIG: writeConfig({
+            omit_meta: {
+              AI_PROVIDER_HAS_DEPENDENTS: ['chat_count', 'chat_ids'],
+            },
+          }),
+        },
+      });
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/ai-providers/${providerRes.body.id}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
+      expect(response.body.error.meta.chat_count).toBeUndefined();
+      expect(response.body.error.meta.chat_ids).toBeUndefined();
+      expect(response.body.error.meta.agent_count).toBe(1);
+    });
+
+    test('omit_meta leaves the named keys out of a stored error', async () => {
+      initErrorHintOverrides({
+        env: {
+          SOAT_ERROR_HINTS_CONFIG: writeConfig({
+            omit_meta: { TOOL_HTTP_ERROR: ['tool_error'] },
+          }),
+        },
+      });
+
+      const error = await failedRunError();
+
+      expect(error.code).toBe('TOOL_HTTP_ERROR');
+      expect(error.meta?.tool_error).toBeUndefined();
+    });
+
     test('an override naming a code the runtime does not define fails boot', () => {
       expect(() => {
         return withEnvSync(
@@ -404,6 +483,10 @@ describe('error hints', () => {
       ['an unknown top-level key', { hints: {}, extra: true }],
       ['hints not an object', { hints: 'x' }],
       ['an empty hint', { hints: { RESOURCE_NOT_FOUND: ' ' } }],
+      ['omit_meta not an object', { omit_meta: [] }],
+      ['omit_meta naming an unknown code', { omit_meta: { NOPE: ['a'] } }],
+      ['omit_meta keys not a list', { omit_meta: { FORBIDDEN: 'action' } }],
+      ['omit_meta with no keys', { omit_meta: { FORBIDDEN: [] } }],
     ])('a config with %s fails boot', (_label, config) => {
       expect(() => {
         return initErrorHintOverrides({

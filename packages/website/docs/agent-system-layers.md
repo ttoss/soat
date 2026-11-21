@@ -127,7 +127,7 @@ A verdict supports a claim, and the claim is written before the evidence. Each v
 | --- | --- | --- |
 | 1. Capability | The pain observed: a correction that recurs, an exception, a turn that went wrong | [Approvals recurrence view](/docs/modules/approvals#recurrence-view), [Exceptions](/docs/modules/exceptions), [Replay a Bad Turn](/docs/tutorials/replay-a-bad-turn) |
 | 2. Construct | The observable property that stands for the capability | One [scorer](/docs/modules/evaluations#scorers) per property; a [decider](/docs/modules/evaluations#decider-scorers-decider) when production already asks the question |
-| 3. Claim | The sentence a passing run authorizes about the agent, over which inputs | Written before the dataset: [Eval Design](/docs/advanced/eval-design#the-claim) |
+| 3. Claim | The sentence a passing run authorizes about the agent, over which inputs | Written before the dataset, stored as the eval's [`claim`](/docs/modules/evaluations#the-claim): [Eval Design](/docs/advanced/eval-design#the-claim) |
 | 4. Evidence required | The kinds of input that must be present and the pass rate the claim needs | `group_by` over the items' `metadata`, `pass_threshold`: [Eval Design](/docs/advanced/eval-design#the-evidence-the-claim-needs) |
 | 5. Cases | The dataset, weighted toward failures, curated from production | [Datasets](/docs/modules/evaluations#curating-items-from-production), a dev and a held-out set |
 | 6. Measurements | One real generation per item, against one pinned agent version | [Eval runs](/docs/modules/evaluations#version-pinning) |
@@ -196,7 +196,7 @@ Pieces marked coming soon are designed but not built.
 | [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion) of a canary release | Shipped                                                                         |
 | [Memories](/docs/modules/memories) forgetting — importance scoring, recency blending, compaction | Coming soon                                                                    |
 | [An eval run's verdict](/docs/modules/evaluations#pass-semantics) read on the pass-rate interval and on the kinds the claim requires, with its reasons | Shipped |
-| The claim written on the eval and frozen on each run | Coming soon |
+| [The claim](/docs/modules/evaluations#the-claim) written on the eval and frozen on each run | Shipped |
 | Claims held per agent version; promotion refused while the canary loses one the stable version supports | Coming soon |
 
 ## Layers are concerns, not autonomy levels

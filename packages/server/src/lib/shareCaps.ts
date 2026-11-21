@@ -138,7 +138,7 @@ export const admitSharedCall = async (args: {
   });
   throw new DomainError(
     'SHARE_CAP_EXCEEDED',
-    `Share '${share.publicId}' allows ${String(cap.calls)} call(s) per ${cap.window}; retry after ${String(retryAfter)}s.`,
+    `Share '${share.publicId}' allows ${String(cap.calls)} call(s) per ${cap.window}; the window resets in ${String(retryAfter)}s.`,
     {
       share_id: share.publicId,
       calls: cap.calls,

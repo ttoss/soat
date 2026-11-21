@@ -10,6 +10,7 @@ import {
   findPendingClientTools,
   savePendingGeneration,
   servedAiProviderId,
+  servedTurnMessages,
 } from './agentGenerationHelpers';
 import {
   type AgentRunResult,
@@ -721,7 +722,7 @@ const completeContinuation = async (args: {
       }),
       content: args.result.text,
       finishReason: args.result.finishReason,
-      responseMessages: args.turnMessages,
+      ...servedTurnMessages(args.turnMessages),
       ...(args.pending.agentConfig.outputSchema
         ? { object: args.result.output }
         : {}),

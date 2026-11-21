@@ -27,7 +27,7 @@ const assertEmbeddingsRequest = (
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `\`inputs\` carries ${body.inputs.length} values, over the ${MAX_EMBEDDINGS_INPUTS} per request this route accepts. Split the batch.`
+      `\`inputs\` carries ${body.inputs.length} values, over the ${MAX_EMBEDDINGS_INPUTS} per request this route accepts.`
     );
   }
 

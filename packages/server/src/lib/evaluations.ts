@@ -18,6 +18,8 @@ import {
 import { validateScorers } from './evaluationScorers';
 import {
   assertValid,
+  claimUpdate,
+  requireClaim,
   requireName,
   validateEvidence,
   validateGroupBy,
@@ -55,6 +57,7 @@ export const mapEval = (evaluation: EvalRow) => {
     group_by: evaluation.groupBy,
     policy_ids: evaluation.policyIds ?? [],
     evidence: evaluation.evidence ?? null,
+    claim: evaluation.claim ?? null,
     created_at: evaluation.createdAt,
     updated_at: evaluation.updatedAt,
   };
@@ -148,6 +151,7 @@ export const createEval = async (args: {
   groupBy?: unknown;
   policyIds: string[] | null | undefined;
   evidence?: unknown;
+  claim?: unknown;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   const name = requireName(args.name);
@@ -212,6 +216,7 @@ export const createEval = async (args: {
       groupBy: args.groupBy ?? null,
       policyIds: args.policyIds,
       evidence: args.evidence ?? null,
+      claim: requireClaim(args.claim) ?? null,
     });
   } catch (error) {
     throw rethrowAsConflict(
@@ -364,6 +369,7 @@ export const updateEval = async (args: {
   groupBy?: unknown;
   policyIds?: string[] | null;
   evidence?: unknown;
+  claim?: unknown;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   log('updateEval: id=%s', args.id);
@@ -421,6 +427,7 @@ export const updateEval = async (args: {
     evidence: args.evidence,
     groupBy: args.groupBy,
   });
+  Object.assign(updates, claimUpdate(args.claim));
 
   try {
     await evaluation.update(updates);

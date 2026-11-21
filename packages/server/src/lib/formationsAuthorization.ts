@@ -205,7 +205,7 @@ export const collectAuthorizationDenials = async (args: {
       resourceType: request.resourceType,
       action: request.action,
       resource: answer.resource,
-      deniedBy: answer.deniedBy,
+      refusal: answer.refusal,
     });
   }
   return denials;
@@ -230,12 +230,12 @@ export const assertResourceActionsAuthorized = async (args: {
 
   const sameSet = rest.filter((denial) => {
     return (
-      denial.deniedBy.type === first.deniedBy.type &&
-      denial.deniedBy.id === first.deniedBy.id
+      denial.refusal.principal.type === first.refusal.principal.type &&
+      denial.refusal.principal.id === first.refusal.principal.id
     );
   });
   throw authorizationDenied({
-    principal: first.deniedBy,
+    ...first.refusal,
     denied: [first, ...sameSet],
     extra: { denied_actions: [first, ...rest].map(authorizationDenialToWire) },
   });

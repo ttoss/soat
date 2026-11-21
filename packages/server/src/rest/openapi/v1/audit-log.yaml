@@ -139,8 +139,9 @@ paths:
       description: >-
         Streams a project's audit-log entries as newline-delimited JSON — one
         entry object per line, oldest first — for archival before the retention
-        window expires, or for shipping into an external system. `project_id` is
-        required: the export is per-project by design. Filters behave exactly as
+        window expires, or for shipping into an external system. The export is per-project:
+        `project_id` names it, or a project-bound credential implies its own.
+        Filters behave exactly as
         they do on the list endpoint.
       operationId: exportAuditEntries
       x-iam-action: audit:ExportAuditEntries
@@ -154,8 +155,9 @@ paths:
       parameters:
         - name: project_id
           in: query
-          required: true
-          description: Project whose entries are exported
+          description: >-
+            Project whose entries are exported; a project-bound credential
+            implies its own
           schema:
             type: string
             example: proj_V1StGXR8Z5jdHi6B
@@ -205,7 +207,7 @@ paths:
                 type: string
         '400':
           description: >-
-            `project_id` is required, or `from`/`to` is present but not a valid
+            `project_id` is missing and the credential names no project, or `from`/`to` is present but not a valid
             ISO 8601 date
           content:
             application/json:
