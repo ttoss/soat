@@ -69,16 +69,13 @@ describe(NAME, () => {
     ).toBe('json');
   });
 
-  test('drops passed; an existing run reads no verdict', async () => {
+  test('keeps passed for the previous release', async () => {
     expect(
-      await columnType({ client, table: 'eval_runs', column: 'passed' })
-    ).toBeUndefined();
-    expect(
-      await selectRows<{ verdict: string | null }>({
+      await selectRows<{ passed: boolean; verdict: string | null }>({
         client,
-        sql: 'SELECT verdict FROM eval_runs WHERE id = 1',
+        sql: 'SELECT passed, verdict FROM eval_runs WHERE id = 1',
       })
-    ).toEqual([{ verdict: null }]);
+    ).toEqual([{ passed: true, verdict: null }]);
   });
 
   test('a second run is a no-op', async () => {
