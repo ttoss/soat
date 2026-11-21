@@ -150,7 +150,7 @@ const resolvePolicies = async (args: {
   if (foreign) {
     throw new DomainError(
       'POLICY_OUTSIDE_PROJECT',
-      `Policy '${foreign.publicId}' belongs to another project; name a policy of this project or a global one.`,
+      `Policy '${foreign.publicId}' belongs to another project.`,
       { policy_id: foreign.publicId }
     );
   }

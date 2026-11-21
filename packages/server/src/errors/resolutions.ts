@@ -27,8 +27,8 @@ export const errorCodesDocsUrl = (): string => {
 /**
  * What to do about a specific code, where the status class alone is too vague
  * to act on. Codes not listed here fall back to `STATUS_RESOLUTIONS`. A route
- * is a token, `{{PATCH /agents/{agent_id}}}`, never a literal path
- * (`hintRoutes.ts`).
+ * is a token, `{{PATCH /agents/{agent_id}}}`, and the OpenAPI document
+ * `{{openapi_document}}`, never a literal path (`hintRoutes.ts`).
  */
 export const ERROR_RESOLUTIONS: Record<string, string> = {
   OAUTH_CALLBACK_FAILED:
@@ -52,11 +52,11 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   IAM_TOKEN_ISSUER_NOT_ALLOWED:
     'Issue the token with an API key scoped to the project, never with a user token, an unscoped key or another token.',
   API_KEY_PROJECT_SCOPE:
-    "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use an unscoped credential.",
+    "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use a credential scoped to the target project, or an unscoped one.",
   RESOURCE_NOT_FOUND:
     'Check the id, and check that the credential can see the project that owns the resource — a resource in another project is indistinguishable from one that does not exist. List the collection to confirm.',
   VALIDATION_FAILED:
-    'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.',
+    'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `{{openapi_document}}`; `meta` names the offending field when the check can identify one, and for an unknown query parameter lists `unknown_query_parameters` and `accepted_query_parameters`.',
   AGENT_TOOL_NOT_OFFERED:
     "Name the tool as the model is offered it, one of `meta.offered_tool_names`: a `builtin` action is `<tool name>_<action>`, and a name two bindings share is prefixed with the binding's name. Update the agent with `{{PATCH /agents/{agent_id}}}`.",
   FORCED_TOOL_CHOICE_CANNOT_STOP:
@@ -154,7 +154,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   NOT_IMPLEMENTED:
     'The operation exists in the contract but is not implemented on this deployment. Retrying will not change the outcome.',
   REQUEST_REJECTED:
-    'The HTTP layer rejected the request before it reached a handler — path, method, content type, or size. The message names the reason; `/openapi.json` lists every path and method.',
+    'The HTTP layer rejected the request before it reached a handler — path, method, content type, or size. The message names the reason; `{{openapi_document}}` lists every path and method.',
   GENERATION_NOT_AWAITING_TOOL_OUTPUTS:
     'Read the generation for its current status. A generation that pauses again answers `requires_action` with new tool call ids; submit outputs for those.',
   GENERATION_ALREADY_IN_PROGRESS:
@@ -255,6 +255,24 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The file is too large to parse inside the request. Call the same operation without `wait=true` and poll the handle it returns.',
   BOOTSTRAP_ALREADY_COMPLETED:
     'The first admin already exists, so bootstrap is closed for good. Sign in instead, and create further users with `{{POST /users}}`.',
+  AGENT_HAS_DEPENDENTS:
+    'Delete the deciders that name the agent (`meta.decider_count`), or point them at another agent with `{{PATCH /deciders/{decider_id}}}`; they block deletion even under `force=true`. Generations, traces, accepted shares and ingestion rules block only until `force=true`.',
+  AI_PROVIDER_HAS_DEPENDENTS:
+    'Delete or repoint the agents, chats and model routes that reference the provider, then delete it; `force` does not override them. Price overrides and usage records (`meta.forcible`) block only until `force=true`, which drops the overrides and unlinks usage history.',
+  FILE_ALREADY_INGESTED:
+    'Re-process the existing document with `{{POST /documents/{document_id}/ingest}}` (`meta.document_id`), or upload a new copy of the file to ingest it separately.',
+  CONVERTER_FAILED:
+    'The message names the converter and how it failed. A tool converter that defers with `{ status: "pending" }` runs only without `wait=true`; otherwise fix the converter\'s tool or agent and ingest again.',
+  ORCHESTRATION_RUN_PAUSED:
+    'Resume the run with `{{POST /orchestration-runs/{orchestration_run_id}/resume}}`, then retry.',
+  OUTPUT_SCHEMA_STREAMING_UNSUPPORTED:
+    'Set `stream` to false, or remove `output_schema` from the agent or the request.',
+  SECRET_NOT_DECRYPTABLE:
+    'Rotate the secret to replace it, or have the deployment operator restore the original `SECRETS_ENCRYPTION_KEY`, which recovers every secret written under it.',
+  INVALID_TOOL_CONTEXT_KEY:
+    'Rename the `tool_context` keys in `meta.keys` so each maps to a header of its own.',
+  MISSING_TOOL_CONTEXT_KEY:
+    'Send a `tool_context` carrying `meta.key`, or call the tool through an entry point that forwards one.',
   SIMILARITY_SOURCE_NOT_EMBEDDED:
     'Retry once the source is embedded: poll {{GET /documents/{document_id}/status}} until a document is `ready`. A source written while the embedding provider was unreachable has no vector until it is re-ingested or rewritten; search with `query` meanwhile.',
 };
@@ -265,7 +283,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
  * be true of every code that shares the status.
  */
 export const STATUS_RESOLUTIONS: Record<number, string> = {
-  400: 'Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/openapi.json`.',
+  400: 'Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `{{openapi_document}}`.',
   401: 'Authenticate the request: send a valid bearer token or project API key in the `Authorization` header.',
   403: 'The credential is authenticated but lacks this action, or is scoped to another project. Grant the action in an IAM policy, or use a credential that has it.',
   404: 'Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.',

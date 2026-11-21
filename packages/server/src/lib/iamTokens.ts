@@ -144,7 +144,7 @@ const parseBoundBody = async (args: {
   if ((policy === undefined) === (policyIds === undefined)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'Send exactly one of policy and policy_ids.'
+      'policy and policy_ids are mutually exclusive, and one is required.'
     );
   }
   return policy === undefined

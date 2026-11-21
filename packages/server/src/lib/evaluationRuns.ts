@@ -181,7 +181,7 @@ const assertRunnableItemCount = (args: {
   if (args.wait && args.count > SYNC_ITEM_CAP) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `A synchronous run is capped at ${SYNC_ITEM_CAP} items and this dataset has ${args.count}. Reduce the dataset, or start the run with wait: false to execute it on the queue.`
+      `A synchronous run is capped at ${SYNC_ITEM_CAP} items and this dataset has ${args.count}; a run with wait: false executes on the queue, uncapped.`
     );
   }
 };

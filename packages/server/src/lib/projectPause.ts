@@ -66,7 +66,7 @@ export const readProjectPause = async (args: {
 export const projectPausedError = (pause: ProjectPause): DomainError => {
   return new DomainError(
     'PROJECT_PAUSED',
-    `Project '${pause.projectPublicId}' is paused; resume it before starting new work.`,
+    `Project '${pause.projectPublicId}' is paused and starts no new work.`,
     {
       project_id: pause.projectPublicId,
       paused_at: pause.pausedAt.toISOString(),

@@ -469,7 +469,7 @@ A deploy is a reconciler, so the two failure kinds are reported differently:
   "status": "failed",
   "error": {
     "code": "VALIDATION_FAILED",
-    "message": "dataset_id is immutable: item 'dsit_…' belongs to 'dset_…'. Declare a new dataset_item instead.",
+    "message": "dataset_id is immutable: item 'dsit_…' belongs to 'dset_…'.",
     "meta": { "logical_id": "case1", "resource_type": "dataset_item" }
   }
 }
