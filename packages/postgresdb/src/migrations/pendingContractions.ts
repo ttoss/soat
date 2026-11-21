@@ -12,4 +12,10 @@ export type PendingContraction = {
   shims: string[];
 };
 
-export const PENDING_CONTRACTIONS: PendingContraction[] = [];
+export const PENDING_CONTRACTIONS: PendingContraction[] = [
+  {
+    expand: '2026-11-21-eval-run-verdict',
+    oldShape: 'eval_runs.passed',
+    shims: [],
+  },
+];

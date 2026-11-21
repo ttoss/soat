@@ -109,24 +109,3 @@ export const aggregateScores = (args: {
     scored_item_count: scored.length,
   };
 };
-
-/**
- * The run-level verdict.
- *
- * Gates on the **pass rate**, never on a pooled mean: pooling 0/1 binaries with
- * 0–1 judge fractions produces a unit-less number whose meaning shifts whenever
- * a scorer is added — a gate value nobody can reason about
- * (the evaluations module doc — Pass semantics).
- *
- * `null` when the Eval declares no threshold (it reports without gating), and
- * `false` when a threshold exists but nothing was scorable — a run that
- * measured nothing must not read as a pass.
- */
-export const resolveRunPassed = (args: {
-  passThreshold: number | null;
-  aggregate: AggregateScores;
-}): boolean | null => {
-  if (args.passThreshold === null) return null;
-  if (args.aggregate.pass_rate === null) return false;
-  return args.aggregate.pass_rate >= args.passThreshold;
-};

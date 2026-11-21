@@ -117,9 +117,13 @@ export class EvalRun extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare aggregateScores: object | null;
 
-  /** Null when the Eval carries no `passThreshold`. */
-  @Column({ type: DataType.BOOLEAN, allowNull: true })
-  declare passed: boolean | null;
+  /** `supported` | `refuted` | `insufficient`; null without a threshold. */
+  @Column({ type: DataType.STRING(16), allowNull: true, defaultValue: null })
+  declare verdict: string | null;
+
+  /** Why the run settled on `verdict`, one entry per judged scope. */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare verdictReasons: unknown[] | null;
 
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare itemCount: number;

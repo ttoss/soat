@@ -24,9 +24,10 @@ import {
 import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
 import { runJudgeCompletion } from './evaluationJudge';
 import { buildRunAggregate } from './evaluationRunAggregate';
-import { resolveRunPassed } from './evaluationScorerAggregation';
+import type { EvalRunDefinition } from './evaluationRunDefinition';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
 import { runToolScorerCall } from './evaluationToolScorer';
+import { runVerdict } from './evaluationVerdict';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { type StoredError, toStoredErrorKeepingMessage } from './storedError';
 import type { WorkAuthority } from './workAuthority';
@@ -360,11 +361,11 @@ export const recountEvalRunProgress = async (args: {
 
 // ── Finalization ───────────────────────────────────────────────────────────
 
-/** What finalize reads off the run's definition: the gate and grouping key. */
-export type EvalSettlement = {
-  passThreshold: number | null;
-  groupBy: string | null;
-};
+/** What finalize reads off the run's definition: the gate, grouping and evidence. */
+export type EvalSettlement = Pick<
+  EvalRunDefinition,
+  'passThreshold' | 'groupBy' | 'evidence'
+>;
 
 /**
  * Rolls a run's persisted results up to its terminal state and fires
@@ -389,8 +390,8 @@ export const finalizeEvalRun = async (args: {
     results,
   });
 
-  const passed = resolveRunPassed({
-    passThreshold: args.settlement.passThreshold,
+  const { verdict, reasons } = runVerdict({
+    settlement: args.settlement,
     aggregate,
   });
 
@@ -401,7 +402,8 @@ export const finalizeEvalRun = async (args: {
   await args.run.update({
     status: 'completed',
     aggregateScores: aggregate,
-    passed,
+    verdict,
+    verdictReasons: reasons,
     // The bag is only needed while items execute, and a finished run is a
     // report that outlives the work.
     toolContext: null,
@@ -411,11 +413,11 @@ export const finalizeEvalRun = async (args: {
   });
 
   log(
-    'finalizeEvalRun: run=%s scored=%d errored=%d passed=%s',
+    'finalizeEvalRun: run=%s scored=%d errored=%d verdict=%s',
     args.run.publicId,
     aggregate.scored_item_count,
     erroredCount,
-    passed
+    verdict
   );
 
   await emitEvalRunEvent({

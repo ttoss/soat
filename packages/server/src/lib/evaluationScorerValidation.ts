@@ -83,7 +83,7 @@ type ScorerCheck = (args: {
 
 // Required with no default: a judge emits a continuous score, so nothing about
 // it says where "good enough" is, and a defaulted cutoff would silently decide
-// the gate every run-level `passed` is computed from.
+// the gate every run-level `verdict` is computed from.
 
 /**
  * The per-type config rules, keyed by type so a new entry in

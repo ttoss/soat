@@ -3,7 +3,7 @@
  *
  * This event plus the verdict it carries **is** the promotion gate consumed by
  * the agents module's eval-gated promotion: a deploy pipeline subscribes, reads
- * `passed`, and promotes or aborts. That is why the payload is the run record,
+ * `verdict`, and promotes or aborts. That is why the payload is the run record,
  * verdict and aggregates included, rather than only an id to fetch — a gate
  * that has to make a second call to learn its answer is a gate that can fail
  * open when the second call does.

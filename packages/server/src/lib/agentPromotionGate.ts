@@ -27,7 +27,7 @@ type AgentRef = {
 };
 
 /** A run is only evidence once it has finished and reported a verdict. */
-const PASSING_RUN_STATUS = 'completed';
+const COMPLETED_RUN_STATUS = 'completed';
 
 /**
  * Validates the `promotion_gate` field's shape, independent of transport.
@@ -86,13 +86,13 @@ export const resolvePromotionGate = async (args: {
 };
 
 /**
- * The newest passing run of the gate's eval against one agent version, or null.
- *
- * Matching is on the run's own `agentPublicId` and pinned `agentVersion`,
- * which every item of that run executed against: a green run of another agent
- * or version is not evidence, and a run that recorded no agent matches none.
+ * The run that speaks for one version of this agent: the newest `completed`
+ * run of the gate's eval pinned to that version **and recorded against this
+ * agent**, whatever its verdict. A newer run that did not support the claim
+ * revokes an older one that did, and a run of another agent that happens to
+ * share the version number — an eval can be repointed — is not evidence.
  */
-const findPassingGateRun = async (args: {
+const findSpeakingRun = async (args: {
   gate: string;
   agent: AgentRef;
   version: number;
@@ -111,10 +111,12 @@ const findPassingGateRun = async (args: {
       evalId: evaluation.id as number,
       agentPublicId: args.agent.publicId,
       agentVersion: args.version,
-      status: PASSING_RUN_STATUS,
-      passed: true,
+      status: COMPLETED_RUN_STATUS,
     },
-    order: [['createdAt', 'DESC']],
+    order: [
+      ['createdAt', 'DESC'],
+      ['id', 'DESC'],
+    ],
   });
 };
 
@@ -122,10 +124,11 @@ const findPassingGateRun = async (args: {
  * Enforces the gate, returning the run row id to record on the promoted
  * version — or null when the release carries no gate.
  *
- * Fails closed: any reason the evidence cannot be produced (no run, no passing
- * run, a run against another version, a deleted eval) is the same `409`. The
- * point of the gate is that promotion is impossible without a green run, so
- * "cannot tell" must never resolve to "allowed".
+ * Fails closed: the speaking run must read `supported`. No run, a run whose
+ * verdict is `insufficient` or `refuted`, a run of another agent or version, a
+ * run that recorded no agent or verdict, or a deleted eval is the same
+ * `409`. The point of the gate is that promotion is impossible without
+ * supporting evidence, so "cannot tell" must never resolve to "allowed".
  */
 export const requirePromotionGate = async (args: {
   gate: string | null;
@@ -141,17 +144,27 @@ export const requirePromotionGate = async (args: {
     args.version
   );
 
-  const run = await findPassingGateRun({
+  const run = await findSpeakingRun({
     gate: args.gate,
     agent: args.agent,
     version: args.version,
   });
 
-  if (!run) {
+  if (run?.verdict !== 'supported') {
     throw new DomainError(
       'PROMOTION_GATE_UNMET',
-      `Promotion gate '${args.gate}' has no passing eval run against version ${args.version} of agent '${args.agent.publicId}'.`,
-      { promotion_gate: args.gate, agent_version: args.version }
+      run
+        ? `Promotion gate '${args.gate}' reads ${String(run.verdict)} on its newest run against version ${args.version} of agent '${args.agent.publicId}'.`
+        : `Promotion gate '${args.gate}' has no completed eval run against version ${args.version} of agent '${args.agent.publicId}'.`,
+      {
+        promotion_gate: args.gate,
+        agent_version: args.version,
+        ...(run && {
+          eval_run_id: run.publicId,
+          verdict: run.verdict,
+          verdict_reasons: run.verdictReasons,
+        }),
+      }
     );
   }
 

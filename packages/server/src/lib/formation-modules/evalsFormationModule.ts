@@ -26,6 +26,7 @@ export const evalsFormationModule = defineFormationModule({
       passThreshold: properties.pass_threshold,
       groupBy: properties.group_by,
       policyIds: toNullableArray<string>(properties.policy_ids),
+      evidence: properties.evidence,
     });
   },
 
@@ -45,6 +46,7 @@ export const evalsFormationModule = defineFormationModule({
           : toNullableNumber(properties.pass_threshold),
       groupBy: properties.group_by,
       policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
+      evidence: properties.evidence,
     });
   },
 
