@@ -77,7 +77,10 @@ sessionSubResourcesRouter.post(
       sessionId: ctx.params.session_id,
       message: body.message,
       documentId: body.document_id,
-      toolContext: parseToolContextBody(body.tool_context),
+      toolContext: parseToolContextBody({
+        raw: body.tool_context,
+        reservedPrefix: 'refuse',
+      }),
       authUser: ctx.authUser,
       authority: captureAuthority({ authUser: ctx.authUser }),
       idempotencyKey: idempotencyKeyOf(ctx),
@@ -116,7 +119,10 @@ sessionSubResourcesRouter.post(
       agentId,
       sessionId: ctx.params.session_id,
       model: body.model,
-      toolContext: parseToolContextBody(body.tool_context),
+      toolContext: parseToolContextBody({
+        raw: body.tool_context,
+        reservedPrefix: 'refuse',
+      }),
       authority: captureAuthority({ authUser: ctx.authUser }),
       authUser: ctx.authUser,
     };
@@ -229,7 +235,10 @@ sessionSubResourcesRouter.post(
       agentPublicId: body.agent_id,
       name: body.name,
       tags: assertNoSystemTagKeys(body.tags),
-      toolContext: parseNullableToolContextBody(body.tool_context),
+      toolContext: parseNullableToolContextBody({
+        raw: body.tool_context,
+        reservedPrefix: 'refuse',
+      }),
     });
   }
 );

@@ -485,7 +485,10 @@ evaluationsRouter.post('/evals/:eval_id/runs', async (ctx: Context) => {
     // Rejected here, before the run row exists: a queued run answers 201 long
     // before it scores anything.
     metadata: parseMetadataBag(body.metadata),
-    toolContext: parseToolContextBody(body.tool_context),
+    toolContext: parseToolContextBody({
+      raw: body.tool_context,
+      reservedPrefix: 'refuse',
+    }),
   });
 });
 

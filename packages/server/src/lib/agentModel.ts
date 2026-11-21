@@ -21,6 +21,7 @@ import {
   resolveVendorModel,
 } from './aiProviderModelAliases';
 import {
+  type AmbientCredentialUser,
   assertAmbientCredentialsAllowed,
   usesAnthropicTenantEndpoint,
 } from './ambientCredentials';
@@ -34,6 +35,8 @@ import { bedrockModelCaches, withoutBedrockCachePoints } from './promptCaching';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
+  /** The public id of the project the provider record belongs to. */
+  project: string;
   provider: AiProviderSlug;
   secretValue: string | null;
   model: string;
@@ -124,14 +127,15 @@ const refuseUnusableLinkedSecret = (args: {
  * — passing no credentials makes it throw a SigV4 error instead.
  *
  * That chain resolves the *deployment's* credentials, so for a tenant-written
- * provider record it is gated on the operator's opt-in. `allowAmbientCredentials`
- * is for the embedding stack alone, whose region and key are operator settings
- * no tenant writes — an instance role is the intended credential there.
+ * provider record it is gated on the operator's opt-in for that project.
+ * `{ operator: true }` is for the embedding stack alone, whose region and key
+ * are operator settings no tenant writes — an instance role is the intended
+ * credential there.
  */
 export const resolveBedrockCredentials = (args: {
   secretValue: string | null;
   config?: Record<string, unknown>;
-  allowAmbientCredentials?: boolean;
+  ambientFor: AmbientCredentialUser;
 }): BedrockCredentials => {
   assertNoConfigCredential({
     config: args.config,
@@ -155,12 +159,15 @@ export const resolveBedrockCredentials = (args: {
       sessionToken: secret.sessionToken,
     };
   }
-  if (!args.allowAmbientCredentials) {
+  if ('project' in args.ambientFor) {
     refuseUnusableLinkedSecret({
       provider: 'bedrock',
       secretValue: args.secretValue,
     });
-    assertAmbientCredentialsAllowed({ provider: 'bedrock' });
+    assertAmbientCredentialsAllowed({
+      provider: 'bedrock',
+      project: args.ambientFor.project,
+    });
   }
   return { region, credentialProvider: fromNodeProviderChain() };
 };
@@ -171,7 +178,10 @@ export const resolveBedrockCredentials = (args: {
  * Bedrock-Anthropic path — see `modules/ai-providers.md`, Bedrock request path.
  */
 const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
-  const options = resolveBedrockCredentials(args);
+  const options = resolveBedrockCredentials({
+    ...args,
+    ambientFor: { project: args.project },
+  });
   const model = createAmazonBedrock({ ...options, fetch: egressGuardedFetch })(
     args.model
   );
@@ -278,6 +288,7 @@ const resolveVertexProject = (args: {
  * `google-auth-library` resolves on its own.
  */
 export const resolveVertexSettings = (args: {
+  project: string;
   secretValue: string | null;
   config?: Record<string, unknown>;
 }): VertexSettings => {
@@ -298,7 +309,10 @@ export const resolveVertexSettings = (args: {
       provider: 'vertex',
       secretValue: args.secretValue,
     });
-    assertAmbientCredentialsAllowed({ provider: 'vertex' });
+    assertAmbientCredentialsAllowed({
+      provider: 'vertex',
+      project: args.project,
+    });
   }
 
   const project = resolveVertexProject({ secret, config: args.config });
@@ -395,7 +409,10 @@ const buildAnthropicModel = (args: BuildModelArgs): LanguageModel => {
       fetch: egressGuardedFetch,
     })(args.model);
   }
-  assertAmbientCredentialsAllowed({ provider: 'anthropic' });
+  assertAmbientCredentialsAllowed({
+    provider: 'anthropic',
+    project: args.project,
+  });
   requireAnthropicFederationSettings();
   return createAnthropic({
     apiKey: '',
@@ -439,6 +456,20 @@ const buildSimpleOpenAiCompatModel = (args: BuildModelArgs): LanguageModel => {
 
 type ProviderBuilder = (args: BuildModelArgs) => LanguageModel;
 
+/** A vendor whose only credential is the record's API key. */
+const keyedBuilder = (
+  create: (settings: {
+    apiKey: string;
+    fetch: typeof egressGuardedFetch;
+  }) => (model: string) => LanguageModel
+): ProviderBuilder => {
+  return (a) => {
+    return create({ apiKey: a.secretValue ?? '', fetch: egressGuardedFetch })(
+      a.model
+    );
+  };
+};
+
 const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   openai: (a) => {
     return createOpenAI({
@@ -448,24 +479,9 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
     })(a.model);
   },
   anthropic: buildAnthropicModel,
-  google: (a) => {
-    return createGoogleGenerativeAI({
-      apiKey: a.secretValue ?? '',
-      fetch: egressGuardedFetch,
-    })(a.model);
-  },
-  xai: (a) => {
-    return createXai({
-      apiKey: a.secretValue ?? '',
-      fetch: egressGuardedFetch,
-    })(a.model);
-  },
-  groq: (a) => {
-    return createGroq({
-      apiKey: a.secretValue ?? '',
-      fetch: egressGuardedFetch,
-    })(a.model);
-  },
+  google: keyedBuilder(createGoogleGenerativeAI),
+  xai: keyedBuilder(createXai),
+  groq: keyedBuilder(createGroq),
   azure: buildAzureModel,
   bedrock: buildBedrockModel,
   vertex: buildVertexModel,
@@ -476,6 +492,8 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
 
 /** A provider row as `resolveAiProviderSecret` hands it out. */
 export type ModelProvider = ModelAliasing & {
+  /** The public id of the project the record belongs to. */
+  projectPublicId: string;
   provider: AiProviderSlug;
   secretValue: string | null;
   baseUrl?: string;
@@ -499,6 +517,7 @@ export const buildModel = (args: {
   }
   const vendorModel = resolveVendorModel(args);
   const model = builder({
+    project: aiProvider.projectPublicId,
     provider: aiProvider.provider,
     secretValue: aiProvider.secretValue,
     model: vendorModel,

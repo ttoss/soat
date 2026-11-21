@@ -328,7 +328,10 @@ approvalsRouter.post(
       id: ctx.params.approval_id,
       editedArguments: body.arguments ?? null,
       resolvedBy: requestPrincipalFromCtx(ctx),
-      toolContext: parseToolContextBody(body.tool_context),
+      toolContext: parseToolContextBody({
+        raw: body.tool_context,
+        reservedPrefix: 'refuse',
+      }),
     });
 
     ctx.body = item;

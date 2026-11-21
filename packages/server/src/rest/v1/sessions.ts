@@ -148,7 +148,10 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     actorId: body.actor_id,
     autoGenerate: body.auto_generate,
-    toolContext: parseNullableToolContextBody(body.tool_context),
+    toolContext: parseNullableToolContextBody({
+      raw: body.tool_context,
+      reservedPrefix: 'refuse',
+    }),
     inactivityTtlSeconds: body.inactivity_ttl_seconds,
     messageDelaySeconds: body.message_delay_seconds,
     maxContextMessages: readMaxContextMessages(body.max_context_messages),
@@ -243,7 +246,10 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
     name: body.name,
     status: body.status,
     autoGenerate: body.auto_generate,
-    toolContext: parseNullableToolContextBody(body.tool_context),
+    toolContext: parseNullableToolContextBody({
+      raw: body.tool_context,
+      reservedPrefix: 'refuse',
+    }),
     inactivityTtlSeconds: body.inactivity_ttl_seconds,
     messageDelaySeconds: body.message_delay_seconds,
     maxContextMessages: readMaxContextMessages(body.max_context_messages),

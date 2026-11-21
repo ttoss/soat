@@ -146,7 +146,10 @@ const buildGenerationArgs = (args: {
       typeof body.max_call_depth === 'number' ? body.max_call_depth : undefined,
     authority: captureAuthority({ authUser: ctx.authUser }),
     authUser: ctx.authUser,
-    toolContext: parseToolContextBody(body.tool_context),
+    toolContext: parseToolContextBody({
+      raw: body.tool_context,
+      reservedPrefix: 'refuse',
+    }),
     actorId: ctx.authUser?.actor ?? undefined,
     knowledgeConfig: toObjectOrUndefined(body.knowledge_config),
     actionId: typeof body.action_id === 'string' ? body.action_id : undefined,

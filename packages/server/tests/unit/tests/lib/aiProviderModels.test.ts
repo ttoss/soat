@@ -3,13 +3,22 @@ import { createServer } from 'node:http';
 
 import { DomainError } from 'src/errors';
 import type { BedrockCredentials } from 'src/lib/agentModel';
-import type { BedrockListArgs, FetchLike } from 'src/lib/aiProviderModels';
+import type {
+  BedrockListArgs,
+  EnumerateProviderModelsArgs,
+  FetchLike,
+} from 'src/lib/aiProviderModels';
 import {
   enumerateProviderModels,
   isModelListingSupported,
 } from 'src/lib/aiProviderModels';
 import { toBedrockClientConfig } from 'src/lib/bedrockModelCatalog';
 import { PROTOCOL_ANSWER_MAX_BYTES } from 'src/lib/requestBounds';
+
+/** Enumerates for a provider record of one tenant project. */
+const enumerate = (args: Omit<EnumerateProviderModelsArgs, 'project'>) => {
+  return enumerateProviderModels({ project: 'proj_tenant', ...args });
+};
 
 /**
  * A `fetch` stand-in. The HTTP call to a model provider is the one boundary
@@ -111,7 +120,7 @@ describe('enumerateProviderModels — against a real HTTP server', () => {
   });
 
   test('lists models over real HTTP, sending the credential as a Bearer token', async () => {
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'custom',
       baseUrl,
       secretValue: 'sk-local',
@@ -124,7 +133,7 @@ describe('enumerateProviderModels — against a real HTTP server', () => {
   });
 
   test('refuses a listing over PROTOCOL_ANSWER_MAX_BYTES', async () => {
-    const listing = enumerateProviderModels({
+    const listing = enumerate({
       provider: 'custom',
       baseUrl: baseUrl.replace('/v1', '/oversized/v1'),
       secretValue: 'sk-local',
@@ -137,7 +146,7 @@ describe('enumerateProviderModels — against a real HTTP server', () => {
   });
 
   test('refuses a listing cut mid-body', async () => {
-    const listing = enumerateProviderModels({
+    const listing = enumerate({
       provider: 'custom',
       baseUrl: baseUrl.replace('/v1', '/cut/v1'),
       secretValue: 'sk-local',
@@ -178,7 +187,7 @@ describe('enumerateProviderModels — openai-compatible', () => {
       },
     });
 
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'openai',
       secretValue: 'sk-test',
       fetchImpl,
@@ -196,7 +205,7 @@ describe('enumerateProviderModels — openai-compatible', () => {
       'https://gateway.internal/v1/models': { body: { data: [] } },
     });
 
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'gateway',
       baseUrl: 'https://gateway.internal/v1',
       secretValue: 'sk-test',
@@ -215,11 +224,7 @@ describe('enumerateProviderModels — openai-compatible', () => {
     });
 
     await expect(
-      enumerateProviderModels({
-        provider: 'openai',
-        secretValue: 'sk-bad',
-        fetchImpl,
-      })
+      enumerate({ provider: 'openai', secretValue: 'sk-bad', fetchImpl })
     ).rejects.toThrow(DomainError);
   });
 });
@@ -240,7 +245,7 @@ describe('enumerateProviderModels — anthropic', () => {
       },
     });
 
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'anthropic',
       secretValue: 'sk-ant-test',
       fetchImpl,
@@ -290,7 +295,7 @@ describe('enumerateProviderModels — anthropic with no linked secret', () => {
       const { fetchImpl, calls } = fakeFetch({
         [MODELS_URL]: { body: { data: [{ id: 'claude-opus-5-5' }] } },
       });
-      const models = await enumerateProviderModels({
+      const models = await enumerate({
         provider: 'anthropic',
         secretValue: null,
         fetchImpl,
@@ -313,7 +318,7 @@ describe('enumerateProviderModels — anthropic with no linked secret', () => {
     await withAmbient(undefined, async () => {
       const { fetchImpl, calls } = fakeFetch({});
       await expect(
-        enumerateProviderModels({
+        enumerate({
           provider: 'anthropic',
           secretValue: null,
           fetchImpl,
@@ -331,7 +336,7 @@ describe('enumerateProviderModels — anthropic with no linked secret', () => {
     await withAmbient('true', async () => {
       const { fetchImpl, calls } = fakeFetch({});
       await expect(
-        enumerateProviderModels({
+        enumerate({
           provider: 'anthropic',
           secretValue: null,
           baseUrl: 'https://proxy.example.com/v1',
@@ -373,7 +378,7 @@ describe('enumerateProviderModels — vertex', () => {
       },
     });
 
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'vertex',
       secretValue: VERTEX_KEY_SECRET,
       config: { project: 'naturali-504614', location: 'us-central1' },
@@ -431,7 +436,7 @@ describe('enumerateProviderModels — vertex', () => {
       },
     });
 
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'vertex',
       secretValue: VERTEX_KEY_SECRET,
       config: { project: 'p', location: 'us-central1' },
@@ -464,7 +469,7 @@ describe('enumerateProviderModels — vertex', () => {
       },
     });
 
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'vertex',
       secretValue: VERTEX_KEY_SECRET,
       config: { project: 'p' },
@@ -495,7 +500,7 @@ describe('enumerateProviderModels — vertex', () => {
       },
     });
 
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'vertex',
       secretValue: VERTEX_KEY_SECRET,
       config: { project: 'naturali-504614', location: 'global' },
@@ -528,7 +533,7 @@ describe('enumerateProviderModels — vertex', () => {
       },
     });
 
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'vertex',
       secretValue: VERTEX_KEY_SECRET,
       config: { project: 'p', location: 'eu' },
@@ -546,7 +551,7 @@ describe('enumerateProviderModels — vertex', () => {
 
   test('refuses to guess when no project is configured', async () => {
     await expect(
-      enumerateProviderModels({
+      enumerate({
         provider: 'vertex',
         secretValue: VERTEX_KEY_SECRET,
         config: {},
@@ -561,7 +566,7 @@ describe('enumerateProviderModels — vertex', () => {
 
 describe('enumerateProviderModels — bedrock', () => {
   test('maps foundation models, including the inference-profile prefix', async () => {
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'bedrock',
       secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
@@ -596,7 +601,7 @@ describe('enumerateProviderModels — bedrock', () => {
   });
 
   test('reports a legacy lifecycle so the catalog can flag a sunset model', async () => {
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'bedrock',
       secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
@@ -615,7 +620,7 @@ describe('enumerateProviderModels — bedrock', () => {
 
   test('passes the configured region through to the AWS call', async () => {
     let seenRegion: string | undefined;
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'bedrock',
       secretValue: 'ABSKexample',
       config: { region: 'sa-east-1' },
@@ -652,7 +657,7 @@ describe('enumerateProviderModels — google ai studio', () => {
       },
     });
 
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'google',
       secretValue: 'AIza-test',
       fetchImpl,
@@ -679,7 +684,7 @@ describe('enumerateProviderModels — malformed payloads', () => {
       },
     });
 
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'openai',
       secretValue: 'sk-test',
       fetchImpl,
@@ -697,11 +702,7 @@ describe('enumerateProviderModels — malformed payloads', () => {
     };
 
     await expect(
-      enumerateProviderModels({
-        provider: 'openai',
-        secretValue: 'sk-test',
-        fetchImpl,
-      })
+      enumerate({ provider: 'openai', secretValue: 'sk-test', fetchImpl })
     ).rejects.toThrow(DomainError);
   });
 
@@ -711,7 +712,7 @@ describe('enumerateProviderModels — malformed payloads', () => {
     });
 
     await expect(
-      enumerateProviderModels({
+      enumerate({
         provider: 'anthropic',
         secretValue: 'sk-ant-test',
         fetchImpl,
@@ -774,7 +775,7 @@ describe('toBedrockClientConfig', () => {
 describe('enumerateProviderModels — listing honors the linked secret', () => {
   test('bedrock signs the control-plane call with the secret IAM credentials', async () => {
     let seen: BedrockListArgs | undefined;
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'bedrock',
       config: { region: 'us-east-1' },
       secretValue: JSON.stringify({
@@ -801,7 +802,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
 
   test('bedrock carries a Bedrock API key as a bearer token', async () => {
     let seen: BedrockListArgs | undefined;
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'bedrock',
       config: { region: 'us-east-1' },
       secretValue: 'ABSKexample',
@@ -825,7 +826,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
     'a credential-less %s record cannot list either',
     async (provider) => {
       await expect(
-        enumerateProviderModels({
+        enumerate({
           provider,
           config: { region: 'us-east-1', project: 'p' },
           listFoundationModels: () => {
@@ -847,7 +848,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
     process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS = 'true';
     try {
       let seen: BedrockListArgs | undefined;
-      await enumerateProviderModels({
+      await enumerate({
         provider: 'bedrock',
         config: { region: 'us-east-1' },
         listFoundationModels: (args) => {
@@ -877,7 +878,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
     });
     let seenOptions: unknown;
 
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'vertex',
       config: { project: 'p' },
       secretValue: JSON.stringify({
@@ -912,7 +913,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
     // Generation resolves `config.project ?? secret.project_id`, so a record
     // carrying only a key file generates fine — and listing must not throw on
     // the same record.
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'vertex',
       config: {},
       secretValue: JSON.stringify({
@@ -935,7 +936,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
     // back out of the request. Refusing the record without it is what proves the
     // field is resolved rather than ignored.
     await expect(
-      enumerateProviderModels({
+      enumerate({
         provider: 'vertex',
         config: {},
         secretValue: JSON.stringify({
@@ -956,7 +957,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
     // supported by this API"), and express mode holds no other credential.
     // Failing with a named reason beats forwarding Google's 401.
     await expect(
-      enumerateProviderModels({
+      enumerate({
         provider: 'vertex',
         config: {},
         secretValue: 'AIzaExpressKey',
@@ -969,7 +970,7 @@ describe('enumerateProviderModels — listing honors the linked secret', () => {
 describe('enumerateProviderModels — credentials and region', () => {
   test('refuses to call a provider with no API key linked', async () => {
     await expect(
-      enumerateProviderModels({
+      enumerate({
         provider: 'openai',
         secretValue: null,
         fetchImpl: fakeFetch({}).fetchImpl,
@@ -982,7 +983,7 @@ describe('enumerateProviderModels — credentials and region', () => {
     process.env.AWS_REGION = 'eu-west-1';
     try {
       let seenRegion: string | undefined;
-      await enumerateProviderModels({
+      await enumerate({
         provider: 'bedrock',
         secretValue: 'ABSKexample',
         listFoundationModels: (args) => {
@@ -1007,7 +1008,7 @@ describe('enumerateProviderModels — credentials and region', () => {
     delete process.env.AWS_DEFAULT_REGION;
     try {
       await expect(
-        enumerateProviderModels({
+        enumerate({
           provider: 'bedrock',
           secretValue: 'ABSKexample',
           listFoundationModels: () => {
@@ -1024,7 +1025,7 @@ describe('enumerateProviderModels — credentials and region', () => {
   });
 
   test('omits fields a Bedrock summary does not report', async () => {
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'bedrock',
       secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
@@ -1042,7 +1043,7 @@ describe('enumerateProviderModels — credentials and region', () => {
   });
 
   test('reports a deprecated Bedrock lifecycle', async () => {
-    const models = await enumerateProviderModels({
+    const models = await enumerate({
       provider: 'bedrock',
       secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
@@ -1069,7 +1070,7 @@ describe('enumerateProviderModels — credentials and region', () => {
       'https://gateway.internal/v1/models': { body: { data: [] } },
     });
 
-    await enumerateProviderModels({
+    await enumerate({
       provider: 'custom',
       baseUrl: 'https://gateway.internal/v1/',
       secretValue: 'sk-test',
@@ -1083,14 +1084,14 @@ describe('enumerateProviderModels — credentials and region', () => {
 describe('enumerateProviderModels — unsupported', () => {
   test('rejects a provider that cannot enumerate models', async () => {
     await expect(
-      enumerateProviderModels({ provider: 'azure', secretValue: 'k' })
+      enumerate({ provider: 'azure', secretValue: 'k' })
     ).rejects.toThrow(DomainError);
   });
 
   test('rejects ollama, whose model list is whatever that host pulled', async () => {
-    await expect(
-      enumerateProviderModels({ provider: 'ollama' })
-    ).rejects.toThrow(DomainError);
+    await expect(enumerate({ provider: 'ollama' })).rejects.toThrow(
+      DomainError
+    );
   });
 });
 
@@ -1110,7 +1111,7 @@ describe('model listing egress and disclosure', () => {
   test('refuses a base_url that is not publicly routable', async () => {
     delete process.env.TOOL_EGRESS_ALLOWED_HOSTS;
     await expect(
-      enumerateProviderModels({
+      enumerate({
         provider: 'openai',
         secretValue: 'sk-test',
         baseUrl: 'http://169.254.169.254/latest',
@@ -1120,7 +1121,7 @@ describe('model listing egress and disclosure', () => {
 
   test('refuses a bedrock region that would move the host', async () => {
     await expect(
-      enumerateProviderModels({
+      enumerate({
         provider: 'bedrock',
         secretValue: null,
         config: { region: 'evil.example.com/' },
@@ -1140,19 +1141,11 @@ describe('model listing egress and disclosure', () => {
     });
 
     await expect(
-      enumerateProviderModels({
-        provider: 'openai',
-        secretValue: 'sk-test',
-        fetchImpl,
-      })
+      enumerate({ provider: 'openai', secretValue: 'sk-test', fetchImpl })
     ).rejects.toThrow(/HTTP 403/);
 
     await expect(
-      enumerateProviderModels({
-        provider: 'openai',
-        secretValue: 'sk-test',
-        fetchImpl,
-      })
+      enumerate({ provider: 'openai', secretValue: 'sk-test', fetchImpl })
     ).rejects.not.toThrow(/secret-from-an-internal-service/);
   });
 });
