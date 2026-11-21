@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.123.0](https://github.com/ttoss/soat/compare/v0.122.0...v0.123.0) (2026-11-21)
+
+### Features
+
+* **sdk:** export the server's ERROR_CODES registry (code → status) ([#2063](https://github.com/ttoss/soat/issues/2063)) ([9fe21fe](https://github.com/ttoss/soat/commit/9fe21fe5c78d8494c86e4a6fd75272303ab227b5))
+
 # [0.122.0](https://github.com/ttoss/soat/compare/v0.121.0...v0.122.0) (2026-11-20)
 
 **Note:** Version bump only for package @soat/sdk

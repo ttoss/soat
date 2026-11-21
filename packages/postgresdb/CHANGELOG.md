@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.123.0](https://github.com/ttoss/soat/compare/v0.122.0...v0.123.0) (2026-11-21)
+
+* feat(evaluations)!: an eval run's verdict reads the evidence; a promotion gate requires supported (#2066) ([aef1026](https://github.com/ttoss/soat/commit/aef1026a3f6bfab68805c821b0227752be5c03ed)), closes [#2066](https://github.com/ttoss/soat/issues/2066)
+
+### BREAKING CHANGES
+
+* `passed` is removed from eval runs and the `eval_runs.*`
+  payload; read `verdict`. A gate on a small suite reads `insufficient` and
+  blocks; a threshold of 1 can never be `supported`.
+
 # [0.122.0](https://github.com/ttoss/soat/compare/v0.121.0...v0.122.0) (2026-11-20)
 
 ### Features

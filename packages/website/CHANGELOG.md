@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.123.0](https://github.com/ttoss/soat/compare/v0.122.0...v0.123.0) (2026-11-21)
+
+* feat(evaluations)!: an eval run's verdict reads the evidence; a promotion gate requires supported (#2066) ([aef1026](https://github.com/ttoss/soat/commit/aef1026a3f6bfab68805c821b0227752be5c03ed)), closes [#2066](https://github.com/ttoss/soat/issues/2066)
+* feat(tools)!: relay a tool's structured error by who registered it (#2062) ([f5707e7](https://github.com/ttoss/soat/commit/f5707e7ef00d339c9e67dab674132e2e9888fc95)), closes [#2062](https://github.com/ttoss/soat/issues/2062)
+
+### Features
+
+* **sdk:** export the server's ERROR_CODES registry (code → status) ([#2063](https://github.com/ttoss/soat/issues/2063)) ([9fe21fe](https://github.com/ttoss/soat/commit/9fe21fe5c78d8494c86e4a6fd75272303ab227b5))
+
+### BREAKING CHANGES
+
+* `passed` is removed from eval runs and the `eval_runs.*`
+  payload; read `verdict`. A gate on a small suite reads `insufficient` and
+  blocks; a threshold of 1 can never be `supported`.
+* a stored mcp tool or an http tool whose target answers a FORBIDDEN body is 502 MCP_TOOL_ERROR / TOOL_HTTP_ERROR, not a relayed 403.
+
 # [0.122.0](https://github.com/ttoss/soat/compare/v0.121.0...v0.122.0) (2026-11-20)
 
 ### Bug Fixes
