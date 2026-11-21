@@ -1903,6 +1903,25 @@ components:
                     description: >-
                       Condition block: keys are condition operators mapping to
                       context-key/value maps.
+                  denial:
+                    type: object
+                    nullable: true
+                    additionalProperties: false
+                    required:
+                      - code
+                      - message
+                    description: >-
+                      On a `Deny` only: the declared `code`, `message` and
+                      `meta` a request it denies answers. Only an unrestricted
+                      admin deploys one.
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      meta:
+                        type: object
+                        additionalProperties: true
 
     SecretResourceProperties:
       description: >-

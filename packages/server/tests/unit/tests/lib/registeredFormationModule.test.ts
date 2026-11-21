@@ -48,6 +48,7 @@ beforeAll(async () => {
     },
     keyPolicyBoundary: undefined,
     narrowed: false,
+    unrestricted: false,
     recordRefusal: () => {},
   };
 });

@@ -1,8 +1,15 @@
-import { initErrorHintOverrides } from '../errors';
+import {
+  declareDenialCodes,
+  initErrorHintOverrides,
+  parseDenialCodes,
+} from '../errors';
 import { initAdmission } from './admission';
 import { initBuiltinActionCatalog } from './builtinActionCatalog';
 import { initFormationResourceTypes } from './formationsRegistry';
-import { initIamRegistrations } from './iamRegistrations';
+import {
+  initIamRegistrations,
+  readIamRegistrationFile,
+} from './iamRegistrations';
 import { initMcpToolRegistrations } from './mcpToolRegistrations';
 
 /**
@@ -18,4 +25,6 @@ export const initDeploymentRegistrations = (): void => {
   initFormationResourceTypes();
   initAdmission();
   initErrorHintOverrides({ env: process.env });
+  const file = readIamRegistrationFile({ env: process.env });
+  declareDenialCodes({ codes: file ? parseDenialCodes(file) : new Map() });
 };

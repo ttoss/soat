@@ -120,12 +120,13 @@ A policy document is a JSON object of statements:
 
 ### Statement
 
-| Field       | Type       | Required | Description                                             |
-| ----------- | ---------- | -------- | ------------------------------------------------------- |
-| `effect`    | `string`   | Yes      | `"Allow"` or `"Deny"`                                   |
-| `action`    | `string[]` | Yes      | Actions this statement applies to (supports wildcards)  |
-| `resource`  | `string[]` | No       | SRNs this statement applies to (default: `["*"]`)       |
-| `condition` | `object`   | No       | Conditions that must be true for the statement to apply |
+| Field       | Type       | Required | Description                                                                                    |
+| ----------- | ---------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `effect`    | `string`   | Yes      | `"Allow"` or `"Deny"`                                                                          |
+| `action`    | `string[]` | Yes      | Actions this statement applies to (supports wildcards)                                         |
+| `resource`  | `string[]` | No       | SRNs this statement applies to (default: `["*"]`)                                              |
+| `condition` | `object`   | No       | Conditions that must be true for the statement to apply                                        |
+| `denial`    | `object`   | No       | On a `Deny`: the code and message a refusal it decides answers ([Denial codes](#denial-codes)) |
 
 Documents are managed globally via [Policies](./policies.md) and attached to users or API keys. Worked example: [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
 
@@ -447,6 +448,48 @@ Every `403 FORBIDDEN` has one shape, whoever was refused: the caller's credentia
 
 The `403`/`404` split on a write is about **which project**, not which resource. Being told plainly that one agent in a project you work in is off limits tells you nothing you could not already work out, so that stays `403`. A resource in a project none of your policies name is `404`: a `403` there would confirm it exists to someone with no business knowing it does — including to a caller whose policies name no project at all, for whom every project is someone else's. A denied write never says more than a denied read of the same resource would.
 
+### Denial codes
+
+A `Deny` statement may carry a `denial`, `{ code, message, meta? }`. When that statement decides a refusal, the `403` answers its `code` and `message` instead of `FORBIDDEN`, keeps `action`, `resource` and `denied_by`, and adds `meta`:
+
+```json
+{
+  "statement": [
+    { "effect": "Allow", "action": ["*"] },
+    {
+      "effect": "Deny",
+      "action": ["guardrails:*"],
+      "denial": {
+        "code": "PLAN_FEATURE_NOT_INCLUDED",
+        "message": "Guardrails are not included in this plan.",
+        "meta": { "feature": "guardrails" }
+      }
+    }
+  ]
+}
+```
+
+```json
+{
+  "error": {
+    "code": "PLAN_FEATURE_NOT_INCLUDED",
+    "message": "Guardrails are not included in this plan.",
+    "hint": "Upgrade the plan to one that includes the feature.",
+    "meta": {
+      "feature": "guardrails",
+      "action": "guardrails:ListGuardrails",
+      "resource": null,
+      "denied_by": { "type": "api_key", "id": "key_01HXYZ" }
+    }
+  }
+}
+```
+
+- The code must be one the deployment declares in `denial_codes` ([Configuration](#configuration)), which supplies its `hint`; any other is `400 VALIDATION_FAILED` at policy write. `meta` keys are snake_case and never `action`, `resource` or `denied_by`.
+- Only an unrestricted admin writes a policy carrying a `denial`, over REST or a [formation](./formations.md); anyone else gets `403 POLICY_DENIAL_RESERVED`. An [IAM token](#iam-tokens)'s inline policy carries none (`400 IAM_TOKEN_POLICY_INVALID`).
+- The first matching `Deny` in the refusing set decides; a `Deny` without a `denial`, or a refusal no `Deny` matched, answers `FORBIDDEN`. An agent's own `policy_ids` answer `FORBIDDEN`.
+- It holds on every path the check runs: REST reads and writes, a read of one resource within the caller's projects (`403`, not `404`), the MCP endpoint, a `builtin` tool's result and a formation's apply.
+
 A credential scoped to one project reaches nothing outside it, so every resource elsewhere is beyond it in exactly that sense: addressed by id, it answers the `404` a made-up id gets, and nothing in the response names its project. `403 API_KEY_PROJECT_SCOPE` is kept for a request that names another project itself, which leaks nothing the caller did not send, and for a tool or agent an accepted [share](./shares.md) lets the credential's project read.
 
 ## Cross-project shares
@@ -678,10 +721,10 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
 
 ## Configuration
 
-| Environment Variable                | Required | Description                                                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `IAM_REGISTRATIONS_CONFIG`          | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`), [MCP servers](#registered-mcp-servers) (`mcp_tools`), [the builtin catalog](#the-builtin-catalog) (`builtin_actions`) and an [admission service](#admission) (`admission`). Unset (the default) registers none and offers every native action. |
-| `SOAT_RESERVED_TOOL_CONTEXT_PREFIX` | No       | A `tool_context` key prefix (e.g. `platform_`) only an [IAM token's layer](#pinning-a-tool_context-layer) carries: stripped from a caller's bag on a call, refused on a write that stores one. It must fit the `tool_context` key grammar and matches in any casing. Unset reserves none.                                                        |
+| Environment Variable                | Required | Description                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `IAM_REGISTRATIONS_CONFIG`          | No       | Path to a JSON file registering [deployment actions](#deployment-registered-actions) (`modules`), [MCP servers](#registered-mcp-servers) (`mcp_tools`), [the builtin catalog](#the-builtin-catalog) (`builtin_actions`), an [admission service](#admission) (`admission`) and [denial codes](#denial-codes) (`denial_codes`). Unset (the default) registers none and offers every native action. |
+| `SOAT_RESERVED_TOOL_CONTEXT_PREFIX` | No       | A `tool_context` key prefix (e.g. `platform_`) only an [IAM token's layer](#pinning-a-tool_context-layer) carries: stripped from a caller's bag on a call, refused on a write that stores one. It must fit the `tool_context` key grammar and matches in any casing. Unset reserves none.                                                                                                        |
 
 ```json
 {
@@ -729,8 +772,14 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
       "timeout_seconds": 5
     },
     "actions": ["triggers:CreateTrigger", "triggers:UpdateTrigger"]
-  }
+  },
+  "denial_codes": [
+    {
+      "code": "PLAN_FEATURE_NOT_INCLUDED",
+      "hint": "Upgrade the plan to one that includes the feature."
+    }
+  ]
 }
 ```
 
-Read once at boot, by the API and the worker alike; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`. Each `admission.actions` entry is an action a runtime write operation declares; `secret_env` names the variable holding the signing secret, which must be set; `timeout_seconds` defaults to 30.
+Read once at boot, by the API and the worker alike; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`. Each `admission.actions` entry is an action a runtime write operation declares; `secret_env` names the variable holding the signing secret, which must be set; `timeout_seconds` defaults to 30. Each `denial_codes` entry is an UPPER_SNAKE code no built-in error code uses, once, with a non-empty `hint`.

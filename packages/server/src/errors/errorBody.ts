@@ -31,7 +31,10 @@ export const errorDocsUrlOmitted = (): boolean => {
  */
 export const errorBody = (args: {
   code: ErrorCode;
-  /** A relayed refusal's own code; `code` still picks the hint and docs. */
+  /**
+   * A relayed refusal's own code; `code` picks the docs, and the hint unless
+   * this is a policy's declared denial code.
+   */
   wireCode?: string;
   message: string;
   meta?: Record<string, unknown>;
@@ -40,7 +43,9 @@ export const errorBody = (args: {
     error: {
       code: args.wireCode ?? args.code,
       message: args.message,
-      ...(!errorHintsOmitted() && { hint: resolutionFor({ code: args.code }) }),
+      ...(!errorHintsOmitted() && {
+        hint: resolutionFor({ code: args.code, wireCode: args.wireCode }),
+      }),
       ...(!errorDocsUrlOmitted() && {
         docs_url: docsUrlFor({ code: args.code }),
       }),

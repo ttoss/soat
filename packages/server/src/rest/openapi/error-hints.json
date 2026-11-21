@@ -846,6 +846,11 @@
         }
       ]
     },
+    "POLICY_DENIAL_RESERVED": {
+      "http_status": 403,
+      "hint": "Remove `denial` from every statement, or have an unrestricted admin write the policy.",
+      "routes": []
+    },
     "POLICY_GRANT_NOT_HELD": {
       "http_status": 403,
       "hint": "Attach a policy whose grants you hold in the project, narrowing the grants `meta.ungranted` lists, or have a caller who holds them make the change.",

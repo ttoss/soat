@@ -1,7 +1,7 @@
 import type { AuthUser } from '../Context';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import type { SenderCredential } from './assertionSender';
-import type { DeniedPrincipal } from './authorizationDenial';
+import type { Refusal } from './authorizationDenial';
 import type { RequestPrincipal } from './principals';
 import {
   INTERNAL_FAILURE,
@@ -116,6 +116,8 @@ export type FormationActor = {
   keyPolicyBoundary: string[] | undefined;
   /** A request narrowed beyond its key's own `policy_ids`, which writes no API key. */
   narrowed: boolean;
+  /** The grant is an unrestricted admin's (`AuthUser.unrestricted`). */
+  unrestricted: boolean;
   /** Records a refusal the module makes before any `isAllowed` call. */
   recordRefusal: (action: string) => void;
 } & SenderCredential &
@@ -232,7 +234,7 @@ export type FormationAuthorizer = {
  */
 export type FormationAuthorizationAnswer =
   | { allowed: true; resource: string }
-  | { allowed: false; resource: string; deniedBy: DeniedPrincipal };
+  | { allowed: false; resource: string; refusal: Refusal };
 
 /** A refused per-resource action, as reported to the caller. */
 export type FormationAuthorizationDenial = {
@@ -241,7 +243,7 @@ export type FormationAuthorizationDenial = {
   action: string;
   /** The SRN the action was refused on. */
   resource: string;
-  deniedBy: DeniedPrincipal;
+  refusal: Refusal;
 };
 
 export type FormationAuthorizationDenialWire = {

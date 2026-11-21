@@ -1,4 +1,9 @@
 export { ERROR_CODES, type ErrorCode } from './codes';
+export {
+  declareDenialCodes,
+  isDeclaredDenialCode,
+  parseDenialCodes,
+} from './denialCodes';
 export { docsBaseUrl } from './docsBaseUrl';
 export { DomainError } from './DomainError';
 export { errorBody, errorDocsUrlOmitted, errorHintsOmitted } from './errorBody';
