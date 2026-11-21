@@ -594,6 +594,7 @@ describe('Agent versions', () => {
         // An ungated rollout still reports the field, so a client never has to
         // distinguish "no gate" from "an older server that had no gates".
         promotion_gate: null,
+        released_claims: [],
       });
     });
 

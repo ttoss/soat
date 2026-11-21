@@ -42,6 +42,11 @@
       "description": "Get one archived agent config version"
     },
     {
+      "operationId": "listAgentVersionClaims",
+      "action": "agents:GetAgentVersion",
+      "description": "List the claims an agent version holds"
+    },
+    {
       "operationId": "restoreAgentVersion",
       "action": "agents:RestoreAgentVersion",
       "description": "Restore an archived agent config as a new version"

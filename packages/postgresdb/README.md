@@ -126,6 +126,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-21-eval-run-verdict` | `evals.evidence` (`json`), the rules a verdict reads beyond the threshold; `eval_runs.verdict` and `eval_runs.verdict_reasons` beside `eval_runs.passed` |
 | `2026-11-21-eval-run-drop-passed` | `eval_runs.passed` dropped; `eval_runs.verdict` replaces it |
 | `2026-11-21-eval-claim` | `evals.claim` and `eval_runs.claim` (`json`), the claim an eval's runs test and the copy each run takes at creation; nothing filled |
+| `2026-11-21-agent-version-claims` | `agent_versions.released_claims` (`json`), the claims a promotion's release gave up; nothing filled |
 
 Run them from the server package, which owns the entrypoint:
 

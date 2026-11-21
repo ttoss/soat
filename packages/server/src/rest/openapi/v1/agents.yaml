@@ -757,6 +757,68 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 
+  /api/v1/agents/{agent_id}/versions/{version}/claims:
+    get:
+      tags:
+        - Agent Versions
+      summary: List the claims an agent version holds
+      description: >
+        Returns the claim of every eval in the agent's project whose newest
+        `completed` run recorded against this agent and pinned to this version
+        carries one, with that run's verdict. A newer run revokes an older one;
+        a run with no claim holds none. Promotion keeps every claim the stable
+        version supports: see
+        [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion).
+      operationId: listAgentVersionClaims
+      x-iam-action: agents:GetAgentVersion
+      x-iam-resource-type: agent
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/AgentVersionNumber'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The claims the version holds, by `eval_id`
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/VersionClaim'
+        '400':
+          description: Bad Request — version is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+
   /api/v1/agents/{agent_id}/versions/{version}/restore:
     post:
       tags:
@@ -921,6 +983,16 @@ paths:
         and `verdict_reasons` when there is one, and the rollout is left running
         untouched. The run that cleared the gate is recorded as `eval_run_id` on
         the version that goes live.
+
+
+        Every claim the stable version supports
+        (`GET /api/v1/agents/{agent_id}/versions/{version}/claims`) must be
+        supported by the canary too, unless the release names its eval in
+        `released_claims`. Otherwise the call is a `409 PROMOTION_CLAIM_UNMET`
+        whose `meta` names the `eval_id`, the stable version's `claim`, and the
+        canary's `eval_run_id`, `verdict` and `verdict_reasons` (null when it
+        has no run). The version that goes live records the release's
+        `released_claims`.
       operationId: promoteAgentRelease
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
@@ -958,7 +1030,8 @@ paths:
             Conflict — the agent has no active release
             (`NO_ACTIVE_RELEASE`), or the newest run of its `promotion_gate`
             against the canary version does not read `supported`
-            (`PROMOTION_GATE_UNMET`)
+            (`PROMOTION_GATE_UNMET`), or the canary does not support a claim
+            the stable version supports (`PROMOTION_CLAIM_UNMET`)
           content:
             application/json:
               schema:
@@ -1375,6 +1448,14 @@ components:
             either way. See
             [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion).
           example: eval_V1StGXR8Z5jdHi6B
+        released_claims:
+          type: array
+          items:
+            type: string
+          description: >-
+            Evals whose claims the canary need not keep. Empty when the release
+            gives none up.
+          example: [eval_V1StGXR8Z5jdHi6B]
 
     AgentVersion:
       type: object
@@ -1437,6 +1518,15 @@ components:
             version was promoted. Null for every version that did not go live
             through a gated promotion — which is most of them.
           example: evrun_V1StGXR8Z5jdHi6B
+        released_claims:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Evals whose claims the release gave up when it promoted this
+            version. Null for a version no promotion made live.
+          example: [eval_V1StGXR8Z5jdHi6B]
         created_by_principal_type:
           nullable: true
           allOf:
@@ -1500,6 +1590,48 @@ components:
             evaluate this agent; anything else is a `400`. Omit it, or send
             null, for a rollout that can be promoted at will.
           example: eval_V1StGXR8Z5jdHi6B
+        released_claims:
+          type: array
+          nullable: true
+          items:
+            type: string
+            minLength: 1
+          description: >-
+            Evals whose claims the canary need not keep, unique and in this
+            project; anything else is a `400`. Omit it, or send null, to keep
+            every claim the stable version supports. Re-setting the release
+            without it requires them again.
+          example: [eval_V1StGXR8Z5jdHi6B]
+
+    VersionClaim:
+      type: object
+      description: >-
+        A claim an agent version holds: the claim its newest run of an eval
+        carries, with that run's verdict.
+      properties:
+        eval_id:
+          x-soat-ref: evals
+          type: string
+          example: eval_V1StGXR8Z5jdHi6B
+        eval_run_id:
+          x-soat-ref: eval-runs
+          type: string
+          example: evrun_V1StGXR8Z5jdHi6B
+        claim:
+          $ref: './evaluations.yaml#/components/schemas/Claim'
+        verdict:
+          type: string
+          nullable: true
+          enum: [supported, refuted, insufficient, null]
+        verdict_reasons:
+          type: array
+          nullable: true
+          items:
+            $ref: './evaluations.yaml#/components/schemas/VerdictReason'
+        settled_at:
+          type: string
+          format: date-time
+          nullable: true
 
     ToolBinding:
       type: object

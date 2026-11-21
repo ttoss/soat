@@ -2,6 +2,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  type AgentRef,
+  speakingRun,
+  speakingRuns,
+  type VersionClaim,
+  versionClaimOf,
+  versionClaimsOf,
+} from './agentVersionClaims';
+import { type ActiveRelease, isEvalIdList } from './releaseAssignment';
 
 const log = createDebug('soat:agents');
 
@@ -18,16 +27,6 @@ const log = createDebug('soat:agents');
  * and it does not make a run happen — a caller starts the run with
  * `agent_version` pinned to the canary.
  */
-
-type AgentRef = {
-  /** Internal row id — the FK evals and archived versions are matched on. */
-  dbId: number;
-  publicId: string;
-  projectId: number;
-};
-
-/** A run is only evidence once it has finished and reported a verdict. */
-const COMPLETED_RUN_STATUS = 'completed';
 
 /**
  * Validates the `promotion_gate` field's shape, independent of transport.
@@ -85,39 +84,14 @@ export const resolvePromotionGate = async (args: {
   return gate;
 };
 
-/**
- * The run that speaks for one version of this agent: the newest `completed`
- * run of the gate's eval pinned to that version **and recorded against this
- * agent**, whatever its verdict. A newer run that did not support the claim
- * revokes an older one that did, and a run of another agent that happens to
- * share the version number — an eval can be repointed — is not evidence.
- */
-const findSpeakingRun = async (args: {
-  gate: string;
-  agent: AgentRef;
-  version: number;
-}): Promise<InstanceType<(typeof db)['EvalRun']> | null> => {
-  const evaluation = await db.Eval.findOne({
-    where: { publicId: args.gate, projectId: args.agent.projectId },
-    attributes: ['id'],
-  });
-  // The eval was validated when the gate was set, so this only fires if it was
-  // deleted mid-rollout. An unsatisfiable gate is the safe reading: promotion
-  // stays blocked until the release is re-set or aborted.
-  if (!evaluation) return null;
-
-  return db.EvalRun.findOne({
-    where: {
-      evalId: evaluation.id as number,
-      agentPublicId: args.agent.publicId,
-      agentVersion: args.version,
-      status: COMPLETED_RUN_STATUS,
-    },
-    order: [
-      ['createdAt', 'DESC'],
-      ['id', 'DESC'],
-    ],
-  });
+/** What a refusal names of the run that speaks for a version. */
+const pickRunEvidence = (claim: VersionClaim) => {
+  return {
+    eval_run_id: claim.eval_run_id,
+    claim: claim.claim,
+    verdict: claim.verdict,
+    verdict_reasons: claim.verdict_reasons,
+  };
 };
 
 /**
@@ -144,8 +118,8 @@ export const requirePromotionGate = async (args: {
     args.version
   );
 
-  const run = await findSpeakingRun({
-    gate: args.gate,
+  const run = await speakingRun({
+    evalPublicId: args.gate,
     agent: args.agent,
     version: args.version,
   });
@@ -159,12 +133,7 @@ export const requirePromotionGate = async (args: {
       {
         promotion_gate: args.gate,
         agent_version: args.version,
-        ...(run && {
-          eval_run_id: run.publicId,
-          claim: run.claim ?? null,
-          verdict: run.verdict,
-          verdict_reasons: run.verdictReasons,
-        }),
+        ...(run && pickRunEvidence(versionClaimOf({ evalId: args.gate, run }))),
       }
     );
   }
@@ -175,7 +144,90 @@ export const requirePromotionGate = async (args: {
 };
 
 /**
- * Records the run that cleared the gate on the version promotion made live.
+ * Resolves the claims a release gives up: eval ids in the agent's own project,
+ * so a typo is a `400` rather than a release of nothing.
+ */
+export const resolveReleasedClaims = async (args: {
+  agent: AgentRef;
+  releasedClaims: unknown;
+}): Promise<string[]> => {
+  if (args.releasedClaims === undefined || args.releasedClaims === null) {
+    return [];
+  }
+  if (!isEvalIdList(args.releasedClaims)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'released_claims must be an array of unique eval ids.'
+    );
+  }
+  const found = await db.Eval.findAll({
+    where: { publicId: args.releasedClaims, projectId: args.agent.projectId },
+    attributes: ['publicId'],
+  });
+  const known = new Set(
+    found.map((evaluation) => {
+      return evaluation.publicId;
+    })
+  );
+  const unknown = args.releasedClaims.find((id) => {
+    return !known.has(id);
+  });
+  if (unknown !== undefined) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `released_claims names '${unknown}', which is not an eval in this project.`
+    );
+  }
+  return args.releasedClaims;
+};
+
+/**
+ * The pawl on promotion: every claim the stable version supports, the canary
+ * supports too, unless the release names its eval in `released_claims`. A
+ * refuted, insufficient or missing canary run is the same `409`, so "cannot
+ * tell" never resolves to "allowed".
+ */
+export const requireClaimsHeld = async (args: {
+  agent: AgentRef;
+  release: ActiveRelease;
+}): Promise<void> => {
+  const { stable_version: stable, canary_version: canary } = args.release;
+  log(
+    'requireClaimsHeld: agent=%s stable=%d canary=%d',
+    args.agent.publicId,
+    stable,
+    canary
+  );
+
+  const released = new Set(args.release.released_claims);
+  const canaryRuns = await speakingRuns({ agent: args.agent, version: canary });
+  const stableRuns = await speakingRuns({ agent: args.agent, version: stable });
+  for (const held of versionClaimsOf(stableRuns)) {
+    if (held.verdict !== 'supported' || released.has(held.eval_id)) continue;
+    const run = canaryRuns.get(held.eval_id);
+    if (run?.verdict === 'supported') continue;
+
+    const evidence = run && versionClaimOf({ evalId: held.eval_id, run });
+    throw new DomainError(
+      'PROMOTION_CLAIM_UNMET',
+      `Version ${stable} of agent '${args.agent.publicId}' supports the claim of eval '${held.eval_id}'; version ${canary} reads ${evidence ? String(evidence.verdict) : 'no completed run'} on it.`,
+      {
+        eval_id: held.eval_id,
+        stable_version: stable,
+        canary_version: canary,
+        eval_run_id: null,
+        verdict: null,
+        verdict_reasons: null,
+        ...(evidence && pickRunEvidence(evidence)),
+        claim: held.claim,
+      }
+    );
+  }
+};
+
+/**
+ * Records what a promotion stood on, on the version it made live: the run that
+ * cleared the gate and the claims the release gave up.
  *
  * Written after the config apply rather than threaded through it, because the
  * version being stamped is only known then: an apply archives a new version
@@ -186,22 +238,24 @@ export const requirePromotionGate = async (args: {
  * This annotates provenance and never touches an archived `config`, so the
  * configuration a version describes can still never change.
  */
-export const recordPromotionEvalRun = async (args: {
+export const recordPromotion = async (args: {
   agentDbId: number;
   version: number;
   evalRunDbId: number | null;
+  releasedClaims: string[];
 }): Promise<void> => {
-  if (args.evalRunDbId === null) return;
-
   log(
-    'recordPromotionEvalRun: agentDbId=%d version=%d evalRunDbId=%d',
+    'recordPromotion: agentDbId=%d version=%d evalRunDbId=%o',
     args.agentDbId,
     args.version,
     args.evalRunDbId
   );
 
   await db.AgentVersion.update(
-    { evalRunId: args.evalRunDbId },
+    {
+      ...(args.evalRunDbId !== null && { evalRunId: args.evalRunDbId }),
+      releasedClaims: args.releasedClaims,
+    },
     { where: { agentId: args.agentDbId, version: args.version } }
   );
 };

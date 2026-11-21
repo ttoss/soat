@@ -31,6 +31,7 @@ const ROLES = {
     'Agent.toolBindings',
     'Agent.toolChoice',
     'AgentVersion.config',
+    'AgentVersion.releasedClaims',
     'AiProvider.config',
     'AiProvider.modelAliases',
     'ApprovalItem.editedArguments',
