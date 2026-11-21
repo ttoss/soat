@@ -9,19 +9,82 @@ import { stripComments } from './sourceText.mjs';
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const srcDir = path.join(repoRoot, 'packages/server/src');
 
-/**
- * A tool or agent named by id in a stored field, or in a request that runs it,
- * resolves in `lib/resourceReferences.ts`: in the project of the row that holds
- * the reference, and nowhere else. A module querying `Tool` or `Agent` itself
- * is either that module or one listed below with the reason its lookup is not
- * a reference, so a new lookup states which it is instead of re-deriving the
- * scope rule by hand.
- */
-describe('tool and agent references', () => {
-  const CHOKEPOINT = 'lib/resourceReferences.ts';
+const CHOKEPOINT = 'lib/resourceReferences.ts';
 
+/** Source with comments dropped, so prose naming a model is not a hit. */
+const code = (file) => {
+  return stripComments(fs.readFileSync(file, 'utf-8'));
+};
+
+const walk = (dir) => {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return walk(full);
+    return entry.name.endsWith('.ts') ? [full] : [];
+  });
+};
+
+const SOURCES = walk(srcDir).map((file) => {
+  return {
+    module: path.relative(srcDir, file).split(path.sep).join('/'),
+    text: code(file),
+  };
+});
+
+/**
+ * A direct query on one of `models`, or the model handed to a generic lookup —
+ * never an `include` entry, which names its association with `as`.
+ */
+const lookupPattern = (models) => {
+  const names = models.join('|');
+  return new RegExp(
+    `\\bdb\\.(${names})\\.(findOne|findAll|findByPk|findAndCountAll)\\b|\\bmodel:\\s*db\\.(${names})\\s*,(?!\\s*as:)`
+  );
+};
+
+/**
+ * A resource named by id in a stored field, or in a request that runs it,
+ * resolves in `lib/resourceReferences.ts`: in the project of the row that holds
+ * the reference, and nowhere else. A module querying the model itself is either
+ * that module or one listed with the reason its lookup is not a reference, so a
+ * new lookup states which it is instead of re-deriving the scope rule by hand.
+ */
+const pinReferences = (args) => {
+  const { label, models, notAReference } = args;
+
+  describe(`${label} references`, () => {
+    const lookup = lookupPattern(models);
+    const modulesWithLookups = SOURCES.filter((source) => {
+      return lookup.test(source.text);
+    })
+      .map((source) => {
+        return source.module;
+      })
+      .sort();
+
+    test(`every module querying ${label} is the chokepoint or states why it is not a reference`, () => {
+      const undeclared = modulesWithLookups.filter((module) => {
+        return module !== CHOKEPOINT && !Object.hasOwn(notAReference, module);
+      });
+
+      assert.deepEqual(undeclared, []);
+    });
+
+    test(`every declared ${label} exception still queries it`, () => {
+      const stale = Object.keys(notAReference).filter((module) => {
+        return !modulesWithLookups.includes(module);
+      });
+
+      assert.deepEqual(stale, []);
+    });
+  });
+};
+
+pinReferences({
+  label: 'tool and agent',
+  models: ['Tool', 'Agent'],
   /** Module → why its `Tool`/`Agent` query is not a by-id reference. */
-  const NOT_A_REFERENCE = {
+  notAReference: {
     'lib/actorFilters.ts': 'narrows a listing already scoped to the caller',
     'lib/agentNonStreamGeneration.ts':
       "reads tools by name inside the running agent's project",
@@ -64,48 +127,23 @@ describe('tool and agent references', () => {
     'lib/usageToolRecording.ts': 'maps a metered call to its internal ids',
     'lib/writerRule.ts':
       'reads the public id of a target already resolved to an internal id',
-  };
+  },
+});
 
-  // A direct query, or the model handed to a generic lookup — never an
-  // `include` entry, which names its association with `as`.
-  const LOOKUP =
-    /\bdb\.(Tool|Agent)\.(findOne|findAll|findByPk|findAndCountAll)\b|\bmodel:\s*db\.(Tool|Agent)\s*,(?!\s*as:)/;
-
-  /** Source with comments dropped, so prose naming a model is not a hit. */
-  const code = (file) => {
-    return stripComments(fs.readFileSync(file, 'utf-8'));
-  };
-
-  const walk = (dir) => {
-    return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) return walk(full);
-      return entry.name.endsWith('.ts') ? [full] : [];
-    });
-  };
-
-  const modulesWithLookups = walk(srcDir)
-    .filter((file) => {
-      return LOOKUP.test(code(file));
-    })
-    .map((file) => {
-      return path.relative(srcDir, file).split(path.sep).join('/');
-    })
-    .sort();
-
-  test('every module querying tools or agents is the chokepoint or states why it is not a reference', () => {
-    const undeclared = modulesWithLookups.filter((module) => {
-      return module !== CHOKEPOINT && !Object.hasOwn(NOT_A_REFERENCE, module);
-    });
-
-    assert.deepEqual(undeclared, []);
-  });
-
-  test('every declared exception still queries tools or agents', () => {
-    const stale = Object.keys(NOT_A_REFERENCE).filter((module) => {
-      return !modulesWithLookups.includes(module);
-    });
-
-    assert.deepEqual(stale, []);
-  });
+pinReferences({
+  label: 'AI provider',
+  models: ['AiProvider'],
+  /** Module → why its `AiProvider` query is not a by-id reference. */
+  notAReference: {
+    'lib/aiProviderModels.ts': "reads the project of the route's own provider",
+    'lib/aiProviders.ts':
+      "lists the caller's providers and deletes the route's own",
+    'lib/chatCompletionModel.ts':
+      "reads the project of the route's own provider",
+    'lib/modelRouteAttribution.ts':
+      'reads back the provider a routed turn already resolved',
+    'lib/priceBook.ts':
+      "reads the price route's own provider, or an operator's global row",
+    'lib/scopedIdFilters.ts': 'narrows a listing already scoped to the caller',
+  },
 });
