@@ -1,11 +1,10 @@
-import { getApiHeaders } from '@ttoss/http-server-mcp';
-
 import {
-  denialToolResult,
-  isAuthorizationDenial,
-} from '../lib/authorizationDenial';
+  ApiError,
+  errorBodyMessage,
+  getApiHeaders,
+} from '@ttoss/http-server-mcp';
+
 import { dispatchApiRequestOrThrow } from '../lib/inProcessApi';
-import { readToolErrorEnvelope, toolCallError } from '../lib/toolErrorRelay';
 
 /**
  * Serves one REST-backed MCP tool call against this process's own app.
@@ -14,10 +13,9 @@ import { readToolErrorEnvelope, toolCallError } from '../lib/toolErrorRelay';
  * so the call reuses the route handler's permission checks and snake_case
  * boundary without a socket, a JSON round trip, or a listening port.
  *
- * The thrown-`Error` contract is why this wrapper exists at all:
- * `@ttoss/http-server-mcp`'s own `apiCall` builds its error via
- * `new Error(err.error)`, which stringifies a `DomainError` body to
- * `"[object Object]"`. Here the real message reaches the client.
+ * A non-2xx answer throws `ApiError`, which `registerTools` answers as an
+ * `isError` result: the message as text and the REST envelope as
+ * `structuredContent`.
  */
 export const dispatchMcpApiRequest = async (args: {
   method: string;
@@ -34,30 +32,11 @@ export const dispatchMcpApiRequest = async (args: {
     as: { authorization: getApiHeaders().authorization ?? '' },
     body: args.body,
     wrapError: (response) => {
-      return toolCallError({
-        trust: 'catalog',
-        envelope: readToolErrorEnvelope(response),
-        // Every `/api/` error answer is an envelope (`errorLogger`,
-        // `unansweredApiRequest`); only a body-less answer has none.
-        wrap: () => {
-          return new Error(`HTTP ${response.status}`);
-        },
+      return new ApiError({
+        message: errorBodyMessage(response.body) ?? `HTTP ${response.status}`,
+        status: response.status,
+        body: response.body,
       });
     },
   });
-};
-
-/**
- * A tool call's authorization denial as the `isError` result an MCP client
- * reads: the REST error body as text, so the client relays the same code,
- * action and message rather than a bare message. `null` for any other error.
- */
-export const mcpDenialResult = (
-  error: unknown
-): { isError: true; content: Array<{ type: 'text'; text: string }> } | null => {
-  if (!isAuthorizationDenial(error)) return null;
-  return {
-    isError: true,
-    content: [{ type: 'text', text: JSON.stringify(denialToolResult(error)) }],
-  };
 };

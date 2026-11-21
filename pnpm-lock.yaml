@@ -482,11 +482,11 @@ importers:
         specifier: ^0.8.1
         version: 0.8.1(@ttoss/http-server@0.11.1(supports-color@8.1.1))
       '@ttoss/http-server-mcp':
-        specifier: ^0.34.2
-        version: 0.34.2(hono@4.12.30)(supports-color@8.1.1)
+        specifier: ^0.46.0
+        version: 0.46.0(supports-color@8.1.1)
       '@ttoss/http-server-mcp-openapi':
-        specifier: ^0.12.5
-        version: 0.12.5(supports-color@8.1.1)
+        specifier: ^0.13.1
+        version: 0.13.1(supports-color@8.1.1)
       '@ttoss/postgresdb':
         specifier: ^0.14.1
         version: 0.14.1(@types/node@26.6.4)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
@@ -3423,33 +3423,15 @@ packages:
     resolution: {integrity: sha512-K8BeapFUfrfxbRAUQAG5oBOCwo1+bNWzaVnPxTCutkfrTBn6T/j91FIhqxWJ32SUeQ9T3iy1zcmPZ5ROZEvDrg==}
     engines: {node: '>=22.12.0'}
 
-  '@modelcontextprotocol/core@2.0.0':
-    resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
-    engines: {node: '>=20'}
-
   '@modelcontextprotocol/core@2.4.0':
     resolution: {integrity: sha512-z8QBKqdfXLPzkLQuG4xp8hrVEMm1PZ1IgxMN2sMbJiFiAKOWXnAzogXn2W4aqIBlP1ea6U5yiqVquvUNM1Cj6Q==}
     engines: {node: '>=20'}
-
-  '@modelcontextprotocol/node@2.0.0':
-    resolution: {integrity: sha512-Y4hAC2XdGDUdDOCbLDOCA4+aL3NUldjsOWlDL/YwpAxrPhRm1xHd7lZ+mLacvZ9t3PaH28wgNoaLQGrIk1P2pg==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@modelcontextprotocol/server': ^2.0.0
-      hono: ^4.11.4
-    peerDependenciesMeta:
-      hono:
-        optional: true
 
   '@modelcontextprotocol/node@2.1.2':
     resolution: {integrity: sha512-IIcIqBpr6NCQQs5DgJTgvbSOAw+3iaR/uquqg+e0nXCdudfjPg/80x0TseUnQx14AUAtE4fsJCEpJKPyb6WPVA==}
     engines: {node: '>=20'}
     peerDependencies:
       '@modelcontextprotocol/server': ^2.4.0
-
-  '@modelcontextprotocol/server@2.0.0':
-    resolution: {integrity: sha512-YhHWdHfpFMQfd0prsEnxKeS3Qz3ytIGmsS0sth4KDjnacIT7hxk6hXHkJ9KysxlkvTM+WZAtQbbcUhdoP4Hvtw==}
-    engines: {node: '>=20'}
 
   '@modelcontextprotocol/server@2.4.0':
     resolution: {integrity: sha512-rgR9yxSaAJ+bcsi/XroT/S2AfPiIWloXAnrdfYSCms9ivVju0ishu/wW0J21Ho6+ZOR1r7RyeRbjiRuF87ix5Q==}
@@ -4852,8 +4834,8 @@ packages:
   '@ttoss/auth-core@0.16.1':
     resolution: {integrity: sha512-uTv/1lc6lRgFs2bg6RTP+DLUtmmoOMy0RrOZS5MJbaxFYyGkK218scjlnY3I9PyQSzOab51T6+pdMDBKZhlwqA==}
 
-  '@ttoss/auth-core@0.26.0':
-    resolution: {integrity: sha512-aaVwF1MUOZ2jnsoEjvQ+x3zEP4FsLtXuFsO0exLtANLRN8X7+ZXajIDAZ0n9jq+eOWUcgxvug8hUgm6PcbgxHg==}
+  '@ttoss/auth-core@0.28.1':
+    resolution: {integrity: sha512-y8rEW4bYs/W2sVu6/ZiOMrUJvC/QtBYxCIJOZ5ssRRirLLlw5qr/5F6mbLzXvVr3HVtEZYeQa7Kf4BQP0IuPLA==}
 
   '@ttoss/cloudformation@0.16.1':
     resolution: {integrity: sha512-fDEng0mtSKBCRMXP9A/Kfx45l6Xi5WPXFc/62BM2ZW+iPFD9+6NeemV0ItX7vANqiKw2awdiPU0iQUnVQAF7gQ==}
@@ -4866,41 +4848,38 @@ packages:
     resolution: {integrity: sha512-Z3eCsqiQavgHemt5q1kpCS/1KFyAD6WMY1fssSop+nO/O3pXnpLVf9TaMrrn+CYo4S/UC3ylPlL4Z4dHS3rXcA==}
     hasBin: true
 
-  '@ttoss/errors@0.5.0':
-    resolution: {integrity: sha512-vBWO4mmmnBWIYJqb8mE2FoaqV5VKiCmqUo97eve7r8nbGVkM8YJrFuwWNcVZpS92yO3aFTD4AMHEy7aP2eLjiw==}
+  '@ttoss/errors@0.5.1':
+    resolution: {integrity: sha512-u9p1libE8offt/6vMHphrOCh7ayEkXIlUY8ioPmxB8PTfpbufnk4i580K9yWHN5S/xl66kk7/TELDHw+x8b5Qg==}
 
   '@ttoss/eslint-config@3.0.0':
     resolution: {integrity: sha512-gBL8FVGAUb9m+uiFpYuHqF165n5/La3tt1uUVQyjf9ROAwrRI479mGiN3HLQU6V4Bs5tk2Shdf2qnr0ZlTU+7Q==}
     peerDependencies:
       eslint: ^10
 
-  '@ttoss/http-server-auth@0.12.4':
-    resolution: {integrity: sha512-mOI98tyYM95cBTFzF0pBhVR98FVNk/EmiX1ATBHFwANOOltbduQeiqymE7ocbmzctawRWMLdIH11F0wL1p6CLA==}
+  '@ttoss/http-server-auth@0.13.1':
+    resolution: {integrity: sha512-LDuT6OuN9TwAeuOvehhV6gNDXomYn8K5wqbgDW5QhcvEPXVTfXzZtPqfryJefrdY862P04bPSI9L6zJCE7wUIw==}
     peerDependencies:
-      '@ttoss/http-server': ^0.15.0
+      '@ttoss/http-server': ^0.15.1
 
   '@ttoss/http-server-auth@0.8.1':
     resolution: {integrity: sha512-oEAkarWFTKEP4zuaerD0jz6c4rLv/3YV87P1S8x9TTKIJaN7OVJSoXGt5sNJNC/cbqpjEoyvn//oN8JTJnXfSw==}
     peerDependencies:
       '@ttoss/http-server': ^0.11.1
 
-  '@ttoss/http-server-mcp-openapi@0.12.5':
-    resolution: {integrity: sha512-fejE/DUK9vOWATc7pzau40kGTwWjFxUfYu9qCk6RaKMGhUuTdxMkotNUnXUwZlEhwkeGtmfETRgkArj/tO9T/w==}
+  '@ttoss/http-server-mcp-openapi@0.13.1':
+    resolution: {integrity: sha512-kLWXUBJpESno/97B01E+d38Rgh2xUdSfyyhYUhNE8A0hZKEAwYhI4IS+UbptI+ls/C1bLPOYaSpesGu+VFLmMA==}
 
-  '@ttoss/http-server-mcp@0.34.2':
-    resolution: {integrity: sha512-FV3LGFxrZnQK9qAR+1FpcTUyeajtp+M80PJH6DXTfgxgXOyIq1Td1KOZkjvcHLJ40DKnnDQLa1AQ3Kq5tG2ziw==}
-
-  '@ttoss/http-server-mcp@0.44.4':
-    resolution: {integrity: sha512-WCHvwGQjQGwGGW60wtrSpQ43TXsXuIJCokIcshPONnRdC4z81uIXI+5CmlnMvsGff3IFlh4yghdVHvmT3ofOBg==}
+  '@ttoss/http-server-mcp@0.46.0':
+    resolution: {integrity: sha512-parjCf4hnTU5hg6wRLvXLxECH8cJ4rj2NwsQE7o1lbYjantwwatVHD5SzTNjg9594RnbyfUbGWUo0I7h7TY8yA==}
 
   '@ttoss/http-server@0.11.1':
     resolution: {integrity: sha512-QY/ukryzYlscCt0Of28hOF6H0124oMbMXt/ZylIW+hS6VqcZj21AVXhNIALEzhxE/FnbXVYwry3JEh/d+72baQ==}
 
-  '@ttoss/http-server@0.15.0':
-    resolution: {integrity: sha512-z5JQ+YX11AwsgvxDy4C1XCetmkgLrQoTMBC6tcl5PKIdvFzMINJjudRVbBMkyhVAVDx+iJU9Rg0Gvr/6mkVxDw==}
+  '@ttoss/http-server@0.15.1':
+    resolution: {integrity: sha512-+tayceeGd9jqXb5pX7ZDZVTO3TZDylB7ac2RrvJI8pHf7mo/97OG8JOEeOZWYJpylKDlPEE11KlFr6FA9wVjrQ==}
 
-  '@ttoss/i18n-core@0.10.0':
-    resolution: {integrity: sha512-mssmCbyafnMnJKnEYK53qaCCxmmuFjAL0zlu1WuwA6CkiN2rL9StTvt5JUby+wMt1YHbMKSX0bcshWp7t5lsYA==}
+  '@ttoss/i18n-core@0.10.1':
+    resolution: {integrity: sha512-rcmuzRs1O5gWnhJrE08Efej60RVwBiqpVggZXS4L/doaRDsohCqXzJydkxeTG/T9uZH96lxjOKJYkHQ08GKrqg==}
 
   '@ttoss/i18n-core@0.7.0':
     resolution: {integrity: sha512-TG5zt8f7QGe4Sj3rYMpUBSOPCSlku27NdsWJsfBVkhpTxdu5F9z4I9+0/w0Uah+bUTBbG5DrtetgV+3NyUFlXA==}
@@ -18022,20 +18001,9 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@modelcontextprotocol/core@2.0.0':
-    dependencies:
-      zod: 4.6.4
-
   '@modelcontextprotocol/core@2.4.0':
     dependencies:
-      zod: 4.6.4
-
-  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.30)':
-    dependencies:
-      '@hono/node-server': 1.19.17(hono@4.12.30)
-      '@modelcontextprotocol/server': 2.0.0
-    optionalDependencies:
-      hono: 4.12.30
+      zod: 4.6.7
 
   '@modelcontextprotocol/node@2.1.2(@modelcontextprotocol/server@2.4.0)':
     dependencies:
@@ -18043,15 +18011,10 @@ snapshots:
       '@modelcontextprotocol/server': 2.4.0
       hono: 4.12.30
 
-  '@modelcontextprotocol/server@2.0.0':
-    dependencies:
-      '@modelcontextprotocol/core': 2.0.0
-      zod: 4.6.4
-
   '@modelcontextprotocol/server@2.4.0':
     dependencies:
       '@modelcontextprotocol/core': 2.4.0
-      zod: 4.6.4
+      zod: 4.6.7
 
   '@module-federation/error-codes@0.22.0': {}
 
@@ -19495,9 +19458,9 @@ snapshots:
       aws-jwt-verify: 4.0.1
       jose: 6.2.12
 
-  '@ttoss/auth-core@0.26.0':
+  '@ttoss/auth-core@0.28.1':
     dependencies:
-      '@ttoss/errors': 0.5.0
+      '@ttoss/errors': 0.5.1
       aws-jwt-verify: 5.2.1
       jose: 6.2.12
 
@@ -19543,7 +19506,7 @@ snapshots:
       - supports-color
       - ts-jest
 
-  '@ttoss/errors@0.5.0': {}
+  '@ttoss/errors@0.5.1': {}
 
   '@ttoss/eslint-config@3.0.0(@testing-library/dom@10.4.2)(@typescript-eslint/utils@8.71.2(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@10.12.0(jiti@2.7.0)(supports-color@8.1.1))(jest@30.5.2(@types/node@26.6.4)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.6.4)(typescript@6.0.3)))(prettier@3.9.9)(supports-color@8.1.1)':
     dependencies:
@@ -19581,44 +19544,31 @@ snapshots:
       - supports-color
       - ts-jest
 
-  '@ttoss/http-server-auth@0.12.4(@ttoss/http-server@0.15.0(supports-color@8.1.1))':
+  '@ttoss/http-server-auth@0.13.1(@ttoss/http-server@0.15.1(supports-color@8.1.1))':
     dependencies:
-      '@ttoss/auth-core': 0.26.0
-      '@ttoss/http-server': 0.15.0(supports-color@8.1.1)
+      '@ttoss/auth-core': 0.28.1
+      '@ttoss/http-server': 0.15.1(supports-color@8.1.1)
 
   '@ttoss/http-server-auth@0.8.1(@ttoss/http-server@0.11.1(supports-color@8.1.1))':
     dependencies:
       '@ttoss/auth-core': 0.16.1
       '@ttoss/http-server': 0.11.1(supports-color@8.1.1)
 
-  '@ttoss/http-server-mcp-openapi@0.12.5(supports-color@8.1.1)':
+  '@ttoss/http-server-mcp-openapi@0.13.1(supports-color@8.1.1)':
     dependencies:
-      '@ttoss/http-server': 0.15.0(supports-color@8.1.1)
-      '@ttoss/http-server-mcp': 0.44.4(supports-color@8.1.1)
+      '@ttoss/http-server': 0.15.1(supports-color@8.1.1)
+      '@ttoss/http-server-mcp': 0.46.0(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
-  '@ttoss/http-server-mcp@0.34.2(hono@4.12.30)(supports-color@8.1.1)':
-    dependencies:
-      '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.30)
-      '@modelcontextprotocol/server': 2.0.0
-      '@ttoss/auth-core': 0.16.1
-      '@ttoss/http-server': 0.11.1(supports-color@8.1.1)
-      '@ttoss/http-server-auth': 0.8.1(@ttoss/http-server@0.11.1(supports-color@8.1.1))
-      '@ttoss/i18n-core': 0.7.0
-      zod: 4.6.4
-    transitivePeerDependencies:
-      - hono
-      - supports-color
-
-  '@ttoss/http-server-mcp@0.44.4(supports-color@8.1.1)':
+  '@ttoss/http-server-mcp@0.46.0(supports-color@8.1.1)':
     dependencies:
       '@modelcontextprotocol/node': 2.1.2(@modelcontextprotocol/server@2.4.0)
       '@modelcontextprotocol/server': 2.4.0
-      '@ttoss/auth-core': 0.26.0
-      '@ttoss/http-server': 0.15.0(supports-color@8.1.1)
-      '@ttoss/http-server-auth': 0.12.4(@ttoss/http-server@0.15.0(supports-color@8.1.1))
-      '@ttoss/i18n-core': 0.10.0
+      '@ttoss/auth-core': 0.28.1
+      '@ttoss/http-server': 0.15.1(supports-color@8.1.1)
+      '@ttoss/http-server-auth': 0.13.1(@ttoss/http-server@0.15.1(supports-color@8.1.1))
+      '@ttoss/i18n-core': 0.10.1
       zod: 4.6.7
     transitivePeerDependencies:
       - supports-color
@@ -19636,21 +19586,21 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@ttoss/http-server@0.15.0(supports-color@8.1.1)':
+  '@ttoss/http-server@0.15.1(supports-color@8.1.1)':
     dependencies:
       '@koa/bodyparser': 6.1.0(koa@3.2.1)
       '@koa/cors': 5.0.0
       '@koa/multer': 4.0.0(koa@3.2.1)(multer@2.4.0)
       '@koa/router': 15.7.0(koa@3.2.1)(supports-color@8.1.1)
-      '@ttoss/errors': 0.5.0
-      '@ttoss/i18n-core': 0.10.0
+      '@ttoss/errors': 0.5.1
+      '@ttoss/i18n-core': 0.10.1
       koa: 3.2.1
       koa-static: 5.0.0(supports-color@8.1.1)
       multer: 2.4.0
     transitivePeerDependencies:
       - supports-color
 
-  '@ttoss/i18n-core@0.10.0':
+  '@ttoss/i18n-core@0.10.1':
     dependencies:
       '@formatjs/intl': 6.1.5
 

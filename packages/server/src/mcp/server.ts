@@ -14,7 +14,7 @@ import { ISSUER } from '../lib/serverIssuer';
 import { BEARER_TOKEN_TYPES, verifyToken } from '../lib/signedTokens';
 import { buildSoatActionTarget, soatMcpTools } from '../lib/soatTools';
 import { verifyApiKeyToken } from '../middleware/auth';
-import { dispatchMcpApiRequest, mcpDenialResult } from './dispatchApi';
+import { dispatchMcpApiRequest } from './dispatchApi';
 import { toMcpText } from './toMcpText';
 
 const mcpServer = new McpServer({
@@ -46,19 +46,12 @@ export const mcpOperationTools: Tool[] = soatMcpTools.map((tool) => {
     inputSchema: tool.inputSchema,
     validateArguments: true,
     handler: async (args: Record<string, unknown>) => {
-      const url = buildSoatActionTarget({ def: tool, args });
-      try {
-        const data = await dispatchMcpApiRequest({
-          method: tool.method,
-          url,
-          body: tool.body ? tool.body(args) : undefined,
-        });
-        return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
-      } catch (error) {
-        const denial = mcpDenialResult(error);
-        if (denial) return denial;
-        throw error;
-      }
+      const data = await dispatchMcpApiRequest({
+        method: tool.method,
+        url: buildSoatActionTarget({ def: tool, args }),
+        body: tool.body ? tool.body(args) : undefined,
+      });
+      return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
     },
   };
 });
@@ -118,8 +111,7 @@ registerTools({
 const mcpRouter = createMcpRouter(mcpServer, {
   aliases: ['/'],
   // No `apiBaseUrl`: it configures the framework's own `apiCall`, and no tool
-  // here calls the API over HTTP any more. Leaving a loopback URL in
-  // place would be a live-looking template for the next tool someone adds.
+  // here calls the API over HTTP; a loopback URL would invite the next one to.
   getApiHeaders: (ctx) => {
     // Read back inside each tool handler through `getApiHeaders()`
     // (`dispatchMcpApiRequest`); the handlers receive only tool arguments.
