@@ -14,6 +14,7 @@ import { db } from '../db';
 import { fireAgentContinuation } from './agentContinuation';
 import { toolCallTimeoutMs } from './externalToolCall';
 import { onGenerationSettled } from './generationEvents';
+import { whenGenerationRecorded } from './generationRecorded';
 import { getGenerationTraceId } from './generations';
 import {
   completedTurnOutputText,
@@ -129,23 +130,18 @@ const reportSettled = async (args: {
 onGenerationSettled(reportSettled);
 
 /**
- * The call's answer once its wait is over: the generation `key` names, marked
- * to report to `call`'s generation. `null` when no generation was recorded
- * under the key, so the caller keeps its timeout.
+ * The call's answer once its wait is over: the generation `key` names in the
+ * parent's project, marked to report to `call`'s generation. `null` when no
+ * generation is recorded under the key yet.
  */
 const handOffRunningGeneration = async (args: {
   key: string;
   call: HandoffCall;
+  projectId: number;
 }): Promise<Record<string, unknown> | null> => {
-  const parent = await db.Generation.findOne({
-    where: { publicId: args.call.generationId },
-    attributes: ['projectId'],
+  const child = await db.Generation.findOne({
+    where: { projectId: args.projectId, idempotencyKey: args.key },
   });
-  const child = parent
-    ? await db.Generation.findOne({
-        where: { projectId: parent.projectId, idempotencyKey: args.key },
-      })
-    : null;
   if (!child) return null;
   log('handOffRunningGeneration: child=%s', child.publicId);
 
@@ -166,6 +162,51 @@ const handOffRunningGeneration = async (args: {
     message:
       'The generation is still running. Its outcome is sent to you in a follow-up message once it settles; do not start it again.',
   };
+};
+
+/**
+ * Past the bound, the generation `key` names once it is recorded. The bound
+ * can pass while the call is still writing that record, so a missing row is
+ * waited for, not taken as a timeout; the call settling first answers with
+ * its own result or error. `null` when the parent is gone.
+ */
+const handOffWhenRecorded = async <T>(args: {
+  key: string;
+  call: HandoffCall;
+  pending: Promise<T>;
+}): Promise<T | Record<string, unknown> | null> => {
+  const parent = await db.Generation.findOne({
+    where: { publicId: args.call.generationId },
+    attributes: ['projectId'],
+  });
+  if (!parent) return null;
+  const projectId = parent.projectId as number;
+  const settled = args.pending.then(
+    (value) => {
+      return { kind: 'settled' as const, value };
+    },
+    (error: unknown) => {
+      return { kind: 'failed' as const, error };
+    }
+  );
+  for (;;) {
+    const watch = whenGenerationRecorded({ idempotencyKey: args.key });
+    try {
+      const child = await handOffRunningGeneration({ ...args, projectId });
+      if (child) return child;
+      log('handOffWhenRecorded: key=%s not recorded yet', args.key);
+      const first = await Promise.race([
+        watch.recorded.then(() => {
+          return { kind: 'recorded' as const };
+        }),
+        settled,
+      ]);
+      if (first.kind === 'settled') return first.value;
+      if (first.kind === 'failed') throw first.error;
+    } finally {
+      watch.cancel();
+    }
+  }
 };
 
 /**
@@ -214,9 +255,9 @@ export const handoffFor = (args: {
       }).catch(async (error: unknown) => {
         const handedOff =
           key && call && isTimeoutError({ error })
-            ? await handOffRunningGeneration({ key, call })
+            ? await handOffWhenRecorded({ key, call, pending: promise })
             : null;
-        if (handedOff) return handedOff;
+        if (handedOff !== null) return handedOff;
         throw error;
       });
     },
