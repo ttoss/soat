@@ -30,6 +30,7 @@ const ROLES = {
     'Agent.stopConditions',
     'Agent.toolBindings',
     'Agent.toolChoice',
+    'AgentVersion.claims',
     'AgentVersion.config',
     'AgentVersion.releasedClaims',
     'AiProvider.config',

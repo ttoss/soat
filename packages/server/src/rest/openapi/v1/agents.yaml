@@ -765,8 +765,9 @@ paths:
       description: >
         Returns the claim of every eval in the agent's project whose newest
         `completed` run recorded against this agent and pinned to this version
-        carries one, with that run's verdict. A newer run revokes an older one;
-        a run with no claim holds none. Promotion keeps every claim the stable
+        carries one, with the claim's verdict: the run's, made worse by the
+        production and run-age rules the run's evidence declares. A newer run
+        revokes an older one; a run with no claim holds none. Promotion keeps every claim the stable
         version supports: see
         [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion).
       operationId: listAgentVersionClaims
@@ -780,6 +781,66 @@ paths:
       responses:
         '200':
           description: The claims the version holds, by `eval_id`
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/VersionClaim'
+        '400':
+          description: Bad Request — version is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+
+  /api/v1/agents/{agent_id}/versions/{version}/promotion-claims:
+    get:
+      tags:
+        - Agent Versions
+      summary: List the claims a promotion recorded on an agent version
+      description: >
+        Returns the claims this version held when a promotion made it live,
+        each as the claims read served it then, with the verdict production
+        gave it at that moment. Empty for a version no promotion made live.
+        The live read is `GET /api/v1/agents/{agent_id}/versions/{version}/claims`.
+      operationId: listAgentVersionPromotionClaims
+      x-iam-action: agents:GetAgentVersion
+      x-iam-resource-type: agent
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/AgentVersionNumber'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The recorded claims, by `eval_id`
           content:
             application/json:
               schema:
@@ -977,10 +1038,12 @@ paths:
 
         When the release carries a `promotion_gate`, the newest `completed` run
         of the eval it names that was recorded against this agent (`agent_id`)
-        and pinned to the canary version (`agent_version`) must read `verdict:
-        supported`. A newer run revokes an older one. Otherwise the call is a
-        `409`, whose `meta` names that run's `eval_run_id`, `claim`, `verdict`
-        and `verdict_reasons` when there is one, and the rollout is left running
+        and pinned to the canary version (`agent_version`) must give a claim
+        verdict of `supported`: the run's verdict, made worse by the production
+        and run-age rules its evidence declares. A newer run revokes an older
+        one. Otherwise the call is a `409`, whose `meta` names that run's
+        `eval_run_id`, `claim`, and the claim's `verdict` and `verdict_reasons`
+        when there is one, and the rollout is left running
         untouched. The run that cleared the gate is recorded as `eval_run_id` on
         the version that goes live.
 
@@ -991,8 +1054,11 @@ paths:
         `released_claims`. Otherwise the call is a `409 PROMOTION_CLAIM_UNMET`
         whose `meta` names the `eval_id`, the stable version's `claim`, and the
         canary's `eval_run_id`, `verdict` and `verdict_reasons` (null when it
-        has no run). The version that goes live records the release's
-        `released_claims`.
+        has no run). Both sides read the claim's verdict, which adds the
+        production rules and the run age the eval's evidence declares. The
+        version that goes live records the claims it held (`GET
+        /api/v1/agents/{agent_id}/versions/{version}/promotion-claims`) and the
+        release's `released_claims`.
       operationId: promoteAgentRelease
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
@@ -1607,7 +1673,9 @@ components:
       type: object
       description: >-
         A claim an agent version holds: the claim its newest run of an eval
-        carries, with that run's verdict.
+        carries, with the claim's verdict (the run's, made worse by the
+        production and run-age rules the run's evidence declares) and the
+        reasons behind it.
       properties:
         eval_id:
           x-soat-ref: evals

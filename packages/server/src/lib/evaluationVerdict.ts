@@ -12,7 +12,11 @@ import type { PassRateInterval } from './evaluationStatistics';
 export type Verdict = 'supported' | 'refuted' | 'insufficient';
 
 /** What a reason judges. A structured scope, never a `kind:name` string. */
-export type VerdictScope = { kind: 'run' } | { kind: 'group'; name: string };
+export type VerdictScope =
+  | { kind: 'run' }
+  | { kind: 'group'; name: string }
+  | { kind: 'live'; name: string }
+  | { kind: 'age' };
 
 export type VerdictReason = {
   scope: VerdictScope;
@@ -57,10 +61,20 @@ export const intervalVerdict = (args: {
   return { verdict: 'insufficient', reason: `${range} contains ${threshold}` };
 };
 
+/** A stored verdict, read back: anything else is no verdict. */
+export const isVerdict = (value: unknown): value is Verdict => {
+  return typeof value === 'string' && value in SEVERITY;
+};
+
+/** The more severe of two verdicts. */
+export const worseOf = (a: Verdict, b: Verdict): Verdict => {
+  return SEVERITY[b] > SEVERITY[a] ? b : a;
+};
+
 /** The most severe verdict: `refuted` over `insufficient` over `supported`. */
 export const worstVerdict = (reasons: VerdictReason[]): Verdict => {
   return reasons.reduce<Verdict>((worst, { verdict }) => {
-    return SEVERITY[verdict] > SEVERITY[worst] ? verdict : worst;
+    return worseOf(worst, verdict);
   }, 'supported');
 };
 

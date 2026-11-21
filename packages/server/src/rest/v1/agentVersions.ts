@@ -1,7 +1,10 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { listAgentVersionClaims } from 'src/lib/agentVersionClaims';
+import {
+  listAgentVersionClaims,
+  listAgentVersionPromotionClaims,
+} from 'src/lib/agentVersionClaims';
 import {
   abortAgentRelease,
   getAgentVersion,
@@ -94,6 +97,28 @@ agentVersionsRouter.get(
       action: 'agents:GetAgentVersion',
     });
     ctx.body = await listAgentVersionClaims({
+      projectIds,
+      agentId: ctx.params.agent_id,
+      version: parseVersionParam(ctx.params.version),
+      ...parsePagination(ctx),
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/agents/{agent_id}/versions/{version}/promotion-claims:
+ *   get:
+ *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1versions~1{version}~1promotion-claims/get'
+ */
+agentVersionsRouter.get(
+  '/agents/:agent_id/versions/:version/promotion-claims',
+  async (ctx: Context) => {
+    const { projectIds } = await authorizeAgentRead({
+      ctx,
+      action: 'agents:GetAgentVersion',
+    });
+    ctx.body = await listAgentVersionPromotionClaims({
       projectIds,
       agentId: ctx.params.agent_id,
       version: parseVersionParam(ctx.params.version),

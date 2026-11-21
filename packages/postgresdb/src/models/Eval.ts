@@ -115,8 +115,9 @@ export class Eval extends Model {
   declare groupBy: string | null;
 
   /**
-   * Every rule a run's verdict reads beyond the threshold, in the wire shape
-   * (`{ required_groups }`). Null declares none.
+   * Every rule beyond the threshold, in the wire shape: `required_groups`,
+   * read by a run's verdict, and `live` and `max_run_age_days`, read only by
+   * its claim's. Null declares none.
    */
   @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare evidence: Record<string, unknown> | null;

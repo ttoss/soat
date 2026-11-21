@@ -12,17 +12,11 @@ import type {
   RuntimeModule,
   RuntimeWindow,
 } from './guardrailRuntimeCatalog';
+import { rollingWindowStart } from './rollingWindows';
 import { sumEventTokens } from './usageThresholds';
 import { TOOL_EXECUTION_METER_TYPE } from './usageToolRecording';
 
 type EventWhere = Record<string | symbol, unknown>;
-
-const WINDOW_MS: Record<Exclude<RuntimeWindow, 'total'>, number> = {
-  '1h': 60 * 60 * 1000,
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
 
 /**
  * The internal ids of the entities in the current call, each resolved within
@@ -205,7 +199,10 @@ export const resolveRuntimeMetric = async (args: {
       : {
           ...scope,
           createdAt: {
-            [Op.gte]: new Date(args.now.getTime() - WINDOW_MS[args.window]),
+            [Op.gte]: rollingWindowStart({
+              window: args.window,
+              now: args.now,
+            }),
           },
         };
   return readMetric({ metric, where });

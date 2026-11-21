@@ -13,6 +13,7 @@
  */
 
 import { PROVENANCE_METRICS } from './generationProvenance';
+import { ROLLING_WINDOWS } from './rollingWindows';
 
 export const RUNTIME_METRICS = [
   'tool_calls',
@@ -26,7 +27,7 @@ export type RuntimeMetric = (typeof RUNTIME_METRICS)[number];
 
 // `total` is the entity's lifetime: "this run so far" for `orchestrations`,
 // "this chain so far" for `generations`, all-time for a tool. The others are rolling and end at evaluation time.
-export const RUNTIME_WINDOWS = ['1h', '24h', '7d', '30d', 'total'] as const;
+export const RUNTIME_WINDOWS = [...ROLLING_WINDOWS, 'total'] as const;
 
 export type RuntimeWindow = (typeof RUNTIME_WINDOWS)[number];
 
@@ -47,7 +48,7 @@ type ServedModule = {
   windows: readonly RuntimeWindow[];
 };
 
-const ROLLING = ['1h', '24h', '7d', '30d'] as const;
+const ROLLING = ROLLING_WINDOWS;
 
 export const RUNTIME_SERVED: { readonly [M in RuntimeModule]: ServedModule } = {
   projects: {

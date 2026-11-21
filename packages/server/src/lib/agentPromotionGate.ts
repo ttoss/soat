@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   type AgentRef,
+  claimReading,
   speakingRun,
   speakingRuns,
   type VersionClaim,
@@ -123,17 +124,24 @@ export const requirePromotionGate = async (args: {
     agent: args.agent,
     version: args.version,
   });
+  const claim =
+    run &&
+    (await versionClaimOf({
+      evalId: args.gate,
+      run,
+      reading: claimReading({ agent: args.agent, version: args.version }),
+    }));
 
-  if (run?.verdict !== 'supported') {
+  if (!run || claim?.verdict !== 'supported') {
     throw new DomainError(
       'PROMOTION_GATE_UNMET',
-      run
-        ? `Promotion gate '${args.gate}' reads ${String(run.verdict)} on its newest run against version ${args.version} of agent '${args.agent.publicId}'.`
+      claim
+        ? `Promotion gate '${args.gate}' reads ${String(claim.verdict)} on its newest run against version ${args.version} of agent '${args.agent.publicId}'.`
         : `Promotion gate '${args.gate}' has no completed eval run against version ${args.version} of agent '${args.agent.publicId}'.`,
       {
         promotion_gate: args.gate,
         agent_version: args.version,
-        ...(run && pickRunEvidence(versionClaimOf({ evalId: args.gate, run }))),
+        ...(claim && pickRunEvidence(claim)),
       }
     );
   }
@@ -185,12 +193,14 @@ export const resolveReleasedClaims = async (args: {
  * The pawl on promotion: every claim the stable version supports, the canary
  * supports too, unless the release names its eval in `released_claims`. A
  * refuted, insufficient or missing canary run is the same `409`, so "cannot
- * tell" never resolves to "allowed".
+ * tell" never resolves to "allowed". Both sides read the claim verdict, so a
+ * canary losing a claim in production is refused as surely as one whose run
+ * does. Returns the canary's claims, which the promoted version records.
  */
 export const requireClaimsHeld = async (args: {
   agent: AgentRef;
   release: ActiveRelease;
-}): Promise<void> => {
+}): Promise<VersionClaim[]> => {
   const { stable_version: stable, canary_version: canary } = args.release;
   log(
     'requireClaimsHeld: agent=%s stable=%d canary=%d',
@@ -201,33 +211,45 @@ export const requireClaimsHeld = async (args: {
 
   const released = new Set(args.release.released_claims);
   const canaryRuns = await speakingRuns({ agent: args.agent, version: canary });
-  const stableRuns = await speakingRuns({ agent: args.agent, version: stable });
-  for (const held of versionClaimsOf(stableRuns)) {
-    if (held.verdict !== 'supported' || released.has(held.eval_id)) continue;
-    const run = canaryRuns.get(held.eval_id);
-    if (run?.verdict === 'supported') continue;
+  const canaryReading = claimReading({ agent: args.agent, version: canary });
+  const held = await versionClaimsOf({
+    runs: await speakingRuns({ agent: args.agent, version: stable }),
+    reading: claimReading({ agent: args.agent, version: stable }),
+  });
+  for (const claim of held) {
+    if (claim.verdict !== 'supported' || released.has(claim.eval_id)) continue;
+    const run = canaryRuns.get(claim.eval_id);
+    const evidence =
+      run &&
+      (await versionClaimOf({
+        evalId: claim.eval_id,
+        run,
+        reading: canaryReading,
+      }));
+    if (evidence?.verdict === 'supported') continue;
 
-    const evidence = run && versionClaimOf({ evalId: held.eval_id, run });
     throw new DomainError(
       'PROMOTION_CLAIM_UNMET',
-      `Version ${stable} of agent '${args.agent.publicId}' supports the claim of eval '${held.eval_id}'; version ${canary} reads ${evidence ? String(evidence.verdict) : 'no completed run'} on it.`,
+      `Version ${stable} of agent '${args.agent.publicId}' supports the claim of eval '${claim.eval_id}'; version ${canary} reads ${evidence ? String(evidence.verdict) : 'no completed run'} on it.`,
       {
-        eval_id: held.eval_id,
+        eval_id: claim.eval_id,
         stable_version: stable,
         canary_version: canary,
         eval_run_id: null,
         verdict: null,
         verdict_reasons: null,
         ...(evidence && pickRunEvidence(evidence)),
-        claim: held.claim,
+        claim: claim.claim,
       }
     );
   }
+  return versionClaimsOf({ runs: canaryRuns, reading: canaryReading });
 };
 
 /**
  * Records what a promotion stood on, on the version it made live: the run that
- * cleared the gate and the claims the release gave up.
+ * cleared the gate, the claims the version held as they read then, and the
+ * claims the release gave up.
  *
  * Written after the config apply rather than threaded through it, because the
  * version being stamped is only known then: an apply archives a new version
@@ -242,6 +264,7 @@ export const recordPromotion = async (args: {
   agentDbId: number;
   version: number;
   evalRunDbId: number | null;
+  claims: VersionClaim[];
   releasedClaims: string[];
 }): Promise<void> => {
   log(
@@ -254,6 +277,7 @@ export const recordPromotion = async (args: {
   await db.AgentVersion.update(
     {
       ...(args.evalRunDbId !== null && { evalRunId: args.evalRunDbId }),
+      claims: args.claims,
       releasedClaims: args.releasedClaims,
     },
     { where: { agentId: args.agentDbId, version: args.version } }

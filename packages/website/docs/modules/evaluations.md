@@ -81,7 +81,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `pass_threshold` | number | 0–1, or `null` to report without gating; see [Pass semantics](#pass-semantics) |
 | `group_by` | string | A key of the items' `metadata` a run rolls its scores up by, or `null`; see [Grouped aggregates](#grouped-aggregates) |
 | `policy_ids` | string[] | Required on create. The policies every run acts under; see [Run authority](#run-authority) |
-| `evidence` | object \| null | The rules a run's verdict reads beyond the threshold; see [Evidence](#evidence) |
+| `evidence` | object \| null | The rules beyond the threshold, read by the run's verdict or its claim's; see [Evidence](#evidence) |
 | `claim` | object \| null | `{ statement, population, limits }`, what a run of the eval tests; see [The claim](#the-claim) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
@@ -103,7 +103,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a cancelled run |
 | `verdict` | string \| null | `supported` \| `refuted` \| `insufficient`; see [Pass semantics](#pass-semantics). `null` when the run has no threshold, until it completes, and on a cancelled or failed run |
-| `verdict_reasons` | array \| null | `[{ scope, verdict, reason }]`, one per judged scope, the run first; `scope` is `{ kind: "run" }` or `{ kind: "group", name }`. `null` when `verdict` is |
+| `verdict_reasons` | array \| null | `[{ scope, verdict, reason }]`, one per judged scope, the run first; `scope` is `{ kind: "run" }` or `{ kind: "group", name }` (a claim's reasons add `live` and `age` scopes, see [Evidence](#evidence)). `null` when `verdict` is |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [cancelled](#canceling-a-run) run the last two count what actually ran |
 | `metadata` | object | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
@@ -567,13 +567,16 @@ which scope decided it.
 
 ### Evidence
 
-`evidence` on the eval holds the rules a run's verdict reads beyond the threshold, and the
-run copies it onto `definition`. `null` declares none; on update, `null` clears it and
+`evidence` on the eval holds the rules beyond the threshold: `required_groups` is read by
+the run's verdict, `live` and `max_run_age_days` only by its [claim's
+verdict](./agents.md#claims-a-version-holds). The run copies it onto `definition`. `null` declares none; on update, `null` clears it and
 omitting it keeps it.
 
 | Key | Rule |
 | --- | --- |
 | `required_groups` | Values of `group_by`, each judged on its own interval ([Pass semantics](#pass-semantics)). Needs `group_by`; names are non-empty and unique. Other groups stay report-only |
+| `live` | Rules over the agent version's production traffic, read by the [claim's verdict](./agents.md#claims-a-version-holds), never by the run's (below) |
+| `max_run_age_days` | A claim whose speaking run finished longer ago than this is `insufficient` (`scope: { kind: "age" }`) |
 
 ```json
 { "group_by": "payment_method", "evidence": { "required_groups": ["pix", "card", "boleto"] } }
@@ -581,6 +584,38 @@ omitting it keeps it.
 
 An unknown key, `required_groups` without `group_by`, an empty or repeated name, and
 clearing `group_by` while groups are required are `400 VALIDATION_FAILED`.
+
+`live` reads the generations of the agent version that finished (`completed` or `failed`) in
+the rolling `window` (`1h`, `24h`, `7d` or `30d`, the windows a guardrail's
+[`runtime.*` keys](./guardrails.md) name), excluding those an eval run started, and the guardrail evaluations and
+approvals linked to them by `generation_id`. A row with no generation link is not read. Each
+declared rule adds a reason with `scope: { kind: "live", name: <rule> }`:
+
+| Rule | `refuted` when | `insufficient` when |
+| --- | --- | --- |
+| `min_served_generations` | never | fewer served generations than the minimum |
+| `guardrail_tripwires: { max }` | more tripwires than `max` | nothing served |
+| `approval_rejections: { max_rate, min_decided }` | rejected over decided (`approved` or `rejected`) above `max_rate` | fewer than `min_decided` decided |
+| `generation_failures: { max_rate }` | failed over served above `max_rate` | nothing served |
+
+```json
+{
+  "evidence": {
+    "live": {
+      "window": "7d",
+      "min_served_generations": 200,
+      "guardrail_tripwires": { "max": 0 },
+      "approval_rejections": { "max_rate": 0.05, "min_decided": 20 },
+      "generation_failures": { "max_rate": 0.01 }
+    },
+    "max_run_age_days": 30
+  }
+}
+```
+
+`window` is required; a rate is between 0 and 1; a rate rule on
+approvals needs `min_decided`. A run settles on its items alone: `live` and
+`max_run_age_days` never move `EvalRun.verdict`.
 
 ### The claim
 

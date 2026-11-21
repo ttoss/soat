@@ -4,11 +4,19 @@
  * doc — Version pinning). Every item and the settle read this copy, so an edit
  * to the Eval reaches only runs created after it.
  */
+import { type LiveEvidence, parseLiveEvidence } from './claimLiveEvidence';
 import { scorerList } from './evaluationScorerValidation';
 import { isPlainObject } from './plainObject';
 
-/** The rules a verdict reads beyond the threshold, in the wire shape. */
-export type EvalEvidence = { required_groups?: string[] };
+/**
+ * The rules beyond the threshold, in the wire shape: `required_groups` for the
+ * run's verdict, `live` and `max_run_age_days` for its claim's.
+ */
+export type EvalEvidence = {
+  required_groups?: string[];
+  live?: LiveEvidence;
+  max_run_age_days?: number;
+};
 
 export type EvalRunDefinition = {
   scorers: unknown[];
@@ -17,14 +25,29 @@ export type EvalRunDefinition = {
   evidence: EvalEvidence | null;
 };
 
-const evidenceOf = (value: unknown): EvalEvidence | null => {
-  if (!isPlainObject(value)) return null;
-  const groups = value.required_groups;
-  if (!Array.isArray(groups)) return {};
+const requiredGroupsOf = (
+  value: unknown
+): Pick<EvalEvidence, 'required_groups'> => {
+  if (!Array.isArray(value)) return {};
   return {
-    required_groups: groups.filter((group): group is string => {
+    required_groups: value.filter((group): group is string => {
       return typeof group === 'string';
     }),
+  };
+};
+
+/**
+ * Every rule the evidence declares, read as the Eval's validator wrote it; a
+ * key it cannot read is left out rather than guessed.
+ */
+const evidenceOf = (value: unknown): EvalEvidence | null => {
+  if (!isPlainObject(value)) return null;
+  const live = parseLiveEvidence(value.live);
+  const age = value.max_run_age_days;
+  return {
+    ...requiredGroupsOf(value.required_groups),
+    ...('live' in live && { live: live.live }),
+    ...(typeof age === 'number' && { max_run_age_days: age }),
   };
 };
 

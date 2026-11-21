@@ -132,7 +132,7 @@ A verdict supports a claim, and the claim is written before the evidence. Each v
 | 5. Cases | The dataset, weighted toward failures, curated from production | [Datasets](/docs/modules/evaluations#curating-items-from-production), a dev and a held-out set |
 | 6. Measurements | One real generation per item, against one pinned agent version | [Eval runs](/docs/modules/evaluations#version-pinning) |
 | 7. Interpretation | The pass rate with its interval, per kind, against a baseline | [Uncertainty](/docs/modules/evaluations#uncertainty), [Grouped aggregates](/docs/modules/evaluations#grouped-aggregates), [Baseline deltas](/docs/modules/evaluations#baseline-deltas) |
-| 8. Supported claim | The run's verdict | [Pass semantics](/docs/modules/evaluations#pass-semantics) |
+| 8. Supported claim | The claim's verdict: the run's, made worse by the version's production and the run's age | [Pass semantics](/docs/modules/evaluations#pass-semantics), [Claims a version holds](/docs/modules/agents#claims-a-version-holds) |
 
 **Gate the change on the verdict** (step 9): promoting the canary, encoding a guardrail `deny` or rewording an instruction waits for the verdict. [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion) is the gate.
 
@@ -198,6 +198,7 @@ Pieces marked coming soon are designed but not built.
 | [An eval run's verdict](/docs/modules/evaluations#pass-semantics) read on the pass-rate interval and on the kinds the claim requires, with its reasons | Shipped |
 | [The claim](/docs/modules/evaluations#the-claim) written on the eval and frozen on each run | Shipped |
 | [Claims held per agent version](/docs/modules/agents#claims-a-version-holds); promotion refused while the canary loses one the stable version supports | Shipped |
+| A claim's verdict read on the version's [production traffic](/docs/modules/evaluations#evidence) — tripwires, approval rejections, failures, served volume — and on its run's age; promotion records the claims it stood on | Shipped |
 
 ## Layers are concerns, not autonomy levels
 

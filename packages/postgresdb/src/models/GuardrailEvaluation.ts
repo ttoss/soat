@@ -27,6 +27,11 @@ import { Project } from './Project';
       unique: true,
       fields: ['public_id'],
     },
+    // The claims read counts a version's tripwires by its generations.
+    {
+      name: 'guardrail_evaluations_generation_id_idx',
+      fields: ['generation_id'],
+    },
   ],
   updatedAt: false,
   hooks: {

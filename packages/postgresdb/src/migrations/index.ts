@@ -68,6 +68,7 @@ import { expireWorkWithoutAuthority } from './2026-11-16-expireWorkWithoutAuthor
 import { evalRunCancelAction } from './2026-11-18-evalRunCancelAction';
 import { usageEventModelAliases } from './2026-11-18-usageEventModelAliases';
 import { agentVersionClaims } from './2026-11-21-agentVersionClaims';
+import { agentVersionPromotionClaims } from './2026-11-21-agentVersionPromotionClaims';
 import { evalClaim } from './2026-11-21-evalClaim';
 import { evalRunDropPassed } from './2026-11-21-evalRunDropPassed';
 import { evalRunVerdict } from './2026-11-21-evalRunVerdict';
@@ -163,4 +164,5 @@ export const MIGRATIONS: Migration[] = [
   evalRunDropPassed,
   evalClaim,
   agentVersionClaims,
+  agentVersionPromotionClaims,
 ];
