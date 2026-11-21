@@ -36,7 +36,7 @@ Access is policy-based, with no membership table: the [policies](./policies.md) 
 | `max_chain_generations` | integer \| null | Generations one [continuation chain](./chains.md#bounding-a-chain) in this project may hold before the platform stops resuming it. `null` (default) means no project ceiling, leaving the deployment-wide one; otherwise an integer ≥ 1. The effective budget is the smallest of the deployment's ceiling, this one, and the agent's own `maxChainGenerations`. Settable/clearable via `update-project`. |
 | `max_orchestration_run_depth` | integer \| null | `loop` / `sub_orchestration` [nesting levels](./orchestrations.md#nesting-depth) a run tree in this project may reach before the engine refuses to start the next child. `null` (default) means no project bound, leaving the deployment-wide one; otherwise an integer ≥ 1. The effective bound is the smaller of the two. Settable/clearable via `update-project`. |
 | `audit_reads_enabled` | boolean | Opts the project into [read auditing](./audit-log.md#read-auditing): when `true`, `GET` requests naming this project are recorded in the audit log alongside mutations. `false` by default. Settable via `update-project`. |
-| `require_priced_model` | boolean | Refuses a generation whose model carries no [price-book](./usage.md#pricing) row with `409 MODEL_NOT_PRICED`. `false` by default. Settable via `update-project`. See [Priced models](#priced-models). |
+| `require_priced_model` | boolean | Refuses an agent generation whose model carries no [price-book](./usage.md#pricing) row with `409 MODEL_NOT_PRICED`. `false` by default. Settable via `update-project`. See [Priced models](#priced-models). |
 | `default_conversation_retrieval` | string | What a [conversation](./conversations.md) that names no `retrieval` of its own does: `embed` or `none` (default). |
 | `trace_content_retention_days` | integer \| null | Days of [trace/generation content retention](./traces.md#retention-policy) before the daily sweep purges it. `null` (default) disables retention; otherwise an integer ≥ 1. Settable/clearable via `update-project`. |
 | `trace_content_mode` | string | `full` (default) or `none`. `none` is [zero-retention](./traces.md#zero-retention-mode): trace and generation content is never written for any agent in the project. Settable via `update-project`. |
@@ -162,9 +162,9 @@ The route must belong to the project. An explicit binding always wins. Repointin
 
 ### Priced models
 
-`require_priced_model` refuses a generation whose model no price row covers,
-before the provider is called. On the project it holds every provider; on an
-[AI provider](./ai-providers.md#requiring-a-priced-model) it holds that
+`require_priced_model` refuses an agent generation whose model no price row
+covers, before the provider is called. On the project it holds every provider;
+on an [AI provider](./ai-providers.md#requiring-a-priced-model) it holds that
 provider alone, and a candidate is checked when either flag holds it:
 
 <Tabs groupId="client">
@@ -213,6 +213,9 @@ record exists, so a refused turn is neither recorded nor metered.
 - The check reads the configured model name. A provider that answers under a
   more specific id meters under that id; the
   [`quota_unpriced` exception](./quotas.md#unpriced-usage) names it.
+- Every agent turn is checked, whatever starts it: an agent, session or
+  conversation generation, or an agent a trigger or orchestration runs. A
+  [chat completion](./chats.md) is not checked.
 - [Embeddings](./embeddings.md#pricing-embeddings) are not gated: their rate is
   deployment configuration, outside every price-book tier.
 

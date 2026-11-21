@@ -100,7 +100,7 @@ When the provider rejects the completion (unavailable model, refused credential)
 }
 ```
 
-Same mapping as [Agents](./agents.md) generation, so probing which models a provider can serve gives an interpretable answer instead of a bare `500`. A streaming request has already written `200`; the failure arrives as a terminal `data: {"error": {"code": "AI_PROVIDER_ERROR", "message": "..."}}` frame and the stream ends without `[DONE]`.
+`meta` carries `provider_status_code` and `provider_response_body` when the provider sent them, as on a [generation](./generations.md#provider-error-surfacing-ai_provider_error). Same mapping as [Agents](./agents.md) generation, so probing which models a provider can serve gives an interpretable answer instead of a bare `500`. A streaming request has already written `200`; the failure arrives as a terminal `data: {"error": {"code": "AI_PROVIDER_ERROR", "message": "..."}}` frame and the stream ends without `[DONE]`.
 
 ### Document-Backed Messages
 
