@@ -16,7 +16,8 @@ export const DEFAULT_HEADER_PREFIX = 'X-Soat-';
  * header cannot be added outside it (`tests/harness/headerPrefix.test.mjs`).
  *
  * Read per call, so the value set is the value used whenever the module graph
- * was loaded. Empty or unset keeps the default.
+ * was loaded; `loadBootConfig` reads it at boot, so a malformed value stops the
+ * process. Empty or unset keeps the default.
  */
 export const headerPrefix = (): string => {
   const configured = process.env.SOAT_HEADER_PREFIX;

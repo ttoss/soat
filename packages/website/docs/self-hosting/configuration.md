@@ -158,7 +158,7 @@ Every header SOAT names is `<SOAT_HEADER_PREFIX><name>` (e.g. to hide the SOAT n
 | [On-behalf-of](../modules/tools.md#writing-on-behalf-of-a-tool-call) `On-Behalf-Of`          | read from a tool server writing back with its project's key | `X-Acme-On-Behalf-Of`    |
 | [Inbound trigger hook](../modules/triggers.md) `Signature`                                   | read from the caller of `/hooks/triggers/{trigger_id}`      | `X-Acme-Signature`       |
 
-Prepended verbatim, so include the trailing `-`. Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the request with an error naming the variable. Empty or unset keeps the default. Changing it breaks every receiver and sender already using these names: set it before wiring anything up, or update both sides together.
+Prepended verbatim, so include the trailing `-`. Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value stops the server and the worker at startup with an error naming the variable. Empty or unset keeps the default. Changing it breaks every receiver and sender already using these names: set it before wiring anything up, or update both sides together.
 
 ### Debug Logging
 

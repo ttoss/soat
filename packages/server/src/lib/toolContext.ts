@@ -186,7 +186,8 @@ const RESERVED_LOWER = new Set(
 /**
  * The key prefix the deployment reserves to an IAM token's `tool_context`
  * layer (`SOAT_RESERVED_TOOL_CONTEXT_PREFIX`), or null when it reserves none.
- * Read per call, like `SOAT_HEADER_PREFIX`.
+ * Read per call, like `SOAT_HEADER_PREFIX`; `loadBootConfig` reads it at boot,
+ * so a malformed value stops the process instead of failing a request.
  */
 export const reservedToolContextPrefix = (): string | null => {
   const configured = process.env.SOAT_RESERVED_TOOL_CONTEXT_PREFIX;

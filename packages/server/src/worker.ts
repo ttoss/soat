@@ -4,12 +4,7 @@ import createDebug from 'debug';
 
 import { app } from './app';
 import { initializeDatabase, logDatabaseConnectionError } from './db';
-import { initDeploymentRegistrations } from './lib/deploymentRegistrations';
-import {
-  EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV,
-  embeddingPriceWarning,
-  readEmbeddingInputTokenPriceUsd,
-} from './lib/embeddingPrice';
+import { loadBootConfigOrExit } from './lib/bootConfig';
 import { startEvalWorker, stopEvalWorker } from './lib/evaluationWorker';
 import {
   startOrchestrationScheduler,
@@ -44,42 +39,18 @@ const drainInFlight = async (): Promise<number> => {
 };
 
 /**
- * Standalone orchestration worker entrypoint (Phase 1, D4).
+ * Standalone worker entrypoint: the scheduler tick (which enqueues
+ * `wake`/`continue` tasks for due and orphaned runs) and the worker loop (which
+ * claims and drives them), with no HTTP listener.
  *
- * Starts only the scheduler tick (which enqueues `wake`/`continue` tasks for due
- * and orphaned runs) and the worker loop (which claims and drives those tasks) —
- * no HTTP listener. This proves the "separate-process worker" option is real:
- * `node worker.ts` drains a queue to completion with the API process stopped.
- *
- * Global concurrency is capped per process via `ORCHESTRATION_WORKER_CONCURRENCY`
- * (D10); a fleet of P workers bounds it at `P × CONCURRENCY`. On `SIGTERM`/`SIGINT`
- * the process drains gracefully — it stops claiming and waits for already-claimed
- * tasks to finish before exiting (D4). Run the API tier with
- * `ORCHESTRATION_WORKER_DISABLED=true` so it stays request-only and this process
- * owns draining.
+ * Global concurrency is capped per process via `ORCHESTRATION_WORKER_CONCURRENCY`;
+ * a fleet of P workers bounds it at `P × CONCURRENCY`. On `SIGTERM`/`SIGINT`
+ * the process stops claiming and waits for already-claimed tasks to finish
+ * before exiting. Run the API tier with `ORCHESTRATION_WORKER_DISABLED=true` so
+ * it stays request-only and this process owns draining.
  */
 const startWorker = async () => {
-  // Ingestion embeds on this tier, so the rate is validated here too — an
-  // unparseable one is swallowed per call by the meter, which would leave this
-  // process metering every embedding at nothing while the API tier refuses to
-  // start at all.
-  try {
-    initDeploymentRegistrations();
-    readEmbeddingInputTokenPriceUsd();
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-
-  const priceWarning = embeddingPriceWarning({
-    provider: process.env.EMBEDDING_PROVIDER,
-    value: process.env[EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV],
-  });
-  if (priceWarning) {
-    // eslint-disable-next-line no-console
-    console.warn(priceWarning);
-  }
+  loadBootConfigOrExit();
 
   try {
     const database = await initializeDatabase(app);
