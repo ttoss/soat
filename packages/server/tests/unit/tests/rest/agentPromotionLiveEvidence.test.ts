@@ -452,7 +452,7 @@ describe('Agent version claims — live evidence', () => {
       expect(claim).toMatchObject({ verdict: null, verdict_reasons: null });
     });
 
-    test('a live rule recorded on the run that no longer reads is insufficient, never ignored', async () => {
+    test('a live rule recorded on the run that the rules do not read is insufficient, never ignored', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
         live: { window: '7d', guardrail_tripwires: { max: 0 } },
@@ -478,7 +478,7 @@ describe('Agent version claims — live evidence', () => {
       });
     });
 
-    test('a run created from a live rule that no longer reads records it as written', async () => {
+    test('a run created from a live rule the rules do not read records it as written', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {
         live: { window: '7d', guardrail_tripwires: { max: 0 } },

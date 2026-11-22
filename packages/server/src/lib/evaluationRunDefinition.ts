@@ -8,7 +8,7 @@ import { type LiveEvidence, parseLiveEvidence } from './claimLiveEvidence';
 import { scorerList } from './evaluationScorerValidation';
 import { isPlainObject } from './plainObject';
 
-/** A recorded `live` the rules no longer read, kept as it was written. */
+/** A recorded `live` the rules do not read, kept as it was written. */
 export type UnreadableLive = { unreadable: unknown };
 
 /**
@@ -47,7 +47,7 @@ const liveOf = (value: unknown): Pick<EvalEvidence, 'live'> => {
 
 /**
  * Every rule the evidence declares, read as the Eval's validator wrote it. A
- * recorded `live` that no longer reads is kept as {@link UnreadableLive}, so
+ * recorded `live` the rules do not read is kept as {@link UnreadableLive}, so
  * the claim it governs reads insufficient instead of passing without it.
  */
 const evidenceOf = (value: unknown): EvalEvidence | null => {

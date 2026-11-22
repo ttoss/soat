@@ -262,12 +262,12 @@ export const ERROR_CODES = {
   PROMOTION_GATE_UNMET: {
     httpStatus: 409,
     description:
-      "The newest run of the release's promotion_gate against the canary version of this agent does not read supported. Run the eval with agent_version pinned to the canary, with enough items for its interval to clear the threshold, or abort the rollout.",
+      "The claim verdict of the newest run of the release's promotion_gate against the canary version of this agent does not read supported, or there is no such run. The claim verdict is the run's verdict made worse by the production and run-age rules the run records. Run the eval with agent_version pinned to the canary, with enough items for its interval to clear the threshold and its evidence rules met, or abort the rollout.",
   },
   PROMOTION_CLAIM_UNMET: {
     httpStatus: 409,
     description:
-      "The stable version supports a claim the canary version does not: its claim verdict on that eval (the newest run, with the live and age rules it records) reads refuted or insufficient, or it has no run. Run the eval with agent_version pinned to the canary, name the eval in the release's released_claims to give the claim up, or abort the rollout.",
+      "The stable version's run supports a claim the canary version does not hold: the canary's claim verdict on that eval (its newest run, with the live and age rules the run records) does not read supported, or it has no run. Run the eval with agent_version pinned to the canary, name the eval in the release's released_claims to give the claim up, or abort the rollout.",
   },
   NO_ACTIVE_RELEASE: {
     httpStatus: 409,

@@ -318,7 +318,7 @@ export const ageReason = (args: {
 };
 
 /**
- * The reason a run's recorded `evidence.live` gives when it no longer reads
+ * The reason a run's recorded `evidence.live` gives when it does not read
  * against the rules: a rule nobody can evaluate is insufficient evidence,
  * never a rule that passed.
  */
