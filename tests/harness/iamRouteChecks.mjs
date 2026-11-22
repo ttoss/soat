@@ -37,7 +37,7 @@ const TAG_ROUTE_METHODS = ['get', 'put', 'patch'];
 export const INHERIT = 'inherit';
 
 const sources = new Map();
-const parse = (file) => {
+export const parse = (file) => {
   if (!sources.has(file)) {
     sources.set(
       file,
@@ -148,6 +148,11 @@ const bindingsOf = (file) => {
     }
   }
   return bindings;
+};
+
+/** The file and exported name `file` imports `name` from. */
+export const importOf = (file, name) => {
+  return bindingsOf(file).imports.get(name);
 };
 
 /** `name` as `file` sees it: its own binding, else the one it imports. */

@@ -268,6 +268,40 @@ describe('admission — a declared write is asked about before it executes', () 
     });
   });
 
+  describe.each([
+    {
+      route: '/api/v1/formations/validate',
+      action: 'formations:ValidateFormation',
+      body: { template: { resources: {} } },
+    },
+    {
+      route: '/api/v1/orchestrations/validate',
+      action: 'orchestrations:ValidateOrchestration',
+      body: { nodes: [], edges: [] },
+    },
+  ])('POST $route — authorized to any caller', ({ route, action, body }) => {
+    test('is asked too', async () => {
+      service.declare({ actions: [action] });
+      service.reply = REFUSAL;
+
+      const res = await turn.api().post(route).send(body);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PLAN_LIMIT_REACHED');
+      expect(service.asked).toHaveLength(1);
+      expect(service.asked[0].body).toMatchObject({ action });
+    });
+
+    test('validates when the service allows', async () => {
+      service.declare({ actions: [action] });
+
+      const res = await turn.api().post(route).send(body);
+
+      expect(res.status).toBe(200);
+      expect(service.asked).toHaveLength(1);
+    });
+  });
+
   describe('a builtin create-trigger in a generation', () => {
     test('passes when the service allows', async () => {
       const { result } = await createTriggerByBuiltin();
