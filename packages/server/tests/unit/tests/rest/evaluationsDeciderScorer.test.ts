@@ -416,6 +416,54 @@ describe('Evaluations — decider scorers', () => {
       });
     });
 
+    test("a tool decider's call for a scorer is verification spend", async () => {
+      const evalId = await createEval([deciderScorer()]);
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_dsc_tool', 'Refund issued.')
+      );
+
+      const res = await runEval(evalId);
+      expect(res.body.status).toBe('completed');
+
+      const tool = await db.Tool.findOne({
+        where: { publicId: deciderToolId },
+      });
+      const events = await db.UsageEvent.findAll({
+        where: { toolId: tool!.id, meterType: 'tool_execution' },
+      });
+      expect(events.length).toBeGreaterThan(0);
+      for (const event of events) expect(event.source).toBe('eval_scorer');
+    });
+
+    test("an agent decider's generation for a scorer is verification spend", async () => {
+      const agentDeciderId = await createDecider({
+        tool_id: undefined,
+        agent_id: agentId,
+      });
+      const evalId = await createEval([
+        deciderScorer({ decider_id: agentDeciderId }),
+      ]);
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_dsc_item', 'Refund.'))
+        .mockResolvedValueOnce({
+          ...completedGeneration('gen_dsc_decider', ''),
+          output: {
+            model: 'test-model',
+            content: '',
+            finishReason: 'stop',
+            object: { resolves_issue: true, tone: 2 },
+          },
+        });
+
+      const res = await runEval(evalId);
+      expect(res.body.status).toBe('completed');
+
+      const deciderCall = mockCreateGeneration.mock.calls.find(([call]) => {
+        return call.outputSchemaOverride !== undefined;
+      });
+      expect(deciderCall?.[0].source).toBe('eval_scorer');
+    });
+
     test('judges the input the scorer maps from the item context', async () => {
       const evalId = await createEval([
         deciderScorer({

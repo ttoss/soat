@@ -13,6 +13,7 @@ import {
   DECIDER_SCORER_TYPE,
   type DeciderScorerDecision,
 } from './evaluationDeciderScorerContract';
+import { SCORER_USAGE_SOURCE } from './evaluationToolScorer';
 import { isPlainObject } from './plainObject';
 import type { WorkAuthority } from './workAuthority';
 
@@ -110,6 +111,7 @@ export const runDeciderScorerCall = async (args: {
       eval_run_id: args.scoring.runId,
       dataset_item_id: args.datasetItemId,
     },
+    source: SCORER_USAGE_SOURCE,
   }).catch((error: unknown) => {
     // Admission refusals (paused project, quota, an uncallable tool) write no
     // decision; name the scorer so the item error says which one.

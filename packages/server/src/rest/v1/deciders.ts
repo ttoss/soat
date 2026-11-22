@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { DECIDER_USAGE_SOURCE } from 'src/lib/deciderQuestions';
 import {
   createDecider,
   deciders,
@@ -282,6 +283,7 @@ decidersRouter.post('/deciders/:decider_id/decisions', async (ctx: Context) => {
     metadata: parseMetadataBag(body.metadata),
     wait: body.wait === true,
     authority: captureAuthority({ authUser: ctx.authUser }),
+    source: DECIDER_USAGE_SOURCE,
   });
 });
 
@@ -312,6 +314,7 @@ decidersRouter.post('/decisions', async (ctx: Context) => {
     metadata: parseMetadataBag(body.metadata),
     wait: body.wait === true,
     authority: captureAuthority({ authUser: ctx.authUser }),
+    source: DECIDER_USAGE_SOURCE,
   });
 });
 
