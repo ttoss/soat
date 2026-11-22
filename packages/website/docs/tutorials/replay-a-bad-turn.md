@@ -557,7 +557,7 @@ EVAL_ID=$(soat create-eval \
   --policy-ids '["'"$POLICY_ID"'"]' \
   --agent-id "$STRICT_AGENT_ID" \
   --dataset-id "$DATASET_ID" \
-  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}]' \
+  --scorers '[{"type":"json_logic","name":"non_empty","expression":{"!=":[{"var":"output"},""]}}]' \
   --pass-threshold 0.5 | jq -r '.id')
 
 RUN=$(soat start-eval-run --eval-id "$EVAL_ID" --wait true)
@@ -591,7 +591,7 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
     agent_id: strictAgent.id,
     dataset_id: dataset.id,
     scorers: [
-      { type: 'json_logic', expression: { '!=': [{ var: 'output' }, ''] } },
+      { type: 'json_logic', name: 'non_empty', expression: { '!=': [{ var: 'output' }, ''] } },
     ],
     pass_threshold: 0.5,
   },
@@ -615,7 +615,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
 
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","name":"refund-clarity","policy_ids":["'"$POLICY_ID"'"],"agent_id":"'"$STRICT_AGENT_ID"'","dataset_id":"'"$DATASET_ID"'","scorers":[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}],"pass_threshold":0.5}' | jq -r '.id')
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"refund-clarity","policy_ids":["'"$POLICY_ID"'"],"agent_id":"'"$STRICT_AGENT_ID"'","dataset_id":"'"$DATASET_ID"'","scorers":[{"type":"json_logic","name":"non_empty","expression":{"!=":[{"var":"output"},""]}}],"pass_threshold":0.5}' | jq -r '.id')
 
 RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \

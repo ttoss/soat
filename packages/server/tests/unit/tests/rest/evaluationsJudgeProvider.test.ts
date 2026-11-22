@@ -123,6 +123,7 @@ describe('POST /api/v1/evals/:eval_id/runs — llm_judge provider resolution', (
         scorers: [
           {
             type: 'llm_judge',
+            name: 'llm_judge',
             prompt: 'A: {{output}}. Answer with JSON.',
             pass_threshold: 0.7,
             ...scorer,

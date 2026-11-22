@@ -527,7 +527,7 @@ describe('Evaluations', () => {
         name: 'basic-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'invoice' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'invoice' }],
         pass_threshold: 0.5,
       });
 
@@ -535,7 +535,9 @@ describe('Evaluations', () => {
       expect(created.agent_id).toBe(agentId);
       expect(created.dataset_id).toBe(datasetId);
       expect(created.pass_threshold).toBe(0.5);
-      expect(created.scorers).toEqual([{ type: 'contains', value: 'invoice' }]);
+      expect(created.scorers).toEqual([
+        { type: 'contains', name: 'contains', value: 'invoice' },
+      ]);
     });
 
     test('an agent in another project is rejected with 400', async () => {
@@ -547,7 +549,7 @@ describe('Evaluations', () => {
           name: 'cross-project-agent',
           agent_id: otherProjectAgentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         });
 
       expect(res.status).toBe(400);
@@ -563,7 +565,7 @@ describe('Evaluations', () => {
           name: 'cross-project-dataset',
           agent_id: agentId,
           dataset_id: otherProjectDatasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         });
 
       expect(res.status).toBe(400);
@@ -595,7 +597,9 @@ describe('Evaluations', () => {
           name: 'embedding-no-threshold-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'embedding_similarity' }],
+          scorers: [
+            { type: 'embedding_similarity', name: 'embedding_similarity' },
+          ],
         });
 
       expect(res.status).toBe(400);
@@ -611,7 +615,9 @@ describe('Evaluations', () => {
           name: 'judge-no-threshold-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'llm_judge', prompt: 'rate {{output}}' }],
+          scorers: [
+            { type: 'llm_judge', name: 'llm_judge', prompt: 'rate {{output}}' },
+          ],
         });
 
       expect(res.status).toBe(400);
@@ -629,7 +635,13 @@ describe('Evaluations', () => {
           dataset_id: datasetId,
           // Its own schema does not help: without an agent schema the platform
           // emits no structured output, so every item would score 0.
-          scorers: [{ type: 'output_schema', schema: { type: 'object' } }],
+          scorers: [
+            {
+              type: 'output_schema',
+              name: 'output_schema',
+              schema: { type: 'object' },
+            },
+          ],
         });
 
       expect(res.status).toBe(400);
@@ -645,7 +657,7 @@ describe('Evaluations', () => {
           name: 'bad-threshold',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
           pass_threshold: 1.5,
         });
 
@@ -658,7 +670,7 @@ describe('Evaluations', () => {
         name: 'unauth',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
       expect(res.status).toBe(401);
     });
@@ -672,7 +684,7 @@ describe('Evaluations', () => {
           name: 'forbidden',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         });
       expect(res.status).toBe(403);
     });
@@ -685,7 +697,7 @@ describe('Evaluations', () => {
           name: 'implicit-project-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         });
 
       expect(res.status).toBe(201);
@@ -701,7 +713,7 @@ describe('Evaluations', () => {
           name: 'numeric-agent',
           agent_id: 42,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         });
 
       expect(res.status).toBe(400);
@@ -721,7 +733,7 @@ describe('Evaluations', () => {
         name: 'listable-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       const list = await asUser().get(`/api/v1/evals?project_id=${projectId}`);
@@ -742,18 +754,20 @@ describe('Evaluations', () => {
         name: 'updatable-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       const res = await asUser()
         .put(`/api/v1/evals/${created.id}`)
         .send({
-          scorers: [{ type: 'contains', value: 'yes' }],
+          scorers: [{ type: 'contains', name: 'contains', value: 'yes' }],
           pass_threshold: null,
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.scorers).toEqual([{ type: 'contains', value: 'yes' }]);
+      expect(res.body.scorers).toEqual([
+        { type: 'contains', name: 'contains', value: 'yes' },
+      ]);
       expect(res.body.pass_threshold).toBeNull();
     });
 
@@ -762,7 +776,7 @@ describe('Evaluations', () => {
         name: 'schema-swap-eval',
         agent_id: schemaAgentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'output_schema' }],
+        scorers: [{ type: 'output_schema', name: 'output_schema' }],
       });
 
       const res = await asUser()
@@ -778,7 +792,7 @@ describe('Evaluations', () => {
         name: 'deletable-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       const res = await asUser().delete(`/api/v1/evals/${created.id}`);
@@ -807,7 +821,7 @@ describe('Evaluations', () => {
           name: 'run-contract-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         })
       ).id;
     });
@@ -841,7 +855,7 @@ describe('Evaluations', () => {
         name: 'queued-oversized-eval',
         agent_id: agentId,
         dataset_id: bigDataset,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       const res = await asUser()
@@ -859,7 +873,7 @@ describe('Evaluations', () => {
         name: 'empty-eval',
         agent_id: agentId,
         dataset_id: emptyDataset,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
         pass_threshold: 0.5,
       });
 
@@ -882,7 +896,7 @@ describe('Evaluations', () => {
         name: 'oversized-eval',
         agent_id: agentId,
         dataset_id: bigDataset,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       const res = await asUser()
@@ -1126,10 +1140,11 @@ describe('Evaluations', () => {
           agent_id: agentId,
           dataset_id: datasetId,
           scorers: [
-            { type: 'exact_match' },
-            { type: 'contains', value: 'Paris' },
+            { type: 'exact_match', name: 'exact_match' },
+            { type: 'contains', name: 'contains', value: 'Paris' },
             {
               type: 'json_logic',
+              name: 'json_logic',
               expression: { '==': [{ var: 'output' }, 'Paris'] },
             },
           ],
@@ -1213,7 +1228,13 @@ describe('Evaluations', () => {
         name: 'embedding-eval',
         agent_id: agentId,
         dataset_id: dataset.id,
-        scorers: [{ type: 'embedding_similarity', pass_threshold: 0.9 }],
+        scorers: [
+          {
+            type: 'embedding_similarity',
+            name: 'embedding_similarity',
+            pass_threshold: 0.9,
+          },
+        ],
         pass_threshold: 1,
       });
 
@@ -1455,7 +1476,7 @@ describe('Evaluations', () => {
         name: 'tied-items-eval',
         agent_id: agentId,
         dataset_id: dataset.id,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       mockCreateGeneration
@@ -1566,7 +1587,7 @@ describe('Evaluations', () => {
           name: 'async-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
           pass_threshold: 0.5,
         })
       ).id;
@@ -1787,7 +1808,7 @@ describe('Evaluations', () => {
         name: 'async-oversized-eval',
         agent_id: agentId,
         dataset_id: bigDataset,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       const res = await asUser()
@@ -1814,7 +1835,7 @@ describe('Evaluations', () => {
           name: 'cancel-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         })
       ).id;
     });
@@ -2052,7 +2073,7 @@ describe('Evaluations', () => {
           name: 'reaper-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         })
       ).id;
     });
@@ -2166,7 +2187,7 @@ describe('Evaluations', () => {
           name: 'events-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
           pass_threshold: 1,
         })
       ).id;
@@ -2335,7 +2356,7 @@ describe('Evaluations', () => {
         name: 'usage-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       mockCreateGeneration.mockResolvedValueOnce(
@@ -2378,7 +2399,7 @@ describe('Evaluations', () => {
           name: 'baseline-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         })
       ).id;
     });
@@ -2491,7 +2512,7 @@ describe('Evaluations', () => {
         name: 'baseline-other-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
       const foreign = await runWith({ answers: ['Paris', 'Paris'] });
 
@@ -2599,6 +2620,7 @@ describe('Evaluations', () => {
         scorers: [
           {
             type: 'llm_judge',
+            name: 'llm_judge',
             ai_provider_id: judgeProviderId,
             model: 'judge-model',
             prompt:
@@ -2728,7 +2750,7 @@ describe('Evaluations', () => {
           name: 'worker-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         })
       ).id;
     });
@@ -2924,10 +2946,11 @@ describe('Evaluations', () => {
           agent_id: schemaAgentId,
           dataset_id: datasetId,
           scorers: [
-            { type: 'output_schema' },
-            { type: 'contains', value: 'billing' },
+            { type: 'output_schema', name: 'output_schema' },
+            { type: 'contains', name: 'contains', value: 'billing' },
             {
               type: 'json_logic',
+              name: 'json_logic',
               expression: {
                 '==': [{ var: 'object.category' }, { var: 'expected' }],
               },
@@ -3007,7 +3030,7 @@ describe('Evaluations', () => {
         name: 'stranded-eval',
         agent_id: strandedAgentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'output_schema' }],
+        scorers: [{ type: 'output_schema', name: 'output_schema' }],
       });
 
       // The agent's schema is mutable, so the create-time check is only
@@ -3038,7 +3061,7 @@ describe('Evaluations', () => {
         name: 'frozen-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       mockCreateGeneration.mockResolvedValueOnce(
@@ -3079,7 +3102,7 @@ describe('Evaluations', () => {
         name: 'purge-eval',
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
 
       // A real Generation row is needed for the FK link and the purge to have
@@ -3373,7 +3396,7 @@ describe('Evaluations', () => {
           name: 'tool-scorer-update-check',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         });
 
         const res = await asUser()

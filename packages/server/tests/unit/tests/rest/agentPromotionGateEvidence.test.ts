@@ -65,7 +65,7 @@ describe('Promotion gate — the evidence it reads', () => {
         name: unique('gate-eval'),
         agent_id: targetAgentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'Paris' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'Paris' }],
         pass_threshold: 0.5,
       });
     expect(res.status).toBe(201);
@@ -82,7 +82,7 @@ describe('Promotion gate — the evidence it reads', () => {
         name: unique('gate-eval-strict'),
         agent_id: targetAgentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'Paris' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'Paris' }],
         pass_threshold: 0.9,
         claim: GATE_CLAIM,
       });

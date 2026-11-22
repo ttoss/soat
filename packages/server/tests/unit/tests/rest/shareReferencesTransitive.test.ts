@@ -177,7 +177,7 @@ describe('Share references through local resources', () => {
       name: 'evaluates-the-agent',
       agent_id: agent,
       dataset_id: dataset,
-      scorers: [{ type: 'exact_match' }],
+      scorers: [{ type: 'exact_match', name: 'exact_match' }],
     });
     const decider = await createIn(granteeId, '/api/v1/deciders', {
       policy_ids: await testGrant({ token: adminToken }),

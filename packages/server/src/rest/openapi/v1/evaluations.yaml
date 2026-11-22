@@ -815,7 +815,8 @@ paths:
         Scorer config is frozen here rather than read from the agent at run
         time, so two runs of the same eval are always judged by the same
         criteria and their comparison measures the agent instead of the config
-        drifting underneath it. Each scorer `type` may appear at most once.
+        drifting underneath it. Every scorer carries a `name`, unique within
+        the eval.
       operationId: createEval
       x-iam-action: evaluations:CreateEval
       x-iam-resource-type: eval
@@ -1800,11 +1801,19 @@ components:
           content:
             description: Message content — a string, or AI SDK content parts
             example: When is my invoice issued?
+    ScorerName:
+      type: string
+      minLength: 1
+      description: >-
+        Required on every scorer and unique within the eval: the key its
+        outcomes (`scores[].scorer`), aggregate scores and calibration go
+        under. Several scorers of one type coexist under distinct names.
+      example: policy_judge
     Scorers:
       type: array
       description: >-
-        Scorer configs, a discriminated union on `type`. Each type may appear at
-        most once. Every scorer produces `{ score: 0–1, passed: boolean }`;
+        Scorer configs, a discriminated union on `type`, each keyed by its
+        `name`. Every scorer produces `{ score: 0–1, passed: boolean }`;
         binary scorers emit 0 or 1.
 
 
@@ -1856,19 +1865,25 @@ components:
       type: object
       required:
         - type
+        - name
       properties:
         type:
           type: string
           enum: [exact_match]
+        name:
+          $ref: '#/components/schemas/ScorerName'
     ContainsScorer:
       type: object
       required:
         - type
+        - name
         - value
       properties:
         type:
           type: string
           enum: [contains]
+        name:
+          $ref: '#/components/schemas/ScorerName'
         value:
           type: string
           example: invoice
@@ -1879,11 +1894,14 @@ components:
       type: object
       required:
         - type
+        - name
         - expression
       properties:
         type:
           type: string
           enum: [json_logic]
+        name:
+          $ref: '#/components/schemas/ScorerName'
         expression:
           type: object
           additionalProperties: true
@@ -1892,10 +1910,13 @@ components:
       type: object
       required:
         - type
+        - name
       properties:
         type:
           type: string
           enum: [output_schema]
+        name:
+          $ref: '#/components/schemas/ScorerName'
         schema:
           type: object
           additionalProperties: true
@@ -1907,11 +1928,14 @@ components:
       type: object
       required:
         - type
+        - name
         - pass_threshold
       properties:
         type:
           type: string
           enum: [embedding_similarity]
+        name:
+          $ref: '#/components/schemas/ScorerName'
         pass_threshold:
           type: number
           minimum: 0
@@ -1925,12 +1949,15 @@ components:
       type: object
       required:
         - type
+        - name
         - prompt
         - pass_threshold
       properties:
         type:
           type: string
           enum: [llm_judge]
+        name:
+          $ref: '#/components/schemas/ScorerName'
         prompt:
           type: string
           description: >-
@@ -1988,13 +2015,7 @@ components:
           type: string
           enum: [tool]
         name:
-          type: string
-          description: >-
-            Keys this scorer's outcomes and aggregate scores, so it must be
-            unique within the eval and must not shadow a built-in scorer type.
-            Unlike the built-in types, several `tool` scorers may coexist under
-            distinct names.
-          example: toxicity
+          $ref: '#/components/schemas/ScorerName'
         tool_id:
           x-soat-ref: tools
           type: string
@@ -2051,11 +2072,7 @@ components:
           type: string
           enum: [decider]
         name:
-          type: string
-          description: >-
-            Keys this scorer's outcomes and aggregate scores, so it must be
-            unique within the eval and must not shadow a built-in scorer type.
-          example: review
+          $ref: '#/components/schemas/ScorerName'
         decider_id:
           x-soat-ref: deciders
           type: string
@@ -2727,8 +2744,9 @@ components:
           type: string
           nullable: true
           description: >-
-            SHA-256 of the scorers the run recorded and the decider versions it
-            pinned, key order aside: a changed prompt, pinned model or
+            SHA-256 of each scorer the run recorded, under its name, and the
+            decider versions it pinned, key order aside: a changed prompt,
+            pinned model or
             provider, threshold or decider version moves it. What a scorer
             resolves when it runs (the project's default model route or
             embedding model, a tool's pipeline) is not in it. Null when the

@@ -1120,7 +1120,7 @@ describe('Projects', () => {
           name: 'late-module-eval',
           agent_id: agentRes.body.id,
           dataset_id: datasetRes.body.id,
-          scorers: [{ type: 'contains', value: 'x' }],
+          scorers: [{ type: 'contains', name: 'contains', value: 'x' }],
         });
       expect(evalRes.status).toBe(201);
 

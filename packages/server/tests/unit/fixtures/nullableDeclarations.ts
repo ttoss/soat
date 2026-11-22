@@ -154,7 +154,7 @@ export const DECLARATIONS: Record<string, Declaration[]> = {
         name: 'Nullable Eval',
         agent_id: fx.agentId,
         dataset_id: fx.datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
         pass_threshold: 0.8,
         group_by: 'topic',
       };

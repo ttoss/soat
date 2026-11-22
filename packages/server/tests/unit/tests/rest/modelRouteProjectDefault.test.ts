@@ -167,6 +167,7 @@ describe('Project default model route', () => {
   /** A judge that pins no provider resolves through the project default. */
   const UNBOUND_JUDGE = {
     type: 'llm_judge',
+    name: 'llm_judge',
     model: 'judge-model',
     prompt: 'Rate {{output}} against {{expected}}.',
     pass_threshold: 0.5,

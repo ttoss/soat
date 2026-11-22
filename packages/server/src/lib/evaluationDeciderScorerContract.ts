@@ -5,7 +5,7 @@
  * `runDeciderScorerCall` from `evaluationDeciderScorer.ts`.
  */
 import { DomainError } from '../errors';
-import type { ScorerOutcome } from './evaluationScorers';
+import type { ScorerVerdict } from './evaluationScorers';
 import { isUnitInterval } from './evaluationToolScorerContract';
 import { evaluateLogic } from './jsonLogicMapping';
 
@@ -34,15 +34,8 @@ export type DeciderScorerRunner = (args: {
 export const checkDeciderScorerConfig = (args: {
   scorer: Record<string, unknown>;
   path: string;
-  isBuiltInTypeName: (name: string) => boolean;
 }): string | null => {
   const { scorer, path } = args;
-  if (typeof scorer.name !== 'string' || scorer.name.trim() === '') {
-    return `${path}.name is required and must be a non-empty string.`;
-  }
-  if (args.isBuiltInTypeName(scorer.name)) {
-    return `${path}.name must not be a built-in scorer type ('${scorer.name}'); pick a name of your own.`;
-  }
   if (typeof scorer.decider_id !== 'string' || scorer.decider_id === '') {
     return `${path}.decider_id is required and must be a decider id.`;
   }
@@ -63,7 +56,7 @@ export const scoreDeciderScorer = async (args: {
   scorer: Record<string, unknown>;
   context: Record<string, unknown>;
   runDecider: DeciderScorerRunner;
-}): Promise<ScorerOutcome> => {
+}): Promise<ScorerVerdict> => {
   const { scorer } = args;
   const name = String(scorer.name);
   const input =
@@ -85,7 +78,6 @@ export const scoreDeciderScorer = async (args: {
   }
 
   return {
-    scorer: name,
     score,
     passed: score >= Number(scorer.pass_threshold),
     decision_id: decision.decisionId,

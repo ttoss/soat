@@ -242,6 +242,8 @@ const planRun = async (args: {
   const scorerError = validateScorers({
     scorers: evaluation.scorers,
     agentHasOutputSchema: isPlainObject(agent.outputSchema),
+    // expand-contract: an Eval stored before names were required still runs
+    names: 'stored',
   });
   if (scorerError) throw new DomainError('VALIDATION_FAILED', scorerError);
   await validateScorerReferences({

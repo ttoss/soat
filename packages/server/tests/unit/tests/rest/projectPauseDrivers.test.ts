@@ -499,7 +499,7 @@ describe('Project pause — work in motion', () => {
           name: 'drivers-eval',
           agent_id: agentId,
           dataset_id: dataset.body.id,
-          scorers: [{ type: 'contains', value: 'done' }],
+          scorers: [{ type: 'contains', name: 'contains', value: 'done' }],
         });
       const run = await asAdmin()
         .post(`/api/v1/evals/${evaluation.body.id}/runs`)

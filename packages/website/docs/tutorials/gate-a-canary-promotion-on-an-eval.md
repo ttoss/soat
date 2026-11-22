@@ -195,7 +195,7 @@ cat > release-notes-formation.json << EOF
         "agent_id": { "ref": "agent" },
         "dataset_id": { "ref": "suite" },
         "scorers": [
-          { "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }
+          { "type": "json_logic", "name": "non_empty", "expression": { "!=": [{ "var": "output" }, ""] } }
         ],
         "pass_threshold": 0.5,
         "claim": { "statement": "Answers every change note." }
@@ -313,7 +313,7 @@ const template = {
         agent_id: { ref: 'agent' },
         dataset_id: { ref: 'suite' },
         scorers: [
-          { type: 'json_logic', expression: { '!=': [{ var: 'output' }, ''] } },
+          { type: 'json_logic', name: 'non_empty', expression: { '!=': [{ var: 'output' }, ''] } },
         ],
         pass_threshold: 0.5,
         claim: { statement: 'Answers every change note.' },
@@ -354,7 +354,7 @@ cat > release-notes-formation.json << EOF
     "darkModeCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "The dashboard now has a dark mode." }], "expected_output": "Added a dark mode to the dashboard." } },
     "exportCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "Reports can be exported as CSV." }], "expected_output": "Added CSV export to reports." } },
     "runGrant": { "type": "policy", "properties": { "name": "release-notes-gate-run", "document": { "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"], "resource": ["srn:$PROJECT_ID:*:*"] }] } } },
-    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "policy_ids": [{ "ref": "runGrant" }], "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 0.5, "claim": { "statement": "Answers every change note." } } }
+    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "policy_ids": [{ "ref": "runGrant" }], "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "name": "non_empty", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 0.5, "claim": { "statement": "Answers every change note." } } }
   },
   "outputs": { "agent_id": { "ref": "agent" }, "eval_id": { "ref": "gate" }, "dataset_id": { "ref": "suite" } }
 }
@@ -840,7 +840,7 @@ The run records its origin in `trigger_id`, kept even if the trigger is deleted.
     { "scope": { "kind": "run" }, "verdict": "supported", "reason": "interval 0.51–1 at or above 0.5" }
   ],
   "aggregate_scores": {
-    "scorers": { "json_logic": { "mean": 1, "pass_rate": 1 } },
+    "scorers": { "non_empty": { "mean": 1, "pass_rate": 1 } },
     "pass_rate": 1,
     "scored_item_count": 4
   }

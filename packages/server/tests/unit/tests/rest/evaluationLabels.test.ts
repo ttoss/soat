@@ -43,7 +43,7 @@ describe('Evaluations — human labels on results', () => {
         name: unique('label-eval'),
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'refund' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'refund' }],
         pass_threshold: 0.5,
       });
     expect(evalRes.status).toBe(201);
@@ -364,13 +364,17 @@ describe('Evaluations — human labels on results', () => {
       const second = await completedRun();
       await asUser()
         .put(`/api/v1/evals/${second.evalId}`)
-        .send({ scorers: [{ value: 'refund', type: 'contains' }] });
+        .send({
+          scorers: [{ value: 'refund', type: 'contains', name: 'contains' }],
+        });
       const reordered = await asUser()
         .post(`/api/v1/evals/${second.evalId}/runs`)
         .send({ wait: true });
       await asUser()
         .put(`/api/v1/evals/${second.evalId}`)
-        .send({ scorers: [{ type: 'contains', value: 'policy' }] });
+        .send({
+          scorers: [{ type: 'contains', name: 'contains', value: 'policy' }],
+        });
       const changed = await asUser()
         .post(`/api/v1/evals/${second.evalId}/runs`)
         .send({ wait: true });

@@ -94,7 +94,7 @@ describe('POST /api/v1/evals/:eval_id/runs — agent version pinning', () => {
         name: 'eval-pinning',
         agent_id: agent.body.id,
         dataset_id: dataset.body.id,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       });
     expect(evaluation.status).toBe(201);
     evalId = evaluation.body.id;

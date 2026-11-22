@@ -42,6 +42,37 @@ describe('evaluationCalibration', () => {
       expect(a).toMatch(/^sha256:[0-9a-f]{64}$/);
     });
 
+    test('a scorer named after its type keeps the fingerprint it had unnamed', () => {
+      expect(
+        scorerFingerprint({
+          scorers: [{ ...JUDGE, name: 'llm_judge' }],
+          deciderVersions: null,
+        })
+      ).toBe(scorerFingerprint({ scorers: [JUDGE], deciderVersions: null }));
+    });
+
+    test('swapping the names of two scorers moves it', () => {
+      const a = { type: 'contains', value: 'refund' };
+      const b = { type: 'contains', value: 'policy' };
+      expect(
+        scorerFingerprint({
+          scorers: [
+            { ...a, name: 'first' },
+            { ...b, name: 'second' },
+          ],
+          deciderVersions: null,
+        })
+      ).not.toBe(
+        scorerFingerprint({
+          scorers: [
+            { ...a, name: 'second' },
+            { ...b, name: 'first' },
+          ],
+          deciderVersions: null,
+        })
+      );
+    });
+
     test('moves with any scorer field and with a pinned decider version', () => {
       const base = scorerFingerprint({
         scorers: [JUDGE, DECIDER],

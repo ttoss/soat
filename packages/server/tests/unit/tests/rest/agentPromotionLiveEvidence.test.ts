@@ -77,7 +77,7 @@ describe('Agent version claims — live evidence', () => {
         name: unique('live-eval'),
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'Paris' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'Paris' }],
         pass_threshold: 0.5,
         claim: { statement: 'Names capitals.' },
         evidence,
@@ -454,7 +454,7 @@ describe('Agent version claims — live evidence', () => {
           name: unique('live-ungated'),
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'contains', value: 'Paris' }],
+          scorers: [{ type: 'contains', name: 'contains', value: 'Paris' }],
           claim: { statement: 'Names capitals.' },
           evidence: { live: { window: '7d', guardrail_tripwires: { max: 0 } } },
         });

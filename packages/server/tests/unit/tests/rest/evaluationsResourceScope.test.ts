@@ -75,7 +75,7 @@ describe('a policy scoped to one dataset or eval does not reach another', () => 
         name: args.name,
         agent_id: args.agentId,
         dataset_id: args.datasetId,
-        scorers: [{ type: 'contains', value: 'invoice' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'invoice' }],
       });
     expect(response.status).toBe(201);
     return response.body.id;

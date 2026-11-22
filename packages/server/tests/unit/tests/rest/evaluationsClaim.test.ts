@@ -47,7 +47,7 @@ describe('Evaluations — the claim', () => {
         name: unique('claim-eval'),
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'refund' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'refund' }],
         pass_threshold: 0.5,
         ...body,
       });
@@ -231,7 +231,9 @@ describe('Evaluations — the claim', () => {
                   name: unique('claim-formation-eval'),
                   agent_id: agentId,
                   dataset_id: datasetId,
-                  scorers: [{ type: 'contains', value: 'refund' }],
+                  scorers: [
+                    { type: 'contains', name: 'contains', value: 'refund' },
+                  ],
                   claim: CLAIM,
                 },
               },
@@ -263,7 +265,9 @@ describe('Evaluations — the claim', () => {
                   name: unique('claim-formation-bad'),
                   agent_id: agentId,
                   dataset_id: datasetId,
-                  scorers: [{ type: 'contains', value: 'refund' }],
+                  scorers: [
+                    { type: 'contains', name: 'contains', value: 'refund' },
+                  ],
                   claim: { statement: 's', confidence: 'high' },
                 },
               },

@@ -88,7 +88,7 @@ describe('Evaluations — verdict', () => {
         name: unique('verdict-eval'),
         agent_id: agentId,
         dataset_id: args.datasetId,
-        scorers: [{ type: 'contains', value: 'ok' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'ok' }],
         ...args.body,
       });
   };
@@ -403,7 +403,9 @@ describe('Evaluations — verdict', () => {
                   name: unique('verdict-formation-eval'),
                   agent_id: agentId,
                   dataset_id: twentyId,
-                  scorers: [{ type: 'contains', value: 'ok' }],
+                  scorers: [
+                    { type: 'contains', name: 'contains', value: 'ok' },
+                  ],
                   pass_threshold: 0.5,
                   group_by: 'kind',
                   evidence: { required_groups: ['x', 'y'] },

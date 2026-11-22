@@ -611,7 +611,9 @@ describe('Evaluations — decider scorers', () => {
     });
 
     test('a run with no decider scorer pins no decider version', async () => {
-      const evalId = await createEval([{ type: 'exact_match' }]);
+      const evalId = await createEval([
+        { type: 'exact_match', name: 'exact_match' },
+      ]);
       mockCreateGeneration.mockResolvedValueOnce(
         completedGeneration('gen_dsc7', 'A refund of the duplicate charge.')
       );
