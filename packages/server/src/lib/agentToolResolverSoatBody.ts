@@ -1,6 +1,7 @@
 import type { ToolDefinition } from './soatTools';
+import { isStringRecord } from './stringBag';
 import { filterToolContext, withoutReservedPrefixKeys } from './toolContext';
-import { overlayToolContext, readToolContextLayer } from './toolContextLayer';
+import { overlayToolContext } from './toolContextLayer';
 
 /**
  * What goes into the request body of a SOAT action a `builtin` tool invokes: the
@@ -27,11 +28,11 @@ const withToolContext = (args: {
     contextKeys: args.contextKeys,
   });
   if (!propagated || Object.keys(propagated).length === 0) return args.body;
-  const own = readToolContextLayer(args.body.tool_context);
-  if (own === null) return args.body;
+  const own = args.body.tool_context ?? {};
+  if (!isStringRecord(own)) return args.body;
   return {
     ...args.body,
-    tool_context: overlayToolContext({ under: own ?? {}, over: propagated }),
+    tool_context: overlayToolContext({ under: own, over: propagated }),
   };
 };
 
