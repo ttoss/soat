@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.125.0](https://github.com/ttoss/soat/compare/v0.124.0...v0.125.0) (2026-11-22)
+
+### Bug Fixes
+
+* **agents:** the pawl holds what the stable run showed; Part 4 review findings ([#2088](https://github.com/ttoss/soat/issues/2088)) ([a808a5e](https://github.com/ttoss/soat/commit/a808a5e218376ae71ad1071dc5a8ddddc328fb6f)), closes [#1556](https://github.com/ttoss/soat/issues/1556)
+
+### Features
+
+* **agents:** a claim's verdict reads production and the run's age; promotion records its claims ([#2086](https://github.com/ttoss/soat/issues/2086)) ([5aaf1db](https://github.com/ttoss/soat/commit/5aaf1db05dddaec3bd9eb5f3f83ae2a1cc8f2226)), closes [#1556](https://github.com/ttoss/soat/issues/1556)
+* **agents:** a promotion keeps every claim the stable version supports ([#2083](https://github.com/ttoss/soat/issues/2083)) ([2c011ec](https://github.com/ttoss/soat/commit/2c011ec30bc5ab195e57899ecd6af363bc1df6ec)), closes [#1556](https://github.com/ttoss/soat/issues/1556)
+
 # [0.124.0](https://github.com/ttoss/soat/compare/v0.123.1...v0.124.0) (2026-11-21)
 
 * feat(generations)!: store vendor options apart from a message and never serve them (#2076) ([7efc82e](https://github.com/ttoss/soat/commit/7efc82e17bce233857f1ac77873da0455c78e46e)), closes [#2076](https://github.com/ttoss/soat/issues/2076)

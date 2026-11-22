@@ -7,14 +7,9 @@ import { app } from './app';
 import { initializeDatabase, logDatabaseConnectionError } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
+import { loadBootConfigOrExit } from './lib/bootConfig';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
 import { startDecisionsScheduler } from './lib/decisionsScheduler';
-import { initDeploymentRegistrations } from './lib/deploymentRegistrations';
-import {
-  EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV,
-  embeddingPriceWarning,
-  readEmbeddingInputTokenPriceUsd,
-} from './lib/embeddingPrice';
 import { startEvalWorker } from './lib/evaluationWorker';
 import { startGenerationSweepScheduler } from './lib/generationSweep';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
@@ -39,33 +34,7 @@ const log = createDebug('soat:server');
 const SOAT_PORT = process.env.PORT || 5047;
 
 const startServer = async () => {
-  // Before the database on purpose: pure config parsing, so a wrong
-  // registration file says so immediately rather than after a schema sync. Any
-  // problem is fatal — see `formationResourceTypeConfig.ts` for why.
-  try {
-    initDeploymentRegistrations();
-    // Same reason and the same place: a rate that cannot be parsed must not
-    // reach the meter, where it would be swallowed and every embedding frozen
-    // at an unintended cost.
-    readEmbeddingInputTokenPriceUsd();
-  } catch (error) {
-    // Fatal and process-terminating, so it goes to stderr unconditionally
-    // rather than through the opt-in `debug` logger.
-    // eslint-disable-next-line no-console
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-
-  const priceWarning = embeddingPriceWarning({
-    provider: process.env.EMBEDDING_PROVIDER,
-    value: process.env[EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV],
-  });
-  if (priceWarning) {
-    // Unconditional rather than through the opt-in `debug` logger: the one boot
-    // where an unintended zero is still cheap to fix is this one.
-    // eslint-disable-next-line no-console
-    console.warn(priceWarning);
-  }
+  loadBootConfigOrExit();
 
   try {
     const database = await initializeDatabase(app);
@@ -74,12 +43,12 @@ const startServer = async () => {
     // that has no such step — a single container against its own database —
     // back into preparing the schema here, serialized on the advisory locks.
     await prepareSchemaOrExit({ sequelize: database.sequelize });
-    // One-time data normalization of `knowledge_config` bags stored in
-    // camelCase before single-casing. Idempotent and prefiltered in SQL, so a
-    // converged database pays a single indexless scan and writes nothing.
+    // Normalizes `knowledge_config` bags stored in camelCase. Idempotent and
+    // prefiltered in SQL, so a converged database pays a single indexless scan
+    // and writes nothing.
     await backfillKnowledgeConfigCasing();
-    // One-time rewrite of stored policy / guardrail / formation documents that
-    // name a usage string under an older spelling. Same shape: idempotent,
+    // Rewrites stored policy / guardrail / formation documents that name a
+    // usage string under a retired spelling. Same shape: idempotent,
     // prefiltered in SQL, and a converged database writes nothing.
     await backfillUsageRenames();
     // Start the durable orchestration scheduler once the database is ready so
