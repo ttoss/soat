@@ -16,8 +16,10 @@ import { EvalRun } from './EvalRun';
  * new row is written by the shared lib update path on every write that actually
  * changes the config, so a REST edit and a formation apply both leave history
  * and a generation can always be traced back to the exact config that served it.
- * Rows are never mutated — a restore appends a new version rather than rewinding
- * the counter — so there is no `updatedAt`.
+ * A row's `config` is not rewritten: a restore appends a new version rather than
+ * rewinding the counter. The one later write is a promotion stamping what it
+ * stood on (`evalRunId`, `claims`, `releasedClaims`) on the version it made
+ * live, which is why there is no `updatedAt` to track config changes.
  *
  * Mirrors `GuardrailVersion`.
  */

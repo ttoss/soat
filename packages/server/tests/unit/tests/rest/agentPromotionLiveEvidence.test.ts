@@ -345,6 +345,25 @@ describe('Agent version claims — live evidence', () => {
       expect(claim?.verdict).toBe('refuted');
     });
 
+    test('a generation a scorer or judge started for an eval run is not served volume', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, {
+        live: { window: '7d', min_served_generations: 2 },
+      });
+      await run({ evalId, version: 2 });
+      await serve({ agentId, version: 2, count: 1 });
+      await serve({ agentId, version: 2, count: 3, source: 'eval_scorer' });
+      await serve({ agentId, version: 2, count: 3, source: 'eval_judge' });
+
+      const claim = await claimOf(agentId, 2, evalId);
+      expect(
+        liveReason(claim!.verdict_reasons, 'min_served_generations')
+      ).toMatchObject({
+        verdict: 'insufficient',
+        reason: '1 served, 2 required',
+      });
+    });
+
     test('an eval run, another version, a generation before the window and one still in flight are not served volume', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createEval(agentId, {

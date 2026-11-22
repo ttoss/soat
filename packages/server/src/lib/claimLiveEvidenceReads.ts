@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { type LiveCounts, liveCountsOf } from './claimLiveEvidence';
-import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
+import { VERIFICATION_USAGE_SOURCES } from './evaluationRunExecution';
 import { type RollingWindow, rollingWindowStart } from './rollingWindows';
 
 const log = createDebug('soat:agents');
@@ -16,7 +16,7 @@ const DECIDED_STATUSES = ['approved', 'rejected'];
 /**
  * One agent version's production over a rolling `window`: the generations
  * of that version that started in the window and finished, started by
- * anything but an eval run, and the guardrail tripwires and approvals linked
+ * anything but an eval run's work (`VERIFICATION_USAGE_SOURCES`), and the guardrail tripwires and approvals linked
  * to them by generation id. A row with no generation link says nothing about
  * a version and is not read.
  */
@@ -41,7 +41,7 @@ export const readLiveCounts = async (args: {
           AND g."agent_version" = :version
           AND g."status" IN (:servedStatuses)
           AND g."started_at" >= :since
-          AND (g."source" IS NULL OR g."source" <> :evalSource)
+          AND (g."source" IS NULL OR g."source" NOT IN (:verificationSources))
      )
      SELECT
        (SELECT count(*) FROM served) AS served,
@@ -65,7 +65,7 @@ export const readLiveCounts = async (args: {
         servedStatuses: SERVED_STATUSES,
         decidedStatuses: DECIDED_STATUSES,
         since: rollingWindowStart({ window: args.window, now: args.now }),
-        evalSource: EVAL_USAGE_SOURCE,
+        verificationSources: VERIFICATION_USAGE_SOURCES,
       },
     }
   );

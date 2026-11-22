@@ -252,6 +252,11 @@ export const createDecision = async (args: {
   authority: WorkAuthority | null;
   /** Answer under this archived question set rather than the live one. */
   version?: number;
+  /**
+   * The workload the decision serves, metered on its generation or tool call
+   * (`admitDecisionBackend`).
+   */
+  source: string;
 }): Promise<MappedDecision> => {
   log('createDecision: deciderId=%s wait=%s', args.deciderId, args.wait);
 
@@ -283,6 +288,7 @@ export const createDecision = async (args: {
       startedBy: args.authority,
       starts: deciderStarts(decider),
     }),
+    source: args.source,
   });
 
   return recordAndEvaluate({
@@ -310,6 +316,11 @@ export const createInlineDecision = async (args: {
   metadata?: Record<string, unknown>;
   wait: boolean;
   authority: WorkAuthority | null;
+  /**
+   * The workload the decision serves, metered on its generation or tool call
+   * (`admitDecisionBackend`).
+   */
+  source: string;
 }): Promise<MappedDecision> => {
   log('createInlineDecision: projectId=%d wait=%s', args.projectId, args.wait);
 
@@ -326,6 +337,7 @@ export const createInlineDecision = async (args: {
     questions,
     input: args.input,
     authority: args.authority,
+    source: args.source,
   });
 
   return recordAndEvaluate({

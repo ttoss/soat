@@ -9,7 +9,6 @@ import { renderDeciderFrame } from './deciderFrame';
 import { parseDecisionInput } from './deciderInput';
 import {
   compileAnswerSchema,
-  DECIDER_USAGE_SOURCE,
   type DeciderQuestions,
   type DecisionAnswer,
   toDecisionAnswers,
@@ -91,6 +90,7 @@ const outcomeOf = (args: {
 /** Runs the agent over the frame; the generation carries the answer. */
 const answerWithAgent = async (args: {
   projectIds?: number[];
+  source: string;
   agentPublicId: string;
   agentVersion: number;
   questions: DeciderQuestions;
@@ -124,7 +124,7 @@ const answerWithAgent = async (args: {
     // The version whose tool surface was checked at admission, so an edit
     // landing mid-evaluation cannot hand the generation a tool.
     pinnedAgentVersion: args.agentVersion,
-    source: DECIDER_USAGE_SOURCE,
+    source: args.source,
     outputSchemaOverride: compileAnswerSchema(args.questions),
   });
   return outcomeOf({ result, questions: args.questions });
@@ -147,6 +147,12 @@ export const admitDecisionBackend = async (args: {
   questions: DeciderQuestions;
   input: unknown;
   authority: WorkAuthority | null;
+  /**
+   * The workload the decision serves, metered on its generation or tool call:
+   * `DECIDER_USAGE_SOURCE` for a caller's decision, `SCORER_USAGE_SOURCE` for
+   * an eval scorer's.
+   */
+  source: string;
 }): Promise<DecisionEvaluation> => {
   const { agent, tool, questions, input } = args;
   parseDecisionInput(input);
@@ -163,6 +169,7 @@ export const admitDecisionBackend = async (args: {
             questions,
             input,
             authority: args.authority,
+            source: args.source,
           }),
           generationId: null,
         };
@@ -190,6 +197,7 @@ export const admitDecisionBackend = async (args: {
         questions,
         input,
         authority: args.authority,
+        source: args.source,
       });
     },
     opaqueFailure: GENERATION_FAILURE,
