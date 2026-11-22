@@ -1,6 +1,8 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { db } from 'src/db';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient } from '../../testClient';
@@ -316,6 +318,28 @@ describe('Agent version claims — calibration evidence', () => {
       expect(claim?.verdict).toBe('insufficient');
       expect(calibrationReason(claim, 'reply_review')).toMatchObject({
         reason: '0 labeled, 2 required',
+      });
+    });
+
+    test('a calibration rule recorded on the run that does not read is insufficient, never ignored', async () => {
+      const evalId = await createEval({
+        scorers: [deciderScorer()],
+        evidence: MIN,
+      });
+      const runId = await run(evalId);
+      await labelAll(evalId, runId, true);
+      const stored = await db.EvalRun.findOne({ where: { publicId: runId } });
+      await stored!.update({
+        definition: {
+          ...stored!.definition,
+          evidence: { min_calibration: { labeled: 0, agreement: 2 } },
+        },
+      });
+
+      const claim = await claimOf(evalId);
+      expect(claim?.verdict).toBe('insufficient');
+      expect(calibrationReason(claim, 'unreadable')).toMatchObject({
+        verdict: 'insufficient',
       });
     });
 

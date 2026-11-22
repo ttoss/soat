@@ -1552,6 +1552,8 @@ paths:
                 $ref: '#/components/schemas/EvalResult'
         '400':
           $ref: './errors.yaml#/components/responses/BadRequest'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '401':
           description: Unauthorized
           content:
@@ -1611,6 +1613,8 @@ paths:
       responses:
         '204':
           description: Label cleared
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -1673,6 +1677,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvalRunCalibration'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
