@@ -75,6 +75,16 @@ export const mapEvalResult = (result: EvalResultRow) => {
     scores: result.scores,
     passed: result.passed,
     error: result.error,
+    human_label:
+      result.humanPassed === null
+        ? null
+        : {
+            passed: result.humanPassed,
+            note: result.labelNote,
+            labeled_by_principal_type: result.labeledByPrincipalType,
+            labeled_by_principal_id: result.labeledByPrincipalId,
+            labeled_at: result.labeledAt,
+          },
     created_at: result.createdAt,
   };
 };
@@ -135,6 +145,28 @@ const findRun = async (args: {
     );
   }
   return run;
+};
+
+/** One result of a run the caller can read, or `RESOURCE_NOT_FOUND`. */
+export const findEvalResult = async (args: {
+  projectIds?: number[];
+  evalId: string;
+  runId: string;
+  resultId: string;
+}): Promise<EvalResultRow> => {
+  log('findEvalResult: run=%s result=%s', args.runId, args.resultId);
+  const run = await findRun(args);
+  const result = (await db.EvalResult.findOne({
+    where: { publicId: args.resultId, evalRunId: run.id as number },
+    include: evalResultIncludes(),
+  })) as EvalResultRow | null;
+  if (!result) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Eval result '${args.resultId}' not found.`
+    );
+  }
+  return result;
 };
 
 export const listEvalRuns = async (args: {

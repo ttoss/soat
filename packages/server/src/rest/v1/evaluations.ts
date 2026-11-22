@@ -64,7 +64,7 @@ const datasetAccess = makeItemRouteAuthorizer({
   label: 'Dataset',
 });
 
-const evalAccess = makeItemRouteAuthorizer({
+export const evalAccess = makeItemRouteAuthorizer({
   findScope: evals.findScope,
   resourceType: 'eval',
   param: 'eval_id',

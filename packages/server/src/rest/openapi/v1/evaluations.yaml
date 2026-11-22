@@ -1490,6 +1490,153 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label:
+    put:
+      tags:
+        - Evaluations
+      summary: Label an eval result
+      description: >-
+        Records a person's pass/fail verdict on one result, replacing any
+        earlier label. The result's `passed` stays what its scorers said; the
+        label is what each scorer's agreement is measured against
+        (`GET /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration`).
+      operationId: labelEvalResult
+      x-iam-action: evaluations:LabelEvalResult
+      x-iam-resource-type: eval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: eval_run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+        - name: eval_result_id
+          in: path
+          required: true
+          description: Eval result ID
+          schema:
+            type: string
+            example: evres_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [passed]
+              properties:
+                passed:
+                  type: boolean
+                  description: Whether the item passes, in the labeler's judgement.
+                  example: false
+                note:
+                  type: string
+                  nullable: true
+                  description: Why, in the labeler's words.
+                  example: Promised a refund it cannot give.
+      responses:
+        '200':
+          description: The labeled result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalResult'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval, run or result not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+    delete:
+      tags:
+        - Evaluations
+      summary: Clear an eval result's label
+      description: Removes the label from one result; a result with none is unchanged.
+      operationId: clearEvalResultLabel
+      x-iam-action: evaluations:LabelEvalResult
+      x-iam-resource-type: eval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: eval_run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+        - name: eval_result_id
+          in: path
+          required: true
+          description: Eval result ID
+          schema:
+            type: string
+            example: evres_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Label cleared
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval, run or result not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
   /api/v1/evals/{eval_id}/runs/{eval_run_id}/cancel:
     post:
       tags:
@@ -2526,6 +2673,34 @@ components:
             `requires_action` pause (`GENERATION_NOT_COMPLETED`), a provider
             failure — or a scorer that could not grade the output is recorded
             here and excluded from the aggregates rather than scored 0.
+        human_label:
+          type: object
+          nullable: true
+          additionalProperties: false
+          description: >-
+            A person's verdict on the item, set by
+            `PUT /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`;
+            null when nobody labeled it. `passed` stays what the scorers said.
+          required:
+            [passed, note, labeled_by_principal_type, labeled_by_principal_id, labeled_at]
+          properties:
+            passed:
+              type: boolean
+              example: false
+            note:
+              type: string
+              nullable: true
+              example: Promised a refund it cannot give.
+            labeled_by_principal_type:
+              allOf:
+                - $ref: './principals.yaml#/components/schemas/PrincipalType'
+              description: Who labeled it
+            labeled_by_principal_id:
+              type: string
+              example: user_V1StGXR8Z5jdHi6B
+            labeled_at:
+              type: string
+              format: date-time
         created_at:
           type: string
           format: date-time

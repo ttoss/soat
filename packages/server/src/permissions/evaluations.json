@@ -97,6 +97,16 @@
       "description": "List the per-item results of an eval run"
     },
     {
+      "operationId": "labelEvalResult",
+      "action": "evaluations:LabelEvalResult",
+      "description": "Record a person's pass/fail label on an eval result"
+    },
+    {
+      "operationId": "clearEvalResultLabel",
+      "action": "evaluations:LabelEvalResult",
+      "description": "Clear the label on an eval result"
+    },
+    {
       "operationId": "cancelEvalRun",
       "action": "evaluations:CancelEvalRun",
       "description": "Cancel a queued or running eval run"
