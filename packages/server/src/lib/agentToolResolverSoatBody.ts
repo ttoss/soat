@@ -1,5 +1,6 @@
 import type { ToolDefinition } from './soatTools';
 import { filterToolContext, withoutReservedPrefixKeys } from './toolContext';
+import { overlayToolContext, readToolContextLayer } from './toolContextLayer';
 
 /**
  * What goes into the request body of a SOAT action a `builtin` tool invokes: the
@@ -11,6 +12,8 @@ import { filterToolContext, withoutReservedPrefixKeys } from './toolContext';
 // applies here too — unfiltered, it would be advisory on the one path that
 // carries context furthest. Reserved-prefix keys stay behind: the started work
 // holds the token's layer on its authority, and a write refuses them.
+// The propagated bag is stamped per key over the action's own `tool_context`
+// argument; one that is not a bag of strings is left for the route to refuse.
 const withToolContext = (args: {
   body: Record<string, unknown>;
   toolContext?: Record<string, string>;
@@ -18,13 +21,18 @@ const withToolContext = (args: {
   acceptedBodyFields: string[];
 }) => {
   if (!args.acceptedBodyFields.includes('tool_context')) return args.body;
-  const toolContext = filterToolContext({
+  const propagated = filterToolContext({
     toolContext:
       args.toolContext && withoutReservedPrefixKeys(args.toolContext),
     contextKeys: args.contextKeys,
   });
-  if (!toolContext || Object.keys(toolContext).length === 0) return args.body;
-  return { ...args.body, tool_context: toolContext };
+  if (!propagated || Object.keys(propagated).length === 0) return args.body;
+  const own = readToolContextLayer(args.body.tool_context);
+  if (own === null) return args.body;
+  return {
+    ...args.body,
+    tool_context: overlayToolContext({ under: own ?? {}, over: propagated }),
+  };
 };
 
 const withTraceIds = (args: {
