@@ -2238,8 +2238,8 @@ components:
       additionalProperties: false
       description: >-
         The rules beyond the threshold: `required_groups` is read by the
-        run's verdict, `live` and `max_run_age_days` only by its claim's
-        verdict. Null declares none.
+        run's verdict, `live`, `max_run_age_days` and `min_calibration` only
+        by its claim's verdict. Null declares none.
       properties:
         required_groups:
           type: array
@@ -2318,6 +2318,28 @@ components:
                   minimum: 0
                   maximum: 1
                   example: 0.01
+        min_calibration:
+          type: object
+          additionalProperties: false
+          required: [labeled, agreement]
+          description: >-
+            Read by its claim's verdict and never by the run's: every scorer
+            whose verdict comes from outside the eval (`llm_judge`,
+            `embedding_similarity`, `tool`, `decider`) must agree with at
+            least `agreement` of at least `labeled` human labels on one
+            completed run of the eval against the version graded by the same
+            scorers (`scorer_fingerprint`), else `insufficient`. Pure scorers
+            need none.
+          properties:
+            labeled:
+              type: integer
+              minimum: 1
+              example: 30
+            agreement:
+              type: number
+              minimum: 0
+              maximum: 1
+              example: 0.9
         max_run_age_days:
           type: integer
           minimum: 1
@@ -2342,14 +2364,16 @@ components:
           properties:
             kind:
               type: string
-              enum: [run, group, live, age]
+              enum: [run, group, live, age, calibration]
               description: >-
                 `run` and `group` judge the run's items; `live` (a production
-                rule) and `age` judge a claim and appear only on a claim's
-                reasons.
+                rule), `age` and `calibration` (a scorer's agreement with human
+                labels) judge a claim and appear only on a claim's reasons.
             name:
               type: string
-              description: The group on a `group` scope; the rule on a `live` scope
+              description: >-
+                The group on a `group` scope; the rule on a `live` scope; the
+                scorer on a `calibration` scope
               example: boleto
         verdict:
           type: string

@@ -96,3 +96,66 @@ export const getEvalRunCalibration = async (args: {
     }),
   };
 };
+
+/**
+ * The calibration of every completed run of one eval against one agent
+ * version that was graded by the scorers `fingerprint` names: labels on a
+ * run graded otherwise say nothing about these scorers.
+ */
+export const versionRunCalibrations = async (args: {
+  evalDbId: number;
+  agentPublicId: string | null;
+  version: number;
+  fingerprint: string;
+}): Promise<RunCalibration[]> => {
+  log(
+    'versionRunCalibrations: eval=%d version=%d',
+    args.evalDbId,
+    args.version
+  );
+  const runs = await db.EvalRun.findAll({
+    where: {
+      evalId: args.evalDbId,
+      agentPublicId: args.agentPublicId,
+      agentVersion: args.version,
+      status: 'completed',
+    },
+    attributes: ['id', 'definition', 'deciderVersions'],
+  });
+  const graded = runs.flatMap((run) => {
+    const definition = readEvalRunDefinition({ run });
+    if (!definition) return [];
+    const fingerprint = scorerFingerprint({
+      scorers: definition.scorers,
+      deciderVersions: run.deciderVersions,
+    });
+    return fingerprint === args.fingerprint
+      ? [{ runId: run.id as number, scorers: definition.scorers }]
+      : [];
+  });
+  if (graded.length === 0) return [];
+  const labeled = await db.EvalResult.findAll({
+    where: {
+      evalRunId: graded.map(({ runId }) => {
+        return runId;
+      }),
+      humanPassed: { [Op.ne]: null },
+    },
+    attributes: ['evalRunId', 'scores', 'humanPassed'],
+  });
+  return graded.map(({ runId, scorers }) => {
+    return calibrationOf({
+      scorers,
+      labeled: labeled
+        .filter((result) => {
+          return result.evalRunId === runId;
+        })
+        .map((result) => {
+          return {
+            scores: result.scores,
+            humanPassed: result.humanPassed === true,
+          };
+        }),
+    });
+  });
+};

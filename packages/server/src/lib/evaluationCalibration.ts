@@ -5,7 +5,12 @@
  *
  * Pure: the label reads (`evaluationLabels.ts`) hand it the rows.
  */
-import { scorerOutcomeKey } from './evaluationScorerValidation';
+import {
+  EXTERNALLY_GRADED,
+  isScorerType,
+  scorerOutcomeKey,
+} from './evaluationScorerValidation';
+import type { VerdictReason } from './evaluationVerdict';
 import { isPlainObject } from './plainObject';
 import { stableDigest } from './stableDigest';
 
@@ -86,4 +91,108 @@ export const calibrationOf = (args: {
     tally.agreement = tally.labeled === 0 ? null : agreed / tally.labeled;
   }
   return { labeled_count: args.labeled.length, scorers };
+};
+
+export type MinCalibration = { labeled: number; agreement: number };
+
+/** `evidence.min_calibration` read against its rule, or the first problem in it. */
+export const parseMinCalibration = (
+  value: unknown
+): { rule: MinCalibration } | { problem: string } => {
+  const path = 'evidence.min_calibration';
+  if (!isPlainObject(value)) return { problem: `${path} must be an object.` };
+  const extra = Object.keys(value).find((key) => {
+    return key !== 'labeled' && key !== 'agreement';
+  });
+  if (extra !== undefined) {
+    return { problem: `${path}.${extra} is not a known field.` };
+  }
+  const { labeled, agreement } = value;
+  if (!(Number.isInteger(labeled) && Number(labeled) >= 1)) {
+    return { problem: `${path}.labeled must be a positive integer.` };
+  }
+  if (
+    typeof agreement !== 'number' ||
+    !Number.isFinite(agreement) ||
+    agreement < 0 ||
+    agreement > 1
+  ) {
+    return { problem: `${path}.agreement must be a number between 0 and 1.` };
+  }
+  return { rule: { labeled: Number(labeled), agreement } };
+};
+
+/** The outcome keys of the scorers whose verdict comes from outside the eval. */
+export const externallyGradedKeys = (scorers: unknown[]): string[] => {
+  return scorers.flatMap((scorer) => {
+    if (!isPlainObject(scorer) || !isScorerType(scorer.type)) return [];
+    return EXTERNALLY_GRADED[scorer.type] ? [scorerOutcomeKey(scorer)] : [];
+  });
+};
+
+const figure = (value: number): string => {
+  return String(Math.round(value * 1000) / 1000);
+};
+
+/**
+ * One reason per externally graded scorer: `supported` when some run graded
+ * by the same scorers reaches both figures, else `insufficient`, naming the
+ * closest run's labels or its agreement.
+ */
+export const calibrationReasons = (args: {
+  rule: MinCalibration;
+  keys: string[];
+  runs: RunCalibration[];
+}): VerdictReason[] => {
+  const { rule } = args;
+  return args.keys.map((name): VerdictReason => {
+    const tallies = args.runs.flatMap((run) => {
+      const tally = run.scorers[name];
+      return tally ? [tally] : [];
+    });
+    const enough = tallies.filter((tally) => {
+      return tally.labeled >= rule.labeled;
+    });
+    const best = Math.max(
+      ...enough.map((tally) => {
+        return tally.agreement ?? 0;
+      })
+    );
+    const scope = { kind: 'calibration' as const, name };
+    if (enough.length > 0 && best >= rule.agreement) {
+      return {
+        scope,
+        verdict: 'supported',
+        reason: `agreement ${figure(best)} at or above ${rule.agreement}`,
+      };
+    }
+    if (enough.length > 0) {
+      return {
+        scope,
+        verdict: 'insufficient',
+        reason: `agreement ${figure(best)} below ${rule.agreement}`,
+      };
+    }
+    const most = Math.max(
+      0,
+      ...tallies.map((tally) => {
+        return tally.labeled;
+      })
+    );
+    return {
+      scope,
+      verdict: 'insufficient',
+      reason: `${most} labeled, ${rule.labeled} required`,
+    };
+  });
+};
+
+/** The reason a run's recorded `min_calibration` gives when it does not read. */
+export const unreadableCalibrationReason = (): VerdictReason => {
+  return {
+    scope: { kind: 'calibration', name: 'unreadable' },
+    verdict: 'insufficient',
+    reason:
+      'the evidence.min_calibration recorded on the run does not read against the rules',
+  };
 };

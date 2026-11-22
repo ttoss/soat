@@ -16,7 +16,8 @@ export type VerdictScope =
   | { kind: 'run' }
   | { kind: 'group'; name: string }
   | { kind: 'live'; name: string }
-  | { kind: 'age' };
+  | { kind: 'age' }
+  | { kind: 'calibration'; name: string };
 
 export type VerdictReason = {
   scope: VerdictScope;
