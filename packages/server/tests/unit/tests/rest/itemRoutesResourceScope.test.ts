@@ -146,7 +146,7 @@ describe('a policy scoped to one resource does not reach its siblings', () => {
     test('PATCH refuses a sibling rule', async () => {
       const response = await authenticatedTestClient(scopedToken)
         .patch(`/api/v1/ingestion-rules/${otherId}`)
-        .send({ chunk_strategy: 'paragraph' });
+        .send({ chunk_strategy: 'page' });
 
       expect(response.status).toBe(403);
     });

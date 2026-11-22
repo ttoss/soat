@@ -97,8 +97,8 @@ const validateQueryParams = (ctx: Context): void => {
  * every query string against the parameters its operation declares — both
  * derived from the spec, the single source of truth for the REST contract, SDK,
  * CLI, and MCP surface — so an allowlist can never drift from the schema. Rejects
- * unknown fields (at every nesting level) and missing top-level required fields
- * with `VALIDATION_FAILED` (400); see `validateRequestBody`.
+ * a body the request schema refuses, at any depth, with `VALIDATION_FAILED`
+ * (400); see `validateRequestBody`.
  *
  * Runs after `authMiddleware`, so `ctx.authUser` is resolved. The body is
  * compared exactly as the client sent it — snake_case, the wire contract, with
@@ -133,9 +133,6 @@ export const strictFieldsMiddleware = async (ctx: Context, next: Next) => {
     return;
   }
 
-  // `validateRequestBody` throws `VALIDATION_FAILED` on an unknown field at any
-  // nesting level, or a missing top-level required one; it no-ops for a route
-  // with no property-based body schema.
   validateRequestBody({ method: ctx.method, path: template, body });
 
   await next();

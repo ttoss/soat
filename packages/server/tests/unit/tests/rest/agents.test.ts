@@ -2222,7 +2222,7 @@ describe('Agents', () => {
     });
 
     test('an update is validated on the same path', async () => {
-      const created = await create(null);
+      const created = await create([]);
       expect(created.status).toBe(201);
 
       const res = await authenticatedTestClient(userToken)

@@ -4496,6 +4496,31 @@ resources:
       ).toBe(false);
     });
 
+    test('a reasoning object without an effort fails the apply', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `reasoning-without-effort-${Date.now()}`,
+          template: {
+            resources: {
+              NestedEnumAgent: {
+                type: 'agent',
+                properties: agentProperties({}),
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error).toEqual({
+        code: 'VALIDATION_FAILED',
+        message: `'reasoning' must be { "effort": "none" | "low" | "medium" | "high" } or null.`,
+        meta: { logical_id: 'NestedEnumAgent', resource_type: 'agent' },
+      });
+    });
+
     test('an expression at that depth validates', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')

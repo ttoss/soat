@@ -1,7 +1,6 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import { getEmbedding, projectEmbeddingBilling } from './embedding';
 
 const log = createDebug('soat:conversations');
@@ -11,25 +10,11 @@ const log = createDebug('soat:conversations');
  *
  * Turns are stored and chunked either way, so `none` costs a conversation
  * nothing but its place in the vector channel: it stays readable by id, in the
- * message list, and through lexical search. The knob exists because every turn
- * was embedded and billed before anyone asked for one to be retrievable.
+ * message list, and through lexical search.
  */
 export const RETRIEVAL_MODES = ['embed', 'none'] as const;
 
 export type RetrievalMode = (typeof RETRIEVAL_MODES)[number];
-
-export const readRetrievalMode = (value: unknown): RetrievalMode => {
-  if (
-    typeof value !== 'string' ||
-    !RETRIEVAL_MODES.includes(value as RetrievalMode)
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `retrieval must be one of ${RETRIEVAL_MODES.join(', ')}`
-    );
-  }
-  return value as RetrievalMode;
-};
 
 /** `null` on the conversation inherits the project's default. */
 export const resolveRetrievalMode = (args: {
@@ -75,8 +60,6 @@ export const embedConversationBacklog = async (args: {
     where: { conversationId: args.conversationId },
     attributes: ['documentId'],
   });
-  if (messages.length === 0) return 0;
-
   const chunks = await db.DocumentChunk.findAll({
     where: {
       documentId: messages.map((message) => {

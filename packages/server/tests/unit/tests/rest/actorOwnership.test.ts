@@ -126,9 +126,18 @@ describe('Actor ownership', () => {
         return `/api/v1/playbook-cases/${id}`;
       },
       bodies: {
-        'write-playbook-case-inputs': { inputs: [] },
+        'write-playbook-case-inputs': {
+          inputs: [
+            {
+              node_id: 'revenue',
+              name: 'revenue',
+              value: 1,
+              expected_revision: 0,
+            },
+          ],
+        },
         'confirm-playbook-case-node': {
-          decision: 'confirm',
+          decision: 'approve',
           expected_revisions: {},
         },
       },

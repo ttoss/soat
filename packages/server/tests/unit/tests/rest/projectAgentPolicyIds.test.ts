@@ -76,11 +76,10 @@ describe("a project's agent_policy_ids", () => {
     const res = await authenticatedTestClient(args.token ?? turn.adminToken)
       .post(`/api/v1/agents/${args.agentId}/generate?wait=true`)
       .send({
-        // No string content, so retrieval is the config's filters alone.
         messages: [
           {
             role: 'user',
-            content: [{ type: 'text', text: 'What do we know?' }],
+            content: 'What do we know?',
           },
         ],
         ...(args.knowledgeConfig

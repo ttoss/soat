@@ -679,7 +679,7 @@ describe('Tools', () => {
         });
       expect(response.status).toBe(400);
       expect(response.body.error.message).toMatch(
-        /Unsupported tool type 'soat'/
+        /`type` must be one of: .* \(got "soat"\)/
       );
     });
 
@@ -726,7 +726,9 @@ describe('Tools', () => {
         });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/unsupported tool type/i);
+      expect(response.body.error.message).toMatch(
+        /`type` must be one of: .* \(got "htpp"\)/
+      );
     });
 
     test('rejects an unknown field on create', async () => {
@@ -748,7 +750,9 @@ describe('Tools', () => {
         .send({ type: 'htpp' });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/unsupported tool type/i);
+      expect(response.body.error.message).toMatch(
+        /`type` must be one of: .* \(got "htpp"\)/
+      );
     });
   });
 

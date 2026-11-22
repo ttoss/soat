@@ -8,11 +8,16 @@ import {
   hasProperties,
   isObjectRecord,
 } from './openapiSchemaFields';
-import { getRouteRequestSchema, resolveSchemaRef } from './openapiSpec';
+import {
+  getRouteRequestSchema,
+  normalizeRoutePath,
+  resolveSchemaRef,
+} from './openapiSpec';
 import {
   collectUnknownFields,
   isOpenOrAmbiguous,
 } from './openapiUnknownFields';
+import { collectSchemaViolations } from './requestSchemaViolations';
 
 const log = createDebug('soat:requestValidation');
 
@@ -77,9 +82,12 @@ const topLevelFieldErrors = (args: {
  * - **Unknown fields** are rejected at every nesting level (objects, arrays of
  *   objects, `$ref`s) with dotted paths; open levels are skipped, and a union
  *   of closed objects is judged against the union of their fields.
- * - **Required fields and scalar types** are enforced at the top level only,
- *   replacing the per-handler `"X is required"` checks; nested schemas are
- *   less rigorously specified, so nested enforcement is out of scope.
+ * - **Required fields and scalar types** at the top level are named field by
+ *   field (`missing_fields`, `invalid_fields`).
+ * - **The full schema** is checked once those pass: a value of any depth that
+ *   breaks its type, union, enum, bound or required list is in
+ *   `invalid_fields`, except fields `ROUTE_OWNED_BODY_FIELDS` leaves to the
+ *   route.
  *
  * `path` is the route as registered (`/agents/:agent_id`), normalized to the
  * OpenAPI path key internally. Field names are compared against the spec's own
@@ -109,7 +117,18 @@ export const validateRequestBody = (args: {
     return field.path;
   });
 
-  const { missingFields, typeErrors } = topLevelFieldErrors({ schema, body });
+  const fieldErrors = topLevelFieldErrors({ schema, body });
+  const { missingFields } = fieldErrors;
+  const typeErrors =
+    unknownFields.length > 0 ||
+    missingFields.length > 0 ||
+    fieldErrors.typeErrors.length > 0
+      ? fieldErrors.typeErrors
+      : collectSchemaViolations({
+          template: normalizeRoutePath(args.path),
+          method: args.method,
+          body,
+        });
   const invalidFields = typeErrors.map((typeError) => {
     return typeError.field;
   });

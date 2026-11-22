@@ -797,12 +797,19 @@ describe('POST /api/v1/knowledge/search — hybrid ranking', () => {
       expect(disabled).toEqual(off);
     });
 
-    test('a negative request value falls back to the deployment default', async () => {
-      process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '30';
+    test('a negative request value is 400', async () => {
+      const res = await asAdmin().post('/api/v1/knowledge/search').send({
+        project_id: projectId,
+        query: QUERY,
+        memory_store_ids: memoryStoreIds,
+        recency_half_life_days: -5,
+      });
 
-      const order = await ranked({ recency_half_life_days: -5 });
-
-      expect(order[0].id).toBe(freshMemoryId);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({
+        invalid_fields: ['recency_half_life_days'],
+      });
     });
 
     test('an unreadable deployment default leaves the blend off', async () => {
