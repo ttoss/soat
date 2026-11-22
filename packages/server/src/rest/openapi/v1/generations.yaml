@@ -531,6 +531,18 @@ paths:
           schema:
             type: integer
             minimum: 0
+        - name: Last-Event-ID
+          in: header
+          required: false
+          # A tool call reads pages and resumes with `after_seq`.
+          x-soat-tool-unsupported: true
+          description: >
+            The `id` of the last frame received, which an `EventSource` sends
+            when it reconnects. Read as `after_seq` when `after_seq` is not
+            sent.
+          schema:
+            type: string
+          example: '42'
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
         - name: progress_only
