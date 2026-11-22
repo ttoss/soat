@@ -8,7 +8,8 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 /**
  * The claims a version holds, and the pawl on promotion (the agents module
  * doc — Eval-gated promotion): every claim the stable version's run supports
- * must be supported by the canary too, or named in the release's `released_claims`.
+ * must be supported by the canary too, or named in the release's
+ * `released_claims`.
  */
 
 type Message = { role: string; content: string };

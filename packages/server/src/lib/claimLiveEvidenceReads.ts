@@ -16,9 +16,9 @@ const DECIDED_STATUSES = ['approved', 'rejected'];
 /**
  * One agent version's production over a rolling `window`: the generations
  * of that version that started in the window and finished, started by
- * anything but an eval run, and
- * the guardrail tripwires and approvals linked to them by generation id. A
- * row with no generation link says nothing about a version and is not read.
+ * anything but an eval run, and the guardrail tripwires and approvals linked
+ * to them by generation id. A row with no generation link says nothing about
+ * a version and is not read.
  */
 export const readLiveCounts = async (args: {
   agentDbId: number;

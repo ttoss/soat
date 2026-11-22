@@ -7,6 +7,7 @@ import {
   ageReason,
   type LiveCounts,
   liveReasons,
+  parseLiveEvidence,
   unreadableLiveReason,
 } from './claimLiveEvidence';
 import { readLiveCounts } from './claimLiveEvidenceReads';
@@ -171,15 +172,16 @@ const claimSideReasons = async (args: {
   reading: ClaimReading;
 }): Promise<VerdictReason[]> => {
   const evidence = readEvalRunDefinition({ run: args.run })?.evidence;
-  const live = evidence?.live;
+  const parsed =
+    evidence?.live === undefined ? null : parseLiveEvidence(evidence.live);
   const reasons: VerdictReason[] = [];
-  if (live && 'unreadable' in live) {
+  if (parsed && 'problem' in parsed) {
     reasons.push(unreadableLiveReason());
-  } else if (live) {
+  } else if (parsed) {
     reasons.push(
       ...liveReasons({
-        live,
-        counts: await args.reading.counts(live.window),
+        live: parsed.live,
+        counts: await args.reading.counts(parsed.live.window),
       })
     );
   }

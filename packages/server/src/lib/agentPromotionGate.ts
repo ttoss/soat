@@ -102,11 +102,11 @@ const pickRunEvidence = (claim: VersionClaim) => {
  *
  * Fails closed: the claim verdict of the speaking run (the run's verdict, made
  * worse by the production and run-age rules it recorded) must read
- * `supported`. No run, a run whose
- * verdict is `insufficient` or `refuted`, a run of another agent or version, a
- * run that recorded no agent or verdict, or a deleted eval is the same
- * `409`. The point of the gate is that promotion is impossible without
- * supporting evidence, so "cannot tell" must never resolve to "allowed".
+ * `supported`. No run, a claim verdict of `insufficient` or `refuted`, a run
+ * of another agent or version, a run that recorded no agent or verdict, or a
+ * deleted eval is the same `409`. The point of the gate is that promotion is
+ * impossible without supporting evidence, so "cannot tell" must never resolve
+ * to "allowed".
  */
 export const requirePromotionGate = async (args: {
   gate: string | null;

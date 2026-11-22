@@ -4,8 +4,8 @@
  * says about the counts of one agent version's production traffic.
  *
  * Pure: the claims read (`agentVersionClaims.ts`) hands it the counts. The
- * eval's validator and the run's recorded definition both read `evidence.live`
- * through {@link parseLiveEvidence}, so neither checks the shape on its own.
+ * eval's validator and the claims read both read `evidence.live` through
+ * {@link parseLiveEvidence}, so neither checks the shape on its own.
  */
 import type { Verdict, VerdictReason } from './evaluationVerdict';
 import { isPlainObject } from './plainObject';
