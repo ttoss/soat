@@ -238,7 +238,8 @@ Requests are counted in memory per (project, API key); a periodic flush writes o
 | `null` | An ordinary agent generation |
 | `eval` | An [eval run](./evaluations.md#eval-spend-is-separable-from-production-spend)'s item generations |
 | `eval_judge` | An `llm_judge` scorer's own grading completion |
-| `eval_scorer` | A `tool` scorer's grading call |
+| `eval_scorer` | A `tool` or `decider` scorer's grading call, including the decider agent's generation |
+| `decider` | Any other [decision](./deciders.md)'s evaluation: its agent's generation or its tool's call |
 | `chat` | A standalone [chat](./chats.md) completion |
 | `memory_extraction` / `memory_consolidation` | A [memory](./memories.md) pass |
 | `embedding` | An [embedding](./embeddings.md#metering) call — the endpoint, document ingestion, a memory write, or a search's query vector |

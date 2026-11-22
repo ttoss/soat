@@ -20,9 +20,9 @@ import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
 
-// Grading with a tool is verification work like `eval_judge`, metered apart
-// from the item generations (`eval`) it grades.
-export const TOOL_SCORER_USAGE_SOURCE = 'eval_scorer';
+// Grading with a tool or a decider is verification work like `eval_judge`,
+// metered apart from the item generations (`eval`) it grades.
+export const SCORER_USAGE_SOURCE = 'eval_scorer';
 
 // ── Output parsing ─────────────────────────────────────────────────────────
 
@@ -207,7 +207,7 @@ export const runToolScorerCall = async (args: {
     action:
       typeof args.scorer.action === 'string' ? args.scorer.action : undefined,
     input: { ...presetParameters, ...args.context },
-    attribution: { source: TOOL_SCORER_USAGE_SOURCE },
+    attribution: { source: SCORER_USAGE_SOURCE },
   });
 
   return parseToolScorerOutput(raw);

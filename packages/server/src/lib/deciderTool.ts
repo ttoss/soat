@@ -3,7 +3,6 @@ import createDebug from 'debug';
 import type { db } from '../db';
 import { DomainError } from '../errors';
 import type { DeciderQuestions, DecisionAnswer } from './deciderQuestions';
-import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { parseToolAnswers } from './deciderToolAnswer';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
@@ -94,6 +93,8 @@ export const answerWithTool = async (args: {
    * whoever asked for the decision, never as nobody or as anyone else.
    */
   authority: WorkAuthority | null;
+  /** The workload the decision serves, metered on the tool call. */
+  source: string;
 }): Promise<DecisionAnswer[]> => {
   log('answerWithTool: toolId=%s', args.toolPublicId);
   const raw = await callTool({
@@ -103,7 +104,7 @@ export const answerWithTool = async (args: {
     guardrails: 'apply',
     input: { input: args.input, questions: args.questions },
     authority: args.authority,
-    attribution: { source: DECIDER_USAGE_SOURCE },
+    attribution: { source: args.source },
   });
   return parseToolAnswers({ questions: args.questions, raw });
 };
