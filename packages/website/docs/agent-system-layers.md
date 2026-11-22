@@ -197,7 +197,7 @@ Pieces marked coming soon are designed but not built.
 | [Memories](/docs/modules/memories) forgetting — importance scoring, recency blending, compaction | Coming soon                                                                    |
 | [An eval run's verdict](/docs/modules/evaluations#pass-semantics) read on the pass-rate interval and on the kinds the claim requires, with its reasons | Shipped |
 | [The claim](/docs/modules/evaluations#the-claim) written on the eval and frozen on each run | Shipped |
-| [Claims held per agent version](/docs/modules/agents#claims-a-version-holds); promotion refused while the canary loses one the stable version supports | Shipped |
+| [Claims held per agent version](/docs/modules/agents#claims-a-version-holds); promotion refused while the canary loses one the stable version's run supports | Shipped |
 | A claim's verdict read on the version's [production traffic](/docs/modules/evaluations#evidence) — tripwires, approval rejections, failures, served volume — and on its run's age; promotion records the claims it stood on | Shipped |
 
 ## Layers are concerns, not autonomy levels

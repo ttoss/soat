@@ -7,8 +7,8 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
  * The claims a version holds, and the pawl on promotion (the agents module
- * doc — Eval-gated promotion): every claim the stable version supports must be
- * supported by the canary too, or named in the release's `released_claims`.
+ * doc — Eval-gated promotion): every claim the stable version's run supports
+ * must be supported by the canary too, or named in the release's `released_claims`.
  */
 
 type Message = { role: string; content: string };
@@ -262,7 +262,7 @@ describe('Agent version claims', () => {
     });
   });
 
-  describe('promotion keeps every claim the stable version supports', () => {
+  describe("promotion keeps every claim the stable version's run supports", () => {
     test('a canary supporting every stable claim promotes', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createClaimEval(agentId);

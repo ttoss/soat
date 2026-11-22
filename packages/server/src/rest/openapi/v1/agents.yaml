@@ -1095,12 +1095,8 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
-            Conflict — the agent has no active release
-            (`NO_ACTIVE_RELEASE`), or the claim verdict of the newest run of
-            its `promotion_gate` against the canary version does not read
-            `supported` (`PROMOTION_GATE_UNMET`), or the canary does not hold
-            a claim the stable version's run supports
-            (`PROMOTION_CLAIM_UNMET`)
+            Conflict — `NO_ACTIVE_RELEASE`, `PROMOTION_GATE_UNMET` or
+            `PROMOTION_CLAIM_UNMET`, each as the operation description states
           content:
             application/json:
               schema:
@@ -1668,7 +1664,7 @@ components:
           description: >-
             Evals whose claims the canary need not keep, unique and in this
             project; anything else is a `400`. Omit it, or send null, to keep
-            every claim the stable version supports. Re-setting the release
+            every claim the stable version's run supports. Re-setting the release
             without it requires them again.
           example: [eval_V1StGXR8Z5jdHi6B]
 
