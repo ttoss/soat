@@ -91,7 +91,7 @@ const literalProp = (node, name) => {
     : undefined;
 };
 
-const isFunction = (node) => {
+export const isFunction = (node) => {
   return (
     node !== undefined &&
     (ts.isArrowFunction(node) ||
@@ -151,7 +151,7 @@ const bindingsOf = (file) => {
 };
 
 /** `name` as `file` sees it: its own binding, else the one it imports. */
-const lookup = (file, name, kind) => {
+export const lookup = (file, name, kind) => {
   const own = bindingsOf(file);
   if (own[kind].has(name)) return { file, value: own[kind].get(name) };
   const imported = own.imports.get(name);
@@ -411,18 +411,12 @@ const specPath = (route) => {
   return `/api/v1${route.replace(/:(\w+)/g, '{$1}')}`;
 };
 
-/** Each route a router file mounts, with the checks its handlers reach. */
-export const routeChecks = () => {
-  const routes = new Map();
-  const add = (key, file, nodes) => {
-    const seen = new Set();
-    routes.set(
-      key,
-      nodes.flatMap((node) => {
-        return checksIn({ file, node, seen });
-      })
-    );
-  };
+/**
+ * Each route a router file mounts: its `method /api/v1/...` key, the file and
+ * the handler nodes. Read by `routeHeaderDeclaration.test.mjs` too.
+ */
+export const mountedRoutes = () => {
+  const routes = [];
   for (const name of fs.readdirSync(routesDir).sort()) {
     if (!name.endsWith('.ts')) continue;
     const file = path.join(routesDir, name);
@@ -437,13 +431,21 @@ export const routeChecks = () => {
           first &&
           ts.isStringLiteralLike(first)
         ) {
-          add(`${method} ${specPath(first.text)}`, file, rest);
+          routes.push({
+            key: `${method} ${specPath(first.text)}`,
+            file,
+            nodes: rest,
+          });
           return;
         }
         const tagPath = literalProp(first, 'path');
         if (method === 'registerTagRoutes' && tagPath) {
           for (const verb of TAG_ROUTE_METHODS) {
-            add(`${verb} ${specPath(tagPath)}`, file, [first]);
+            routes.push({
+              key: `${verb} ${specPath(tagPath)}`,
+              file,
+              nodes: [first],
+            });
           }
           return;
         }
@@ -451,6 +453,21 @@ export const routeChecks = () => {
       ts.forEachChild(node, visit);
     };
     visit(parse(file));
+  }
+  return routes;
+};
+
+/** Each route a router file mounts, with the checks its handlers reach. */
+export const routeChecks = () => {
+  const routes = new Map();
+  for (const { key, file, nodes } of mountedRoutes()) {
+    const seen = new Set();
+    routes.set(
+      key,
+      nodes.flatMap((node) => {
+        return checksIn({ file, node, seen });
+      })
+    );
   }
   return routes;
 };
