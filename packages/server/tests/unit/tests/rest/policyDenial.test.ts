@@ -197,6 +197,46 @@ describe('a policy denial', () => {
     });
   });
 
+  describe('answers the declared code to a writer whose resource would perform the action', () => {
+    const builtinTool = { type: 'builtin', actions: ['create-guardrail'] };
+
+    test('on a tool write', async () => {
+      const res = await authenticatedTestClient(key)
+        .post('/api/v1/tools')
+        .send({
+          project_id: turn.projectId,
+          name: 'denied-tool',
+          ...builtinTool,
+        });
+
+      expect(res.status).toBe(403);
+      expectDenial(res.body.error);
+      expect(res.body.error.meta.action).toBe('guardrails:CreateGuardrail');
+    });
+
+    test('on a formation tool resource', async () => {
+      const res = await authenticatedTestClient(key)
+        .post('/api/v1/formations')
+        .send({
+          project_id: turn.projectId,
+          name: 'denied-tool-stack',
+          template: {
+            resources: {
+              Tool: {
+                type: 'tool',
+                properties: { name: 'denied-stack-tool', ...builtinTool },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(JSON.stringify(res.body)).toContain(CODE);
+      expect(JSON.stringify(res.body)).not.toContain('ACTION_NOT_HELD');
+    });
+  });
+
   test('a Deny with no denial still answers FORBIDDEN', async () => {
     const policy = await turn.createPolicy({
       statement: [

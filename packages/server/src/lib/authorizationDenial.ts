@@ -120,6 +120,25 @@ export const authorizationDenied = (args: {
   );
 };
 
+/**
+ * A writer, or a resource's grant, missing an action the resource would
+ * perform: the refusing `Deny`'s denial when it declares one, else
+ * `ACTION_NOT_HELD` worded by `message`.
+ */
+export const actionNotHeld = (args: {
+  refusedBy: RefusedBy | undefined;
+  action: string;
+  resource: string;
+  message: string;
+}): DomainError => {
+  const denied = { action: args.action, resource: args.resource };
+  const refusal = args.refusedBy?.(denied);
+  if (refusal?.denial) {
+    return authorizationDenied({ ...refusal, denied: [denied] });
+  }
+  return new DomainError('ACTION_NOT_HELD', args.message, denied);
+};
+
 /** The request's credential, as the principal whose policies refused it. */
 export const callerPrincipal = (authUser: {
   terms: { principal: ActingPrincipal };

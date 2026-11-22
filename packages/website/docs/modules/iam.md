@@ -254,7 +254,7 @@ A resource that acts after the write that made it does no more than whoever writ
 | calls actions          | each action calling it performs: a [`builtin` tool](./tools.md#who-may-write-a-tool)'s, or what a [registered MCP server](#registered-mcp-servers) declares for each of an `mcp` tool's `actions` | `403 ACTION_NOT_HELD`       |
 | sends a secret         | `secrets:UseSecret` on it                                                                                                                                                                         | `403 FORBIDDEN`             |
 
-A version restore or a release is an edit. A deployment's own resource deployed through a formation is checked by the runtime from its registration (`writer`, see [Formations](./formations.md#what-a-write-performs)); written through the deployment's own routes, the deployment asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), from the same declaration.
+An `ACTION_NOT_HELD` refused by a `Deny` carrying a [`denial`](#denial-codes) answers that denial instead. A version restore or a release is an edit. A deployment's own resource deployed through a formation is checked by the runtime from its registration (`writer`, see [Formations](./formations.md#what-a-write-performs)); written through the deployment's own routes, the deployment asks the same of its writer with [`POST /api/v1/iam/check`](/docs/api/iam/check-iam-permission), from the same declaration.
 
 ### Registered MCP servers
 
@@ -488,7 +488,7 @@ A `Deny` statement may carry a `denial`, `{ code, message, meta? }`. When that s
 - The code must be one the deployment declares in `denial_codes` ([Configuration](#configuration)), which supplies its `hint`; any other is `400 VALIDATION_FAILED` at policy write. `meta` keys are snake_case and never `action`, `resource` or `denied_by`.
 - Only an unrestricted admin writes a policy carrying a `denial`, over REST or a [formation](./formations.md); anyone else gets `403 POLICY_DENIAL_RESERVED`. An [IAM token](#iam-tokens)'s inline policy carries none (`400 IAM_TOKEN_POLICY_INVALID`).
 - The first matching `Deny` in the refusing set decides; a `Deny` without a `denial`, or a refusal no `Deny` matched, answers `FORBIDDEN`. An agent's own `policy_ids` answer `FORBIDDEN`.
-- It holds on every path the check runs: REST reads and writes, a read of one resource within the caller's projects (`403`, not `404`), the MCP endpoint, a `builtin` tool's result and a formation's apply.
+- It holds on every path the check runs: REST reads and writes, a read of one resource within the caller's projects (`403`, not `404`), the MCP endpoint, a `builtin` tool's result, a formation's apply, the [writer rule](#the-writer-rule) and a resource's grant refusing the target it starts.
 
 A credential scoped to one project reaches nothing outside it, so every resource elsewhere is beyond it in exactly that sense: addressed by id, it answers the `404` a made-up id gets, and nothing in the response names its project. `403 API_KEY_PROJECT_SCOPE` is kept for a request that names another project itself, which leaks nothing the caller did not send, and for a tool or agent an accepted [share](./shares.md) lets the credential's project read.
 

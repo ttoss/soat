@@ -335,7 +335,7 @@ export const ERROR_CODES = {
   ACTION_NOT_HELD: {
     httpStatus: 403,
     description:
-      'The resource being created or edited would perform an action the caller may not: start a target (an agent, tool, orchestration, eval, decider or workflow) or grant a shared action. A resource that acts later may do no more than whoever writes it. `meta` names the `action` and the `resource`.',
+      'The resource being created or edited would perform an action the caller may not: start a target (an agent, tool, orchestration, eval, decider or workflow) or grant a shared action. A resource that acts later may do no more than whoever writes it. `meta` names the `action` and the `resource`. A refusing `Deny` that carries a `denial` answers that denial instead.',
   },
   IAM_TOKEN_POLICY_INVALID: {
     httpStatus: 400,

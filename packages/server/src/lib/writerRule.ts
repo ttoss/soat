@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
+import { actionNotHeld } from './authorizationDenial';
 import { buildSrn } from './iam';
 import { EVERY_PROJECT, type PolicyCarrierName } from './policyCarriers';
 import {
@@ -197,7 +198,7 @@ const assertPoliciesHeld = async (args: {
 };
 
 /**
- * Throws `ACTION_NOT_HELD` for the first of `actions` the writer may not
+ * Throws {@link actionNotHeld} for the first of `actions` the writer may not
  * perform in its project.
  */
 export const assertActionsHeld = async (args: {
@@ -218,11 +219,12 @@ export const assertActionsHeld = async (args: {
     });
     if (allowed) continue;
     log('assertActionsHeld: refused %s on %s', carried.action, resource);
-    throw new DomainError(
-      'ACTION_NOT_HELD',
-      `The resource would perform ${carried.action} on ${resource}, which the caller may not.`,
-      { action: carried.action, resource }
-    );
+    throw actionNotHeld({
+      refusedBy: args.isAllowed.refusedBy,
+      action: carried.action,
+      resource,
+      message: `The resource would perform ${carried.action} on ${resource}, which the caller may not.`,
+    });
   }
 };
 

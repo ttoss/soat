@@ -11,7 +11,7 @@ export const TRUSTED_OUTPUT_ACTION = 'guardrails:DetachGuardrail';
 
 /**
  * The one check for a write that sets `trusted_output: true`, on a stored or
- * an inline tool: `ACTION_NOT_HELD` without {@link TRUSTED_OUTPUT_ACTION}.
+ * an inline tool: refused without {@link TRUSTED_OUTPUT_ACTION}.
  */
 export const assertTrustedOutputAllowed = async (args: {
   trustedOutput: boolean | null | undefined;
