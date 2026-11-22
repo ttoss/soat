@@ -2,7 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { callerDenied } from 'src/lib/authorizationDenial';
-import { readRetrievalMode } from 'src/lib/conversationRetrieval';
+import type { RetrievalMode } from 'src/lib/conversationRetrieval';
 import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
 import { pauseProject, resumeProject } from 'src/lib/projectPauseActions';
 import {
@@ -155,10 +155,10 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
         ? body.audit_reads_enabled
         : undefined,
     requirePricedModel: provided<boolean>(body, 'require_priced_model'),
-    defaultConversationRetrieval:
-      body.default_conversation_retrieval === undefined
-        ? undefined
-        : readRetrievalMode(body.default_conversation_retrieval),
+    defaultConversationRetrieval: provided<RetrievalMode>(
+      body,
+      'default_conversation_retrieval'
+    ),
     // An explicit `null` disables retention.
     traceContentRetentionDays: provided<number | null>(
       body,

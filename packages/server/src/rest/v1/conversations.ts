@@ -2,7 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import { readRetrievalMode } from 'src/lib/conversationRetrieval';
+import type { RetrievalMode } from 'src/lib/conversationRetrieval';
 import {
   createConversation,
   deleteConversation,
@@ -87,7 +87,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     status?: string;
     name?: string | null;
     actor_id?: string | null;
-    retrieval?: unknown;
+    retrieval?: RetrievalMode | null;
   };
 
   const targetProjectId = await resolveWriteProjectId({
@@ -112,10 +112,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     status: body.status,
     name: body.name ?? null,
     actorId: resolvedActorId,
-    retrieval:
-      body.retrieval === undefined || body.retrieval === null
-        ? null
-        : readRetrievalMode(body.retrieval),
+    retrieval: body.retrieval ?? null,
   });
   ctx.status = 201;
   ctx.body = conversation;
@@ -129,7 +126,7 @@ conversationsRouter.patch(
     const body = ctx.request.body as {
       status?: string;
       name?: string | null;
-      retrieval?: unknown;
+      retrieval?: RetrievalMode | null;
     };
 
     if (
@@ -162,12 +159,7 @@ conversationsRouter.patch(
       id: ctx.params.conversation_id,
       status: body.status,
       name: body.name,
-      retrieval:
-        body.retrieval === undefined
-          ? undefined
-          : body.retrieval === null
-            ? null
-            : readRetrievalMode(body.retrieval),
+      retrieval: body.retrieval,
     });
 
     ctx.body = updated;
