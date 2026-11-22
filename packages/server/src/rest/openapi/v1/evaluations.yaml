@@ -2055,16 +2055,16 @@ components:
           description: >-
             Rules over the agent version's production traffic in a rolling
             `window`, read by its claim's verdict and never by the run's:
-            generations of that version that finished (`completed` or
-            `failed`), not started by an eval run, and the guardrail
-            evaluations and approvals linked to them.
+            generations of that version that started in the window and
+            finished (`completed` or `failed`), not started by an eval run,
+            and the guardrail evaluations and approvals linked to them.
           properties:
             window:
               type: string
               enum: ['1h', '24h', '7d', '30d']
               description: >-
-                The rolling window, ending at the read. The same windows a
-                guardrail's `runtime.*` keys name.
+                The rolling window, ending at the read: the rolling windows a
+                guardrail's `runtime.*` keys name (not `total`).
               example: 7d
             min_served_generations:
               type: integer

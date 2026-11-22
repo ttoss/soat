@@ -197,7 +197,8 @@ cat > release-notes-formation.json << EOF
         "scorers": [
           { "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }
         ],
-        "pass_threshold": 0.5
+        "pass_threshold": 0.5,
+        "claim": { "statement": "Answers every change note." }
       }
     }
   },
@@ -315,6 +316,7 @@ const template = {
           { type: 'json_logic', expression: { '!=': [{ var: 'output' }, ''] } },
         ],
         pass_threshold: 0.5,
+        claim: { statement: 'Answers every change note.' },
       },
     },
   },
@@ -352,7 +354,7 @@ cat > release-notes-formation.json << EOF
     "darkModeCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "The dashboard now has a dark mode." }], "expected_output": "Added a dark mode to the dashboard." } },
     "exportCase": { "type": "dataset_item", "properties": { "dataset_id": { "ref": "suite" }, "input": [{ "role": "user", "content": "Reports can be exported as CSV." }], "expected_output": "Added CSV export to reports." } },
     "runGrant": { "type": "policy", "properties": { "name": "release-notes-gate-run", "document": { "statement": [{ "effect": "Allow", "action": ["agents:CreateAgentGeneration"], "resource": ["srn:$PROJECT_ID:*:*"] }] } } },
-    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "policy_ids": [{ "ref": "runGrant" }], "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 0.5 } }
+    "gate": { "type": "eval", "properties": { "name": "release-notes-gate", "policy_ids": [{ "ref": "runGrant" }], "agent_id": { "ref": "agent" }, "dataset_id": { "ref": "suite" }, "scorers": [{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }], "pass_threshold": 0.5, "claim": { "statement": "Answers every change note." } } }
   },
   "outputs": { "agent_id": { "ref": "agent" }, "eval_id": { "ref": "gate" }, "dataset_id": { "ref": "suite" } }
 }
@@ -598,6 +600,8 @@ printf '%s' "$CANARY_RUN" | jq '{id, agent_version, status, verdict}'
 soat promote-agent-release --agent-id "$AGENT_ID" | jq '{version, active_release, instructions}'
 
 soat list-agent-versions --agent-id "$AGENT_ID" | jq '.data | map({version, eval_run_id})'
+
+soat list-agent-version-promotion-claims --agent-id "$AGENT_ID" --version 2 | jq '.data | map({eval_id, verdict, statement: .claim.statement})'
 ```
 
 </TabItem>
@@ -615,6 +619,12 @@ const { data: promoted } = await adminSoat.agentVersions.promoteAgentRelease({
 });
 console.log(promoted.active_release); // null — the rollout is over
 console.log(promoted.instructions); // version 2's prompt
+
+const { data: record } =
+  await adminSoat.agentVersions.listAgentVersionPromotionClaims({
+    path: { agent_id: AGENT_ID, version: 2 },
+  });
+console.log(record.data); // the claim the promotion stood on, verdict supported
 ```
 
 </TabItem>
@@ -630,6 +640,9 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
 
 curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | map({version, eval_run_id})'
+
+curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions/2/promotion-claims" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | map({eval_id, verdict, statement: .claim.statement})'
 ```
 
 </TabItem>
@@ -644,7 +657,7 @@ Expected output (the promoted version records which run cleared it):
 ]
 ```
 
-`eval_run_id` is the audit trail, with per-item scores behind it.
+`eval_run_id` is the audit trail, with per-item scores behind it. The promoted version also records the [claims it stood on](/docs/modules/agents#claims-a-version-holds), here the gate eval's `claim` with `verdict: supported`; a later run does not change that record.
 
 :::note
 

@@ -64,8 +64,12 @@ describe('the rolling windows are stated once', () => {
   };
 
   test('no other module spells a window token', () => {
+    const tokens = windows();
     const spellers = libFiles().filter((file) => {
-      return /'30d'/.test(readFileSync(`${LIB}${file}`, 'utf-8'));
+      const source = readFileSync(`${LIB}${file}`, 'utf-8');
+      return tokens.some((token) => {
+        return new RegExp(`['"\`]${token}['"\`]`).test(source);
+      });
     });
     assert.deepEqual(spellers, ['rollingWindows.ts']);
   });

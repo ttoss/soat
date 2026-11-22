@@ -111,10 +111,10 @@ export class AgentVersion extends Model {
   declare releasedClaims: string[] | null;
 
   /**
-   * The claims this version held when a promotion made it live, each as the
-   * claims read served it then. A copy: production keeps moving the claims
-   * read, and this records what the promotion stood on. Null for a version no
-   * promotion made live.
+   * The claims the promoted canary version held when a promotion made this
+   * version live, each as the claims read served it then. A copy: production
+   * keeps moving the claims read, and this records what the promotion stood
+   * on. Null for a version no promotion made live.
    */
   @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare claims: Record<string, unknown>[] | null;

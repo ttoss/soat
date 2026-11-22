@@ -4,7 +4,6 @@
  * doc — Version pinning). Every item and the settle read this copy, so an edit
  * to the Eval reaches only runs created after it.
  */
-import { type LiveEvidence, parseLiveEvidence } from './claimLiveEvidence';
 import { scorerList } from './evaluationScorerValidation';
 import { isPlainObject } from './plainObject';
 
@@ -14,7 +13,8 @@ import { isPlainObject } from './plainObject';
  */
 export type EvalEvidence = {
   required_groups?: string[];
-  live?: LiveEvidence;
+  /** As written: the claims read parses it against the rules. */
+  live?: unknown;
   max_run_age_days?: number;
 };
 
@@ -37,16 +37,17 @@ const requiredGroupsOf = (
 };
 
 /**
- * Every rule the evidence declares, read as the Eval's validator wrote it; a
- * key it cannot read is left out rather than guessed.
+ * Every rule the evidence declares, as the Eval's validator wrote it. `live`
+ * stays as written, so one the rules do not read still reaches the claims
+ * read, which reads its claim insufficient instead of passing without it.
  */
 const evidenceOf = (value: unknown): EvalEvidence | null => {
   if (!isPlainObject(value)) return null;
-  const live = parseLiveEvidence(value.live);
   const age = value.max_run_age_days;
   return {
     ...requiredGroupsOf(value.required_groups),
-    ...('live' in live && { live: live.live }),
+    ...(value.live !== undefined &&
+      value.live !== null && { live: value.live }),
     ...(typeof age === 'number' && { max_run_age_days: age }),
   };
 };

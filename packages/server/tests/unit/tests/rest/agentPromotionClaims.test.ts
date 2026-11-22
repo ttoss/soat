@@ -1,11 +1,15 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
  * The claims a version holds, and the pawl on promotion (the agents module
- * doc — Eval-gated promotion): every claim the stable version supports must be
- * supported by the canary too, or named in the release's `released_claims`.
+ * doc — Eval-gated promotion): every claim the stable version's run supports
+ * must be supported by the canary too, or named in the release's
+ * `released_claims`.
  */
 
 type Message = { role: string; content: string };
@@ -14,7 +18,6 @@ describe('Agent version claims', () => {
   let adminToken: string;
   let userToken: string;
   let userPolicyId: string;
-  let noPermToken: string;
   let projectId: string;
   let providerId: string;
   let datasetId: string;
@@ -131,7 +134,6 @@ describe('Agent version claims', () => {
     adminToken = setup.adminToken;
     userToken = setup.userToken;
     userPolicyId = setup.policyId;
-    noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
 
     const provider = await asAdmin().post('/api/v1/ai-providers').send({
@@ -236,17 +238,32 @@ describe('Agent version claims', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a principal without GetAgentVersion gets 404 and no claim', async () => {
+    test('only GetAgentVersion reads the claims', async () => {
       const agentId = await createTwoVersionAgent();
-      const res = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/agents/${agentId}/versions/1/claims`
+      const path = `/api/v1/agents/${agentId}/versions/1/claims`;
+      const reader = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: unique('claims-reader'),
+        actions: ['agents:GetAgentVersion'],
+      });
+      const other = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: unique('claims-other'),
+        actions: ['agents:GetAgent'],
+      });
+
+      expect((await authenticatedTestClient(reader).get(path)).status).toBe(
+        200
       );
-      expect(res.status).toBe(404);
-      expect(res.body.data).toBeUndefined();
+      const refused = await authenticatedTestClient(other).get(path);
+      expect(refused.status).toBe(404);
+      expect(refused.body.data).toBeUndefined();
     });
   });
 
-  describe('promotion keeps every claim the stable version supports', () => {
+  describe("promotion keeps every claim the stable version's run supports", () => {
     test('a canary supporting every stable claim promotes', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createClaimEval(agentId);

@@ -1,6 +1,11 @@
+import { app } from 'src/app';
 import { db } from 'src/db';
+import request from 'supertest';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -26,7 +31,6 @@ describe('Agent version claims — live evidence', () => {
   let adminToken: string;
   let userToken: string;
   let userPolicyId: string;
-  let noPermToken: string;
   let projectId: string;
   let projectDbId: number;
   let providerId: string;
@@ -86,13 +90,18 @@ describe('Agent version claims — live evidence', () => {
     return res.body.id as string;
   };
 
-  const run = async (args: { evalId: string; version: number }) => {
-    answer = 'Paris';
+  /** A run answering `Paris` is supported; one answering `Lyon` is refuted. */
+  const run = async (args: {
+    evalId: string;
+    version: number;
+    reply?: 'Paris' | 'Lyon';
+  }) => {
+    answer = args.reply ?? 'Paris';
     const res = await asUser()
       .post(`/api/v1/evals/${args.evalId}/runs`)
       .send({ wait: true, agent_version: args.version });
     expect(res.status).toBe(201);
-    expect(res.body.verdict).toBe('supported');
+    expect(res.body.verdict).toBe(answer === 'Paris' ? 'supported' : 'refuted');
     return res.body as { id: string };
   };
 
@@ -216,7 +225,6 @@ describe('Agent version claims — live evidence', () => {
     adminToken = setup.adminToken;
     userToken = setup.userToken;
     userPolicyId = setup.policyId;
-    noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
     const project = await db.Project.findOne({
       where: { publicId: projectId },
@@ -283,6 +291,16 @@ describe('Agent version claims — live evidence', () => {
     ])('is refused with %s', async (_label, evidence) => {
       const agentId = await createTwoVersionAgent();
       const res = await postEval(agentId, evidence);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an update naming a live rule after an Object property is refused', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, null);
+      const res = await asUser()
+        .put(`/api/v1/evals/${evalId}`)
+        .send({ evidence: { live: { window: '7d', toString: 1 } } });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
@@ -407,7 +425,7 @@ describe('Agent version claims — live evidence', () => {
       ).toMatchObject({ verdict: 'refuted' });
     });
 
-    test('a claim whose eval has no threshold has no verdict, whatever production says', async () => {
+    test('a claim whose eval has no threshold has no verdict and no reasons, whatever production says', async () => {
       const agentId = await createTwoVersionAgent();
       const res = await asUser()
         .post('/api/v1/evals')
@@ -419,6 +437,7 @@ describe('Agent version claims — live evidence', () => {
           dataset_id: datasetId,
           scorers: [{ type: 'contains', value: 'Paris' }],
           claim: { statement: 'Names capitals.' },
+          evidence: { live: { window: '7d', guardrail_tripwires: { max: 0 } } },
         });
       expect(res.status).toBe(201);
       const evalId = res.body.id as string;
@@ -426,9 +445,68 @@ describe('Agent version claims — live evidence', () => {
         .post(`/api/v1/evals/${evalId}/runs`)
         .send({ wait: true, agent_version: 2 });
       expect(created.status).toBe(201);
+      const [served] = await serve({ agentId, version: 2, count: 1 });
+      await tripwire(served!);
 
       const claim = await claimOf(agentId, 2, evalId);
       expect(claim).toMatchObject({ verdict: null, verdict_reasons: null });
+    });
+
+    test('a live rule recorded on the run that the rules do not read is insufficient, never ignored', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, {
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
+      });
+      const created = await run({ evalId, version: 2 });
+      await serve({ agentId, version: 2, count: 1 });
+      const stored = await db.EvalRun.findOne({
+        where: { publicId: created.id },
+      });
+      await stored!.update({
+        definition: {
+          ...stored!.definition,
+          evidence: {
+            live: { window: '14d', guardrail_tripwires: { max: 0 } },
+          },
+        },
+      });
+
+      const claim = await claimOf(agentId, 2, evalId);
+      expect(claim?.verdict).toBe('insufficient');
+      expect(liveReason(claim!.verdict_reasons, 'unreadable')).toMatchObject({
+        verdict: 'insufficient',
+      });
+    });
+
+    test('a run created from a live rule the rules do not read records it as written', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, {
+        live: { window: '7d', guardrail_tripwires: { max: 0 } },
+      });
+      const unreadable = { window: '14d', guardrail_tripwires: { max: 0 } };
+      await db.Eval.update(
+        { evidence: { live: unreadable } },
+        { where: { publicId: evalId } }
+      );
+
+      // The response contract describes the rules as they are; a value they no
+      // longer read is outside it by construction, so the bare app creates it.
+      const created = await request(app.callback())
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ wait: true, agent_version: 2 });
+      expect(created.status).toBe(201);
+      expect(created.body.definition.evidence).toEqual({ live: unreadable });
+      const stored = await db.EvalRun.findOne({
+        where: { publicId: created.body.id },
+      });
+      expect(stored!.definition?.evidence).toEqual({ live: unreadable });
+
+      const claim = await claimOf(agentId, 2, evalId);
+      expect(claim?.verdict).toBe('insufficient');
+      expect(liveReason(claim!.verdict_reasons, 'unreadable')).toMatchObject({
+        verdict: 'insufficient',
+      });
     });
 
     test('a run older than max_run_age_days is insufficient', async () => {
@@ -492,6 +570,49 @@ describe('Agent version claims — live evidence', () => {
     });
   });
 
+  describe('the pawl judges the stable version by its run', () => {
+    test('a stable claim with no traffic left in the window is still required', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, {
+        live: { window: '7d', min_served_generations: 1 },
+      });
+      await run({ evalId, version: 1 });
+      await serve({
+        agentId,
+        version: 1,
+        count: 1,
+        startedAt: new Date(Date.now() - 8 * DAY_MS),
+      });
+      await run({ evalId, version: 2, reply: 'Lyon' });
+      await serve({ agentId, version: 2, count: 1 });
+      expect((await release(agentId)).status).toBe(200);
+
+      const res = await promote(agentId);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PROMOTION_CLAIM_UNMET');
+      expect(res.body.error.meta).toMatchObject({
+        eval_id: evalId,
+        verdict: 'refuted',
+      });
+    });
+
+    test('a stable claim whose run outlived max_run_age_days is still required', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, { max_run_age_days: 30 });
+      const stableRun = await run({ evalId, version: 1 });
+      await db.EvalRun.update(
+        { finishedAt: new Date(Date.now() - 31 * DAY_MS) },
+        { where: { publicId: stableRun.id } }
+      );
+      await run({ evalId, version: 2, reply: 'Lyon' });
+      expect((await release(agentId)).status).toBe(200);
+
+      const res = await promote(agentId);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PROMOTION_CLAIM_UNMET');
+    });
+  });
+
   describe('GET /api/v1/agents/:agent_id/versions/:version/promotion-claims', () => {
     test('records the claims a promotion stood on, unmoved by a later run', async () => {
       const agentId = await createTwoVersionAgent();
@@ -543,13 +664,99 @@ describe('Agent version claims — live evidence', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a principal without GetAgentVersion gets 404 and no claim', async () => {
+    test('only GetAgentVersion reads the record', async () => {
       const agentId = await createTwoVersionAgent();
-      const res = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/agents/${agentId}/versions/1/promotion-claims`
+      const path = `/api/v1/agents/${agentId}/versions/1/promotion-claims`;
+      const reader = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: unique('promotion-claims-reader'),
+        actions: ['agents:GetAgentVersion'],
+      });
+      const other = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: unique('promotion-claims-other'),
+        actions: ['agents:GetAgent'],
+      });
+
+      expect((await authenticatedTestClient(reader).get(path)).status).toBe(
+        200
       );
-      expect(res.status).toBe(404);
-      expect(res.body.data).toBeUndefined();
+      const refused = await authenticatedTestClient(other).get(path);
+      expect(refused.status).toBe(404);
+      expect(refused.body.data).toBeUndefined();
+    });
+
+    test('an unknown version is 404 and a version that is not a number is 400', async () => {
+      const agentId = await createTwoVersionAgent();
+      const unknown = await asAdmin().get(
+        `/api/v1/agents/${agentId}/versions/99/promotion-claims`
+      );
+      expect(unknown.status).toBe(404);
+      const malformed = await asAdmin().get(
+        `/api/v1/agents/${agentId}/versions/latest/promotion-claims`
+      );
+      expect(malformed.status).toBe(400);
+    });
+
+    test('pages the record by eval_id, and refuses a cursor minted by the live read', async () => {
+      const agentId = await createTwoVersionAgent();
+      const first = await createEval(agentId, null);
+      const second = await createEval(agentId, null);
+      await run({ evalId: first, version: 2 });
+      await run({ evalId: second, version: 2 });
+      expect((await release(agentId)).status).toBe(200);
+      const promoted = await promote(agentId);
+      expect(promoted.status).toBe(200);
+      const live = promoted.body.version as number;
+      const base = `/api/v1/agents/${agentId}/versions`;
+
+      const page = await asAdmin().get(
+        `${base}/${live}/promotion-claims?limit=1`
+      );
+      expect(page.status).toBe(200);
+      const next = await asAdmin().get(
+        `${base}/${live}/promotion-claims?limit=1&cursor=${page.body.next_cursor}`
+      );
+      expect(
+        [...page.body.data, ...next.body.data].map(
+          (claim: { eval_id: string }) => {
+            return claim.eval_id;
+          }
+        )
+      ).toEqual([first, second].sort());
+      expect(next.body.next_cursor).toBeNull();
+
+      const liveRead = await asAdmin().get(`${base}/2/claims?limit=1`);
+      expect(liveRead.body.next_cursor).not.toBeNull();
+      const crossed = await asAdmin().get(
+        `${base}/${live}/promotion-claims?limit=1&cursor=${liveRead.body.next_cursor}`
+      );
+      expect(crossed.status).toBe(400);
+      expect(crossed.body.error.code).toBe('INVALID_CURSOR');
+    });
+
+    test('a promotion that archives a new version records the canary claims on it', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createEval(agentId, null);
+      const canaryRun = await run({ evalId, version: 2 });
+      const draft = await asAdmin()
+        .put(`/api/v1/agents/${agentId}`)
+        .send({ instructions: 'draft after the canary' });
+      expect(draft.status).toBe(200);
+      expect((await release(agentId)).status).toBe(200);
+
+      const promoted = await promote(agentId);
+      expect(promoted.status).toBe(200);
+      expect(promoted.body.version).toBeGreaterThan(3);
+
+      const res = await asAdmin().get(
+        `/api/v1/agents/${agentId}/versions/${promoted.body.version}/promotion-claims`
+      );
+      expect(res.body.data).toEqual([
+        expect.objectContaining({ eval_id: evalId, eval_run_id: canaryRun.id }),
+      ]);
     });
   });
 });

@@ -13,7 +13,7 @@ import { Project } from './Project';
 
 /**
  * A human-decision queue item. Created by the platform (an `approval`
- * orchestration node in Phase 1; tool-call interception in Phase 2) — never via
+ * orchestration node, or tool-call interception) — never via
  * a public create endpoint. Freezes the proposed action and its supporting
  * evidence at emit time and enforces a server-side expiry gate.
  */
@@ -111,7 +111,7 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.DATE, allowNull: false })
   declare expiresAt: Date;
 
-  // Set on tool-call items (Phase 2): `(project_id, agent_id, tool_id,
+  // Set on tool-call items: `(project_id, agent_id, tool_id,
   // args_digest)` while a matching item is pending.
   @Column({ type: DataType.STRING, allowNull: true })
   declare dedupKey: string | null;
@@ -133,7 +133,7 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare nodeId: string | null;
 
-  // The generation that emitted the item (tool-call producer, Phase 2).
+  // The generation that emitted the item (tool-call producer).
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare generationId: string | null;
 
