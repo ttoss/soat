@@ -252,7 +252,7 @@ so at equal relevance a fresh fact outranks a stale one. Document results are ne
 - **`0` disables the blend, at either level.** Zero days is not a meaningful half-life, so the value is a switch rather than a lower bound. It is also the default at both levels, so an upgrade reorders nothing until someone turns it on. A request `recency_half_life_days: 0` turns off a deployment-wide decay for that one query — the archival search on a deployment that otherwise wants freshness.
 - **Days, as a float.** `0.5` is twelve hours; `30` stays readable.
 - **Age is read from `updated_at`, not `created_at`**, so a [consolidation merge](./memories.md#write-algorithm) that re-asserts a fact refreshes it instead of ageing out knowledge the system keeps re-confirming. Every write to the memory counts as a re-assertion — a `PATCH` of its content and a tag edit included. A tag-only edit therefore resets a fact's age to zero.
-- **An invalid value falls back rather than failing.** A negative or non-finite `recency_half_life_days` resolves to the deployment value, then to `0`, the same way `rrf_k` does.
+- **A request value below `0` is `400 VALIDATION_FAILED`.** An unreadable deployment value leaves the blend off.
 - **The clock is read once per response**, so two results in one answer are always ordered against the same instant.
 - **Retrieval only.** The memory write algorithm's duplicate shortlist reads raw cosine and is unaffected: a memory old enough for the blend to bury is still the duplicate a restatement of it merges into.
 

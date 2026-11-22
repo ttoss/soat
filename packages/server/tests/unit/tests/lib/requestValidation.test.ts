@@ -1,5 +1,9 @@
 import { DomainError } from '../../../../src/errors';
+import { getRequestBodyValidator } from '../../../../src/lib/openapiJsonSchema';
+import { isObjectRecord } from '../../../../src/lib/openapiSchemaFields';
+import { getRouteRequestSchema } from '../../../../src/lib/openapiSpec';
 import { validateRequestBody } from '../../../../src/lib/requestValidation';
+import { ROUTE_OWNED_BODY_FIELDS } from '../../../../src/lib/routeOwnedBodyFields';
 
 const expectThrows = (fn: () => void): DomainError => {
   let thrown: unknown;
@@ -109,16 +113,6 @@ describe('validateRequestBody', () => {
             nodes: [{ id: 'n1', type: 'agent', input_mapping: { any: 1 } }],
             edges: [],
           },
-        });
-      }).not.toThrow();
-    });
-
-    test('skips a nested oneOf union (generation message content)', () => {
-      expect(() => {
-        return validateRequestBody({
-          method: 'post',
-          path: '/agents/:agent_id/generate',
-          body: { messages: [{ role: 'user', content: { unusual: 'shape' } }] },
         });
       }).not.toThrow();
     });
@@ -342,4 +336,81 @@ describe('validateRequestBody', () => {
       expect(error.meta).toEqual({ missing_fields: ['name'] });
     });
   });
+
+  describe('the full request schema', () => {
+    const generate = '/agents/:agent_id/generate';
+
+    test('refuses a nested value that matches no branch of its union', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: generate,
+          body: {
+            messages: [
+              {
+                role: 'user',
+                content: [{ type: 'document', document_id: 'd' }],
+              },
+            ],
+          },
+        });
+      });
+      expect(error.code).toBe('VALIDATION_FAILED');
+      expect(error.meta).toEqual({ invalid_fields: ['messages.0.content'] });
+    });
+
+    test('refuses a nested required field the body leaves out', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { ai_provider_id: 'aip_1', tool_bindings: [{ tool: {} }] },
+        });
+      });
+      expect(error.meta).toEqual({
+        invalid_fields: ['tool_bindings.0.tool.name'],
+      });
+    });
+
+    test('names the value an enum refuses', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { ai_provider_id: 'aip_1', trace_content_mode: 'partial' },
+        });
+      });
+      expect(error.message).toMatch(
+        /`trace_content_mode` must be one of: .*\(got "partial"\)/
+      );
+    });
+
+    test('leaves a route-owned field to its route', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: generate,
+          body: { messages: [{ role: 'system', content: 'x' }] },
+        });
+      }).not.toThrow();
+    });
+  });
+});
+
+describe('ROUTE_OWNED_BODY_FIELDS', () => {
+  test.each(Object.entries(ROUTE_OWNED_BODY_FIELDS))(
+    '%s names an operation with a JSON body and fields it declares',
+    (operation, fields) => {
+      const [method, template] = operation.split(' ');
+      expect(getRequestBodyValidator({ method, template })).not.toBeNull();
+      const schema = getRouteRequestSchema({ method, path: template });
+      const properties = isObjectRecord(schema?.properties)
+        ? Object.keys(schema.properties)
+        : [];
+      for (const field of fields) {
+        if (field === '') continue;
+        expect(properties).toContain(field.split('.')[0]);
+      }
+    }
+  );
 });

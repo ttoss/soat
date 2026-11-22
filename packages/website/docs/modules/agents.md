@@ -360,7 +360,7 @@ The key is scoped to the project. Every other body field except `stream` is the 
 
 #### Tool Output Message Content
 
-`messages[].content` is a string, a `tool_output` object or a `document` object.
+`messages[].content` is a string, a `tool_output` object or a `document` object. Any other shape, an array of blocks included, is `400 VALIDATION_FAILED` before a generation is recorded.
 
 When `content.type` is `tool_output`, the server executes the referenced tool before inference and replaces the content with the extracted result (audio URL → transcription text):
 

@@ -280,6 +280,41 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
       expect(await sentToModel()).toBe('The document the message names.');
     });
 
+    // The spec's `content` is a string or one block object; a list of blocks
+    // is refused at write, before a generation is recorded.
+    test('inside an array is 400 at write', async () => {
+      const agentId = await createAgent({ toolIds: [] });
+
+      const res = await asAdmin()
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'document', document_id: documentId }],
+            },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({
+        invalid_fields: ['messages.0.content'],
+      });
+    });
+
+    test('missing its document_id is 400 at write', async () => {
+      const agentId = await createAgent({ toolIds: [] });
+
+      const res = await generate({ agentId, content: { type: 'document' } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({
+        invalid_fields: ['messages.0.content'],
+      });
+    });
+
     test('naming no document is 404', async () => {
       const agentId = await createAgent({ toolIds: [] });
 

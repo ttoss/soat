@@ -675,17 +675,21 @@ describe('Knowledge', () => {
       for (const result of above.body.results) {
         expect(result.score).toBeGreaterThanOrEqual(0);
       }
+    });
 
-      // A floor above any achievable cosine filters everything out.
-      const below = await authenticatedTestClient(userToken)
+    test('min_similarity outside the cosine range is 400', async () => {
+      const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
           query: 'anything',
           min_similarity: 1.5,
         });
-      expect(below.status).toBe(200);
-      expect(below.body.results).toHaveLength(0);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta).toEqual({
+        invalid_fields: ['min_similarity'],
+      });
     });
 
     test('min_score is not a field the search accepts', async () => {
@@ -1087,7 +1091,7 @@ describe('Knowledge', () => {
           project_id: projectId,
           query: 'sky',
           memory_store_ids: [memoryStoreId],
-          min_similarity: -1,
+          min_similarity: 0,
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);

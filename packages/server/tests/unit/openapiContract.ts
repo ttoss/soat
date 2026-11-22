@@ -3,6 +3,7 @@ import { appendFileSync } from 'node:fs';
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { errorDocsUrlOmitted, errorHintsOmitted } from 'src/errors';
+import { escapePointerToken, toJsonSchema } from 'src/lib/openapiJsonSchema';
 import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
 
 // Audit mode: validate EVERY response against its full schema and append
@@ -35,72 +36,6 @@ const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
-// OpenAPI-only keywords that are not valid JSON Schema draft-07 and would make
-// Ajv strict-mode unhappy. `example(s)` are documentation-only.
-const STRIPPED_KEYWORDS = new Set([
-  'example',
-  'examples',
-  'xml',
-  'externalDocs',
-  'discriminator',
-  'deprecated',
-]);
-
-/**
- * Rewrites `nullable: true` in place on a sanitized node into a JSON-Schema
- * `null` union, preserving any `$ref`/`oneOf` by wrapping in `anyOf`.
- */
-const applyNullable = (out: Record<string, unknown>): void => {
-  const nullable = out.nullable;
-  delete out.nullable;
-  if (nullable !== true) return;
-
-  if (typeof out.type === 'string') {
-    out.type = [out.type, 'null'];
-  } else if (Array.isArray(out.type)) {
-    if (!out.type.includes('null')) out.type.push('null');
-  } else {
-    // No plain `type` (e.g. a `$ref` / `oneOf` node): express nullability as
-    // an explicit union so the ref is preserved.
-    const inner = { ...out };
-    for (const key of Object.keys(out)) delete out[key];
-    out.anyOf = [inner, { type: 'null' }];
-  }
-};
-
-// The per-file specs are merged into one document, but some use cross-file refs
-// like `./tools.yaml#/components/schemas/X`. Every component name is unique
-// across the merged doc, so collapse any ref to its local fragment so it
-// resolves within the registered spec.
-const localizeRef = (value: string): string => {
-  return value.includes('#')
-    ? `#${value.slice(value.indexOf('#') + 1)}`
-    : value;
-};
-
-/**
- * Recursively converts an OpenAPI 3.0 schema fragment into a draft-07 schema
- * Ajv understands. Operates on a deep clone so the cached merged spec is never
- * mutated.
- */
-const sanitizeSchema = (node: unknown): unknown => {
-  if (Array.isArray(node)) return node.map(sanitizeSchema);
-  if (!isRecord(node)) return node;
-
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(node)) {
-    if (STRIPPED_KEYWORDS.has(key)) continue;
-    if (key === '$ref' && typeof value === 'string') {
-      out[key] = localizeRef(value);
-      continue;
-    }
-    out[key] = sanitizeSchema(value);
-  }
-
-  applyNullable(out);
-  return out;
 };
 
 const ajvs = new Map<string, Ajv>();
@@ -137,7 +72,7 @@ const getAjv = (omitted: string): Ajv => {
   const cached = ajvs.get(omitted);
   if (cached) return cached;
 
-  const sanitized = sanitizeSchema(getMergedOpenApiSpec()) as Record<
+  const sanitized = toJsonSchema(getMergedOpenApiSpec()) as Record<
     string,
     unknown
   >;
@@ -153,11 +88,6 @@ const getAjv = (omitted: string): Ajv => {
   ajvs.set(omitted, ajv);
 
   return ajv;
-};
-
-/** Escapes a single JSON Pointer reference token (RFC 6901). */
-const escapePointerToken = (token: string): string => {
-  return token.replace(/~/g, '~0').replace(/\//g, '~1');
 };
 
 /** The response an operation declares for `status`: its own key, else its `4XX`-style range. */

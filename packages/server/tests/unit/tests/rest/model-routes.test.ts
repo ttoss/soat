@@ -227,7 +227,9 @@ describe('Model Routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.message).toMatch(/non-empty array/);
+      expect(res.body.error.message).toMatch(
+        /`targets` must NOT have fewer than 1 items/
+      );
     });
 
     test('rejects an unknown field inside a target', async () => {

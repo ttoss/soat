@@ -210,7 +210,7 @@ export const matchOpenApiPath = (args: { path: string }): string | null => {
  * the OpenAPI path-key form used in the specs (`/api/v1/agents/{agent_id}`):
  * `:param` → `{param}`, and the `/api/v1` prefix is added if absent.
  */
-const normalizeRoutePath = (path: string): string => {
+export const normalizeRoutePath = (path: string): string => {
   const withBraces = path.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
   return withBraces.startsWith('/api/v1') ? withBraces : `/api/v1${withBraces}`;
 };
