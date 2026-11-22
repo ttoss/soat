@@ -87,6 +87,10 @@ A caller without it gets `403` before any provider call or SSE stream (a refused
 
 `stream: true` returns SSE; each event is a JSON object with a `choices[0].delta.content` chunk, ending with `data: [DONE]`. A `: heartbeat` comment line is sent every 15 seconds; a stream lasts at most 5 minutes and then ends with `event: end` and `data: {"reason":"max_lifetime"}`.
 
+### Priced models
+
+A completion on a project or AI provider with [`require_priced_model`](./projects.md#priced-models) is refused with `409 MODEL_NOT_PRICED` when no price row covers its model (the request's `model`, else the chat's, else the provider's `default_model`), before the provider is called. A chat bound to a route is held to every target. A streaming request has already written `200`, so the refusal arrives as a terminal error frame.
+
 ### Upstream provider errors
 
 When the provider rejects the completion (unavailable model, refused credential) or is unreachable, [`POST /api/v1/chat/completions`](/docs/api/chats/create-chat-completion) answers `502 AI_PROVIDER_ERROR` with the provider's status and message:

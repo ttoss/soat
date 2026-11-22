@@ -14,7 +14,7 @@ import type { LanguageModel } from 'ai';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
-import { buildModel } from './agentModel';
+import { buildPricedModel } from './modelPricingGate';
 import {
   buildRoutedModel,
   resolveConsumerModelRoute,
@@ -56,6 +56,7 @@ export const resolveAgentModel = async (
       model: await buildRoutedModel({
         route,
         projectId: ownerProjectId(typedAgent),
+        spendProjectId: typedAgent.project.id,
       }),
       provider: ROUTED_PROVIDER_LABEL,
     };
@@ -76,7 +77,8 @@ export const resolveAgentModel = async (
   if (!resolved) return { failure: 'provider_unresolvable' };
 
   return {
-    model: buildModel({
+    model: await buildPricedModel({
+      spendProjectId: typedAgent.project.id,
       aiProvider: resolved,
       model: typedAgent.model ?? resolved.defaultModel,
     }),

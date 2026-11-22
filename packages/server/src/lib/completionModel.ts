@@ -5,7 +5,7 @@ import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
-import { buildModel } from './agentModel';
+import { buildPricedModel } from './modelPricingGate';
 import {
   buildRoutedModel,
   type CompletionAttribution,
@@ -92,7 +92,11 @@ const resolvePinnedCompletionModel = async (args: {
   );
 
   return {
-    model: buildModel({ aiProvider: resolved, model: modelName }),
+    model: await buildPricedModel({
+      spendProjectId: args.projectId,
+      aiProvider: resolved,
+      model: modelName,
+    }),
     attribution: {
       provider: resolved.provider,
       modelName,
@@ -179,7 +183,11 @@ export const resolveCompletionModel = async (args: {
       route.id
     );
     return {
-      model: await buildRoutedModel({ route, projectId }),
+      model: await buildRoutedModel({
+        route,
+        projectId,
+        spendProjectId: projectId,
+      }),
       modelName: route.id,
       projectId,
       agentDbId,

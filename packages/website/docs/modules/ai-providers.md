@@ -35,7 +35,7 @@ An AI provider is a named configuration that tells the system how to reach a spe
 | `config`        | object \| null   | Arbitrary provider-specific configuration object          |
 | `model_aliases` | object           | Alias → model id sent to the vendor, or `{ ai_provider_id, model }` another provider of the project serves; `{}` when none (see [Model aliases](#model-aliases)) |
 | `model_aliases_only` | boolean     | Refuse a model that is not one of `model_aliases` |
-| `require_priced_model` | boolean   | Refuse an agent generation on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
+| `require_priced_model` | boolean   | Refuse a model call on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
 
@@ -308,7 +308,7 @@ An alias may map to `{ ai_provider_id, model }`: another provider of the same pr
 
 ### Requiring a priced model
 
-`require_priced_model: true` on a provider refuses, with `409 MODEL_NOT_PRICED`, an agent generation on that provider whose model no price row covers, before the provider is called; a chat completion is not checked. It holds that provider alone: another provider of the project runs unpriced unless the [project's own flag](./projects.md#priced-models) is set. A route target is held when its provider sets it. Setting it needs `ai-providers:UpdateAiProvider`.
+`require_priced_model: true` on a provider refuses, with `409 MODEL_NOT_PRICED`, any model call on that provider (agent generation, chat completion, memory extraction, `llm_judge` scorer) whose model no price row covers, before the provider is called. It holds that provider alone: another provider of the project runs unpriced unless the [project's own flag](./projects.md#priced-models) is set. A route target is held when its provider sets it. Setting it needs `ai-providers:UpdateAiProvider`.
 
 ### Price overrides
 

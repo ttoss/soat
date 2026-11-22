@@ -1,9 +1,9 @@
 /**
  * The refusal of a model no price row covers, behind `require_priced_model`:
- * on the project it holds every candidate, on an AI provider that provider's.
+ * on the project it holds every binding, on an AI provider that provider's.
  *
  * A `cost_usd` quota and a guardrail cost ceiling both answer *after* the fact:
- * they read a window the meter already wrote, so the generations that opened an
+ * they read a window the meter already wrote, so the calls that opened an
  * unpriced window always ran, and a window holding one priced model beside an
  * unpriced one reads the priced spend alone (`costEnforceability.ts`). This
  * gate answers before the provider is called instead, on the binding itself —
@@ -13,18 +13,26 @@
  * event at `cost_usd = null` and must keep running; the provider flag lets one
  * project hold the providers it bills while its others run unpriced.
  *
- * The check reads the configured model, which is the name the binding can be
- * held to before a call exists. A provider that answers under a more specific
- * id (a dated snapshot of the model asked for) meters under that id, so the
- * `quota_unpriced` exception remains the backstop that names it.
+ * Every language model a provider row serves is built here, so no caller
+ * reaches a provider without crossing the gate
+ * (`tests/harness/modelPricingChokepoint.test.mjs`). The check reads the
+ * configured model, the name the binding can be held to before a call exists.
+ * A provider that answers under a more specific id (a dated snapshot of the
+ * model asked for) meters under that id, so the `quota_unpriced` exception
+ * remains the backstop that names it.
  */
 
+import type { LanguageModel } from 'ai';
+import createDebug from 'debug';
+
+import { db } from '../db';
 import { DomainError } from '../errors';
-import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
+import { buildModel } from './agentModel';
+import type { ModelProvider } from './aiProviderModelAliases';
 import type { UnpricedRow } from './costEnforceability';
-import { resolveConsumerModelRoute } from './modelRouteDefaults';
 import { getEffectivePrice } from './priceBook';
-import { aiProviderReferences } from './resourceReferences';
+
+const log = createDebug('soat:model-pricing-gate');
 
 /**
  * The components every token event bills. The two cache dimensions are left
@@ -36,107 +44,45 @@ import { aiProviderReferences } from './resourceReferences';
  */
 const GATED_COMPONENTS = ['input_tokens', 'output_tokens'];
 
-/** A `(provider, model)` pair a turn may bill against, and the instance serving it. */
-type ModelCandidate = {
+/** A provider row as `resolveAiProviderSecret` returns it. */
+export type PricedModelProvider = ModelProvider & {
+  id: number;
+  projectId: number;
   provider: string;
-  model: string;
-  aiProviderId: number;
   requirePricedModel: boolean;
 };
 
-type CandidateBinding = {
-  aiProviderPublicId: string | undefined;
-  model: string | null;
-};
-
-/**
- * What the turn may spend on: a routed agent's whole target list, because a
- * failover bills whichever target answers, and a pinned agent's single pair.
- *
- * The route and the provider rows are read again here rather than carried out
- * of `resolveAgentModel`: two reads cost nothing beside the provider call they
- * precede, and threading the pair through the routing stack would put a
- * pricing concern in every model builder. Each candidate carries its provider's
- * own flag, so a turn reads them whether or not the project requires pricing.
- */
-const resolveCandidates = async (
-  typedAgent: TypedAgent
-): Promise<ModelCandidate[]> => {
-  const projectId = ownerProjectId(typedAgent);
-  const route = await resolveConsumerModelRoute({
-    projectId,
-    modelRouteId: typedAgent.modelRoute?.publicId,
-    aiProviderId: typedAgent.aiProvider?.publicId,
-  });
-
-  const bindings: CandidateBinding[] = route
-    ? route.targets.map((target) => {
-        return {
-          aiProviderPublicId: target.ai_provider_id,
-          model: target.model,
-        };
-      })
-    : [
-        {
-          aiProviderPublicId: typedAgent.aiProvider?.publicId,
-          model: typedAgent.model,
-        },
-      ];
-
-  const providers = await aiProviderReferences.findMany({
-    ids: bindings.flatMap((binding) => {
-      return binding.aiProviderPublicId ? [binding.aiProviderPublicId] : [];
-    }),
-    projectId,
-    reach: 'shares',
-  });
-
-  return bindings.flatMap((binding) => {
-    const provider = binding.aiProviderPublicId
-      ? providers.get(binding.aiProviderPublicId)
-      : undefined;
-    if (!provider) return [];
-    return [
-      {
-        provider: provider.provider,
-        // The same string `buildModel` is given, so the gate and the meter
-        // read one name.
-        model: binding.model ?? provider.defaultModel ?? '',
-        aiProviderId: provider.id as number,
-        requirePricedModel: provider.requirePricedModel,
-      },
-    ];
-  });
+/** A `(provider, model)` pair a call may bill against. */
+export type ModelBinding = {
+  aiProvider: PricedModelProvider;
+  /** The string the meter reads, so the gate and the meter name one model. */
+  model: string;
 };
 
 /**
  * The `(provider, model, component)` rows no price covers, resolved through the
- * same tiering the meter prices with, so a per-provider override or a project
- * rate satisfies the gate exactly where it would satisfy the cost.
+ * same tiering the meter prices with, in the price book of the project that
+ * reaches the provider, so a per-provider override or a project rate satisfies
+ * the gate exactly where it would satisfy the cost.
  */
-const unpricedRows = async (args: {
-  projectId: number;
-  candidates: ModelCandidate[];
-}): Promise<UnpricedRow[]> => {
+const unpricedRows = async (
+  bindings: ModelBinding[]
+): Promise<UnpricedRow[]> => {
   const at = new Date();
   const rows: UnpricedRow[] = [];
 
-  for (const candidate of args.candidates) {
+  for (const { aiProvider, model } of bindings) {
     for (const component of GATED_COMPONENTS) {
       const price = await getEffectivePrice({
-        provider: candidate.provider,
-        model: candidate.model,
+        provider: aiProvider.provider,
+        model,
         component,
-        aiProviderId: candidate.aiProviderId,
-        projectId: args.projectId,
+        aiProviderId: aiProvider.id,
+        projectId: aiProvider.grantee ?? aiProvider.projectId,
         at,
       });
       if (!price) {
-        rows.push({
-          provider: candidate.provider,
-          model: candidate.model,
-          component,
-        });
+        rows.push({ provider: aiProvider.provider, model, component });
       }
     }
   }
@@ -145,30 +91,30 @@ const unpricedRows = async (args: {
 };
 
 /**
- * Refuses a fresh turn whose model carries no price, on a project that requires
- * one. Raised before the generation record exists and before any context is
- * built, so a refusal leaves nothing recorded and nothing metered.
- *
- * An unreadable price book refuses rather than waving the turn through: the
- * same database has to be readable for the turn to be recorded at all, so a
- * read that fails here is not a case worth staying available for.
+ * An unreadable price book refuses rather than waving the call through: the
+ * same database has to be readable for the call to be metered at all.
  */
-export const assertGenerationModelPriced = async (args: {
-  typedAgent: TypedAgent;
+const assertBindingsPriced = async (args: {
+  spendProjectId: number;
+  bindings: ModelBinding[];
 }): Promise<void> => {
-  const projectRequires = args.typedAgent.project.requirePricedModel === true;
-  const candidates = (await resolveCandidates(args.typedAgent)).filter(
-    (candidate) => {
-      return projectRequires || candidate.requirePricedModel;
-    }
-  );
-  if (candidates.length === 0) return;
+  const project = await db.Project.findByPk(args.spendProjectId, {
+    attributes: ['requirePricedModel'],
+  });
+  const projectRequires = project?.requirePricedModel === true;
+  const held = args.bindings.filter((binding) => {
+    return projectRequires || binding.aiProvider.requirePricedModel;
+  });
+  if (held.length === 0) return;
 
-  // The price book the agent's own provider is priced in.
-  const projectId = ownerProjectId(args.typedAgent);
-  const rows = await unpricedRows({ projectId, candidates });
+  const rows = await unpricedRows(held);
   if (rows.length === 0) return;
 
+  log(
+    'assertBindingsPriced: spendProjectId=%d refused %o',
+    args.spendProjectId,
+    rows
+  );
   const named = rows
     .map((row) => {
       return `${row.provider}/${row.model} ${row.component}`;
@@ -180,4 +126,32 @@ export const assertGenerationModelPriced = async (args: {
     `A priced model is required, and no price row covers ${named}.`,
     { unpriced_rows: rows }
   );
+};
+
+/**
+ * Builds each binding's language model once all of them pass the gate: a
+ * route's targets are checked together, because a failover bills whichever
+ * target answers. `spendProjectId` is the project the call's spend is metered
+ * against, which for a shared agent is the project the turn runs in.
+ */
+export const buildPricedModels = async (args: {
+  spendProjectId: number;
+  bindings: ModelBinding[];
+}): Promise<LanguageModel[]> => {
+  await assertBindingsPriced(args);
+  return args.bindings.map((binding) => {
+    return buildModel(binding);
+  });
+};
+
+export const buildPricedModel = async (args: {
+  spendProjectId: number;
+  aiProvider: PricedModelProvider;
+  model: string;
+}): Promise<LanguageModel> => {
+  const [model] = await buildPricedModels({
+    spendProjectId: args.spendProjectId,
+    bindings: [{ aiProvider: args.aiProvider, model: args.model }],
+  });
+  return model;
 };
