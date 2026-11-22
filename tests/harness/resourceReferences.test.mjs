@@ -138,7 +138,7 @@ pinReferences({
   notAReference: {
     'lib/aiProviderAliasTargets.ts':
       'scans a project for the providers whose aliases forward to one',
-    'lib/aiProviderModels.ts': "reads the project of the route's own provider",
+    'lib/aiProviderModelListing.ts': "reads the route's own provider",
     'lib/aiProviderDeletion.ts': "deletes the route's own provider",
     'lib/aiProviders.ts': "lists the caller's providers",
     'lib/chatCompletionModel.ts':

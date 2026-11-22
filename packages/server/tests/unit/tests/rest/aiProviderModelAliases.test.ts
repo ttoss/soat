@@ -321,6 +321,47 @@ describe('AI provider model_aliases', () => {
     });
   });
 
+  describe('GET /api/v1/ai-providers/{ai_provider_id}/models', () => {
+    const listIds = async (args: {
+      providerId: string;
+      query?: Record<string, string>;
+    }) => {
+      const res = await asAdmin()
+        .get(`/api/v1/ai-providers/${args.providerId}/models`)
+        .query(args.query ?? {});
+      expect(res.status).toBe(200);
+      return res.body.data.map((model: { id: string }) => {
+        return model.id;
+      });
+    };
+
+    test('a closed catalog lists its aliases without calling the vendor', async () => {
+      const before = stub.routeRequests.length + stub.completions.length;
+      expect(await listIds({ providerId: closedProviderId })).toEqual([
+        'fast',
+        'smart',
+      ]);
+      expect(stub.routeRequests.length + stub.completions.length).toBe(before);
+    });
+
+    test('q and paging apply to the aliases', async () => {
+      expect(
+        await listIds({ providerId: closedProviderId, query: { q: 'SMA' } })
+      ).toEqual(['smart']);
+      expect(
+        await listIds({ providerId: closedProviderId, query: { limit: '1' } })
+      ).toEqual(['fast']);
+    });
+
+    test('an open catalog still asks the vendor', async () => {
+      const res = await asAdmin().get(
+        `/api/v1/ai-providers/${openProviderId}/models`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MODEL_LISTING_UNSUPPORTED');
+    });
+  });
+
   test('a builtin get-agent answers the alias', async () => {
     const agent = await createAgent({
       providerId: closedProviderId,

@@ -85,6 +85,12 @@ export const forwardsEveryModel = (aiProvider: ModelAliasing): boolean => {
   );
 };
 
+/** The names a closed provider offers, sorted; `null` for an open one. */
+export const offeredAliases = (aiProvider: ModelAliasing): string[] | null => {
+  if (!aiProvider.modelAliasesOnly) return null;
+  return Object.keys(aiProvider.modelAliases ?? {}).sort();
+};
+
 /** Refuses a model a closed provider does not offer. */
 export const assertModelOffered = (args: {
   aiProvider: ModelAliasing;
