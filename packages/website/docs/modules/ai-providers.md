@@ -182,7 +182,7 @@ These are the deployment's credentials, so the mode is available only where the 
 
 ### Listing the models a provider can run
 
-[`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that record's configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry, unless the provider names its models through [aliases](#model-aliases). Reachable models are a property of the **credential**, not the slug.
+[`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that record's configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. A provider with `model_aliases_only: true` answers its [aliases](#model-aliases) instead, without asking the vendor. Reachable models are a property of the **credential**, not the slug.
 
 Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
 
@@ -281,7 +281,7 @@ Wherever a model is named beside the provider (its `default_model`, an agent's `
 
 `model_aliases_only: true` closes the catalog: a model that is not one of the aliases is `400 MODEL_NOT_OFFERED`, with `meta.ai_provider_id` and `meta.model`. It is refused on the write that names it (the provider's own `default_model`, an agent, a chat, a model route target, and those resources in a formation) and on any call that would send it. Closing a catalog does not re-check what is already stored: a stored non-alias model is refused when it is called. Setting either field needs `ai-providers:UpdateAiProvider`.
 
-The [model listing](#listing-the-models-a-provider-can-run) reads neither field: it returns the vendor's ids, not the aliases.
+On a closed catalog the [model listing](#listing-the-models-a-provider-can-run) answers the aliases, sorted, each as an entry carrying only `id`, without calling the vendor; any provider type lists this way. An open catalog's listing answers the vendor's ids, not the aliases.
 
 #### Forwarding an alias to another provider
 

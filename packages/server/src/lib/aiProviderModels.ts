@@ -2,7 +2,6 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { GoogleAuth } from 'google-auth-library';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import type { VertexSettings } from './agentModel';
 import { resolveVertexSettings } from './agentModel';
@@ -18,7 +17,6 @@ import {
   readJson,
   requireSecret,
 } from './aiProviderModelsHttp';
-import { resolveAiProviderSecret } from './aiProviders';
 import {
   assertAmbientCredentialsAllowed,
   usesAnthropicTenantEndpoint,
@@ -30,7 +28,6 @@ import type {
 } from './bedrockModelCatalog';
 import { defaultListFoundationModels } from './bedrockModelCatalog';
 import { resolveBedrockCredentials } from './linkedProviderSecret';
-import { type Page, pageOf } from './pagination';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 const log = createDebug('soat:provider-models');
@@ -488,71 +485,4 @@ export const enumerateProviderModels = async (
     models.length
   );
   return models;
-};
-
-/** `q` as a case-insensitive substring of a model's id or display name. */
-const filterModels = (args: {
-  models: ProviderModel[];
-  q?: string;
-}): ProviderModel[] => {
-  const needle = args.q?.trim().toLowerCase();
-  if (!needle) return args.models;
-  return args.models.filter((model) => {
-    return [model.id, model.display_name].some((value) => {
-      return value?.toLowerCase().includes(needle);
-    });
-  });
-};
-
-/**
- * Asks an existing AI provider record which models it can run, using that
- * provider's own stored credentials and configuration.
- *
- * The provider record is the unit of authorization and of credentials, which is
- * why this hangs off a provider rather than off a slug: two providers of the
- * same slug in the same project can legitimately see different catalogues.
- */
-export const listAiProviderModels = async (args: {
-  aiProviderId: string;
-  q?: string;
-  limit?: number;
-  cursor?: string;
-}): Promise<Page<ProviderModel>> => {
-  // The provider is this route's subject rather than something another
-  // project's record points at, and the caller was authorized against the
-  // provider's own project — so that project is the scope.
-  const owner = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId },
-    attributes: ['projectId'],
-  });
-  if (!owner) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
-  }
-
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: args.aiProviderId,
-    projectId: owner.projectId,
-    reach: 'project',
-  });
-  /* istanbul ignore next -- the row was just read; only a delete racing this
-     call resolves it away. */
-  if (!resolved) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
-  }
-
-  const catalogue = await enumerateProviderModels({
-    project: resolved.projectPublicId,
-    provider: resolved.provider,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config,
-    secretValue: resolved.secretValue,
-  });
-  // The vendor answers its whole catalogue in one call, so the filter and the
-  // page apply to what it returned rather than to the upstream request.
-  return pageOf({
-    items: filterModels({ models: catalogue, q: args.q }),
-    limit: args.limit,
-    cursor: args.cursor,
-    filters: { aiProviderId: args.aiProviderId, q: args.q },
-  });
 };

@@ -7,7 +7,7 @@ import { DomainError } from 'src/errors';
 import { redactAiProviderSecrets } from 'src/lib/aiProviderConfigSecrets';
 import { deleteAiProvider } from 'src/lib/aiProviderDeletion';
 import type { ModelAliases } from 'src/lib/aiProviderModelAliases';
-import { listAiProviderModels } from 'src/lib/aiProviderModels';
+import { listAiProviderModels } from 'src/lib/aiProviderModelListing';
 import {
   createAiProvider,
   getAiProvider,
