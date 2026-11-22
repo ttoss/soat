@@ -326,6 +326,30 @@ describe('Agent version claims', () => {
       });
     });
 
+    test('a canary run that carries no claim holds none, so it is refused', async () => {
+      const agentId = await createTwoVersionAgent();
+      const evalId = await createClaimEval(agentId);
+      await run({ evalId, version: 1, reply: 'Paris' });
+      const cleared = await asUser()
+        .put(`/api/v1/evals/${evalId}`)
+        .send({ claim: null });
+      expect(cleared.status).toBe(200);
+      const canaryRun = await run({ evalId, version: 2, reply: 'Paris' });
+      expect(canaryRun.verdict).toBe('supported');
+      expect((await release(agentId)).status).toBe(200);
+
+      const res = await promote(agentId);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PROMOTION_CLAIM_UNMET');
+      expect(res.body.error.meta).toMatchObject({
+        eval_id: evalId,
+        claim: { statement: 'Names capitals.' },
+        eval_run_id: null,
+        verdict: null,
+      });
+    });
+
     test('a claim the stable version does not support is not required', async () => {
       const agentId = await createTwoVersionAgent();
       const evalId = await createClaimEval(agentId);

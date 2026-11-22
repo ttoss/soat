@@ -1057,7 +1057,8 @@ paths:
         rules and the run age its run recorded. Otherwise the call is a
         `409 PROMOTION_CLAIM_UNMET` whose `meta` names the `eval_id`, the
         stable version's `claim`, and the canary's `eval_run_id`, `verdict`
-        and `verdict_reasons` (null when it has no run). The version that goes
+        and `verdict_reasons` (null when it holds no claim of that eval: no
+        run, or a run that carries no claim). The version that goes
         live records the claims the canary held (`GET
         /api/v1/agents/{agent_id}/versions/{version}/promotion-claims`) and the
         release's `released_claims`.
