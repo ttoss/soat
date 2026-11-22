@@ -109,9 +109,10 @@ Measure the agent at the `temperature` production serves. Temperature is part of
 
 An `llm_judge` or `embedding_similarity` score is a model's opinion; its `pass_threshold` means nothing until it agrees with human grades.
 
-1. Grade 20–30 items by hand, pass or fail, borderline cases included.
-2. Run the eval and compare each scorer's `passed` with your grade ([Judge Open-Ended Answers — Step 5](/docs/tutorials/judge-open-ended-answers#step-5--check-the-judge-against-your-own-grades)).
-3. Move the threshold or rewrite the prompt until the disagreements are few and understood. The judge's `reasoning` on each one says which of the two is wrong.
+1. Run the eval and label 20–30 of its results by hand, pass or fail, borderline cases included ([Human labels and calibration](../modules/evaluations.md#human-labels-and-calibration); [Judge Open-Ended Answers — Step 5](/docs/tutorials/judge-open-ended-answers#step-5--check-the-judge-against-your-own-grades)).
+2. Read the run's calibration: each scorer's agreement with your labels, its false passes and its false fails.
+3. Move the threshold or rewrite the prompt until the disagreements are few and understood. The judge's `reasoning` on each one says which of the two is wrong. Any change to the scorers moves `scorer_fingerprint`, so label a run graded by the new ones.
+4. Require it of the claim with `evidence.min_calibration` ([Evidence](../modules/evaluations.md#evidence)).
 
 For an `llm_judge` ([LLM judge](../modules/evaluations.md#llm-judge)):
 
