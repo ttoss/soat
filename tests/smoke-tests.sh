@@ -5087,6 +5087,8 @@ SOAT_AGENT_RESP=$($SOAT_CLI create-agent \
   --name soat-project-lister \
   --instructions "You are a helpful assistant. Use the SOAT list-projects action to list projects for the user." \
   --tool_bindings "[{\"tool_id\":\"$SOAT_TOOL_ID\"}]" \
+  --step_rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"soat-platform_list-projects"}}]' \
+  --stop_conditions '[{"type":"has_tool_call","tool_name":"soat-platform_list-projects"}]' \
   --max_steps 5)
 SOAT_AGENT_ID=$(printf '%s\n' "$SOAT_AGENT_RESP" | jq -r '.id')
 if [ -z "$SOAT_AGENT_ID" ] || [ "$SOAT_AGENT_ID" = "null" ]; then
@@ -5096,7 +5098,10 @@ if [ -z "$SOAT_AGENT_ID" ] || [ "$SOAT_AGENT_ID" = "null" ]; then
 fi
 echo "SOAT Agent id: $SOAT_AGENT_ID"
 
-# 39. Run generation with the SOAT-backed agent
+# 39. Run generation with the SOAT-backed agent. Step 1 forces the call, which
+# the compose stack's shim synthesizes with no arguments (list-projects requires
+# none), and the stop condition ends the turn on it: the model never picks an
+# argument value, so a validation error below can only be the runtime's own.
 echo "--- Running SOAT agent generation ---"
 SOAT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$SOAT_AGENT_ID" \
   --messages '[{"role":"user","content":"List all projects. Use the soat-platform tool."}]' | sanitize_json)

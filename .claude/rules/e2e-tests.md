@@ -69,7 +69,7 @@ after is silently wrong):
 Smoke and tutorials route Ollama through `tests/mocks/ollamaToolChoiceProxy.mjs`
 (`OLLAMA_BASE_URL: http://ollama-tool-choice:11434`), which implements
 `tool_choice` (Ollama drops it) for tools in `TOOL_CHOICE_TOOLS`
-(`get_order_status` in tutorials, `get_weather` in smoke) and forwards
+(each compose file lists its own) and forwards
 everything else verbatim. A forced allowlisted tool absent from `tools` is
 answered `400`.
 
