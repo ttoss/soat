@@ -199,9 +199,10 @@ export const resolveReleasedClaims = async (args: {
  * required when its traffic stops (a canary at 100%) or its run ages. The
  * canary side is judged by its claim verdict, production and run age
  * included, so a canary losing a claim in production is refused as surely as
- * one whose run does. A refuted, insufficient or missing canary claim is the
- * same `409`, so "cannot tell" never resolves to "allowed". Returns the
- * canary's claims, which the promoted version records.
+ * one whose run does. A refuted, insufficient or missing canary claim (no
+ * run, or a run that carries no claim) is the same `409`, so "cannot tell"
+ * never resolves to "allowed". Returns the canary's claims, which the promoted
+ * version records.
  */
 export const requireClaimsHeld = async (args: {
   agent: AgentRef;
@@ -216,8 +217,15 @@ export const requireClaimsHeld = async (args: {
   );
 
   const released = new Set(args.release.released_claims);
-  const canaryRuns = await speakingRuns({ agent: args.agent, version: canary });
-  const canaryReading = claimReading({ agent: args.agent, version: canary });
+  const canaryClaims = await versionClaimsOf({
+    runs: await speakingRuns({ agent: args.agent, version: canary }),
+    reading: claimReading({ agent: args.agent, version: canary }),
+  });
+  const canaryByEval = new Map(
+    canaryClaims.map((claim) => {
+      return [claim.eval_id, claim];
+    })
+  );
   const stableRuns = await speakingRuns({ agent: args.agent, version: stable });
   const held = [...stableRuns]
     .filter(([, run]) => {
@@ -228,19 +236,13 @@ export const requireClaimsHeld = async (args: {
     });
   for (const claim of held) {
     if (claim.verdict !== 'supported' || released.has(claim.eval_id)) continue;
-    const run = canaryRuns.get(claim.eval_id);
-    const evidence =
-      run &&
-      (await versionClaimOf({
-        evalId: claim.eval_id,
-        run,
-        reading: canaryReading,
-      }));
+    // A canary run that carries no claim holds none: refused like no run.
+    const evidence = canaryByEval.get(claim.eval_id);
     if (evidence?.verdict === 'supported') continue;
 
     throw new DomainError(
       'PROMOTION_CLAIM_UNMET',
-      `Version ${stable} of agent '${args.agent.publicId}' supports the claim of eval '${claim.eval_id}'; version ${canary} reads ${evidence ? String(evidence.verdict) : 'no completed run'} on it.`,
+      `Version ${stable} of agent '${args.agent.publicId}' supports the claim of eval '${claim.eval_id}'; version ${canary} reads ${evidence ? String(evidence.verdict) : 'no claim'} on it.`,
       {
         eval_id: claim.eval_id,
         stable_version: stable,
@@ -253,7 +255,7 @@ export const requireClaimsHeld = async (args: {
       }
     );
   }
-  return versionClaimsOf({ runs: canaryRuns, reading: canaryReading });
+  return canaryClaims;
 };
 
 /**
