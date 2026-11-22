@@ -367,23 +367,25 @@ Re-run the baseline when you change the judge's `model`. The judge's `ai_provide
 
 ## Step 5 — Check the judge against your own grades
 
-A judge's `pass_threshold` means nothing until the judge agrees with your own verdicts ([Eval Design — Calibrating a judge](/docs/advanced/eval-design#calibrating-a-judge)). Export each draft with the judge's verdict, record yours next to it, and count the agreement.
+A judge's `pass_threshold` means nothing until the judge agrees with your own verdicts ([Eval Design — Calibrating a judge](/docs/advanced/eval-design#calibrating-a-judge)). Label each draft with your verdict, then read how far the judge agrees.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
-  | jq '[.data[] | {output, judge_passed: ([.scores[]? | select(.scorer == "llm_judge") | .passed] | first), human_passed: null}]' \
-  > judge-grades.json
+RESULT_IDS=$(soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" | jq -r '.data[].id')
+FIRST_RESULT_ID=$(echo "$RESULT_IDS" | sed -n 1p)
+SECOND_RESULT_ID=$(echo "$RESULT_IDS" | sed -n 2p)
 
-jq '.[0].human_passed = true | .[1].human_passed = false' judge-grades.json > judge-graded.json
+soat label-eval-result --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
+  --eval-result-id "$FIRST_RESULT_ID" --passed true | jq '.human_label | {passed}'
 
-jq '{
-  graded: map(select(.judge_passed != null)) | length,
-  agreed: map(select(.judge_passed != null and .judge_passed == .human_passed)) | length,
-  disagreements: map(select(.judge_passed != null and .judge_passed != .human_passed))
-}' judge-graded.json
+soat label-eval-result --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
+  --eval-result-id "$SECOND_RESULT_ID" --passed false \
+  --note "Apologizes without resolving anything." | jq '.human_label | {passed, note}'
+
+soat get-eval-run-calibration --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID" \
+  | jq '{labeled_count, scorers}'
 ```
 
 </TabItem>
@@ -397,36 +399,42 @@ const { data: graded } = await adminSoat.evaluations.listEvalResults({
 // Your own verdict per draft, in result order.
 const humanPassed = [true, false];
 
-const rows = graded.data.map((result, index) => ({
-  output: result.output,
-  judge_passed: result.scores?.find((s) => s.scorer === 'llm_judge')?.passed ?? null,
-  human_passed: humanPassed[index] ?? null,
-}));
+for (const [index, result] of graded.data.entries()) {
+  await adminSoat.evaluations.labelEvalResult({
+    path: {
+      eval_id: evaluation.id,
+      eval_run_id: run.id,
+      eval_result_id: result.id,
+    },
+    body: { passed: humanPassed[index] ?? false },
+  });
+}
 
-const judged = rows.filter((row) => row.judge_passed !== null);
-console.log({
-  graded: judged.length,
-  agreed: judged.filter((row) => row.judge_passed === row.human_passed).length,
-  disagreements: judged.filter((row) => row.judge_passed !== row.human_passed),
+const { data: calibration } = await adminSoat.evaluations.getEvalRunCalibration({
+  path: { eval_id: evaluation.id, eval_run_id: run.id },
 });
+console.log(calibration.labeled_count, calibration.scorers);
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/results" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.data[] | {output, judge_passed: ([.scores[]? | select(.scorer == "llm_judge") | .passed] | first), human_passed: null}]' \
-  > judge-grades.json
+RESULT_IDS=$(curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/results" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.data[].id')
+FIRST_RESULT_ID=$(echo "$RESULT_IDS" | sed -n 1p)
+SECOND_RESULT_ID=$(echo "$RESULT_IDS" | sed -n 2p)
 
-jq '.[0].human_passed = true | .[1].human_passed = false' judge-grades.json > judge-graded.json
+curl -s -X PUT "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/results/$FIRST_RESULT_ID/label" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"passed": true}' | jq '.human_label | {passed}'
 
-jq '{
-  graded: map(select(.judge_passed != null)) | length,
-  agreed: map(select(.judge_passed != null and .judge_passed == .human_passed)) | length,
-  disagreements: map(select(.judge_passed != null and .judge_passed != .human_passed))
-}' judge-graded.json
+curl -s -X PUT "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/results/$SECOND_RESULT_ID/label" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"passed": false, "note": "Apologizes without resolving anything."}' | jq '.human_label | {passed, note}'
+
+curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/calibration" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{labeled_count, scorers}'
 ```
 
 </TabItem>
@@ -434,19 +442,14 @@ jq '{
 
 ```json
 {
-  "graded": 2,
-  "agreed": 1,
-  "disagreements": [
-    {
-      "output": "We apologize for any inconvenience and appreciate your understanding.",
-      "judge_passed": true,
-      "human_passed": false
-    }
-  ]
+  "labeled_count": 2,
+  "scorers": {
+    "llm_judge": { "labeled": 2, "agreement": 0.5, "false_pass": 1, "false_fail": 0 }
+  }
 }
 ```
 
-The second command stands in for your review: set `human_passed` on each draft to your own verdict. Items the judge could not grade (Step 4) carry `judge_passed: null` and are left out of the count. On each disagreement, read the judge's `reasoning`, then fix the rubric or move `pass_threshold` with [`update-eval`](/docs/api/evaluations/update-eval) and run again. Grade 20–30 drafts, borderline ones included, before gating on the judge.
+The labels stand in for your review: label each draft with your own verdict. A label never changes the result's `passed`; it is what the judge's agreement is measured against. Items the judge could not grade (Step 4) carry no `llm_judge` outcome and are left out of its count. On each disagreement (a result whose `llm_judge` outcome differs from its `human_label`), read the judge's `reasoning`, then fix the rubric or move `pass_threshold` with [`update-eval`](/docs/api/evaluations/update-eval) and run again. Label 20–30 drafts, borderline ones included, before gating on the judge; `evidence.min_calibration` makes a claim require it ([Evidence](/docs/modules/evaluations#evidence)).
 
 ---
 

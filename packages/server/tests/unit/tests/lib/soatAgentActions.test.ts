@@ -31,6 +31,10 @@ describe('actions withheld from the agent tool surface', () => {
     // Settling an approval is what the gate exists to put a person in front of.
     ['approve-approval'],
     ['reject-approval'],
+    // A human label is what a judge's calibration is measured against, and
+    // calibration can hold a promotion.
+    ['label-eval-result'],
+    ['clear-eval-result-label'],
     // Minting or reading a credential.
     ['create-api-key'],
     ['update-api-key'],

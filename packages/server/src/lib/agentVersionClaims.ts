@@ -11,7 +11,18 @@ import {
   unreadableLiveReason,
 } from './claimLiveEvidence';
 import { readLiveCounts } from './claimLiveEvidenceReads';
-import { readEvalRunDefinition } from './evaluationRunDefinition';
+import {
+  calibrationReasons,
+  externallyGradedKeys,
+  parseMinCalibration,
+  scorerFingerprint,
+  unreadableCalibrationReason,
+} from './evaluationCalibration';
+import { versionRunCalibrations } from './evaluationLabels';
+import {
+  type EvalRunDefinition,
+  readEvalRunDefinition,
+} from './evaluationRunDefinition';
 import {
   isVerdict,
   type Verdict,
@@ -166,25 +177,55 @@ export const claimReading = (args: {
   };
 };
 
+/** The production rules the run recorded, against the version's traffic. */
+const liveSideReasons = async (args: {
+  rule: unknown;
+  reading: ClaimReading;
+}): Promise<VerdictReason[]> => {
+  const parsed = parseLiveEvidence(args.rule);
+  if ('problem' in parsed) return [unreadableLiveReason()];
+  return liveReasons({
+    live: parsed.live,
+    counts: await args.reading.counts(parsed.live.window),
+  });
+};
+
+/**
+ * One reason per externally graded scorer of the run: whether it agrees with
+ * enough human labels on a run of the version graded by the same scorers.
+ */
+const calibrationSideReasons = async (args: {
+  run: EvalRunRow;
+  definition: EvalRunDefinition;
+  rule: unknown;
+}): Promise<VerdictReason[]> => {
+  const parsed = parseMinCalibration(args.rule);
+  if ('problem' in parsed) return [unreadableCalibrationReason()];
+  const keys = externallyGradedKeys(args.definition.scorers);
+  if (keys.length === 0) return [];
+  const runs = await versionRunCalibrations({
+    evalDbId: args.run.evalId,
+    agentPublicId: args.run.agentPublicId,
+    version: args.run.agentVersion,
+    fingerprint: scorerFingerprint({
+      scorers: args.definition.scorers,
+      deciderVersions: args.run.deciderVersions,
+    }),
+  });
+  return calibrationReasons({ rule: parsed.rule, keys, runs });
+};
+
 /** The reasons the run's recorded evidence adds beyond its items. */
 const claimSideReasons = async (args: {
   run: EvalRunRow;
   reading: ClaimReading;
 }): Promise<VerdictReason[]> => {
-  const evidence = readEvalRunDefinition({ run: args.run })?.evidence;
-  const parsed =
-    evidence?.live === undefined ? null : parseLiveEvidence(evidence.live);
-  const reasons: VerdictReason[] = [];
-  if (parsed && 'problem' in parsed) {
-    reasons.push(unreadableLiveReason());
-  } else if (parsed) {
-    reasons.push(
-      ...liveReasons({
-        live: parsed.live,
-        counts: await args.reading.counts(parsed.live.window),
-      })
-    );
-  }
+  const definition = readEvalRunDefinition({ run: args.run });
+  const evidence = definition?.evidence;
+  const reasons: VerdictReason[] =
+    evidence?.live === undefined
+      ? []
+      : await liveSideReasons({ rule: evidence.live, reading: args.reading });
   if (evidence?.max_run_age_days !== undefined) {
     reasons.push(
       ageReason({
@@ -192,6 +233,15 @@ const claimSideReasons = async (args: {
         finishedAt: args.run.finishedAt,
         now: args.reading.now,
       })
+    );
+  }
+  if (definition && evidence?.min_calibration !== undefined) {
+    reasons.push(
+      ...(await calibrationSideReasons({
+        run: args.run,
+        definition,
+        rule: evidence.min_calibration,
+      }))
     );
   }
   return reasons;

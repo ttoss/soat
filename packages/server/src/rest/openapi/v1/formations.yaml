@@ -1410,8 +1410,8 @@ components:
         evidence:
           description: >-
             The rules beyond the threshold: `required_groups` is read by the
-            run's verdict, `live` and `max_run_age_days` only by its claim's
-            verdict.
+            run's verdict, `live`, `max_run_age_days` and `min_calibration`
+            only by its claim's verdict.
           allOf:
             - $ref: './evaluations.yaml#/components/schemas/Evidence'
         claim:

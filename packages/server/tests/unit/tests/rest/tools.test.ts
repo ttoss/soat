@@ -2447,11 +2447,14 @@ describe('Tools', () => {
 
     // An agent's builtin tool runs under the caller's bearer with an LLM
     // choosing the arguments, so an action that mints a credential, rewrites
-    // authorization or settles an approval is one the agent surface must not
-    // carry — whatever that bearer would allow a human to do directly.
+    // authorization, settles an approval or labels an eval result is one the
+    // agent surface must not carry — whatever that bearer would allow a human
+    // to do directly.
     test.each([
       ['approve-approval'],
       ['reject-approval'],
+      ['label-eval-result'],
+      ['clear-eval-result-label'],
       ['create-api-key'],
       ['attach-user-policies'],
       ['create-policy'],

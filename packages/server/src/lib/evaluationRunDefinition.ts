@@ -9,13 +9,16 @@ import { isPlainObject } from './plainObject';
 
 /**
  * The rules beyond the threshold, in the wire shape: `required_groups` for the
- * run's verdict, `live` and `max_run_age_days` for its claim's.
+ * run's verdict, `live`, `max_run_age_days` and `min_calibration` for its
+ * claim's.
  */
 export type EvalEvidence = {
   required_groups?: string[];
   /** As written: the claims read parses it against the rules. */
   live?: unknown;
   max_run_age_days?: number;
+  /** As written: the claims read parses it against the rules. */
+  min_calibration?: unknown;
 };
 
 export type EvalRunDefinition = {
@@ -49,6 +52,10 @@ const evidenceOf = (value: unknown): EvalEvidence | null => {
     ...(value.live !== undefined &&
       value.live !== null && { live: value.live }),
     ...(typeof age === 'number' && { max_run_age_days: age }),
+    ...(value.min_calibration !== undefined &&
+      value.min_calibration !== null && {
+        min_calibration: value.min_calibration,
+      }),
   };
 };
 

@@ -128,6 +128,25 @@ export class EvalResult extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare error: object | null;
 
+  /**
+   * A person's verdict on the item, set and cleared only by the label route;
+   * null when nobody labeled it. `passed` stays what the scorers said.
+   */
+  @Column({ type: DataType.BOOLEAN, allowNull: true, defaultValue: null })
+  declare humanPassed: boolean | null;
+
+  @Column({ type: DataType.TEXT, allowNull: true, defaultValue: null })
+  declare labelNote: string | null;
+
+  @Column({ type: DataType.STRING(16), allowNull: true, defaultValue: null })
+  declare labeledByPrincipalType: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true, defaultValue: null })
+  declare labeledByPrincipalId: string | null;
+
+  @Column({ type: DataType.DATE, allowNull: true, defaultValue: null })
+  declare labeledAt: Date | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 }

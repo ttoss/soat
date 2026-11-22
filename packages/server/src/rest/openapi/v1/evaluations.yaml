@@ -1490,6 +1490,219 @@ paths:
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
+  /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label:
+    put:
+      tags:
+        - Evaluations
+      summary: Label an eval result
+      description: >-
+        Records a person's pass/fail verdict on one result, replacing any
+        earlier label. The result's `passed` stays what its scorers said; the
+        label is what each scorer's agreement is measured against
+        (`GET /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration`).
+      operationId: labelEvalResult
+      x-iam-action: evaluations:LabelEvalResult
+      x-iam-resource-type: eval
+      x-soat-agent-exclude: true
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: eval_run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+        - name: eval_result_id
+          in: path
+          required: true
+          description: Eval result ID
+          schema:
+            type: string
+            example: evres_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [passed]
+              properties:
+                passed:
+                  type: boolean
+                  description: Whether the item passes, in the labeler's judgement.
+                  example: false
+                note:
+                  type: string
+                  nullable: true
+                  description: Why, in the labeler's words.
+                  example: Promised a refund it cannot give.
+      responses:
+        '200':
+          description: The labeled result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalResult'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval, run or result not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+    delete:
+      tags:
+        - Evaluations
+      summary: Clear an eval result's label
+      description: Removes the label from one result; a result with none is unchanged.
+      operationId: clearEvalResultLabel
+      x-iam-action: evaluations:LabelEvalResult
+      x-iam-resource-type: eval
+      x-soat-agent-exclude: true
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: eval_run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+        - name: eval_result_id
+          in: path
+          required: true
+          description: Eval result ID
+          schema:
+            type: string
+            example: evres_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Label cleared
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval, run or result not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration:
+    get:
+      tags:
+        - Evaluations
+      summary: Read an eval run's calibration
+      description: >-
+        How far each scorer of the run agrees with the results people labeled
+        (`PUT /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`),
+        under the fingerprint of the scorers that graded it. Each disagreement
+        is a result whose scorer outcome in `scores` differs from its
+        `human_label`.
+      operationId: getEvalRunCalibration
+      x-iam-action: evaluations:GetEval
+      x-iam-resource-type: eval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: eval_run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The run's calibration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRunCalibration'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval or run not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/evals/{eval_id}/runs/{eval_run_id}/cancel:
     post:
       tags:
@@ -2033,8 +2246,8 @@ components:
       additionalProperties: false
       description: >-
         The rules beyond the threshold: `required_groups` is read by the
-        run's verdict, `live` and `max_run_age_days` only by its claim's
-        verdict. Null declares none.
+        run's verdict, `live`, `max_run_age_days` and `min_calibration` only
+        by its claim's verdict. Null declares none.
       properties:
         required_groups:
           type: array
@@ -2113,6 +2326,28 @@ components:
                   minimum: 0
                   maximum: 1
                   example: 0.01
+        min_calibration:
+          type: object
+          additionalProperties: false
+          required: [labeled, agreement]
+          description: >-
+            Read by its claim's verdict and never by the run's: every scorer
+            whose verdict comes from outside the eval (`llm_judge`,
+            `embedding_similarity`, `tool`, `decider`) must agree with at
+            least `agreement` of at least `labeled` human labels, taken
+            together over every completed run of the eval against the version
+            graded by the same scorers (`scorer_fingerprint`), else
+            `insufficient`. Pure scorers need none.
+          properties:
+            labeled:
+              type: integer
+              minimum: 1
+              example: 30
+            agreement:
+              type: number
+              minimum: 0
+              maximum: 1
+              example: 0.9
         max_run_age_days:
           type: integer
           minimum: 1
@@ -2137,14 +2372,16 @@ components:
           properties:
             kind:
               type: string
-              enum: [run, group, live, age]
+              enum: [run, group, live, age, calibration]
               description: >-
                 `run` and `group` judge the run's items; `live` (a production
-                rule) and `age` judge a claim and appear only on a claim's
-                reasons.
+                rule), `age` and `calibration` (a scorer's agreement with human
+                labels) judge a claim and appear only on a claim's reasons.
             name:
               type: string
-              description: The group on a `group` scope; the rule on a `live` scope
+              description: >-
+                The group on a `group` scope; the rule on a `live` scope; the
+                scorer on a `calibration` scope
               example: boleto
         verdict:
           type: string
@@ -2481,6 +2718,51 @@ components:
           example: kind
         evidence:
           $ref: '#/components/schemas/Evidence'
+    EvalRunCalibration:
+      type: object
+      additionalProperties: false
+      required: [scorer_fingerprint, labeled_count, scorers]
+      properties:
+        scorer_fingerprint:
+          type: string
+          nullable: true
+          description: >-
+            SHA-256 of the scorers the run recorded and the decider versions it
+            pinned, key order aside: a changed prompt, pinned model or
+            provider, threshold or decider version moves it. What a scorer
+            resolves when it runs (the project's default model route or
+            embedding model, a tool's pipeline) is not in it. Null when the
+            run recorded no definition.
+          example: sha256:9f2c4e7a1b3d5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcd
+        labeled_count:
+          type: integer
+          description: Results of the run carrying a human label
+          example: 32
+        scorers:
+          type: object
+          description: Each scorer of the run, keyed as `scores[].scorer` keys it
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            required: [labeled, agreement, false_pass, false_fail]
+            properties:
+              labeled:
+                type: integer
+                description: Labeled results this scorer graded
+                example: 32
+              agreement:
+                type: number
+                nullable: true
+                description: Share of those where the scorer and the label agree; null with none labeled
+                example: 0.906
+              false_pass:
+                type: integer
+                description: The scorer passed what the label failed
+                example: 2
+              false_fail:
+                type: integer
+                description: The scorer failed what the label passed
+                example: 1
     EvalResult:
       type: object
       properties:
@@ -2526,6 +2808,34 @@ components:
             `requires_action` pause (`GENERATION_NOT_COMPLETED`), a provider
             failure — or a scorer that could not grade the output is recorded
             here and excluded from the aggregates rather than scored 0.
+        human_label:
+          type: object
+          nullable: true
+          additionalProperties: false
+          description: >-
+            A person's verdict on the item, set by
+            `PUT /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`;
+            null when nobody labeled it. `passed` stays what the scorers said.
+          required:
+            [passed, note, labeled_by_principal_type, labeled_by_principal_id, labeled_at]
+          properties:
+            passed:
+              type: boolean
+              example: false
+            note:
+              type: string
+              nullable: true
+              example: Promised a refund it cannot give.
+            labeled_by_principal_type:
+              allOf:
+                - $ref: './principals.yaml#/components/schemas/PrincipalType'
+              description: Who labeled it
+            labeled_by_principal_id:
+              type: string
+              example: user_V1StGXR8Z5jdHi6B
+            labeled_at:
+              type: string
+              format: date-time
         created_at:
           type: string
           format: date-time

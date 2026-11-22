@@ -7,6 +7,7 @@
  */
 import { DomainError } from '../errors';
 import { parseLiveEvidence } from './claimLiveEvidence';
+import { parseMinCalibration } from './evaluationCalibration';
 import { validateMetadataBag } from './metadataBag';
 import { isPlainObject } from './plainObject';
 
@@ -96,6 +97,7 @@ const EVIDENCE_KEYS: ReadonlySet<string> = new Set([
   'required_groups',
   'live',
   'max_run_age_days',
+  'min_calibration',
 ]);
 
 /** Non-empty, unique group names, and a `group_by` to read them from. */
@@ -122,7 +124,7 @@ const validateRequiredGroups = (args: {
   return null;
 };
 
-/** The rules the claims read applies beyond the run: production and age. */
+/** The rules the claims read applies beyond the run: production, age and calibration. */
 const claimSideProblem = (evidence: Record<string, unknown>): string | null => {
   if (evidence.live !== undefined) {
     const parsed = parseLiveEvidence(evidence.live);
@@ -131,6 +133,10 @@ const claimSideProblem = (evidence: Record<string, unknown>): string | null => {
   const age = evidence.max_run_age_days;
   if (age !== undefined && !(Number.isInteger(age) && Number(age) >= 1)) {
     return 'evidence.max_run_age_days must be a positive integer.';
+  }
+  if (evidence.min_calibration !== undefined) {
+    const parsed = parseMinCalibration(evidence.min_calibration);
+    if ('problem' in parsed) return parsed.problem;
   }
   return null;
 };

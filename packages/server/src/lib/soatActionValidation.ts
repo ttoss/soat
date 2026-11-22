@@ -34,7 +34,7 @@ export const validateSoatActions = (actions: string[] | null | undefined) => {
         })
         .join(
           ', '
-        )}. These mint credentials, change authorization, read secret material or settle an approval, so a generation may not perform them however its caller is authorized.`
+        )}. These mint credentials, change authorization, read secret material, settle an approval or label an eval result, so a generation may not perform them however its caller is authorized.`
     );
   }
 

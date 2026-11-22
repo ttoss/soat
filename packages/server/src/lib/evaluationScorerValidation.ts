@@ -61,6 +61,29 @@ const NAMED_SCORER_TYPES: ReadonlySet<unknown> = new Set([
   DECIDER_SCORER_TYPE,
 ]);
 
+/** The key a scorer's outcomes and aggregates go under: its name or its type. */
+export const scorerOutcomeKey = (scorer: Record<string, unknown>): string => {
+  return NAMED_SCORER_TYPES.has(scorer.type)
+    ? String(scorer.name)
+    : String(scorer.type);
+};
+
+/**
+ * Whether a scorer type's verdict comes from outside the eval (a model, a
+ * tool, a decider) and so needs calibrating against human labels; the pure
+ * types grade the output alone. A new type must state its side to compile.
+ */
+export const EXTERNALLY_GRADED: Record<ScorerType, boolean> = {
+  exact_match: false,
+  contains: false,
+  json_logic: false,
+  output_schema: false,
+  embedding_similarity: true,
+  llm_judge: true,
+  tool: true,
+  decider: true,
+};
+
 // ── Validation ─────────────────────────────────────────────────────────────
 
 const SCORER_TYPE_SET: ReadonlySet<unknown> = new Set(SCORER_TYPES);
@@ -221,7 +244,7 @@ export const validateScorers = (args: {
     // collapse into a single bucket and silently lose a signal.
     const type = scorer.type as string;
     const named = NAMED_SCORER_TYPES.has(type);
-    const key = named ? (scorer.name as string) : type;
+    const key = scorerOutcomeKey(scorer);
     if (seen.has(key)) {
       return named
         ? `${path}.name '${key}' is declared more than once; each ${type} scorer name may appear at most once per eval.`

@@ -124,6 +124,7 @@ One row per dataset item per run.
 | `output` | string | The agent's final output text. `null` only when there is none — the generation failed or never completed — or once the linked generation's content is [purged](#retention-and-erasure). An item errored by a **scorer** keeps the output it was graded on |
 | `scores` | array | `[{ scorer, score, passed, reasoning?, decision_id? }]`, one entry per scorer in the order the eval declares them. `scorer` is the type — or the scorer's `name` for a [`tool`](#custom-scorers-tool) or [`decider`](#decider-scorers-decider) scorer. `reasoning` is present for `llm_judge`, and for `tool` scorers whose tool returned one; `decision_id` for `decider` scorers |
 | `passed` | boolean | AND over the per-scorer `passed` flags |
+| `human_label` | object | `{ passed, note, labeled_by_principal_type, labeled_by_principal_id, labeled_at }`: a user's or API key's verdict on the item ([Human labels and calibration](#human-labels-and-calibration)); `null` when nobody labeled it |
 | `error` | object | Item-level failure reason as a [recorded failure](/docs/api#recorded-failures) — `GENERATION_NOT_COMPLETED`, `GENERATION_FAILED`, or a scorer's own code (`EVAL_SCORING_FAILED` when it has none) with a message starting `Scoring failed:`; set instead of scoring, never alongside it |
 | `created_at` | string | ISO 8601 creation timestamp |
 
@@ -568,7 +569,7 @@ which scope decided it.
 ### Evidence
 
 `evidence` on the eval holds the rules beyond the threshold: `required_groups` is read by
-the run's verdict, `live` and `max_run_age_days` only by its [claim's
+the run's verdict, `live`, `max_run_age_days` and `min_calibration` only by its [claim's
 verdict](./agents.md#claims-a-version-holds). The run copies it onto `definition`. `null` declares none; on update, `null` clears it and
 omitting it keeps it.
 
@@ -577,6 +578,7 @@ omitting it keeps it.
 | `required_groups` | Values of `group_by`, each judged on its own interval ([Pass semantics](#pass-semantics)). Needs `group_by`; names are non-empty and unique. Other groups stay report-only |
 | `live` | Rules over the agent version's production traffic, read by the [claim's verdict](./agents.md#claims-a-version-holds), never by the run's (below) |
 | `max_run_age_days` | A claim whose speaking run finished longer ago than this is `insufficient` (`scope: { kind: "age" }`) |
+| `min_calibration` | `{ labeled, agreement }`: each externally graded scorer must agree with at least `agreement` of at least `labeled` human labels, or the claim is `insufficient` ([Human labels and calibration](#human-labels-and-calibration)) |
 
 ```json
 { "group_by": "payment_method", "evidence": { "required_groups": ["pix", "card", "boleto"] } }
@@ -614,8 +616,43 @@ declared rule adds a reason with `scope: { kind: "live", name: <rule> }`:
 ```
 
 `window` is required; a rate is between 0 and 1; a rate rule on
-approvals needs `min_decided`. A run settles on its items alone: `live` and
-`max_run_age_days` never move `EvalRun.verdict`.
+approvals needs `min_decided`. A run settles on its items alone: `live`,
+`max_run_age_days` and `min_calibration` never move `EvalRun.verdict`.
+
+### Human labels and calibration
+
+A person labels a result pass or fail with
+[`PUT /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`](/docs/api/evaluations/label-eval-result)
+(`{ passed, note? }`, replacing any earlier label) and clears it with
+[`DELETE /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`](/docs/api/evaluations/clear-eval-result-label);
+both need `evaluations:LabelEvalResult`. A user or an API key labels; an agent's `builtin`
+tool cannot bind either action. The result's `passed` never moves; its `human_label`
+records the verdict and who gave it.
+
+[`GET /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration`](/docs/api/evaluations/get-eval-run-calibration)
+reports, per scorer keyed as `scores[].scorer` keys it, the labeled results it graded,
+its `agreement` with the labels (`null` with none), its `false_pass` (passed what the
+label failed) and its `false_fail` (the reverse), under `scorer_fingerprint`: a hash of
+the scorers the run recorded and the decider versions it pinned. Any change to a
+scorer's configuration (prompt, a pinned `model` or `ai_provider_id`, threshold, a decider
+version) moves the fingerprint. What a scorer resolves when it runs is not in it: an
+`llm_judge` pinning no provider follows the project's default model route, an
+`embedding_similarity` the project's embedding model, and a `tool` scorer its tool's
+current pipeline; after changing one of those, label a new run.
+
+`evidence.min_calibration: { labeled, agreement }` makes the claim require it: for every
+scorer whose verdict comes from outside the eval (`llm_judge`, `embedding_similarity`,
+`tool`, `decider`), the labeled results of every completed run of the eval against the
+version with the speaking run's fingerprint, taken together, must reach both figures, else
+the claim reads `insufficient` with
+`scope: { kind: "calibration", name: <scorer> }`. Labels on runs graded by other scorers
+do not count. Pure scorers (`exact_match`, `contains`, `json_logic`, `output_schema`)
+need none. `labeled` is a positive integer and `agreement` a number between 0 and 1;
+anything else is `400 VALIDATION_FAILED`.
+
+```json
+{ "evidence": { "min_calibration": { "labeled": 30, "agreement": 0.9 } } }
+```
 
 ### The claim
 

@@ -75,6 +75,16 @@ export const mapEvalResult = (result: EvalResultRow) => {
     scores: result.scores,
     passed: result.passed,
     error: result.error,
+    human_label:
+      result.humanPassed === null
+        ? null
+        : {
+            passed: result.humanPassed,
+            note: result.labelNote,
+            labeled_by_principal_type: result.labeledByPrincipalType,
+            labeled_by_principal_id: result.labeledByPrincipalId,
+            labeled_at: result.labeledAt,
+          },
     created_at: result.createdAt,
   };
 };
@@ -110,10 +120,11 @@ export const reloadEvalRun = async (row: {
 };
 
 /**
- * Loads a run, scoped by the caller's access to its **parent Eval** — the run
- * row carries no project column of its own.
+ * One run of an eval the caller can read, or `RESOURCE_NOT_FOUND`: scoped by
+ * the caller's access to its parent eval, since the run row carries no
+ * project column of its own.
  */
-const findRun = async (args: {
+export const findEvalRun = async (args: {
   projectIds?: number[];
   evalId: string;
   runId: string;
@@ -135,6 +146,28 @@ const findRun = async (args: {
     );
   }
   return run;
+};
+
+/** One result of a run the caller can read, or `RESOURCE_NOT_FOUND`. */
+export const findEvalResult = async (args: {
+  projectIds?: number[];
+  evalId: string;
+  runId: string;
+  resultId: string;
+}): Promise<EvalResultRow> => {
+  log('findEvalResult: run=%s result=%s', args.runId, args.resultId);
+  const run = await findEvalRun(args);
+  const result = (await db.EvalResult.findOne({
+    where: { publicId: args.resultId, evalRunId: run.id as number },
+    include: evalResultIncludes(),
+  })) as EvalResultRow | null;
+  if (!result) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Eval result '${args.resultId}' not found.`
+    );
+  }
+  return result;
 };
 
 export const listEvalRuns = async (args: {
@@ -179,7 +212,7 @@ export const getEvalRun = async (args: {
   runId: string;
 }): Promise<ReturnType<typeof mapEvalRun>> => {
   log('getEvalRun: evalId=%s runId=%s', args.evalId, args.runId);
-  return mapEvalRun(await findRun(args));
+  return mapEvalRun(await findEvalRun(args));
 };
 
 export const listEvalResults = async (args: {
@@ -191,7 +224,7 @@ export const listEvalResults = async (args: {
 }): Promise<Page<ReturnType<typeof mapEvalResult>>> => {
   log('listEvalResults: evalId=%s runId=%s', args.evalId, args.runId);
 
-  const run = await findRun({
+  const run = await findEvalRun({
     projectIds: args.projectIds,
     evalId: args.evalId,
     runId: args.runId,
