@@ -168,9 +168,9 @@ paths:
           description: >
             Filter by what the spend was incurred for. `eval` is an eval run's
             item generations, `eval_judge` an `llm_judge` scorer's own
-            completion and `eval_scorer` a `tool` scorer's call, so
-            verification spend is `source` in (`eval`, `eval_judge`,
-            `eval_scorer`); `decider` is a decision's evaluation; `embedding`
+            completion and `eval_scorer` a `tool` or `decider` scorer's call,
+            so verification spend is `source` in (`eval`, `eval_judge`,
+            `eval_scorer`); `decider` is any other decision's evaluation; `embedding`
             is any embedding call. Ordinary agent
             traffic carries no source and is matched by none of them.
           schema:
@@ -994,9 +994,9 @@ components:
           description: >
             What the spend was incurred for. `eval` is an eval run's item
             generations and `eval_judge` an `llm_judge` scorer's own completion,
-            and `eval_scorer` a `tool` scorer's call, so verification spend is
+            and `eval_scorer` a `tool` or `decider` scorer's call, so verification spend is
             `source` in (`eval`, `eval_judge`, `eval_scorer`) and they are
-            distinct so running a suite can be priced apart from grading it. `decider` is a decision's evaluation. `embedding` is any embedding call — the endpoint, document
+            distinct so running a suite can be priced apart from grading it. `decider` is any other decision's evaluation. `embedding` is any embedding call — the endpoint, document
             ingestion, a memory store write, or a search's query vector. Null for
             ordinary agent traffic.
           example: eval

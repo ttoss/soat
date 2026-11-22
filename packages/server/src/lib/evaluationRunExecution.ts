@@ -22,11 +22,11 @@ import {
   runDeciderScorerCall,
 } from './evaluationDeciderScorer';
 import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
-import { runJudgeCompletion } from './evaluationJudge';
+import { JUDGE_USAGE_SOURCE, runJudgeCompletion } from './evaluationJudge';
 import { buildRunAggregate } from './evaluationRunAggregate';
 import type { EvalRunDefinition } from './evaluationRunDefinition';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
-import { runToolScorerCall } from './evaluationToolScorer';
+import { runToolScorerCall, SCORER_USAGE_SOURCE } from './evaluationToolScorer';
 import { runVerdict } from './evaluationVerdict';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { type StoredError, toStoredErrorKeepingMessage } from './storedError';
@@ -39,6 +39,16 @@ const log = createDebug('soat:evaluations');
  * separable from the spend serving real users (usage module — Coverage).
  */
 export const EVAL_USAGE_SOURCE = 'eval';
+
+/**
+ * Every source an eval run's work is metered under: its item generations, its
+ * judges' completions and its scorers' calls. None of it serves real users.
+ */
+export const VERIFICATION_USAGE_SOURCES = [
+  EVAL_USAGE_SOURCE,
+  JUDGE_USAGE_SOURCE,
+  SCORER_USAGE_SOURCE,
+];
 
 type AgentRow = InstanceType<(typeof db)['Agent']>;
 type DatasetItemRow = InstanceType<(typeof db)['DatasetItem']>;

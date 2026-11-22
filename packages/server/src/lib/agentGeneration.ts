@@ -13,6 +13,7 @@ import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
 import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
+import { SCORER_USAGE_SOURCE } from './evaluationToolScorer';
 import { type GenerationConversation } from './generationAttribution';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import {
@@ -318,7 +319,9 @@ const prepareGeneration = async (
   // A run node's, an eval item's or a decision's turn was admitted with its
   // run or decision; the pause was checked there, before the record existed.
   const admitted =
-    args.source === EVAL_USAGE_SOURCE || args.source === DECIDER_USAGE_SOURCE;
+    args.source === EVAL_USAGE_SOURCE ||
+    args.source === DECIDER_USAGE_SOURCE ||
+    args.source === SCORER_USAGE_SOURCE;
   if (!args.orchestrationRunId && !admitted) {
     await assertGenerationProjectAcceptsWork({
       agentPublicId: args.agentId,

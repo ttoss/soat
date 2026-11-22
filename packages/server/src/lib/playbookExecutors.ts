@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { createDecision } from './decisions';
 import { applyInputMapping } from './jsonLogicMapping';
 import { startOrchestrationRun } from './orchestrationEngine';
@@ -123,6 +124,7 @@ const startDecider = async (args: StartArgs): Promise<ExecutorOutcome> => {
     input: args.input,
     wait: true,
     authority: args.runAs.authority,
+    source: DECIDER_USAGE_SOURCE,
   });
   if (decision.status !== 'completed') {
     throw failed('The decision failed.', {
