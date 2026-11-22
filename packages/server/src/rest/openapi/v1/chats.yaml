@@ -354,6 +354,7 @@ paths:
         '409':
           description: >-
             PROJECT_PAUSED — the project is paused, so nothing new starts in it; `error.meta` carries `paused_at` and `pause_reason`.
+            MODEL_NOT_PRICED — the project or AI provider has `require_priced_model` and no price row covers the model; `error.meta.unpriced_rows` names each row to price.
           content:
             application/json:
               schema:

@@ -373,6 +373,7 @@ export const resolveAiProviderSecret = async (args: {
     publicId: instance.publicId,
     modelAliases: instance.modelAliases,
     modelAliasesOnly: instance.modelAliasesOnly,
+    requirePricedModel: instance.requirePricedModel,
     secretValue: decryptedValue,
     aliasTargets,
     grantee: instance.projectId === args.projectId ? null : args.projectId,

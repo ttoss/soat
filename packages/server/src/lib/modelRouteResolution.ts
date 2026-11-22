@@ -3,8 +3,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { buildModel } from './agentModel';
 import { resolveAiProviderSecret } from './aiProviders';
+import { buildPricedModels } from './modelPricingGate';
 import { createRoutedModel, type RoutedTarget } from './modelRouteExecutor';
 import {
   mapModelRouteConfig,
@@ -85,12 +85,11 @@ const asInnerModel = (
   );
 };
 
-const buildRoutedTarget = async (args: {
+const resolveRoutedTarget = async (args: {
   target: ModelRouteTarget;
-  index: number;
   routeId: string;
   projectId: number;
-}): Promise<RoutedTarget> => {
+}) => {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.target.ai_provider_id,
     projectId: args.projectId,
@@ -102,22 +101,7 @@ const buildRoutedTarget = async (args: {
       `AI provider '${args.target.ai_provider_id}' referenced by model route '${args.routeId}' could not be resolved.`
     );
   }
-
-  return {
-    index: args.index,
-    aiProviderId: args.target.ai_provider_id,
-    aiProviderDbId: resolved.id,
-    modelName: args.target.model,
-    timeoutMs:
-      args.target.timeout_seconds != null
-        ? args.target.timeout_seconds * 1000
-        : null,
-    maxRetries: args.target.max_retries ?? DEFAULT_TARGET_MAX_RETRIES,
-    model: asInnerModel(
-      buildModel({ aiProvider: resolved, model: args.target.model }),
-      `${args.index}`
-    ),
-  };
+  return resolved;
 };
 
 /**
@@ -129,17 +113,36 @@ export const buildRoutedModel = async (args: {
   route: ModelRouteConfig;
   /** The project consuming the route, which owns every target it may name. */
   projectId: number;
+  /** The project the call's spend is metered against (`buildPricedModels`). */
+  spendProjectId: number;
 }): Promise<LanguageModel> => {
-  const targets = await Promise.all(
-    args.route.targets.map((target, index) => {
-      return buildRoutedTarget({
+  const resolvedTargets = await Promise.all(
+    args.route.targets.map((target) => {
+      return resolveRoutedTarget({
         target,
-        index,
         routeId: args.route.id,
         projectId: args.projectId,
       });
     })
   );
+  const models = await buildPricedModels({
+    spendProjectId: args.spendProjectId,
+    bindings: args.route.targets.map((target, index) => {
+      return { aiProvider: resolvedTargets[index], model: target.model };
+    }),
+  });
+  const targets: RoutedTarget[] = args.route.targets.map((target, index) => {
+    return {
+      index,
+      aiProviderId: target.ai_provider_id,
+      aiProviderDbId: resolvedTargets[index].id,
+      modelName: target.model,
+      timeoutMs:
+        target.timeout_seconds != null ? target.timeout_seconds * 1000 : null,
+      maxRetries: target.max_retries ?? DEFAULT_TARGET_MAX_RETRIES,
+      model: asInnerModel(models[index], `${index}`),
+    };
+  });
 
   log(
     'buildRoutedModel: route=%s targets=%d retryOn=%o',

@@ -2,7 +2,7 @@ import type { LanguageModel, LanguageModelUsage } from 'ai';
 import { db } from 'src/db';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
-import { buildModel } from './agentModel';
+import { buildPricedModel } from './modelPricingGate';
 import {
   buildRoutedModel,
   type CompletionAttribution,
@@ -40,13 +40,19 @@ type ResolvedAiProviderSecret = NonNullable<
  * read the provider off the chat row), so they call this directly instead of
  * `resolveChatModel`.
  */
-export const buildResolvedChatModel = (args: {
+export const buildResolvedChatModel = async (args: {
   resolved: ResolvedAiProviderSecret;
   modelName: string;
-}): ResolvedChatModel => {
+}): Promise<ResolvedChatModel> => {
   const { resolved } = args;
   return {
-    model: buildModel({ aiProvider: resolved, model: args.modelName }),
+    model: await buildPricedModel({
+      // The project the completion is made from: the chat's, or the
+      // provider's own for a stateless call.
+      spendProjectId: resolved.grantee ?? resolved.projectId,
+      aiProvider: resolved,
+      model: args.modelName,
+    }),
     modelName: args.modelName,
     projectId: resolved.projectId,
     attribution: {
@@ -71,6 +77,7 @@ export const buildRoutedChatModel = async (args: {
     model: await buildRoutedModel({
       route: args.route,
       projectId: args.projectId,
+      spendProjectId: args.projectId,
     }),
     modelName: args.route.id,
     projectId: args.projectId,

@@ -38,7 +38,6 @@ import {
   trackGenerationProvenance,
 } from './generationProvenance';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
-import { assertGenerationModelPriced } from './modelPricingGate';
 import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
 import type { ToolSurface } from './toolSurfaceMeasure';
@@ -347,11 +346,6 @@ export const buildGenerationContext = async (
     agentId: args.agentId,
     typedAgent,
   });
-
-  // Before the generation record, the tool surface and the knowledge
-  // retrieval: a project that refuses unpriced spend must not pay for the
-  // embeddings a refused turn would have retrieved with.
-  await assertGenerationModelPriced({ typedAgent });
 
   // Generated up front (before tool resolution) so the approval gate can freeze
   // it onto any item it files — a tool-call approval's continuation is linked

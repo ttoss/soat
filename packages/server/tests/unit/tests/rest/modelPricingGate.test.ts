@@ -25,6 +25,8 @@ const ACTIONS = [
   'model-routes:CreateModelRoute',
   'agents:CreateAgent',
   'agents:CreateAgentGeneration',
+  'chats:CreateChat',
+  'chats:CreateChatCompletion',
 ];
 
 const PRICED_COMPONENTS = ['input_tokens', 'output_tokens'];
@@ -514,6 +516,106 @@ describe('require_priced_model', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('completed');
+    });
+  });
+
+  describe('on a chat completion', () => {
+    const complete = async (body: Record<string, unknown>) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({ ...body, messages: [{ role: 'user', content: 'hello' }] });
+    };
+
+    const expectRefused = (args: {
+      response: Awaited<ReturnType<typeof complete>>;
+      model: string;
+      before: number;
+    }) => {
+      expect(args.response.status).toBe(409);
+      expect(args.response.body.error.code).toBe('MODEL_NOT_PRICED');
+      expect(
+        args.response.body.error.meta.unpriced_rows.map((row: UnpricedRow) => {
+          return row.model;
+        })
+      ).toEqual([args.model, args.model]);
+      expect(stub.requests()).toBe(args.before);
+    };
+
+    test('refuses a stateless completion on an unpriced model', async () => {
+      const projectId = await createProject({
+        name: 'chat-stateless',
+        requirePricedModel: true,
+      });
+      const providerId = await createProvider({
+        projectId,
+        name: 'chat-stateless provider',
+        model: 'chat-stateless-model',
+      });
+      const before = stub.requests();
+
+      const response = await complete({ ai_provider_id: providerId });
+
+      expectRefused({ response, model: 'chat-stateless-model', before });
+    });
+
+    test('refuses a request-level model no price row covers', async () => {
+      const projectId = await createProject({
+        name: 'chat-override',
+        requirePricedModel: true,
+      });
+      await priceModel({ model: 'chat-override-priced' });
+      const providerId = await createProvider({
+        projectId,
+        name: 'chat-override provider',
+        model: 'chat-override-priced',
+      });
+      const before = stub.requests();
+
+      const response = await complete({
+        ai_provider_id: providerId,
+        model: 'chat-override-unpriced',
+      });
+
+      expectRefused({ response, model: 'chat-override-unpriced', before });
+    });
+
+    test('refuses a chat-scoped completion on a provider that requires pricing', async () => {
+      const projectId = await createProject({ name: 'chat-scoped' });
+      const chat = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({
+          project_id: projectId,
+          ai_provider_id: await createProvider({
+            projectId,
+            name: 'chat-scoped provider',
+            model: 'chat-scoped-model',
+            requirePricedModel: true,
+          }),
+        });
+      expect(chat.status).toBe(201);
+      const before = stub.requests();
+
+      const response = await complete({ chat_id: chat.body.id });
+
+      expectRefused({ response, model: 'chat-scoped-model', before });
+    });
+
+    test('runs a priced model', async () => {
+      const projectId = await createProject({
+        name: 'chat-priced',
+        requirePricedModel: true,
+      });
+      await priceModel({ model: 'chat-priced-model' });
+      const providerId = await createProvider({
+        projectId,
+        name: 'chat-priced provider',
+        model: 'chat-priced-model',
+      });
+
+      const response = await complete({ ai_provider_id: providerId });
+
+      expect(response.status).toBe(200);
+      expect(response.body.choices[0].message.content).toBe('served');
     });
   });
 });

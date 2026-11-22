@@ -13,7 +13,7 @@ import createDebug from 'debug';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { DomainError } from '../errors';
-import { buildModel } from './agentModel';
+import { buildPricedModel } from './modelPricingGate';
 import {
   buildRoutedModel,
   type CompletionAttribution,
@@ -57,7 +57,11 @@ export const resolveProjectScopedModel = async (args: {
       route.id
     );
     return {
-      model: await buildRoutedModel({ route, projectId: args.projectId }),
+      model: await buildRoutedModel({
+        route,
+        projectId: args.projectId,
+        spendProjectId: args.projectId,
+      }),
       modelName: route.id,
       attribution: null,
     };
@@ -106,7 +110,11 @@ export const resolveProjectScopedModel = async (args: {
     modelName
   );
 
-  const model = buildModel({ aiProvider: resolved, model: modelName });
+  const model = await buildPricedModel({
+    spendProjectId: args.projectId,
+    aiProvider: resolved,
+    model: modelName,
+  });
 
   return {
     model,

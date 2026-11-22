@@ -75,7 +75,6 @@ export const resolveAgentForGeneration = async (args: {
       publicId: runProject.publicId,
       guardrailIds: runProject.guardrailIds,
       maxChainGenerations: runProject.maxChainGenerations,
-      requirePricedModel: runProject.requirePricedModel,
     },
     ownerProject: {
       id: agent.projectId,

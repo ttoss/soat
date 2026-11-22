@@ -79,8 +79,6 @@ export type TypedAgent = {
     publicId: string;
     guardrailIds?: string[] | null;
     maxChainGenerations?: number | null;
-    /** Absent on a config rebuilt without the project row; only `true` gates. */
-    requirePricedModel?: boolean;
   };
   /**
    * The agent's own project, where its provider, model route, versions, tools
