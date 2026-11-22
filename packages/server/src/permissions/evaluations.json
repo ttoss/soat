@@ -107,6 +107,11 @@
       "description": "Clear the label on an eval result"
     },
     {
+      "operationId": "getEvalRunCalibration",
+      "action": "evaluations:GetEval",
+      "description": "Read how far each scorer of an eval run agrees with its human labels"
+    },
+    {
       "operationId": "cancelEvalRun",
       "action": "evaluations:CancelEvalRun",
       "description": "Cancel a queued or running eval run"

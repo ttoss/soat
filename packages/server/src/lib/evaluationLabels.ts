@@ -1,6 +1,18 @@
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
-import { findEvalResult, mapEvalResult } from './evaluationRunReads';
+import { db } from '../db';
+import {
+  calibrationOf,
+  type RunCalibration,
+  scorerFingerprint,
+} from './evaluationCalibration';
+import { readEvalRunDefinition } from './evaluationRunDefinition';
+import {
+  findEvalResult,
+  findEvalRun,
+  mapEvalResult,
+} from './evaluationRunReads';
 import type { RequestPrincipal } from './principals';
 
 const log = createDebug('soat:evaluations');
@@ -47,4 +59,40 @@ export const clearEvalResultLabel = async (args: {
     labeledByPrincipalId: null,
     labeledAt: null,
   });
+};
+
+/**
+ * A run's calibration: each scorer it graded with, against the results people
+ * labeled, under the fingerprint of those scorers. A run that recorded no
+ * definition has neither scorers nor a fingerprint.
+ */
+export const getEvalRunCalibration = async (args: {
+  projectIds?: number[];
+  evalId: string;
+  runId: string;
+}): Promise<RunCalibration & { scorer_fingerprint: string | null }> => {
+  log('getEvalRunCalibration: run=%s', args.runId);
+  const run = await findEvalRun(args);
+  const definition = readEvalRunDefinition({ run });
+  const labeled = await db.EvalResult.findAll({
+    where: { evalRunId: run.id as number, humanPassed: { [Op.ne]: null } },
+    attributes: ['scores', 'humanPassed'],
+  });
+  return {
+    scorer_fingerprint: definition
+      ? scorerFingerprint({
+          scorers: definition.scorers,
+          deciderVersions: run.deciderVersions,
+        })
+      : null,
+    ...calibrationOf({
+      scorers: definition?.scorers ?? [],
+      labeled: labeled.map((result) => {
+        return {
+          scores: result.scores,
+          humanPassed: result.humanPassed === true,
+        };
+      }),
+    }),
+  };
 };

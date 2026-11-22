@@ -1637,6 +1637,64 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration:
+    get:
+      tags:
+        - Evaluations
+      summary: Read an eval run's calibration
+      description: >-
+        How far each scorer of the run agrees with the results people labeled
+        (`PUT /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`),
+        under the fingerprint of the scorers that graded it. Each disagreement
+        is a result whose scorer outcome in `scores` differs from its
+        `human_label`.
+      operationId: getEvalRunCalibration
+      x-iam-action: evaluations:GetEval
+      x-iam-resource-type: eval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: eval_run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The run's calibration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRunCalibration'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval or run not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/evals/{eval_id}/runs/{eval_run_id}/cancel:
     post:
       tags:
@@ -2628,6 +2686,48 @@ components:
           example: kind
         evidence:
           $ref: '#/components/schemas/Evidence'
+    EvalRunCalibration:
+      type: object
+      additionalProperties: false
+      required: [scorer_fingerprint, labeled_count, scorers]
+      properties:
+        scorer_fingerprint:
+          type: string
+          nullable: true
+          description: >-
+            SHA-256 of the scorers the run recorded and the decider versions it
+            pinned, key order aside: a changed prompt, model, threshold or
+            decider version moves it. Null when the run recorded no definition.
+          example: sha256:9f2c4e7a1b3d5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcd
+        labeled_count:
+          type: integer
+          description: Results of the run carrying a human label
+          example: 32
+        scorers:
+          type: object
+          description: Each scorer of the run, keyed as `scores[].scorer` keys it
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            required: [labeled, agreement, false_pass, false_fail]
+            properties:
+              labeled:
+                type: integer
+                description: Labeled results this scorer graded
+                example: 32
+              agreement:
+                type: number
+                nullable: true
+                description: Share of those where the scorer and the label agree; null with none labeled
+                example: 0.906
+              false_pass:
+                type: integer
+                description: The scorer passed what the label failed
+                example: 2
+              false_fail:
+                type: integer
+                description: The scorer failed what the label passed
+                example: 1
     EvalResult:
       type: object
       properties:

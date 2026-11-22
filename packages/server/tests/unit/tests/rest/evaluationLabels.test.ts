@@ -262,4 +262,122 @@ describe('Evaluations — human labels on results', () => {
       expect(res.status).toBe(403);
     });
   });
+
+  describe('GET /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration', () => {
+    const calibrationPath = (run: { evalId: string; runId: string }) => {
+      return `/api/v1/evals/${run.evalId}/runs/${run.runId}/calibration`;
+    };
+
+    test('measures each scorer against the labels, counting each side apart', async () => {
+      const run = await completedRun();
+      const list = await asUser().get(run.resultsPath);
+      const [first, second] = list.body.data as Array<{ id: string }>;
+      const labelPath = (id: string) => {
+        return `${run.resultsPath}/${id}/label`;
+      };
+      // Both items pass `contains: refund`; the second label disagrees.
+      await asUser().put(labelPath(first!.id)).send({ passed: true });
+      await asUser().put(labelPath(second!.id)).send({ passed: false });
+
+      const res = await asUser().get(calibrationPath(run));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        scorer_fingerprint: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        labeled_count: 2,
+        scorers: {
+          contains: {
+            labeled: 2,
+            agreement: 0.5,
+            false_pass: 1,
+            false_fail: 0,
+          },
+        },
+      });
+    });
+
+    test('a run nobody labeled reports every scorer with nothing labeled', async () => {
+      const run = await completedRun();
+      const res = await asUser().get(calibrationPath(run));
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        labeled_count: 0,
+        scorers: {
+          contains: {
+            labeled: 0,
+            agreement: null,
+            false_pass: 0,
+            false_fail: 0,
+          },
+        },
+      });
+    });
+
+    test('the fingerprint follows the scorers that graded the run, not their key order', async () => {
+      const first = await completedRun();
+      const second = await completedRun();
+      await asUser()
+        .put(`/api/v1/evals/${second.evalId}`)
+        .send({ scorers: [{ value: 'refund', type: 'contains' }] });
+      const reordered = await asUser()
+        .post(`/api/v1/evals/${second.evalId}/runs`)
+        .send({ wait: true });
+      await asUser()
+        .put(`/api/v1/evals/${second.evalId}`)
+        .send({ scorers: [{ type: 'contains', value: 'policy' }] });
+      const changed = await asUser()
+        .post(`/api/v1/evals/${second.evalId}/runs`)
+        .send({ wait: true });
+
+      const fingerprintOf = async (evalId: string, runId: string) => {
+        const res = await asUser().get(calibrationPath({ evalId, runId }));
+        expect(res.status).toBe(200);
+        return res.body.scorer_fingerprint as string;
+      };
+      const base = await fingerprintOf(first.evalId, first.runId);
+      expect(await fingerprintOf(second.evalId, second.runId)).toBe(base);
+      expect(await fingerprintOf(second.evalId, reordered.body.id)).toBe(base);
+      expect(await fingerprintOf(second.evalId, changed.body.id)).not.toBe(
+        base
+      );
+    });
+
+    test('returns 404 for a run of another eval', async () => {
+      const run = await completedRun();
+      const other = await completedRun();
+      const res = await asUser().get(
+        calibrationPath({ evalId: run.evalId, runId: other.runId })
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 401 without a credential', async () => {
+      const run = await completedRun();
+      const res = await testClient.get(calibrationPath(run));
+      expect(res.status).toBe(401);
+    });
+
+    test('only GetEval reads it', async () => {
+      const run = await completedRun();
+      const reader = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: unique('calibration-reader'),
+        actions: ['evaluations:GetEval'],
+      });
+      const other = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: unique('calibration-other'),
+        actions: ['evaluations:LabelEvalResult'],
+      });
+      expect(
+        (await authenticatedTestClient(reader).get(calibrationPath(run))).status
+      ).toBe(200);
+      // A read the caller may not make answers 404, as every eval read does.
+      expect(
+        (await authenticatedTestClient(other).get(calibrationPath(run))).status
+      ).toBe(404);
+    });
+  });
 });

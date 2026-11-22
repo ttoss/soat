@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
   clearEvalResultLabel,
+  getEvalRunCalibration,
   labelEvalResult,
 } from 'src/lib/evaluationLabels';
 
@@ -65,6 +66,27 @@ evaluationLabelsRouter.delete(
       resultId: ctx.params.eval_result_id,
     });
     ctx.status = 204;
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration:
+ *   get:
+ *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{eval_run_id}~1calibration/get'
+ */
+evaluationLabelsRouter.get(
+  '/evals/:eval_id/runs/:eval_run_id/calibration',
+  async (ctx: Context) => {
+    const { projectIds } = await evalAccess.authorizeRead({
+      ctx,
+      action: 'evaluations:GetEval',
+    });
+    ctx.body = await getEvalRunCalibration({
+      projectIds,
+      evalId: ctx.params.eval_id,
+      runId: ctx.params.eval_run_id,
+    });
   }
 );
 

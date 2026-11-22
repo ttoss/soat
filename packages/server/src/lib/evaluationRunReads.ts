@@ -123,7 +123,8 @@ export const reloadEvalRun = async (row: {
  * Loads a run, scoped by the caller's access to its **parent Eval** — the run
  * row carries no project column of its own.
  */
-const findRun = async (args: {
+/** One run of an eval the caller can read, or `RESOURCE_NOT_FOUND`. */
+export const findEvalRun = async (args: {
   projectIds?: number[];
   evalId: string;
   runId: string;
@@ -155,7 +156,7 @@ export const findEvalResult = async (args: {
   resultId: string;
 }): Promise<EvalResultRow> => {
   log('findEvalResult: run=%s result=%s', args.runId, args.resultId);
-  const run = await findRun(args);
+  const run = await findEvalRun(args);
   const result = (await db.EvalResult.findOne({
     where: { publicId: args.resultId, evalRunId: run.id as number },
     include: evalResultIncludes(),
@@ -211,7 +212,7 @@ export const getEvalRun = async (args: {
   runId: string;
 }): Promise<ReturnType<typeof mapEvalRun>> => {
   log('getEvalRun: evalId=%s runId=%s', args.evalId, args.runId);
-  return mapEvalRun(await findRun(args));
+  return mapEvalRun(await findEvalRun(args));
 };
 
 export const listEvalResults = async (args: {
@@ -223,7 +224,7 @@ export const listEvalResults = async (args: {
 }): Promise<Page<ReturnType<typeof mapEvalResult>>> => {
   log('listEvalResults: evalId=%s runId=%s', args.evalId, args.runId);
 
-  const run = await findRun({
+  const run = await findEvalRun({
     projectIds: args.projectIds,
     evalId: args.evalId,
     runId: args.runId,
