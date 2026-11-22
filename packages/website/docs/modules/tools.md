@@ -412,7 +412,21 @@ On every action that takes `project_id` the server pins it to the agent's own pr
 
 The action runs in-process through the same middleware stack and route handler as a client request (no network hop): per-call permission check against the caller's policies, strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply. No ambient authority: an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call not settled within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. From an orchestration the tool acts as the run's own identity — [Run identity](./orchestrations.md#durable-background-execution). Work that stores no authority, or whose authority names a user or key that no longer exists, makes no tool call of any type: each is refused `409 WORK_AUTHORITY_MISSING`.
 
-Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` and `max_call_depth` only for actions whose REST schema declares them (currently only `create-agent-generation`).
+Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` and `max_call_depth` only for actions whose REST schema declares them (`tool_context` on `create-agent-generation` and `call-tool`; the trace fields and depth on `create-agent-generation`).
+
+#### Which `tool_context` a nested call carries
+
+An action that takes `tool_context` (a nested generation, a `call-tool` relay) receives three layers, merged per key in any casing:
+
+```
+the action's own tool_context argument  <  the calling bag  <  the token's layer
+```
+
+- **The token's layer** ([Pinning a `tool_context` layer](./iam.md#pinning-a-tool_context-layer)) wins every key it names, at every depth.
+- **The calling bag** is the generation's or the direct call's `tool_context`, narrowed by the builtin tool's [`context_keys`](#scoping-which-context-keys-reach-a-tool), without keys under the reserved prefix. Its keys override the same keys in the argument.
+- **The argument** a model or caller writes keeps every key neither layer above names. A key under the reserved prefix in it is dropped by `call-tool` and refused by a nested generation, as on a direct request.
+
+The three keys a session populates are dropped by `call-tool` whichever layer sends them ([Auto-populated keys](../advanced/tool-context.md#auto-populated-keys-sessions)).
 
 ### pipeline
 

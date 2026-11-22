@@ -34,7 +34,7 @@ A value is never interpolated into a URL or into arguments the model chooses. Th
 | --- | --- | --- |
 | `http` | Yes | Injected as request headers on the outbound call |
 | `mcp` | Yes | Injected on the MCP `tools/call` fetch |
-| `builtin` | Yes | Propagated into nested agent generations |
+| `builtin` | Yes | Propagated into the generations and tool calls the action starts, under the action's own `tool_context` argument: [Which `tool_context` a nested call carries](../modules/tools.md#which-tool_context-a-nested-call-carries) |
 | `client` | **No** | Executes on the caller's side; nothing is sent. A `{{context:}}` preset is still resolved before the arguments are handed over |
 | `pipeline` | Yes | Each step inherits the context the pipeline was called with |
 
