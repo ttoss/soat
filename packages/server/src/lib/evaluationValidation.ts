@@ -124,7 +124,7 @@ const validateRequiredGroups = (args: {
   return null;
 };
 
-/** The rules the claims read applies beyond the run: production and age. */
+/** The rules the claims read applies beyond the run: production, age and calibration. */
 const claimSideProblem = (evidence: Record<string, unknown>): string | null => {
   if (evidence.live !== undefined) {
     const parsed = parseLiveEvidence(evidence.live);

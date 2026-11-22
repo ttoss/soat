@@ -1,7 +1,7 @@
 import { defineMigration } from '@ttoss/postgresdb';
 
 /**
- * A person's label on an eval result. Nothing to fill: a result nobody
+ * A user's or API key's label on an eval result. Nothing to fill: a result nobody
  * labeled has no label.
  */
 export const evalResultHumanLabel = defineMigration({

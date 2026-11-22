@@ -1503,6 +1503,7 @@ paths:
       operationId: labelEvalResult
       x-iam-action: evaluations:LabelEvalResult
       x-iam-resource-type: eval
+      x-soat-agent-exclude: true
       parameters:
         - name: eval_id
           in: path
@@ -1588,6 +1589,7 @@ paths:
       operationId: clearEvalResultLabel
       x-iam-action: evaluations:LabelEvalResult
       x-iam-resource-type: eval
+      x-soat-agent-exclude: true
       parameters:
         - name: eval_id
           in: path
@@ -2332,10 +2334,10 @@ components:
             Read by its claim's verdict and never by the run's: every scorer
             whose verdict comes from outside the eval (`llm_judge`,
             `embedding_similarity`, `tool`, `decider`) must agree with at
-            least `agreement` of at least `labeled` human labels on one
-            completed run of the eval against the version graded by the same
-            scorers (`scorer_fingerprint`), else `insufficient`. Pure scorers
-            need none.
+            least `agreement` of at least `labeled` human labels, taken
+            together over every completed run of the eval against the version
+            graded by the same scorers (`scorer_fingerprint`), else
+            `insufficient`. Pure scorers need none.
           properties:
             labeled:
               type: integer
@@ -2726,8 +2728,11 @@ components:
           nullable: true
           description: >-
             SHA-256 of the scorers the run recorded and the decider versions it
-            pinned, key order aside: a changed prompt, model, threshold or
-            decider version moves it. Null when the run recorded no definition.
+            pinned, key order aside: a changed prompt, pinned model or
+            provider, threshold or decider version moves it. What a scorer
+            resolves when it runs (the project's default model route or
+            embedding model, a tool's pipeline) is not in it. Null when the
+            run recorded no definition.
           example: sha256:9f2c4e7a1b3d5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcd
         labeled_count:
           type: integer

@@ -124,7 +124,7 @@ One row per dataset item per run.
 | `output` | string | The agent's final output text. `null` only when there is none — the generation failed or never completed — or once the linked generation's content is [purged](#retention-and-erasure). An item errored by a **scorer** keeps the output it was graded on |
 | `scores` | array | `[{ scorer, score, passed, reasoning?, decision_id? }]`, one entry per scorer in the order the eval declares them. `scorer` is the type — or the scorer's `name` for a [`tool`](#custom-scorers-tool) or [`decider`](#decider-scorers-decider) scorer. `reasoning` is present for `llm_judge`, and for `tool` scorers whose tool returned one; `decision_id` for `decider` scorers |
 | `passed` | boolean | AND over the per-scorer `passed` flags |
-| `human_label` | object | `{ passed, note, labeled_by_principal_type, labeled_by_principal_id, labeled_at }`: a person's verdict on the item ([Human labels and calibration](#human-labels-and-calibration)); `null` when nobody labeled it |
+| `human_label` | object | `{ passed, note, labeled_by_principal_type, labeled_by_principal_id, labeled_at }`: a user's or API key's verdict on the item ([Human labels and calibration](#human-labels-and-calibration)); `null` when nobody labeled it |
 | `error` | object | Item-level failure reason as a [recorded failure](/docs/api#recorded-failures) — `GENERATION_NOT_COMPLETED`, `GENERATION_FAILED`, or a scorer's own code (`EVAL_SCORING_FAILED` when it has none) with a message starting `Scoring failed:`; set instead of scoring, never alongside it |
 | `created_at` | string | ISO 8601 creation timestamp |
 
@@ -625,20 +625,26 @@ A person labels a result pass or fail with
 [`PUT /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`](/docs/api/evaluations/label-eval-result)
 (`{ passed, note? }`, replacing any earlier label) and clears it with
 [`DELETE /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`](/docs/api/evaluations/clear-eval-result-label);
-both need `evaluations:LabelEvalResult`. The result's `passed` never moves; its
-`human_label` records the verdict and who gave it.
+both need `evaluations:LabelEvalResult`. A user or an API key labels; an agent's `builtin`
+tool cannot bind either action. The result's `passed` never moves; its `human_label`
+records the verdict and who gave it.
 
 [`GET /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration`](/docs/api/evaluations/get-eval-run-calibration)
 reports, per scorer keyed as `scores[].scorer` keys it, the labeled results it graded,
 its `agreement` with the labels (`null` with none), its `false_pass` (passed what the
 label failed) and its `false_fail` (the reverse), under `scorer_fingerprint`: a hash of
 the scorers the run recorded and the decider versions it pinned. Any change to a
-scorer (prompt, model, threshold, a decider version) moves the fingerprint.
+scorer's configuration (prompt, a pinned `model` or `ai_provider_id`, threshold, a decider
+version) moves the fingerprint. What a scorer resolves when it runs is not in it: an
+`llm_judge` pinning no provider follows the project's default model route, an
+`embedding_similarity` the project's embedding model, and a `tool` scorer its tool's
+current pipeline; after changing one of those, label a new run.
 
 `evidence.min_calibration: { labeled, agreement }` makes the claim require it: for every
 scorer whose verdict comes from outside the eval (`llm_judge`, `embedding_similarity`,
-`tool`, `decider`), one completed run of the eval against the version with the speaking
-run's fingerprint must reach both figures, else the claim reads `insufficient` with
+`tool`, `decider`), the labeled results of every completed run of the eval against the
+version with the speaking run's fingerprint, taken together, must reach both figures, else
+the claim reads `insufficient` with
 `scope: { kind: "calibration", name: <scorer> }`. Labels on runs graded by other scorers
 do not count. Pure scorers (`exact_match`, `contains`, `json_logic`, `output_schema`)
 need none. `labeled` is a positive integer and `agreement` a number between 0 and 1;

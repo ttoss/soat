@@ -135,9 +135,9 @@ const figure = (value: number): string => {
 };
 
 /**
- * One reason per externally graded scorer: `supported` when some run graded
- * by the same scorers reaches both figures, else `insufficient`, naming the
- * closest run's labels or its agreement.
+ * One reason per externally graded scorer, read over the labels of every run
+ * graded by the same scorers taken together: the labels measure the scorer,
+ * not the run, so no single run's luck can carry the rule.
  */
 export const calibrationReasons = (args: {
   rule: MinCalibration;
@@ -146,44 +146,34 @@ export const calibrationReasons = (args: {
 }): VerdictReason[] => {
   const { rule } = args;
   return args.keys.map((name): VerdictReason => {
-    const tallies = args.runs.flatMap((run) => {
+    let labeled = 0;
+    let disagreed = 0;
+    for (const run of args.runs) {
       const tally = run.scorers[name];
-      return tally ? [tally] : [];
-    });
-    const enough = tallies.filter((tally) => {
-      return tally.labeled >= rule.labeled;
-    });
-    const best = Math.max(
-      ...enough.map((tally) => {
-        return tally.agreement ?? 0;
-      })
-    );
-    const scope = { kind: 'calibration' as const, name };
-    if (enough.length > 0 && best >= rule.agreement) {
-      return {
-        scope,
-        verdict: 'supported',
-        reason: `agreement ${figure(best)} at or above ${rule.agreement}`,
-      };
+      if (!tally) continue;
+      labeled += tally.labeled;
+      disagreed += tally.false_pass + tally.false_fail;
     }
-    if (enough.length > 0) {
+    const scope = { kind: 'calibration' as const, name };
+    if (labeled < rule.labeled) {
       return {
         scope,
         verdict: 'insufficient',
-        reason: `agreement ${figure(best)} below ${rule.agreement}`,
+        reason: `${labeled} labeled, ${rule.labeled} required`,
       };
     }
-    const most = Math.max(
-      0,
-      ...tallies.map((tally) => {
-        return tally.labeled;
-      })
-    );
-    return {
-      scope,
-      verdict: 'insufficient',
-      reason: `${most} labeled, ${rule.labeled} required`,
-    };
+    const agreement = (labeled - disagreed) / labeled;
+    return agreement >= rule.agreement
+      ? {
+          scope,
+          verdict: 'supported',
+          reason: `agreement ${figure(agreement)} at or above ${rule.agreement}`,
+        }
+      : {
+          scope,
+          verdict: 'insufficient',
+          reason: `agreement ${figure(agreement)} below ${rule.agreement}`,
+        };
   });
 };
 

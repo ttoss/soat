@@ -120,10 +120,10 @@ export const reloadEvalRun = async (row: {
 };
 
 /**
- * Loads a run, scoped by the caller's access to its **parent Eval** — the run
- * row carries no project column of its own.
+ * One run of an eval the caller can read, or `RESOURCE_NOT_FOUND`: scoped by
+ * the caller's access to its parent eval, since the run row carries no
+ * project column of its own.
  */
-/** One run of an eval the caller can read, or `RESOURCE_NOT_FOUND`. */
 export const findEvalRun = async (args: {
   projectIds?: number[];
   evalId: string;
