@@ -30,7 +30,7 @@ export const loadBootConfigOrExit = (): void => {
     // Fatal and process-terminating, so it goes to stderr unconditionally
     // rather than through the opt-in `debug` logger.
     // eslint-disable-next-line no-console
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(String(error));
     process.exit(1);
   }
 
