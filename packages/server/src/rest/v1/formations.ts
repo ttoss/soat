@@ -29,6 +29,7 @@ import { buildSrn } from 'src/lib/iam';
 import { namesRequestTag } from 'src/lib/iamConditionKeys';
 import { readNullableMetadataBag } from 'src/lib/metadataBag';
 import { buildRequestTagContext } from 'src/lib/tags';
+import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
@@ -178,6 +179,7 @@ const assertDeployableParams = (
 
 formationsRouter.post('/formations/validate', async (ctx: Context) => {
   requireAuth(ctx);
+  await admitAuthorized(ctx, 'formations:ValidateFormation');
 
   const body = ctx.request.body as {
     template?: unknown;

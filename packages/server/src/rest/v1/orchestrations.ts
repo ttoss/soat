@@ -24,6 +24,7 @@ import {
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
 import { captureAuthority } from 'src/lib/workAuthority';
+import { admitAuthorized } from 'src/middleware/admission';
 
 import {
   parseEnumListQuery,
@@ -139,6 +140,7 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
  */
 orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
   requireAuth(ctx);
+  await admitAuthorized(ctx, 'orchestrations:ValidateOrchestration');
   const body = ctx.request.body as {
     nodes?: unknown;
     edges?: unknown;
