@@ -38,6 +38,12 @@ describe('authorization denial chokepoint', () => {
     ]);
   });
 
+  test('is the only place an ACTION_NOT_HELD is raised', () => {
+    assert.deepEqual(filesMatching(/['"]ACTION_NOT_HELD['"]/), [
+      'lib/authorizationDenial.ts',
+    ]);
+  });
+
   test('is the only place the refusal is worded', () => {
     assert.deepEqual(
       filesMatching(/policies deny|boundary policy|policy denies/),
