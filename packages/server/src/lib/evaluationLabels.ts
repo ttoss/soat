@@ -133,7 +133,6 @@ export const versionRunCalibrations = async (args: {
       ? [{ runId: run.id as number, scorers: definition.scorers }]
       : [];
   });
-  if (graded.length === 0) return [];
   const labeled = await db.EvalResult.findAll({
     where: {
       evalRunId: graded.map(({ runId }) => {

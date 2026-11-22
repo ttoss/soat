@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
@@ -340,6 +342,23 @@ describe('Evaluations — human labels on results', () => {
       expect(await fingerprintOf(second.evalId, changed.body.id)).not.toBe(
         base
       );
+    });
+
+    test('a run that recorded no definition has no fingerprint and no scorers', async () => {
+      const run = await completedRun();
+      await db.EvalRun.update(
+        { definition: null },
+        { where: { publicId: run.runId } }
+      );
+
+      const res = await asUser().get(calibrationPath(run));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        scorer_fingerprint: null,
+        labeled_count: 0,
+        scorers: {},
+      });
     });
 
     test('returns 404 for a run of another eval', async () => {

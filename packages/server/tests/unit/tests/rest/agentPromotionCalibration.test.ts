@@ -301,6 +301,26 @@ describe('Agent version claims — calibration evidence', () => {
       expect((await claimOf(evalId))?.verdict).toBe('supported');
     });
 
+    test('labels on a run that recorded no definition do not count', async () => {
+      const evalId = await createEval({
+        scorers: [deciderScorer()],
+        evidence: MIN,
+      });
+      const first = await run(evalId);
+      await labelAll(evalId, first, true);
+      await db.EvalRun.update(
+        { definition: null },
+        { where: { publicId: first } }
+      );
+      await run(evalId);
+
+      const claim = await claimOf(evalId);
+      expect(calibrationReason(claim, 'reply_review')).toMatchObject({
+        verdict: 'insufficient',
+        reason: '0 labeled, 2 required',
+      });
+    });
+
     test('labels under other scorers stop counting once the scorers change', async () => {
       const evalId = await createEval({
         scorers: [deciderScorer()],
