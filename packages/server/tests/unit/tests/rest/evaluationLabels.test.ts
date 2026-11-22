@@ -237,6 +237,29 @@ describe('Evaluations — human labels on results', () => {
         .send({ passed: true });
       expect(allowed.status).toBe(200);
     });
+
+    test('returns 404 to a labeler whose policies name another project', async () => {
+      const run = await completedRun();
+      const other = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: unique('Labels Other Project') });
+      expect(other.status).toBe(201);
+      const outsider = await createScopedPrincipal({
+        adminToken,
+        projectId: other.body.id as string,
+        username: unique('outside-labeler'),
+        actions: ['evaluations:LabelEvalResult'],
+      });
+
+      const res = await authenticatedTestClient(outsider)
+        .put(run.labelPath)
+        .send({ passed: true });
+
+      expect(res.status).toBe(404);
+      expect(await resultOf(run.resultsPath, run.resultId)).toMatchObject({
+        human_label: null,
+      });
+    });
   });
 
   describe('DELETE /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label', () => {
@@ -262,6 +285,27 @@ describe('Evaluations — human labels on results', () => {
       });
       const res = await authenticatedTestClient(reader).delete(run.labelPath);
       expect(res.status).toBe(403);
+    });
+
+    test('returns 404 for a result of another run', async () => {
+      const run = await completedRun();
+      const other = await completedRun();
+      await asUser().put(other.labelPath).send({ passed: true });
+
+      const res = await asUser().delete(
+        `/api/v1/evals/${run.evalId}/runs/${run.runId}/results/${other.resultId}/label`
+      );
+
+      expect(res.status).toBe(404);
+      expect(await resultOf(other.resultsPath, other.resultId)).toMatchObject({
+        human_label: { passed: true },
+      });
+    });
+
+    test('returns 401 without a credential', async () => {
+      const run = await completedRun();
+      const res = await testClient.delete(run.labelPath);
+      expect(res.status).toBe(401);
     });
   });
 

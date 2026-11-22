@@ -96,6 +96,16 @@ describe('Agent version claims — calibration evidence', () => {
     }
   };
 
+  const labelFirst = async (evalId: string, runId: string, passed: boolean) => {
+    const path = `/api/v1/evals/${evalId}/runs/${runId}/results`;
+    const results = await asUser().get(path);
+    const [first] = results.body.data as Array<{ id: string }>;
+    const res = await asUser()
+      .put(`${path}/${first.id}/label`)
+      .send({ passed });
+    expect(res.status).toBe(200);
+  };
+
   const claimOf = async (evalId: string) => {
     const res = await authenticatedTestClient(adminToken).get(
       `/api/v1/agents/${agentId}/versions/1/claims`
@@ -301,6 +311,38 @@ describe('Agent version claims — calibration evidence', () => {
       expect((await claimOf(evalId))?.verdict).toBe('supported');
     });
 
+    test('labels spread over runs graded by the same scorers add up', async () => {
+      const evalId = await createEval({
+        scorers: [deciderScorer()],
+        evidence: MIN,
+      });
+      await labelFirst(evalId, await run(evalId), true);
+      await labelFirst(evalId, await run(evalId), true);
+
+      const claim = await claimOf(evalId);
+      expect(claim?.verdict).toBe('supported');
+      expect(calibrationReason(claim, 'reply_review')).toMatchObject({
+        verdict: 'supported',
+        reason: 'agreement 1 at or above 0.5',
+      });
+    });
+
+    test('a run that agrees does not outweigh one that disagrees', async () => {
+      const evalId = await createEval({
+        scorers: [deciderScorer()],
+        evidence: { min_calibration: { labeled: 2, agreement: 0.6 } },
+      });
+      await labelAll(evalId, await run(evalId), true);
+      await labelAll(evalId, await run(evalId), false);
+
+      const claim = await claimOf(evalId);
+      expect(claim?.verdict).toBe('insufficient');
+      expect(calibrationReason(claim, 'reply_review')).toMatchObject({
+        verdict: 'insufficient',
+        reason: 'agreement 0.5 below 0.6',
+      });
+    });
+
     test('labels on a run that recorded no definition do not count', async () => {
       const evalId = await createEval({
         scorers: [deciderScorer()],
@@ -387,6 +429,7 @@ describe('Agent version claims — calibration evidence', () => {
       ['no agreement', { labeled: 30 }],
       ['an unknown key', { labeled: 30, agreement: 0.9, kappa: 0.8 }],
       ['a non-object', 30],
+      ['null', null],
     ])('refuses %s with 400', async (_label, rule) => {
       const res = await asUser()
         .post('/api/v1/evals')
@@ -402,6 +445,24 @@ describe('Agent version claims — calibration evidence', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  describe('PUT /api/v1/evals/{eval_id} with evidence.min_calibration', () => {
+    test('refuses a malformed rule with 400 and keeps the stored one', async () => {
+      const evalId = await createEval({
+        scorers: [deciderScorer()],
+        evidence: MIN,
+      });
+
+      const res = await asUser()
+        .put(`/api/v1/evals/${evalId}`)
+        .send({ evidence: { min_calibration: { labeled: 2 } } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      const stored = await asUser().get(`/api/v1/evals/${evalId}`);
+      expect(stored.body.evidence).toMatchObject(MIN);
     });
   });
 });

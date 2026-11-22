@@ -128,55 +128,60 @@ describe('evaluationCalibration', () => {
   });
 
   describe('calibrationReasons', () => {
-    const tally = (labeled: number, agreement: number | null) => {
+    const tally = (labeled: number, disagreed: number) => {
       return {
         scorers: {
-          llm_judge: { labeled, agreement, false_pass: 0, false_fail: 0 },
+          llm_judge: {
+            labeled,
+            agreement: labeled === 0 ? null : (labeled - disagreed) / labeled,
+            false_pass: disagreed,
+            false_fail: 0,
+          },
         },
         labeled_count: labeled,
       };
     };
     const rule = { labeled: 30, agreement: 0.9 };
 
-    test('one run reaching both figures supports it', () => {
+    test('labels across runs graded by the same scorers add up', () => {
       expect(
         calibrationReasons({
           rule,
           keys: ['llm_judge'],
-          runs: [tally(10, 1), tally(30, 0.93)],
+          runs: [tally(10, 0), tally(20, 1)],
         })
       ).toEqual([
         {
           scope: { kind: 'calibration', name: 'llm_judge' },
           verdict: 'supported',
-          reason: 'agreement 0.93 at or above 0.9',
+          reason: 'agreement 0.967 at or above 0.9',
         },
       ]);
     });
 
-    test('enough labels below the agreement name the best agreement', () => {
+    test('the pooled agreement decides, not the best run', () => {
       expect(
         calibrationReasons({
           rule,
           keys: ['llm_judge'],
-          runs: [tally(30, 0.8), tally(40, 0.85)],
+          runs: [tally(30, 1), tally(30, 15)],
         })[0]
       ).toMatchObject({
         verdict: 'insufficient',
-        reason: 'agreement 0.85 below 0.9',
+        reason: 'agreement 0.733 below 0.9',
       });
     });
 
-    test('too few labels name the most any run has', () => {
+    test('too few labels name the pooled count', () => {
       expect(
         calibrationReasons({
           rule,
           keys: ['llm_judge'],
-          runs: [tally(12, 1), tally(20, 0.95)],
+          runs: [tally(12, 0), tally(10, 0)],
         })[0]
       ).toMatchObject({
         verdict: 'insufficient',
-        reason: '20 labeled, 30 required',
+        reason: '22 labeled, 30 required',
       });
       expect(
         calibrationReasons({ rule, keys: ['llm_judge'], runs: [] })[0]
