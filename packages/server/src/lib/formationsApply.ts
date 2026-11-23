@@ -17,6 +17,10 @@ import {
   runPendingCleanups,
 } from './formationsApplyUpdate';
 import {
+  type DeployedResource,
+  deployedResourceOf,
+} from './formationsComparison';
+import {
   buildAuditableParameters,
   buildDependencyGraph,
   resolveRefs,
@@ -128,8 +132,8 @@ export const processResourceChange = async (args: {
   actor: FormationActor;
   formationId: number;
   pendingCleanups: PendingCleanup[];
-  /** This resource in the template the formation last deployed. */
-  deployed: ResourceDeclaration | undefined;
+  /** This resource in the formation's last deploy. */
+  deployed: DeployedResource | undefined;
 }): Promise<AppliedChange | null> => {
   const {
     logicalId,
@@ -221,6 +225,9 @@ const runResourceChanges = async (args: {
 }): Promise<boolean> => {
   const { sortedOrder, workingTemplate, existingMap, events } = args;
   const applied: AppliedChange[] = [];
+  // Before any change: a ref to a resource this deploy replaces then resolves
+  // to a new id, so a write-only property holding it is not settled.
+  const deployedIds = new Map(args.resolvedIds);
   for (const logicalId of sortedOrder) {
     const decl = workingTemplate.resources[logicalId];
     const existing = existingMap.get(logicalId);
@@ -235,8 +242,11 @@ const runResourceChanges = async (args: {
         actor: args.actor,
         formationId: args.formationId,
         pendingCleanups: args.pendingCleanups,
-        deployed: (args.formation.template as FormationTemplate | null)
-          ?.resources[logicalId],
+        deployed: deployedResourceOf({
+          formation: args.formation,
+          logicalId,
+          physicalIds: deployedIds,
+        }),
       });
       if (change) applied.push(change);
     } catch (error) {
