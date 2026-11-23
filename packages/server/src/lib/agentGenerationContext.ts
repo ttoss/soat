@@ -37,6 +37,8 @@ import {
   readGenerationProvenance,
   trackGenerationProvenance,
 } from './generationProvenance';
+import { readInputModalities } from './inputModalities';
+import { assertModelAcceptsInput } from './inputModalityGate';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { withPromptCacheBreakpoint } from './promptCaching';
 import { type ReplayedWindow, replayedWindowOf } from './replayRefusal';
@@ -113,6 +115,8 @@ export type GenerationContext = {
 const resolveGenerationModel = async (args: {
   agentId: string;
   typedAgent: TypedAgent;
+  /** The turn's input, refused here when the model declares it cannot read it. */
+  messages: Array<{ role: string; content: unknown }>;
 }): Promise<{ model: LanguageModel }> => {
   const resolution = await resolveAgentModel(args.typedAgent);
 
@@ -126,6 +130,10 @@ const resolveGenerationModel = async (args: {
     );
   }
 
+  assertModelAcceptsInput({
+    model: resolution.model,
+    required: readInputModalities(args.messages),
+  });
   return { model: resolution.model };
 };
 
@@ -348,6 +356,7 @@ export const buildGenerationContext = async (
   const { model } = await resolveGenerationModel({
     agentId: args.agentId,
     typedAgent,
+    messages: resolvedMessages,
   });
 
   // Generated up front (before tool resolution) so the approval gate can freeze

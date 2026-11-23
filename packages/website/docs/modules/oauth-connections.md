@@ -67,6 +67,15 @@ An access token within 60 seconds of `expires_at` is refreshed before it is sent
 
 [`DELETE /api/v1/oauth-connections/{oauth_connection_id}`](/docs/api/oauth-connections/delete-oauth-connection) revokes the refresh token (else the access token) at the client's `revocation_url`, then deletes; a failed revocation does not stop the deletion. Deleting the actor or the OAuth client deletes its connections.
 
+### Events
+
+| Event                            | Emitted when                                                                                                      |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `oauth_connections.connected`    | Every completed authorization, first connect and re-authorization alike                                           |
+| `oauth_connections.disconnected` | The connection moves to `disconnected`: a refused refresh, or a failed authorization of an unconnected connection |
+
+`data` is the connection as `GET` reads it (`id`, `actor_id`, `oauth_client_id`, `status`, `scopes`, `error`, …), never a token. A routine refresh emits nothing, and a failure that leaves the status where it was emits nothing. Both reach [webhooks](./webhooks.md) and [event triggers](./triggers.md#event-triggers), read-guarded by `oauth-connections:GetOauthConnection`; filter on one client with `event_data: { "oauth_client_id": "oauc_…" }`.
+
 ## Configuration
 
 | Environment Variable     | Required | Description                                                                                                          |

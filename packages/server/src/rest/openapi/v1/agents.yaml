@@ -423,6 +423,18 @@ paths:
                   messages:
                     - role: user
                       content: What is the weather in Tokyo?
+              fileParts:
+                summary: Send files to the model in their own media type
+                value:
+                  messages:
+                    - role: user
+                      content:
+                        - type: text
+                          text: Compare the report with the consultation audio.
+                        - type: file
+                          file_id: file_V1StGXR8Z5jdHi6B
+                        - type: file
+                          file_id: file_3ZjkQ2mPxW9vTn4R
               toolOutput:
                 summary: Use a tool output as user message content
                 value:
@@ -533,6 +545,16 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '422':
+          description: >-
+            `MAX_STEPS_REACHED` — the agent has an `output_schema` and the
+            turn spent every step of `max_steps` without producing the object;
+            `meta.max_steps` names the budget. The generation is recorded
+            `failed`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted;
@@ -633,6 +655,16 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '422':
+          description: >-
+            `MAX_STEPS_REACHED` — the agent has an `output_schema` and the
+            turn spent every step of `max_steps` without producing the object;
+            `meta.max_steps` names the budget. The generation is recorded
+            `failed`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -2348,10 +2380,20 @@ components:
                   - user
                   - assistant
               content:
+                description: >-
+                  A string, one `tool_output` or `document` object, or an array
+                  of parts. A `file` part is sent to the model in its own media
+                  type, unconverted, and only in a `user` message; a model whose
+                  AI provider declares it cannot read that modality refuses it
+                  with `400 INPUT_MODALITY_UNSUPPORTED`.
                 oneOf:
                   - type: string
                   - $ref: '#/components/schemas/ToolOutputMessageContent'
                   - $ref: '#/components/schemas/DocumentMessageContent'
+                  - type: array
+                    minItems: 1
+                    items:
+                      $ref: '#/components/schemas/MessageContentPart'
         stream:
           type: boolean
           default: false
@@ -2499,6 +2541,46 @@ components:
               type: integer
               description: >
                 Maximum number of results to inject. Omitted, 10 are injected.
+
+    MessageContentPart:
+      oneOf:
+        - $ref: '#/components/schemas/TextMessageContentPart'
+        - $ref: '#/components/schemas/FileMessageContentPart'
+        - $ref: '#/components/schemas/ToolOutputMessageContent'
+        - $ref: '#/components/schemas/DocumentMessageContent'
+
+    TextMessageContentPart:
+      type: object
+      required:
+        - type
+        - text
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum:
+            - text
+        text:
+          type: string
+
+    FileMessageContentPart:
+      type: object
+      required:
+        - type
+        - file_id
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum:
+            - file
+        file_id:
+          x-soat-ref: files
+          type: string
+          description: >-
+            Public ID of a file in the agent's project, read as the caller
+            (`files:DownloadFile`). Its `content_type` is the media type the
+            model receives.
 
     ToolOutputMessageContent:
       type: object

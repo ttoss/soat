@@ -1,6 +1,13 @@
 import type { LanguageModel } from 'ai';
 import createDebug from 'debug';
 
+import { type InputModality, readInputModalities } from './inputModalities';
+import {
+  inputModalityRefusal,
+  missingInputModalities,
+  registerInputGate,
+} from './inputModalityGate';
+import { FILE_REFERENCE_URL } from './modelInputBoundary';
 import {
   type BreakerTarget,
   isTargetTripped,
@@ -178,15 +185,59 @@ const breakerTarget = (args: {
   };
 };
 
-const selectTargets = (spec: RoutedModelSpec): RoutedTarget[] => {
-  const eligible = spec.targets.filter((target) => {
+/** The targets that read every modality of the call's input. */
+const acceptingTargets = (args: {
+  targets: RoutedTarget[];
+  required: readonly InputModality[];
+}): RoutedTarget[] => {
+  return args.targets.filter((target) => {
+    return (
+      missingInputModalities({ model: target.model, required: args.required })
+        .length === 0
+    );
+  });
+};
+
+/**
+ * What a route cannot read: nothing when one target reads it all, else the
+ * modalities no target reads, or all of them when each is read only apart.
+ */
+const routeMissing = (args: {
+  targets: RoutedTarget[];
+  required: readonly InputModality[];
+}): InputModality[] => {
+  if (acceptingTargets(args).length > 0) return [];
+  const unread = args.required.filter((modality) => {
+    return acceptingTargets({ ...args, required: [modality] }).length === 0;
+  });
+  return unread.length > 0 ? unread : [...args.required];
+};
+
+/**
+ * The targets that read the call's input, skipping those whose breaker is
+ * open; a route none of whose targets reads it is refused before any call.
+ */
+const selectTargets = (args: {
+  spec: RoutedModelSpec;
+  options: RoutedCallOptions;
+}): RoutedTarget[] => {
+  const { spec } = args;
+  const required = readInputModalities(args.options.prompt);
+  const readable = acceptingTargets({ targets: spec.targets, required });
+  if (readable.length === 0) {
+    throw inputModalityRefusal({
+      model: spec.routeId,
+      missing: routeMissing({ targets: spec.targets, required }),
+    });
+  }
+  const eligible = readable.filter((target) => {
     return !isTargetTripped({
       target: breakerTarget({ spec, target }),
       failureThreshold: spec.failureThreshold,
       cooldownSeconds: spec.cooldownSeconds,
     });
   });
-  return eligible.length > 0 ? eligible : [spec.targets[0]];
+  return eligible.length > 0 ? eligible : [readable[0]];
 };
 
 const runWithFallback = async <T>(args: {
@@ -199,7 +250,7 @@ const runWithFallback = async <T>(args: {
   }) => PromiseLike<T>;
 }): Promise<T> => {
   const { spec, routing } = args;
-  const targets = selectTargets(spec);
+  const targets = selectTargets({ spec, options: args.options });
   let targetsTried = 0;
   let lastError: unknown;
 
@@ -288,10 +339,10 @@ export const createRoutedModel = (spec: RoutedModelSpec): LanguageModel => {
     specificationVersion: 'v4',
     provider: 'soat.model-route',
     modelId: spec.routeId,
-    // Deliberately empty: targets may disagree about which URLs they can fetch
-    // natively, so the composite claims none and lets the SDK download inputs —
-    // the only answer that is correct whichever target ends up serving.
-    supportedUrls: {},
+    // Only a file reference: targets may disagree about which URLs they can
+    // fetch natively, so the SDK downloads every other input; every target
+    // reads a reference itself, at its input boundary.
+    supportedUrls: { '*': [FILE_REFERENCE_URL] },
     doGenerate: (options) => {
       return runWithFallback<RoutedGenerateResult>({
         spec,
@@ -318,6 +369,12 @@ export const createRoutedModel = (spec: RoutedModelSpec): LanguageModel => {
   };
 
   routingByModel.set(composite, routing);
+  registerInputGate({
+    model: composite,
+    missing: (required) => {
+      return routeMissing({ targets: spec.targets, required });
+    },
+  });
 
   return composite;
 };

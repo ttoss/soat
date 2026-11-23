@@ -3,6 +3,7 @@
  * typed field accepts. Graph-wide checks (edges, reachability, cycles) stay in
  * `orchestrationValidation.ts`.
  */
+import { loopItemVariable } from './orchestrationLoopItemContext';
 import { REQUIRED_NODE_FIELDS } from './orchestrationNodeFields';
 import {
   LOOP_ITEM_ERROR_MODES,
@@ -67,7 +68,7 @@ const pollNodeShapeIssues = (args: {
   return issues;
 };
 
-const loopNodeShapeIssues = (args: {
+const loopOnItemErrorIssues = (args: {
   node: OrchestrationNode;
   basePath: string;
 }): OrchestrationValidationIssue[] => {
@@ -88,6 +89,30 @@ const loopNodeShapeIssues = (args: {
       message: `loop node '${node.id}' has on_item_error '${String(value)}'; expected one of ${LOOP_ITEM_ERROR_MODES.join(', ')}.`,
     },
   ];
+};
+
+/** The item is always the child's input under `item_variable`. */
+const loopInputMappingIssues = (args: {
+  node: OrchestrationNode;
+  basePath: string;
+}): OrchestrationValidationIssue[] => {
+  const { node, basePath } = args;
+  const itemVariable = loopItemVariable(node);
+  if (!Object.hasOwn(node.inputMapping ?? {}, itemVariable)) return [];
+  return [
+    {
+      code: 'ITEM_VARIABLE_COLLISION',
+      path: `${basePath}.input_mapping.${itemVariable}`,
+      message: `loop node '${node.id}' maps input key '${itemVariable}', which each child receives as its item; rename the key or set a different item_variable.`,
+    },
+  ];
+};
+
+const loopNodeShapeIssues = (args: {
+  node: OrchestrationNode;
+  basePath: string;
+}): OrchestrationValidationIssue[] => {
+  return [...loopOnItemErrorIssues(args), ...loopInputMappingIssues(args)];
 };
 
 const validateNodeShape = (args: {

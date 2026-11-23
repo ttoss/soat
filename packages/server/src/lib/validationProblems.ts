@@ -15,6 +15,7 @@ export type ValidationProblem = {
 type ValidationFailureCode =
   | 'ORCHESTRATION_VALIDATION_FAILED'
   | 'PLAYBOOK_VALIDATION_FAILED'
+  | 'VALIDATION_FAILED'
   | 'WORKFLOW_VALIDATION_FAILED';
 
 /**

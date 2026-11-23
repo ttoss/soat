@@ -440,6 +440,11 @@
       "hint": "Ingest the document again. A large file or a busy worker can outlast the window; raise `INGESTION_STALL_TIMEOUT_MS` when it does so repeatedly.",
       "routes": []
     },
+    "INPUT_MODALITY_UNSUPPORTED": {
+      "http_status": 400,
+      "hint": "Send the part to a model whose AI provider's `model_input_modalities` lists its modality, or ingest the file and send it as a `document` part, which the model reads as text.",
+      "routes": []
+    },
     "INTERNAL_ERROR": {
       "http_status": 500,
       "hint": "Retry with backoff. The underlying exception is logged server-side and deliberately never forwarded, so the response carries nothing further to act on.",
@@ -489,6 +494,16 @@
       "http_status": 422,
       "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
       "routes": []
+    },
+    "MAX_STEPS_REACHED": {
+      "http_status": 422,
+      "hint": "Raise `max_steps` with `PATCH /api/v1/agents/{agent_id}`, or make the instructions reach the answer in fewer tool calls. An agent whose `tool_choice` forces a tool cannot answer on its last step: use `\"auto\"` and force specific steps with `step_rules`.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/agents/{agent_id}"
+        }
+      ]
     },
     "MCP_TOOL_ERROR": {
       "http_status": 502,

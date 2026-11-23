@@ -20,7 +20,7 @@ import {
   resolveAgentStepRuleToolIdToName,
   type TurnToolChoice,
 } from './agentStepRules';
-import { resolveStopWhen } from './agentStopConditions';
+import { resolveAnswerStep, resolveStopWhen } from './agentStopConditions';
 import {
   recordGenerationFailure,
   recordSegmentUsage,
@@ -126,7 +126,7 @@ const fireStreamEndSideEffects = (args: {
     turn: {
       steps: args.steps,
       finishReason: args.finishReason,
-      maxSteps: args.typedAgent.maxSteps,
+      budget: args.typedAgent,
       outcome: args.failed ? 'error' : 'ok',
     },
   });
@@ -158,7 +158,7 @@ const fireStreamEndSideEffects = (args: {
       stopReason: resolveStopReason({
         finishReason: args.finishReason,
         stepCount: args.steps.length,
-        maxSteps: args.typedAgent.maxSteps,
+        budget: args.typedAgent,
       }),
       assistantContent: args.finalText,
     },
@@ -340,6 +340,7 @@ export const runStreamGeneration = async (
     logContext: 'stream',
     toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
     promptCaching: args.typedAgent.promptCaching,
+    answerStep: resolveAnswerStep(args.typedAgent),
     provenance: args.provenance,
   });
   const toolCount = Object.keys(args.resolvedTools).length;

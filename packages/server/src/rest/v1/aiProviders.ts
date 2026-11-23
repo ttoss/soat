@@ -15,6 +15,7 @@ import {
   updateAiProvider,
 } from 'src/lib/aiProviders';
 import { buildSrn } from 'src/lib/iam';
+import type { ModelInputModalities } from 'src/lib/inputModalityGate';
 import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
 import { getShareProjection } from 'src/lib/shareableTypes';
 
@@ -35,6 +36,7 @@ type CreateAiProviderBody = {
   config?: Record<string, unknown>;
   model_aliases?: ModelAliases;
   model_aliases_only?: boolean;
+  model_input_modalities?: ModelInputModalities;
   require_priced_model?: boolean;
 };
 
@@ -224,6 +226,7 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     config: body.config,
     modelAliases: body.model_aliases,
     modelAliasesOnly: body.model_aliases_only,
+    modelInputModalities: body.model_input_modalities,
     requirePricedModel: body.require_priced_model,
     isAllowed: ctx.authUser.isAllowed,
   });
@@ -265,6 +268,7 @@ aiProvidersRouter.patch(
       config?: Record<string, unknown> | null;
       model_aliases?: ModelAliases | null;
       model_aliases_only?: boolean;
+      model_input_modalities?: ModelInputModalities | null;
       require_priced_model?: boolean;
     };
 
@@ -293,6 +297,7 @@ aiProvidersRouter.patch(
       config: body.config,
       modelAliases: body.model_aliases,
       modelAliasesOnly: body.model_aliases_only,
+      modelInputModalities: body.model_input_modalities,
       requirePricedModel: body.require_priced_model,
       isAllowed: ctx.authUser.isAllowed,
     });

@@ -92,6 +92,10 @@ paths:
                             model_aliases_only:
                               type: boolean
                               description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                            model_input_modalities:
+                              description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
+                              allOf:
+                                - $ref: '#/components/schemas/ModelInputModalities'
                             require_priced_model:
                               type: boolean
                               description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -212,6 +216,10 @@ paths:
                   type: boolean
                   default: false
                   description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                model_input_modalities:
+                  description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
+                  allOf:
+                    - $ref: '#/components/schemas/ModelInputModalities'
                 require_priced_model:
                   type: boolean
                   default: false
@@ -240,6 +248,10 @@ paths:
                   model_aliases_only:
                     type: boolean
                     description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                  model_input_modalities:
+                    description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
+                    allOf:
+                      - $ref: '#/components/schemas/ModelInputModalities'
                   require_priced_model:
                     type: boolean
                     description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -346,6 +358,10 @@ paths:
                   model_aliases_only:
                     type: boolean
                     description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                  model_input_modalities:
+                    description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
+                    allOf:
+                      - $ref: '#/components/schemas/ModelInputModalities'
                   require_priced_model:
                     type: boolean
                     description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -444,6 +460,11 @@ paths:
                 model_aliases_only:
                   type: boolean
                   description: 'When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).'
+                model_input_modalities:
+                  nullable: true
+                  description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part. Replaces the whole map; `null` clears it.'
+                  allOf:
+                    - $ref: '#/components/schemas/ModelInputModalities'
                 require_priced_model:
                   type: boolean
                   description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -815,6 +836,23 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 components:
   schemas:
+    ModelInputModalities:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          type: string
+          enum:
+            - text
+            - image
+            - file
+            - audio
+            - video
+      example:
+        gpt-4o:
+          - text
+          - image
+          - file
     ModelAliasTarget:
       description: >
         The model id sent to the vendor, or another provider of the same

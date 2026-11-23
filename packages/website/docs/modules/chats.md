@@ -108,7 +108,7 @@ When the provider rejects the completion (unavailable model, refused credential)
 
 ### Document-Backed Messages
 
-A message may carry `document_id` instead of `content`; the server uses the document's `content`. The document must be in the completion's project (the chat's, or the AI provider's); one in another project answers `404 RESOURCE_NOT_FOUND`, as an unknown id does. jq-based selection of tool output (`output_path`) belongs to [Agents](./agents.md#tool-output-message-content).
+A message may carry `document_id` instead of `content`; the server uses the document's `content`. The document must be in the completion's project (the chat's, or the AI provider's); one in another project answers `404 RESOURCE_NOT_FOUND`, as an unknown id does. jq-based selection of tool output (`output_path`) belongs to [Agents](./agents.md#message-content).
 
 ## Examples
 

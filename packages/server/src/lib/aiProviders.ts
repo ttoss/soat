@@ -17,6 +17,11 @@ import {
   type ModelEndpoint,
 } from './aiProviderModelAliases';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
+import {
+  assertModelInputModalities,
+  type ModelInputModalities,
+  readModelInputModalities,
+} from './inputModalityGate';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import {
   aiProviderReferences,
@@ -56,6 +61,7 @@ const mapAiProvider = (instance: AiProviderRow) => {
     config: instance.config ?? undefined,
     model_aliases: instance.modelAliases ?? {},
     model_aliases_only: instance.modelAliasesOnly,
+    model_input_modalities: instance.modelInputModalities ?? {},
     require_priced_model: instance.requirePricedModel,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
@@ -162,11 +168,13 @@ export const createAiProvider = async (args: {
   config?: Record<string, unknown>;
   modelAliases?: ModelAliases;
   modelAliasesOnly?: boolean;
+  modelInputModalities?: ModelInputModalities;
   requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   await assertEndpointSecretUse(args);
   assertModelAliases(args.modelAliases);
+  assertModelInputModalities(args.modelInputModalities);
   const aliasing = {
     modelAliases: args.modelAliases ?? null,
     modelAliasesOnly: args.modelAliasesOnly ?? false,
@@ -198,6 +206,7 @@ export const createAiProvider = async (args: {
     config: args.config ?? null,
     modelAliases: args.modelAliases ?? null,
     modelAliasesOnly: args.modelAliasesOnly ?? false,
+    modelInputModalities: args.modelInputModalities ?? null,
     requirePricedModel: args.requirePricedModel ?? false,
   });
   return mapAiProvider(await aiProviders.reload(instance));
@@ -212,7 +221,26 @@ type AiProviderFieldUpdates = {
   config?: Record<string, unknown> | null;
   modelAliases?: ModelAliases | null;
   modelAliasesOnly?: boolean;
+  modelInputModalities?: ModelInputModalities | null;
   requirePricedModel?: boolean;
+};
+
+// The fields that say which models the provider serves and how.
+const applyModelFields = (args: {
+  instance: AiProviderRow;
+  fields: AiProviderFieldUpdates;
+}): void => {
+  const { instance, fields } = args;
+  if (fields.defaultModel !== undefined)
+    instance.defaultModel = fields.defaultModel;
+  if (fields.modelAliases !== undefined)
+    instance.modelAliases = fields.modelAliases;
+  if (fields.modelAliasesOnly !== undefined)
+    instance.modelAliasesOnly = fields.modelAliasesOnly;
+  if (fields.modelInputModalities !== undefined)
+    instance.modelInputModalities = fields.modelInputModalities;
+  if (fields.requirePricedModel !== undefined)
+    instance.requirePricedModel = fields.requirePricedModel;
 };
 
 const applyAiProviderFields = (args: {
@@ -223,18 +251,11 @@ const applyAiProviderFields = (args: {
   if (args.fields.name !== undefined) instance.name = args.fields.name;
   if (args.fields.provider !== undefined)
     instance.provider = args.fields.provider;
-  if (args.fields.defaultModel !== undefined)
-    instance.defaultModel = args.fields.defaultModel;
   if (args.fields.baseUrl !== undefined) instance.baseUrl = args.fields.baseUrl;
   if (args.fields.config !== undefined) instance.config = args.fields.config;
   if (args.fields.secretId !== undefined)
     instance.secretId = args.fields.secretId;
-  if (args.fields.modelAliases !== undefined)
-    instance.modelAliases = args.fields.modelAliases;
-  if (args.fields.modelAliasesOnly !== undefined)
-    instance.modelAliasesOnly = args.fields.modelAliasesOnly;
-  if (args.fields.requirePricedModel !== undefined)
-    instance.requirePricedModel = args.fields.requirePricedModel;
+  applyModelFields(args);
 };
 
 export const updateAiProvider = async (args: {
@@ -247,12 +268,14 @@ export const updateAiProvider = async (args: {
   config?: Record<string, unknown> | null;
   modelAliases?: ModelAliases | null;
   modelAliasesOnly?: boolean;
+  modelInputModalities?: ModelInputModalities | null;
   requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   const instance = await aiProviders.findByPublicId({ id: args.id });
   if (!instance) return null;
   assertModelAliases(args.modelAliases);
+  assertModelInputModalities(args.modelInputModalities);
 
   applyAiProviderFields({ instance, fields: args });
   assertModelOffered({ aiProvider: instance, model: instance.defaultModel });
@@ -373,6 +396,9 @@ export const resolveAiProviderSecret = async (args: {
     publicId: instance.publicId,
     modelAliases: instance.modelAliases,
     modelAliasesOnly: instance.modelAliasesOnly,
+    modelInputModalities: readModelInputModalities(
+      instance.modelInputModalities
+    ),
     requirePricedModel: instance.requirePricedModel,
     secretValue: decryptedValue,
     aliasTargets,

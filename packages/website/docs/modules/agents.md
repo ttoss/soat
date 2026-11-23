@@ -134,12 +134,12 @@ Set when `status` is `completed`:
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `stop`        | The model produced a final response with no tool calls                                                                                                     |
 | `tool-calls`  | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named |
-| `max_steps`   | The turn spent its whole `max_steps` budget on tool calls and could not finish                                                                             |
+| `max_steps`   | The turn spent its whole `max_steps` budget: on tool calls, or, with an `output_schema`, answering on its last step ([Structured Output](#structured-output)) |
 | `depth_guard` | A nested call exceeded `max_call_depth`                                                                                                                    |
 | `chain_limit` | A [continuation chain](./chains.md) reached its generation budget and was not resumed                                                                      |
 | `error`       | The turn failed; the `error` field carries the details                                                                                                     |
 
-Other values are the provider's finish reason (`length`, `content-filter`, …) relayed unchanged; `max_steps` is platform-named because the provider reports `tool-calls` for an exhausted budget and a pause alike.
+Other values are the provider's finish reason (`length`, `content-filter`, …) relayed unchanged; `max_steps` is platform-named because the provider reports `tool-calls` for an exhausted budget and a pause alike, and `stop` for an `output_schema` agent's last step.
 
 ## Key Concepts
 
@@ -358,9 +358,9 @@ The first request under a key runs as usual. Every later request carrying it run
 
 The key is scoped to the project. Every other body field except `stream` is the request a key names: reusing a key with any of them changed, or on another agent of the project, is `409 IDEMPOTENCY_KEY_REUSED` and runs nothing. `stream` and `wait` are not compared. The key's format, the `Idempotency-Key` header and how long a key lasts are in [Idempotency](../advanced/idempotency.md).
 
-#### Tool Output Message Content
+#### Message Content
 
-`messages[].content` is a string, a `tool_output` object or a `document` object. Any other shape, an array of blocks included, is `400 VALIDATION_FAILED` before a generation is recorded.
+`messages[].content` is a string, a `tool_output` object, a `document` object, or an array of parts: `{ "type": "text", "text" }`, `{ "type": "file", "file_id" }`, `tool_output` and `document`. Any other shape is `400 VALIDATION_FAILED` before a generation is recorded.
 
 When `content.type` is `tool_output`, the server executes the referenced tool before inference and replaces the content with the extracted result (audio URL → transcription text):
 
@@ -383,6 +383,31 @@ When `content.type` is `tool_output`, the server executes the referenced tool be
 `tool_id` is required. `output_path` is an optional jq expression over the result (e.g. `.items[] | select(.lang == "pt-BR") | .text`); omitted, the whole output is used. `builtin` and `mcp` tools also take `action`.
 
 When `content.type` is `document` (`{ "type": "document", "document_id": "doc_abc123" }`), the document's content is used. The document is looked up in the project the generation runs in: one in another project answers `404 RESOURCE_NOT_FOUND`, as an unknown id does.
+
+#### File parts
+
+A `file` part sends a stored [file](./files.md) to the model in its own media type, unconverted: a PDF as a document, an image as an image, audio as audio. The file's `content_type` is the media type the model receives.
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Compare the report with the recording." },
+        { "type": "file", "file_id": "file_V1StGXR8Z5jdHi6B" },
+        { "type": "file", "file_id": "file_3ZjkQ2mPxW9vTn4R" }
+      ]
+    }
+  ]
+}
+```
+
+- The file is looked up in the project the generation runs in (another project's answers `404 RESOURCE_NOT_FOUND`) and read as the caller, who needs `files:DownloadFile` on it ([Execution Identity](#execution-identity)).
+- A `file` part is accepted only in a `user` message; elsewhere it is `400 VALIDATION_FAILED`.
+- The generation stores the reference, not the bytes: the file is read from storage each time the turn calls the model, so deleting the file fails a turn that still names it.
+- A model whose AI provider [declares its input modalities](./ai-providers.md#input-modalities) and lacks the part's (`image`, `audio`, `video`, or `file` for any other type) refuses it with `400 INPUT_MODALITY_UNSUPPORTED` before the provider is called; `meta.model` and `meta.modalities` name what was refused. A model that declares nothing is sent the part, and a provider that cannot read it answers with its own error.
+- To have the model read a file as text, [ingest](./documents.md) it and send a `document` part.
 
 ### Streaming
 
@@ -610,7 +635,11 @@ Only `memory_store_ids` set → memory-only search. Document search runs when `d
 }
 ```
 
-A completed non-streaming generation returns the parsed value as `output.object` beside `output.content`. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
+A completed non-streaming generation returns the parsed value as `output.object` beside `output.content`.
+
+#### Answering at `max_steps`
+
+The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
 
 #### The schema is enforced, not advisory
 
@@ -661,7 +690,7 @@ An agent's `run_as` states what its **`policy_ids`** are.
 | `caller` (default) | its **caller** (the user, API key or trigger that started it) capped by `policy_ids`; no `policy_ids`, no cap | the caller's own permissions for what the agent does                |
 | `agent`            | `policy_ids` alone, inside the agent's project: the agent's own grant                                         | a non-empty `policy_ids`, else `400 AGENT_RUN_AS_REQUIRES_POLICIES` |
 
-Every tool call and knowledge read of the turn is checked under this authority: every stored tool, whatever its type (each pipeline step included), as `tools:CallTool` on the tool, and a `builtin` action also at its route, `write_memory` as `memories:CreateMemory` and `memories:UpdateMemory` on its store, and the stored `knowledge_config`'s search as `knowledge:SearchKnowledge`. Under `caller`, each must be allowed by both, as for [API keys](./api-keys.md#permission-inheritance). Under `agent`, the caller needs only `agents:CreateAgentGeneration` on the agent: the agent's calls run under its own grant, so an agent can serve a caller that holds nothing else (an MCP client, a channel contact) without handing that caller what the agent needs. Work such an action starts (a task, a run, a generation) stores that grant as its [authority](./generations.md#starting-principal) and runs under it. The writer rule below keeps that grant no wider than whoever wrote it. What the caller names in the call itself — a `document` or `tool_output` message (every action a `tool_output` reaches, however named), a per-call `knowledge_config` — is checked as the caller, capped by `policy_ids` under `caller`. The generation's `acted_as` is `{ principal_type: "agent", principal_id: <agent_id> }` for a segment run under `agent`, and records are attributed to the caller's identity. The cap holds for every `builtin` call of the turn, its resumption after `submit-tool-outputs`, an [approved](./approvals.md#continuation-identity) action and every `builtin` step of a [pipeline tool](./tools.md#pipeline), nested pipelines included. It also holds for an `mcp` or `http` tool's server calling back with its project's key and the call's assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call): that request is allowed only where the key, the credential the turn runs on, the caller and `policy_ids` all allow it (under `run_as: agent`, the key and the agent's grant alone, however narrow the caller's credential). Statements across the attached policies combine as one document: any `Deny` wins.
+Every tool call and knowledge read of the turn is checked under this authority: every stored tool, whatever its type (each pipeline step included), as `tools:CallTool` on the tool, and a `builtin` action also at its route, `write_memory` as `memories:CreateMemory` and `memories:UpdateMemory` on its store, and the stored `knowledge_config`'s search as `knowledge:SearchKnowledge`. Under `caller`, each must be allowed by both, as for [API keys](./api-keys.md#permission-inheritance). Under `agent`, the caller needs only `agents:CreateAgentGeneration` on the agent: the agent's calls run under its own grant, so an agent can serve a caller that holds nothing else (an MCP client, a channel contact) without handing that caller what the agent needs. Work such an action starts (a task, a run, a generation) stores that grant as its [authority](./generations.md#starting-principal) and runs under it. The writer rule below keeps that grant no wider than whoever wrote it. What the caller names in the call itself — a `document`, `file` or `tool_output` message (every action a `tool_output` reaches, however named), a per-call `knowledge_config` — is checked as the caller, capped by `policy_ids` under `caller`. The generation's `acted_as` is `{ principal_type: "agent", principal_id: <agent_id> }` for a segment run under `agent`, and records are attributed to the caller's identity. The cap holds for every `builtin` call of the turn, its resumption after `submit-tool-outputs`, an [approved](./approvals.md#continuation-identity) action and every `builtin` step of a [pipeline tool](./tools.md#pipeline), nested pipelines included. It also holds for an `mcp` or `http` tool's server calling back with its project's key and the call's assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call): that request is allowed only where the key, the credential the turn runs on, the caller and `policy_ids` all allow it (under `run_as: agent`, the key and the agent's grant alone, however narrow the caller's credential). Statements across the attached policies combine as one document: any `Deny` wins.
 
 **Starting a generation.** Every generation, whatever starts it, is checked before anything is recorded, under the authority the work runs under: `agents:CreateAgentGeneration` on the agent in the project the turn runs in (a [session](./sessions.md)'s turn: `agents:SendSessionMessage` on the session). Work a request starts under a resource's `policy_ids` (an eval, a decider, an ingestion or memory rule, a trigger, a playbook version) runs under that grant capped by the request, so both must allow it. A refused start is `403 FORBIDDEN`, and the run, firing or execution that started it fails.
 

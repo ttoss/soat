@@ -82,6 +82,13 @@ export class Tool extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare presetParameters: object | null;
 
+  // `builtin` only: action name → presets overriding `presetParameters` per key.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare presetParametersByAction: Record<
+    string,
+    Record<string, unknown>
+  > | null;
+
   @Column({ type: DataType.JSON, allowNull: true })
   declare pipeline: object | null;
 
