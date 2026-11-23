@@ -95,7 +95,7 @@ const blockedResult = (args: {
 }): NodeExecutionResult => {
   const reason = BLOCK_REASON[args.label];
   return {
-    kind: 'blocked',
+    kind: 'routed',
     nodeId: args.node.id,
     label: args.label,
     artifact: { status: args.label, reason },

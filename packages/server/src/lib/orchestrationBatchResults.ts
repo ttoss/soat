@@ -68,7 +68,7 @@ const recordCompletedNode = (args: {
   nodeDefn: OrchestrationNode;
   execResult: Extract<
     NodeExecutionResult,
-    { kind: 'artifact' | 'condition' | 'blocked' }
+    { kind: 'artifact' | 'condition' | 'routed' }
   >;
   artifacts: Record<string, unknown>;
   conditionLabels: Map<string, string>;
@@ -81,10 +81,10 @@ const recordCompletedNode = (args: {
     writeNodeArtifact({ nodeId, artifact: { label: execResult.label }, state });
     return;
   }
-  if (execResult.kind === 'blocked') {
-    // The seeded branch label is what lets `blocked`/`tripwire` edges route.
-    // Treated as a decision node at advance time, so unlabeled happy-path edges
-    // do not follow.
+  if (execResult.kind === 'routed') {
+    // The seeded branch label is what lets `blocked`/`tripwire`/`error` edges
+    // route. Treated as a decision node at advance time, so unlabeled
+    // happy-path edges do not follow.
     conditionLabels.set(nodeId, execResult.label);
     artifacts[nodeId] = execResult.artifact;
     writeNodeArtifact({ nodeId, artifact: execResult.artifact, state });
@@ -96,14 +96,14 @@ const recordCompletedNode = (args: {
   applyStateMapping(nodeDefn.stateMapping, execResult.artifact, state);
 };
 
-// A guardrail-`blocked` tool node advances as a decision node, so its unlabeled
-// happy-path edge never auto-follows.
+// A routed node (guardrail-blocked, or failed onto an error edge) advances as a
+// decision node, so its unlabeled happy-path edge never auto-follows.
 const settleCompletedNode = (args: {
   nodeId: string;
   nodeDefn: OrchestrationNode;
   execResult: Extract<
     NodeExecutionResult,
-    { kind: 'artifact' | 'condition' | 'blocked' }
+    { kind: 'artifact' | 'condition' | 'routed' }
   >;
   artifacts: Record<string, unknown>;
   conditionLabels: Map<string, string>;
@@ -132,7 +132,7 @@ const settleCompletedNode = (args: {
     activatedNodes: args.activatedNodes,
     nextRound: args.nextRound,
     decisionNodeIds:
-      args.execResult.kind === 'blocked' ? new Set([args.nodeId]) : undefined,
+      args.execResult.kind === 'routed' ? new Set([args.nodeId]) : undefined,
   });
 };
 

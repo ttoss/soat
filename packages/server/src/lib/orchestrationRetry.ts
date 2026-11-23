@@ -1,7 +1,14 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import type { OrchestrationNode, RetryBackoffStrategy } from './orchestrations';
+import { errorLabel, hasErrorRoute } from './orchestrationGraph';
+import type { NodeExecutionResult } from './orchestrationNodeTypes';
+import type {
+  OrchestrationEdge,
+  OrchestrationNode,
+  RetryBackoffStrategy,
+} from './orchestrations';
+import type { StoredError } from './storedError';
 
 const log = createDebug('soat:orchestrations');
 
@@ -98,4 +105,39 @@ export const backoffMs = (args: {
     delay
   );
   return delay;
+};
+
+/**
+ * What a failed node does next: a retry `wait` while the error is transient
+ * and attempts remain; else a `routed` result along an `error` /
+ * `error:<CODE>` edge leaving the node; else `null`, which fails the run.
+ */
+export const nextAfterFailure = (args: {
+  error: unknown;
+  stored: StoredError;
+  nodeId: string;
+  nodeDefn: OrchestrationNode | undefined;
+  attempt: number;
+  edges: OrchestrationEdge[];
+}): Extract<NodeExecutionResult, { kind: 'wait' | 'routed' }> | null => {
+  const { nodeId, nodeDefn, attempt } = args;
+  if (!nodeDefn) return null;
+  const policy = resolveRetryPolicy(nodeDefn);
+  if (isRetriableError(args.error) && attempt < policy.maxAttempts) {
+    log(
+      'nextAfterFailure: retrying node=%s attempt=%d/%d',
+      nodeId,
+      attempt,
+      policy.maxAttempts
+    );
+    return {
+      kind: 'wait',
+      nodeId,
+      resumeInMs: backoffMs({ policy, attempt }),
+      resume: { kind: 'retry', attempt: attempt + 1 },
+    };
+  }
+  const label = errorLabel(args.stored.code);
+  if (!hasErrorRoute({ nodeId, label, edges: args.edges })) return null;
+  return { kind: 'routed', nodeId, label, artifact: { error: args.stored } };
 };

@@ -1,6 +1,10 @@
 import createDebug from 'debug';
 
-import { cyclesExcludingLoopNodes, describeCycles } from './orchestrationGraph';
+import {
+  cyclesExcludingLoopNodes,
+  describeCycles,
+  errorConditionCode,
+} from './orchestrationGraph';
 import {
   buildPredecessors,
   computeDominators,
@@ -18,6 +22,7 @@ import {
 } from './orchestrationNodesNamespace';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 import { collectVarRefs } from './orchestrationVarRefs';
+import { isErrorCode } from './storedError';
 import { assertValidToolContextAllowlist } from './toolContext';
 import { throwValidationProblems } from './validationProblems';
 
@@ -113,6 +118,15 @@ const checkEdges = (args: {
         code: 'UNKNOWN_NODE',
         path: `edges[${index}].to`,
         message: `Edge references unknown node '${edge.to}'.`,
+      });
+    }
+    const code =
+      edge.condition === undefined ? null : errorConditionCode(edge.condition);
+    if (code !== null && !isErrorCode(code)) {
+      errors.push({
+        code: 'UNKNOWN_ERROR_CODE',
+        path: `edges[${index}].condition`,
+        message: `Edge condition names unknown error code '${code}'.`,
       });
     }
   }
