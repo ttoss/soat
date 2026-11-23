@@ -342,3 +342,104 @@ describe('PUT /api/v1/formations/:formation_id — a deploy that fails after an 
     );
   });
 });
+
+describe('PUT /api/v1/formations/:formation_id — a rolled-back update of a write-only property', () => {
+  const declaring = (config: unknown) => {
+    return {
+      resources: {
+        Chan: {
+          type: 'test_channel',
+          properties: { name: 'A', kind: 'k', config },
+        },
+      },
+    };
+  };
+
+  beforeEach(() => {
+    unregisterFormationResourceTypes({ names: ['test_channel'] });
+    registerFormationResourceTypes({
+      registrations: [
+        handler.registration({ writeOnlyProperties: ['config'] }),
+      ],
+    });
+  });
+
+  const failUpdate = async (formationId: string, body: object) => {
+    handler.recorded.length = 0;
+    handler.replies.create = {
+      status: 422,
+      body: { message: 'broken refused' },
+    };
+    handler.replies.update = echoUpdate;
+    const res = await authenticatedTestClient(userToken)
+      .put(`/api/v1/formations/${formationId}`)
+      .send(body);
+    expect(res.body.status).toBe('failed');
+  };
+
+  test('the restore re-sends the value the last deploy declared', async () => {
+    handler.replies.create = {
+      status: 200,
+      body: { physical_resource_id: 'chn_w' },
+    };
+    const created = await createFormation(declaring({ token: 'v1' }));
+    expect(created.body.status).toBe('active');
+
+    await failUpdate(created.body.id, {
+      template: failingAfter({ name: 'A', kind: 'k', config: { token: 'v2' } }),
+    });
+
+    const sent = handler.recorded
+      .filter((request) => {
+        return request.body.request_type === 'update';
+      })
+      .map((request) => {
+        return request.body.properties;
+      });
+    expect(sent).toEqual([
+      { name: 'A', kind: 'k', config: { token: 'v2' } },
+      { name: 'A', kind: 'k', config: { token: 'v1' } },
+    ]);
+
+    handler.recorded.length = 0;
+    const redeployed = await updateFormation(
+      created.body.id,
+      declaring({ token: 'v1' })
+    );
+    expect(redeployed.body.status).toBe('active');
+    expect(writeRequests()).toEqual([]);
+  });
+
+  test('a value the restore cannot resolve is re-sent by the next deploy', async () => {
+    const parameters = { Token: { type: 'string', no_echo: true } };
+    const masked = { parameters, ...declaring({ token: { param: 'Token' } }) };
+    handler.replies.create = {
+      status: 200,
+      body: { physical_resource_id: 'chn_m' },
+    };
+    const created = await authenticatedTestClient(userToken)
+      .post('/api/v1/formations')
+      .send({
+        project_id: projectId,
+        name: 'rollback-updates-masked',
+        template: masked,
+        parameters: { Token: 'v1' },
+      });
+    expect(created.body.status).toBe('active');
+
+    await failUpdate(created.body.id, {
+      template: {
+        parameters,
+        ...failingAfter({ name: 'A', kind: 'k', config: { token: 'v2' } }),
+      },
+    });
+
+    handler.recorded.length = 0;
+    handler.replies.update = echoUpdate;
+    const redeployed = await authenticatedTestClient(userToken)
+      .put(`/api/v1/formations/${String(created.body.id)}`)
+      .send({ template: masked, parameters: { Token: 'v1' } });
+    expect(redeployed.body.status).toBe('active');
+    expect(writeRequests()).toEqual(['update:Chan:chn_m']);
+  });
+});
