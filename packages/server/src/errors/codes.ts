@@ -986,6 +986,11 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description: 'A closed task cannot gain a dependency.',
   },
+  TASK_GRAPH_TOO_LARGE: {
+    httpStatus: 422,
+    description:
+      'The task graph the filters select holds more tasks than one answer carries; a graph is never truncated. `meta.count` is how many it holds and `meta.limit` the ceiling, `TASK_GRAPH_LIMIT` (default 500).',
+  },
   TASK_MIGRATION_CONFLICT: {
     httpStatus: 409,
     description:

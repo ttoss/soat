@@ -26,8 +26,8 @@ paths:
     get:
       description: >-
         Lists tasks (the board query). Filter by workflow, state, status,
-        automation status, priority, assignee, or `metadata` — `GET
-        /tasks?workflow_id=...&state=...` is one board column.
+        automation status, priority, assignee, `upstream_of` or `metadata` —
+        `GET /tasks?workflow_id=...&state=...` is one board column.
       tags:
         - Tasks
       summary: List tasks
@@ -35,11 +35,7 @@ paths:
       x-iam-action: tasks:ListTasks
       x-iam-resource-type: task
       parameters:
-        - name: project_id
-          in: query
-          required: false
-          schema:
-            type: string
+        - $ref: '#/components/parameters/TaskListProjectId'
         - name: workflow_id
           in: query
           required: false
@@ -52,88 +48,13 @@ paths:
             another workflow.
           schema:
             type: string
-        - name: state
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: status
-          in: query
-          required: false
-          description: >-
-            Filter by whether the task is open or closed. Repeat the parameter
-            to OR values. A value outside the enum, empty string included, is a
-            `400`.
-          schema:
-            type: array
-            items:
-              type: string
-              enum: [open, closed]
-          style: form
-          explode: true
-        - name: automation_status
-          in: query
-          required: false
-          description: >-
-            Filter by the current state's dispatch status. Repeat the parameter
-            to OR values. `none` selects the tasks whose `automation_status` is
-            `null` — the ones that never entered a state with an automation. It
-            is a value a task really holds, so it is a value of the filter too;
-            the parameter's own absence already means "every task".
-
-
-            A value outside the enum, empty string included, is a `400`.
-          schema:
-            type: array
-            items:
-              type: string
-              enum:
-                - running
-                - completed
-                - failed
-                - unrouted
-                - paused
-                - none
-          style: form
-          explode: true
-          example:
-            - running
-        - name: priority
-          in: query
-          required: false
-          description: >-
-            Filter by priority. Repeat the parameter to OR values. `none`
-            selects the tasks nobody prioritised (`priority: null`). A value
-            outside the enum, empty string included, is a `400`.
-          schema:
-            type: array
-            items:
-              type: string
-              enum:
-                - very_high
-                - high
-                - medium
-                - low
-                - very_low
-                - none
-          style: form
-          explode: true
-          example:
-            - high
-        - name: assignee
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: blocked
-          in: query
-          required: false
-          description: >-
-            `true` lists only the tasks with an open dependency
-            (`readiness.blocked`), `false` only the rest.
-          schema:
-            type: string
-            enum: ['true', 'false']
+        - $ref: '#/components/parameters/TaskStateFilter'
+        - $ref: '#/components/parameters/TaskStatusFilter'
+        - $ref: '#/components/parameters/TaskAutomationStatusFilter'
+        - $ref: '#/components/parameters/TaskPriorityFilter'
+        - $ref: '#/components/parameters/TaskAssigneeFilter'
+        - $ref: '#/components/parameters/TaskBlockedFilter'
+        - $ref: '#/components/parameters/TaskUpstreamOf'
         - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
         - name: order
           in: query
@@ -269,6 +190,67 @@ paths:
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
+  /api/v1/tasks/graph:
+    get:
+      description: >-
+        A summary of each task `GET /tasks` selects with the same filters, as
+        `data.nodes`, and the dependencies between them, as `data.edges`: one
+        read draws a list, a graph or a tree. `upstream_of` answers what leads to one task. Answered
+        whole, never paged: above `TASK_GRAPH_LIMIT` tasks it is refused with
+        `TASK_GRAPH_TOO_LARGE`.
+      tags:
+        - Tasks
+      summary: Get a task graph
+      operationId: getTaskGraph
+      x-iam-action: tasks:ListTasks
+      x-iam-resource-type: task
+      parameters:
+        - $ref: '#/components/parameters/TaskListProjectId'
+        - name: workflow_id
+          in: query
+          required: false
+          description: Only the tasks of this workflow.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/TaskStateFilter'
+        - $ref: '#/components/parameters/TaskStatusFilter'
+        - $ref: '#/components/parameters/TaskAutomationStatusFilter'
+        - $ref: '#/components/parameters/TaskPriorityFilter'
+        - $ref: '#/components/parameters/TaskAssigneeFilter'
+        - $ref: '#/components/parameters/TaskBlockedFilter'
+        - $ref: '#/components/parameters/TaskUpstreamOf'
+        - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
+      responses:
+        '200':
+          description: The selected tasks and the dependencies between them
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskGraph'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '422':
+          description: The graph holds more than `TASK_GRAPH_LIMIT` tasks (`TASK_GRAPH_TOO_LARGE`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
   /api/v1/tasks/{task_id}:
     get:
       description: Retrieves a task, including its active dispatch and automation status.
@@ -1188,6 +1170,116 @@ paths:
           $ref: './errors.yaml#/components/responses/InternalError'
 components:
   parameters:
+    TaskListProjectId:
+      name: project_id
+      in: query
+      required: false
+      description: >-
+        Only the tasks of this project. Omitted, every project the caller
+        reads.
+      schema:
+        type: string
+    TaskStateFilter:
+      name: state
+      in: query
+      required: false
+      description: Only the tasks in this workflow state.
+      schema:
+        type: string
+    TaskStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: >-
+        Filter by whether the task is open or closed. Repeat the parameter
+        to OR values. A value outside the enum, empty string included, is a
+        `400`.
+      schema:
+        type: array
+        items:
+          type: string
+          enum: [open, closed]
+      style: form
+      explode: true
+    TaskAutomationStatusFilter:
+      name: automation_status
+      in: query
+      required: false
+      description: >-
+        Filter by the current state's dispatch status. Repeat the parameter
+        to OR values. `none` selects the tasks whose `automation_status` is
+        `null` — the ones that never entered a state with an automation. It
+        is a value a task really holds, so it is a value of the filter too;
+        the parameter's own absence already means "every task".
+
+
+        A value outside the enum, empty string included, is a `400`.
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - running
+            - completed
+            - failed
+            - unrouted
+            - paused
+            - none
+      style: form
+      explode: true
+      example:
+        - running
+    TaskPriorityFilter:
+      name: priority
+      in: query
+      required: false
+      description: >-
+        Filter by priority. Repeat the parameter to OR values. `none`
+        selects the tasks nobody prioritised (`priority: null`). A value
+        outside the enum, empty string included, is a `400`.
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - very_high
+            - high
+            - medium
+            - low
+            - very_low
+            - none
+      style: form
+      explode: true
+      example:
+        - high
+    TaskAssigneeFilter:
+      name: assignee
+      in: query
+      required: false
+      description: Only the tasks assigned to this value.
+      schema:
+        type: string
+    TaskBlockedFilter:
+      name: blocked
+      in: query
+      required: false
+      description: >-
+        `true` lists only the tasks with an open dependency
+        (`readiness.blocked`), `false` only the rest.
+      schema:
+        type: string
+        enum: ['true', 'false']
+    TaskUpstreamOf:
+      name: upstream_of
+      in: query
+      required: false
+      description: >-
+        Only the tasks this task depends on, directly or through others, closed
+        ones included; never the task itself. An unknown id selects nothing.
+        With `blocked=false&order=next` it pulls the next task toward it.
+      schema:
+        type: string
+        example: task_V1StGXR8Z5jdHi6B
     WorkflowPin:
       name: workflow_id
       in: query
@@ -1407,6 +1499,69 @@ components:
         created_at:
           type: string
           format: date-time
+    TaskGraph:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [nodes, edges]
+          properties:
+            nodes:
+              type: array
+              description: >-
+                A summary of each task the filters select, newest first; the
+                whole task is `GET /tasks/{task_id}`.
+              items:
+                $ref: '#/components/schemas/TaskGraphNode'
+            edges:
+              type: array
+              description: >-
+                Every dependency between two of `nodes`; one to a task the
+                filters leave out is not answered.
+              items:
+                type: object
+                required: [task_id, depends_on_task_id]
+                properties:
+                  task_id:
+                    type: string
+                    description: The task that waits.
+                  depends_on_task_id:
+                    type: string
+                    description: The task it waits on.
+                  note:
+                    type: string
+                    nullable: true
+                    description: The note the dependency was added with.
+    TaskGraphNode:
+      type: object
+      required: [id, title, state, status, priority, blocked]
+      properties:
+        id:
+          type: string
+          example: task_V1StGXR8Z5jdHi6B
+        title:
+          type: string
+          description: The task's title.
+        state:
+          type: string
+          description: Its current workflow state.
+        status:
+          type: string
+          enum: [open, closed]
+          description: Whether the task is open or closed.
+        priority:
+          type: string
+          nullable: true
+          enum: [very_high, high, medium, low, very_low, null]
+          description: The priority a person set; `null` when nobody did.
+        blocked:
+          type: boolean
+          description: Whether an open dependency holds it (`readiness.blocked`).
+        metadata:
+          description: The caller-owned metadata the task was created with.
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
     TaskReadiness:
       type: object
       description: >-

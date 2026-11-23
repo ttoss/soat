@@ -191,6 +191,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Name a task of the same project in `depends_on_task_id`.',
   TASK_DEPENDENCY_CLOSED:
     'Add the dependency to an open task; a closed task waits on nothing.',
+  TASK_GRAPH_TOO_LARGE:
+    'Narrow the graph with `upstream_of`, `status=open`, `workflow_id` or `metadata`, or page through {{GET /tasks}} with the same filters.',
   TASK_MIGRATION_CONFLICT:
     'Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.',
   VERSION_CONFLICT:

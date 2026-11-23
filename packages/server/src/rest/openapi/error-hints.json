@@ -1131,6 +1131,16 @@
       "hint": "Name a task of the same project in `depends_on_task_id`.",
       "routes": []
     },
+    "TASK_GRAPH_TOO_LARGE": {
+      "http_status": 422,
+      "hint": "Narrow the graph with `upstream_of`, `status=open`, `workflow_id` or `metadata`, or page through GET /api/v1/tasks with the same filters.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/tasks"
+        }
+      ]
+    },
     "TASK_GUARD_REJECTED": {
       "http_status": 400,
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
