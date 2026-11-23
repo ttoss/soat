@@ -73,12 +73,15 @@ const apiCallDomainError = (error: APICallError): DomainError => {
     ? `Provider returned ${statusCode}: ${error.message}`
     : `Provider request failed: ${error.message}`;
 
-  return new DomainError('AI_PROVIDER_ERROR', message, {
+  const mapped = new DomainError('AI_PROVIDER_ERROR', message, {
     ...(statusCode !== undefined && { provider_status_code: statusCode }),
     ...(error.responseBody !== undefined && {
       provider_response_body: error.responseBody,
     }),
   });
+  // Kept so a conversation turn's failure can be classified (`replayRefusal`).
+  mapped.cause = error;
+  return mapped;
 };
 
 /**

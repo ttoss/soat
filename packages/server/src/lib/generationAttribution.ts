@@ -248,12 +248,13 @@ export const attributionColumns = (args: GenerationAttribution) => {
 };
 
 /**
- * The conversation a turn answers: its public id, the `position` of the last
- * message the turn read, which is where its reply is stored after, and the
+ * The conversation a turn answers: its public id, the `position` of the first
+ * and last message the turn read (its reply is stored after the last), and the
  * provenance counts the messages it is sent carry.
  */
 export type GenerationConversation = {
   id: string;
+  firstPosition: number;
   snapshotPosition: number;
   replayed: ProvenanceCounts;
 };

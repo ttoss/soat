@@ -377,6 +377,7 @@ describe('Generations', () => {
         traceId: 'trc_conv_edge',
         conversation: {
           id: conversation.body.id,
+          firstPosition: -1,
           snapshotPosition: -1,
           replayed: NO_PROVENANCE,
         },

@@ -69,6 +69,11 @@ export const ERROR_CODES = {
     description:
       'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable).',
   },
+  REPLAY_REFUSED: {
+    httpStatus: 502,
+    description:
+      'The AI provider refused a turn that replays a conversation. `meta.cause` classifies it from the provider status (`history_refused`, `context_too_long`, `request_refused`) and `meta.replayed_window` names the first and last conversation `position` the turn sent. The provider text is not relayed.',
+  },
   GENERATION_FAILED: {
     httpStatus: 500,
     description:
