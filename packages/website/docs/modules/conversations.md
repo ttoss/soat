@@ -159,7 +159,7 @@ By default the call runs in the background and returns `202 Accepted` once the t
 
 A conversation with no message to answer is refused with `400 NO_MESSAGE_TO_ANSWER` before any generation is recorded, in either mode.
 
-A generated reply keeps the turn's tool calls, tool results and reasoning, and the next turn replays them as model input. The [vendor options](./generations.md#vendor-options) that replay needs are stored beside the message and never served.
+A generated reply keeps the turn's tool calls, tool results and reasoning, and the next turn replays its text, tool calls and tool results as model input, but not its reasoning. The [vendor options](./generations.md#vendor-options) that replay needs are stored beside the message and never served.
 
 `?wait=true` blocks and returns the result inline; it is required to observe `requires_action` (client tools). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract.
 

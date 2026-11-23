@@ -82,28 +82,54 @@ const withOptions = (
   return { ...value, providerOptions: options };
 };
 
-/** The messages a model call is built from: `vendorOptions` back in place. */
-export const joinVendorOptions = (args: {
+const isReasoningPart = (part: unknown): boolean => {
+  return (
+    isRecord(part) &&
+    typeof part.type === 'string' &&
+    part.type.startsWith('reasoning')
+  );
+};
+
+const joinMessage = (args: { raw: unknown; own: VendorOptions }): unknown => {
+  const onMessage = args.own.find((entry) => {
+    return entry.part === undefined;
+  });
+  const joined = withOptions(args.raw, onMessage?.options);
+  if (!isRecord(joined) || !Array.isArray(joined.content)) return joined;
+  const content = joined.content.map((rawPart: unknown, part) => {
+    const onPart = args.own.find((entry) => {
+      return entry.part === part;
+    });
+    return withOptions(rawPart, onPart?.options);
+  });
+  return { ...joined, content };
+};
+
+/**
+ * The messages a model call is built from a stored, finished turn:
+ * `vendorOptions` back in place, except on a message that carried reasoning.
+ * A vendor binds reasoning, and the item ids paired with it, to the prompt it
+ * was issued under, which an agent edit changes; no vendor needs a finished
+ * turn's reasoning, so that message replays as its content alone.
+ */
+export const replayStoredTurn = (args: {
   messages: readonly unknown[];
   vendorOptions: VendorOptions;
 }): unknown[] => {
-  if (args.vendorOptions.length === 0) return [...args.messages];
-  return args.messages.map((raw, message) => {
+  return args.messages.flatMap((raw, message) => {
+    if (
+      isRecord(raw) &&
+      Array.isArray(raw.content) &&
+      raw.content.some(isReasoningPart)
+    ) {
+      const content = raw.content.filter((part: unknown) => {
+        return !isReasoningPart(part);
+      });
+      return content.length === 0 ? [] : [{ ...raw, content }];
+    }
     const own = args.vendorOptions.filter((entry) => {
       return entry.message === message;
     });
-    if (own.length === 0) return raw;
-    const onMessage = own.find((entry) => {
-      return entry.part === undefined;
-    });
-    const joined = withOptions(raw, onMessage?.options);
-    if (!isRecord(joined) || !Array.isArray(joined.content)) return joined;
-    const content = joined.content.map((rawPart: unknown, part) => {
-      const onPart = own.find((entry) => {
-        return entry.part === part;
-      });
-      return withOptions(rawPart, onPart?.options);
-    });
-    return { ...joined, content };
+    return [own.length === 0 ? raw : joinMessage({ raw, own })];
   });
 };
