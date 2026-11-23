@@ -95,6 +95,10 @@ export class ConversationMessage extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
+  /** Public ids of the files a user turn sends the model natively, in order. */
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare fileIds: string[] | null;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'idempotency_key' })
   declare idempotencyKey: string | null;
 

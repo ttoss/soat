@@ -10,20 +10,23 @@ import { resolveMessageContent } from './messageContent';
 import type { WorkAuthority } from './workAuthority';
 import { captureAuthority } from './workAuthority';
 
+/** A session turn is text, files, both, or one document: never document and more. */
 export const assertSessionMessageInput = (args: {
   message?: string;
   documentId?: string;
+  fileIds?: string[];
 }) => {
-  if (!args.message && !args.documentId) {
+  const hasFiles = (args.fileIds?.length ?? 0) > 0;
+  if (!args.message && !args.documentId && !hasFiles) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'either message or documentId is required'
+      'one of message, file_ids or document_id is required'
     );
   }
-  if (args.message && args.documentId) {
+  if (args.documentId && (args.message || hasFiles)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'message and documentId are mutually exclusive'
+      'document_id is mutually exclusive with message and file_ids'
     );
   }
 };
@@ -34,6 +37,7 @@ export const addResolvedSessionUserMessage = async (args: {
   actorId?: string | null;
   message?: string;
   documentId?: string;
+  fileIds?: string[];
   authUser?: AuthUser;
   idempotencyKey?: string;
   idempotencyDigest?: string;
@@ -62,6 +66,13 @@ export const addResolvedSessionUserMessage = async (args: {
         conversationId: args.conversationId,
         message: resolvedContent.content,
         role: 'user',
+        files: args.fileIds?.length
+          ? {
+              ids: args.fileIds,
+              authority: captureAuthority({ authUser: args.authUser }),
+              authUser: args.authUser,
+            }
+          : undefined,
         actorId: args.actorId ?? null,
         idempotencyKey: args.idempotencyKey,
         idempotencyDigest: args.idempotencyDigest,

@@ -153,6 +153,7 @@ const copyMessagesIntoFork = async (args: {
         agentId: message.agentId ?? null,
         position: message.position,
         metadata: message.metadata ?? null,
+        fileIds: message.fileIds ?? null,
         responseMessages: message.responseMessages ?? null,
         vendorOptions: message.vendorOptions ?? null,
         ...provenanceColumns(storedProvenance(message)),

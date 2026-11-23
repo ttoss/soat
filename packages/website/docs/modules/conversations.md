@@ -50,6 +50,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
 | `metadata`    | object | Caller-owned annotations on the message (e.g. `phone`, `channel`), stored as sent. Never read by the platform and never part of the model's input — see [Tags and metadata](iam.md#tags-and-metadata) |
 | `content`     | string         | Full text content of the message (read from the underlying document)                                                       |
+| `file_ids`    | string[]       | Files a `user` turn sends the model natively, in order; `[]` when none (see [Files in a turn](#files-in-a-turn)) |
 | `idempotency_key` | string \| null | The idempotency key the message was posted with ([session messages](./sessions.md) take one); `null` when none was sent. A channel that posts each inbound message under its provider's message id finds that message's row by this key |
 
 The pair `(conversation_id, position)` is uniquely indexed. See [Message ordering](#message-ordering) for insertion semantics.
@@ -71,6 +72,14 @@ Listed messages carry the document's full `content`, `role`, `actor_id`, `idempo
 Removing a message also deletes its Document and File, and deleting a conversation deletes every turn it holds. A document a [forked session](./sessions.md#forking) still references stays until the last message referencing it goes.
 
 Each message emits a [webhook event](./webhooks.md) named by its `document_id`: `conversation_messages.created` when added, `conversation_messages.generated` when an agent's reply is saved, and `conversation_messages.deleted` when removed. `data` is the message as [listed](/docs/api/conversations/list-conversation-messages), with `conversation_id` beside it; a generated reply adds `generation_id` and `trace_id`, and a deletion carries the message as it stood.
+
+### Files in a turn
+
+A `user` message added with `file_ids` sends each [file](./files.md) to the model in its own media type whenever the turn is replayed into a generation, after the message's text, as an agent's [`file` part](./agents.md#file-parts) does.
+
+- Each file must be in the conversation's project (another project's answers `404 RESOURCE_NOT_FOUND`), and the writer needs `files:DownloadFile` on it.
+- `file_ids` on an `assistant` message is `400 VALIDATION_FAILED`.
+- The message stores the ids, not the bytes. A generation reads each file as its caller, and a model whose provider [declares](./ai-providers.md#input-modalities) it cannot read one refuses the turn with `400 INPUT_MODALITY_UNSUPPORTED`.
 
 ### Retrieval
 
