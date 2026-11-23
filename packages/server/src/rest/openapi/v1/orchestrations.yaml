@@ -1358,9 +1358,10 @@ components:
             (https://jsonlogic.com), the same evaluator used by transform and
             condition nodes. A single-key object is evaluated against the run
             state — `{"var": "key"}` reads `state.key`, `{"cat": [...]}` and
-            `{">": [...]}` compute derived values. Any other value (string,
-            number, boolean, array, multi-key object) is passed through as a
-            literal.
+            `{">": [...]}` compute derived values. A string, number or boolean
+            is a literal. Any other object or array is evaluated key by key
+            (item by item for an array) at any depth; keys are copied as
+            written, so a dotted key such as `post.fields` stays one key.
             On a `sub_orchestration` node the result is the child run's input.
             On a `loop` node it is added to each child's input beside
             `{ <item_variable>: <item> }`, evaluated against the run state with
