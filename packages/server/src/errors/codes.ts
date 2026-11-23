@@ -1019,7 +1019,7 @@ export const ERROR_CODES = {
   QUERY_TIMEOUT: {
     httpStatus: 422,
     description:
-      'A collection item listing ran past its statement timeout (`COLLECTION_QUERY_TIMEOUT_MS`, five seconds by default) and was cancelled. Equality and `in` on `?data=` and `?tags=` are answered by an index; a range is evaluated row by row. `meta.timeout_ms` is the limit that applied.',
+      'A query ran past its statement timeout and was cancelled: a collection item listing (`COLLECTION_QUERY_TIMEOUT_MS`, five seconds by default), or a knowledge or memory search (`KNOWLEDGE_QUERY_TIMEOUT_MS`, thirty seconds by default). On a collection, equality and `in` on `?data=` and `?tags=` are answered by an index; a range is evaluated row by row. `meta.timeout_ms` is the limit that applied.',
   },
   CONVERSATION_POSITION_CONFLICT: {
     httpStatus: 409,

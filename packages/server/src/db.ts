@@ -67,8 +67,8 @@ export const syncSchemaWithAdvisoryLock = async (args: {
 
 /**
  * Connections one hybrid knowledge search holds at once: a vector and a lexical
- * query over each of the two stores, run in parallel, two of them inside their
- * own `SET LOCAL` transaction (`withIterativeVectorScan`).
+ * query over each of the two stores, run in parallel, each inside its own
+ * `SET LOCAL` transaction (`withBoundedSearch`).
  */
 export const CONNECTIONS_PER_HYBRID_SEARCH = 4;
 

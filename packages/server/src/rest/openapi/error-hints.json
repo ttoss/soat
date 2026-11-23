@@ -954,7 +954,7 @@
     },
     "QUERY_TIMEOUT": {
       "http_status": 422,
-      "hint": "Add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on, or lower `limit`. Retrying the same query times out again.",
+      "hint": "Narrow the query: on a collection listing, add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on; on a search, scope it with `document_paths`, `memory_store_ids` or `tags`. Or lower `limit`. Retrying the same query times out again.",
       "routes": []
     },
     "QUEUE_DRIVER_MISCONFIGURED": {
