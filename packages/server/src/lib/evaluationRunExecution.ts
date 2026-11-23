@@ -108,7 +108,7 @@ const notCompleted = (generation: GenerationResult): StoredError => {
 };
 
 /** The scorer's own failure, named as one: the generation itself succeeded. */
-const scoringFailure = (error: unknown): StoredError => {
+export const scoringFailure = (error: unknown): StoredError => {
   const failure = toStoredErrorKeepingMessage({
     error,
     code: 'EVAL_SCORING_FAILED',

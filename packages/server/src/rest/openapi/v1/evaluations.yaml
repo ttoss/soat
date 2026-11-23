@@ -1402,9 +1402,10 @@ paths:
         - name: eval_id
           in: path
           required: true
+          description: Eval ID
           schema:
             type: string
-          example: eval_V1StGXR8Z5jdHi6B
+            example: eval_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: The probes' report
@@ -1412,6 +1413,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProbeReport'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
         '401':
           description: Unauthorized
           content:
@@ -2408,8 +2411,9 @@ components:
           items:
             $ref: '#/components/schemas/ScorerResult'
         error:
-          type: string
           description: Why the scorers could not grade it; such a probe does not hold
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
     Claim:
       type: object
       nullable: true

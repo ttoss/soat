@@ -10,9 +10,11 @@
  */
 import createDebug from 'debug';
 
+import { scoringFailure } from './evaluationRunExecution';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
 import { scorerOutcomeKey } from './evaluationScorerValidation';
 import { isPlainObject } from './plainObject';
+import type { StoredError } from './storedError';
 
 const log = createDebug('soat:evaluations');
 
@@ -26,7 +28,7 @@ export type ProbeResult = {
   held: boolean;
   scores: ScorerOutcome[];
   /** Why the scorers could not grade it; the probe does not hold then. */
-  error?: string;
+  error?: StoredError;
 };
 
 export type ProbeReport = { passed: boolean; probes: ProbeResult[] };
@@ -124,7 +126,7 @@ const runProbe = async (args: {
       passed: false,
       held: false,
       scores: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: scoringFailure(error),
     };
   }
 };
