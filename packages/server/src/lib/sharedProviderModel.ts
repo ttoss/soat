@@ -3,6 +3,7 @@ import { APICallError } from 'ai';
 import createDebug from 'debug';
 
 import { isFetchFailure } from './providerError';
+import { carriedCause } from './replayRefusal';
 import { admitSharedCall } from './shareCaps';
 
 const log = createDebug('soat:shares');
@@ -11,8 +12,9 @@ const SHARED_FAILURE = 'The shared AI provider failed to answer.';
 
 /**
  * The vendor's status and body belong to the publisher, whose credential and
- * endpoint they describe: the grantee gets a retryable-or-not failure only, and
- * the detail goes to the runtime's error log.
+ * endpoint they describe: the grantee gets a retryable-or-not failure and the
+ * refusal's classified cause only, and the detail goes to the runtime's error
+ * log.
  */
 const withheld = (args: {
   error: unknown;
@@ -30,6 +32,7 @@ const withheld = (args: {
     message: SHARED_FAILURE,
     url: '',
     requestBodyValues: {},
+    data: carriedCause(args.error),
     isRetryable: APICallError.isInstance(args.error)
       ? args.error.isRetryable
       : true,

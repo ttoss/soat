@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.127.0](https://github.com/ttoss/soat/compare/v0.126.1...v0.127.0) (2026-11-23)
+
+### Bug Fixes
+
+* **agents:** an output_schema agent answers on its last allowed step ([#2118](https://github.com/ttoss/soat/issues/2118)) ([11edd22](https://github.com/ttoss/soat/commit/11edd22fe8526c38178a853e4b74caafd93bfa58))
+* **formations:** plan compares nested nulls and stored defaults as the held value ([#2114](https://github.com/ttoss/soat/issues/2114)) ([084d136](https://github.com/ttoss/soat/commit/084d136faaba334c7f1568f0ab356f1ecae063a8))
+* **generations:** a replay the provider refuses fails as REPLAY_REFUSED with its cause and window ([#2125](https://github.com/ttoss/soat/issues/2125)) ([d0b1a23](https://github.com/ttoss/soat/commit/d0b1a23b2065bb7382a18e0248e9887f5ea0ee4a))
+* **sessions:** a later turn replays a finished turn without its reasoning ([#2115](https://github.com/ttoss/soat/issues/2115)) ([075454c](https://github.com/ttoss/soat/commit/075454c0dace769a09db46ebf419e6147b6517fb))
+
+### Features
+
+* **agents:** send stored files to the model as native message parts ([#2117](https://github.com/ttoss/soat/issues/2117)) ([2117d13](https://github.com/ttoss/soat/commit/2117d1363d9e511ef74280485b9c99492b4067cf))
+* **conversations:** send a turn's files to the model natively ([#2126](https://github.com/ttoss/soat/issues/2126)) ([cecd3ea](https://github.com/ttoss/soat/commit/cecd3eaf93173a5df181f1e7ef412c450002afc5))
+* **oauth-connections:** emit connected and disconnected events ([#2123](https://github.com/ttoss/soat/issues/2123)) ([9919dd5](https://github.com/ttoss/soat/commit/9919dd545a13ea4564082db35fda0b538add1a90))
+* **orchestrations:** a failed node routes along an error edge ([#2119](https://github.com/ttoss/soat/issues/2119)) ([99871a1](https://github.com/ttoss/soat/commit/99871a1bf25054e86b83f8db9ec82b68e6c81b29))
+* **orchestrations:** a loop node's input_mapping adds parent state to each child's input ([#2122](https://github.com/ttoss/soat/issues/2122)) ([c3f5486](https://github.com/ttoss/soat/commit/c3f5486308a1ba2d612c91988bcd70707c7081f5))
+* **tasks:** upstream_of filter and get task graph route ([#2120](https://github.com/ttoss/soat/issues/2120)) ([5036623](https://github.com/ttoss/soat/commit/503662332ddeec4b8d2fab04dbb9d6b9c0a27b43))
+* **tools:** preset_parameters_by_action overrides preset_parameters per builtin action ([#2121](https://github.com/ttoss/soat/issues/2121)) ([ea80802](https://github.com/ttoss/soat/commit/ea80802d6f2cc333ee94b776ba5f2425dece6c44))
+
+### BREAKING CHANGES
+
+* **tools:** a builtin tool whose preset_parameters carry a key one of its
+  non-denied actions does not declare is refused with 400 VALIDATION_FAILED on
+  its next create or update.
+
 ## [0.126.1](https://github.com/ttoss/soat/compare/v0.126.0...v0.126.1) (2026-11-23)
 
 ### Bug Fixes

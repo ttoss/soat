@@ -153,6 +153,33 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 
 `meta.provider_status_code` is the status the provider answered with, and `meta.provider_response_body` its raw response body, each present when the provider sent one; a network fault carries neither. `meta` also carries the `generation_id` and `trace_id` of the failed run for inspection via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
 
+### A replay the provider refuses (`REPLAY_REFUSED`)
+
+A turn that replays a conversation (a session or conversation turn) and that the provider refuses answers `502` `REPLAY_REFUSED` instead of `AI_PROVIDER_ERROR`, on the project's own provider, through a forwarded alias and through a shared provider alike. A refusal is a non-retryable `4xx`; a rate limit, timeout or `5xx` stays `AI_PROVIDER_ERROR`.
+
+```json
+{
+  "error": {
+    "code": "REPLAY_REFUSED",
+    "message": "The AI provider refused the replayed history (conversation positions 0 to 2).",
+    "meta": {
+      "cause": "history_refused",
+      "replayed_window": { "first_position": 0, "last_position": 2 },
+      "generation_id": "gen_abc123",
+      "trace_id": "trace_xyz789"
+    }
+  }
+}
+```
+
+| `meta.cause` | Provider status | What to do |
+| --- | --- | --- |
+| `history_refused` | `400` | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
+| `context_too_long` | `413` | Lower the session's `max_context_messages`, fork, or start a new session |
+| `request_refused` | any other `4xx` | Read the failed generation |
+
+`meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status alone: neither the provider's text nor its status reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) reports its refusal as `AI_PROVIDER_ERROR`.
+
 ### Metadata
 
 `metadata` is a **caller-owned** bag, returned verbatim, for per-run audit attribution (e.g. the ticket or case an AI action belongs to). What knowledge the turn read is not the caller's to record: the server writes it to [`retrieval`](#what-retrieval-served).

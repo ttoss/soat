@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.127.0](https://github.com/ttoss/soat/compare/v0.126.1...v0.127.0) (2026-11-23)
+
+### Features
+
+* **agents:** send stored files to the model as native message parts ([#2117](https://github.com/ttoss/soat/issues/2117)) ([2117d13](https://github.com/ttoss/soat/commit/2117d1363d9e511ef74280485b9c99492b4067cf))
+* **conversations:** send a turn's files to the model natively ([#2126](https://github.com/ttoss/soat/issues/2126)) ([cecd3ea](https://github.com/ttoss/soat/commit/cecd3eaf93173a5df181f1e7ef412c450002afc5))
+* **tools:** preset_parameters_by_action overrides preset_parameters per builtin action ([#2121](https://github.com/ttoss/soat/issues/2121)) ([ea80802](https://github.com/ttoss/soat/commit/ea80802d6f2cc333ee94b776ba5f2425dece6c44))
+
+### BREAKING CHANGES
+
+* **tools:** a builtin tool whose preset_parameters carry a key one of its
+  non-denied actions does not declare is refused with 400 VALIDATION_FAILED on
+  its next create or update.
+
 ## [0.126.1](https://github.com/ttoss/soat/compare/v0.126.0...v0.126.1) (2026-11-23)
 
 **Note:** Version bump only for package @soat/postgresdb

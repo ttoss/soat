@@ -41,6 +41,7 @@ import { readInputModalities } from './inputModalities';
 import { assertModelAcceptsInput } from './inputModalityGate';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { withPromptCacheBreakpoint } from './promptCaching';
+import { type ReplayedWindow, replayedWindowOf } from './replayRefusal';
 import { pinServerIdentityToolContext } from './toolContext';
 import type { ToolSurface } from './toolSurfaceMeasure';
 import { measureToolSurface } from './toolSurfaceMeasure';
@@ -101,6 +102,8 @@ export type GenerationContext = {
    * stream and non-stream paths cannot disagree about it.
    */
   toolChoice: TurnToolChoice;
+  /** The conversation positions the turn replays, `null` outside a conversation. */
+  replayed: ReplayedWindow | null;
 };
 
 /**
@@ -321,15 +324,18 @@ const boundToolIds = (typedAgent: TypedAgent): string[] => {
   return splitToolBindings(readAgentToolBindings(typedAgent)).toolIds;
 };
 
-export const buildGenerationContext = async (
-  args: BuildGenerationContextArgs
-): Promise<GenerationContext> => {
-  const toolContext = await resolvePinnedToolContext(args);
-
-  const { typedAgent, agentVersion } = await resolveTurnAgent(args);
-
-  const provenance = await turnProvenance(args);
-
+/**
+ * The authority the agent acts under and the messages it is sent, resolved
+ * against that authority and the identity-pinned tool context.
+ */
+const resolveTurnInput = async (
+  args: BuildGenerationContextArgs & {
+    typedAgent: TypedAgent;
+    toolContext: Awaited<ReturnType<typeof resolvePinnedToolContext>>;
+    provenance: GenerationProvenance;
+  }
+) => {
+  const { typedAgent, toolContext } = args;
   const agentAuthority = await resolveAgentAuthority({
     agentId: args.agentId,
     runAs: typedAgent.runAs,
@@ -348,6 +354,24 @@ export const buildGenerationContext = async (
     allowedToolIds: boundToolIds(typedAgent),
     agentAuthority,
     toolContext, // identity-pinned, not the raw caller bag
+    provenance: args.provenance,
+  });
+  return { agentAuthority, resolvedMessages };
+};
+
+export const buildGenerationContext = async (
+  args: BuildGenerationContextArgs
+): Promise<GenerationContext> => {
+  const toolContext = await resolvePinnedToolContext(args);
+
+  const { typedAgent, agentVersion } = await resolveTurnAgent(args);
+
+  const provenance = await turnProvenance(args);
+
+  const { agentAuthority, resolvedMessages } = await resolveTurnInput({
+    ...args,
+    typedAgent,
+    toolContext,
     provenance,
   });
   const { model } = await resolveGenerationModel({
@@ -411,5 +435,6 @@ export const buildGenerationContext = async (
     agentVersion,
     provenance,
     toolChoice: normalizeToolChoice(typedAgent.toolChoice),
+    replayed: replayedWindowOf(args.conversation),
   };
 };
