@@ -742,7 +742,8 @@ components:
             Why the generation stopped. Either the model provider's own finish
             reason relayed unchanged ('stop', 'tool-calls', 'length', …) or one
             the platform names itself: 'max_steps' when the turn spent its whole
-            step budget on tool calls, 'depth_guard' when a nested call exceeded
+            step budget, on tool calls or, for an `output_schema` agent,
+            answering on its last step, 'depth_guard' when a nested call exceeded
             the call depth, 'chain_limit' when a continuation chain reached its
             generation budget, or 'error' when the turn failed.
           example: error
