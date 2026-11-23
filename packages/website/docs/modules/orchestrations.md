@@ -113,12 +113,12 @@ A record holds external I/O only (resolved input, returned artifact) and no gene
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
 | `approval`     | Proposes a guarded tool call and pauses for a human decision via the [Approvals](./approvals.md) queue. Uses `tool_id`, `arguments`, and `expires_in`. See [Approval Nodes](#approval-nodes).                         |
-| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, `parallelism`, `on_item_error`, `context_keys` and `item_tool_context`. See [Loops](#loops-collection-iteration). |
+| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, `input_mapping`, `parallelism`, `on_item_error`, `context_keys` and `item_tool_context`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. See [Emitting events](#emitting-events). |
 | `webhook`      | Pauses awaiting an inbound callback (`mode: "receive"`). The run enters `awaiting_input` with `required_action.type: "webhook_receive"`; resume it via `human-input`. (To send data _out_ of a graph, use `emit_event`.) |
-| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — the child's [`output_mapping`](#run-output) result, or `{ terminalNodeId: terminalArtifact }` when it declares none. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly. |
+| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`; the child's input is the node's `input_mapping` result. The node's artifact is the **child run's `output`** — the child's [`output_mapping`](#run-output) result, or `{ terminalNodeId: terminalArtifact }` when it declares none. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly. |
 
 An orchestration does no more than its writer could. Every create, update, version restore and formation apply needs the start action of every node's target in the graph the write leaves: `agents:CreateAgentGeneration` on an `agent` node's agent, `tools:CallTool` on a `tool`, `poll` or `approval` node's tool, and `orchestrations:StartRun` on a `sub_orchestration` or `loop` node's orchestration. One it lacks is `403 ACTION_NOT_HELD` (`meta.action`, `meta.resource`), asked before the target is looked up. A run checks each start again under the authority it runs under, where the target starts: a child run its authority may not start (`orchestrations:StartRun` on the child) fails the node with `FORBIDDEN`.
 
@@ -172,6 +172,7 @@ A `loop` node runs a **sub-orchestration once per item** of an array in run stat
 | `orchestration_id` | — (required) | Public ID of the orchestration to run for each item (same field the `sub_orchestration` node uses) |
 | `collection` | `state.items` | State path to the array to iterate; a path without the `state.` prefix is normalised to one. A missing or non-array value yields zero iterations |
 | `item_variable` | `item` | Each element is passed as the sub-run's **input** under this key; run input is seeded under the `input` namespace, so the sub-graph reads it with `{"var": "input.item"}` |
+| `input_mapping` | — | Keys added to each child's input beside the item, as JSON Logic over the run state with the item under `item_variable`. See [A child's input](#a-childs-input) |
 | `parallelism` | `5` | Items are processed in batches of this size |
 | `on_item_error` | `fail` | `fail` fails the node on the first item whose run settles `failed`, `cancelled` or `expired`. `collect` records that item in `results` and carries on |
 | `context_keys` | `null` | Allowlist of the run's `tool_context` keys each child inherits; `null` hands down the whole bag, `[]` none. See [Narrowing what a child run inherits](#narrowing-what-a-child-run-inherits) |
@@ -198,6 +199,31 @@ A child run that could not be started at all, such as one past the [nesting dept
   "state_mapping": { "state.summaries": { "var": "output.results" } }
 }
 ```
+
+#### A child's input
+
+| Node | Child run's `input` |
+| --- | --- |
+| `sub_orchestration` | `input_mapping` evaluated against the run state |
+| `loop` | `{ <item_variable>: <item> }` plus `input_mapping` evaluated against the run state with the item under `item_variable` |
+
+A `loop` child needs the parent's context (an actor, a date, a setting) beside its item:
+
+```json
+{
+  "id": "summarise_each",
+  "type": "loop",
+  "orchestration_id": "orch_summariseOne",
+  "collection": "state.input.documents",
+  "item_variable": "doc",
+  "input_mapping": {
+    "actor": { "var": "input.actor" },
+    "title": { "var": "doc.title" }
+  }
+}
+```
+
+Each child starts with `{ "doc": <item>, "actor": ..., "title": ... }` and reads `{"var": "input.actor"}`. A mapping key equal to `item_variable` is `400 ORCHESTRATION_VALIDATION_FAILED` (`ITEM_VARIABLE_COLLISION`); [static validation](#static-validation) treats a reference to the item variable as satisfied. A mapping that throws for an item fails that item, as [`item_tool_context`](#per-item-tool-context) does.
 
 #### Per-item tool context
 
@@ -595,6 +621,7 @@ Graphs are validated **before** persistence: `create-orchestration` / `update-or
 | `TOOL_RUNS_ON_CLIENT` | A `tool` or `poll` node names a `client` tool, which cannot run server-side | |
 | `WRONG_FIELD` | A field named for another node type | a `tool` node with `action` instead of `operation_id` |
 | `INVALID_VALUE` | A field outside its accepted values | a `loop` node's `on_item_error` other than `fail` / `collect` |
+| `ITEM_VARIABLE_COLLISION` | A `loop` node's `input_mapping` key equal to its `item_variable` | `item_variable: "doc"` with `input_mapping: { "doc": ... }` |
 | `INVALID_TYPE` | `nodes` is not an array | |
 | `DUPLICATE_NODE_ID` | Duplicate node id | two nodes share `id: "a"` |
 | `UNKNOWN_NODE` | Dangling edge | an edge whose `from`/`to` references a node that does not exist |

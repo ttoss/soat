@@ -1,22 +1,31 @@
 /**
- * A `loop` node's `item_tool_context`: per-item `tool_context` keys, each a
- * JSON Logic value over `{ <item_variable>: item, state }`, laid over the bag
- * every child inherits.
+ * What each child of a `loop` node starts with: its input, `{ <item_variable>:
+ * item }` plus `input_mapping` over the parent state with the item under
+ * `item_variable`; and its `tool_context`, the inherited bag with
+ * `item_tool_context` (JSON Logic over `{ <item_variable>: item, state }`)
+ * laid over it.
  */
 import createDebug from 'debug';
 
 import { DomainError, type ErrorCode } from '../errors';
-import { evaluateLogic } from './jsonLogicMapping';
+import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
+import type { OrchestrationNode } from './orchestrations';
 import { assertAssignableToolContextKeys } from './toolContext';
 
 const log = createDebug('soat:orchestrations');
 
-/** An item whose `item_tool_context` failed, so no child run started for it. */
+/** The state key each item is read under, in the child's input and mappings. */
+export const loopItemVariable = (node: OrchestrationNode): string => {
+  return node.itemVariable ?? 'item';
+};
+
+/** An item whose mappings failed, so no child run started for it. */
 export type LoopItemError = { index: number; code: ErrorCode; message: string };
 
 export type LoopItemStart = {
   index: number;
   item: unknown;
+  input: Record<string, unknown>;
   toolContext?: Record<string, string>;
 };
 
@@ -96,39 +105,46 @@ const toItemError = (args: {
   };
 };
 
+const resolveItemToolContext = (args: {
+  scope: Record<string, unknown>;
+  itemToolContext?: Record<string, unknown>;
+  inherited?: Record<string, string>;
+}): Record<string, string> | undefined => {
+  const { scope, itemToolContext, inherited } = args;
+  if (!itemToolContext) return inherited;
+  return overlay({
+    inherited,
+    evaluated: evaluateItemKeys({ itemToolContext, scope }),
+  });
+};
+
 /**
- * Each item's child bag, or the error that keeps it from starting. Evaluated
- * for every item before any child starts.
+ * Each item's child input and bag, or the error that keeps it from starting.
+ * Evaluated for every item before any child starts.
  */
 export const resolveLoopItemStarts = (args: {
   items: unknown[];
   itemVariable: string;
+  inputMapping?: Record<string, unknown>;
   itemToolContext?: Record<string, unknown>;
   state: Record<string, unknown>;
   inherited?: Record<string, string>;
 }): { starts: LoopItemStart[]; itemErrors: LoopItemError[] } => {
-  const { items, itemVariable, itemToolContext, state, inherited } = args;
-  if (!itemToolContext) {
-    return {
-      starts: items.map((item, index) => {
-        return { index, item, toolContext: inherited };
-      }),
-      itemErrors: [],
-    };
-  }
+  const { items, itemVariable, inputMapping, itemToolContext, state } = args;
   const starts: LoopItemStart[] = [];
   const itemErrors: LoopItemError[] = [];
   for (const [index, item] of items.entries()) {
     try {
-      const evaluated = evaluateItemKeys({
-        itemToolContext,
+      const input = {
+        ...applyInputMapping(inputMapping, { ...state, [itemVariable]: item }),
+        [itemVariable]: item,
+      };
+      const toolContext = resolveItemToolContext({
         scope: { [itemVariable]: item, state },
+        itemToolContext,
+        inherited: args.inherited,
       });
-      starts.push({
-        index,
-        item,
-        toolContext: overlay({ inherited, evaluated }),
-      });
+      starts.push({ index, item, input, toolContext });
     } catch (error) {
       itemErrors.push(toItemError({ index, error }));
     }
