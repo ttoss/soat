@@ -1,14 +1,17 @@
 /**
  * How `plan-formation` and apply decide whether a declared property differs
- * from what the resource holds: an empty (`null`) property and an absent one
- * are the same, the type's schema defaults fill both sides, and a write-only
+ * from what the resource holds: an empty (`null`) field and an absent one are
+ * the same at every depth, the type's defaults fill both sides, and a write-only
  * property the resource cannot read back is settled when it resolves to the
  * value the formation last deployed.
  */
 
 import { isDeepStrictEqual } from 'node:util';
 
-import { holdsFormationExpression } from './formation-modules/formationSpecLoader';
+import {
+  holdsFormationExpression,
+  isObjectRecord,
+} from './formation-modules/formationSpecLoader';
 import {
   collectParamRefs,
   resolveParamExpressions,
@@ -131,10 +134,25 @@ const settledWriteOnlyProperties = (args: {
   );
 };
 
+/** `value` with every `null` object field dropped, at every depth. */
+const withoutNullFields = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(withoutNullFields);
+  if (!isObjectRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, field]) => {
+        return field !== null;
+      })
+      .map(([key, field]) => {
+        return [key, withoutNullFields(field)];
+      })
+  );
+};
+
 /**
- * A read leaves an empty property out, so a top-level `null` compares as
- * absent. Not for a write-only property: no read returns it, so absent there
- * says nothing about whether it holds a value.
+ * A read may leave an empty field out or hold it `null`, at any depth, so a
+ * `null` field compares as absent. Not a top-level write-only property: no read
+ * returns it, so absent there says nothing about whether it holds a value.
  */
 export const buildPropertyComparison = (args: {
   withSchemaDefaults: (
@@ -148,9 +166,13 @@ export const buildPropertyComparison = (args: {
     comparable: (properties) => {
       return args.withSchemaDefaults(
         Object.fromEntries(
-          Object.entries(properties).filter(([key, value]) => {
-            return value !== null || writeOnly.has(key);
-          })
+          Object.entries(properties)
+            .filter(([key, value]) => {
+              return value !== null || writeOnly.has(key);
+            })
+            .map(([key, value]) => {
+              return [key, withoutNullFields(value)];
+            })
         )
       );
     },

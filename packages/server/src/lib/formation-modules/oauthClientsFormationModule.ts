@@ -3,6 +3,7 @@ import {
   CLIENT_SECRET_REFERENCE_MESSAGE,
   clientSecretIds,
   createOauthClient,
+  defaultRedirectUri,
   deleteOauthClient,
   getOauthClient,
   isClientSecretReference,
@@ -109,5 +110,10 @@ export const oauthClientsFormationModule = defineFormationModule({
 
   fetch: ({ physicalResourceId }) => {
     return getOauthClient({ id: physicalResourceId });
+  },
+
+  storedDefaults: () => {
+    const redirectUri = defaultRedirectUri();
+    return redirectUri ? { redirect_uri: redirectUri } : {};
   },
 });
