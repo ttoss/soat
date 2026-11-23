@@ -120,15 +120,20 @@ const validateInput = (input: OauthClientInput): void => {
   validateAuthorizeParams(input.authorizeParams);
 };
 
+/** The deployment's `OAUTH_DEFAULT_REDIRECT_URI`, or `undefined` when unset. */
+export const defaultRedirectUri = (): string | undefined => {
+  return process.env.OAUTH_DEFAULT_REDIRECT_URI || undefined;
+};
+
 /**
- * A write leaving `redirect_uri` absent on create, or `null`, stores the
- * deployment's `OAUTH_DEFAULT_REDIRECT_URI` when set, on every write path.
+ * A write leaving `redirect_uri` absent on create, or `null`, stores
+ * {@link defaultRedirectUri} when set, on every write path.
  */
 const withDefaultRedirect = (args: {
   input: OauthClientInput;
   isCreate: boolean;
 }): OauthClientInput => {
-  const fallback = process.env.OAUTH_DEFAULT_REDIRECT_URI;
+  const fallback = defaultRedirectUri();
   const { redirectUri } = args.input;
   const leftToDefault =
     redirectUri === null || (args.isCreate && redirectUri === undefined);

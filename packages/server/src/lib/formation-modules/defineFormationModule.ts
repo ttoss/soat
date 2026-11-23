@@ -158,6 +158,12 @@ export type FormationModuleDefinition<TResource> = {
   read?: (resource: TResource) => Record<string, unknown>;
   writeOnly?: boolean;
   /**
+   * What a write stores for a property sent empty, beyond the schema's
+   * defaults (a deployment setting): compared as the value such a property
+   * holds, so leaving it empty is not a change.
+   */
+  storedDefaults?: () => Record<string, unknown>;
+  /**
    * Property names carrying credential material. One declaration drives every
    * place such a value would otherwise surface — the `lastAppliedProperties`
    * snapshot, a stored template's read, a plan diff — so a module says it once
@@ -518,11 +524,14 @@ export const defineFormationModule = <TResource>(
     authorization: definition.authorization,
 
     withSchemaDefaults: (properties) => {
-      return applySchemaDefaults({
-        schema: loadModuleSchema({ schemaName }),
-        properties,
-        resolveRef: resolveSchemaRef,
-      });
+      return {
+        ...definition.storedDefaults?.(),
+        ...applySchemaDefaults({
+          schema: loadModuleSchema({ schemaName }),
+          properties,
+          resolveRef: resolveSchemaRef,
+        }),
+      };
     },
 
     validateProperties: ({

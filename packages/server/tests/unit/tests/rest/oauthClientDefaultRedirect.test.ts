@@ -148,6 +148,71 @@ describe('the deployment default redirect_uri', () => {
       );
     });
 
+    test.each([
+      ['absent', {}],
+      ['null', { redirect_uri: null }],
+    ])(
+      'a formation with redirect_uri %s plans as a no-op once deployed',
+      async (_, overrides) => {
+        seq += 1;
+        const template = {
+          resources: {
+            XClient: {
+              type: 'oauth_client',
+              properties: clientFields(overrides),
+            },
+          },
+        };
+        const created = await authenticatedTestClient(adminToken)
+          .post('/api/v1/formations')
+          .send({ project_id: projectId, name: `plan-${seq}`, template });
+        expect(created.status).toBe(201);
+        const plan = await authenticatedTestClient(adminToken)
+          .post('/api/v1/formations/plan')
+          .send({
+            project_id: projectId,
+            formation_id: created.body.id,
+            template,
+          });
+        expect(plan.status).toBe(200);
+        expect(plan.body.changes).toMatchObject([
+          { logical_id: 'XClient', action: 'no-op' },
+        ]);
+      }
+    );
+
+    test('a formation clearing a held redirect_uri plans an update', async () => {
+      seq += 1;
+      const template = (redirect: string | null) => {
+        return {
+          resources: {
+            XClient: {
+              type: 'oauth_client',
+              properties: clientFields({ redirect_uri: redirect }),
+            },
+          },
+        };
+      };
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `plan-${seq}`,
+          template: template(OWN_CALLBACK),
+        });
+      expect(created.status).toBe(201);
+      const plan = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: created.body.id,
+          template: template(null),
+        });
+      expect(plan.body.changes).toMatchObject([
+        { logical_id: 'XClient', action: 'update' },
+      ]);
+    });
+
     test('an update setting redirect_uri null stores it', async () => {
       const { id } = await createOverRest({ redirect_uri: OWN_CALLBACK });
       const res = await authenticatedTestClient(adminToken)
