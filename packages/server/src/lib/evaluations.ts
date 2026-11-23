@@ -16,6 +16,7 @@ import {
   validateScorerReferences,
 } from './evaluationScorerReferences';
 import { validateScorers } from './evaluationScorers';
+import { namedScorers } from './evaluationScorerValidation';
 import {
   assertValid,
   claimUpdate,
@@ -49,7 +50,7 @@ export const mapEval = (evaluation: EvalRow) => {
     name: evaluation.name,
     agent_id: evaluation.agent?.publicId,
     dataset_id: evaluation.dataset?.publicId,
-    scorers: evaluation.scorers,
+    scorers: namedScorers(evaluation.scorers),
     pass_threshold:
       evaluation.passThreshold === null
         ? null

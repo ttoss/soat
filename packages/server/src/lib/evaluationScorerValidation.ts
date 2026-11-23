@@ -61,6 +61,20 @@ export const scorerOutcomeKey = (scorer: Record<string, unknown>): string => {
 };
 
 /**
+ * Scorers as the wire shows them: each under its name, so an Eval or a run
+ * stored before names were required reads as the spec declares it.
+ */
+export const namedScorers = (scorers: unknown): unknown => {
+  if (!Array.isArray(scorers)) return scorers;
+  return scorers.map((scorer) => {
+    // expand-contract: scorers stored before names were required
+    return isPlainObject(scorer) && typeof scorer.name !== 'string'
+      ? { ...scorer, name: scorerOutcomeKey(scorer) }
+      : scorer;
+  });
+};
+
+/**
  * Whether a scorer must carry its name: `required` on every write, `stored`
  * for the run-start re-check of an Eval written before names were required.
  */

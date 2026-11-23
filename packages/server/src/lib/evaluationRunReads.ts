@@ -11,6 +11,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { getEvalRow } from './evaluations';
+import { namedScorers } from './evaluationScorerValidation';
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -44,7 +45,13 @@ export const mapEvalRun = (run: EvalRunRow) => {
     eval_id: run.eval?.publicId,
     agent_id: run.agentPublicId ?? null,
     agent_version: run.agentVersion,
-    definition: run.definition ?? null,
+    definition:
+      run.definition === null
+        ? null
+        : {
+            ...run.definition,
+            scorers: namedScorers(run.definition.scorers),
+          },
     claim: run.claim ?? null,
     decider_versions: run.deciderVersions ?? null,
     status: run.status,
