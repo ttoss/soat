@@ -13,6 +13,7 @@ import { TASK_PRIORITIES } from 'src/lib/tasksPriority';
  * spec through nobody.
  */
 type QueryParameter = {
+  $ref?: string;
   name: string;
   in: string;
   schema?: { items?: { enum?: string[] } };
@@ -23,9 +24,14 @@ const parameterEnum = (args: { path: string; name: string }): string[] => {
   const operation = (
     spec.paths[args.path] as { get: { parameters: QueryParameter[] } }
   ).get;
-  const parameter = operation.parameters.find((p) => {
-    return p.in === 'query' && p.name === args.name;
-  });
+  const named = spec.components.parameters as Record<string, QueryParameter>;
+  const parameter = operation.parameters
+    .map((p) => {
+      return p.$ref ? named[p.$ref.split('/').pop() ?? ''] : p;
+    })
+    .find((p) => {
+      return p?.in === 'query' && p.name === args.name;
+    });
   if (!parameter?.schema?.items?.enum) {
     throw new Error(`${args.path} declares no \`${args.name}\` enum`);
   }

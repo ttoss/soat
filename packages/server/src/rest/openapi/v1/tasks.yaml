@@ -1174,12 +1174,16 @@ components:
       name: project_id
       in: query
       required: false
+      description: >-
+        Only the tasks of this project. Omitted, every project the caller
+        reads.
       schema:
         type: string
     TaskStateFilter:
       name: state
       in: query
       required: false
+      description: Only the tasks in this workflow state.
       schema:
         type: string
     TaskStatusFilter:
@@ -1252,6 +1256,7 @@ components:
       name: assignee
       in: query
       required: false
+      description: Only the tasks assigned to this value.
       schema:
         type: string
     TaskBlockedFilter:
