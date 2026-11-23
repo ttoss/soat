@@ -154,7 +154,7 @@ export const findTaskInstance = async (args: {
   })) as TaskInstance | null;
 };
 
-const findTask = async (args: { id: string }) => {
+export const findTask = async (args: { id: string }) => {
   const task = await findTaskInstance({ id: args.id });
   return task ? presentTask({ task }) : null;
 };

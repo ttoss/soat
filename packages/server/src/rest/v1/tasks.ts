@@ -1,13 +1,10 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
-import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
 import { readStructuredQuery } from 'src/lib/structuredFilter';
 import {
   createTask,
   deleteTask,
-  getTask,
   getTaskHistory,
   listTaskTransitions,
   migrateTask,
@@ -36,7 +33,7 @@ import {
 } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
 import { resolveListScope } from './listScope';
-import { requireAllowed } from './resourceAccess';
+import { authorizeTask, taskPins } from './taskAccess';
 
 const tasksRouter = new Router<Context>();
 
@@ -80,7 +77,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
 
   ctx.body = await listTasks({
     projectIds,
-    workflowId: ctx.query.workflow_id as string | undefined,
+    workflowId: taskPins.read(ctx, 'workflow_id'),
     state: ctx.query.state as string | undefined,
     statuses: parseEnumListQuery({
       ctx,
@@ -106,48 +103,18 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
 });
 
 tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  ctx.body = await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:GetTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:GetTask',
+    id: ctx.params.task_id,
   });
-
-  ctx.body = task;
 });
 
 tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:GetTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:GetTask',
+    id: ctx.params.task_id,
   });
 
   ctx.body = await getTaskHistory({
@@ -157,24 +124,10 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
 });
 
 tasksRouter.get('/tasks/:task_id/transitions', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:GetTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:GetTask',
+    id: ctx.params.task_id,
   });
 
   ctx.body = await listTaskTransitions({
@@ -232,24 +185,10 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
 });
 
 tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:UpdateTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:UpdateTask',
+    id: ctx.params.task_id,
   });
 
   const body = ctx.request.body as {
@@ -267,24 +206,10 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
 });
 
 tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:TransitionTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:TransitionTask',
+    id: ctx.params.task_id,
   });
 
   const body = ctx.request.body as {
@@ -328,24 +253,10 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
 });
 
 tasksRouter.post('/tasks/:task_id/migrate', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:MigrateTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:MigrateTask',
+    id: ctx.params.task_id,
   });
 
   const body = ctx.request.body as {
@@ -362,24 +273,10 @@ tasksRouter.post('/tasks/:task_id/migrate', async (ctx: Context) => {
 });
 
 tasksRouter.post('/tasks/:task_id/pause', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:PauseTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:PauseTask',
+    id: ctx.params.task_id,
   });
 
   const body = ctx.request.body as { reason?: unknown };
@@ -392,24 +289,10 @@ tasksRouter.post('/tasks/:task_id/pause', async (ctx: Context) => {
 });
 
 tasksRouter.post('/tasks/:task_id/resume', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:ResumeTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:ResumeTask',
+    id: ctx.params.task_id,
   });
 
   ctx.body = await resumeTask({
@@ -421,24 +304,10 @@ tasksRouter.post('/tasks/:task_id/resume', async (ctx: Context) => {
 });
 
 tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
-  requireAuth(ctx);
-  const task = await getTask({ id: ctx.params.task_id });
-
-  await requireAllowed({
+  await authorizeTask({
     ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: 'tasks:DeleteTask',
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${ctx.params.task_id}' not found.`
-    ),
+    action: 'tasks:DeleteTask',
+    id: ctx.params.task_id,
   });
 
   await deleteTask({ id: ctx.params.task_id });
