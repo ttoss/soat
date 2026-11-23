@@ -2,6 +2,8 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 
+import { readinessOf } from './taskReadiness';
+import { type TaskInstance } from './tasks';
 import { type TaskListFilters, taskListWhere } from './tasksList';
 
 const log = createDebug('soat:tasks');
@@ -17,10 +19,9 @@ const graphLimit = (): number => {
 };
 
 /**
- * The ids of the tasks `listTasks` would select with the same filters, and the
- * dependencies between them. Answered whole: a graph cut into pages would show
- * a held task as free, so above the ceiling it is refused, never truncated.
- * The tasks themselves are read through `listTasks`, paged.
+ * A summary of each task `listTasks` would select with the same filters, and
+ * the dependencies between them. Answered whole: a graph cut into pages would
+ * show a held task as free, so above the ceiling it is refused, never truncated.
  */
 export const getTaskGraph = async (args: TaskListFilters) => {
   log(
@@ -40,38 +41,60 @@ export const getTaskGraph = async (args: TaskListFilters) => {
     );
   }
 
-  const rows = await db.Task.findAll({
+  const rows = (await db.Task.findAll({
     where,
-    attributes: ['id', 'publicId'],
+    attributes: [
+      'id',
+      'publicId',
+      'title',
+      'state',
+      'status',
+      'priority',
+      'metadata',
+    ],
     order: [
       ['createdAt', 'DESC'],
       ['id', 'DESC'],
     ],
+  })) as TaskInstance[];
+  const ids = rows.map((row) => {
+    return row.id as number;
   });
   const publicIds = new Map(
     rows.map((row) => {
       return [row.id as number, row.publicId];
     })
   );
-  const ids = [...publicIds.keys()];
+  const readiness = await readinessOf({ taskIds: ids });
   const dependencies =
     ids.length === 0
       ? []
       : await db.TaskDependency.findAll({
           where: { taskId: ids, dependsOnTaskId: ids },
-          attributes: ['taskId', 'dependsOnTaskId'],
+          attributes: ['taskId', 'dependsOnTaskId', 'note'],
           order: [['id', 'ASC']],
         });
 
   return {
     data: {
-      nodes: [...publicIds.values()],
+      nodes: rows.map((row) => {
+        return {
+          id: row.publicId,
+          title: row.title,
+          state: row.state,
+          status: row.status,
+          priority: row.priority ?? null,
+          blocked: readiness.get(row.id as number)!.blocked,
+          metadata: row.metadata ?? undefined,
+        };
+      }),
       edges: dependencies.map((dependency) => {
         return {
           task_id: publicIds.get(dependency.taskId as number)!,
           depends_on_task_id: publicIds.get(
             dependency.dependsOnTaskId as number
           )!,
+          note: dependency.note ?? null,
         };
       }),
     },

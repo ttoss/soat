@@ -193,9 +193,9 @@ paths:
   /api/v1/tasks/graph:
     get:
       description: >-
-        The ids of the tasks `GET /tasks` selects with the same filters, as
-        `data.nodes`, and the dependencies between them, as `data.edges`: the
-        shape of a list, a graph or a tree, whose tasks `GET /tasks` pages. `upstream_of` answers what leads to one task. Answered
+        A summary of each task `GET /tasks` selects with the same filters, as
+        `data.nodes`, and the dependencies between them, as `data.edges`: one
+        read draws a list, a graph or a tree. `upstream_of` answers what leads to one task. Answered
         whole, never paged: above `TASK_GRAPH_LIMIT` tasks it is refused with
         `TASK_GRAPH_TOO_LARGE`.
       tags:
@@ -1510,11 +1510,10 @@ components:
             nodes:
               type: array
               description: >-
-                The ids of the tasks the filters select, newest first. Read the
-                tasks through `GET /tasks` with the same filters.
+                A summary of each task the filters select, newest first; the
+                whole task is `GET /tasks/{task_id}`.
               items:
-                type: string
-                example: task_V1StGXR8Z5jdHi6B
+                $ref: '#/components/schemas/TaskGraphNode'
             edges:
               type: array
               description: >-
@@ -1530,6 +1529,39 @@ components:
                   depends_on_task_id:
                     type: string
                     description: The task it waits on.
+                  note:
+                    type: string
+                    nullable: true
+                    description: The note the dependency was added with.
+    TaskGraphNode:
+      type: object
+      required: [id, title, state, status, priority, blocked]
+      properties:
+        id:
+          type: string
+          example: task_V1StGXR8Z5jdHi6B
+        title:
+          type: string
+          description: The task's title.
+        state:
+          type: string
+          description: Its current workflow state.
+        status:
+          type: string
+          enum: [open, closed]
+          description: Whether the task is open or closed.
+        priority:
+          type: string
+          nullable: true
+          enum: [very_high, high, medium, low, very_low, null]
+          description: The priority a person set; `null` when nobody did.
+        blocked:
+          type: boolean
+          description: Whether an open dependency holds it (`readiness.blocked`).
+        metadata:
+          description: The caller-owned metadata the task was created with.
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
     TaskReadiness:
       type: object
       description: >-

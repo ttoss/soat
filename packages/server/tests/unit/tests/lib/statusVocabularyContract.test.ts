@@ -90,6 +90,8 @@ const DOMAIN_LIFECYCLES: Record<string, string> = {
     'a task is a work item moving through its workflow states',
   'tasks.yaml#TaskStatusFilter.status':
     'a task is a work item moving through its workflow states',
+  'tasks.yaml#TaskGraphNode.status':
+    'a task is a work item moving through its workflow states',
   'tasks.yaml#TaskDependencyEnd.status':
     'a task is a work item moving through its workflow states',
   'formations.yaml#Formation.status': 'the deployed state of a stack',

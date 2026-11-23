@@ -13,7 +13,11 @@ let otherProjectId: string;
 /** Every task a test created, by id, so a graph's ids read as titles. */
 const titleOf = new Map<string, string>();
 
-type Edge = { task_id: string; depends_on_task_id: string };
+type Edge = {
+  task_id: string;
+  depends_on_task_id: string;
+  note: string | null;
+};
 
 const createWorkflow = async (
   name: string,
@@ -56,10 +60,14 @@ const createTask = async (args: {
 };
 
 /** `taskId` waits on `dependsOnTaskId`. */
-const dependOn = async (taskId: string, dependsOnTaskId: string) => {
+const dependOn = async (
+  taskId: string,
+  dependsOnTaskId: string,
+  note?: string
+) => {
   const res = await authenticatedTestClient(userToken)
     .post(`/api/v1/tasks/${taskId}/dependencies`)
-    .send({ depends_on_task_id: dependsOnTaskId });
+    .send({ depends_on_task_id: dependsOnTaskId, note });
   expect(res.status).toBe(201);
 };
 
@@ -70,10 +78,10 @@ const finish = async (taskId: string) => {
   expect(res.status).toBe(200);
 };
 
-const nodeTitles = (ids: string[]) => {
-  return ids
-    .map((id) => {
-      return titleOf.get(id) ?? id;
+const nodeTitles = (nodes: { id: string }[]) => {
+  return nodes
+    .map((node) => {
+      return titleOf.get(node.id) ?? node.id;
     })
     .sort();
 };
@@ -101,7 +109,7 @@ const diamond = async (name: string) => {
   const b = await createTask({ workflowId: wf, title: 'b' });
   const base = await createTask({ workflowId: wf, title: 'base' });
   await createTask({ workflowId: wf, title: 'unrelated' });
-  await dependOn(milestone, a);
+  await dependOn(milestone, a, 'needs a');
   await dependOn(milestone, b);
   await dependOn(a, base);
   await dependOn(b, base);
@@ -200,7 +208,7 @@ describe('GET /api/v1/tasks/graph', () => {
       `/api/v1/tasks/graph?workflow_id=${wf}`
     );
     expect(res.status).toBe(200);
-    const nodes = res.body.data.nodes as string[];
+    const nodes = res.body.data.nodes as { id: string }[];
     expect(nodeTitles(nodes)).toEqual([
       'a',
       'b',
@@ -208,18 +216,29 @@ describe('GET /api/v1/tasks/graph', () => {
       'milestone',
       'unrelated',
     ]);
-    expect(nodes[0]).toMatch(/^task_/);
+    const node = res.body.data.nodes.find((n: { id: string }) => {
+      return n.id === milestone;
+    });
+    expect(node).toEqual({
+      id: milestone,
+      title: 'milestone',
+      state: 'todo',
+      status: 'open',
+      priority: null,
+      blocked: true,
+      metadata: { kind: 'milestone' },
+    });
     const edges = (res.body.data.edges as Edge[])
       .map((edge) => {
-        return `${edge.task_id}>${edge.depends_on_task_id}`;
+        return `${edge.task_id}>${edge.depends_on_task_id}:${edge.note}`;
       })
       .sort();
     expect(edges).toEqual(
       [
-        `${milestone}>${a}`,
-        `${milestone}>${b}`,
-        `${a}>${base}`,
-        `${b}>${base}`,
+        `${milestone}>${a}:needs a`,
+        `${milestone}>${b}:null`,
+        `${a}>${base}:null`,
+        `${b}>${base}:null`,
       ].sort()
     );
   });
