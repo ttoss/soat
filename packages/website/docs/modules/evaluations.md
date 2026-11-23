@@ -693,6 +693,17 @@ update, `criteria` replaces the stored ones whole, `null` clears them and omitti
 keeps them; a scorer edit that leaves a criterion naming a missing scorer is refused. An
 eval without `criteria` reports none.
 
+A probe holds when its criterion's verdict on it (every scorer the criterion binds passed)
+is the `passed` it declares. A run grades every probe after its row exists and before its
+first item, queued or not; one that does not hold settles the run `failed` and the start
+answers `400 PROBE_FAILED`, whose `meta` names the run (`eval_run_id`) and each probe in
+`failed` (`criterion`, `index`, `expected`, `passed`, and `error` when a scorer could not
+grade it). [`POST /api/v1/evals/{eval_id}/probes`](/docs/api/evaluations/check-eval-probes)
+(`evaluations:RunEval`) grades them the same way and returns the report,
+`{ passed, probes: [{ criterion, index, expected, passed, held, scores }] }`, without
+creating a run. Probes run under the authority a run of the eval holds and are metered as
+its scorers are; an eval write never runs them.
+
 ### The claim
 
 `claim` on the eval states what its runs test, and each run copies it when created, so a

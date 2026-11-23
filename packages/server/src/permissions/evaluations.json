@@ -82,6 +82,11 @@
       "description": "Run an eval against its dataset and score every item"
     },
     {
+      "operationId": "checkEvalProbes",
+      "action": "evaluations:RunEval",
+      "description": "Grade an eval's probes without creating a run"
+    },
+    {
       "operationId": "listEvalRuns",
       "action": "evaluations:ListEvals",
       "description": "List an eval's runs"

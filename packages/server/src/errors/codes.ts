@@ -104,6 +104,11 @@ export const ERROR_CODES = {
     description:
       "Recorded on an eval result, never returned by a request: a scorer could not grade the item's output for a reason no more specific code names. The item is excluded from the aggregates rather than scored 0.",
   },
+  PROBE_FAILED: {
+    httpStatus: 400,
+    description:
+      "A probe of the eval's criteria did not hold: its criterion's scorers did not give the verdict the probe declares, so the scorers do not measure what the criterion says. The run is settled `failed` before its first item. `meta.eval_run_id` names the run and `meta.failed` each probe (`criterion`, `index`, `expected`, `passed`, and `error` when a scorer could not grade it).",
+  },
   GENERATION_CONTENT_UNAVAILABLE: {
     httpStatus: 409,
     description:

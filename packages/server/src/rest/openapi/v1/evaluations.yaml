@@ -1335,7 +1335,10 @@ paths:
           description: >-
             Bad request (non-boolean wait, dataset empty or over the synchronous
             cap, unknown agent_version, invalid baseline, scorers no longer valid
-            against the agent, a `tool_context` key that cannot become a header)
+            against the agent, a `tool_context` key that cannot become a header),
+            or `PROBE_FAILED`: a probe of the eval's `criteria` did not hold, so
+            the run is settled `failed` before its first item and
+            `error.meta` names it (`eval_run_id`, `failed`)
           content:
             application/json:
               schema:
@@ -1367,6 +1370,73 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/evals/{eval_id}/probes:
+    post:
+      tags:
+        - Evaluations
+      summary: Check an eval's probes
+      description: >-
+        Grades every probe of the eval's `criteria` with the criterion's
+        scorers, as a run does before its first item, and reports each one
+        without creating a run. A probe holds when the criterion's verdict on
+        it (every scorer it binds passed) is the `passed` it declares; the
+        report passes when every probe holds. The scorers run under the
+        authority a run of the eval holds and are metered as a run's. An eval
+        without `criteria` reports no probes.
+      operationId: checkEvalProbes
+      x-iam-action: evaluations:RunEval
+      x-iam-resource-type: eval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: eval_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The probes' report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbeReport'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            PROJECT_PAUSED — the project is paused, so nothing new starts in it; `error.meta` carries `paused_at` and `pause_reason`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -2296,6 +2366,50 @@ components:
           nullable: true
           description: The reference answer the scorers see
           example: Order 48213 shipped.
+    ProbeReport:
+      type: object
+      additionalProperties: false
+      required: [passed, probes]
+      properties:
+        passed:
+          type: boolean
+          description: Every probe held
+          example: true
+        probes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProbeResult'
+    ProbeResult:
+      type: object
+      additionalProperties: false
+      required: [criterion, index, expected, passed, held, scores]
+      properties:
+        criterion:
+          type: string
+          example: identifies
+        index:
+          type: integer
+          description: The probe's position in its criterion's `probes`
+          example: 0
+        expected:
+          type: boolean
+          description: The verdict the probe declares
+          example: true
+        passed:
+          type: boolean
+          description: The criterion's verdict on it — every scorer it binds passed
+          example: true
+        held:
+          type: boolean
+          description: Whether `passed` is the declared verdict
+          example: true
+        scores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScorerResult'
+        error:
+          type: string
+          description: Why the scorers could not grade it; such a probe does not hold
     Claim:
       type: object
       nullable: true

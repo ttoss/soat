@@ -13,6 +13,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { pinDeciderVersions } from './evaluationDeciderScorer';
+import { assertRunProbesHold } from './evaluationProbeRuns';
 import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
 import {
   type EvalRunDefinition,
@@ -422,6 +423,8 @@ export const startEvalRun = async (args: {
     plan.agentVersion,
     wait
   );
+
+  await assertRunProbesHold({ run, plan, authority });
 
   if (wait) {
     await executeSyncRun({

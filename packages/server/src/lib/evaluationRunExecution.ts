@@ -121,10 +121,11 @@ const scoringFailure = (error: unknown): StoredError => {
  * completions and tool scorer calls. Injected into `scoreOutput` so the kernel
  * itself stays pure.
  */
-const buildScorerRunners = (args: {
+export const buildScorerRunners = (args: {
   projectId: number;
   deciderScoring: DeciderScoring;
-  datasetItemId: string;
+  /** The item graded, or null for a probe, which grades no item. */
+  datasetItemId: string | null;
   authority: WorkAuthority | null;
 }) => {
   return {
