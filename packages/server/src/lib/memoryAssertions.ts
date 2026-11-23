@@ -6,6 +6,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { ownerActorWhere } from 'src/lib/actorOwnership';
+import type { Transaction } from 'src/lib/dbTransaction';
 import {
   emptyPage,
   type ListFilters,
@@ -171,13 +172,15 @@ const assertionPage = async (args: {
   return { ...page, data: await mapAssertions(page.data) };
 };
 
-const resolveGenerationDbId = async (
-  generationId?: string | null
-): Promise<number | null> => {
-  if (!generationId) return null;
+const resolveGenerationDbId = async (args: {
+  generationId?: string | null;
+  transaction?: Transaction;
+}): Promise<number | null> => {
+  if (!args.generationId) return null;
   const generation = await db.Generation.findOne({
-    where: { publicId: generationId },
+    where: { publicId: args.generationId },
     attributes: ['id'],
+    transaction: args.transaction,
   });
   return (generation?.id as number | undefined) ?? null;
 };
@@ -187,53 +190,75 @@ const resolveGenerationDbId = async (
  * in `createdAt` order, and two writes can share a millisecond or come from
  * processes whose clocks disagree; either would show an effect before its cause.
  */
-const nextAssertionTime = async (memoryId: number | null): Promise<Date> => {
+const nextAssertionTime = async (args: {
+  memoryId: number;
+  transaction: Transaction;
+}): Promise<Date> => {
   const now = new Date();
-  if (memoryId === null) return now;
   const previous = await db.MemoryAssertion.findOne({
-    where: { memoryId },
+    where: { memoryId: args.memoryId },
     attributes: ['createdAt'],
     order: [['createdAt', 'DESC']],
+    transaction: args.transaction,
   });
   if (!previous || previous.createdAt < now) return now;
   return new Date(previous.createdAt.getTime() + 1);
 };
 
-/**
- * Appends one assertion. Never throws into the write it records: an audit row
- * that cannot be written must not lose the fact the caller was storing.
- */
-export const recordMemoryAssertion = async (args: {
+/** What a write states about itself; the memory it lands on comes from the write. */
+export type MemoryAssertionRecord = {
   memoryStoreId: number;
   contentId: number;
-  memoryId: number | null;
   outcome: MemoryAssertionOutcome;
   similarity: number | null;
   /** Whether the caller named the memory this write replaced. */
   declared?: boolean;
   source: MemoryAssertionSource;
-}): Promise<void> => {
+};
+
+/**
+ * The one way a memory changes: `write` and the assertion recording it commit
+ * in one transaction, so no reader sees a memory row's change without its
+ * assertion, and a failed assertion rolls the change back.
+ */
+export const writeAssertedMemory = async <
+  T extends InstanceType<(typeof db)['Memory']>,
+>(args: {
+  write: (options: { transaction: Transaction }) => Promise<T>;
+  assertion: MemoryAssertionRecord;
+}): Promise<T> => {
+  const { assertion } = args;
   log(
-    'recordMemoryAssertion: memoryStoreId=%d outcome=%s mechanism=%s memoryId=%o',
-    args.memoryStoreId,
-    args.outcome,
-    args.source.mechanism,
-    args.memoryId
+    'writeAssertedMemory: memoryStoreId=%d outcome=%s mechanism=%s',
+    assertion.memoryStoreId,
+    assertion.outcome,
+    assertion.source.mechanism
   );
 
-  await db.MemoryAssertion.create({
-    memoryStoreId: args.memoryStoreId,
-    contentId: args.contentId,
-    memoryId: args.memoryId,
-    generationId: await resolveGenerationDbId(args.source.generationId),
-    mechanism: args.source.mechanism,
-    ruleId: args.source.ruleId ?? null,
-    principalType: args.source.principalType,
-    principalId: args.source.principalId,
-    outcome: args.outcome,
-    similarity: args.similarity,
-    declared: args.declared ?? false,
-    createdAt: await nextAssertionTime(args.memoryId),
+  return db.sequelize.transaction(async (transaction) => {
+    const memory = await args.write({ transaction });
+    const memoryId = memory.id as number;
+    await db.MemoryAssertion.create(
+      {
+        memoryStoreId: assertion.memoryStoreId,
+        contentId: assertion.contentId,
+        memoryId,
+        generationId: await resolveGenerationDbId({
+          generationId: assertion.source.generationId,
+          transaction,
+        }),
+        mechanism: assertion.source.mechanism,
+        ruleId: assertion.source.ruleId ?? null,
+        principalType: assertion.source.principalType,
+        principalId: assertion.source.principalId,
+        outcome: assertion.outcome,
+        similarity: assertion.similarity,
+        declared: assertion.declared ?? false,
+        createdAt: await nextAssertionTime({ memoryId, transaction }),
+      },
+      { transaction }
+    );
+    return memory;
   });
 };
 
@@ -298,7 +323,9 @@ export const listMemoryStoreAssertions = async (args: {
   if (createdAt) where.createdAt = createdAt;
 
   if (args.generationId) {
-    const generationDbId = await resolveGenerationDbId(args.generationId);
+    const generationDbId = await resolveGenerationDbId({
+      generationId: args.generationId,
+    });
     // A filter naming a generation that does not exist selects nothing, rather
     // than silently widening to the whole store.
     if (generationDbId === null) {
