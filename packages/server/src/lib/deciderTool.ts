@@ -6,6 +6,7 @@ import type { DeciderQuestions, DecisionAnswer } from './deciderQuestions';
 import { parseToolAnswers } from './deciderToolAnswer';
 import { isPlainObject } from './plainObject';
 import { toolReferences } from './resourceReferences';
+import { presetParametersForAction } from './toolPresetParameters';
 import { callTool } from './tools';
 import { serverSideToolProblem } from './toolsCallDispatch';
 import type { WorkAuthority } from './workAuthority';
@@ -41,9 +42,17 @@ export const assertDeciderToolCallable = (tool: DeciderToolRow): void => {
       { tool_id: tool.publicId, type: tool.type }
     );
   }
-  const presets = isPlainObject(tool.presetParameters)
-    ? tool.presetParameters
-    : {};
+  // A `builtin` decider runs the action its presets name, so that action's
+  // own presets reach the call too.
+  const action = isPlainObject(tool.presetParameters)
+    ? tool.presetParameters.action
+    : undefined;
+  const presets =
+    presetParametersForAction({
+      presetParameters: tool.presetParameters,
+      presetParametersByAction: tool.presetParametersByAction,
+      action: typeof action === 'string' ? action : '',
+    }) ?? {};
   const pinned = DECIDER_INPUT_KEYS.filter((key) => {
     return key in presets;
   });

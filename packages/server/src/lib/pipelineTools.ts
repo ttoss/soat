@@ -6,9 +6,9 @@ import { mergePresetParameters } from './toolPresetParameters';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
-  validateToolDefinition,
 } from './tools';
 import { serverSideToolProblem } from './toolsCallDispatch';
+import { validateToolDefinition } from './toolWriteValidation';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

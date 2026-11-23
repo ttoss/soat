@@ -1,4 +1,5 @@
 import { DomainError } from '../../errors';
+import { builtinPresetProblems } from '../builtinPresetValidation';
 import { isParam, isRef, isRefAttr, isSub } from '../formationsHelpers';
 import type { ValidationError } from '../formationsTypes';
 import { validateHttpExecute } from '../httpToolResponse';
@@ -172,6 +173,57 @@ const pushBuiltinActionErrors = (args: {
   }
 };
 
+const isLiteral = (value: unknown): boolean => {
+  return !(isRef(value) || isRefAttr(value) || isParam(value) || isSub(value));
+};
+
+/** `value` when it is an array of strings, else `null`. */
+const stringsOf = (value: unknown): string[] | null => {
+  if (!Array.isArray(value)) return null;
+  const strings = value.filter((entry): entry is string => {
+    return typeof entry === 'string';
+  });
+  return strings.length === value.length ? strings : null;
+};
+
+/** The preset fields as literals, or `null` while an expression awaits the apply. */
+const literalPresetFields = (properties: Record<string, unknown>) => {
+  const {
+    type = 'http',
+    actions = [],
+    denied_actions: denied,
+    preset_parameters: presets,
+    preset_parameters_by_action: byAction,
+  } = properties;
+  const names = stringsOf(actions);
+  const entries = isObjectRecord(byAction) ? Object.values(byAction) : [];
+  const literal = [presets, byAction, ...entries].every(isLiteral);
+  if (typeof type !== 'string' || !names || !literal) return null;
+  return {
+    type,
+    actions: names,
+    deniedActions: stringsOf(denied),
+    presetParameters: isObjectRecord(presets) ? presets : null,
+    presetParametersByAction: isObjectRecord(byAction) ? byAction : null,
+  };
+};
+
+/** The REST write path's preset rule (`builtinPresetProblems`), per field. */
+const pushBuiltinPresetErrors = (args: {
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+}): void => {
+  const fields = literalPresetFields(args.properties);
+  if (!fields) return;
+  for (const problem of builtinPresetProblems(fields)) {
+    args.errors.push({
+      path: `${args.basePath}.${problem.path}`,
+      message: problem.message,
+    });
+  }
+};
+
 export const toolsFormationModule = defineFormationModule({
   resourceType: 'tool',
   authorization: {
@@ -206,6 +258,7 @@ export const toolsFormationModule = defineFormationModule({
 
     pushExecuteErrors({ properties, basePath, errors });
     pushBuiltinActionErrors({ properties, basePath, errors });
+    pushBuiltinPresetErrors({ properties, basePath, errors });
 
     // The same rule the REST write path enforces, from the same function, so a
     // template cannot author a tool the API would reject — and so the error
@@ -296,6 +349,9 @@ export const toolsFormationModule = defineFormationModule({
       presetParameters: optional(
         toNullableObject(properties.preset_parameters)
       ),
+      presetParametersByAction: optional(
+        toNullableObject(properties.preset_parameters_by_action)
+      ),
       pipeline: optional(toNullableObject(properties.pipeline)),
       outputMapping: optional(toNullableObject(properties.output_mapping)),
       guardrailIds: optional(toNullableArray<string>(properties.guardrail_ids)),
@@ -317,6 +373,9 @@ export const toolsFormationModule = defineFormationModule({
       deniedActions: toNullableArray<string>(properties.denied_actions),
       contextKeys: toNullableArray<string>(properties.context_keys),
       presetParameters: toNullableObject(properties.preset_parameters),
+      presetParametersByAction: toNullableObject(
+        properties.preset_parameters_by_action
+      ),
       pipeline: toNullableObject(properties.pipeline),
       outputMapping: toNullableObject(properties.output_mapping),
       guardrailIds: toNullableArray<string>(properties.guardrail_ids),

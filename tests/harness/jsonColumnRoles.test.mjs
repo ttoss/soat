@@ -169,6 +169,7 @@ const ROLES = {
     'Tool.parameters',
     'Tool.pipeline',
     'Tool.presetParameters',
+    'Tool.presetParametersByAction',
     'Trace.error',
     'Trace.stepSegments',
     'Trigger.eventData',
