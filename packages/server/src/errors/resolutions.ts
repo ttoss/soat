@@ -132,6 +132,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The model answered and the answer does not satisfy `output_schema` — the violated field is named in the message. Retrying the same request bills a second call to reach the same answer; loosen the schema, or make the instructions name the shape the model keeps missing.',
   AI_PROVIDER_MISCONFIGURED:
     "The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment's own, which only an operator may allow. Update the AI provider and retry.",
+  INPUT_MODALITY_UNSUPPORTED:
+    "Send the part to a model whose AI provider's `model_input_modalities` lists its modality, or ingest the file and send it as a `document` part, which the model reads as text.",
   MODEL_NOT_OFFERED:
     "Name one of the provider's `model_aliases` (read the AI provider), or have someone who may update it add the alias or clear `model_aliases_only`.",
   EMBEDDING_NOT_CONFIGURED:

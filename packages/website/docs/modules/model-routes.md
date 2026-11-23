@@ -196,6 +196,10 @@ A route resolves to a **composite language model**, one inner model per target; 
 
 Agent generation is a multi-step loop whose tools have side effects (HTTP, MCP, SOAT actions, `write_memory`). Retrying the whole generation would re-execute succeeded tool calls; failing over one call keeps steps 1…n−1 in the message history.
 
+### Input modalities
+
+Each call goes only to the targets that read every modality of its input, by their providers' [`model_input_modalities`](./ai-providers.md#input-modalities); a target that declares nothing reads everything. Failover and the circuit breaker choose among those targets. When no target reads the input, the call is refused with `400 INPUT_MODALITY_UNSUPPORTED` naming the route in `meta.model`, before any target is called.
+
 ### Retry ownership
 
 The route is the **only** retry authority: the AI SDK's `maxRetries` (default `2`) is `0` for routed calls, so `max_retries: 2` means 3 attempts per target, not 9. Non-routed calls keep the SDK default.
