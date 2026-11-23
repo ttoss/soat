@@ -570,7 +570,7 @@ describe('MCP tools - happy path', () => {
     );
     expect(graph.data.nodes).toHaveLength(2);
     expect(graph.data.edges).toEqual([
-      { task_id: milestone, depends_on_task_id: step },
+      { task_id: milestone, depends_on_task_id: step, note: null },
     ]);
 
     const upstream = parseResult(
