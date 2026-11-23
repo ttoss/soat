@@ -192,7 +192,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   VERSION_CONFLICT:
     'Re-read the resource, re-apply the change on top of the version `meta.current_version` names, and retry with that version. A retry of the same body against the same stale version conflicts again.',
   QUERY_TIMEOUT:
-    'Add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on, or lower `limit`. Retrying the same query times out again.',
+    'Narrow the query: on a collection listing, add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on; on a search, scope it with `document_paths`, `memory_store_ids` or `tags`. Or lower `limit`. Retrying the same query times out again.',
   CONVERSATION_POSITION_CONFLICT:
     'Retry the write unchanged: nothing was stored, and the retry resolves its position again.',
   NAME_CONFLICT:

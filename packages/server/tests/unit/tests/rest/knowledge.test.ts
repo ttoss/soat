@@ -1114,4 +1114,50 @@ describe('Knowledge', () => {
       expect(response.body.results).toEqual([]);
     });
   });
+
+  describe('the query timeout', () => {
+    const previous = process.env.KNOWLEDGE_QUERY_TIMEOUT_MS;
+
+    afterEach(() => {
+      if (previous === undefined) {
+        delete process.env.KNOWLEDGE_QUERY_TIMEOUT_MS;
+      } else {
+        process.env.KNOWLEDGE_QUERY_TIMEOUT_MS = previous;
+      }
+    });
+
+    test('cancels a search that runs past it', async () => {
+      const project = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Knowledge Timeout Project' });
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: project.body.id,
+          content: 'A document the bulk chunks hang off.',
+          path: '/bulk/source.txt',
+        });
+      expect(created.status).toBe(201);
+      const document = await db.Document.findOne({
+        where: { publicId: created.body.id },
+      });
+      // Volume a request-by-request setup cannot reach in a test's budget.
+      await db.sequelize.query(
+        `INSERT INTO "document_chunks"
+           ("public_id", "document_id", "content", "chunk_index", "created_at", "updated_at")
+         SELECT 'dchunk_bulk' || n, :documentId, 'bulk chunk ' || n, n, now(), now()
+           FROM generate_series(1, 200000) AS n`,
+        { replacements: { documentId: document!.id } }
+      );
+      process.env.KNOWLEDGE_QUERY_TIMEOUT_MS = '1';
+
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: project.body.id, document_paths: ['/bulk/'] });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('QUERY_TIMEOUT');
+      expect(response.body.error.meta.timeout_ms).toBe(1);
+    });
+  });
 });

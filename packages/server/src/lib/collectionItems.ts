@@ -8,6 +8,7 @@ import { paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints } from './policyWhere';
 import { assertStorageQuota, jsonBytes } from './quotaStorage';
+import { timeoutFromEnv, withStatementTimeout } from './statementTimeout';
 import {
   applyFilterWhere,
   compileStructuredWhere,
@@ -32,21 +33,7 @@ type ItemRow = InstanceType<typeof db.CollectionItem>;
 
 /** Statement timeout for an item listing, which may range over any field. */
 const queryTimeoutMs = (): number => {
-  const raw = Number(process.env.COLLECTION_QUERY_TIMEOUT_MS);
-  return Number.isInteger(raw) && raw > 0 ? raw : 5000;
-};
-
-/** Postgres' `query_canceled`, raised when `statement_timeout` fires. */
-const QUERY_CANCELED = '57014';
-
-const isQueryCanceled = (error: unknown): boolean => {
-  return (
-    error instanceof Error &&
-    'parent' in error &&
-    error.parent instanceof Error &&
-    'code' in error.parent &&
-    error.parent.code === QUERY_CANCELED
-  );
+  return timeoutFromEnv({ env: 'COLLECTION_QUERY_TIMEOUT_MS', fallback: 5000 });
 };
 
 const mapItem = (args: { row: ItemRow; collectionPublicId: string }) => {
@@ -295,12 +282,11 @@ export const listCollectionItems = async (args: {
     applyFilterWhere({ where, fragments: [args.policyWhere] });
   }
 
-  try {
-    return await db.sequelize.transaction(async (transaction) => {
-      await db.sequelize.query(
-        `SET LOCAL statement_timeout = ${queryTimeoutMs()}`,
-        { transaction }
-      );
+  const timeoutMs = queryTimeoutMs();
+  return withStatementTimeout({
+    timeoutMs,
+    message: `The item query ran past ${timeoutMs} ms. Narrow it with an equality or \`in\` filter, which the index answers.`,
+    run: async ({ transaction }) => {
       return paginatedList({
         limit: args.limit,
         cursor: args.cursor,
@@ -324,13 +310,6 @@ export const listCollectionItems = async (args: {
           return mapItem({ row, collectionPublicId: args.collection.publicId });
         },
       });
-    });
-  } catch (error) {
-    if (!isQueryCanceled(error)) throw error;
-    throw new DomainError(
-      'QUERY_TIMEOUT',
-      `The item query ran past ${queryTimeoutMs()} ms. Narrow it with an equality or \`in\` filter, which the index answers.`,
-      { timeout_ms: queryTimeoutMs() }
-    );
-  }
+    },
+  });
 };

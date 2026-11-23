@@ -1,6 +1,8 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type { Transaction } from './dbTransaction';
+import { withBoundedSearch } from './vectorSearch';
 
 const log = createDebug('soat:knowledge');
 
@@ -93,19 +95,19 @@ export const lexicalRankExpression = (args: {
 };
 
 /**
- * Runs a lexical candidate query, degrading to no lexical channel at all when
- * it fails.
+ * Runs a lexical candidate query under the search statement timeout, degrading
+ * to no lexical channel at all when it fails.
  *
  * The vector query is the one that always has an answer; lexical is additive,
- * so a misconfigured `KNOWLEDGE_TEXT_SEARCH_CONFIG` — the one realistic failure
- * — costs exact-token recall rather than the whole search.
+ * so a misconfigured `KNOWLEDGE_TEXT_SEARCH_CONFIG` or a lexical query past the
+ * timeout costs exact-token recall rather than the whole search.
  */
 export const withLexicalDegrade = async <T>(args: {
   source: 'documents' | 'memories';
-  run: () => Promise<T[]>;
+  run: (options: { transaction: Transaction }) => Promise<T[]>;
 }): Promise<T[]> => {
   try {
-    return await args.run();
+    return await withBoundedSearch({ run: args.run });
   } catch (error) {
     log(
       'withLexicalDegrade: lexical query over %s failed, degrading to vector-only: %o',

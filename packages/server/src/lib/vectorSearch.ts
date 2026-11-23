@@ -1,5 +1,27 @@
 import { db } from '../db';
 import type { Transaction } from './dbTransaction';
+import { timeoutFromEnv, withStatementTimeout } from './statementTimeout';
+
+/**
+ * Statement timeout of every knowledge and memory search query. A search that
+ * outruns it ends as `QUERY_TIMEOUT` instead of holding its connection, and the
+ * caller's gateway, for minutes.
+ */
+const searchTimeoutMs = (): number => {
+  return timeoutFromEnv({ env: 'KNOWLEDGE_QUERY_TIMEOUT_MS', fallback: 30000 });
+};
+
+/** Runs one search query under the search statement timeout. */
+export const withBoundedSearch = async <T>(args: {
+  run: (options: { transaction: Transaction }) => Promise<T>;
+}): Promise<T> => {
+  const timeoutMs = searchTimeoutMs();
+  return withStatementTimeout({
+    timeoutMs,
+    message: `The search ran past ${timeoutMs} ms. Narrow it with \`document_paths\`, \`memory_store_ids\` or \`tags\`, or lower \`limit\`.`,
+    run: args.run,
+  });
+};
 
 /**
  * Runs a vector search with pgvector's iterative index scan enabled.
@@ -20,16 +42,19 @@ import type { Transaction } from './dbTransaction';
  * The setting is session-scoped, so it has to be `SET LOCAL` inside a
  * transaction — a plain `SET` would leak onto a pooled connection, and
  * `@ttoss/postgresdb` exposes no per-connection hook to set it once. Requires
- * pgvector 0.8 or newer.
+ * pgvector 0.8 or newer. The query runs under the search statement timeout
+ * (`withBoundedSearch`).
  */
 export const withIterativeVectorScan = async <T>(args: {
   run: (options: { transaction: Transaction }) => Promise<T>;
 }): Promise<T> => {
-  return db.sequelize.transaction(async (transaction) => {
-    await db.sequelize.query("SET LOCAL hnsw.iterative_scan = 'strict_order'", {
-      transaction,
-    });
-
-    return args.run({ transaction });
+  return withBoundedSearch({
+    run: async ({ transaction }) => {
+      await db.sequelize.query(
+        "SET LOCAL hnsw.iterative_scan = 'strict_order'",
+        { transaction }
+      );
+      return args.run({ transaction });
+    },
   });
 };
