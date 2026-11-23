@@ -13,6 +13,7 @@ import { applyInputMapping } from './jsonLogicMapping';
 import {
   type LoopItemError,
   type LoopItemStart,
+  loopItemVariable,
   resolveLoopItemStarts,
 } from './orchestrationLoopItemContext';
 import { type NestedRunParent, startNestedRun } from './orchestrationNestedRun';
@@ -134,7 +135,6 @@ const settleNestedNode = (args: {
 const runLoopBatches = async (args: {
   starts: LoopItemStart[];
   parallelism: number;
-  itemVariable: string;
   onItemError: LoopItemErrorMode;
   orchestrationId: string;
   projectIds: number[];
@@ -144,7 +144,6 @@ const runLoopBatches = async (args: {
   const {
     starts,
     parallelism,
-    itemVariable,
     onItemError,
     orchestrationId,
     projectIds,
@@ -156,13 +155,10 @@ const runLoopBatches = async (args: {
     const batch = starts.slice(i, i + parallelism);
     const batchResults = await Promise.all(
       batch.map((start) => {
-        const itemInput: Record<string, unknown> = {
-          [itemVariable]: start.item,
-        };
         return startNestedRun({
           orchestrationPublicId: orchestrationId,
           projectIds,
-          input: itemInput,
+          input: start.input,
           authority,
           // Narrowed by `contextKeys`, then overlaid by `itemToolContext`.
           toolContext: start.toolContext,
@@ -200,12 +196,12 @@ export const executeLoopNode = async (args: {
   const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const collectionPath = node.collection ?? 'state.items';
-  const itemVariable = node.itemVariable ?? 'item';
   const parallelism = node.parallelism ?? 5;
   const onItemError = node.onItemError ?? 'fail';
   const { starts, itemErrors } = resolveLoopItemStarts({
     items: resolveLoopCollection({ collectionPath, state }),
-    itemVariable,
+    itemVariable: loopItemVariable(node),
+    inputMapping: node.inputMapping,
     itemToolContext: node.itemToolContext,
     state,
     inherited: filterToolContext({
@@ -223,7 +219,6 @@ export const executeLoopNode = async (args: {
   const runs = await runLoopBatches({
     starts,
     parallelism,
-    itemVariable,
     onItemError,
     orchestrationId,
     projectIds,

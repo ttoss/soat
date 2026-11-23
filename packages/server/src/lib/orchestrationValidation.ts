@@ -6,7 +6,10 @@ import {
   computeDominators,
   transitivePredecessors,
 } from './orchestrationGraphAnalysis';
-import { assertValidItemToolContext } from './orchestrationLoopItemContext';
+import {
+  assertValidItemToolContext,
+  loopItemVariable,
+} from './orchestrationLoopItemContext';
 import { checkUnsafeStateMappingPaths } from './orchestrationMappingPath';
 import {
   checkNodeShapes,
@@ -133,6 +136,8 @@ const buildWriters = (nodes: OrchestrationNode[]): Map<string, Set<string>> => {
 
 type RefContext = {
   inputKeys: Set<string>;
+  /** Keys the node itself supplies: a `loop` node's item variable. */
+  localKeys: Set<string>;
   writers: Map<string, Set<string>>;
   ancestors: Set<string>;
   ancestorDominators: Set<string>;
@@ -178,7 +183,7 @@ const classifyRef = (args: {
   // satisfiable regardless of the declared schema. A flat `<name>` never is,
   // even when the schema declares it — only an upstream `state_mapping` write
   // can satisfy that, handled by the writers-map lookup below.
-  if (key === 'input') return 'ok';
+  if (key === 'input' || ctx.localKeys.has(key)) return 'ok';
   if (key === NODE_ARTIFACTS_STATE_KEY)
     return classifyNodesRef({ refPath, ctx });
   const keyWriters = ctx.writers.get(key) ?? new Set<string>();
@@ -262,6 +267,7 @@ const checkReachability = (args: {
     if (!node.inputMapping) continue;
     const ctx: RefContext = {
       inputKeys,
+      localKeys: new Set(node.type === 'loop' ? [loopItemVariable(node)] : []),
       writers,
       ancestors: transitivePredecessors({ nodeId: node.id, preds }),
       ancestorDominators: dominators.get(node.id) ?? new Set<string>(),

@@ -1361,6 +1361,11 @@ components:
             `{">": [...]}` compute derived values. Any other value (string,
             number, boolean, array, multi-key object) is passed through as a
             literal.
+            On a `sub_orchestration` node the result is the child run's input.
+            On a `loop` node it is added to each child's input beside
+            `{ <item_variable>: <item> }`, evaluated against the run state with
+            the item under `item_variable`; a key equal to `item_variable` is
+            rejected at write time.
         state_mapping:
           type: object
           additionalProperties: true
@@ -1390,7 +1395,9 @@ components:
           description: For loop nodes — state path to the collection to iterate over.
         item_variable:
           type: string
-          description: For loop nodes — variable name injected into state for each item.
+          description: >-
+            For loop nodes — the key each item is passed under in its child
+            run's input, and read under by `input_mapping`. Defaults to `item`.
         parallelism:
           type: integer
           description: For loop nodes — number of items to process in parallel.
