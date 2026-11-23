@@ -59,7 +59,11 @@ describe('evaluation scorers', () => {
 
   describe('validateScorers', () => {
     const validate = (scorers: unknown, agentHasOutputSchema = false) => {
-      return validateScorers({ scorers, agentHasOutputSchema });
+      return validateScorers({
+        scorers,
+        agentHasOutputSchema,
+        names: 'required',
+      });
     };
 
     test.each([
@@ -83,6 +87,7 @@ describe('evaluation scorers', () => {
       const judge = (overrides: Record<string, unknown> = {}) => {
         return {
           type: 'llm_judge',
+          name: 'llm_judge',
           prompt: 'Rate {{output}} against {{expected}}',
           pass_threshold: 0.7,
           ...overrides,
@@ -136,29 +141,38 @@ describe('evaluation scorers', () => {
     });
 
     test('rejects a config field the type does not accept', () => {
-      expect(validate([{ type: 'exact_match', value: 'x' }])).toBe(
-        "scorers.0 has unknown field(s) for type 'exact_match': value."
-      );
+      expect(
+        validate([{ type: 'exact_match', name: 'exact_match', value: 'x' }])
+      ).toBe("scorers.0 has unknown field(s) for type 'exact_match': value.");
     });
 
-    test('rejects a duplicated scorer type', () => {
+    test('rejects two scorers sharing a name', () => {
       const message = validate([
-        { type: 'contains', value: 'a' },
-        { type: 'contains', value: 'b' },
+        { type: 'contains', name: 'contains', value: 'a' },
+        { type: 'contains', name: 'contains', value: 'b' },
       ]);
       expect(message).toMatch(/declared more than once/);
     });
 
     test.each([
-      ['a missing value', { type: 'contains' }, /value is required/],
+      [
+        'a missing value',
+        { type: 'contains', name: 'contains' },
+        /value is required/,
+      ],
       [
         'a non-boolean case_sensitive',
-        { type: 'contains', value: 'a', case_sensitive: 'yes' },
+        {
+          type: 'contains',
+          name: 'contains',
+          value: 'a',
+          case_sensitive: 'yes',
+        },
         /case_sensitive must be a boolean/,
       ],
       [
         'a missing expression',
-        { type: 'json_logic' },
+        { type: 'json_logic', name: 'json_logic' },
         /expression is required/,
       ],
     ])('rejects %s', (_label, scorer, pattern) => {
@@ -169,12 +183,22 @@ describe('evaluation scorers', () => {
       expect(
         validate(
           [
-            { type: 'exact_match' },
-            { type: 'contains', value: 'invoice', case_sensitive: true },
-            { type: 'json_logic', expression: { '==': [1, 1] } },
-            { type: 'output_schema' },
+            { type: 'exact_match', name: 'exact_match' },
+            {
+              type: 'contains',
+              name: 'contains',
+              value: 'invoice',
+              case_sensitive: true,
+            },
+            {
+              type: 'json_logic',
+              name: 'json_logic',
+              expression: { '==': [1, 1] },
+            },
+            { type: 'output_schema', name: 'output_schema' },
             {
               type: 'llm_judge',
+              name: 'llm_judge',
               prompt: 'rate {{output}}',
               pass_threshold: 0.5,
             },
@@ -188,19 +212,36 @@ describe('evaluation scorers', () => {
     describe('output_schema requires an agent schema', () => {
       test('rejects when the agent has none, even with its own schema', () => {
         const message = validate(
-          [{ type: 'output_schema', schema: { type: 'object' } }],
+          [
+            {
+              type: 'output_schema',
+              name: 'output_schema',
+              schema: { type: 'object' },
+            },
+          ],
           false
         );
         expect(message).toMatch(/requires the agent under test/);
       });
 
       test('accepts when the agent has one and the scorer omits its own', () => {
-        expect(validate([{ type: 'output_schema' }], true)).toBeNull();
+        expect(
+          validate([{ type: 'output_schema', name: 'output_schema' }], true)
+        ).toBeNull();
       });
 
       test('rejects a non-object schema', () => {
         expect(
-          validate([{ type: 'output_schema', schema: 'object' }], true)
+          validate(
+            [
+              {
+                type: 'output_schema',
+                name: 'output_schema',
+                schema: 'object',
+              },
+            ],
+            true
+          )
         ).toMatch(/must be a JSON Schema object/);
       });
     });
@@ -259,12 +300,9 @@ describe('evaluation scorers', () => {
         ).toMatch(pattern as RegExp);
       });
 
-      test('rejects a name that shadows a built-in scorer type', () => {
-        // Aggregate scores are keyed by the outcome's scorer key, so a tool
-        // scorer named like a built-in would collapse into its bucket.
-        expect(validate([toolScorer({ name: 'contains' })])).toMatch(
-          /must not be a built-in scorer type/
-        );
+      test('accepts a name equal to a scorer type', () => {
+        // Every scorer is keyed by its name, so a type name is one more name.
+        expect(validate([toolScorer({ name: 'contains' })])).toBeNull();
       });
 
       test.each(['input', 'output', 'object', 'expected', 'item'])(
@@ -286,8 +324,7 @@ describe('evaluation scorers', () => {
       });
 
       test('accepts two tool scorers with distinct names', () => {
-        // Unlike built-in types, `tool` may appear several times — outcomes
-        // key on the scorer's own name, so two names are two buckets.
+        // Outcomes key on the scorer's name, so two names are two buckets.
         expect(
           validate([
             toolScorer(),
@@ -304,7 +341,7 @@ describe('evaluation scorers', () => {
     test('scores 1 on an exact match, ignoring surrounding whitespace', async () => {
       expect(
         await runOne({
-          scorer: { type: 'exact_match' },
+          scorer: { type: 'exact_match', name: 'exact_match' },
           content: '  Paris\n',
           expectedOutput: 'Paris',
         })
@@ -315,7 +352,7 @@ describe('evaluation scorers', () => {
       expect(
         (
           await runOne({
-            scorer: { type: 'exact_match' },
+            scorer: { type: 'exact_match', name: 'exact_match' },
             content: 'Lyon',
             expectedOutput: 'Paris',
           })
@@ -327,7 +364,7 @@ describe('evaluation scorers', () => {
       expect(
         (
           await runOne({
-            scorer: { type: 'exact_match' },
+            scorer: { type: 'exact_match', name: 'exact_match' },
             content: 'Paris',
             expectedOutput: null,
           })
@@ -343,7 +380,7 @@ describe('evaluation scorers', () => {
       expect(
         (
           await runOne({
-            scorer: { type: 'contains', value: 'INVOICE' },
+            scorer: { type: 'contains', name: 'contains', value: 'INVOICE' },
             content: 'Your invoice is ready.',
           })
         ).score
@@ -356,6 +393,7 @@ describe('evaluation scorers', () => {
           await runOne({
             scorer: {
               type: 'contains',
+              name: 'contains',
               value: 'INVOICE',
               case_sensitive: true,
             },
@@ -369,7 +407,7 @@ describe('evaluation scorers', () => {
       expect(
         (
           await runOne({
-            scorer: { type: 'contains', value: 'refund' },
+            scorer: { type: 'contains', name: 'contains', value: 'refund' },
             content: 'Your invoice is ready.',
           })
         ).passed
@@ -386,6 +424,7 @@ describe('evaluation scorers', () => {
           await runOne({
             scorer: {
               type: 'json_logic',
+              name: 'json_logic',
               expression: { '==': [{ var: 'output' }, 'yes'] },
             },
             content: 'yes',
@@ -400,6 +439,7 @@ describe('evaluation scorers', () => {
           await runOne({
             scorer: {
               type: 'json_logic',
+              name: 'json_logic',
               expression: { '==': [{ var: 'object.category' }, 'billing'] },
             },
             content: '{"category":"billing"}',
@@ -415,6 +455,7 @@ describe('evaluation scorers', () => {
           await runOne({
             scorer: {
               type: 'json_logic',
+              name: 'json_logic',
               expression: {
                 '==': [{ var: 'object.category' }, { var: 'expected' }],
               },
@@ -433,6 +474,7 @@ describe('evaluation scorers', () => {
           await runOne({
             scorer: {
               type: 'json_logic',
+              name: 'json_logic',
               expression: { '==': [{ var: 'item.metadata.topic' }, 'billing'] },
             },
             content: 'anything',
@@ -447,6 +489,7 @@ describe('evaluation scorers', () => {
         await runOne({
           scorer: {
             type: 'json_logic',
+            name: 'json_logic',
             expression: { '==': [{ var: 'object.category' }, 'billing'] },
           },
           content: 'plain text',
@@ -458,7 +501,11 @@ describe('evaluation scorers', () => {
       expect(
         (
           await runOne({
-            scorer: { type: 'json_logic', expression: { cat: ['a', 'b'] } },
+            scorer: {
+              type: 'json_logic',
+              name: 'json_logic',
+              expression: { cat: ['a', 'b'] },
+            },
             content: 'anything',
           })
         ).score
@@ -501,7 +548,7 @@ describe('evaluation scorers', () => {
       expect(
         (
           await runOne({
-            scorer: { type: 'output_schema' },
+            scorer: { type: 'output_schema', name: 'output_schema' },
             content: '{"category":"billing"}',
             object: { category: 'billing' },
             agentOutputSchema: schema,
@@ -514,7 +561,7 @@ describe('evaluation scorers', () => {
       expect(
         (
           await runOne({
-            scorer: { type: 'output_schema' },
+            scorer: { type: 'output_schema', name: 'output_schema' },
             content: '{"category":"weather"}',
             object: { category: 'weather' },
             agentOutputSchema: schema,
@@ -532,6 +579,7 @@ describe('evaluation scorers', () => {
           await runOne({
             scorer: {
               type: 'output_schema',
+              name: 'output_schema',
               schema: { type: 'object', required: ['ticket_id'] },
             },
             content: '{"category":"billing"}',
@@ -545,7 +593,7 @@ describe('evaluation scorers', () => {
     test('scores 0 when the generation produced no structured object', async () => {
       expect(
         await runOne({
-          scorer: { type: 'output_schema' },
+          scorer: { type: 'output_schema', name: 'output_schema' },
           content: 'plain text',
           agentOutputSchema: schema,
         })
@@ -712,6 +760,7 @@ describe('evaluation scorers', () => {
   describe('llm_judge', () => {
     const scorer = {
       type: 'llm_judge',
+      name: 'llm_judge',
       prompt: 'Rate {{output}}',
       pass_threshold: 0.7,
     };
@@ -934,6 +983,7 @@ describe('evaluation scorers', () => {
     const scorer = (overrides: Record<string, unknown> = {}) => {
       return {
         type: 'embedding_similarity',
+        name: 'embedding_similarity',
         pass_threshold: 0.8,
         ...overrides,
       };
@@ -956,6 +1006,7 @@ describe('evaluation scorers', () => {
         return validateScorers({
           scorers: [config],
           agentHasOutputSchema: false,
+          names: 'required',
         });
       };
 

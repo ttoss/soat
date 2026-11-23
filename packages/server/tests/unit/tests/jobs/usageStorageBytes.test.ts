@@ -185,7 +185,7 @@ describe('Usage — what the storage snapshot counts', () => {
       name: 'seed-eval',
       agentId: agent.id,
       datasetId: dataset.id,
-      scorers: [{ type: 'exact_match' }],
+      scorers: [{ type: 'exact_match', name: 'exact_match' }],
     });
     evalInternalId = evaluation.id as number;
 

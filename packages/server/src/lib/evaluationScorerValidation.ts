@@ -3,10 +3,7 @@
  * one is held to. Pure, like the scoring kernel in `evaluationScorers.ts`,
  * which re-exports this surface so consumers see one module.
  */
-import {
-  checkDeciderScorerConfig,
-  DECIDER_SCORER_TYPE,
-} from './evaluationDeciderScorerContract';
+import { checkDeciderScorerConfig } from './evaluationDeciderScorerContract';
 import { checkEmbeddingScorerConfig } from './evaluationEmbeddingScorer';
 import {
   checkToolScorerConfig,
@@ -43,7 +40,7 @@ export const JUDGE_SCORER_TYPE = 'llm_judge';
  */
 export const TOOL_SCORER_TYPE = 'tool';
 
-/** The config keys each scorer type accepts, beyond `type`. */
+/** The config keys each scorer type accepts, beyond `type` and `name`. */
 const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
   exact_match: [],
   contains: ['value', 'case_sensitive'],
@@ -51,22 +48,37 @@ const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
   embedding_similarity: ['pass_threshold'],
   output_schema: ['schema'],
   llm_judge: ['ai_provider_id', 'model', 'prompt', 'pass_threshold'],
-  tool: ['name', 'tool_id', 'action', 'preset_parameters', 'pass_threshold'],
-  decider: ['name', 'decider_id', 'input', 'score', 'pass_threshold'],
+  tool: ['tool_id', 'action', 'preset_parameters', 'pass_threshold'],
+  decider: ['decider_id', 'input', 'score', 'pass_threshold'],
 };
 
-/** The scorer types keyed by their `name` rather than their type. */
-const NAMED_SCORER_TYPES: ReadonlySet<unknown> = new Set([
-  TOOL_SCORER_TYPE,
-  DECIDER_SCORER_TYPE,
-]);
-
-/** The key a scorer's outcomes and aggregates go under: its name or its type. */
+/**
+ * The key a scorer's outcomes, aggregates and calibration go under: its name.
+ */
 export const scorerOutcomeKey = (scorer: Record<string, unknown>): string => {
-  return NAMED_SCORER_TYPES.has(scorer.type)
-    ? String(scorer.name)
-    : String(scorer.type);
+  // expand-contract: scorers stored before names were required read by type
+  return typeof scorer.name === 'string' ? scorer.name : String(scorer.type);
 };
+
+/**
+ * Scorers as the wire shows them: each under its name, so an Eval or a run
+ * stored before names were required reads as the spec declares it.
+ */
+export const namedScorers = (scorers: unknown): unknown => {
+  if (!Array.isArray(scorers)) return scorers;
+  return scorers.map((scorer) => {
+    // expand-contract: scorers stored before names were required
+    return isPlainObject(scorer) && typeof scorer.name !== 'string'
+      ? { ...scorer, name: scorerOutcomeKey(scorer) }
+      : scorer;
+  });
+};
+
+/**
+ * Whether a scorer must carry its name: `required` on every write, `stored`
+ * for the run-start re-check of an Eval written before names were required.
+ */
+export type ScorerNames = 'required' | 'stored';
 
 /**
  * Whether a scorer type's verdict comes from outside the eval (a model, a
@@ -166,22 +178,10 @@ const SCORER_CHECKS: Record<ScorerType, ScorerCheck> = {
     return null;
   },
   tool: ({ scorer, path }) => {
-    return checkToolScorerConfig({
-      scorer,
-      path,
-      isBuiltInTypeName: (name) => {
-        return SCORER_TYPE_SET.has(name);
-      },
-    });
+    return checkToolScorerConfig({ scorer, path });
   },
   decider: ({ scorer, path }) => {
-    return checkDeciderScorerConfig({
-      scorer,
-      path,
-      isBuiltInTypeName: (name) => {
-        return SCORER_TYPE_SET.has(name);
-      },
-    });
+    return checkDeciderScorerConfig({ scorer, path });
   },
 };
 
@@ -189,6 +189,7 @@ const validateOneScorer = (args: {
   scorer: Record<string, unknown>;
   path: string;
   agentHasOutputSchema: boolean;
+  names: ScorerNames;
 }): string | null => {
   const { scorer, path } = args;
   const type = scorer.type;
@@ -197,12 +198,19 @@ const validateOneScorer = (args: {
     return `${path}.type must be one of ${SCORER_TYPES.join(' / ')}.`;
   }
 
-  const allowed = new Set<string>(['type', ...SCORER_FIELDS[type]]);
+  const allowed = new Set<string>(['type', 'name', ...SCORER_FIELDS[type]]);
   const unknown = Object.keys(scorer).filter((key) => {
     return !allowed.has(key);
   });
   if (unknown.length > 0) {
     return `${path} has unknown field(s) for type '${type}': ${unknown.join(', ')}.`;
+  }
+
+  const { name } = scorer;
+  // expand-contract: scorers stored before names were required carry none
+  const unnamedAllowed = args.names === 'stored' && name === undefined;
+  if (!unnamedAllowed && (typeof name !== 'string' || name.trim() === '')) {
+    return `${path}.name is required and must be a non-empty string.`;
   }
 
   return SCORER_CHECKS[type]({ ...args, scorer });
@@ -221,6 +229,7 @@ const validateOneScorer = (args: {
 export const validateScorers = (args: {
   scorers: unknown;
   agentHasOutputSchema: boolean;
+  names: ScorerNames;
 }): string | null => {
   if (!Array.isArray(args.scorers) || args.scorers.length === 0) {
     return 'scorers must be a non-empty array.';
@@ -237,18 +246,15 @@ export const validateScorers = (args: {
       scorer,
       path,
       agentHasOutputSchema: args.agentHasOutputSchema,
+      names: args.names,
     });
     if (error) return error;
 
     // Keyed by the outcome's scorer key, so two scorers sharing one would
     // collapse into a single bucket and silently lose a signal.
-    const type = scorer.type as string;
-    const named = NAMED_SCORER_TYPES.has(type);
     const key = scorerOutcomeKey(scorer);
     if (seen.has(key)) {
-      return named
-        ? `${path}.name '${key}' is declared more than once; each ${type} scorer name may appear at most once per eval.`
-        : `${path}.type '${key}' is declared more than once; each scorer type may appear at most once per eval.`;
+      return `${path}.name '${key}' is declared more than once; each scorer name may appear at most once per eval.`;
     }
     seen.add(key);
   }

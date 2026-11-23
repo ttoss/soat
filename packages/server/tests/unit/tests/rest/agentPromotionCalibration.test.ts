@@ -407,7 +407,7 @@ describe('Agent version claims — calibration evidence', () => {
 
     test('an eval graded only by pure scorers needs no calibration', async () => {
       const evalId = await createEval({
-        scorers: [{ type: 'contains', value: 'refund' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'refund' }],
         evidence: MIN,
       });
       await run(evalId);

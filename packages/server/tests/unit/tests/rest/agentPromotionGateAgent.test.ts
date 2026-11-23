@@ -50,7 +50,7 @@ describe('POST /api/v1/agents/{agent_id}/release/promote — the run agent', () 
         name: `gate-${agentId}`,
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
         // Four of four clear 0.5 (interval low ≈ 0.51).
         pass_threshold: 0.5,
       });

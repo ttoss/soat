@@ -17,7 +17,7 @@ import {
   type EmbeddingScorerRunner,
   scoreEmbeddingSimilarity,
 } from './evaluationEmbeddingScorer';
-import { isScorerType, JUDGE_SCORER_TYPE } from './evaluationScorerValidation';
+import { isScorerType, scorerOutcomeKey } from './evaluationScorerValidation';
 import {
   resolveToolScorerPassed,
   type ToolScorerRunner,
@@ -54,6 +54,7 @@ export {
 } from './evaluationEmbeddingScorer';
 
 export type ScorerOutcome = {
+  /** The scorer's outcome key (`scorerOutcomeKey`): its name. */
   scorer: string;
   score: number;
   passed: boolean;
@@ -61,6 +62,9 @@ export type ScorerOutcome = {
   /** The decision that graded the item, for a `decider` scorer. */
   decision_id?: string;
 };
+
+/** What one scorer concludes; {@link scoreOutput} files it under its key. */
+export type ScorerVerdict = Omit<ScorerOutcome, 'scorer'>;
 
 /** The generation output channels a scorer may read. */
 export type ScoredOutput = {
@@ -72,34 +76,31 @@ export type ScoredOutput = {
 
 // ── Scoring ────────────────────────────────────────────────────────────────
 
-const binary = (scorer: string, hit: boolean): ScorerOutcome => {
-  return { scorer, score: hit ? 1 : 0, passed: hit };
+const binary = (hit: boolean): ScorerVerdict => {
+  return { score: hit ? 1 : 0, passed: hit };
 };
 
 const scoreExactMatch = (args: {
   output: ScoredOutput;
   expectedOutput: string | null;
-}): ScorerOutcome => {
+}): ScorerVerdict => {
   // A reference answer is what `exact_match` compares against; with none there
   // is nothing to be right about, so the item cannot pass.
-  if (args.expectedOutput === null) return binary('exact_match', false);
-  return binary(
-    'exact_match',
-    args.output.content.trim() === args.expectedOutput.trim()
-  );
+  if (args.expectedOutput === null) return binary(false);
+  return binary(args.output.content.trim() === args.expectedOutput.trim());
 };
 
 const scoreContains = (args: {
   scorer: Record<string, unknown>;
   output: ScoredOutput;
-}): ScorerOutcome => {
+}): ScorerVerdict => {
   const value = String(args.scorer.value);
   const caseSensitive = args.scorer.case_sensitive === true;
   const haystack = caseSensitive
     ? args.output.content
     : args.output.content.toLowerCase();
   const needle = caseSensitive ? value : value.toLowerCase();
-  return binary('contains', haystack.includes(needle));
+  return binary(haystack.includes(needle));
 };
 
 /**
@@ -128,29 +129,29 @@ export const buildJsonLogicContext = (args: {
 const scoreJsonLogic = (args: {
   scorer: Record<string, unknown>;
   context: Record<string, unknown>;
-}): ScorerOutcome => {
+}): ScorerVerdict => {
   // The shared `LogicEngine` — the same evaluator orchestration mappings use —
   // so assertion semantics are identical everywhere and no second expression
   // language enters the platform.
   const result = evaluateLogic(args.scorer.expression, args.context);
-  return binary('json_logic', Boolean(result));
+  return binary(Boolean(result));
 };
 
 const scoreOutputSchema = (args: {
   scorer: Record<string, unknown>;
   output: ScoredOutput;
   agentOutputSchema: unknown;
-}): ScorerOutcome => {
+}): ScorerVerdict => {
   // A `completed` generation that produced no structured object failed to
   // answer in the required shape — a genuine behavioral 0, not an error.
-  if (args.output.object === undefined) return binary('output_schema', false);
+  if (args.output.object === undefined) return binary(false);
 
   const schema =
     args.scorer.schema !== undefined
       ? args.scorer.schema
       : args.agentOutputSchema;
   const validation = validateStructuredOutput(schema)(args.output.object);
-  return binary('output_schema', validation.success);
+  return binary(validation.success);
 };
 
 /**
@@ -178,7 +179,7 @@ const scoreToolScorer = async (args: {
   scorer: Record<string, unknown>;
   context: Record<string, unknown>;
   runToolScorer: ToolScorerRunner;
-}): Promise<ScorerOutcome> => {
+}): Promise<ScorerVerdict> => {
   const verdict = await args.runToolScorer({
     scorer: args.scorer,
     context: args.context,
@@ -186,7 +187,6 @@ const scoreToolScorer = async (args: {
 
   const name = String(args.scorer.name);
   return {
-    scorer: name,
     score: verdict.score,
     passed: resolveToolScorerPassed({ name, scorer: args.scorer, verdict }),
     ...(verdict.reasoning === undefined
@@ -201,7 +201,7 @@ const scoreJudge = async (args: {
   output: ScoredOutput;
   expectedOutput: string | null;
   runJudge: JudgeRunner;
-}): Promise<ScorerOutcome> => {
+}): Promise<ScorerVerdict> => {
   const verdict = await args.runJudge({
     scorer: args.scorer,
     input: args.input,
@@ -214,7 +214,6 @@ const scoreJudge = async (args: {
   // threshold passes.
   const threshold = Number(args.scorer.pass_threshold);
   return {
-    scorer: JUDGE_SCORER_TYPE,
     score: verdict.score,
     passed: verdict.score >= threshold,
     ...(verdict.reasoning === undefined
@@ -254,7 +253,7 @@ const scoreOne = async (args: {
   runToolScorer?: ToolScorerRunner;
   runEmbeddings?: EmbeddingScorerRunner;
   runDecider?: DeciderScorerRunner;
-}): Promise<ScorerOutcome> => {
+}): Promise<ScorerVerdict> => {
   const { scorer } = args;
   const scorerType = scorer.type;
 
@@ -354,8 +353,9 @@ export const scoreOutput = async (args: {
 
   for (const raw of args.scorers) {
     const scorer = isPlainObject(raw) ? raw : {};
-    outcomes.push(
-      await scoreOne({
+    outcomes.push({
+      scorer: scorerOutcomeKey(scorer),
+      ...(await scoreOne({
         scorer,
         context,
         input: args.input,
@@ -366,8 +366,8 @@ export const scoreOutput = async (args: {
         runToolScorer: args.runToolScorer,
         runEmbeddings: args.runEmbeddings,
         runDecider: args.runDecider,
-      })
-    );
+      })),
+    });
   }
 
   return outcomes;

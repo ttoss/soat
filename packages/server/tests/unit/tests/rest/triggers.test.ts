@@ -182,7 +182,7 @@ describe('Triggers', () => {
           name: 'triggers-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         })
     ).body.id;
   });

@@ -357,7 +357,7 @@ describe('Project pause', () => {
           name: 'pause-eval',
           agent_id: agentId,
           dataset_id: dataset.body.id,
-          scorers: [{ type: 'contains', value: 'x' }],
+          scorers: [{ type: 'contains', name: 'contains', value: 'x' }],
         });
       expect(evaluation.status).toBe(201);
 

@@ -5995,7 +5995,7 @@ echo "--- Creating formation with dataset / dataset_item / eval resources ---"
 EVAL_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval-formation" \
-  --template '{"resources":{"suite":{"type":"dataset","properties":{"name":"smoke-formation-suite"}},"case":{"type":"dataset_item","properties":{"dataset_id":{"ref":"suite"},"input":[{"role":"user","content":"Say hello."}],"expected_output":"hello"}},"regression":{"type":"eval","properties":{"name":"smoke-formation-eval","policy_ids":["'"$GRANT_POLICY_ID"'"],"agent_id":"'"$AGENT_ID"'","dataset_id":{"ref":"suite"},"scorers":[{"type":"contains","value":"hello"}],"pass_threshold":0.5}}}}')
+  --template '{"resources":{"suite":{"type":"dataset","properties":{"name":"smoke-formation-suite"}},"case":{"type":"dataset_item","properties":{"dataset_id":{"ref":"suite"},"input":[{"role":"user","content":"Say hello."}],"expected_output":"hello"}},"regression":{"type":"eval","properties":{"name":"smoke-formation-eval","policy_ids":["'"$GRANT_POLICY_ID"'"],"agent_id":"'"$AGENT_ID"'","dataset_id":{"ref":"suite"},"scorers":[{"type":"contains","name":"says_hello","value":"hello"}],"pass_threshold":0.5}}}}')
 EVAL_FORMATION_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.id')
 EVAL_FORM_DATASET_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "suite") | .physical_resource_id')
 EVAL_FORM_EVAL_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "regression") | .physical_resource_id')
@@ -6387,7 +6387,7 @@ DEL_EVAL_ID=$(printf '%s\n' "$($SOAT_CLI create-eval \
   --name smoke-delete-eval \
   --agent_id "$DEL_AGENT_ID" \
   --dataset_id "$DEL_DATASET_ID" \
-  --scorers '[{"type":"contains","value":"a"}]')" | jq -r '.id')
+  --scorers '[{"type":"contains","name":"has_a","value":"a"}]')" | jq -r '.id')
 
 DEL_WORKFLOW_ID=$(printf '%s\n' "$($SOAT_CLI create-workflow \
   --project-id "$DEL_PROJECT_ID" \
@@ -7688,7 +7688,7 @@ EVAL_RESP=$($SOAT_CLI create-eval \
   --name "smoke-eval" \
   --agent_id "$AGENT_ID" \
   --dataset_id "$DATASET_ID" \
-  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"embedding_similarity","pass_threshold":0}]' \
+  --scorers '[{"type":"json_logic","name":"non_empty","expression":{"!=":[{"var":"output"},""]}},{"type":"embedding_similarity","name":"similar","pass_threshold":0}]' \
   --pass_threshold 0.5)
 EVAL_ID=$(printf '%s\n' "$EVAL_RESP" | jq -r '.id')
 if ! printf '%s\n' "$EVAL_ID" | grep -q '^eval_'; then
@@ -7768,7 +7768,7 @@ fi
 # The embedding scorer must have produced a numeric 0-1 cosine score (the value
 # itself depends on the model's wording, so only its presence/shape is asserted).
 if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e \
-  '.data[0].scores[] | select(.scorer == "embedding_similarity") | (.score >= 0 and .score <= 1 and .passed == true)' \
+  '.data[0].scores[] | select(.scorer == "similar") | (.score >= 0 and .score <= 1 and .passed == true)' \
   >/dev/null 2>&1; then
   echo "ERROR: expected an embedding_similarity score on the eval result" >&2
   printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
@@ -7879,7 +7879,7 @@ EVAL_OTHER_RESP=$($SOAT_CLI create-eval \
   --name "smoke-eval-other" \
   --agent_id "$AGENT_ID" \
   --dataset_id "$DATASET_ID" \
-  --scorers '[{"type":"contains","value":"a"}]')
+  --scorers '[{"type":"contains","name":"has_a","value":"a"}]')
 EVAL_OTHER_ID=$(printf '%s\n' "$EVAL_OTHER_RESP" | jq -r '.id')
 set +e
 EVAL_FOREIGN_BASE=$($SOAT_CLI start-eval-run --eval_id "$EVAL_OTHER_ID" --wait true \
@@ -7900,7 +7900,7 @@ EVAL_JUDGE_RESP=$($SOAT_CLI create-eval \
   --name "smoke-eval-judge" \
   --agent_id "$AGENT_ID" \
   --dataset_id "$DATASET_ID" \
-  --scorers '[{"type":"llm_judge","ai_provider_id":"'"$AI_PROVIDER_ID"'","prompt":"Rate from 0 to 1 how helpful the answer is. Reply with only JSON: {\"score\": 0.5, \"reasoning\": \"why\"}. Answer: {{output}}","pass_threshold":0.5}]')
+  --scorers '[{"type":"llm_judge","name":"helpfulness","ai_provider_id":"'"$AI_PROVIDER_ID"'","prompt":"Rate from 0 to 1 how helpful the answer is. Reply with only JSON: {\"score\": 0.5, \"reasoning\": \"why\"}. Answer: {{output}}","pass_threshold":0.5}]')
 EVAL_JUDGE_ID=$(printf '%s\n' "$EVAL_JUDGE_RESP" | jq -r '.id')
 if ! printf '%s\n' "$EVAL_JUDGE_ID" | grep -q '^eval_'; then
   echo "ERROR: judged eval was not created" >&2
@@ -7923,7 +7923,7 @@ if ! printf '%s\n' "$EVAL_JUDGE_RESULTS" | jq -e \
   '(.data | length) == 1
    and (.data[0]
         | (.error != null and (.scores | length) == 0)
-          or (.error == null and .scores[0].scorer == "llm_judge"
+          or (.error == null and .scores[0].scorer == "helpfulness"
               and .scores[0].score >= 0 and .scores[0].score <= 1))' \
   >/dev/null 2>&1; then
   echo "ERROR: judged result was neither scored in range nor cleanly errored" >&2
@@ -7940,7 +7940,7 @@ EVAL_JUDGE_BAD=$($SOAT_CLI create-eval \
   --name "smoke-eval-judge-bad" \
   --agent_id "$AGENT_ID" \
   --dataset_id "$DATASET_ID" \
-  --scorers '[{"type":"llm_judge","prompt":"rate {{output}}"}]' 2>&1)
+  --scorers '[{"type":"llm_judge","name":"helpfulness","prompt":"rate {{output}}"}]' 2>&1)
 EVAL_JUDGE_BAD_EXIT=$?
 set -e
 if [ "$EVAL_JUDGE_BAD_EXIT" -eq 0 ]; then
@@ -8128,7 +8128,7 @@ GATE_EVAL_RESP=$($SOAT_CLI create-eval \
   --name "smoke-eval-gate" \
   --agent_id "$GATE_AGENT_ID" \
   --dataset_id "$DATASET_ID" \
-  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}]' \
+  --scorers '[{"type":"json_logic","name":"non_empty","expression":{"!=":[{"var":"output"},""]}}]' \
   --pass_threshold 0.5)
 GATE_EVAL_ID=$(printf '%s\n' "$GATE_EVAL_RESP" | jq -r '.id')
 

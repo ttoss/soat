@@ -1007,7 +1007,7 @@ describe('Agent versions', () => {
           name,
           agent_id: targetAgentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
           pass_threshold: 0.5,
         });
       expect(res.status).toBe(201);

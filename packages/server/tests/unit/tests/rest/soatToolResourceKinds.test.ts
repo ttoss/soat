@@ -339,7 +339,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
           name: 'kinds-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'exact_match' }],
+          scorers: [{ type: 'exact_match', name: 'exact_match' }],
         }),
         absentId: 'eval_absent',
       }),

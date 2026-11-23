@@ -471,7 +471,7 @@ EVAL_ID=$(soat create-eval \
   --policy-ids '["'"$POLICY_ID"'"]' \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
-  --scorers '[{"type":"output_schema","schema":{"type":"object","properties":{"refund_amount":{"type":"number","minimum":0}}}},{"type":"json_logic","expression":{"==":[{"var":"object.category"},{"var":"item.metadata.expected_category"}]}},{"type":"tool","name":"refund-policy","tool_id":"'"$SCORER_TOOL_ID"'"}]' \
+  --scorers '[{"type":"output_schema","name":"refund_shape","schema":{"type":"object","properties":{"refund_amount":{"type":"number","minimum":0}}}},{"type":"json_logic","name":"category_matches","expression":{"==":[{"var":"object.category"},{"var":"item.metadata.expected_category"}]}},{"type":"tool","name":"refund-policy","tool_id":"'"$SCORER_TOOL_ID"'"}]' \
   --pass-threshold 0.75 \
   --group-by kind | jq -r '.id')
 
@@ -501,6 +501,7 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
     scorers: [
       {
         type: 'output_schema',
+        name: 'refund_shape',
         schema: {
           type: 'object',
           properties: { refund_amount: { type: 'number', minimum: 0 } },
@@ -508,6 +509,7 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
       },
       {
         type: 'json_logic',
+        name: 'category_matches',
         expression: {
           '==': [{ var: 'object.category' }, { var: 'item.metadata.expected_category' }],
         },
@@ -530,7 +532,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
 
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"refund-triage\",\"policy_ids\":[\"$POLICY_ID\"],\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"output_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"refund_amount\":{\"type\":\"number\",\"minimum\":0}}}},{\"type\":\"json_logic\",\"expression\":{\"==\":[{\"var\":\"object.category\"},{\"var\":\"item.metadata.expected_category\"}]}},{\"type\":\"tool\",\"name\":\"refund-policy\",\"tool_id\":\"$SCORER_TOOL_ID\"}],\"pass_threshold\":0.75,\"group_by\":\"kind\"}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"refund-triage\",\"policy_ids\":[\"$POLICY_ID\"],\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"output_schema\",\"name\":\"refund_shape\",\"schema\":{\"type\":\"object\",\"properties\":{\"refund_amount\":{\"type\":\"number\",\"minimum\":0}}}},{\"type\":\"json_logic\",\"name\":\"category_matches\",\"expression\":{\"==\":[{\"var\":\"object.category\"},{\"var\":\"item.metadata.expected_category\"}]}},{\"type\":\"tool\",\"name\":\"refund-policy\",\"tool_id\":\"$SCORER_TOOL_ID\"}],\"pass_threshold\":0.75,\"group_by\":\"kind\"}" | jq -r '.id')
 ```
 
 </TabItem>
@@ -615,8 +617,8 @@ The over-limit request, read as asked:
   "output": "{\"category\":\"refund\",\"refund_amount\":60}",
   "error": null,
   "scores": [
-    { "scorer": "output_schema", "passed": true, "reasoning": null },
-    { "scorer": "json_logic", "passed": true, "reasoning": null },
+    { "scorer": "refund_shape", "passed": true, "reasoning": null },
+    { "scorer": "category_matches", "passed": true, "reasoning": null },
     { "scorer": "refund-policy", "passed": false, "reasoning": "Refund 60 against 25 paid." }
   ]
 }

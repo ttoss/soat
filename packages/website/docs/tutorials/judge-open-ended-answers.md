@@ -222,7 +222,7 @@ EVAL_ID=$(soat create-eval \
   --policy-ids '["'"$POLICY_ID"'"]' \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
-  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"llm_judge","ai_provider_id":"'"$AI_PROVIDER_ID"'","model":"qwen2.5:0.5b","prompt":"You grade a customer support draft against a reference answer. Score 1 when the draft apologizes and offers the fix the reference names, 0.5 when it offers the fix without apologizing, 0 when it offers no fix. Reply with only JSON: {\"score\": <1, 0.5 or 0>, \"reasoning\": \"<one sentence>\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}","pass_threshold":0.7}]' \
+  --scorers '[{"type":"json_logic","name":"non_empty","expression":{"!=":[{"var":"output"},""]}},{"type":"llm_judge","name":"reply_judge","ai_provider_id":"'"$AI_PROVIDER_ID"'","model":"qwen2.5:0.5b","prompt":"You grade a customer support draft against a reference answer. Score 1 when the draft apologizes and offers the fix the reference names, 0.5 when it offers the fix without apologizing, 0 when it offers no fix. Reply with only JSON: {\"score\": <1, 0.5 or 0>, \"reasoning\": \"<one sentence>\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}","pass_threshold":0.7}]' \
   --pass-threshold 0.5 | jq -r '.id')
 
 soat get-eval --eval-id "$EVAL_ID" | jq '.scorers | map({type, pass_threshold})'
@@ -249,9 +249,10 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
     agent_id: agent.id,
     dataset_id: dataset.id,
     scorers: [
-      { type: 'json_logic', expression: { '!=': [{ var: 'output' }, ''] } },
+      { type: 'json_logic', name: 'non_empty', expression: { '!=': [{ var: 'output' }, ''] } },
       {
         type: 'llm_judge',
+        name: 'reply_judge',
         ai_provider_id: provider.id,
         model: 'qwen2.5:0.5b',
         prompt:
@@ -278,7 +279,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
 
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"reply-quality\",\"policy_ids\":[\"$POLICY_ID\"],\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"llm_judge\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\",\"prompt\":\"You grade a customer support draft against a reference answer. Score 1 when the draft apologizes and offers the fix the reference names, 0.5 when it offers the fix without apologizing, 0 when it offers no fix. Reply with only JSON: {\\\"score\\\": <1, 0.5 or 0>, \\\"reasoning\\\": \\\"<one sentence>\\\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}\",\"pass_threshold\":0.7}],\"pass_threshold\":0.5}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"reply-quality\",\"policy_ids\":[\"$POLICY_ID\"],\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"scorers\":[{\"type\":\"json_logic\",\"name\":\"non_empty\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"llm_judge\",\"name\":\"reply_judge\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\",\"prompt\":\"You grade a customer support draft against a reference answer. Score 1 when the draft apologizes and offers the fix the reference names, 0.5 when it offers the fix without apologizing, 0 when it offers no fix. Reply with only JSON: {\\\"score\\\": <1, 0.5 or 0>, \\\"reasoning\\\": \\\"<one sentence>\\\"}. Customer message: {{input}} Draft reply: {{output}} Reference answer: {{expected}}\",\"pass_threshold\":0.7}],\"pass_threshold\":0.5}" | jq -r '.id')
 ```
 
 </TabItem>
@@ -317,7 +318,7 @@ const { data: results } = await adminSoat.evaluations.listEvalResults({
 });
 
 for (const result of results.data) {
-  const judge = result.scores?.find((s) => s.scorer === 'llm_judge');
+  const judge = result.scores?.find((s) => s.scorer === 'reply_judge');
   console.log(judge?.score, judge?.reasoning, result.error);
 }
 ```
@@ -344,9 +345,9 @@ A judged item (the score gates; `reasoning` is stored for audit):
   "output": "I am sorry your package arrived damaged. Send us a photo and we will ship a replacement right away.",
   "error": null,
   "scores": [
-    { "scorer": "json_logic", "score": 1, "passed": true },
+    { "scorer": "non_empty", "score": 1, "passed": true },
     {
-      "scorer": "llm_judge",
+      "scorer": "reply_judge",
       "score": 0.9,
       "passed": true,
       "reasoning": "Apologizes, asks for a photo, and offers a replacement."
@@ -444,12 +445,12 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/calibration" \
 {
   "labeled_count": 2,
   "scorers": {
-    "llm_judge": { "labeled": 2, "agreement": 0.5, "false_pass": 1, "false_fail": 0 }
+    "reply_judge": { "labeled": 2, "agreement": 0.5, "false_pass": 1, "false_fail": 0 }
   }
 }
 ```
 
-The labels stand in for your review: label each draft with your own verdict. A label never changes the result's `passed`; it is what the judge's agreement is measured against. Items the judge could not grade (Step 4) carry no `llm_judge` outcome and are left out of its count. On each disagreement (a result whose `llm_judge` outcome differs from its `human_label`), read the judge's `reasoning`, then fix the rubric or move `pass_threshold` with [`update-eval`](/docs/api/evaluations/update-eval) and run again. Label 20–30 drafts, borderline ones included, before gating on the judge; `evidence.min_calibration` makes a claim require it ([Evidence](/docs/modules/evaluations#evidence)).
+The labels stand in for your review: label each draft with your own verdict. A label never changes the result's `passed`; it is what the judge's agreement is measured against. Items the judge could not grade (Step 4) carry no `reply_judge` outcome and are left out of its count. On each disagreement (a result whose `reply_judge` outcome differs from its `human_label`), read the judge's `reasoning`, then fix the rubric or move `pass_threshold` with [`update-eval`](/docs/api/evaluations/update-eval) and run again. Label 20–30 drafts, borderline ones included, before gating on the judge; `evidence.min_calibration` makes a claim require it ([Evidence](/docs/modules/evaluations#evidence)).
 
 ---
 

@@ -266,7 +266,7 @@ const CASES: RoundTripCase[] = [
         name: 'Formation Eval',
         agent_id: fx.agentId,
         dataset_id: fx.datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
         pass_threshold: 0.8,
       };
       return {
@@ -274,12 +274,12 @@ const CASES: RoundTripCase[] = [
         expectRead: declared,
         update: {
           ...declared,
-          scorers: [{ type: 'contains', value: 'Paris' }],
+          scorers: [{ type: 'contains', name: 'contains', value: 'Paris' }],
           pass_threshold: 0.5,
         },
         expectAfterUpdate: {
           pass_threshold: 0.5,
-          scorers: [{ type: 'contains', value: 'Paris' }],
+          scorers: [{ type: 'contains', name: 'contains', value: 'Paris' }],
         },
       };
     },
@@ -293,7 +293,7 @@ const CASES: RoundTripCase[] = [
         name: 'Declared-Only Eval',
         agent_id: fx.agentId,
         dataset_id: fx.datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
         pass_threshold: 0.9,
       };
       const { pass_threshold: _kept, ...withoutThreshold } = declared;
@@ -317,7 +317,7 @@ const CASES: RoundTripCase[] = [
         name: 'Ungated Eval',
         agent_id: fx.agentId,
         dataset_id: fx.datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
       };
       return {
         create: declared,

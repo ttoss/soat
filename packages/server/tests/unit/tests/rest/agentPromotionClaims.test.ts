@@ -67,7 +67,7 @@ describe('Agent version claims', () => {
         name: unique('claims-eval'),
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'Paris' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'Paris' }],
         pass_threshold: 0.5,
         claim,
       });

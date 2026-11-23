@@ -326,7 +326,6 @@ describe('Evaluations — decider scorers', () => {
       ['a pass_threshold above 1', { pass_threshold: 2 }, 'pass_threshold'],
       ['a missing decider_id', { decider_id: undefined }, 'decider_id'],
       ['a missing name', { name: undefined }, 'scorers.0.name'],
-      ['a built-in type as name', { name: 'llm_judge' }, 'built-in'],
       ['an unknown field', { tool_id: 'tool_x' }, 'unknown field'],
     ])('refuses %s', async (_label, extra, message) => {
       const res = await postEval([deciderScorer(extra)]);
@@ -611,7 +610,9 @@ describe('Evaluations — decider scorers', () => {
     });
 
     test('a run with no decider scorer pins no decider version', async () => {
-      const evalId = await createEval([{ type: 'exact_match' }]);
+      const evalId = await createEval([
+        { type: 'exact_match', name: 'exact_match' },
+      ]);
       mockCreateGeneration.mockResolvedValueOnce(
         completedGeneration('gen_dsc7', 'A refund of the duplicate charge.')
       );

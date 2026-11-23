@@ -45,7 +45,7 @@ describe('Evaluations — group_by', () => {
         name: unique('grouped-eval'),
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'ok' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'ok' }],
         ...body,
       });
   };
@@ -222,7 +222,7 @@ describe('Evaluations — group_by', () => {
         name: unique('grouped-eval'),
         agent_id: agentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'ok' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'ok' }],
         group_by: 'kind',
       });
 

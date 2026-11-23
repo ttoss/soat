@@ -27,15 +27,24 @@ export type RunCalibration = {
 };
 
 /**
- * The scorers as the run recorded them and the decider versions it pinned,
- * digested without regard to key order: any change to what graded moves it.
+ * Each scorer's configuration under its outcome key, and the decider versions
+ * the run pinned, digested without regard to key order: any change to what
+ * graded, or to which key a configuration answers under, moves it. The name
+ * is the key rather than part of the configuration, so naming a scorer after
+ * the key it already had leaves its labels counting.
  */
 export const scorerFingerprint = (args: {
   scorers: unknown[];
   deciderVersions: Record<string, number> | null;
 }): string => {
+  const byKey: Record<string, unknown> = {};
+  for (const scorer of args.scorers) {
+    if (!isPlainObject(scorer)) continue;
+    const { name: _name, ...config } = scorer;
+    byKey[scorerOutcomeKey(scorer)] = config;
+  }
   return `sha256:${stableDigest({
-    scorers: args.scorers,
+    scorers: byKey,
     decider_versions: args.deciderVersions ?? {},
   })}`;
 };

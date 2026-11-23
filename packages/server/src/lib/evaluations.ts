@@ -16,6 +16,7 @@ import {
   validateScorerReferences,
 } from './evaluationScorerReferences';
 import { validateScorers } from './evaluationScorers';
+import { namedScorers } from './evaluationScorerValidation';
 import {
   assertValid,
   claimUpdate,
@@ -49,7 +50,7 @@ export const mapEval = (evaluation: EvalRow) => {
     name: evaluation.name,
     agent_id: evaluation.agent?.publicId,
     dataset_id: evaluation.dataset?.publicId,
-    scorers: evaluation.scorers,
+    scorers: namedScorers(evaluation.scorers),
     pass_threshold:
       evaluation.passThreshold === null
         ? null
@@ -141,6 +142,30 @@ const requireReferenceId = (value: unknown, field: string): string => {
   return value;
 };
 
+/**
+ * The scorers an Eval write leaves, validated: the ones written, each named,
+ * or, when the write names none, the ones stored, re-checked against a new
+ * agent. Returns the scorers that stand.
+ */
+const assertScorers = async (args: {
+  written: unknown;
+  stored?: unknown;
+  agentOutputSchema: unknown;
+  projectId: number;
+}): Promise<unknown> => {
+  const scorers = args.written === undefined ? args.stored : args.written;
+  assertValid(
+    validateScorers({
+      scorers,
+      agentHasOutputSchema: isPlainObject(args.agentOutputSchema),
+      // expand-contract: an agent swap re-checks scorers stored unnamed
+      names: args.written === undefined ? 'stored' : 'required',
+    })
+  );
+  await validateScorerReferences({ scorers, projectId: args.projectId });
+  return scorers;
+};
+
 export const createEval = async (args: {
   projectId: number;
   name: unknown;
@@ -173,14 +198,9 @@ export const createEval = async (args: {
 
   // Best-effort at create time — the agent's `output_schema` is mutable, so
   // `evaluationRuns.ts` re-checks this authoritatively at run start.
-  assertValid(
-    validateScorers({
-      scorers: args.scorers,
-      agentHasOutputSchema: isPlainObject(agent.outputSchema),
-    })
-  );
-  await validateScorerReferences({
-    scorers: args.scorers,
+  await assertScorers({
+    written: args.scorers,
+    agentOutputSchema: agent.outputSchema,
     projectId: args.projectId,
   });
   await assertWriterHolds({
@@ -392,19 +412,12 @@ export const updateEval = async (args: {
   // Re-validated whenever either half of the pair moves: swapping the agent can
   // invalidate an `output_schema` scorer that was legal against the old one.
   if (args.scorers !== undefined || args.agentId !== undefined) {
-    const scorers =
-      args.scorers === undefined ? evaluation.scorers : args.scorers;
-    assertValid(
-      validateScorers({
-        scorers,
-        agentHasOutputSchema: isPlainObject(agentOutputSchema),
-      })
-    );
-    await validateScorerReferences({
-      scorers,
+    updates.scorers = await assertScorers({
+      written: args.scorers,
+      stored: evaluation.scorers,
+      agentOutputSchema,
       projectId: evaluation.projectId as number,
     });
-    updates.scorers = scorers;
   }
 
   await assertWriterStartsUpdatedEval({ ...args, evaluation });

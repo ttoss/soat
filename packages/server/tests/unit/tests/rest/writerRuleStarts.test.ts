@@ -241,7 +241,7 @@ describe('Writer rule: what a resource starts', () => {
         project_id: projectId,
         name: unique('wrs-eval'),
         dataset_id: datasetId,
-        scorers: [{ type: 'exact_match' }],
+        scorers: [{ type: 'exact_match', name: 'exact_match' }],
         ...fields,
       };
     };

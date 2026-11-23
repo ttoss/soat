@@ -53,6 +53,7 @@ A scorer that applies to one kind reads `item.metadata` and passes the others va
 ```json
 {
   "type": "json_logic",
+  "name": "refuses_when_asked",
   "expression": {
     "if": [
       { "==": [{ "var": "item.metadata.kind" }, "refusal"] },

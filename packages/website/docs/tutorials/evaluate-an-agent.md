@@ -293,7 +293,7 @@ EVAL_ID=$(soat create-eval \
   --agent-id "$AGENT_ID" \
   --dataset-id "$DATASET_ID" \
   --policy-ids '["'"$POLICY_ID"'"]' \
-  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"contains","value":"billing@example.com"}]' \
+  --scorers '[{"type":"json_logic","name":"non_empty","expression":{"!=":[{"var":"output"},""]}},{"type":"contains","name":"names_billing_email","value":"billing@example.com"}]' \
   --pass-threshold 0.67 \
   --claim '{"statement":"Answers a billing question and hands off to billing@example.com","population":"Billing questions from customers","limits":["English only"]}' | jq -r '.id')
 
@@ -321,8 +321,8 @@ const { data: evaluation } = await adminSoat.evaluations.createEval({
     dataset_id: dataset.id,
     policy_ids: [policy.id],
     scorers: [
-      { type: 'json_logic', expression: { '!=': [{ var: 'output' }, ''] } },
-      { type: 'contains', value: 'billing@example.com' },
+      { type: 'json_logic', name: 'non_empty', expression: { '!=': [{ var: 'output' }, ''] } },
+      { type: 'contains', name: 'names_billing_email', value: 'billing@example.com' },
     ],
     pass_threshold: 0.67,
     claim: {
@@ -344,7 +344,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
 
 EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"billing-regression\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"policy_ids\":[\"$POLICY_ID\"],\"scorers\":[{\"type\":\"json_logic\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"contains\",\"value\":\"billing@example.com\"}],\"pass_threshold\":0.67,\"claim\":{\"statement\":\"Answers a billing question and hands off to billing@example.com\",\"population\":\"Billing questions from customers\",\"limits\":[\"English only\"]}}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"billing-regression\",\"agent_id\":\"$AGENT_ID\",\"dataset_id\":\"$DATASET_ID\",\"policy_ids\":[\"$POLICY_ID\"],\"scorers\":[{\"type\":\"json_logic\",\"name\":\"non_empty\",\"expression\":{\"!=\":[{\"var\":\"output\"},\"\"]}},{\"type\":\"contains\",\"name\":\"names_billing_email\",\"value\":\"billing@example.com\"}],\"pass_threshold\":0.67,\"claim\":{\"statement\":\"Answers a billing question and hands off to billing@example.com\",\"population\":\"Billing questions from customers\",\"limits\":[\"English only\"]}}" | jq -r '.id')
 ```
 
 </TabItem>
@@ -409,8 +409,8 @@ Expected shape (`contains` fails every item; the prompt never asks for a hand-of
   "errored_count": 0,
   "aggregate_scores": {
     "scorers": {
-      "json_logic": { "mean": 1, "pass_rate": 1 },
-      "contains": { "mean": 0, "pass_rate": 0 }
+      "non_empty": { "mean": 1, "pass_rate": 1 },
+      "names_billing_email": { "mean": 0, "pass_rate": 0 }
     },
     "pass_rate": 0,
     "scored_item_count": 3
@@ -555,8 +555,8 @@ Expected shape (positive `pass_rate_delta` = improvement over the baseline):
   "baseline": {
     "run_id": "evrun_stmdkHIXmu4KwTDl",
     "scorers": {
-      "json_logic": { "mean_delta": 0, "pass_rate_delta": 0 },
-      "contains": { "mean_delta": 1, "pass_rate_delta": 1 }
+      "non_empty": { "mean_delta": 0, "pass_rate_delta": 0 },
+      "names_billing_email": { "mean_delta": 1, "pass_rate_delta": 1 }
     },
     "pass_rate_delta": 1,
     "compared_item_count": 3,

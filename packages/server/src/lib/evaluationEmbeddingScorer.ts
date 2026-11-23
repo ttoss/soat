@@ -10,7 +10,7 @@
  * `embedding.ts` to the run's project, the same env-configured stack document
  * ingestion uses.
  */
-import type { ScoredOutput, ScorerOutcome } from './evaluationScorers';
+import type { ScoredOutput, ScorerVerdict } from './evaluationScorers';
 import { isUnitInterval } from './evaluationToolScorerContract';
 
 /**
@@ -69,12 +69,12 @@ export const scoreEmbeddingSimilarity = async (args: {
   output: ScoredOutput;
   expectedOutput: string | null;
   runEmbeddings: EmbeddingScorerRunner;
-}): Promise<ScorerOutcome> => {
+}): Promise<ScorerVerdict> => {
   // Like `exact_match`: the reference answer is what similarity is measured
   // against, so an item without one cannot pass — and there is nothing to
   // embed, so the backend is never called.
   if (args.expectedOutput === null) {
-    return { scorer: EMBEDDING_SCORER_TYPE, score: 0, passed: false };
+    return { score: 0, passed: false };
   }
 
   const [outputVector, expectedVector] = await args.runEmbeddings({
@@ -85,7 +85,6 @@ export const scoreEmbeddingSimilarity = async (args: {
   const threshold = Number(args.scorer.pass_threshold);
   // `>=`, so a score exactly at the threshold passes — same as `llm_judge`.
   return {
-    scorer: EMBEDDING_SCORER_TYPE,
     score,
     passed: score >= threshold,
   };

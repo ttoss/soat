@@ -3411,7 +3411,7 @@ describe('MCP tools - happy path', () => {
         name: 'MCP Eval',
         agent_id: evalAgentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'invoice' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'invoice' }],
         pass_threshold: 0.5,
       });
 
@@ -3420,7 +3420,9 @@ describe('MCP tools - happy path', () => {
       evalId = created.id;
       expect(evalId).toMatch(/^eval_/);
       // The scorer config round-trips untouched — it is an opaque bag.
-      expect(created.scorers).toEqual([{ type: 'contains', value: 'invoice' }]);
+      expect(created.scorers).toEqual([
+        { type: 'contains', name: 'contains', value: 'invoice' },
+      ]);
       expect(created.pass_threshold).toBe(0.5);
     });
 
@@ -3431,7 +3433,7 @@ describe('MCP tools - happy path', () => {
         name: 'MCP Grouped Eval',
         agent_id: evalAgentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'invoice' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'invoice' }],
         group_by: 'kind',
       });
 

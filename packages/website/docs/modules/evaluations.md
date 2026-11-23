@@ -148,9 +148,10 @@ An eval starts its agent, and each `tool` and `decider` scorer, on every run. Ev
 
 `scorers` is a discriminated union on `type`. Every scorer produces
 `{ score: 0–1, passed: boolean }` (binary scorers emit 0 or 1), so aggregation, thresholds
-and baseline deltas are scorer-agnostic. Each built-in type may appear **at most once** per
-eval; `tool` and `decider` scorers may appear several times, each under a distinct `name`
-(outcomes and aggregate scores key on the type, or on the `name` for those two).
+and baseline deltas are scorer-agnostic. Every scorer carries a `name`, unique within the
+eval, that its outcomes (`scores[].scorer`), aggregate scores and calibration key on; a
+scorer without one is `400 VALIDATION_FAILED`. Several scorers of one type coexist under
+distinct names.
 
 | `type` | Config | Scores |
 | --- | --- | --- |
@@ -232,7 +233,7 @@ invokes a [tool](./tools.md) you own once per item; it answers with the same
 
 | Config field | Required | Meaning |
 | --- | --- | --- |
-| `name` | yes | Keys this scorer's outcomes and aggregate buckets. Unique within the eval; must not shadow a built-in type. Several `tool` scorers may coexist under distinct names |
+| `name` | yes | Keys this scorer's outcomes and aggregate buckets ([Scorers](#scorers)) |
 | `tool_id` | yes | The tool that grades each item. Must belong to the eval's project and be server-callable — `http`, `mcp`, `builtin`, or `pipeline`. A `client` tool is rejected with `400`: it pauses for a calling client, and an eval run scores server-side |
 | `action` | `mcp`; `builtin` unless a `preset_parameters` (the scorer's or the tool's) names `action` | The operation to invoke on a multi-action tool |
 | `preset_parameters` | no | Fixed values merged into every call's input at the top level. The engine-injected keys below are reserved and rejected |
@@ -522,7 +523,7 @@ a queued run keeps what it started with, and a finished run still says what grad
   "agent_id": "agent_V1StGXR8Z5jdHi6B",
   "agent_version": 7,
   "definition": {
-    "scorers": [{ "type": "contains", "value": "refund" }],
+    "scorers": [{ "type": "contains", "name": "mentions_refund", "value": "refund" }],
     "pass_threshold": 0.8,
     "group_by": "kind",
     "evidence": { "required_groups": ["refund"] }
@@ -633,7 +634,7 @@ records the verdict and who gave it.
 reports, per scorer keyed as `scores[].scorer` keys it, the labeled results it graded,
 its `agreement` with the labels (`null` with none), its `false_pass` (passed what the
 label failed) and its `false_fail` (the reverse), under `scorer_fingerprint`: a hash of
-the scorers the run recorded and the decider versions it pinned. Any change to a
+each scorer the run recorded, under its name, and the decider versions it pinned. Any change to a
 scorer's configuration (prompt, a pinned `model` or `ai_provider_id`, threshold, a decider
 version) moves the fingerprint. What a scorer resolves when it runs is not in it: an
 `llm_judge` pinning no provider follows the project's default model route, an
@@ -921,7 +922,7 @@ Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another ev
 | `pass_rate_delta` | Run-level pass-rate delta over the intersection; `null` when the two runs share no comparable item |
 | `flipped` | `improved` (passed here, failed in the baseline) and `regressed` (the reverse) among the compared items |
 | `p_value` | Exact McNemar p-value of the `flipped` split; see [Uncertainty](#uncertainty) |
-| `scorers` | Per scorer type, `mean_delta` and `pass_rate_delta` |
+| `scorers` | Per scorer name, `mean_delta` and `pass_rate_delta` |
 
 Positive deltas mean this run scored **higher**. Every number is computed over the
 **item intersection**, recomputing both sides, so dataset drift shows up in the counts. A
@@ -1171,7 +1172,7 @@ Bind an eval and gate it at an 80% pass rate. `$POLICY_ID` is a policy allowing
 soat create-eval --project-id "$PROJECT_ID" --name billing-regression-suite \
   --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
   --policy-ids '["'"$POLICY_ID"'"]' \
-  --scorers '[{"type":"contains","value":"first of each month"}]' \
+  --scorers '[{"type":"contains","name":"names_schedule","value":"first of each month"}]' \
   --pass-threshold 0.8
 ```
 
@@ -1186,7 +1187,7 @@ const { data, error } = await soat.evaluations.createEval({
     agent_id: agentId,
     dataset_id: datasetId,
     policy_ids: [policyId],
-    scorers: [{ type: 'contains', value: 'first of each month' }],
+    scorers: [{ type: 'contains', name: 'names_schedule', value: 'first of each month' }],
     pass_threshold: 0.8,
   },
 });
@@ -1206,7 +1207,7 @@ curl -X POST https://api.example.com/api/v1/evals \
     "agent_id": "'"$AGENT_ID"'",
     "dataset_id": "'"$DATASET_ID"'",
     "policy_ids": ["'"$POLICY_ID"'"],
-    "scorers": [{"type":"contains","value":"first of each month"}],
+    "scorers": [{"type":"contains","name":"names_schedule","value":"first of each month"}],
     "pass_threshold": 0.8
   }'
 ```

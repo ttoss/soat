@@ -48,7 +48,7 @@ describe('Evaluations — uncertainty', () => {
         name: unique('uncertainty-eval'),
         agent_id: agentId,
         dataset_id: dataset,
-        scorers: [{ type: 'contains', value: 'ok' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'ok' }],
       });
     expect(res.status).toBe(201);
     return res.body.id as string;

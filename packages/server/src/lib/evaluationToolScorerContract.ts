@@ -72,21 +72,12 @@ export const isUnitInterval = (value: unknown): boolean => {
   );
 };
 
-/** The identity half of a tool scorer config: `name` and `tool_id`. */
+/** The identity half of a tool scorer config: `tool_id`. */
 const checkToolScorerIdentity = (args: {
   scorer: Record<string, unknown>;
   path: string;
-  isBuiltInTypeName: (name: string) => boolean;
 }): string | null => {
   const { scorer, path } = args;
-  if (typeof scorer.name !== 'string' || scorer.name.trim() === '') {
-    return `${path}.name is required and must be a non-empty string.`;
-  }
-  // Outcomes and aggregate scores key on the name, so a name that is also a
-  // built-in type would collapse two scorers into one bucket.
-  if (args.isBuiltInTypeName(scorer.name)) {
-    return `${path}.name must not be a built-in scorer type ('${scorer.name}'); pick a name of your own.`;
-  }
   if (typeof scorer.tool_id !== 'string' || scorer.tool_id === '') {
     return `${path}.tool_id is required and must be a tool id.`;
   }
@@ -124,13 +115,11 @@ const checkToolScorerCall = (args: {
 
 /**
  * The per-type config rules of a `tool` scorer, shaped like every other entry
- * of the kernel's `SCORER_CHECKS`. `isBuiltInTypeName` is passed in rather
- * than imported so this module depends on nothing in the kernel.
+ * of the kernel's `SCORER_CHECKS`.
  */
 export const checkToolScorerConfig = (args: {
   scorer: Record<string, unknown>;
   path: string;
-  isBuiltInTypeName: (name: string) => boolean;
 }): string | null => {
   return (
     checkToolScorerIdentity(args) ??

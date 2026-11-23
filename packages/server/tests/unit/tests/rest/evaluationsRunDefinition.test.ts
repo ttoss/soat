@@ -55,7 +55,7 @@ describe('Evaluations — a run records its agent and definition', () => {
         name: unique('definition-eval'),
         agent_id: firstAgentId,
         dataset_id: datasetId,
-        scorers: [{ type: 'contains', value: 'refund' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'refund' }],
         pass_threshold: 0.5,
         ...body,
       });
@@ -172,7 +172,7 @@ describe('Evaluations — a run records its agent and definition', () => {
     const runId = await startQueuedRun(evalId);
 
     await updateEval(evalId, {
-      scorers: [{ type: 'contains', value: 'never-said' }],
+      scorers: [{ type: 'contains', name: 'contains', value: 'never-said' }],
     });
     await drainEvalQueueOnce();
 
@@ -187,7 +187,7 @@ describe('Evaluations — a run records its agent and definition', () => {
 
   test('a queued run settles its verdict on the threshold it started with', async () => {
     const evalId = await createEval({
-      scorers: [{ type: 'contains', value: 'never-said' }],
+      scorers: [{ type: 'contains', name: 'contains', value: 'never-said' }],
       pass_threshold: 0.9,
     });
     const runId = await startQueuedRun(evalId);
@@ -248,7 +248,7 @@ describe('Evaluations — a run records its agent and definition', () => {
     const expected = {
       agent_id: firstAgentId,
       definition: {
-        scorers: [{ type: 'contains', value: 'refund' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'refund' }],
         pass_threshold: 0.5,
         group_by: 'kind',
         evidence: { required_groups: ['refusal'] },
@@ -263,7 +263,7 @@ describe('Evaluations — a run records its agent and definition', () => {
 
     await updateEval(evalId, {
       agent_id: secondAgentId,
-      scorers: [{ type: 'exact_match' }],
+      scorers: [{ type: 'exact_match', name: 'exact_match' }],
       pass_threshold: 0.1,
       group_by: 'tier',
       evidence: null,
@@ -335,7 +335,7 @@ describe('Evaluations — a run records its agent and definition', () => {
     expect(event?.data).toMatchObject({
       agent_id: firstAgentId,
       definition: {
-        scorers: [{ type: 'contains', value: 'refund' }],
+        scorers: [{ type: 'contains', name: 'contains', value: 'refund' }],
         pass_threshold: 0.5,
         group_by: null,
       },
