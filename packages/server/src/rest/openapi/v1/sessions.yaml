@@ -1070,13 +1070,26 @@ components:
       oneOf:
         - type: object
           additionalProperties: false
-          required:
-            - message
+          anyOf:
+            - required:
+                - message
+            - required:
+                - file_ids
           properties:
             message:
               type: string
               description: User message text
               example: Hello, how can I deploy my app?
+            file_ids:
+              type: array
+              minItems: 1
+              items:
+                x-soat-ref: files
+                type: string
+              description: >-
+                Files the turn sends the model natively, in this order, with or
+                without `message`. Each is a file of the session's project the
+                caller may download (`files:DownloadFile`).
             tool_context:
               type: object
               additionalProperties:
@@ -1097,7 +1110,7 @@ components:
                 with the same key already exists in the session, the original
                 message is returned with HTTP 200 and no new message or
                 generation is triggered. Reusing the key with a different
-                `message`, `document_id` or `tool_context` is
+                `message`, `file_ids`, `document_id` or `tool_context` is
                 `409 IDEMPOTENCY_KEY_REUSED`.
               example: wamid.HBgLNTUxMTk4...
         - type: object
@@ -1129,7 +1142,7 @@ components:
                 with the same key already exists in the session, the original
                 message is returned with HTTP 200 and no new message or
                 generation is triggered. Reusing the key with a different
-                `message`, `document_id` or `tool_context` is
+                `message`, `file_ids`, `document_id` or `tool_context` is
                 `409 IDEMPOTENCY_KEY_REUSED`.
               example: wamid.HBgLNTUxMTk4...
 

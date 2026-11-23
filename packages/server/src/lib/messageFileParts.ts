@@ -80,3 +80,30 @@ export const resolveFileContentPart = async (args: {
     ...(file.filename ? { filename: file.filename } : {}),
   };
 };
+
+/**
+ * Refuses, when a turn is written, a file it could not send: one outside the
+ * conversation's project or one the writer may not download. The turn is read
+ * again, as the caller of the generation that sends it, when it is sent.
+ */
+export const assertMessageFilesReadable = async (args: {
+  fileIds: readonly string[];
+  role: string;
+  turnProjectId: number;
+  authority: WorkAuthority | null;
+  authUser?: AuthUser;
+}): Promise<void> => {
+  if (args.fileIds.length === 0) return;
+  if (args.role !== 'user') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      '`file_ids` is accepted only on a `user` message.'
+    );
+  }
+  for (const fileId of args.fileIds) {
+    await resolveFileContentPart({
+      ...args,
+      part: { type: 'file', file_id: fileId },
+    });
+  }
+};

@@ -32,30 +32,6 @@ const sessionSubResourcesRouter = new Router<Context>();
 
 // ── Add Message ──────────────────────────────────────────────────────────
 
-const validateAddMessageBody = (body: {
-  message?: string;
-  document_id?: string;
-}) => {
-  if (body.message !== undefined && typeof body.message !== 'string') {
-    throw new DomainError('VALIDATION_FAILED', 'message must be a string');
-  }
-  if (body.document_id !== undefined && typeof body.document_id !== 'string') {
-    throw new DomainError('VALIDATION_FAILED', 'document_id must be a string');
-  }
-  if (!body.message && !body.document_id) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'either message or document_id is required'
-    );
-  }
-  if (body.message && body.document_id) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'message and document_id are mutually exclusive'
-    );
-  }
-};
-
 sessionSubResourcesRouter.post(
   '/sessions/:session_id/messages',
   async (ctx: Context) => {
@@ -67,16 +43,16 @@ sessionSubResourcesRouter.post(
     const body = ctx.request.body as {
       message?: string;
       document_id?: string;
+      file_ids?: string[];
       tool_context?: unknown;
     };
-
-    validateAddMessageBody(body);
 
     const result = await addSessionMessage({
       agentId,
       sessionId: ctx.params.session_id,
       message: body.message,
       documentId: body.document_id,
+      fileIds: body.file_ids,
       toolContext: parseToolContextBody({
         raw: body.tool_context,
         reservedPrefix: 'refuse',

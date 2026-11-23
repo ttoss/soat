@@ -52,12 +52,7 @@ const resolveMessagePosition = async (args: {
 
 const POSITION_INDEX = 'conversation_messages_conversation_id_position_unique';
 
-/**
- * The one writer of a conversation's message rows. Writes to one conversation
- * hold its lock while they resolve and take a `position`, so concurrent writes
- * queue rather than collide on the unique index.
- */
-export const insertMessage = async (args: {
+type InsertMessageArgs = {
   conversationId: number;
   documentId: number;
   role: string;
@@ -65,13 +60,49 @@ export const insertMessage = async (args: {
   agentId?: number | null;
   position?: number;
   metadata?: Record<string, unknown>;
+  fileIds?: string[];
   responseMessages?: PublicMessages;
   vendorOptions?: VendorOptions;
   idempotencyKey: string | null;
   idempotencyDigest?: string | null;
   /** What the message's content feeds a turn it is sent to. */
   provenance: ProvenanceCounts;
-}): Promise<InstanceType<(typeof db)['ConversationMessage']>> => {
+};
+
+// Absent and empty optional bags are both stored as null.
+const contentColumns = (args: InsertMessageArgs) => {
+  return {
+    metadata: args.metadata ?? null,
+    fileIds: args.fileIds?.length ? args.fileIds : null,
+    responseMessages: args.responseMessages ?? null,
+    vendorOptions: args.vendorOptions?.length ? args.vendorOptions : null,
+  };
+};
+
+const messageColumns = (args: InsertMessageArgs) => {
+  return {
+    conversationId: args.conversationId,
+    documentId: args.documentId,
+    role: args.role,
+    actorId: args.actorId ?? null,
+    agentId: args.agentId ?? null,
+    ...contentColumns(args),
+    ...provenanceColumns(args.provenance),
+    idempotencyKey: args.idempotencyKey,
+    idempotencyDigest: args.idempotencyKey
+      ? (args.idempotencyDigest ?? null)
+      : null,
+  };
+};
+
+/**
+ * The one writer of a conversation's message rows. Writes to one conversation
+ * hold its lock while they resolve and take a `position`, so concurrent writes
+ * queue rather than collide on the unique index.
+ */
+export const insertMessage = async (
+  args: InsertMessageArgs
+): Promise<InstanceType<(typeof db)['ConversationMessage']>> => {
   log(
     'insertMessage: conversationId=%d position=%s',
     args.conversationId,
@@ -93,22 +124,7 @@ export const insertMessage = async (args: {
       });
 
       return db.ConversationMessage.create(
-        {
-          conversationId: args.conversationId,
-          documentId: args.documentId,
-          role: args.role,
-          actorId: args.actorId ?? null,
-          agentId: args.agentId ?? null,
-          position,
-          metadata: args.metadata ?? null,
-          responseMessages: args.responseMessages ?? null,
-          vendorOptions: args.vendorOptions?.length ? args.vendorOptions : null,
-          ...provenanceColumns(args.provenance),
-          idempotencyKey: args.idempotencyKey,
-          idempotencyDigest: args.idempotencyKey
-            ? (args.idempotencyDigest ?? null)
-            : null,
-        },
+        { ...messageColumns(args), position },
         { transaction: t }
       );
     });

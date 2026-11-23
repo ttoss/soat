@@ -248,6 +248,7 @@ export const addSessionMessage = async (args: {
   sessionId: string;
   message?: string;
   documentId?: string;
+  fileIds?: string[];
   toolContext?: Record<string, string>;
   authUser: AuthUser | undefined;
   idempotencyKey?: string;
@@ -276,6 +277,7 @@ export const addSessionMessage = async (args: {
   assertSessionMessageInput({
     message: args.message,
     documentId: args.documentId,
+    fileIds: args.fileIds,
   });
 
   const { resolvedContent, userMsg } = await addResolvedSessionUserMessage({
@@ -284,6 +286,7 @@ export const addSessionMessage = async (args: {
     actorId: actor?.publicId ?? null,
     message: args.message,
     documentId: args.documentId,
+    fileIds: args.fileIds,
     authUser: args.authUser,
     idempotencyKey: args.idempotencyKey,
     // The request a key names: what the message says and what its tools see.
@@ -291,6 +294,7 @@ export const addSessionMessage = async (args: {
       ? stableDigest({
           message: args.message,
           documentId: args.documentId,
+          fileIds: args.fileIds,
           toolContext: args.toolContext,
         })
       : undefined,
