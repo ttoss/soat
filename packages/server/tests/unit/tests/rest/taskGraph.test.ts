@@ -10,7 +10,9 @@ let noPermToken: string;
 let projectId: string;
 let otherProjectId: string;
 
-type Node = { id: string; title: string; readiness: { blocked: boolean } };
+/** Every task a test created, by id, so a graph's ids read as titles. */
+const titleOf = new Map<string, string>();
+
 type Edge = { task_id: string; depends_on_task_id: string };
 
 const createWorkflow = async (
@@ -49,6 +51,7 @@ const createTask = async (args: {
       metadata: args.metadata,
     });
   expect(res.status).toBe(201);
+  titleOf.set(res.body.id, args.title);
   return res.body.id as string;
 };
 
@@ -65,6 +68,14 @@ const finish = async (taskId: string) => {
     .post(`/api/v1/tasks/${taskId}/transitions`)
     .send({ transition: 'finish' });
   expect(res.status).toBe(200);
+};
+
+const nodeTitles = (ids: string[]) => {
+  return ids
+    .map((id) => {
+      return titleOf.get(id) ?? id;
+    })
+    .sort();
 };
 
 const titles = (items: { title: string }[]) => {
@@ -182,19 +193,23 @@ describe('GET /api/v1/tasks?upstream_of=', () => {
 });
 
 describe('GET /api/v1/tasks/graph', () => {
-  test('answers the filtered tasks as data and the edges between them', async () => {
+  test('answers the ids of the filtered tasks and the edges between them', async () => {
     const { wf, milestone, a, b, base } = await diamond('graph all');
 
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/graph?workflow_id=${wf}`
     );
     expect(res.status).toBe(200);
-    const nodes = res.body.data as Node[];
-    expect(titles(nodes)).toEqual(['a', 'b', 'base', 'milestone', 'unrelated']);
-    expect(nodes[0].id).toMatch(/^task_/);
-    expect(nodes[0]).toHaveProperty('readiness');
-    expect(nodes[0]).not.toHaveProperty('internal_id');
-    const edges = (res.body.edges as Edge[])
+    const nodes = res.body.data.nodes as string[];
+    expect(nodeTitles(nodes)).toEqual([
+      'a',
+      'b',
+      'base',
+      'milestone',
+      'unrelated',
+    ]);
+    expect(nodes[0]).toMatch(/^task_/);
+    const edges = (res.body.data.edges as Edge[])
       .map((edge) => {
         return `${edge.task_id}>${edge.depends_on_task_id}`;
       })
@@ -216,8 +231,8 @@ describe('GET /api/v1/tasks/graph', () => {
       `/api/v1/tasks/graph?workflow_id=${wf}&upstream_of=${milestone}`
     );
     expect(res.status).toBe(200);
-    expect(titles(res.body.data)).toEqual(['a', 'b', 'base']);
-    expect(res.body.edges).toHaveLength(2);
+    expect(nodeTitles(res.body.data.nodes)).toEqual(['a', 'b', 'base']);
+    expect(res.body.data.edges).toHaveLength(2);
   });
 
   test('an edge to a task the filters leave out is not answered', async () => {
@@ -227,8 +242,13 @@ describe('GET /api/v1/tasks/graph', () => {
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/graph?workflow_id=${wf}&status=open`
     );
-    expect(titles(res.body.data)).toEqual(['a', 'b', 'milestone', 'unrelated']);
-    expect(res.body.edges).toHaveLength(2);
+    expect(nodeTitles(res.body.data.nodes)).toEqual([
+      'a',
+      'b',
+      'milestone',
+      'unrelated',
+    ]);
+    expect(res.body.data.edges).toHaveLength(2);
   });
 
   test('filters by metadata, as the list does', async () => {
@@ -238,8 +258,8 @@ describe('GET /api/v1/tasks/graph', () => {
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/graph?workflow_id=${wf}&metadata=${metadata}`
     );
-    expect(titles(res.body.data)).toEqual(['milestone']);
-    expect(res.body.edges).toEqual([]);
+    expect(nodeTitles(res.body.data.nodes)).toEqual(['milestone']);
+    expect(res.body.data.edges).toEqual([]);
   });
 
   test('is not read as a task id', async () => {
@@ -247,8 +267,10 @@ describe('GET /api/v1/tasks/graph', () => {
       `/api/v1/tasks/graph?project_id=${projectId}`
     );
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('data');
-    expect(res.body).toHaveProperty('edges');
+    expect(res.body.data).toEqual({
+      nodes: expect.any(Array),
+      edges: expect.any(Array),
+    });
   });
 
   test('refuses above the ceiling instead of truncating', async () => {
@@ -289,7 +311,7 @@ describe('GET /api/v1/tasks/graph', () => {
       '/api/v1/tasks/graph'
     );
     expect(res.status).toBe(200);
-    const seen = titles(res.body.data);
+    const seen = nodeTitles(res.body.data.nodes);
     expect(seen).toContain('milestone');
     expect(seen).not.toContain('elsewhere');
   });
@@ -312,6 +334,6 @@ describe('GET /api/v1/tasks/graph', () => {
       '/api/v1/tasks/graph'
     );
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ data: [], edges: [] });
+    expect(res.body).toEqual({ data: { nodes: [], edges: [] } });
   });
 });

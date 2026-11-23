@@ -115,7 +115,7 @@ export const taskListWhere = async (
 };
 
 /** A page's rows and their readiness, in two queries rather than two per row. */
-export const pageReader = () => {
+const pageReader = () => {
   let readiness = new Map<number, TaskReadiness>();
   const read = async (page: {
     where: Record<string, unknown> | undefined;

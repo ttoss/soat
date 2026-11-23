@@ -2,7 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 
-import { pageReader, type TaskListFilters, taskListWhere } from './tasksList';
+import { type TaskListFilters, taskListWhere } from './tasksList';
 
 const log = createDebug('soat:tasks');
 
@@ -17,9 +17,10 @@ const graphLimit = (): number => {
 };
 
 /**
- * The tasks `listTasks` would select with the same filters, and the
+ * The ids of the tasks `listTasks` would select with the same filters, and the
  * dependencies between them. Answered whole: a graph cut into pages would show
  * a held task as free, so above the ceiling it is refused, never truncated.
+ * The tasks themselves are read through `listTasks`, paged.
  */
 export const getTaskGraph = async (args: TaskListFilters) => {
   log(
@@ -39,10 +40,9 @@ export const getTaskGraph = async (args: TaskListFilters) => {
     );
   }
 
-  const { read, map } = pageReader();
-  const rows = await read({
+  const rows = await db.Task.findAll({
     where,
-    limit,
+    attributes: ['id', 'publicId'],
     order: [
       ['createdAt', 'DESC'],
       ['id', 'DESC'],
@@ -64,14 +64,16 @@ export const getTaskGraph = async (args: TaskListFilters) => {
         });
 
   return {
-    data: rows.map(map),
-    edges: dependencies.map((dependency) => {
-      return {
-        task_id: publicIds.get(dependency.taskId as number)!,
-        depends_on_task_id: publicIds.get(
-          dependency.dependsOnTaskId as number
-        )!,
-      };
-    }),
+    data: {
+      nodes: [...publicIds.values()],
+      edges: dependencies.map((dependency) => {
+        return {
+          task_id: publicIds.get(dependency.taskId as number)!,
+          depends_on_task_id: publicIds.get(
+            dependency.dependsOnTaskId as number
+          )!,
+        };
+      }),
+    },
   };
 };

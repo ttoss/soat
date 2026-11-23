@@ -193,9 +193,9 @@ paths:
   /api/v1/tasks/graph:
     get:
       description: >-
-        The tasks `GET /tasks` selects with the same filters, as `data`, and
-        the dependencies between them, as `edges`: one read draws a list, a
-        graph or a tree. `upstream_of` answers what leads to one task. Answered
+        The ids of the tasks `GET /tasks` selects with the same filters, as
+        `data.nodes`, and the dependencies between them, as `data.edges`: the
+        shape of a list, a graph or a tree, whose tasks `GET /tasks` pages. `upstream_of` answers what leads to one task. Answered
         whole, never paged: above `TASK_GRAPH_LIMIT` tasks it is refused with
         `TASK_GRAPH_TOO_LARGE`.
       tags:
@@ -1501,28 +1501,35 @@ components:
           format: date-time
     TaskGraph:
       type: object
-      required: [data, edges]
+      required: [data]
       properties:
         data:
-          type: array
-          description: The tasks the filters select, newest first.
-          items:
-            $ref: '#/components/schemas/Task'
-        edges:
-          type: array
-          description: >-
-            Every dependency between two of `data`; one to a task the filters
-            leave out is not answered.
-          items:
-            type: object
-            required: [task_id, depends_on_task_id]
-            properties:
-              task_id:
+          type: object
+          required: [nodes, edges]
+          properties:
+            nodes:
+              type: array
+              description: >-
+                The ids of the tasks the filters select, newest first. Read the
+                tasks through `GET /tasks` with the same filters.
+              items:
                 type: string
-                description: The task that waits.
-              depends_on_task_id:
-                type: string
-                description: The task it waits on.
+                example: task_V1StGXR8Z5jdHi6B
+            edges:
+              type: array
+              description: >-
+                Every dependency between two of `nodes`; one to a task the
+                filters leave out is not answered.
+              items:
+                type: object
+                required: [task_id, depends_on_task_id]
+                properties:
+                  task_id:
+                    type: string
+                    description: The task that waits.
+                  depends_on_task_id:
+                    type: string
+                    description: The task it waits on.
     TaskReadiness:
       type: object
       description: >-
