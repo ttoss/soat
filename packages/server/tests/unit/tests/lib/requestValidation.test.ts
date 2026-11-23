@@ -349,7 +349,7 @@ describe('validateRequestBody', () => {
             messages: [
               {
                 role: 'user',
-                content: [{ type: 'document', document_id: 'd' }],
+                content: { type: 'document' },
               },
             ],
           },
