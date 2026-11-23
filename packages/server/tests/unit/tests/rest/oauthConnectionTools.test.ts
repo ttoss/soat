@@ -4,6 +4,7 @@ import {
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { createScopedPrincipal } from '../../fixtures/bootstrap';
+import { captureEvents } from '../../fixtures/eventCapture';
 import { startFakeOauthProvider } from '../../fixtures/fakeOauthProvider';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -170,10 +171,22 @@ describe('http tool auth oauth_connection', () => {
   test('refreshes an expired token and keeps the rotated refresh token', async () => {
     provider.state.expiresIn = 0;
     const actorId = await createActor();
-    await connect(actorId);
+    const connectionId = await connect(actorId);
+    let first: Record<string, unknown> = {};
+    let second: Record<string, unknown> = {};
 
-    const [first] = await callTool({ actorId });
-    const [second] = await callTool({ actorId });
+    const transitions = await captureEvents({
+      type: 'oauth_connections.disconnected',
+      where: (event) => {
+        return event.resourceId === connectionId;
+      },
+      action: async () => {
+        [first] = await callTool({ actorId });
+        [second] = await callTool({ actorId });
+      },
+    });
+
+    expect(transitions).toEqual([]);
 
     const refreshes = provider.state.tokenRequests.filter((request) => {
       return request.params.grant_type === 'refresh_token';
@@ -215,10 +228,27 @@ describe('http tool auth oauth_connection', () => {
     const actorId = await createActor();
     const connectionId = await connect(actorId);
     provider.state.failRefresh = true;
+    let result: Record<string, unknown> = {};
 
-    const [result] = await callTool({ actorId });
+    const events = await captureEvents({
+      type: 'oauth_connections.disconnected',
+      where: (event) => {
+        return event.resourceId === connectionId;
+      },
+      count: 2,
+      action: async () => {
+        [result] = await callTool({ actorId });
+      },
+    });
 
     expect(JSON.stringify(result)).toContain('reconnect');
+    expect(events).toHaveLength(1);
+    expect(events[0].data).toMatchObject({
+      actor_id: actorId,
+      oauth_client_id: clientId,
+      status: 'disconnected',
+      error: { code: 'OAUTH_CONNECTION_REFRESH_FAILED' },
+    });
     const read = await turn
       .api()
       .get(`/api/v1/oauth-connections/${connectionId}`);

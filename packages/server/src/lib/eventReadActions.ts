@@ -20,6 +20,7 @@ export const EVENT_READ_ACTIONS: Readonly<Record<SoatResourceType, string>> = {
   generation: 'generations:GetGeneration',
   guardrail: 'guardrails:GetGuardrail',
   memory: 'memories:GetMemory',
+  oauth_connection: 'oauth-connections:GetOauthConnection',
   orchestration_run: 'orchestrations:GetRun',
   project: 'projects:GetProject',
   quota: 'quotas:GetQuota',

@@ -11,6 +11,10 @@ import {
   oauthConnections,
   tokenColumns,
 } from './oauthConnections';
+import {
+  markOauthConnectionConnected,
+  markOauthConnectionDisconnected,
+} from './oauthConnectionStatus';
 import { requestTokens, type TokenSet } from './oauthTokenEndpoint';
 import { decryptValue } from './secrets';
 
@@ -61,9 +65,15 @@ const recordFailure = async (args: {
   row: OauthConnectionRow;
   failure: DomainError;
 }) => {
-  await args.row.update({
-    ...(args.row.status === 'connected' ? {} : { status: 'disconnected' }),
-    error: { code: args.failure.code, message: args.failure.message },
+  const error = { code: args.failure.code, message: args.failure.message };
+  if (args.row.status === 'connected') {
+    await args.row.update({ error });
+    return;
+  }
+  await markOauthConnectionDisconnected({
+    row: args.row,
+    error,
+    transaction: null,
   });
 };
 
@@ -128,12 +138,13 @@ export const completeOauthConnection = async (args: {
   if ('failure' in exchanged) {
     await recordFailure({ row, failure: exchanged.failure });
   } else {
-    await row.update({
-      ...tokenColumns(exchanged.tokens),
-      status: 'connected',
-      grantedScopes: exchanged.tokens.scopes ?? client.scopes,
-      connectedAt: now,
-      error: null,
+    await markOauthConnectionConnected({
+      row,
+      columns: {
+        ...tokenColumns(exchanged.tokens),
+        grantedScopes: exchanged.tokens.scopes ?? client.scopes,
+        connectedAt: now,
+      },
     });
   }
   const failure = 'failure' in exchanged ? exchanged.failure : null;
