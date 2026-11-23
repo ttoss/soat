@@ -26,6 +26,8 @@ export type EvalRunDefinition = {
   passThreshold: number | null;
   groupBy: string | null;
   evidence: EvalEvidence | null;
+  /** As written: `validateCriteria` held it at the eval write. */
+  criteria: unknown[] | null;
 };
 
 const requiredGroupsOf = (
@@ -66,14 +68,17 @@ export const evalRunDefinitionOf = (args: {
     passThreshold: string | null;
     groupBy: string | null;
     evidence: unknown;
+    criteria: unknown;
   };
 }): EvalRunDefinition => {
-  const { scorers, passThreshold, groupBy, evidence } = args.evaluation;
+  const { scorers, passThreshold, groupBy, evidence, criteria } =
+    args.evaluation;
   return {
     scorers: scorerList(scorers),
     passThreshold: passThreshold === null ? null : Number(passThreshold),
     groupBy,
     evidence: evidenceOf(evidence),
+    criteria: Array.isArray(criteria) ? criteria : null,
   };
 };
 
@@ -86,6 +91,7 @@ export const storedEvalRunDefinition = (args: {
     pass_threshold: args.definition.passThreshold,
     group_by: args.definition.groupBy,
     evidence: args.definition.evidence,
+    criteria: args.definition.criteria,
   };
 };
 
@@ -105,5 +111,6 @@ export const readEvalRunDefinition = (args: {
       typeof stored.pass_threshold === 'number' ? stored.pass_threshold : null,
     groupBy: typeof stored.group_by === 'string' ? stored.group_by : null,
     evidence: evidenceOf(stored.evidence),
+    criteria: Array.isArray(stored.criteria) ? stored.criteria : null,
   };
 };

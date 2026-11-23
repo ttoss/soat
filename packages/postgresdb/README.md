@@ -129,6 +129,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-21-agent-version-claims` | `agent_versions.released_claims` (`json`), the claims a promotion's release gave up; nothing filled |
 | `2026-11-21-agent-version-promotion-claims` | `agent_versions.claims` (`json`), the claims a promotion stood on; nothing filled |
 | `2026-11-22-eval-result-human-label` | `eval_results.human_passed`, `label_note`, `labeled_by_principal_type`, `labeled_by_principal_id`, `labeled_at`, the label a user or API key gave a result; nothing filled |
+| `2026-11-23-eval-criteria` | `evals.criteria` (`json`), the properties an eval's claim is made of, each binding scorers and defined by probes; nothing filled |
 
 Run them from the server package, which owns the entrypoint:
 

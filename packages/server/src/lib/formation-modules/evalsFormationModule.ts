@@ -28,6 +28,7 @@ export const evalsFormationModule = defineFormationModule({
       policyIds: toNullableArray<string>(properties.policy_ids),
       evidence: properties.evidence,
       claim: properties.claim,
+      criteria: properties.criteria,
     });
   },
 
@@ -49,6 +50,7 @@ export const evalsFormationModule = defineFormationModule({
       policyIds: toNullableArray<string>(properties.policy_ids) ?? undefined,
       evidence: properties.evidence,
       claim: properties.claim,
+      criteria: properties.criteria,
     });
   },
 

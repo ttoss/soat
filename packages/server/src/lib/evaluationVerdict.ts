@@ -5,6 +5,7 @@
  * Pure: every caller hands it figures it already holds. Anything that judges
  * evidence imports these types and functions rather than re-deriving them.
  */
+import { criterionBindings } from './evaluationCriteria';
 import type { EvalRunDefinition } from './evaluationRunDefinition';
 import type { AggregateScores } from './evaluationScorerAggregation';
 import type { PassRateInterval } from './evaluationStatistics';
@@ -17,7 +18,8 @@ export type VerdictScope =
   | { kind: 'group'; name: string }
   | { kind: 'live'; name: string }
   | { kind: 'age' }
-  | { kind: 'calibration'; name: string };
+  | { kind: 'calibration'; name: string }
+  | { kind: 'criterion'; name: string };
 
 export type VerdictReason = {
   scope: VerdictScope;
@@ -98,6 +100,28 @@ const requiredGroupReasons = (args: {
 };
 
 /**
+ * One reason per criterion, judged on its own interval against the run's
+ * threshold. A criterion is never worse than the run on the same items, since
+ * the run's item passes only when every scorer does: the reasons say which
+ * property lost the items.
+ */
+const criterionReasons = (args: {
+  criteria: unknown;
+  aggregate: AggregateScores;
+  threshold: number;
+}): VerdictReason[] => {
+  return criterionBindings(args.criteria).map(({ name }) => {
+    return {
+      scope: { kind: 'criterion', name },
+      ...intervalVerdict({
+        interval: args.aggregate.criteria?.[name]?.pass_rate_interval ?? null,
+        threshold: args.threshold,
+      }),
+    };
+  });
+};
+
+/**
  * The run's verdict and why: the run's own interval against the threshold,
  * then each group `evidence.required_groups` names, judged by the same rule on
  * its own interval. The verdict is the worst of them; groups the evidence does
@@ -105,7 +129,10 @@ const requiredGroupReasons = (args: {
  * scores without gating on them.
  */
 export const runVerdict = (args: {
-  settlement: Pick<EvalRunDefinition, 'passThreshold' | 'evidence'>;
+  settlement: Pick<
+    EvalRunDefinition,
+    'passThreshold' | 'evidence' | 'criteria'
+  >;
   aggregate: AggregateScores;
 }): { verdict: Verdict | null; reasons: VerdictReason[] | null } => {
   const threshold = args.settlement.passThreshold;
@@ -121,6 +148,11 @@ export const runVerdict = (args: {
     },
     ...requiredGroupReasons({
       groups: args.settlement.evidence?.required_groups ?? [],
+      aggregate: args.aggregate,
+      threshold,
+    }),
+    ...criterionReasons({
+      criteria: args.settlement.criteria,
       aggregate: args.aggregate,
       threshold,
     }),

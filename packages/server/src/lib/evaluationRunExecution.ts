@@ -374,7 +374,7 @@ export const recountEvalRunProgress = async (args: {
 /** What finalize reads off the run's definition: the gate, grouping and evidence. */
 export type EvalSettlement = Pick<
   EvalRunDefinition,
-  'passThreshold' | 'groupBy' | 'evidence'
+  'passThreshold' | 'groupBy' | 'evidence' | 'criteria'
 >;
 
 /**
@@ -396,7 +396,7 @@ export const finalizeEvalRun = async (args: {
 
   const aggregate = await buildRunAggregate({
     run: args.run,
-    groupBy: args.settlement.groupBy,
+    settlement: args.settlement,
     results,
   });
 

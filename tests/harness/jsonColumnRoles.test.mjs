@@ -58,6 +58,7 @@ const ROLES = {
     'Document.error',
     'DocumentVersion.config',
     'Eval.claim',
+    'Eval.criteria',
     'Eval.evidence',
     'Eval.scorers',
     'EvalResult.error',

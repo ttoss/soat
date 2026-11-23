@@ -12,6 +12,7 @@
  */
 import createDebug from 'debug';
 
+import type { CriterionRollup } from './evaluationCriteria';
 import type { BaselineComparison } from './evaluationDeltas';
 import type { RunGrouping } from './evaluationGrouping';
 import type { ScorerOutcome } from './evaluationScorers';
@@ -34,6 +35,8 @@ export type AggregateScores = {
   baseline?: BaselineComparison;
   /** Present only when the Eval declares a `group_by` (`evaluationGrouping.ts`). */
   grouping?: RunGrouping;
+  /** Present only when the run's definition records `criteria` (`evaluationCriteria.ts`). */
+  criteria?: Record<string, CriterionRollup>;
 };
 
 const ratio = (numerator: number, denominator: number): number => {
