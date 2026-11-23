@@ -43,7 +43,7 @@ describe("a formation's policy grants in the formation's project only", () => {
     return [
       {
         path: 'resources.Res.properties.document',
-        message: `Allow resource 'srn:${otherProjectId}:*:*' is outside the formation's project; name srn:${projectId}:<type>:<id>, or omit resource for every resource of the project.`,
+        message: `Allow resource 'srn:${otherProjectId}:*:*' is outside the policy's project; name srn:${projectId}:<type>:<id>, or omit resource for every resource of the project.`,
       },
     ];
   };
