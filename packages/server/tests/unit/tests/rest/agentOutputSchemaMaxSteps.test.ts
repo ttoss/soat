@@ -1,3 +1,4 @@
+import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   type ChatCompletionsStub,
   type RecordedRequest,
@@ -224,6 +225,15 @@ describe('output_schema at max_steps', () => {
         return request.body.tool_choice;
       })
     ).toEqual(['auto', 'none']);
-    expect(await readStopReason(paused.body.id)).toBe('max_steps');
+    // A resumed turn settles its generation after it responds.
+    const stopReason = await pollUntil({
+      read: () => {
+        return readStopReason(paused.body.id);
+      },
+      done: (value) => {
+        return value !== null;
+      },
+    });
+    expect(stopReason).toBe('max_steps');
   });
 });
