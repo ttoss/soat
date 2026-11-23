@@ -1,4 +1,5 @@
 import type { AuthUser } from '../Context';
+import type { DeniedPrincipal } from '../lib/authorizationDenial';
 import { isPlainObject } from '../lib/plainObject';
 import { parseBound } from '../lib/principalBound';
 import type { TokenType } from '../lib/signedTokens';
@@ -39,6 +40,16 @@ const readPrincipalClaim = (
   return typeof type === 'string' && typeof id === 'string'
     ? { type, id }
     : undefined;
+};
+
+/** Whom a denial by an IAM token's bound names: its jti and the principal it was minted for. */
+export const boundDenier = (claims: BoundClaims): DeniedPrincipal => {
+  const principal = readPrincipalClaim(claims.prn);
+  return {
+    type: 'iam_token',
+    id: claims.jti ?? null,
+    ...(principal ? { principal } : {}),
+  };
 };
 
 /** The `iamToken` an authenticated caller carries and its layer, if any. */

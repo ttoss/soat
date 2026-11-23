@@ -326,8 +326,10 @@ components:
         jti:
           type: string
           description: >-
-            The token's id: `meta.denied_by.id` of a denial its bound causes,
-            and `detail.iam_token.jti` on the audit entries it makes.
+            The token's id: `detail.iam_token.jti` on the audit entries it
+            makes, and `meta.denied_by.id` of a denial its bound causes when it
+            was minted with no `principal`; with one, the denial names that
+            principal.
           example: 3f2c1a9e-7b4d-4e8a-9c1f-2d5e6a7b8c9d
         expires_at:
           type: string

@@ -20,6 +20,7 @@ import {
 } from '../lib/workAuthority';
 import {
   type BoundClaims,
+  boundDenier,
   boundIdentityFields,
   holdsItsBound,
 } from './authBound';
@@ -199,7 +200,7 @@ const jwtTerms = (args: { payload: JwtClaims }): CredentialTerms => {
             {
               kind: 'bound' as const,
               bound,
-              by: { type: 'iam_token' as const, id: payload.jti ?? null },
+              by: boundDenier(payload),
             },
           ]
         : []),
