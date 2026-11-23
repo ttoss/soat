@@ -103,6 +103,7 @@ export const SHAREABLE_TYPES: Readonly<Record<string, ShareableType>> = {
           'provider',
           'defaultModel',
           'modelAliases',
+          'modelInputModalities',
         ],
       });
       if (!provider) return null;
@@ -112,6 +113,8 @@ export const SHAREABLE_TYPES: Readonly<Record<string, ShareableType>> = {
         provider: provider.provider,
         default_model: provider.defaultModel,
         model_alias_names: Object.keys(provider.modelAliases ?? {}),
+        // What a grantee may send each model.
+        model_input_modalities: provider.modelInputModalities ?? {},
       };
     },
   },

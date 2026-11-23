@@ -30,6 +30,8 @@ import { DomainError } from '../errors';
 import { buildModel } from './agentModel';
 import type { ModelProvider } from './aiProviderModelAliases';
 import type { UnpricedRow } from './costEnforceability';
+import { declaredFor, type ModelInputModalities } from './inputModalityGate';
+import { withInputBoundary } from './modelInputBoundary';
 import { getEffectivePrice } from './priceBook';
 
 const log = createDebug('soat:model-pricing-gate');
@@ -50,6 +52,8 @@ export type PricedModelProvider = ModelProvider & {
   projectId: number;
   provider: string;
   requirePricedModel: boolean;
+  /** What each model accepts; the input gate reads it off the built model. */
+  modelInputModalities: ModelInputModalities;
 };
 
 /** A `(provider, model)` pair a call may bill against. */
@@ -140,7 +144,15 @@ export const buildPricedModels = async (args: {
 }): Promise<LanguageModel[]> => {
   await assertBindingsPriced(args);
   return args.bindings.map((binding) => {
-    return buildModel(binding);
+    return withInputBoundary({
+      model: buildModel(binding),
+      modelName: binding.model,
+      accepted: declaredFor({
+        modelInputModalities: binding.aiProvider.modelInputModalities,
+        model: binding.model,
+      }),
+      projectId: args.spendProjectId,
+    });
   });
 };
 

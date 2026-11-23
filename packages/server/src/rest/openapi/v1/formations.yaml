@@ -1092,6 +1092,10 @@ components:
         model_aliases_only:
           type: boolean
           description: When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).
+        model_input_modalities:
+          description: Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.
+          allOf:
+            - $ref: './ai-providers.yaml#/components/schemas/ModelInputModalities'
         require_priced_model:
           type: boolean
           description: When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project.

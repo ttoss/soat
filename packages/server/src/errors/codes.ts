@@ -1090,6 +1090,11 @@ export const ERROR_CODES = {
     description:
       'The project, or the AI provider a candidate model runs on, has `require_priced_model` set and no price-book row covers a billable token component of the model this call would run on (an agent generation, a chat completion, a memory extraction or an `llm_judge` scorer), so the spend it would incur could not be measured. The check runs before the provider is called: nothing is sent, spent or metered. `meta.unpriced_rows` names each `(provider, model, component)` to price. A call bound to a model route is held to every target it may fail over to, not just the first. Price the rows, or clear `require_priced_model` on the project or the provider to accept unmeasurable spend.',
   },
+  INPUT_MODALITY_UNSUPPORTED: {
+    httpStatus: 400,
+    description:
+      "The model declares the input modalities it accepts, in its AI provider's `model_input_modalities`, and a message part is of a modality it lacks. Refused before the provider is called. `meta.model` names the model (or the model route when none of its targets accepts the input) and `meta.modalities` the refused modalities.",
+  },
   MODEL_NOT_OFFERED: {
     httpStatus: 400,
     description:

@@ -1,5 +1,13 @@
-/** The part types a model input can carry, as a price row reads them. */
-export type InputModality = 'text' | 'image' | 'file' | 'audio';
+/** The kinds of input a model reads, as a price row and a provider's declaration name them. */
+export const INPUT_MODALITIES = [
+  'text',
+  'image',
+  'file',
+  'audio',
+  'video',
+] as const;
+
+export type InputModality = (typeof INPUT_MODALITIES)[number];
 
 const PART_MODALITIES: ReadonlyMap<string, InputModality> = new Map([
   ['text', 'text'],
@@ -11,13 +19,22 @@ const field = (value: unknown, key: string): unknown => {
   return Reflect.get(Object(value), key);
 };
 
-// A `file` part is `audio` by its media type; an image arrives as an `image` part.
+const MEDIA_TYPE_MODALITIES: ReadonlyArray<[string, InputModality]> = [
+  ['image/', 'image'],
+  ['audio/', 'audio'],
+  ['video/', 'video'],
+];
+
+// A `file` part is read by its media type: the provider prompt carries an
+// image as a `file` part too.
 const partModality = (part: unknown): InputModality | undefined => {
   const type = String(field(part, 'type'));
   if (type !== 'file') return PART_MODALITIES.get(type);
-  return String(field(part, 'mediaType')).startsWith('audio/')
-    ? 'audio'
-    : 'file';
+  const mediaType = String(field(part, 'mediaType'));
+  const match = MEDIA_TYPE_MODALITIES.find(([prefix]) => {
+    return mediaType.startsWith(prefix);
+  });
+  return match ? match[1] : 'file';
 };
 
 const messageParts = (message: unknown): unknown[] => {
@@ -27,7 +44,7 @@ const messageParts = (message: unknown): unknown[] => {
 
 /**
  * The sorted set of part types `messages` carry: a string content is `text`,
- * and a `file` part is `audio` or `file` by its media type.
+ * and a `file` part is `image`, `audio`, `video` or `file` by its media type.
  */
 export const readInputModalities = (
   messages: readonly unknown[] | null | undefined

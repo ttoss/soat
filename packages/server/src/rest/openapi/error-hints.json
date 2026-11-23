@@ -440,6 +440,11 @@
       "hint": "Ingest the document again. A large file or a busy worker can outlast the window; raise `INGESTION_STALL_TIMEOUT_MS` when it does so repeatedly.",
       "routes": []
     },
+    "INPUT_MODALITY_UNSUPPORTED": {
+      "http_status": 400,
+      "hint": "Send the part to a model whose AI provider's `model_input_modalities` lists its modality, or ingest the file and send it as a `document` part, which the model reads as text.",
+      "routes": []
+    },
     "INTERNAL_ERROR": {
       "http_status": 500,
       "hint": "Retry with backoff. The underlying exception is logged server-side and deliberately never forwarded, so the response carries nothing further to act on.",

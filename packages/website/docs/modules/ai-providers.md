@@ -35,6 +35,7 @@ An AI provider is a named configuration that tells the system how to reach a spe
 | `config`        | object \| null   | Arbitrary provider-specific configuration object          |
 | `model_aliases` | object           | Alias → model id sent to the vendor, or `{ ai_provider_id, model }` another provider of the project serves; `{}` when none (see [Model aliases](#model-aliases)) |
 | `model_aliases_only` | boolean     | Refuse a model that is not one of `model_aliases` |
+| `model_input_modalities` | object  | Model name (or alias) → the input modalities it accepts; `{}` when none (see [Input modalities](#input-modalities)) |
 | `require_priced_model` | boolean   | Refuse a model call on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
@@ -305,6 +306,20 @@ An alias may map to `{ ai_provider_id, model }`: another provider of the same pr
 - A forward is one hop: the target forwards nothing, is not the provider itself, and a provider other providers forward to may not forward. A target outside the project is refused. Each is `400 VALIDATION_FAILED` on the write.
 - A provider an alias forwards to cannot be deleted ([below](#deleting-a-provider)).
 - A project a forwarding provider is [shared](#sharing-a-provider) with generates on its aliases through that share alone; the targets stay in the provider's project and are not shared.
+
+### Input modalities
+
+`model_input_modalities` declares what each model reads: a map from a model name, or an alias, to a list of `text`, `image`, `file` (a document, such as a PDF), `audio` and `video`.
+
+```json
+{ "model_input_modalities": { "gpt-4o": ["text", "image", "file"] } }
+```
+
+- A message [`file` part](./agents.md#file-parts) of a modality its model lacks is refused with `400 INPUT_MODALITY_UNSUPPORTED` before the provider is called.
+- A model absent from the map is sent every part; the provider answers for what it cannot read.
+- An unknown modality is `400 VALIDATION_FAILED` on the write. `PATCH` replaces the whole map; `null` clears it.
+- A [model route](./model-routes.md#input-modalities) sends a call only to targets that read its input.
+- A [shared](#sharing-a-provider) provider shows its grantee the map.
 
 ### Requiring a priced model
 
