@@ -922,7 +922,7 @@ Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another ev
 | `pass_rate_delta` | Run-level pass-rate delta over the intersection; `null` when the two runs share no comparable item |
 | `flipped` | `improved` (passed here, failed in the baseline) and `regressed` (the reverse) among the compared items |
 | `p_value` | Exact McNemar p-value of the `flipped` split; see [Uncertainty](#uncertainty) |
-| `scorers` | Per scorer type, `mean_delta` and `pass_rate_delta` |
+| `scorers` | Per scorer name, `mean_delta` and `pass_rate_delta` |
 
 Positive deltas mean this run scored **higher**. Every number is computed over the
 **item intersection**, recomputing both sides, so dataset drift shows up in the counts. A

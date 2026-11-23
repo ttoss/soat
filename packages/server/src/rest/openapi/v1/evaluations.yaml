@@ -2107,9 +2107,8 @@ components:
         scorer:
           type: string
           description: >-
-            The scorer that produced this entry — the scorer type, or for a
-            `tool` scorer its `name`
-          example: contains
+            The `name` of the scorer that produced this entry
+          example: mentions_refund
         score:
           type: number
           example: 1
@@ -2598,7 +2597,7 @@ components:
         scorers:
           type: object
           description: >-
-            Per-scorer deltas, keyed by scorer type. A scorer only one of the two
+            Per-scorer deltas, keyed by scorer name. A scorer only one of the two
             runs ran is omitted rather than compared against nothing.
           additionalProperties:
             type: object
