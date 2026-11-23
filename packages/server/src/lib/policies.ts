@@ -12,7 +12,7 @@ import {
   assertWriterHoldsAttachedEdit,
   type GetWriterPolicies,
 } from './policyGrantCoverage';
-import { findAllowResourcesOutsideProject } from './policyProjectIds';
+import { validateProjectPolicyDocument } from './projectPolicyValidation';
 import { projectScopeWhere } from './projectScope';
 import type { ResourceScope } from './resourceAccessor';
 
@@ -37,21 +37,16 @@ const validatePolicy = (args: {
   document: PolicyDocument;
   project: PolicyProject;
 }): { valid: boolean; errors: string[] } => {
+  if (args.project) {
+    const errors = validateProjectPolicyDocument({
+      document: args.document,
+      projectPublicId: args.project.publicId,
+    });
+    return { valid: errors.length === 0, errors };
+  }
   const structural = validatePolicyDocument(args.document);
   if (!structural.valid) return structural;
-  const actions = validatePolicyActions(args.document);
-  if (!actions.valid || !args.project) return actions;
-  const projectPublicId = args.project.publicId;
-  const outside = findAllowResourcesOutsideProject({
-    document: args.document,
-    projectPublicId,
-  });
-  return {
-    valid: outside.length === 0,
-    errors: outside.map((resource) => {
-      return `Allow resource '${resource}' is outside the policy's project '${projectPublicId}'; name srn:${projectPublicId}:<type>:<id>.`;
-    }),
-  };
+  return validatePolicyActions(args.document);
 };
 
 export const mapPolicy = (policy: PolicyRow) => {

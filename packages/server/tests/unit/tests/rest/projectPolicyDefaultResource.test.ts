@@ -171,16 +171,16 @@ describe('a project policy whose Allow omits resource', () => {
     };
 
     test.each([
-      ['an Allow on `*`', allowOn(['*']), /outside the formation's project/],
+      ['an Allow on `*`', allowOn(['*']), /outside the policy's project/],
       [
         'an Allow on every project',
         allowOn(['srn:*:document:*']),
-        /outside the formation's project/,
+        /outside the policy's project/,
       ],
       [
         'an Allow on a project glob',
         allowOn(['srn:proj_*:document:*']),
-        /outside the formation's project/,
+        /outside the policy's project/,
       ],
       ['an Allow on a non-SRN pattern', allowOn(['doc_123']), /is invalid/],
       [

@@ -1,17 +1,12 @@
 import { DomainError } from '../../errors';
 import type { PolicyDocument } from '../iam';
 import {
-  findAllowResourcesOutsideEveryProject,
-  validatePolicyActions,
-  validatePolicyDocument,
-} from '../iam';
-import {
   createPolicy,
   deletePolicy,
   getPolicy,
   updatePolicy,
 } from '../policies';
-import { findAllowResourcesOutsideProject } from '../policyProjectIds';
+import { validateProjectPolicyDocument } from '../projectPolicyValidation';
 import { findProjectPublicId } from '../projects';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
@@ -34,28 +29,11 @@ export const policiesFormationModule = defineFormationModule({
   extraChecks: ({ properties, basePath, projectPublicId, errors }) => {
     const document = properties.document;
     if (document == null || !isObjectRecord(document)) return;
-    const structural = validatePolicyDocument(document);
-    const messages = structural.valid
-      ? validatePolicyActions(document).errors
-      : structural.errors;
-    for (const message of messages) {
+    for (const message of validateProjectPolicyDocument({
+      document,
+      projectPublicId,
+    })) {
       errors.push({ path: `${basePath}.document`, message });
-    }
-    if (!structural.valid) return;
-    const policy = document as PolicyDocument;
-    const outside =
-      projectPublicId === null
-        ? findAllowResourcesOutsideEveryProject(policy)
-        : findAllowResourcesOutsideProject({
-            document: policy,
-            projectPublicId,
-          });
-    const project = projectPublicId ?? '<project_id>';
-    for (const resource of outside) {
-      errors.push({
-        path: `${basePath}.document`,
-        message: `Allow resource '${resource}' is outside the formation's project; name srn:${project}:<type>:<id>, or omit resource for every resource of the project.`,
-      });
     }
   },
 
