@@ -498,13 +498,15 @@ Each `input_mapping` value is [JSON Logic](https://jsonlogic.com) over run state
 
 Keys are never paths in `input_mapping`: `"post.fields"` below is the literal key `post.fields` of the tool input, and only its value is evaluated. A single-key object whose key is an operator name is read as an expression, never as data. A dotted key nests only in `state_mapping` and `output_mapping`, where keys are write paths.
 
+A `tool` node calling an `http` GET tool takes each top-level key of its tool input as a query parameter. X's `post.fields` is one such parameter, a comma-separated string:
+
 ```json
 "input_mapping": {
-  "post.fields": { "text": { "var": "draft.text" }, "lang": "en" }
+  "post.fields": { "var": "input.fields" }
 }
 ```
 
-This sends `{ "post.fields": { "text": "<draft text>", "lang": "en" } }`, the shape an X post body expects.
+With run input `{ "fields": "created_at,text" }`, the request carries `?post.fields=created_at%2Ctext`. The dotted key is sent as written. Nesting the same key in an object under `query` instead sends one JSON-string parameter.
 
 #### Run input
 
