@@ -50,7 +50,7 @@ describe('vendor options', () => {
   });
 
   test('stored vendor options rejoin a message only in a conversation replay', () => {
-    assert.deepEqual(filesMatching(/\bjoinVendorOptions\(/), [
+    assert.deepEqual(filesMatching(/\breplayStoredTurn\(/), [
       'lib/conversationGeneration.ts',
     ]);
   });

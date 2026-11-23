@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -6,8 +7,9 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
  * Vendor options (`providerOptions`) ride the AI SDK messages a turn stores:
- * here an Anthropic reasoning signature. A replay sends them back to the
- * model; no response, trace or stored message a caller reads carries them.
+ * here an Anthropic reasoning signature, which the stub binds to the system
+ * prompt it was issued under and refuses under any other, as the vendor does.
+ * No response, trace or stored message a caller reads carries them.
  */
 describe('Agent vendor options', () => {
   let stubServer: Server;
@@ -23,6 +25,23 @@ describe('Agent vendor options', () => {
     return (JSON.stringify(body.messages).match(/"tool_result"/g) ?? []).length;
   };
 
+  const signaturesSent = (body: Record<string, unknown>): string[] => {
+    return (body.messages as WireMessage[]).flatMap((message) => {
+      return Array.isArray(message.content)
+        ? message.content.flatMap((block) => {
+            return block.type === 'thinking' ? [String(block.signature)] : [];
+          })
+        : [];
+    });
+  };
+
+  const systemDigest = (body: Record<string, unknown>): string => {
+    return createHash('sha256')
+      .update(JSON.stringify(body.system ?? null))
+      .digest('hex')
+      .slice(0, 12);
+  };
+
   /** One tool call, then a text answer; every answer opens with signed thinking. */
   const startStubServer = async (): Promise<string> => {
     stubServer = createServer((req, res: ServerResponse) => {
@@ -33,6 +52,22 @@ describe('Agent vendor options', () => {
       req.on('end', () => {
         const body = JSON.parse(raw);
         requestBodies.push(body);
+        const foreign = signaturesSent(body).some((signature) => {
+          return !signature.endsWith(`|${systemDigest(body)}`);
+        });
+        if (foreign) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              type: 'error',
+              error: {
+                type: 'invalid_request_error',
+                message: 'Invalid signature in thinking block',
+              },
+            })
+          );
+          return;
+        }
         const toolName = (
           body.tools as Array<{ name: string }> | undefined
         )?.[0]?.name;
@@ -42,7 +77,7 @@ describe('Agent vendor options', () => {
         const thinking = {
           type: 'thinking',
           thinking: 'considering',
-          signature: `sig_${requestBodies.length}`,
+          signature: `sig_${requestBodies.length}|${systemDigest(body)}`,
         };
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
@@ -74,16 +109,6 @@ describe('Agent vendor options', () => {
     });
     const { port } = stubServer.address() as AddressInfo;
     return `http://127.0.0.1:${port}`;
-  };
-
-  const signaturesSent = (body: Record<string, unknown>): string[] => {
-    return (body.messages as WireMessage[]).flatMap((message) => {
-      return Array.isArray(message.content)
-        ? message.content.flatMap((block) => {
-            return block.type === 'thinking' ? [String(block.signature)] : [];
-          })
-        : [];
-    });
   };
 
   const expectNoVendorOptions = (body: unknown) => {
@@ -247,40 +272,57 @@ describe('Agent vendor options', () => {
       return res;
     };
 
-    test('a later turn replays the stored reasoning signatures', async () => {
+    const setInstructions = async (instructions: string) => {
+      const res = await authenticatedTestClient(token)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ instructions });
+      expect(res.status).toBe(200);
+    };
+
+    afterEach(async () => {
+      await setInstructions('Be terse.');
+    });
+
+    test('a turn sends its own step reasoning back within its tool loop', async () => {
+      const sessionId = await createSession();
+      await turn(sessionId);
+
+      expect(requestBodies).toHaveLength(2);
+      expect(signaturesSent(requestBodies[1])).toEqual([
+        `sig_1|${systemDigest(requestBodies[0])}`,
+      ]);
+    });
+
+    test('a later turn replays no stored reasoning', async () => {
       const sessionId = await createSession();
       const first = await turn(sessionId);
-      const firstTurnSignatures = requestBodies.map((_body, index) => {
-        return `sig_${index + 1}`;
-      });
+      requestBodies = [];
 
       const second = await turn(sessionId);
 
-      const lastRequest = requestBodies[requestBodies.length - 1];
-      expect(signaturesSent(lastRequest)).toEqual(
-        expect.arrayContaining(firstTurnSignatures)
-      );
+      expect(signaturesSent(requestBodies[0])).toEqual([]);
       expectNoVendorOptions(first.body);
       expectNoVendorOptions(second.body);
     });
 
-    test('a fork replays the parent turn signatures', async () => {
+    test('a session keeps answering after its agent instructions change', async () => {
+      const sessionId = await createSession();
+      await turn(sessionId);
+      await setInstructions('Be terse and polite.');
+
+      await turn(sessionId);
+    });
+
+    test('a fork keeps answering after its agent instructions change', async () => {
       const parentId = await createSession();
       await turn(parentId);
-      const parentSignatures = requestBodies.map((_body, index) => {
-        return `sig_${index + 1}`;
-      });
       const fork = await authenticatedTestClient(token)
         .post(`/api/v1/sessions/${parentId}/fork`)
-        .send({});
+        .send({ fork_at_position: 1 });
       expect(fork.status).toBe(201);
+      await setInstructions('Be terse and polite.');
 
       await turn(fork.body.id);
-
-      const lastRequest = requestBodies[requestBodies.length - 1];
-      expect(signaturesSent(lastRequest)).toEqual(
-        expect.arrayContaining(parentSignatures)
-      );
     });
   });
 });

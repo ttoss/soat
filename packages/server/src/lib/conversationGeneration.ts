@@ -14,7 +14,7 @@ import {
   sumProvenance,
 } from './generationProvenance';
 import { agentReferences } from './resourceReferences';
-import { joinVendorOptions, readVendorOptions } from './vendorOptions';
+import { readVendorOptions, replayStoredTurn } from './vendorOptions';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
@@ -79,7 +79,7 @@ const buildConversationHistory = async (args: {
       // Expand stored AI SDK response messages (tool calls, tool results, final
       // text) so the LLM sees the full tool-use chain on subsequent turns.
       if (Array.isArray(responseMessages) && responseMessages.length > 0) {
-        return joinVendorOptions({
+        return replayStoredTurn({
           messages: responseMessages,
           vendorOptions: readVendorOptions(msg.vendorOptions),
         }) as Array<{ role: string; content: unknown }>;
