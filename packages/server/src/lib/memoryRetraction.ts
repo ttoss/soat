@@ -2,7 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
-import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
+import { writeAssertedMemory } from 'src/lib/memoryAssertions';
 import { emitMemoryEvent } from 'src/lib/memoryEvents';
 import { mapMemory, memories } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
@@ -53,35 +53,38 @@ export const retractMemory = async (args: {
   // concurrent write had already replaced — a row both superseded and
   // retracted.
   const currentVersion = entry.version;
-  const [claimed] = await db.Memory.update(
-    { invalidatedAt: new Date(), version: currentVersion + 1 },
-    {
-      where: {
-        id: entry.id,
-        version: args.expectedVersion ?? currentVersion,
-        ...validMemoryWhere(),
-      },
-    }
-  );
-
-  if (claimed === 0) {
-    await entry.reload();
-    throw versionConflict({
-      currentVersion: entry.version,
-      expectedVersion: args.expectedVersion ?? null,
-      resourceLabel: 'Memory',
-      resourceId: entry.publicId,
-    });
-  }
-
-  await recordMemoryAssertion({
-    memoryStoreId: entry.memoryStoreId,
-    contentId: entry.contentId,
-    memoryId: entry.id as number,
-    outcome: 'retracted',
-    // Nothing was compared: a retraction is a statement about one memory.
-    similarity: null,
-    source: args.assertion,
+  await writeAssertedMemory({
+    write: async ({ transaction }) => {
+      const [claimed] = await db.Memory.update(
+        { invalidatedAt: new Date(), version: currentVersion + 1 },
+        {
+          where: {
+            id: entry.id,
+            version: args.expectedVersion ?? currentVersion,
+            ...validMemoryWhere(),
+          },
+          transaction,
+        }
+      );
+      if (claimed === 0) {
+        await entry.reload({ transaction });
+        throw versionConflict({
+          currentVersion: entry.version,
+          expectedVersion: args.expectedVersion ?? null,
+          resourceLabel: 'Memory',
+          resourceId: entry.publicId,
+        });
+      }
+      return entry;
+    },
+    assertion: {
+      memoryStoreId: entry.memoryStoreId,
+      contentId: entry.contentId,
+      outcome: 'retracted',
+      // Nothing was compared: a retraction is a statement about one memory.
+      similarity: null,
+      source: args.assertion,
+    },
   });
 
   const mapped = mapMemory(await memories.reload(entry));

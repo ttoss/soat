@@ -2,18 +2,18 @@ import type { MemorySource } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import {
-  contentBoundTagKeysOfStore,
-  withoutContentBoundTags,
-} from 'src/lib/contentBoundTags';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
-import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
+import { writeAssertedMemory } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
 import { emitMemoryEvent } from 'src/lib/memoryEvents';
 import type { MappedMemory, MemoryRow } from 'src/lib/memoryMapper';
 import { mapMemory, memories, memoryIncludes } from 'src/lib/memoryMapper';
 import { validMemoryWhere } from 'src/lib/memoryValidity';
-import { mergeTags } from 'src/lib/tags';
+import {
+  type MemoryRowArgs,
+  resolveOutcome,
+  type SettledWrite,
+} from 'src/lib/memoryWriteOutcome';
 import { withIterativeVectorScan } from 'src/lib/vectorSearch';
 
 const log = createDebug('soat:memories');
@@ -39,9 +39,6 @@ export type MemoryWriteResult = {
   action: MemoryWriteAction;
   entry: MappedMemory;
 };
-
-/** The outcome a write resolved to, and the memory it resolved into. */
-type SettledWrite = { action: MemoryWriteAction; memory: MemoryRow };
 
 export type EffectiveThresholds = {
   duplicateThreshold: number;
@@ -250,108 +247,6 @@ const similarityOf = (match: MemoryRow): number => {
   return 1 - distance;
 };
 
-/**
- * Tags and metadata for the memory replacing a superseded one: the retired
- * memory's bags, with the incoming keys winning.
- *
- * Carried forward rather than dropped because a supersede states the *same
- * fact, changed* — a replacement that lost the original's `role` tag would
- * silently fall out of every tag-scoped search and policy the original
- * satisfied, which is precisely the invisible loss this design removes
- * elsewhere.
- */
-const inheritBags = (args: {
-  retired: MemoryRow;
-  tags?: Record<string, string> | null;
-  metadata?: Record<string, unknown> | null;
-  /** Judged the retired text, not the replacement's (`contentBoundTags.ts`). */
-  contentBoundKeys: readonly string[];
-}) => {
-  const inherited = withoutContentBoundTags({
-    keys: args.contentBoundKeys,
-    tags: args.retired.tags,
-  });
-  return {
-    tags:
-      args.tags && Object.keys(args.tags).length > 0
-        ? mergeTags({
-            current: inherited,
-            incoming: args.tags,
-            merge: true,
-          })
-        : inherited,
-    metadata:
-      args.metadata || args.retired.metadata
-        ? { ...(args.retired.metadata ?? {}), ...(args.metadata ?? {}) }
-        : null,
-  };
-};
-
-const createMemoryRow = async (args: {
-  memoryStoreId: number;
-  actorId: number | null;
-  contentId: number;
-  sourceType?: MemorySource;
-  sourceConversationPublicId?: string | null;
-  tags?: Record<string, string> | null;
-  metadata?: Record<string, unknown> | null;
-}) => {
-  const conversationPublicId = args.sourceConversationPublicId ?? null;
-  return db.Memory.create({
-    memoryStoreId: args.memoryStoreId,
-    actorId: args.actorId,
-    contentId: args.contentId,
-    sourceType: conversationPublicId
-      ? 'conversation'
-      : (args.sourceType ?? 'manual'),
-    sourceId: conversationPublicId,
-    tags: args.tags ?? null,
-    metadata: args.metadata ?? null,
-  });
-};
-
-/**
- * Retires the matched memory and creates its replacement.
- *
- * Lossless at the audit level: the old memory stays readable by id (with
- * `include_invalidated`), its text intact on the content row it still points
- * at, and its own assertions attached. What changes is retrieval — only the
- * newest statement of a fact is searchable, which is what temporal invalidation
- * was always for.
- */
-const supersedeMemory = async (args: {
-  match: MemoryRow;
-  memoryStoreId: number;
-  actorId: number | null;
-  contentId: number;
-  sourceType?: MemorySource;
-  sourceConversationPublicId?: string | null;
-  tags?: Record<string, string> | null;
-  metadata?: Record<string, unknown> | null;
-}) => {
-  const replacement = await createMemoryRow({
-    memoryStoreId: args.memoryStoreId,
-    actorId: args.actorId,
-    contentId: args.contentId,
-    sourceType: args.sourceType,
-    sourceConversationPublicId: args.sourceConversationPublicId,
-    ...inheritBags({
-      retired: args.match,
-      tags: args.tags,
-      metadata: args.metadata,
-      contentBoundKeys: await contentBoundTagKeysOfStore({
-        memoryStoreId: args.memoryStoreId,
-      }),
-    }),
-  });
-
-  args.match.invalidatedAt = new Date();
-  args.match.supersededByMemoryId = replacement.id as number;
-  await args.match.save();
-
-  return replacement;
-};
-
 export type WriteMemoryArgs = {
   memoryStoreId: number;
   /**
@@ -436,9 +331,9 @@ const measureWrite = async (args: {
 };
 
 /**
- * The one exit every outcome takes: append the assertion, reload the memory
- * through the same includes, and announce a stored row, so no branch can return
- * a result the others would not, or leave the write unrecorded.
+ * The one exit every outcome takes: store the memory with its assertion, reload
+ * it through the same includes, and announce a stored row, so no branch can
+ * return a result the others would not, or leave the write unrecorded.
  */
 const settleWrite = async (
   args: SettledWrite & {
@@ -450,17 +345,19 @@ const settleWrite = async (
     assertion: MemoryAssertionSource;
   }
 ): Promise<MemoryWriteResult> => {
-  await recordMemoryAssertion({
-    memoryStoreId: args.memoryStoreId,
-    contentId: args.contentId,
-    memoryId: args.memory.id as number,
-    outcome: args.action,
-    similarity: args.similarity,
-    declared: args.declared,
-    source: args.assertion,
+  const memory = await writeAssertedMemory({
+    write: args.store,
+    assertion: {
+      memoryStoreId: args.memoryStoreId,
+      contentId: args.contentId,
+      outcome: args.action,
+      similarity: args.similarity,
+      declared: args.declared,
+      source: args.assertion,
+    },
   });
 
-  const entry = mapMemory(await memories.reload(args.memory));
+  const entry = mapMemory(await memories.reload(memory));
   // A skip stored nothing; a supersede stored its replacement.
   if (args.action !== 'skipped') {
     await emitMemoryEvent({
@@ -536,7 +433,7 @@ export const writeMemory = async (
 
   // Every outcome writes its memory from the same content row and provenance,
   // whether that row is new or the replacement for a retired one.
-  const rowArgs = {
+  const rowArgs: MemoryRowArgs = {
     ...place,
     contentId: content.id as number,
     sourceType: args.sourceType,
@@ -545,43 +442,19 @@ export const writeMemory = async (
     metadata: args.metadata,
   };
 
-  const settle = (settled: SettledWrite) => {
-    return settleWrite({
-      ...settled,
-      memoryStoreId: args.memoryStoreId,
-      projectId: store.projectId,
-      contentId: content.id as number,
+  return settleWrite({
+    ...resolveOutcome({
+      declaredTarget,
+      match,
       similarity,
-      declared: declaredTarget !== null,
-      assertion: args.assertion,
-    });
-  };
-
-  const replacementFor = (retired: MemoryRow) => {
-    return supersedeMemory({ match: retired, ...rowArgs });
-  };
-
-  if (declaredTarget) {
-    return settle({
-      action: 'superseded',
-      memory: await replacementFor(declaredTarget),
-    });
-  }
-
-  if (match && similarity !== null) {
-    if (similarity >= store.duplicateThreshold) {
-      return settle({ action: 'skipped', memory: match });
-    }
-    if (similarity >= store.supersedeThreshold) {
-      return settle({
-        action: 'superseded',
-        memory: await replacementFor(match),
-      });
-    }
-  }
-
-  return settle({
-    action: 'created',
-    memory: await createMemoryRow(rowArgs),
+      thresholds: store,
+      rowArgs,
+    }),
+    memoryStoreId: args.memoryStoreId,
+    projectId: store.projectId,
+    contentId: content.id as number,
+    similarity,
+    declared: declaredTarget !== null,
+    assertion: args.assertion,
   });
 };

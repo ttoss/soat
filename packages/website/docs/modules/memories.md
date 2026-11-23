@@ -179,7 +179,7 @@ The response always includes an `action` field alongside the memory:
 
 ### Assertions
 
-A memory row is **state**. The write that produced it is an **event**, recorded separately: one `memory_assertion` per write attempt, appended whatever the outcome, including the writes that changed nothing.
+A memory row is **state**. The write that produced it is an **event**, recorded separately: one `memory_assertion` per write attempt, appended whatever the outcome, including the writes that changed nothing. The change to the memory and its assertion commit together: no read sees a memory created, superseded or retracted without the assertion that records it, and a write whose assertion fails changes nothing.
 
 An assertion names the content as asserted (not always the memory's text), the outcome and the similarity that chose it, whether the supersede was `declared` by the caller rather than chosen by the thresholds, the principal who claimed the fact, the mechanism it came through, and — for anything an agent wrote — the generation it happened in.
 
