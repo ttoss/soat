@@ -26,6 +26,27 @@ export const mergePresetParameters = (args: {
   return { ...input, ...(args.presetParameters ?? {}) };
 };
 
+export type PresetParametersByAction = Record<string, Record<string, unknown>>;
+
+/**
+ * The presets one `builtin` action takes: the tool's, with the keys of the
+ * action's own entry in `preset_parameters_by_action` over them.
+ */
+export const presetParametersForAction = (args: {
+  presetParameters?: object | null;
+  presetParametersByAction?: object | null;
+  action: string;
+}): Record<string, unknown> | null => {
+  const byAction = args.presetParametersByAction;
+  const own: unknown =
+    byAction && Object.hasOwn(byAction, args.action)
+      ? Reflect.get(byAction, args.action)
+      : undefined;
+  const ownPresets = own && typeof own === 'object' ? own : null;
+  if (!args.presetParameters && !ownPresets) return null;
+  return { ...args.presetParameters, ...ownPresets };
+};
+
 /**
  * The presets one `mcp` action takes: a binding's presets reach every action
  * its server lists, and a server that validates its arguments refuses a key

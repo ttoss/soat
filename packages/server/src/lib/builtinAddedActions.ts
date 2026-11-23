@@ -44,6 +44,7 @@ export const resolveAddedBuiltinActions = async (
     toolName: string;
     actions: string[];
     presetParameters?: Record<string, unknown> | null;
+    presetParametersByAction?: object | null;
     logToolCallingError: LogToolCallingError;
     reportResolutionFailure?: (args: { reason: string }) => void;
   }
@@ -69,6 +70,7 @@ export const resolveAddedBuiltinActions = async (
     typedTool: {
       actions: names,
       presetParameters: args.presetParameters,
+      presetParametersByAction: args.presetParametersByAction,
     },
     meter: args.meter,
     toolContext: args.toolContext,

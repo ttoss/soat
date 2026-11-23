@@ -1,5 +1,8 @@
+import createDebug from 'debug';
+
 import type { db } from '../db';
 import { DomainError } from '../errors';
+import { assertBuiltinPresetsDeclared } from './builtinPresetValidation';
 import { validateHttpExecute } from './httpToolResponse';
 import {
   assertPipelineStepToolsValid,
@@ -8,6 +11,7 @@ import {
 import { assertSecretRefsExist } from './secrets';
 import { validateSoatActions } from './soatActionValidation';
 import { assertValidToolContextAllowlist } from './toolContext';
+import type { InlineToolDefinition } from './toolsCall';
 import { assertNoLiteralCredentials } from './toolSecretRedaction';
 import { assertValidToolTemplateTokens } from './toolTemplates';
 
@@ -17,6 +21,8 @@ import { assertValidToolTemplateTokens } from './toolTemplates';
  * agent's toolset and fail at call time with a misleading error — reject it at
  * write time instead.
  */
+const log = createDebug('soat:tools');
+
 const TOOL_TYPES = ['http', 'client', 'mcp', 'builtin', 'pipeline'] as const;
 
 export const assertToolTypeSupported = (type: string): void => {
@@ -43,6 +49,7 @@ export type ToolUpdateArgs = {
   deniedActions?: string[] | null;
   contextKeys?: string[] | null;
   presetParameters?: object | null;
+  presetParametersByAction?: object | null;
   pipeline?: object | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
@@ -63,12 +70,19 @@ const validateToolUpdateTemplates = async (params: {
 }): Promise<void> => {
   const { args } = params;
   const touchesConfig = args.execute !== undefined || args.mcp !== undefined;
-  if (!touchesConfig && args.presetParameters === undefined) return;
+  if (
+    !touchesConfig &&
+    args.presetParameters === undefined &&
+    args.presetParametersByAction === undefined
+  ) {
+    return;
+  }
 
   assertValidToolTemplateTokens({
     execute: args.execute,
     mcp: args.mcp,
     presetParameters: args.presetParameters,
+    presetParametersByAction: args.presetParametersByAction,
   });
   if (touchesConfig) {
     await assertSecretRefsExist({
@@ -91,6 +105,27 @@ const validateUpdatedExecute = (params: {
   validateHttpExecute({
     type: args.type ?? tool.type,
     execute: args.execute === undefined ? tool.execute : args.execute,
+  });
+};
+
+/**
+ * Checked against the tool the write leaves behind, so a new action is held to
+ * the presets already stored.
+ */
+const validateUpdatedPresets = (params: {
+  args: ToolUpdateArgs;
+  tool: InstanceType<typeof db.Tool>;
+}): void => {
+  const { args, tool } = params;
+  const pick = <K extends keyof ToolUpdateArgs & keyof typeof tool>(key: K) => {
+    return args[key] === undefined ? tool[key] : args[key];
+  };
+  assertBuiltinPresetsDeclared({
+    type: args.type ?? tool.type,
+    actions: pick('actions'),
+    deniedActions: pick('deniedActions'),
+    presetParameters: pick('presetParameters'),
+    presetParametersByAction: pick('presetParametersByAction'),
   });
 };
 
@@ -118,5 +153,76 @@ export const validateToolUpdate = async (params: {
     assertValidToolContextAllowlist(args.contextKeys);
   }
   validateUpdatedExecute({ args, tool });
+  validateUpdatedPresets({ args, tool });
   await validateToolUpdateTemplates({ args, projectId: tool.projectId });
+};
+
+export const validateToolDefinition = async (args: {
+  definition: InlineToolDefinition;
+  projectId: number;
+}): Promise<void> => {
+  const { definition, projectId } = args;
+
+  log(
+    'validateToolDefinition: projectId=%d name=%s type=%s',
+    projectId,
+    definition.name,
+    definition.type ?? 'http'
+  );
+
+  if (!definition.name || typeof definition.name !== 'string') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'Tool definition requires a name.'
+    );
+  }
+
+  assertToolTypeSupported(definition.type ?? 'http');
+  assertNoLiteralCredentials(definition);
+
+  if (definition.type === 'pipeline') {
+    const config = validatePipelineConfig(definition.pipeline);
+    await assertPipelineStepToolsValid({
+      steps: config.steps,
+      projectId,
+    });
+  }
+
+  if ((definition.type ?? 'http') === 'builtin') {
+    validateSoatActions(definition.actions);
+  }
+
+  validateHttpExecute({
+    type: definition.type ?? 'http',
+    execute: definition.execute,
+  });
+
+  // A `context_keys` entry is a `tool_context` key, held to the same
+  // header-name grammar (`toolContext.ts`) so an entry cannot be one that no
+  // key could ever match.
+  assertValidToolContextAllowlist(definition.contextKeys);
+
+  // Reject any {{...}} token that isn't a well-formed reference — and any
+  // {{context:...}} token outside a headers record — before checking whether
+  // referenced secrets actually exist.
+  assertValidToolTemplateTokens({
+    execute: definition.execute,
+    mcp: definition.mcp,
+    presetParameters: definition.presetParameters,
+    presetParametersByAction: definition.presetParametersByAction,
+  });
+  assertBuiltinPresetsDeclared({
+    type: definition.type ?? 'http',
+    actions: definition.actions,
+    deniedActions: definition.deniedActions,
+    presetParameters: definition.presetParameters,
+    presetParametersByAction: definition.presetParametersByAction,
+  });
+
+  // Fail fast on {{secret:...}} tokens referencing nonexistent or
+  // out-of-project secrets, instead of failing at first call.
+  await assertSecretRefsExist({
+    value: { execute: definition.execute, mcp: definition.mcp },
+    projectId,
+  });
 };

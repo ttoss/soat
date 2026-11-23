@@ -22,10 +22,16 @@ import { withoutAgentExcludedActions } from './soatAgentActions';
 import { buildSoatActionTarget, type ToolDefinition } from './soatTools';
 import { readToolErrorEnvelope, toolCallError } from './toolErrorRelay';
 import {
+  GATE_PRESETS,
   mergePresetParameters,
+  presetParametersForAction,
   stripPresetKeysFromSchema,
+  type ToolWithGatePresets,
 } from './toolPresetParameters';
-import { resolvePresetParametersForCall } from './toolTemplates';
+import {
+  resolvePresetParametersForCall,
+  resolvePresetParametersForGate,
+} from './toolTemplates';
 import { turnAuthority } from './turnAuthority';
 import {
   meterToolExecution,
@@ -174,7 +180,7 @@ const buildSoatActionTool = (args: {
   toolDescription: string | null;
   def: ToolDefinition;
   meter: ToolExecutionMeter;
-  presetParameters?: Record<string, unknown>;
+  presetParameters: Record<string, unknown> | null;
   projectPublicId?: string;
   agentAuthority?: AgentAuthority;
   authority: WorkAuthority | null;
@@ -189,13 +195,13 @@ const buildSoatActionTool = (args: {
     contextKeys?: string[] | null;
   }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
-}): Tool => {
+}): ToolWithGatePresets => {
   const pinned = pinnedProjectParameters(args.projectPublicId);
   const effectiveInputSchema = stripPresetKeysFromSchema(
     args.def.inputSchema as JSONSchema7,
     { ...args.presetParameters, ...pinned }
   );
-  return tool({
+  const built = tool({
     description: args.toolDescription ?? args.def.description,
     inputSchema: jsonSchema(effectiveInputSchema),
     execute: async (toolArgs: unknown, options: { toolCallId: string }) => {
@@ -232,6 +238,17 @@ const buildSoatActionTool = (args: {
       });
     },
   });
+  // Actions of one binding take different presets, so each carries the ones
+  // its gate judges.
+  return {
+    ...built,
+    [GATE_PRESETS]: resolvePresetParametersForGate({
+      presetParameters: args.presetParameters,
+      toolContext: args.toolContext,
+      toolName: args.toolName,
+      schema: args.def.inputSchema,
+    }),
+  };
 };
 
 /** The native actions of a `builtin` tool; `resolveAddedBuiltinActions` resolves the added ones. */
@@ -241,6 +258,7 @@ export const resolveSoatTools = (args: {
     description: string | null;
     actions: string[] | null;
     presetParameters?: Record<string, unknown> | null;
+    presetParametersByAction?: object | null;
     contextKeys?: string[] | null;
   };
   meter: ToolExecutionMeter;
@@ -283,7 +301,11 @@ export const resolveSoatTools = (args: {
       toolDescription: args.typedTool.description,
       def,
       meter: args.meter,
-      presetParameters: args.typedTool.presetParameters ?? undefined,
+      presetParameters: presetParametersForAction({
+        presetParameters: args.typedTool.presetParameters,
+        presetParametersByAction: args.typedTool.presetParametersByAction,
+        action,
+      }),
       projectPublicId: args.projectPublicId,
       agentAuthority: args.agentAuthority,
       authority: args.authority,

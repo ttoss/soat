@@ -199,6 +199,7 @@ export const assertValidToolTemplateTokens = (args: {
   execute?: unknown;
   mcp?: unknown;
   presetParameters?: unknown;
+  presetParametersByAction?: unknown;
 }): void => {
   const problems = [args.execute, args.mcp].reduce<ToolTemplateTokenProblems>(
     (acc, value) => {
@@ -212,7 +213,10 @@ export const assertValidToolTemplateTokens = (args: {
       // A preset is a context *sink*, so only the shape rule applies. Checking
       // at write time keeps a typo'd token from reaching the target as a
       // literal parameter value and coming back as an opaque `not found`.
-      invalid: findInvalidTemplateTokens(args.presetParameters),
+      invalid: [
+        ...findInvalidTemplateTokens(args.presetParameters),
+        ...findInvalidTemplateTokens(args.presetParametersByAction),
+      ],
       misplacedContext: [],
     }
   );

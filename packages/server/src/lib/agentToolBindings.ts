@@ -8,9 +8,9 @@ import { assertToolSecretUseAllowed } from './secretUse';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
-  validateToolDefinition,
 } from './tools';
 import { assertTrustedOutputAllowed } from './toolTrust';
+import { validateToolDefinition } from './toolWriteValidation';
 
 const log = createDebug('soat:agents');
 
@@ -156,6 +156,7 @@ type WireInlineToolDefinition = {
   actions?: string[];
   denied_actions?: string[];
   preset_parameters?: object;
+  preset_parameters_by_action?: object;
   pipeline?: object;
   output_mapping?: object;
   trusted_output?: boolean;
@@ -168,6 +169,7 @@ const INLINE_TOOL_FIELD_PAIRS: Array<
 > = [
   ['deniedActions', 'denied_actions'],
   ['presetParameters', 'preset_parameters'],
+  ['presetParametersByAction', 'preset_parameters_by_action'],
   ['outputMapping', 'output_mapping'],
   ['trustedOutput', 'trusted_output'],
 ];
