@@ -7,6 +7,7 @@ import type { AgentAuthority } from './agentAuthority';
 import { buildSrn } from './iam';
 import { type OauthClientRow, resolveOauthClient } from './oauthClients';
 import { type OauthConnectionRow, tokenColumns } from './oauthConnections';
+import { markOauthConnectionDisconnected } from './oauthConnectionStatus';
 import { requestTokens } from './oauthTokenEndpoint';
 import { decryptValue } from './secrets';
 import { toolAuthFailed } from './toolAuthConfig';
@@ -109,13 +110,11 @@ const refreshLocked = async (args: {
     if (result.status === null || result.status >= 500) {
       return { kind: 'unavailable', message };
     }
-    await row.update(
-      {
-        status: 'disconnected',
-        error: { code: 'OAUTH_CONNECTION_REFRESH_FAILED', message },
-      },
-      { transaction }
-    );
+    await markOauthConnectionDisconnected({
+      row,
+      error: { code: 'OAUTH_CONNECTION_REFRESH_FAILED', message },
+      transaction,
+    });
     return { kind: 'revoked', message };
   });
 };

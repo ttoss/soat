@@ -281,6 +281,11 @@ The filter and the read guard below are the ones a [webhook](./webhooks.md#event
 | `documents.*`        | every event in the `documents` namespace |
 | `*`                  | every event in the project               |
 
+To act when an actor connects a provider, subscribe to
+`oauth_connections.connected` with `event_data: { "oauth_client_id": "oauc_…" }`;
+`oauth_connections.disconnected` announces a lost connection (see
+[OAuth Connections](./oauth-connections.md#events)).
+
 A pattern whose first segment is a **platform namespace** must resolve to a
 [registered event](../webhook-events.md); `documents.ingsted` is rejected with
 `400 INVALID_EVENT_PATTERN`. A name outside every platform namespace
