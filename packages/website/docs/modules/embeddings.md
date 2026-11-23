@@ -73,8 +73,8 @@ A usage event belongs to a project, so an embedding call needs one:
 
 | Call | Billed to |
 | --- | --- |
-| [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) with `project_id` | that project — the caller must be able to write to it |
-| The same call from a project-scoped credential | the credential's project |
+| [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) with `project_id` | that project — the caller needs `embeddings:CreateEmbeddings` on it |
+| The same call from a project-scoped credential | the credential's project — the credential needs `embeddings:CreateEmbeddings` on it |
 | The same call with neither | refused, `400 VALIDATION_FAILED` |
 | Ingestion, memory, evaluation | the document's, memory's or run's project |
 | A knowledge search with a `query` | the first project in scope, by public id, the caller holds `embeddings:CreateEmbeddings` on (a project-scoped credential's own project); `403 FORBIDDEN` when there is none; an admin's search naming no project is not metered. A search with no `query` embeds nothing |

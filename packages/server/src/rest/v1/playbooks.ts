@@ -15,6 +15,7 @@ import {
   listPlaybookVersions,
   restorePlaybookVersion,
 } from 'src/lib/playbookVersions';
+import { admitAuthorized } from 'src/middleware/admission';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -82,6 +83,8 @@ playbooksRouter.post('/playbooks/validate', async (ctx: Context) => {
         resourceType: 'playbook',
       });
     }
+  } else {
+    await admitAuthorized(ctx, 'playbooks:ValidatePlaybook');
   }
 
   ctx.body = await validatePlaybook({

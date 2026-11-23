@@ -6,7 +6,7 @@ import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { mountedRoutes } from './iamRouteChecks.mjs';
-import { reachedStrings } from './routeStrings.mjs';
+import { stringsOnEveryPath } from './routeStrings.mjs';
 import { stripComments } from './sourceText.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -118,6 +118,36 @@ const REACHED_ONLY_FROM_A_ROUTE = new Set([
   'lib/workflowVersions.ts',
 ]);
 
+/** Declarable writes whose route skips their action on some path. */
+const unaskedWrites = () => {
+  const routes = new Map(
+    mountedRoutes().map((route) => {
+      return [route.key, route];
+    })
+  );
+  return declarableOperations()
+    .filter(({ method, route, operation }) => {
+      const mounted = routes.get(`${method} ${route}`);
+      return (
+        !mounted || !stringsOnEveryPath(mounted).has(operation['x-iam-action'])
+      );
+    })
+    .map(({ method, route }) => {
+      return `${method.toUpperCase()} ${route}`;
+    });
+};
+
+/**
+ * Routes with a branch that authorizes nothing because it writes nothing,
+ * each with the reason; every other branch of a declarable write asks.
+ */
+const BRANCH_WRITES_NOTHING = new Map([
+  [
+    'POST /api/v1/chat/completions',
+    'an unknown `chat_id` is answered `CHAT_NOT_FOUND` by the lib before any model call',
+  ],
+]);
+
 /**
  * A declared write is asked about at two chokepoints: the REST middleware
  * (REST and `builtin`) and `defineFormationModule`. A write path reaching a lib
@@ -148,24 +178,23 @@ describe('admission chokepoints', () => {
   });
 
   // The middleware asks only when the route authorizes under its action, so a
-  // route that authenticates and checks nothing executes unasked.
-  test('every declarable write authorizes under its declared action', () => {
-    const routes = new Map(
-      mountedRoutes().map((route) => {
-        return [route.key, route];
-      })
+  // route that authenticates and checks nothing, or checks on one branch only,
+  // executes unasked.
+  test('every declarable write authorizes under its declared action on every path', () => {
+    const unasked = unaskedWrites();
+    assert.deepEqual(
+      unasked.filter((operation) => {
+        return !BRANCH_WRITES_NOTHING.has(operation);
+      }),
+      []
     );
-    const unasked = declarableOperations()
-      .filter(({ method, route, operation }) => {
-        const mounted = routes.get(`${method} ${route}`);
-        return (
-          !mounted || !reachedStrings(mounted).has(operation['x-iam-action'])
-        );
-      })
-      .map(({ method, route }) => {
-        return `${method.toUpperCase()} ${route}`;
-      });
-    assert.deepEqual(unasked, []);
+    assert.deepEqual(
+      [...BRANCH_WRITES_NOTHING.keys()].filter((operation) => {
+        return !unasked.includes(operation);
+      }),
+      [],
+      'an exemption whose route asks on every path is stale'
+    );
   });
 
   test('defineFormationModule asks before a create and an update', () => {
