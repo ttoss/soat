@@ -350,6 +350,8 @@ The pair of tasks is a dependency's identity; it has no id of its own. Edges cro
 
 It composes with every list filter and answers one page: `limit` applies, a `cursor` is `400 VALIDATION_FAILED` and `next_cursor` is `null`. Another `order` value is `400 VALIDATION_FAILED`; omitted, the list is newest first. The page is ordered in a fixed number of queries, whatever its size.
 
+`upstream_of={task_id}` narrows any list, this one included, to what that task depends on, directly or through others: `blocked=false&order=next&upstream_of=` is the next task toward a milestone.
+
 There is no claim or lease. A worker lists the state it works from with `blocked=false` and `order=next`, then fires the transition out of that state on the first task with an idempotency key ([Retrying a transition](#retrying-a-transition)). `TASK_TRANSITION_CONFLICT` (409) means another worker moved it first: take the next task on the page.
 
 <Tabs groupId="client">
@@ -397,6 +399,44 @@ NEXT_ID=$(curl -s "$SOAT_URL/api/v1/tasks?workflow_id=$WORKFLOW_ID&state=todo&bl
 curl -s -X POST "$SOAT_URL/api/v1/tasks/$NEXT_ID/transitions" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"transition":"start","idempotency_key":"'"$RUN_ID"'"}'
+```
+
+</TabItem>
+</Tabs>
+
+### Reading a task graph
+
+[`GET /tasks/graph`](/docs/api/tasks/get-task-graph) takes every filter of [`GET /tasks`](/docs/api/tasks/list-tasks) but `order`, `limit` and `cursor`, and answers `{ nodes, edges }`: the tasks the filters select, newest first, and each dependency between two of them as `{ task_id, depends_on_task_id }`. An edge to a task the filters leave out is not answered. Needs `tasks:ListTasks`.
+
+- `upstream_of={task_id}` answers what leads to one task, closed tasks included unless `status=open`; the task itself is not a node.
+- The answer is whole, never paged. Above `TASK_GRAPH_LIMIT` tasks it is `422 TASK_GRAPH_TOO_LARGE` with `meta.count` and `meta.limit`: narrow the filters, or page through [`GET /tasks`](/docs/api/tasks/list-tasks).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-task-graph --workflow-id "$WORKFLOW_ID" --upstream-of "$MILESTONE_ID" --status open
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: graph } = await soat.tasks.getTaskGraph({
+  query: {
+    workflow_id: WORKFLOW_ID,
+    upstream_of: MILESTONE_ID,
+    status: ['open'],
+  },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_URL/api/v1/tasks/graph?workflow_id=$WORKFLOW_ID&upstream_of=$MILESTONE_ID&status=open" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 </TabItem>
@@ -592,6 +632,7 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 
 | Variable | Required | Description |
 | --- | --- | --- |
+| `TASK_GRAPH_LIMIT` | No | How many tasks one [task graph](#reading-a-task-graph) answers before it is refused (default `500`). |
 | `TASK_AUTOMATION_CHAIN_LIMIT` | No | How many machine-driven transitions a task may run back-to-back with no outside intervention before the next one is refused (default `50`). See [The automation chain budget](#the-automation-chain-budget). |
 
 ## Error Codes
@@ -616,6 +657,7 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | `INVALID_TOOL_CONTEXT_KEY`  | 400    | A `tool_context` key on `create-task` / `transition-task` is not a valid header name, or two keys collide on one header. See [Dispatch tool context](#dispatch-tool-context) |
 | `TASK_AUTOMATION_CHAIN_LIMIT` | 409 | The task has run `TASK_AUTOMATION_CHAIN_LIMIT` machine-driven transitions with no outside intervention; the next one is refused. See [The automation chain budget](#the-automation-chain-budget) |
 | `TASK_NOT_PAUSABLE`        | 409    | The task is closed, so it has no automation left to pause. See [Pausing a task](#pausing-a-task) |
+| `TASK_GRAPH_TOO_LARGE`     | 422    | The task graph the filters select holds more than `TASK_GRAPH_LIMIT` tasks; `meta.count`, `meta.limit`. See [Reading a task graph](#reading-a-task-graph) |
 | `TASK_DEPENDENCY_CYCLE`    | 409    | The dependency would close a cycle; `meta.path` lists it. See [Task dependencies](#task-dependencies) |
 | `TASK_DEPENDENCY_SELF`     | 400    | A task cannot depend on itself |
 | `TASK_DEPENDENCY_TARGET_NOT_FOUND` | 400 | `depends_on_task_id` names no task in the project of the task it would block |

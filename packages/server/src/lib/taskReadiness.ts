@@ -93,6 +93,21 @@ export const blockedWhereSql = (blocked: boolean): string => {
      WHERE d.task_id = "Task"."id" AND b.status = 'open')`;
 };
 
+/**
+ * The `listTasks` `upstream_of` filter's SQL, over the list's `Task` alias:
+ * every task `rootId` depends on, transitively, through closed ones too.
+ * `UNION` keeps a shared dependency from being walked twice.
+ */
+export const upstreamWhereSql = (rootId: number): string => {
+  return `"Task"."id" IN (WITH RECURSIVE upstream(id) AS (
+      SELECT d.depends_on_task_id FROM task_dependencies d
+       WHERE d.task_id = ${Math.trunc(rootId)}
+      UNION
+      SELECT d.depends_on_task_id FROM task_dependencies d
+        JOIN upstream u ON d.task_id = u.id)
+    SELECT id FROM upstream)`;
+};
+
 /** `readiness.unblocks` as SQL over the list's `Task` alias. */
 export const unblocksSql = (): string => {
   return `(SELECT COUNT(*) FROM task_dependencies d

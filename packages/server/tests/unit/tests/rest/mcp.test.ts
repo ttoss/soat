@@ -535,6 +535,56 @@ describe('MCP tools - happy path', () => {
     ).toEqual(['todo', 'doing', 'done']);
   });
 
+  test('get-task-graph and list-tasks upstream_of via MCP', async () => {
+    const workflow = parseResult(
+      await mcpCall('create-workflow', {
+        project_id: projectId,
+        name: 'mcp-graph',
+        states: [
+          { name: 'todo', initial: true },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [{ name: 'finish', from: ['todo'], to: 'done' }],
+      })
+    );
+    const create = async (title: string) => {
+      return parseResult(
+        await mcpCall('create-task', {
+          project_id: projectId,
+          workflow_id: workflow.id,
+          title,
+        })
+      ).id as string;
+    };
+    const milestone = await create('milestone');
+    const step = await create('step');
+    parseResult(
+      await mcpCall('add-task-dependency', {
+        task_id: milestone,
+        depends_on_task_id: step,
+      })
+    );
+
+    const graph = parseResult(
+      await mcpCall('get-task-graph', { workflow_id: workflow.id })
+    );
+    expect(graph.nodes).toHaveLength(2);
+    expect(graph.edges).toEqual([
+      { task_id: milestone, depends_on_task_id: step },
+    ]);
+
+    const upstream = parseResult(
+      await mcpCall('list-tasks', {
+        workflow_id: workflow.id,
+        upstream_of: milestone,
+      })
+    );
+    expect(
+      upstream.data.map((t: { id: string }) => {
+        return t.id;
+      })
+    ).toEqual([step]);
+  });
   test('migrate-task moves a task onto a newer workflow version via MCP', async () => {
     const workflow = parseResult(
       await mcpCall('create-workflow', {

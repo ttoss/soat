@@ -14,6 +14,7 @@ import {
 } from 'src/lib/tasks';
 import { TASK_AUTOMATION_STATUSES } from 'src/lib/tasksAutomationStatus';
 import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
+import { getTaskGraph } from 'src/lib/tasksGraph';
 import { listTasks } from 'src/lib/tasksList';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 import { TASK_PRIORITIES } from 'src/lib/tasksPriority';
@@ -61,11 +62,8 @@ const blockedQuery = (ctx: Context): boolean | undefined => {
   return value === undefined ? undefined : value === 'true';
 };
 
-/**
- * @openapi
- * Managed via packages/server/src/rest/openapi/v1/tasks.yaml
- */
-tasksRouter.get('/tasks', async (ctx: Context) => {
+/** The filters `GET /tasks` and `GET /tasks/graph` share, read off the query. */
+const listFiltersQuery = async (ctx: Context) => {
   requireAuth(ctx);
   const metadata = readStructuredQuery({ name: 'metadata', query: ctx.query });
   const { projectIds } = await resolveListScope({
@@ -74,8 +72,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     resourceType: 'task',
     projectSelector: 'optional',
   });
-
-  ctx.body = await listTasks({
+  return {
     projectIds,
     workflowId: taskPins.read(ctx, 'workflow_id'),
     state: ctx.query.state as string | undefined,
@@ -96,10 +93,29 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     }),
     assignee: ctx.query.assignee as string | undefined,
     blocked: blockedQuery(ctx),
+    upstreamOf: ctx.query.upstream_of as string | undefined,
     metadata,
+  };
+};
+
+/**
+ * @openapi
+ * Managed via packages/server/src/rest/openapi/v1/tasks.yaml
+ */
+tasksRouter.get('/tasks', async (ctx: Context) => {
+  ctx.body = await listTasks({
+    ...(await listFiltersQuery(ctx)),
     order: parseEnumQuery({ ctx, name: 'order', allowed: TASK_LIST_ORDERS }),
     ...parsePagination(ctx),
   });
+});
+
+/**
+ * @openapi
+ * Managed via packages/server/src/rest/openapi/v1/tasks.yaml
+ */
+tasksRouter.get('/tasks/graph', async (ctx: Context) => {
+  ctx.body = await getTaskGraph(await listFiltersQuery(ctx));
 });
 
 tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {

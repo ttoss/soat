@@ -12,6 +12,11 @@
       "description": "List tasks (board query)"
     },
     {
+      "operationId": "getTaskGraph",
+      "action": "tasks:ListTasks",
+      "description": "Get the tasks a list selects and the dependencies between them"
+    },
+    {
       "operationId": "getTask",
       "action": "tasks:GetTask",
       "description": "Get a task by ID"
