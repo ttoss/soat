@@ -311,7 +311,7 @@ const meterCompletedTurn = (args: {
     turn: {
       steps: args.result.steps,
       finishReason: args.result.finishReason,
-      maxSteps: args.typedAgent.maxSteps,
+      budget: args.typedAgent,
       outcome: 'ok',
     },
   });
@@ -389,7 +389,7 @@ export const buildCompletedGenerationResult = async (args: {
       stopReason: resolveStopReason({
         finishReason: args.result.finishReason,
         stepCount: args.result.steps.length,
-        maxSteps: args.typedAgent.maxSteps,
+        budget: args.typedAgent,
       }),
       assistantContent: args.result.text,
     },

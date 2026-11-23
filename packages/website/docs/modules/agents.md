@@ -134,12 +134,12 @@ Set when `status` is `completed`:
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `stop`        | The model produced a final response with no tool calls                                                                                                     |
 | `tool-calls`  | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named |
-| `max_steps`   | The turn spent its whole `max_steps` budget on tool calls and could not finish                                                                             |
+| `max_steps`   | The turn spent its whole `max_steps` budget: on tool calls, or, with an `output_schema`, answering on its last step ([Structured Output](#structured-output)) |
 | `depth_guard` | A nested call exceeded `max_call_depth`                                                                                                                    |
 | `chain_limit` | A [continuation chain](./chains.md) reached its generation budget and was not resumed                                                                      |
 | `error`       | The turn failed; the `error` field carries the details                                                                                                     |
 
-Other values are the provider's finish reason (`length`, `content-filter`, …) relayed unchanged; `max_steps` is platform-named because the provider reports `tool-calls` for an exhausted budget and a pause alike.
+Other values are the provider's finish reason (`length`, `content-filter`, …) relayed unchanged; `max_steps` is platform-named because the provider reports `tool-calls` for an exhausted budget and a pause alike, and `stop` for an `output_schema` agent's last step.
 
 ## Key Concepts
 
@@ -610,7 +610,11 @@ Only `memory_store_ids` set → memory-only search. Document search runs when `d
 }
 ```
 
-A completed non-streaming generation returns the parsed value as `output.object` beside `output.content`. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
+A completed non-streaming generation returns the parsed value as `output.object` beside `output.content`.
+
+#### Answering at `max_steps`
+
+The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
 
 #### The schema is enforced, not advisory
 
