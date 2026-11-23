@@ -43,6 +43,13 @@ paths:
         - name: workflow_id
           in: query
           required: false
+          x-soat-pin:
+            field: workflow_id
+            match: equals
+          description: >-
+            Only the tasks of this workflow. Every `/tasks/{task_id}` operation
+            takes the same pin, so a tool presetting it reaches no task of
+            another workflow.
           schema:
             type: string
         - name: state
@@ -272,6 +279,7 @@ paths:
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -324,6 +332,7 @@ paths:
       x-iam-action: tasks:UpdateTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -387,6 +396,7 @@ paths:
       x-iam-action: tasks:DeleteTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -440,6 +450,7 @@ paths:
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -500,6 +511,7 @@ paths:
       x-iam-action: tasks:TransitionTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -580,6 +592,7 @@ paths:
       x-iam-action: tasks:MigrateTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -659,6 +672,7 @@ paths:
       x-iam-action: tasks:SetTaskPriority
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -736,6 +750,7 @@ paths:
       x-iam-action: tasks:PauseTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -809,6 +824,7 @@ paths:
       x-iam-action: tasks:ResumeTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -871,6 +887,7 @@ paths:
       x-iam-action: tasks:UpdateTaskDependencies
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -951,6 +968,7 @@ paths:
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -1008,6 +1026,7 @@ paths:
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -1067,6 +1086,7 @@ paths:
       x-iam-action: tasks:UpdateTaskDependencies
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -1121,6 +1141,7 @@ paths:
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
         - name: task_id
           in: path
           required: true
@@ -1166,6 +1187,18 @@ paths:
         '500':
           $ref: './errors.yaml#/components/responses/InternalError'
 components:
+  parameters:
+    WorkflowPin:
+      name: workflow_id
+      in: query
+      required: false
+      description: >-
+        Pins the call to the tasks of this workflow, as the listing's
+        `workflow_id` filters them. A task of another workflow is `404`, as if
+        it did not exist.
+      schema:
+        type: string
+        example: wfl_V1StGXR8Z5jdHi6B
   securitySchemes:
     bearerAuth:
       type: http

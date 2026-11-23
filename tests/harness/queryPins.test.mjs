@@ -252,6 +252,7 @@ describe('query pins', () => {
       'listMemories?actor_id',
       'listMemories?memory_store_id',
       'listPlaybookCases?actor_id',
+      'listTasks?workflow_id',
     ]);
   });
 });

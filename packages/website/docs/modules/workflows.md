@@ -144,6 +144,10 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 - **Delete is guarded.** A workflow with **open** tasks cannot be deleted (`WORKFLOW_HAS_OPEN_TASKS`); once every task is closed, deleting it removes those tasks and their history.
 - **Payload is working data.** [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) updates `payload`, `title` or `assignee`. `payload` is **shallow-merged** (omitted keys kept) and validated against `payload_schema`. No patch reaches read-only `last_result`, so a guard on `task.last_result` is satisfied only by a value an automation wrote. Payload writes are not versioned.
 
+### Pinning a call to a workflow
+
+`workflow_id` in the query string, the filter of [`GET /api/v1/tasks`](/docs/api/tasks/list-tasks), also pins every `/tasks/{task_id}` route: get, history, update, delete, transitions, migrate, priority, pause, resume and dependencies. A task of another workflow is `404 TASK_NOT_FOUND`, as if it did not exist; adding or removing a dependency holds both ends to the pin. A [builtin tool](./tools.md#builtin) presetting `workflow_id` therefore confines every task action it binds to that workflow, so one project can serve one workflow per team or end user.
+
 ### Listing a task's transitions
 
 [`GET /tasks/{task_id}/transitions`](/docs/api/tasks/list-task-transitions) lists every transition of the task's pinned version with `name`, `to`, `requires_approval`, `allowed`, and `error_code`: the code firing it now as the caller would answer (`TASK_TRANSITION_CONFLICT` for a closed task, a pending gate or a state outside `from`; `TASK_GUARD_REJECTED` for a failing guard), `null` when allowed. The guard runs with the caller as `principal`. A `requires_approval` transition is allowed before its guard passes, since the guard runs when the approval resolves. One check decides both this list and the fire, so it is the dry run; it is advisory, and firing re-validates under the lock. Needs `tasks:GetTask`.

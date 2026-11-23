@@ -1,43 +1,16 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
-import { buildSrn } from 'src/lib/iam';
 import {
   addTaskDependency,
   listTaskDependencies,
   removeTaskDependency,
 } from 'src/lib/taskDependencies';
-import { getTask } from 'src/lib/tasks';
 
-import { parsePagination, requireAuth } from './helpers';
-import { requireAllowed } from './resourceAccess';
+import { parsePagination } from './helpers';
+import { assertTaskWithinPins, authorizeTask } from './taskAccess';
 import { principalFromCtx } from './tasks';
 
 const taskDependenciesRouter = new Router<Context>();
-
-const authorizeTask = async (args: {
-  ctx: Context;
-  action: 'tasks:GetTask' | 'tasks:UpdateTaskDependencies';
-}): Promise<void> => {
-  requireAuth(args.ctx);
-  const task = await getTask({ id: args.ctx.params.task_id });
-  await requireAllowed({
-    ctx: args.ctx,
-    check: {
-      projectPublicId: task.project_id!,
-      action: args.action,
-      resource: buildSrn({
-        projectPublicId: task.project_id!,
-        resourceType: 'task',
-        resourceId: task.id,
-      }),
-    },
-    notFound: new DomainError(
-      'TASK_NOT_FOUND',
-      `Task '${args.ctx.params.task_id}' not found.`
-    ),
-  });
-};
 
 /**
  * @openapi
@@ -46,11 +19,16 @@ const authorizeTask = async (args: {
 taskDependenciesRouter.post(
   '/tasks/:task_id/dependencies',
   async (ctx: Context) => {
-    await authorizeTask({ ctx, action: 'tasks:UpdateTaskDependencies' });
+    await authorizeTask({
+      ctx,
+      action: 'tasks:UpdateTaskDependencies',
+      id: ctx.params.task_id,
+    });
     const body = ctx.request.body as {
       depends_on_task_id: string;
       note?: string | null;
     };
+    await assertTaskWithinPins({ ctx, id: body.depends_on_task_id });
     const { dependency, created } = await addTaskDependency({
       taskId: ctx.params.task_id,
       dependsOnTaskId: body.depends_on_task_id,
@@ -65,7 +43,11 @@ taskDependenciesRouter.post(
 taskDependenciesRouter.get(
   '/tasks/:task_id/dependencies',
   async (ctx: Context) => {
-    await authorizeTask({ ctx, action: 'tasks:GetTask' });
+    await authorizeTask({
+      ctx,
+      action: 'tasks:GetTask',
+      id: ctx.params.task_id,
+    });
     ctx.body = await listTaskDependencies({
       taskId: ctx.params.task_id,
       direction: 'dependencies',
@@ -77,7 +59,11 @@ taskDependenciesRouter.get(
 taskDependenciesRouter.get(
   '/tasks/:task_id/dependents',
   async (ctx: Context) => {
-    await authorizeTask({ ctx, action: 'tasks:GetTask' });
+    await authorizeTask({
+      ctx,
+      action: 'tasks:GetTask',
+      id: ctx.params.task_id,
+    });
     ctx.body = await listTaskDependencies({
       taskId: ctx.params.task_id,
       direction: 'dependents',
@@ -89,7 +75,12 @@ taskDependenciesRouter.get(
 taskDependenciesRouter.delete(
   '/tasks/:task_id/dependencies/:depends_on_task_id',
   async (ctx: Context) => {
-    await authorizeTask({ ctx, action: 'tasks:UpdateTaskDependencies' });
+    await authorizeTask({
+      ctx,
+      action: 'tasks:UpdateTaskDependencies',
+      id: ctx.params.task_id,
+    });
+    await assertTaskWithinPins({ ctx, id: ctx.params.depends_on_task_id });
     await removeTaskDependency({
       taskId: ctx.params.task_id,
       dependsOnTaskId: ctx.params.depends_on_task_id,
