@@ -30,7 +30,12 @@ import {
   resolveStepRuleToolIdToName,
   type TurnToolChoice,
 } from './agentStepRules';
-import { isTurnBudgetSpent, resolveStopWhen } from './agentStopConditions';
+import {
+  isTurnBudgetSpent,
+  readTurnObject,
+  resolveAnswerStep,
+  resolveStopWhen,
+} from './agentStopConditions';
 import {
   fireCompletionSideEffects,
   meterContinuationSegment,
@@ -228,7 +233,7 @@ const settlePartition = async (args: {
     turn: {
       steps: args.save.result.steps,
       finishReason: args.save.result.finishReason,
-      maxSteps: args.save.typedAgent.maxSteps,
+      budget: args.save.typedAgent,
       outcome: 'ok',
     },
   });
@@ -411,7 +416,13 @@ const resolveGenerationResult = async (args: {
       text: args.result.text,
       response: args.result.response,
       responseMessages: args.result.responseMessages,
-      object: args.typedAgent.outputSchema ? args.result.output : undefined,
+      object: readTurnObject({
+        budget: args.typedAgent,
+        stepCount: args.result.steps.length,
+        readOutput: () => {
+          return args.result.output;
+        },
+      }),
       usage: args.result.usage,
     },
     typedAgent: args.typedAgent,
@@ -514,6 +525,7 @@ const turnPrepareStep = async (args: {
     logContext: 'non_stream',
     toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
     promptCaching: args.typedAgent.promptCaching,
+    answerStep: resolveAnswerStep(args.typedAgent),
     provenance: args.provenance,
   });
 };
@@ -644,6 +656,7 @@ export const runToolOutputsGeneration = async (args: {
         toolIdToName,
         stepsAlreadySpent,
         promptCaching: args.pending.agentConfig.promptCaching,
+        answerStep: resolveAnswerStep(args.pending.agentConfig),
         provenance: args.pending.provenance,
       }),
       // The turn is the agent's on both sides of the pause. What keeps a
@@ -704,6 +717,24 @@ const completeContinuation = async (args: {
     });
   }
 
+  let object: unknown;
+  try {
+    object = readTurnObject({
+      budget: args.pending.agentConfig,
+      stepCount: args.pending.stepCount + args.result.steps.length,
+      readOutput: () => {
+        return args.result.output;
+      },
+    });
+  } catch (error) {
+    throw await recordContinuationFailure({
+      generationId: args.generationId,
+      pending: args.pending,
+      steps: args.result.steps,
+      error,
+    });
+  }
+
   const completedResult: GenerationResult = {
     id: args.generationId,
     traceId: args.pending.traceId,
@@ -723,9 +754,7 @@ const completeContinuation = async (args: {
       content: args.result.text,
       finishReason: args.result.finishReason,
       ...servedTurnMessages(args.turnMessages),
-      ...(args.pending.agentConfig.outputSchema
-        ? { object: args.result.output }
-        : {}),
+      ...(args.pending.agentConfig.outputSchema ? { object } : {}),
     },
   };
 

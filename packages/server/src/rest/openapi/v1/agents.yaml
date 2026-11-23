@@ -545,6 +545,16 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '422':
+          description: >-
+            `MAX_STEPS_REACHED` — the agent has an `output_schema` and the
+            turn spent every step of `max_steps` without producing the object;
+            `meta.max_steps` names the budget. The generation is recorded
+            `failed`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           description: >-
             `QUOTA_EXCEEDED`: an `enforce`-mode generation quota is exhausted;
@@ -645,6 +655,16 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '422':
+          description: >-
+            `MAX_STEPS_REACHED` — the agent has an `output_schema` and the
+            turn spent every step of `max_steps` without producing the object;
+            `meta.max_steps` names the budget. The generation is recorded
+            `failed`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':

@@ -581,6 +581,11 @@ export const ERROR_CODES = {
     description:
       'The model returned an object that does not satisfy the agent output_schema (or was not valid JSON at all). Upstream-caused like AI_PROVIDER_ERROR: the request was well-formed, the model output was not.',
   },
+  MAX_STEPS_REACHED: {
+    httpStatus: 422,
+    description:
+      'An agent with an output_schema spent every step of max_steps without producing the object: its last allowed step answered without it, or its tool_choice forces a tool, so no step could answer. `meta.max_steps` names the budget.',
+  },
   TEXT_ENCODED_TOOL_CALL: {
     httpStatus: 502,
     description:

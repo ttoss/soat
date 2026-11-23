@@ -495,6 +495,16 @@
       "hint": "The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.",
       "routes": []
     },
+    "MAX_STEPS_REACHED": {
+      "http_status": 422,
+      "hint": "Raise `max_steps` with `PATCH /api/v1/agents/{agent_id}`, or make the instructions reach the answer in fewer tool calls. An agent whose `tool_choice` forces a tool cannot answer on its last step: use `\"auto\"` and force specific steps with `step_rules`.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/agents/{agent_id}"
+        }
+      ]
+    },
     "MCP_TOOL_ERROR": {
       "http_status": 502,
       "hint": "The MCP server answered the call with a failure rather than a result — `meta.mcp_tool` names the tool and `meta.mcp_url` the server, and `meta.upstream_code` the code it answered, when it answered one. The message carries what the server said; fix the arguments or the server-side condition it names, then retry. The call reached the server, so this is not a connectivity or allowlist problem.",
