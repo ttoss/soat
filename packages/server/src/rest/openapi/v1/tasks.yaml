@@ -193,7 +193,7 @@ paths:
   /api/v1/tasks/graph:
     get:
       description: >-
-        The tasks `GET /tasks` selects with the same filters, as `nodes`, and
+        The tasks `GET /tasks` selects with the same filters, as `data`, and
         the dependencies between them, as `edges`: one read draws a list, a
         graph or a tree. `upstream_of` answers what leads to one task. Answered
         whole, never paged: above `TASK_GRAPH_LIMIT` tasks it is refused with
@@ -1496,9 +1496,9 @@ components:
           format: date-time
     TaskGraph:
       type: object
-      required: [nodes, edges]
+      required: [data, edges]
       properties:
-        nodes:
+        data:
           type: array
           description: The tasks the filters select, newest first.
           items:
@@ -1506,7 +1506,7 @@ components:
         edges:
           type: array
           description: >-
-            Every dependency between two of `nodes`; one to a task the filters
+            Every dependency between two of `data`; one to a task the filters
             leave out is not answered.
           items:
             type: object

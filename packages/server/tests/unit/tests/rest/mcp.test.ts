@@ -568,7 +568,7 @@ describe('MCP tools - happy path', () => {
     const graph = parseResult(
       await mcpCall('get-task-graph', { workflow_id: workflow.id })
     );
-    expect(graph.nodes).toHaveLength(2);
+    expect(graph.data).toHaveLength(2);
     expect(graph.edges).toEqual([
       { task_id: milestone, depends_on_task_id: step },
     ]);

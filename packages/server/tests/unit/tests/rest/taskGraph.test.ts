@@ -1,4 +1,7 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 let adminToken: string;
@@ -179,14 +182,14 @@ describe('GET /api/v1/tasks?upstream_of=', () => {
 });
 
 describe('GET /api/v1/tasks/graph', () => {
-  test('answers the filtered tasks as nodes and the edges between them', async () => {
+  test('answers the filtered tasks as data and the edges between them', async () => {
     const { wf, milestone, a, b, base } = await diamond('graph all');
 
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/graph?workflow_id=${wf}`
     );
     expect(res.status).toBe(200);
-    const nodes = res.body.nodes as Node[];
+    const nodes = res.body.data as Node[];
     expect(titles(nodes)).toEqual(['a', 'b', 'base', 'milestone', 'unrelated']);
     expect(nodes[0].id).toMatch(/^task_/);
     expect(nodes[0]).toHaveProperty('readiness');
@@ -213,7 +216,7 @@ describe('GET /api/v1/tasks/graph', () => {
       `/api/v1/tasks/graph?workflow_id=${wf}&upstream_of=${milestone}`
     );
     expect(res.status).toBe(200);
-    expect(titles(res.body.nodes)).toEqual(['a', 'b', 'base']);
+    expect(titles(res.body.data)).toEqual(['a', 'b', 'base']);
     expect(res.body.edges).toHaveLength(2);
   });
 
@@ -224,12 +227,7 @@ describe('GET /api/v1/tasks/graph', () => {
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/graph?workflow_id=${wf}&status=open`
     );
-    expect(titles(res.body.nodes)).toEqual([
-      'a',
-      'b',
-      'milestone',
-      'unrelated',
-    ]);
+    expect(titles(res.body.data)).toEqual(['a', 'b', 'milestone', 'unrelated']);
     expect(res.body.edges).toHaveLength(2);
   });
 
@@ -240,7 +238,7 @@ describe('GET /api/v1/tasks/graph', () => {
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/tasks/graph?workflow_id=${wf}&metadata=${metadata}`
     );
-    expect(titles(res.body.nodes)).toEqual(['milestone']);
+    expect(titles(res.body.data)).toEqual(['milestone']);
     expect(res.body.edges).toEqual([]);
   });
 
@@ -249,7 +247,7 @@ describe('GET /api/v1/tasks/graph', () => {
       `/api/v1/tasks/graph?project_id=${projectId}`
     );
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('nodes');
+    expect(res.body).toHaveProperty('data');
     expect(res.body).toHaveProperty('edges');
   });
 
@@ -270,7 +268,7 @@ describe('GET /api/v1/tasks/graph', () => {
     }
   });
 
-  test('answers only the caller projects', async () => {
+  test('answers only the projects the caller reads', async () => {
     const wf = await createWorkflow('graph other', otherProjectId, adminToken);
     await createTask({
       workflowId: wf,
@@ -279,11 +277,21 @@ describe('GET /api/v1/tasks/graph', () => {
       token: adminToken,
     });
 
-    const res = await authenticatedTestClient(userToken).get(
+    await diamond('graph scoped');
+    const scopedToken = await createScopedPrincipal({
+      adminToken,
+      projectId,
+      username: 'taskgraphscoped',
+      actions: ['tasks:ListTasks'],
+    });
+
+    const res = await authenticatedTestClient(scopedToken).get(
       '/api/v1/tasks/graph'
     );
     expect(res.status).toBe(200);
-    expect(titles(res.body.nodes)).not.toContain('elsewhere');
+    const seen = titles(res.body.data);
+    expect(seen).toContain('milestone');
+    expect(seen).not.toContain('elsewhere');
   });
 
   test('refuses order, limit and cursor', async () => {
@@ -304,6 +312,6 @@ describe('GET /api/v1/tasks/graph', () => {
       '/api/v1/tasks/graph'
     );
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ nodes: [], edges: [] });
+    expect(res.body).toEqual({ data: [], edges: [] });
   });
 });

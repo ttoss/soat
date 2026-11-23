@@ -64,7 +64,7 @@ export const getTaskGraph = async (args: TaskListFilters) => {
         });
 
   return {
-    nodes: rows.map(map),
+    data: rows.map(map),
     edges: dependencies.map((dependency) => {
       return {
         task_id: publicIds.get(dependency.taskId as number)!,

@@ -406,9 +406,9 @@ curl -s -X POST "$SOAT_URL/api/v1/tasks/$NEXT_ID/transitions" \
 
 ### Reading a task graph
 
-[`GET /tasks/graph`](/docs/api/tasks/get-task-graph) takes every filter of [`GET /tasks`](/docs/api/tasks/list-tasks) but `order`, `limit` and `cursor`, and answers `{ nodes, edges }`: the tasks the filters select, newest first, and each dependency between two of them as `{ task_id, depends_on_task_id }`. An edge to a task the filters leave out is not answered. Needs `tasks:ListTasks`.
+[`GET /tasks/graph`](/docs/api/tasks/get-task-graph) takes every filter of [`GET /tasks`](/docs/api/tasks/list-tasks) but `order`, `limit` and `cursor`, and answers `{ data, edges }`: the tasks the filters select, newest first, and each dependency between two of them as `{ task_id, depends_on_task_id }`. An edge to a task the filters leave out is not answered. Needs `tasks:ListTasks`.
 
-- `upstream_of={task_id}` answers what leads to one task, closed tasks included unless `status=open`; the task itself is not a node.
+- `upstream_of={task_id}` answers what leads to one task, closed tasks included unless `status=open`; the task itself is not in `data`.
 - The answer is whole, never paged. Above `TASK_GRAPH_LIMIT` tasks it is `422 TASK_GRAPH_TOO_LARGE` with `meta.count` and `meta.limit`: narrow the filters, or page through [`GET /tasks`](/docs/api/tasks/list-tasks).
 
 <Tabs groupId="client">
