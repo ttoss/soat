@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.126.1](https://github.com/ttoss/soat/compare/v0.126.0...v0.126.1) (2026-11-23)
+
+### Bug Fixes
+
+* **admission:** every branch of a declared write authorizes and asks admission ([#2109](https://github.com/ttoss/soat/issues/2109)) ([7133000](https://github.com/ttoss/soat/commit/7133000c54c7808e8a89b695d2a78b9a628274ab))
+* **knowledge:** bound every search query with a statement timeout ([#2112](https://github.com/ttoss/soat/issues/2112)) ([f38b3e2](https://github.com/ttoss/soat/commit/f38b3e23c8f557eef7da1b1d525f171555400cf1))
+* **memories:** commit a memory write with its assertion ([#2110](https://github.com/ttoss/soat/issues/2110)) ([f1389d4](https://github.com/ttoss/soat/commit/f1389d448c7747ce5e4170dabf028324d3f8a7b4))
+* **tasks:** workflow_id pins every by-id task route ([#2111](https://github.com/ttoss/soat/issues/2111)) ([81f9494](https://github.com/ttoss/soat/commit/81f9494734a861f83f7c9c5d90c145139691ab59))
+
 # [0.126.0](https://github.com/ttoss/soat/compare/v0.125.0...v0.126.0) (2026-11-23)
 
 ### Bug Fixes
