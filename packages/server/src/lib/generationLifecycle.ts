@@ -9,6 +9,7 @@ import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
+import { type ReplayedWindow, replayRefusal } from './replayRefusal';
 import { recordTraceError } from './traces';
 import {
   reportedModelOf,
@@ -100,10 +101,15 @@ export const recordGenerationFailure = async (args: {
   reportedModelId?: string;
   /** Steps the turn spent before the failed segment — keys its usage event. */
   stepsAlreadySpent: number;
+  /** The conversation positions the turn replayed; `null` when it replays none. */
+  replayed: ReplayedWindow | null;
 }): Promise<unknown> => {
   // A segment cancelled at its deadline or on losing its lease fails for that
   // reason, whatever the cancelled call threw.
-  const cause = segmentAbortReason(args.generationId) ?? args.error;
+  const cause = replayRefusal({
+    error: segmentAbortReason(args.generationId) ?? args.error,
+    replayed: args.replayed,
+  });
   const errorPayload = buildGenerationErrorPayload(cause);
   // Derived here so no failure path has to remember to pass it: `usage` is only
   // supplied explicitly by a caller that mapped the error before handing it over
@@ -190,6 +196,9 @@ export const recordContinuationFailure = async (args: {
     usage: sumStepUsage(args.steps) ?? usageFromFailure(args.error),
     reportedModelId: reportedModelOfSteps(args.steps),
     stepsAlreadySpent: args.pending.stepCount,
+    // A paused turn does not keep its replayed window, so a refusal of its
+    // continuation stays `AI_PROVIDER_ERROR`.
+    replayed: null,
   });
 };
 

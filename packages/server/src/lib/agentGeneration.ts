@@ -396,6 +396,7 @@ const claimGeneration = (args: RequestedGenerationArgs) => {
 const failureProject = (ctx: GenerationContext) => {
   return {
     projectId: ctx.typedAgent.project.id,
+    replayed: ctx.replayed,
   };
 };
 

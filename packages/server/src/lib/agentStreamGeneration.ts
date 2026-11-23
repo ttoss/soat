@@ -194,6 +194,8 @@ const recordStreamFailure = async (args: {
     model: args.model,
     projectId: args.typedAgent.project.id,
     stepsAlreadySpent: 0,
+    // A conversation turn is never streamed.
+    replayed: null,
   });
 };
 

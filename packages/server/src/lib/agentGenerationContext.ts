@@ -39,6 +39,7 @@ import {
 } from './generationProvenance';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { withPromptCacheBreakpoint } from './promptCaching';
+import { type ReplayedWindow, replayedWindowOf } from './replayRefusal';
 import { pinServerIdentityToolContext } from './toolContext';
 import type { ToolSurface } from './toolSurfaceMeasure';
 import { measureToolSurface } from './toolSurfaceMeasure';
@@ -99,6 +100,8 @@ export type GenerationContext = {
    * stream and non-stream paths cannot disagree about it.
    */
   toolChoice: TurnToolChoice;
+  /** The conversation positions the turn replays, `null` outside a conversation. */
+  replayed: ReplayedWindow | null;
 };
 
 /**
@@ -402,5 +405,6 @@ export const buildGenerationContext = async (
     agentVersion,
     provenance,
     toolChoice: normalizeToolChoice(typedAgent.toolChoice),
+    replayed: replayedWindowOf(args.conversation),
   };
 };

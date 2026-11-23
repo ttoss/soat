@@ -1001,6 +1001,24 @@
         }
       ]
     },
+    "REPLAY_REFUSED": {
+      "http_status": 502,
+      "hint": "The stored history the turn replays is what the provider refused, so retrying the same session fails the same way. `history_refused`: fork the session at a `position` before the message the provider objects to, within `meta.replayed_window`, with POST /api/v1/sessions/{session_id}/fork, or start a new session. `context_too_long`: lower the session `max_context_messages` with PATCH /api/v1/sessions/{session_id}, fork, or start a new session. `request_refused`: read the failed generation with GET /api/v1/generations/{generation_id}.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/sessions/{session_id}/fork"
+        },
+        {
+          "method": "PATCH",
+          "path": "/sessions/{session_id}"
+        },
+        {
+          "method": "GET",
+          "path": "/generations/{generation_id}"
+        }
+      ]
+    },
     "REQUEST_REJECTED": {
       "http_status": 400,
       "hint": "The HTTP layer rejected the request before it reached a handler — path, method, content type, or size. The message names the reason; `/api/v1/openapi.json` lists every path and method.",

@@ -133,6 +133,7 @@ const runAgentGeneration = async (args: {
     // from a client-tool pause is stored after the snapshot it read.
     conversation: {
       id: args.conversationId,
+      firstPosition: args.replayed[0]?.position ?? args.snapshotPosition,
       snapshotPosition: args.snapshotPosition,
       replayed: sumProvenance(...args.replayed.map(storedProvenance)),
     },
