@@ -291,6 +291,33 @@ Retriable: infrastructure errors (network, timeouts, provider SDK throws) and up
 
 A **retry** (new attempt) is not deduped; a **redelivery** of the same attempt is ([Idempotency](#idempotency-of-node-execution)).
 
+### Error edges
+
+A node that fails once its retries are spent (or on a terminal error) follows an error edge instead of failing the run:
+
+| Edge `condition` | Follows when the node's error `code` is |
+| --- | --- |
+| `error:<CODE>` | `<CODE>` only, e.g. `error:RESOURCE_NOT_FOUND` |
+| `error` | any code |
+
+The node's artifact is `{ error }`, the recorded [error](../error-codes.md) (`code`, `message`, `meta`), read as `{"var": "nodes.<id>.error.code"}` or through `state_mapping`. Its [node execution](#node-executions) stays `failed` and carries the same value as `output`. An unlabeled success edge does not follow a failed node. With no matching edge, the run fails with the node's error.
+
+```json
+{
+  "nodes": [
+    { "id": "load", "type": "tool", "tool_id": "tool_collections", "operation_id": "get-collection-item" },
+    { "id": "use", "type": "transform", "expression": { "var": "nodes.load" } },
+    { "id": "first_run", "type": "transform", "expression": {} }
+  ],
+  "edges": [
+    { "from": "load", "to": "use" },
+    { "from": "load", "to": "first_run", "condition": "error:RESOURCE_NOT_FOUND" }
+  ]
+}
+```
+
+An `error:<CODE>` naming an unknown code is refused on write (`UNKNOWN_ERROR_CODE`, [Static Validation](#static-validation)).
+
 ### Durable Background Execution
 
 Runs execute in a **queue-backed durable worker**, detached from the starting request:
@@ -571,6 +598,7 @@ Graphs are validated **before** persistence: `create-orchestration` / `update-or
 | `INVALID_TYPE` | `nodes` is not an array | |
 | `DUPLICATE_NODE_ID` | Duplicate node id | two nodes share `id: "a"` |
 | `UNKNOWN_NODE` | Dangling edge | an edge whose `from`/`to` references a node that does not exist |
+| `UNKNOWN_ERROR_CODE` | Error edge | an edge `condition: "error:<CODE>"` naming a code that is not an [error code](../error-codes.md) |
 | `CYCLE` | Cycle (no `loop` node present) | `a → b → a` |
 | `UNWRITTEN_STATE_KEY` | Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
 | `NODE_NOT_UPSTREAM` | Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema` |

@@ -50,16 +50,19 @@ export type WaitResume =
 export type RequiredActionType =
   'human_input' | 'webhook_receive' | 'approval' | 'child_run';
 
+/** The branch label of a failed node: `error:<code>`, the code it recorded. */
+export type ErrorLabel = `error:${string}`;
+
 export type NodeExecutionResult =
   | { kind: 'artifact'; artifact: Record<string, unknown>; traceId?: string }
   | { kind: 'condition'; label: string }
   | {
       // A routable outcome, not a run failure: the node is treated like a
       // decision node, so an unlabeled happy-path edge does not auto-follow a
-      // blocked action.
-      kind: 'blocked';
+      // blocked action or a failure routed along an error edge.
+      kind: 'routed';
       nodeId: string;
-      label: 'blocked' | 'tripwire';
+      label: 'blocked' | 'tripwire' | ErrorLabel;
       artifact: Record<string, unknown>;
     }
   | {

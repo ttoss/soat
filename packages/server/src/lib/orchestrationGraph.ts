@@ -1,4 +1,5 @@
 import { type Dag, topologicalWaves } from './dag';
+import type { ErrorLabel } from './orchestrationNodeTypes';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 
 /** The orchestration as a graph: a node reads every node with an edge into it. */
@@ -87,11 +88,38 @@ export const findStartNodes = (
     });
 };
 
+/** An edge `condition` that follows a failed node whatever its error code. */
+export const ANY_ERROR_CONDITION = 'error';
+
+const ERROR_CONDITION_PREFIX = `${ANY_ERROR_CONDITION}:`;
+
+export const errorLabel = (code: string): ErrorLabel => {
+  return `${ERROR_CONDITION_PREFIX}${code}`;
+};
+
+/** The code an `error:<CODE>` condition names, or `null` for any other. */
+export const errorConditionCode = (condition: string): string | null => {
+  return condition.startsWith(ERROR_CONDITION_PREFIX)
+    ? condition.slice(ERROR_CONDITION_PREFIX.length)
+    : null;
+};
+
+const labelMatches = (args: {
+  condition: string;
+  label: string | undefined;
+}): boolean => {
+  if (args.label === args.condition) return true;
+  return (
+    args.condition === ANY_ERROR_CONDITION &&
+    args.label?.startsWith(ERROR_CONDITION_PREFIX) === true
+  );
+};
+
 /**
  * Whether an edge's branch condition is met. A `condition` edge follows only
- * when the completed node's label matches. An unlabeled edge leaving a decision
- * node (`approval`) follows only on the `approved` label; otherwise unlabeled
- * edges always follow.
+ * when the completed node's label matches; `error` matches every `error:<CODE>`
+ * label. An unlabeled edge leaving a decision node (`approval`) follows only on
+ * the `approved` label; otherwise unlabeled edges always follow.
  */
 const edgeConditionMet = (args: {
   edge: OrchestrationEdge;
@@ -99,7 +127,9 @@ const edgeConditionMet = (args: {
   isDecisionNode: boolean;
 }): boolean => {
   const { edge, label, isDecisionNode } = args;
-  if (edge.condition !== undefined) return label === edge.condition;
+  if (edge.condition !== undefined) {
+    return labelMatches({ condition: edge.condition, label });
+  }
   if (isDecisionNode) return label === 'approved';
   return true;
 };
@@ -152,4 +182,19 @@ export const resolveNextNodes = (args: {
     });
 
   return [...new Set(next)];
+};
+
+/** Whether a failed node has an edge its error label follows. */
+export const hasErrorRoute = (args: {
+  nodeId: string;
+  label: ErrorLabel;
+  edges: OrchestrationEdge[];
+}): boolean => {
+  return args.edges.some((edge) => {
+    return (
+      edge.from === args.nodeId &&
+      edge.condition !== undefined &&
+      labelMatches({ condition: edge.condition, label: args.label })
+    );
+  });
 };

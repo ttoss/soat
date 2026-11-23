@@ -109,6 +109,7 @@ const executeActiveNodes = (args: {
   activeNodeIds: string[];
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
   state: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
@@ -122,6 +123,7 @@ const executeActiveNodes = (args: {
         nodeId,
         runRecord: args.runRecord,
         nodes: args.nodes,
+        edges: args.edges,
         state: args.state,
         projectIds: args.projectIds,
         traceId: args.traceId,

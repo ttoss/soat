@@ -1534,7 +1534,11 @@ components:
           description: Target node ID.
         condition:
           type: string
-          description: For condition node routing — label to match against condition output.
+          description: >-
+            Label to match: a condition node's output, an approval decision,
+            `blocked`/`tripwire` for a guardrail-blocked tool node, or, for a
+            node that failed once its retries are spent, `error:<CODE>` (that
+            error code only; an unknown code is refused) or `error` (any code).
         activation_group:
           type: string
           description: Groups edges for join semantics.
