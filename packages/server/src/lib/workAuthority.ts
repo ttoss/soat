@@ -1,7 +1,10 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { DeniedPrincipal } from './authorizationDenial';
+import {
+  type DeniedPrincipal,
+  readDeniedPrincipal,
+} from './authorizationDenial';
 import { type PolicyDocument, validatePolicyDocument } from './iam';
 import { isPlainObject } from './plainObject';
 import {
@@ -152,26 +155,6 @@ const parseGrant = (value: unknown): AuthorityGrant | null => {
   return GRANT_READERS[value.holder](value);
 };
 
-const DENIED_TYPES = new Set<string>([
-  'user',
-  'api_key',
-  'caller',
-  'iam_token',
-  'on_behalf_of',
-  'generation',
-  'project',
-  'agent',
-  'trigger',
-  ...RESOURCE_GRANT_PRINCIPAL_TYPES,
-]);
-
-const parseDenied = (value: unknown): DeniedPrincipal | null => {
-  if (!isPlainObject(value) || typeof value.type !== 'string') return null;
-  if (!DENIED_TYPES.has(value.type)) return null;
-  if (value.id !== null && typeof value.id !== 'string') return null;
-  return { type: value.type as DeniedPrincipal['type'], id: value.id };
-};
-
 /** One reader per cap kind; a kind none reads is not a cap. */
 const CAP_READERS: Record<
   AuthorityCap['kind'],
@@ -196,7 +179,7 @@ const CAP_READERS: Record<
   },
   bound: (value) => {
     const bound = parseBound(value.bound);
-    const by = parseDenied(value.by);
+    const by = readDeniedPrincipal(value.by);
     return bound && by ? { kind: 'bound', bound, by } : null;
   },
 };
