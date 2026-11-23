@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.126.0](https://github.com/ttoss/soat/compare/v0.125.0...v0.126.0) (2026-11-23)
+
+### Bug Fixes
+
+* **admission:** formation and orchestration validate ask admission ([#2105](https://github.com/ttoss/soat/issues/2105)) ([d9402df](https://github.com/ttoss/soat/commit/d9402dfb4f9ea6bd255abd9e2a85c28174b915d1))
+* **agents:** the promotion pawl refuses a canary run that carries no claim ([#2100](https://github.com/ttoss/soat/issues/2100)) ([fad731b](https://github.com/ttoss/soat/commit/fad731bd5d0b6bcb7ad705fd02db22d250e56250)), closes [#2091](https://github.com/ttoss/soat/issues/2091)
+* **evals:** a decider an eval scorer calls is metered as verification, not production ([#2099](https://github.com/ttoss/soat/issues/2099)) ([d181256](https://github.com/ttoss/soat/commit/d181256376b44b1162898b40f85cacb1b80e9111)), closes [#2092](https://github.com/ttoss/soat/issues/2092)
+* **formations:** settle a write-only property resolving as last deployed ([#2107](https://github.com/ttoss/soat/issues/2107)) ([b9c283e](https://github.com/ttoss/soat/commit/b9c283e3a71dc50189421f7580a95a7c114f8b44))
+* **formations:** stored templates declare only parameter types plan accepts ([#2106](https://github.com/ttoss/soat/issues/2106)) ([511c583](https://github.com/ttoss/soat/commit/511c58321a1f01f62a78178a5b57361a48f5fa1e))
+* **server:** a refusing deny's denial answers its code on the writer rule ([#2103](https://github.com/ttoss/soat/issues/2103)) ([428498d](https://github.com/ttoss/soat/commit/428498d4803068cf58b5e5baac2ead7fb9181c4e))
+* **tools:** a nested call keeps its own tool_context keys under the propagated bag ([#2104](https://github.com/ttoss/soat/issues/2104)) ([2569399](https://github.com/ttoss/soat/commit/2569399c74ae988afceb911b4b4b6ffca06ebe19))
+
+### Features
+
+* **evals:** human labels on results, calibration per scorer, and evidence.min_calibration ([#1556](https://github.com/ttoss/soat/issues/1556) Part 5) ([#2102](https://github.com/ttoss/soat/issues/2102)) ([eaa3f74](https://github.com/ttoss/soat/commit/eaa3f745726d5cef966ae93a150e15267ca28ca0))
+
 # [0.125.0](https://github.com/ttoss/soat/compare/v0.124.0...v0.125.0) (2026-11-22)
 
 ### Bug Fixes
