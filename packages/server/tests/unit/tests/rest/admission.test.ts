@@ -279,6 +279,15 @@ describe('admission — a declared write is asked about before it executes', () 
       action: 'orchestrations:ValidateOrchestration',
       body: { nodes: [], edges: [] },
     },
+    {
+      route: '/api/v1/playbooks/validate',
+      action: 'playbooks:ValidatePlaybook',
+      body: {
+        definition: {
+          nodes: [{ id: 'a', title: 'A', kind: 'collect', inputs: [] }],
+        },
+      },
+    },
   ])('POST $route — authorized to any caller', ({ route, action, body }) => {
     test('is asked too', async () => {
       service.declare({ actions: [action] });

@@ -66,20 +66,16 @@ embeddingsRouter.post('/embeddings', async (ctx: Context) => {
   const { hasSingle, hasBatch } = assertEmbeddingsRequest(body);
 
   // Every embedding is billed to a project, so a call names one or carries a
-  // credential bound to one. An explicit `project_id` is authorized like any
-  // project-scoped write; the bound project needs no such check, since the
-  // credential can act nowhere else.
+  // credential bound to one; either way the caller needs the spend there.
   const billingProjectPublicId = resolveWriteProjectPublicId({
     ctx,
     projectPublicId: body.project_id,
   });
-  if (body.project_id) {
-    await resolveWriteProjectId({
-      ctx,
-      projectPublicId: body.project_id,
-      ...EMBEDDING_SPEND,
-    });
-  }
+  await resolveWriteProjectId({
+    ctx,
+    projectPublicId: billingProjectPublicId,
+    ...EMBEDDING_SPEND,
+  });
 
   const response: { embedding?: number[]; embeddings?: number[][] } = {};
 
