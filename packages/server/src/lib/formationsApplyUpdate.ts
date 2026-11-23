@@ -14,7 +14,10 @@ import {
   isResourceAlreadyGone,
   sanitizeAppliedProperties,
 } from './formationsApplyHelpers';
-import { propertyComparisonFor } from './formationsComparison';
+import {
+  type DeployedResource,
+  propertyComparisonFor,
+} from './formationsComparison';
 import { mergeWithPrevious } from './formationsProperties';
 import { clearablePropertiesOf } from './formationsRegistry';
 import {
@@ -26,7 +29,6 @@ import {
   type FormationActor,
   type FormationEvent,
   formationFailure,
-  type ResourceDeclaration,
 } from './formationsTypes';
 import type { StoredError } from './storedError';
 
@@ -238,7 +240,7 @@ const mergeWithLastApplied = (args: {
   existing: ResourceRow;
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
-  deployed: ResourceDeclaration | undefined;
+  deployed: DeployedResource | undefined;
 }): ReturnType<typeof mergeWithPrevious> & {
   lastApplied: Record<string, unknown>;
 } => {
@@ -285,8 +287,8 @@ export const applyUpdateChange = async (args: {
   events: FormationEvent[];
   /** Collects the disposal a replacement here defers to the end of the apply. */
   pendingCleanups: PendingCleanup[];
-  /** This resource in the template the formation last deployed. */
-  deployed: ResourceDeclaration | undefined;
+  /** This resource in the formation's last deploy. */
+  deployed: DeployedResource | undefined;
 }): Promise<AppliedUpdate | null> => {
   const { resourceRow, existing, resourceType, logicalId } = args;
   const { resolvedProperties, projectId, actor, resolvedIds, events } = args;

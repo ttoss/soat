@@ -2,16 +2,22 @@
  * How `plan-formation` and apply decide whether a declared property differs
  * from what the resource holds: an empty (`null`) property and an absent one
  * are the same, the type's schema defaults fill both sides, and a write-only
- * property the resource cannot read back is settled when its declaration is the
- * one the formation last deployed.
+ * property the resource cannot read back is settled when it resolves to the
+ * value the formation last deployed.
  */
 
 import { isDeepStrictEqual } from 'node:util';
 
 import { holdsFormationExpression } from './formation-modules/formationSpecLoader';
+import {
+  collectParamRefs,
+  resolveParamExpressions,
+  resolveRefs,
+} from './formationsHelpers';
+import { resolveParameterValues } from './formationsParameters';
 import { normalizeDeclaredProperties } from './formationsProperties';
 import { getFormationModule } from './formationsRegistry';
-import type { ResourceDeclaration } from './formationsTypes';
+import type { FormationTemplate, ResourceDeclaration } from './formationsTypes';
 
 export type PropertyComparison = {
   /** Both sides of the comparison pass through this before they are compared. */
@@ -20,30 +26,106 @@ export type PropertyComparison = {
   settled: ReadonlySet<string>;
 };
 
+/** One resource of the formation's last successful deploy, and what it resolved from. */
+export type DeployedResource = {
+  declaration: ResourceDeclaration;
+  template: FormationTemplate;
+  /** The deploy's `resolved_parameters`: `no_echo` values masked, kept ones absent. */
+  parameters: Record<string, string> | null;
+  /** The physical id each resource held when that deploy ended. */
+  physicalIds: ReadonlyMap<string, string>;
+};
+
+export const deployedResourceOf = (args: {
+  formation: {
+    template: unknown;
+    resolvedParameters: Record<string, string> | null;
+  };
+  logicalId: string;
+  physicalIds: ReadonlyMap<string, string>;
+}): DeployedResource | undefined => {
+  const template = args.formation.template as FormationTemplate | null;
+  const declaration = template?.resources[args.logicalId];
+  if (!template || !declaration) return undefined;
+  return {
+    declaration,
+    template,
+    parameters: args.formation.resolvedParameters,
+    physicalIds: args.physicalIds,
+  };
+};
+
 /**
- * The write-only properties whose declaration equals, as a literal, the one the
- * formation last deployed: the value the resource holds is that one, though no
- * read returns it. One holding an expression may resolve differently, so it is
+ * `value`, from the deployed declaration, as that deploy resolved it; `undefined`
+ * when a parameter it reads is masked or was not recorded, or a ref names a
+ * resource the deploy did not leave.
+ */
+const resolvedAsDeployed = (args: {
+  value: unknown;
+  deployed: DeployedResource;
+}): unknown => {
+  const { template, parameters, physicalIds } = args.deployed;
+  const logicalIds = new Set(Object.keys(template.resources));
+  const used = collectParamRefs(args.value).filter((name) => {
+    return !logicalIds.has(name);
+  });
+  const recorded = used.every((name) => {
+    return (
+      template.parameters?.[name] !== undefined &&
+      template.parameters[name].no_echo !== true &&
+      parameters?.[name] !== undefined
+    );
+  });
+  if (!recorded) return undefined;
+  try {
+    const values = resolveParameterValues(
+      template,
+      Object.fromEntries(
+        used.map((name) => {
+          return [name, parameters?.[name] ?? ''];
+        })
+      )
+    );
+    return resolveRefs(
+      resolveParamExpressions(args.value, values, logicalIds),
+      new Map(physicalIds)
+    );
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * The write-only properties whose resolved declaration equals the value the
+ * formation last deployed: the resource holds that one, though no read returns
+ * it. `declared` carries resolved values; one still holding an expression is
  * never settled.
  */
 const settledWriteOnlyProperties = (args: {
   declared: ResourceDeclaration;
-  deployed: ResourceDeclaration | undefined;
+  deployed: DeployedResource | undefined;
 }): ReadonlySet<string> => {
   const { declared, deployed } = args;
   const names =
     getFormationModule({ resourceType: declared.type })?.writeOnlyProperties ??
     [];
-  if (names.length === 0 || deployed?.type !== declared.type) return new Set();
+  if (names.length === 0 || deployed?.declaration.type !== declared.type) {
+    return new Set();
+  }
 
   const now = normalizeDeclaredProperties(declared.properties ?? {});
-  const before = normalizeDeclaredProperties(deployed.properties ?? {});
+  const before = normalizeDeclaredProperties(
+    deployed.declaration.properties ?? {}
+  );
   return new Set(
     names.filter((name) => {
       return (
         now[name] !== undefined &&
         !holdsFormationExpression(now[name]) &&
-        isDeepStrictEqual(now[name], before[name])
+        isDeepStrictEqual(
+          now[name],
+          resolvedAsDeployed({ value: before[name], deployed })
+        )
       );
     })
   );
@@ -77,12 +159,13 @@ export const buildPropertyComparison = (args: {
 };
 
 /**
- * The comparison for one declared resource. `deployed` is its declaration in
- * the template the formation last deployed, `undefined` when there is none.
+ * The comparison for one declared resource, whose `properties` are resolved.
+ * `deployed` is the resource in the formation's last deploy, `undefined` when
+ * there is none.
  */
 export const propertyComparisonFor = (args: {
   declared: ResourceDeclaration;
-  deployed: ResourceDeclaration | undefined;
+  deployed: DeployedResource | undefined;
 }): PropertyComparison => {
   const module = getFormationModule({ resourceType: args.declared.type });
   return buildPropertyComparison({

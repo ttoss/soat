@@ -540,7 +540,7 @@ Plan and apply share one change rule:
 - Comparison is **structural**; key order in a nested value bag is not a change.
 - An **empty property** is not a change: a declared `null` equals a property the read leaves out, except a write-only one, which no read returns.
 - A **schema default** is not a change: both sides are compared with every `default` the type's properties schema declares filled in, at every depth, so a playbook node omitting `final` equals one read back with `final: false`.
-- A **write-only property** compares equal when its declaration is the literal the formation last deployed, including one sent back as `{ "no_echo": true }`; any other value, or one holding a `param`, `ref` or `sub`, is a change.
+- A **write-only property** compares equal when it resolves to the value the formation last deployed, including one sent back as `{ "no_echo": true }`: the same declaration, each `param` it reads given the value that deploy recorded in `resolved_parameters`, and each `ref` naming a resource the deploy does not replace. A different value, or a `param` declared `no_echo` (never recorded), is a change.
 - A property resolving to `undefined` (a kept `use_previous_value` parameter) reuses the previous value, or is dropped when there is none.
 
 ### A Formation Only Does What the Caller Could Do Directly
@@ -704,7 +704,7 @@ The same list masks the property on every read of a stored template and in a pla
 
 Consequences:
 
-- **A write-only property is compared with its last deployed declaration**: the literal the formation last deployed is not a change; a new literal, or a value from a `param`, `ref` or `sub`, is, and is sent again (the handler is expected to be idempotent). See [Plan Diff](#plan-diff).
+- **A write-only property is compared with its last deployed declaration**: a declaration resolving to the value the formation last deployed is not a change; a different value, or one from a `no_echo` parameter, is, and is sent again (the handler is expected to be idempotent). See [Plan Diff](#plan-diff).
 - **`read` should not return it either**: a credential echoed in `read.properties` goes straight back into the drift comparison.
 
 #### Overriding a built-in type
