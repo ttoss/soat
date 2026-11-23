@@ -58,9 +58,8 @@ const writeToState = (
   });
 };
 
-// `applyInputMapping` and the JSON Logic evaluator now live in
-// `./jsonLogicMapping` so orchestration nodes and pipeline tools share a single
-// evaluator. Re-exported here to preserve the existing import surface.
+// Orchestration nodes and pipeline tools share the evaluator in
+// `./jsonLogicMapping`; re-exported for this module's importers.
 export { applyInputMapping };
 
 /**

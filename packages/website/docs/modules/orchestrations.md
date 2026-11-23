@@ -534,7 +534,7 @@ Each `input_mapping` value is [JSON Logic](https://jsonlogic.com) over run state
 | ----- | --------- |
 | String, number, boolean | Passed through as a literal |
 | A single-key object whose key names a JSON Logic operator (`var`, `cat`, `if`, `>`, arithmetic, …) | Evaluated against state |
-| Any other object or array | Passed through as a literal, but recursed into — a JSON Logic marker nested inside it (at any depth) is still resolved |
+| Any other object or array | Evaluated key by key (item by item for an array), at any depth; keys are copied literally, so a dotted key such as `"post.fields"` stays one key |
 
 ```json
 "input_mapping": {
@@ -548,6 +548,18 @@ Each `input_mapping` value is [JSON Logic](https://jsonlogic.com) over run state
 ```
 
 `{"var": "key"}` reads `state.key`. A literal object that looks like JSON Logic goes in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
+
+Keys are never paths in `input_mapping`: `"post.fields"` below is the literal key `post.fields` of the tool input, and only its value is evaluated. A single-key object whose key is an operator name is read as an expression, never as data. A dotted key nests only in `state_mapping` and `output_mapping`, where keys are write paths.
+
+A `tool` node calling an `http` GET tool takes each top-level key of its tool input as a query parameter. X's `post.fields` is one such parameter, a comma-separated string:
+
+```json
+"input_mapping": {
+  "post.fields": { "var": "input.fields" }
+}
+```
+
+With run input `{ "fields": "created_at,text" }`, the request carries `?post.fields=created_at%2Ctext`. The dotted key is sent as written. Nesting the same key in an object under `query` instead sends one JSON-string parameter.
 
 #### Run input
 
