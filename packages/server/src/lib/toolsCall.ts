@@ -17,6 +17,7 @@ import { stampToolContextLayer } from './toolContextLayer';
 import { assertToolInputValid } from './toolInputValidation';
 import {
   mergePresetParameters,
+  presetParametersForAction,
   presetsDeclaredBy,
 } from './toolPresetParameters';
 import { callTool } from './tools';
@@ -50,6 +51,7 @@ export type InlineToolDefinition = {
   deniedActions?: string[];
   contextKeys?: string[] | null;
   presetParameters?: object;
+  presetParametersByAction?: object;
   pipeline?: object;
   outputMapping?: object;
   trustedOutput?: boolean;
@@ -69,6 +71,7 @@ export type CallableToolDefinition = {
   deniedActions?: string[] | null;
   contextKeys?: string[] | null;
   presetParameters?: object | null;
+  presetParametersByAction?: object | null;
   pipeline?: object | null;
   outputMapping?: object | null;
 };
@@ -182,6 +185,32 @@ const frozenPresets = (args: {
   );
 };
 
+const actionIn = (bag: unknown): string | undefined => {
+  const value: unknown =
+    bag && typeof bag === 'object' ? Reflect.get(bag, 'action') : undefined;
+  return typeof value === 'string' ? value : undefined;
+};
+
+/**
+ * The tool's presets for this call: a `builtin` action's own over the tool's,
+ * the action selected as `callSoatTool` selects it.
+ */
+const storedPresetsOf = (args: {
+  call: CallResolvedToolArgs;
+}): object | null => {
+  const { call } = args;
+  const { tool } = call;
+  if (tool.type !== 'builtin') return tool.presetParameters ?? null;
+  const action =
+    call.action ?? actionIn(tool.presetParameters) ?? actionIn(call.input);
+  if (!action) return tool.presetParameters ?? null;
+  return presetParametersForAction({
+    presetParameters: tool.presetParameters,
+    presetParametersByAction: tool.presetParametersByAction,
+    action,
+  });
+};
+
 type CallResolvedToolArgs = {
   tool: CallableToolDefinition;
   toolProjectId: number;
@@ -292,14 +321,14 @@ const resolveCallPresets = async (args: {
   const resolvedPresets = call.signedOff
     ? resolvePresetParametersForCall({
         presetParameters: frozenPresets({
-          presetParameters: call.tool.presetParameters,
+          presetParameters: storedPresetsOf({ call }),
           frozenArguments: call.signedOff.frozenArguments,
         }),
         toolName: call.tool.name,
         schema: call.tool.parameters,
       })
     : resolvePresetParametersForCall({
-        presetParameters: call.tool.presetParameters,
+        presetParameters: storedPresetsOf({ call }),
         toolContext: call.toolContext,
         toolName: call.tool.name,
         schema: call.tool.parameters,

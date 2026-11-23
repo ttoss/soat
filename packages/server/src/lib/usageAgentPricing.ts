@@ -1,4 +1,4 @@
-import { resolveStopReason } from './generationStopReason';
+import { resolveStopReason, type TurnBudget } from './generationStopReason';
 import {
   type InvalidQuantity,
   type PricedResourceComponent,
@@ -10,8 +10,8 @@ import type { UsageTokens } from './usageTotals';
 export type GenerationTurnFacts = {
   steps: readonly unknown[];
   finishReason: string;
-  /** The agent's `max_steps`, which tells `max_steps` apart from a tool call. */
-  maxSteps: unknown;
+  /** What tells a `max_steps` stop apart from a tool call. */
+  budget: TurnBudget;
   outcome: 'ok' | 'error';
 };
 
@@ -63,7 +63,7 @@ export const priceAgentResource = (args: {
           stop_reason: resolveStopReason({
             finishReason: args.turn.finishReason,
             stepCount: steps.length,
-            maxSteps: args.turn.maxSteps,
+            budget: args.turn.budget,
           }),
         },
         outcome: args.turn.outcome,

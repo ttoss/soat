@@ -130,8 +130,12 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
   OUTPUT_SCHEMA_VALIDATION_FAILED:
     'The model answered and the answer does not satisfy `output_schema` — the violated field is named in the message. Retrying the same request bills a second call to reach the same answer; loosen the schema, or make the instructions name the shape the model keeps missing.',
+  MAX_STEPS_REACHED:
+    'Raise `max_steps` with `{{PATCH /agents/{agent_id}}}`, or make the instructions reach the answer in fewer tool calls. An agent whose `tool_choice` forces a tool cannot answer on its last step: use `"auto"` and force specific steps with `step_rules`.',
   AI_PROVIDER_MISCONFIGURED:
     "The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment's own, which only an operator may allow. Update the AI provider and retry.",
+  INPUT_MODALITY_UNSUPPORTED:
+    "Send the part to a model whose AI provider's `model_input_modalities` lists its modality, or ingest the file and send it as a `document` part, which the model reads as text.",
   MODEL_NOT_OFFERED:
     "Name one of the provider's `model_aliases` (read the AI provider), or have someone who may update it add the alias or clear `model_aliases_only`.",
   EMBEDDING_NOT_CONFIGURED:
@@ -187,12 +191,14 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Name a task of the same project in `depends_on_task_id`.',
   TASK_DEPENDENCY_CLOSED:
     'Add the dependency to an open task; a closed task waits on nothing.',
+  TASK_GRAPH_TOO_LARGE:
+    'Narrow the graph with `upstream_of`, `status=open`, `workflow_id` or `metadata`, or page through {{GET /tasks}} with the same filters.',
   TASK_MIGRATION_CONFLICT:
     'Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.',
   VERSION_CONFLICT:
     'Re-read the resource, re-apply the change on top of the version `meta.current_version` names, and retry with that version. A retry of the same body against the same stale version conflicts again.',
   QUERY_TIMEOUT:
-    'Add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on, or lower `limit`. Retrying the same query times out again.',
+    'Narrow the query: on a collection listing, add an equality or `in` condition to `?data=` or a `?tags=` pair so the index narrows the rows a range is evaluated on; on a search, scope it with `document_paths`, `memory_store_ids` or `tags`. Or lower `limit`. Retrying the same query times out again.',
   CONVERSATION_POSITION_CONFLICT:
     'Retry the write unchanged: nothing was stored, and the retry resolves its position again.',
   NAME_CONFLICT:

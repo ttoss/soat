@@ -25,6 +25,7 @@ import { type McpTransport, postMcp } from './mcpTransport';
 import {
   GATE_PRESETS,
   mergePresetParameters,
+  presetParametersForAction,
   presetsDeclaredBy,
   stripPresetKeysFromSchema,
   type ToolWithGatePresets,
@@ -380,6 +381,8 @@ export const resolveMcpTools = async (args: {
     // the MCP server exposes through it — the same reach `builtin` presets have
     // over every action a binding lists.
     presetParameters?: object | null;
+    /** A `builtin` binding's per-action presets, over `presetParameters`. */
+    presetParametersByAction?: object | null;
   };
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
@@ -409,7 +412,6 @@ export const resolveMcpTools = async (args: {
   const shared = {
     transport,
     meter: args.meter,
-    presetParameters: args.typedTool.presetParameters,
     toolContext: args.toolContext,
     logToolCallingError: args.logToolCallingError,
   };
@@ -425,6 +427,11 @@ export const resolveMcpTools = async (args: {
     if (withheld.has(mcpTool.name)) continue;
     result[mcpTool.name] = buildMcpToolEntry({
       ...shared,
+      presetParameters: presetParametersForAction({
+        presetParameters: args.typedTool.presetParameters,
+        presetParametersByAction: args.typedTool.presetParametersByAction,
+        action: mcpTool.name,
+      }),
       mcpTool,
       ...(proxy
         ? proxyRole({

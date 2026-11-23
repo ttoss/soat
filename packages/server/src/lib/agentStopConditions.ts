@@ -2,20 +2,27 @@
  * The agent's `stop_conditions`, resolved into the AI SDK `stopWhen` array the
  * generation loop actually runs under.
  *
- * The field is documented (`modules/agents.md` — Stop Conditions), so it has to
- * reach the loop. A `stopWhen` of `isStepCount(maxSteps)` alone leaves the
- * "done tool" idiom the docs describe terminating only by accident of the model
- * choosing to stop — a field stored, versioned and silently ignored.
+ * A `stopWhen` of `isStepCount(maxSteps)` alone would leave the "done tool"
+ * idiom (`modules/agents.md` — Stop Conditions) terminating only by accident of
+ * the model choosing to stop.
  *
- * Resolved in one place for all three call sites — the fresh turn, its no-tools
- * retry, and the resume after `submit-tool-outputs` — because two sites
- * deriving the same thing independently let a defect survive in both at once.
+ * Also how a turn ends on its budget: the step that must answer
+ * ({@link resolveAnswerStep}) and the object it must yield
+ * ({@link readTurnObject}). Every path resolves these here — the fresh turn,
+ * streamed or not, its no-tools retry, and the resume after
+ * `submit-tool-outputs` — so no two paths derive them apart.
  */
-import { hasToolCall, isStepCount, type StopCondition, type ToolSet } from 'ai';
+import {
+  hasToolCall,
+  isStepCount,
+  NoOutputGeneratedError,
+  type StopCondition,
+  type ToolSet,
+} from 'ai';
 
 import { DomainError } from '../errors';
 import { forcesATool } from './agentStepRules';
-import { resolveMaxSteps } from './generationStopReason';
+import { resolveMaxSteps, type TurnBudget } from './generationStopReason';
 import { isPlainObject } from './plainObject';
 
 /**
@@ -96,8 +103,8 @@ const assertValidCondition = (entry: unknown): void => {
  * Rejects a `stop_conditions` value the loop could not act on, so a typo is a
  * `400` on write rather than a condition that never fires. An unknown `type` is
  * refused here even though {@link resolveStopWhen} tolerates one at runtime: a
- * stored row may predate this check, but accepting a *new* write of one is what
- * made the field inert in the first place.
+ * stored row may hold one, but a write accepting one would store a condition
+ * that never fires.
  */
 export const assertValidStopConditions = (value: unknown): void => {
   if (value === undefined || value === null) return;
@@ -238,6 +245,54 @@ export const resolveStopWhen = (config: {
   }
 
   return conditions;
+};
+
+/**
+ * The 1-indexed turn step that must answer without tools, or `null` when none
+ * must.
+ *
+ * An `output_schema` agent's answer is the object, so its last allowed step
+ * runs under `tool_choice: "none"` and returns it from what the turn gathered.
+ * A forcing `tool_choice` forbids that answer, so such an agent keeps its last
+ * step and fails at the budget instead ({@link readTurnObject}).
+ */
+export const resolveAnswerStep = (config: {
+  maxSteps: unknown;
+  outputSchema: unknown;
+  toolChoice: unknown;
+}): number | null => {
+  if (!isPlainObject(config.outputSchema)) return null;
+  if (forcesATool(config.toolChoice)) return null;
+  return resolveMaxSteps(config.maxSteps);
+};
+
+/**
+ * The turn's `output_schema` object, or `undefined` for an agent without one.
+ *
+ * A turn that spent its whole budget without producing the object fails with
+ * `MAX_STEPS_REACHED`, naming the budget, rather than the SDK's bare
+ * `No output generated`.
+ */
+export const readTurnObject = (args: {
+  budget: TurnBudget;
+  /** Every step the turn spent, across its pauses. */
+  stepCount: number;
+  readOutput: () => unknown;
+}): unknown => {
+  if (!isPlainObject(args.budget.outputSchema)) return undefined;
+  try {
+    const output = args.readOutput();
+    if (output !== undefined) return output;
+  } catch (error) {
+    if (!NoOutputGeneratedError.isInstance(error)) throw error;
+  }
+  const maxSteps = resolveMaxSteps(args.budget.maxSteps);
+  if (args.stepCount < maxSteps) throw new NoOutputGeneratedError();
+  throw new DomainError(
+    'MAX_STEPS_REACHED',
+    `The turn spent all ${maxSteps} steps of max_steps without producing the output_schema object.`,
+    { max_steps: maxSteps }
+  );
 };
 
 /**

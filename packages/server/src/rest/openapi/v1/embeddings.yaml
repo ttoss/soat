@@ -32,7 +32,8 @@ paths:
         `project_id` names the project the call's token usage is metered against, so
         embedding spend reaches the usage rollup and the project's `cost_usd` / `tokens`
         quotas. A project-scoped credential supplies its own project; a call that names
-        none and is bound to none is `400 VALIDATION_FAILED`.
+        none and is bound to none is `400 VALIDATION_FAILED`. The caller needs
+        `embeddings:CreateEmbeddings` on the project billed.
       operationId: createEmbeddings
       x-iam-action: embeddings:CreateEmbeddings
       x-iam-resource-type: embedding
@@ -48,7 +49,6 @@ paths:
                   description: >-
                     Project the call's usage is billed to. Required unless the
                     credential is bound to a project, which then supplies its own.
-                    Requires write access to the named project.
                   example: proj_V1StGXR8Z5jdHi6B
                 input:
                   type: string
@@ -89,7 +89,7 @@ paths:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
-          description: The caller cannot write to the named `project_id`
+          description: The caller lacks `embeddings:CreateEmbeddings` on the project billed
           content:
             application/json:
               schema:

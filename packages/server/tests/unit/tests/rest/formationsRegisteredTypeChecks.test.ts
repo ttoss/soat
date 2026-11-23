@@ -100,6 +100,7 @@ beforeAll(async () => {
       'formations:PlanFormation',
       'formations:CreateFormation',
       'formations:GetFormation',
+      'formations:UpdateFormation',
       'formations:DeleteFormation',
       'memories:CreateMemoryStore',
       ...TEST_CHANNEL_ACTIONS,
@@ -651,26 +652,115 @@ describe('POST /api/v1/formations/plan — a write-only property no read returns
     expect(res.body.changes[0].action).toBe('update');
   });
 
-  test('a value from a parameter plans as update, as it may resolve differently', async () => {
-    const template = {
-      parameters: { Mode: { type: 'string' } },
-      ...channel({ mode: { param: 'Mode' } }),
-    };
-    const formationId = await deployed({
-      template,
-      parameters: { Mode: 'members' },
-    });
-
-    const res = await authenticatedTestClient(userToken)
+  const planWith = (args: {
+    formationId: string;
+    template: unknown;
+    parameters: Record<string, string>;
+  }) => {
+    return authenticatedTestClient(userToken)
       .post('/api/v1/formations/plan')
       .send({
         project_id: projectId,
-        formation_id: formationId,
-        template,
-        parameters: { Mode: 'members' },
+        formation_id: args.formationId,
+        template: args.template,
+        parameters: args.parameters,
       });
+  };
+
+  const fromParameter = (declaration: Record<string, unknown> = {}) => {
+    return {
+      parameters: { Mode: { type: 'string', ...declaration } },
+      ...channel({ mode: { param: 'Mode' } }),
+    };
+  };
+
+  test('a value from a parameter resolving as at the last deploy plans as no-op', async () => {
+    const formationId = await deployed({
+      template: fromParameter(),
+      parameters: { Mode: 'members' },
+    });
+    const read = await authenticatedTestClient(userToken).get(
+      `/api/v1/formations/${formationId}`
+    );
+
+    const res = await planWith({
+      formationId,
+      template: read.body.template,
+      parameters: { Mode: 'members' },
+    });
 
     expect(res.status).toBe(200);
+    expect(res.body.changes[0].action).toBe('no-op');
+  });
+
+  test('a value from a parameter given another value plans as update', async () => {
+    const formationId = await deployed({
+      template: fromParameter(),
+      parameters: { Mode: 'members' },
+    });
+
+    const res = await planWith({
+      formationId,
+      template: fromParameter(),
+      parameters: { Mode: 'allowlist' },
+    });
+
     expect(res.body.changes[0].action).toBe('update');
+  });
+
+  test('a value from a `no_echo` parameter plans as update, as no deploy records it', async () => {
+    const formationId = await deployed({
+      template: fromParameter({ no_echo: true }),
+      parameters: { Mode: 'members' },
+    });
+
+    const res = await planWith({
+      formationId,
+      template: fromParameter({ no_echo: true }),
+      parameters: { Mode: 'members' },
+    });
+
+    expect(res.body.changes[0].action).toBe('update');
+  });
+
+  test('a value from a ref to a resource the formation holds plans as no-op', async () => {
+    const template = {
+      resources: {
+        ...channel({ mode: 'members' }).resources,
+        Second: {
+          type: 'test_channel',
+          properties: {
+            name: 'Support',
+            kind: 'whatsapp',
+            config: { context: { x_channel: { ref: 'Chan' } } },
+          },
+        },
+      },
+    };
+    const formationId = await deployed({ template });
+
+    const res = await plan({ formationId, template });
+
+    expect(res.status).toBe(200);
+    expect(
+      res.body.changes.map((change: { action: string }) => {
+        return change.action;
+      })
+    ).toEqual(['no-op', 'no-op']);
+  });
+
+  test('re-applying a value from an unchanged parameter sends no update', async () => {
+    const formationId = await deployed({
+      template: fromParameter(),
+      parameters: { Mode: 'members' },
+    });
+    handler.recorded.length = 0;
+
+    const res = await authenticatedTestClient(userToken)
+      .put(`/api/v1/formations/${formationId}`)
+      .send({ template: fromParameter(), parameters: { Mode: 'members' } });
+
+    expect(res.status).toBe(200);
+    expect(requestsOfType('update')).toEqual([]);
   });
 });

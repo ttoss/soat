@@ -131,6 +131,7 @@ export const DECLARATIONS: Record<string, Declaration[]> = {
         actions: ['list-tools', 'get-tool'],
         denied_actions: ['get-tool'],
         preset_parameters: { action: 'list-tools' },
+        preset_parameters_by_action: { 'list-tools': { limit: 5 } },
       };
     },
   ],
@@ -438,6 +439,7 @@ export const NOT_CLEARABLE_ALONE: Record<string, Record<string, string>> = {
   ingestion_rule: { tool_id: ONE_HANDLER, agent_id: ONE_HANDLER },
   decider: { agent_id: ONE_BACKEND, tool_id: ONE_BACKEND },
   tool: {
+    actions: 'names every action `preset_parameters_by_action` keys',
     execute: 'required by `type: http`',
     mcp: 'required by `type: mcp`',
     pipeline: 'required by `type: pipeline`',

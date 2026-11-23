@@ -117,6 +117,7 @@ describe('buildPrepareStep', () => {
     const prepareStep = buildPrepareStep({
       stepRules: [],
       logContext: 'non_stream',
+      answerStep: null,
       provenance,
     });
     provenance.record({ untrusted_tool_results: 1, knowledge_results: 0 });
@@ -133,6 +134,7 @@ describe('buildPrepareStep', () => {
         { step: 2, tool_choice: { type: 'tool', tool_name: 'lookup' } },
       ],
       logContext: 'non_stream',
+      answerStep: null,
     });
 
     expect(prepareStep).toBeDefined();
@@ -154,6 +156,7 @@ describe('buildPrepareStep', () => {
         },
       ],
       logContext: 'non_stream',
+      answerStep: null,
       toolIdToName: { tool_abc: 'search' },
     });
 
@@ -169,6 +172,7 @@ describe('buildPrepareStep', () => {
       provenance: createGenerationProvenance(),
       stepRules: [{ step: 1, tool_choice: 'required' }],
       logContext: 'non_stream',
+      answerStep: null,
     });
 
     expect(prepareStep).toBeDefined();
@@ -193,6 +197,7 @@ describe('buildPrepareStep', () => {
         { step: 3, tool_choice: 'required' },
       ],
       logContext: 'non_stream',
+      answerStep: null,
       stepsAlreadySpent: 2,
     });
 
@@ -214,6 +219,7 @@ describe('buildPrepareStep', () => {
         { step: 2, tool_choice: { type: 'tool', tool_name: 'lookup' } },
       ],
       logContext: 'non_stream',
+      answerStep: null,
     });
 
     expect(prepareStep).toBeDefined();
@@ -232,6 +238,7 @@ describe('buildPrepareStep', () => {
         { step: 1, tool_choice: { type: 'tool', tool_name: 'lookup' } },
       ],
       logContext: 'non_stream',
+      answerStep: null,
       promptCaching: { enabled: true },
     });
 
@@ -254,6 +261,7 @@ describe('buildPrepareStep', () => {
         },
       ],
       logContext: 'non_stream',
+      answerStep: null,
       toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
       promptCaching: { enabled: true },
     });
@@ -274,6 +282,7 @@ describe('buildPrepareStep', () => {
       provenance: createGenerationProvenance(),
       stepRules: [{ step: 1, active_tool_ids: ['tool_abc'] }],
       logContext: 'non_stream',
+      answerStep: null,
       toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
     });
 
@@ -296,6 +305,7 @@ describe('buildPrepareStep', () => {
         },
       ],
       logContext: 'non_stream',
+      answerStep: null,
       toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
     });
 
@@ -313,6 +323,7 @@ describe('buildPrepareStep', () => {
         { step: 1, tool_choice: 'required', active_tool_ids: ['tool_abc'] },
       ],
       logContext: 'non_stream',
+      answerStep: null,
       toolIdToName: { tool_abc: 'search' },
     });
 
@@ -328,6 +339,7 @@ describe('buildPrepareStep', () => {
       provenance: createGenerationProvenance(),
       stepRules: [{ step: 1, active_tool_ids: ['tool_doesNotExist'] }],
       logContext: 'non_stream',
+      answerStep: null,
       toolIdToName: {},
     });
 

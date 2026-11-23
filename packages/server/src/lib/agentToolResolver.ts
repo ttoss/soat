@@ -952,6 +952,7 @@ type AgentToolRow = {
   deniedActions: string[] | null;
   contextKeys: string[] | null;
   presetParameters: Record<string, unknown> | null;
+  presetParametersByAction: object | null;
   outputMapping: Record<string, unknown> | null;
   guardrailIds: string[] | null;
   trustedOutput: boolean;
@@ -1158,6 +1159,7 @@ const resolveBuiltinToolEntry = async (params: {
       actions: typedTool.actions ?? [],
       meter,
       presetParameters: typedTool.presetParameters,
+      presetParametersByAction: typedTool.presetParametersByAction,
       toolContext: args.toolContext,
       contextKeys: typedTool.contextKeys,
       logToolCallingError,
@@ -1285,6 +1287,7 @@ const ephemeralDefinitionToRow = (
     presetParameters: orNull(
       definition.presetParameters as Record<string, unknown> | undefined
     ),
+    presetParametersByAction: orNull(definition.presetParametersByAction),
     outputMapping: orNull(
       definition.outputMapping as Record<string, unknown> | undefined
     ),

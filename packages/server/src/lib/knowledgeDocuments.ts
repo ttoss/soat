@@ -20,7 +20,7 @@ import { clampKnowledgeSearchLimit } from './requestBounds';
 import { applyFilterWhere } from './structuredFilter';
 import { liveDocumentWhere } from './systemPathScope';
 import { applyTagFilter, hasSystemTagFilter } from './tags';
-import { withIterativeVectorScan } from './vectorSearch';
+import { withBoundedSearch, withIterativeVectorScan } from './vectorSearch';
 
 /**
  * The document store's half of knowledge retrieval: the two candidate queries a
@@ -307,7 +307,7 @@ const findChunksByLexical = async (args: {
 
   return withLexicalDegrade({
     source: 'documents',
-    run: () => {
+    run: ({ transaction }) => {
       return db.DocumentChunk.findAll({
         where: {
           [Op.and]: [
@@ -323,6 +323,7 @@ const findChunksByLexical = async (args: {
         order: [[lexicalRank, 'DESC']],
         subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
         limit: args.limit,
+        transaction,
       });
     },
   });
@@ -391,12 +392,17 @@ const findChunksWithoutSearch = async (args: {
     fileInclude: args.fileInclude,
   });
 
-  return db.DocumentChunk.findAll({
-    where: args.topLevelWhere,
-    include: docInclude,
-    order: [['chunkIndex', 'ASC']],
-    subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
-    limit: args.limit,
+  return withBoundedSearch({
+    run: ({ transaction }) => {
+      return db.DocumentChunk.findAll({
+        where: args.topLevelWhere,
+        include: docInclude,
+        order: [['chunkIndex', 'ASC']],
+        subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
+        limit: args.limit,
+        transaction,
+      });
+    },
   });
 };
 

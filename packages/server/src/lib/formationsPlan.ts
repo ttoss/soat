@@ -4,6 +4,7 @@ import {
   collectApplyAuthorizationRequests,
   collectAuthorizationDenials,
 } from './formationsAuthorization';
+import { deployedResourceOf } from './formationsComparison';
 import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
 import { resolveParameterValues } from './formationsParameters';
 import {
@@ -31,13 +32,13 @@ export const planFormation = async (args: {
   const existingMap = new Map<string, string>();
   const lastAppliedMap = new Map<string, Record<string, unknown> | null>();
   let existingResources: InstanceType<(typeof db)['FormationResource']>[] = [];
-  let deployedTemplate: FormationTemplate | null = null;
+  let deployedFormation: InstanceType<(typeof db)['Formation']> | null = null;
   if (args.formationId) {
     const formation = await db.Formation.findOne({
       where: { publicId: args.formationId, projectId: args.projectId },
     });
     if (formation) {
-      deployedTemplate = formation.template as FormationTemplate | null;
+      deployedFormation = formation;
       existingResources = await db.FormationResource.findAll({
         where: {
           formationId: formation.id as number,
@@ -68,7 +69,13 @@ export const planFormation = async (args: {
         existingMap,
         templateResourceKeys,
         lastAppliedProperties: lastAppliedMap.get(logicalId),
-        deployed: deployedTemplate?.resources[logicalId],
+        deployed: deployedFormation
+          ? deployedResourceOf({
+              formation: deployedFormation,
+              logicalId,
+              physicalIds: existingMap,
+            })
+          : undefined,
       });
     })
   );

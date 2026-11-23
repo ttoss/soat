@@ -19,7 +19,7 @@ import { hasPolicyConstraints } from './policyWhere';
 import { projectScopeWhere } from './projectScope';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { hasTagFilter, tagContainment } from './tags';
-import { withIterativeVectorScan } from './vectorSearch';
+import { withBoundedSearch, withIterativeVectorScan } from './vectorSearch';
 
 export type MemoryStoreQueryConfig = {
   memoryStoreIds?: string[];
@@ -257,7 +257,7 @@ const findEntriesByLexical = async (args: {
 
   const entries = await withLexicalDegrade({
     source: 'memories',
-    run: () => {
+    run: ({ transaction }) => {
       return db.Memory.findAll({
         where: {
           [Op.and]: [args.entryWhere, lexicalMatch],
@@ -272,6 +272,7 @@ const findEntriesByLexical = async (args: {
         order: [[lexicalRank, 'DESC']],
         subQuery: false,
         limit: args.limit,
+        transaction,
       });
     },
   });
@@ -485,12 +486,17 @@ export const resolveMemoryStoreSearchLists = async (args: {
     });
   }
 
-  const entries = await db.Memory.findAll({
-    where: entryWhere,
-    include: memoryStoreInclude({ memoryStoreWhere }),
-    order: [['createdAt', 'ASC']],
-    subQuery: false,
-    limit,
+  const entries = await withBoundedSearch({
+    run: ({ transaction }) => {
+      return db.Memory.findAll({
+        where: entryWhere,
+        include: memoryStoreInclude({ memoryStoreWhere }),
+        order: [['createdAt', 'ASC']],
+        subQuery: false,
+        limit,
+        transaction,
+      });
+    },
   });
 
   return {

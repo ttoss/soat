@@ -83,7 +83,7 @@ export const coerceToJsonObject = (v: unknown): object | null | undefined => {
 };
 
 const TOOL_JSON_FIELDS_ERROR =
-  'parameters, execute, mcp, preset_parameters, pipeline, and output_mapping must be JSON objects';
+  'parameters, execute, mcp, preset_parameters, preset_parameters_by_action, pipeline, and output_mapping must be JSON objects';
 
 /**
  * Coerces the JSON-object config fields shared by create/update. Throws
@@ -95,6 +95,8 @@ const coerceToolJsonFields = (body: Record<string, unknown>) => {
     execute: coerceToJsonObject(body.execute) ?? undefined,
     mcp: coerceToJsonObject(body.mcp) ?? undefined,
     presetParameters: coerceToJsonObject(body.preset_parameters) ?? undefined,
+    presetParametersByAction:
+      coerceToJsonObject(body.preset_parameters_by_action) ?? undefined,
     pipeline: coerceToJsonObject(body.pipeline) ?? undefined,
     outputMapping: coerceToJsonObject(body.output_mapping) ?? undefined,
   };
@@ -278,6 +280,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   let parsedExecute: object | null | undefined;
   let parsedMcp: object | null | undefined;
   let parsedPresetParameters: object | null | undefined;
+  let parsedPresetParametersByAction: object | null | undefined;
   let parsedPipeline: object | null | undefined;
   let parsedOutputMapping: object | null | undefined;
   try {
@@ -285,6 +288,9 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     parsedExecute = coerceToJsonObject(execute);
     parsedMcp = coerceToJsonObject(mcp);
     parsedPresetParameters = coerceToJsonObject(presetParameters);
+    parsedPresetParametersByAction = coerceToJsonObject(
+      body.preset_parameters_by_action
+    );
     parsedPipeline = coerceToJsonObject(pipeline);
     parsedOutputMapping = coerceToJsonObject(outputMapping);
   } catch {
@@ -320,6 +326,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     deniedActions: parseNullableArray(deniedActions),
     contextKeys: parseNullableArray(contextKeys),
     presetParameters: parsedPresetParameters,
+    presetParametersByAction: parsedPresetParametersByAction,
     pipeline: parsedPipeline,
     outputMapping: parsedOutputMapping,
     guardrailIds: nextGuardrailIds,

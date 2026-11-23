@@ -454,6 +454,15 @@ paths:
                     channel: 'whatsapp'
                   allOf:
                     - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
+                file_ids:
+                  type: array
+                  items:
+                    x-soat-ref: files
+                    type: string
+                  description: >-
+                    Files a `user` turn sends the model natively, in this order, each a
+                    file of the conversation's project the caller may download
+                    (`files:DownloadFile`). Refused on an `assistant` turn.
       responses:
         '201':
           description: Message added
@@ -983,6 +992,12 @@ components:
           type: string
           nullable: true
           description: Full text content of the message
+        file_ids:
+          type: array
+          items:
+            x-soat-ref: files
+            type: string
+          description: Files the turn sends the model natively, in order; empty when none.
         idempotency_key:
           type: string
           nullable: true

@@ -1,47 +1,32 @@
-import createDebug from 'debug';
-
 import { db } from '../db';
-import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
 import type { SenderCredential } from './assertionSender';
 import { assertGuardrailsExist } from './guardrails';
-import { validateHttpExecute } from './httpToolResponse';
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
-import {
-  assertPipelineStepToolsValid,
-  validatePipelineConfig,
-} from './pipelineTools';
 import { isPlainObject } from './plainObject';
 import { assertProjectAcceptsWork } from './projectPause';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { type ReferenceReach, toolReferences } from './resourceReferences';
-import { assertSecretRefsExist } from './secrets';
 import { assertToolSecretUseAllowed } from './secretUse';
-import { validateSoatActions } from './soatActionValidation';
 import type { ToolCallGuardrailMode } from './toolCallGuardrail';
 import { carriedActionsOfTool } from './toolCarriedActions';
-import { assertValidToolContextAllowlist } from './toolContext';
 import {
   type CallableToolDefinition,
   callResolvedTool,
   type InlineToolDefinition,
   type SignedOffCall,
 } from './toolsCall';
-import { assertNoLiteralCredentials } from './toolSecretRedaction';
-import { assertValidToolTemplateTokens } from './toolTemplates';
 import { assertTrustedOutputAllowed } from './toolTrust';
 import {
-  assertToolTypeSupported,
   type ToolUpdateArgs,
+  validateToolDefinition,
   validateToolUpdate,
 } from './toolWriteValidation';
 import type { ToolCallAttribution } from './usageToolRecording';
 import type { WorkAuthority } from './workAuthority';
 import { assertWriterHolds, type Writer } from './writerRule';
-
-const log = createDebug('soat:tools');
 
 // Re-exported so importers of `assertEphemeralTypeSupported` and
 // `InlineToolDefinition` (agents.ts, pipelineTools.ts, agentToolResolver.ts)
@@ -68,6 +53,7 @@ export type MappedTool = {
   denied_actions: string[] | null;
   context_keys: string[] | null;
   preset_parameters: object | null;
+  preset_parameters_by_action: object | null;
   pipeline: object | null;
   output_mapping: object | null;
   guardrail_ids: string[] | null;
@@ -109,6 +95,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
     denied_actions: tool.deniedActions,
     context_keys: tool.contextKeys,
     preset_parameters: tool.presetParameters,
+    preset_parameters_by_action: tool.presetParametersByAction,
     pipeline: tool.pipeline,
     output_mapping: tool.outputMapping,
     guardrail_ids: tool.guardrailIds,
@@ -139,6 +126,7 @@ const buildToolConfigFields = (args: CreateToolArgs) => {
     deniedActions: nullify(args.deniedActions),
     contextKeys: nullify(args.contextKeys),
     presetParameters: nullify(args.presetParameters),
+    presetParametersByAction: nullify(args.presetParametersByAction),
     pipeline: nullify(args.pipeline),
     outputMapping: nullify(args.outputMapping),
     guardrailIds: nullify(args.guardrailIds),
@@ -153,70 +141,6 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
     name: args.name,
     ...buildToolConfigFields(args),
   };
-};
-
-// ── Shared Tool Definition Validation ────────────────────────────────────────
-
-export const validateToolDefinition = async (args: {
-  definition: InlineToolDefinition;
-  projectId: number;
-}): Promise<void> => {
-  const { definition, projectId } = args;
-
-  log(
-    'validateToolDefinition: projectId=%d name=%s type=%s',
-    projectId,
-    definition.name,
-    definition.type ?? 'http'
-  );
-
-  if (!definition.name || typeof definition.name !== 'string') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'Tool definition requires a name.'
-    );
-  }
-
-  assertToolTypeSupported(definition.type ?? 'http');
-  assertNoLiteralCredentials(definition);
-
-  if (definition.type === 'pipeline') {
-    const config = validatePipelineConfig(definition.pipeline);
-    await assertPipelineStepToolsValid({
-      steps: config.steps,
-      projectId,
-    });
-  }
-
-  if ((definition.type ?? 'http') === 'builtin') {
-    validateSoatActions(definition.actions);
-  }
-
-  validateHttpExecute({
-    type: definition.type ?? 'http',
-    execute: definition.execute,
-  });
-
-  // A `context_keys` entry is a `tool_context` key, held to the same
-  // header-name grammar (`toolContext.ts`) so an entry cannot be one that no
-  // key could ever match.
-  assertValidToolContextAllowlist(definition.contextKeys);
-
-  // Reject any {{...}} token that isn't a well-formed reference — and any
-  // {{context:...}} token outside a headers record — before checking whether
-  // referenced secrets actually exist.
-  assertValidToolTemplateTokens({
-    execute: definition.execute,
-    mcp: definition.mcp,
-    presetParameters: definition.presetParameters,
-  });
-
-  // Fail fast on {{secret:...}} tokens referencing nonexistent or
-  // out-of-project secrets, instead of failing at first call.
-  await assertSecretRefsExist({
-    value: { execute: definition.execute, mcp: definition.mcp },
-    projectId,
-  });
 };
 
 export const createTool = async (
@@ -302,6 +226,7 @@ const buildToolUpdates = (args: {
   deniedActions?: string[] | null;
   contextKeys?: string[] | null;
   presetParameters?: object | null;
+  presetParametersByAction?: object | null;
   pipeline?: object | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
@@ -319,6 +244,7 @@ const buildToolUpdates = (args: {
     'deniedActions',
     'contextKeys',
     'presetParameters',
+    'presetParametersByAction',
     'pipeline',
     'outputMapping',
     'guardrailIds',
@@ -411,6 +337,7 @@ const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
     deniedActions: tool.denied_actions,
     contextKeys: tool.context_keys,
     presetParameters: tool.preset_parameters,
+    presetParametersByAction: tool.preset_parameters_by_action,
     pipeline: tool.pipeline,
     outputMapping: tool.output_mapping,
   };

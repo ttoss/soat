@@ -1,5 +1,3 @@
-import createDebug from 'debug';
-
 import { db } from '../db';
 import { applyInputMapping } from './jsonLogicMapping';
 import type { NodeOutcome, ReservedRow } from './orchestrationIdempotency';
@@ -11,20 +9,14 @@ import { executeNodeById } from './orchestrationNodeDispatch';
 import { meterNodeCompute } from './orchestrationNodeMetering';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import { reuseRequiresActionRow } from './orchestrationPauseRecords';
-import {
-  backoffMs,
-  isRetriableError,
-  resolveRetryPolicy,
-} from './orchestrationRetry';
-import type { OrchestrationNode } from './orchestrations';
+import { nextAfterFailure } from './orchestrationRetry';
+import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 import {
   INTERNAL_FAILURE,
   type StoredError,
   toStoredError,
 } from './storedError';
 import type { WorkAuthority } from './workAuthority';
-
-const log = createDebug('soat:orchestrations');
 
 /** The error a failed node or run records. */
 export const buildRunError = (error: unknown): StoredError => {
@@ -99,9 +91,9 @@ const summarizeNodeResult = (
 
 /**
  * Handles a node execution failure: records the failed attempt (so the per-node
- * trace shows every try), then either parks the run on a retry wait — when the
- * error is transient and attempts remain — or re-throws to fail the run. A
- * terminal error, or exhausting the attempt budget, re-throws.
+ * trace shows every try), then parks the run on a retry wait when the error is
+ * transient and attempts remain, routes along a matching error edge, or
+ * re-throws to fail the run.
  */
 const handleNodeFailure = async (args: {
   error: unknown;
@@ -112,6 +104,7 @@ const handleNodeFailure = async (args: {
   input: Record<string, unknown> | null;
   attempt: number;
   startedAt: Date;
+  edges: OrchestrationEdge[];
   // The keyed `running` row reserved before dispatch (side-effecting nodes),
   // updated in place to `failed` instead of writing a second record.
   keyedRow?: ReservedRow;
@@ -121,11 +114,22 @@ const handleNodeFailure = async (args: {
   execResult: NodeExecutionResult;
 }> => {
   const { error, nodeId, nodeDefn, nodeType, runRecord, input, attempt } = args;
+  const stored = buildRunError(error);
+  const next = nextAfterFailure({
+    error,
+    stored,
+    nodeId,
+    nodeDefn,
+    attempt,
+    edges: args.edges,
+  });
+  const output = next?.kind === 'routed' ? next.artifact : null;
   if (args.keyedRow) {
     const completedAt = new Date();
     await args.keyedRow.update({
       status: 'failed',
-      error: buildRunError(error),
+      output,
+      error: stored,
       completedAt,
     });
     await meterNodeCompute({
@@ -143,33 +147,13 @@ const handleNodeFailure = async (args: {
       attempt,
       status: 'failed',
       input,
-      output: null,
-      error: buildRunError(error),
+      output,
+      error: stored,
       startedAt: args.startedAt,
     });
   }
 
-  if (nodeDefn) {
-    const policy = resolveRetryPolicy(nodeDefn);
-    if (isRetriableError(error) && attempt < policy.maxAttempts) {
-      log(
-        'handleNodeFailure: retrying node=%s attempt=%d/%d',
-        nodeId,
-        attempt,
-        policy.maxAttempts
-      );
-      return {
-        nodeId,
-        nodeDefn,
-        execResult: {
-          kind: 'wait',
-          nodeId,
-          resumeInMs: backoffMs({ policy, attempt }),
-          resume: { kind: 'retry', attempt: attempt + 1 },
-        },
-      };
-    }
-  }
+  if (nodeDefn && next) return { nodeId, nodeDefn, execResult: next };
   throw error;
 };
 
@@ -309,6 +293,7 @@ export const executeAndRecordNode = async (args: {
   nodeId: string;
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
   state: Record<string, unknown>;
   projectIds: number[];
   traceId: string | null;
@@ -367,6 +352,7 @@ export const executeAndRecordNode = async (args: {
       input: ctx.input,
       attempt,
       startedAt: ctx.startedAt,
+      edges: args.edges,
       keyedRow: prepared.keyedRow,
     });
   }

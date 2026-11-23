@@ -735,7 +735,7 @@ const { data: knowledgeTool } = await adminSoat.tools.createTool({
     type: 'builtin',
     description: 'Searches the ingested product manuals for relevant passages',
     actions: ['search-knowledge'],
-    preset_parameters: { projectId: PROJECT_ID, documentPaths: ['/manuals/'] },
+    preset_parameters: { project_id: PROJECT_ID, document_paths: ['/manuals/'] },
   },
 });
 const KNOWLEDGE_TOOL_ID = knowledgeTool.id;
@@ -748,7 +748,7 @@ const KNOWLEDGE_TOOL_ID = knowledgeTool.id;
 KNOWLEDGE_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"manuals\",\"type\":\"soat\",\"description\":\"Searches the ingested product manuals for relevant passages\",\"actions\":[\"search-knowledge\"],\"preset_parameters\":{\"projectId\":\"$PROJECT_ID\",\"documentPaths\":[\"/manuals/\"]}}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"manuals\",\"type\":\"builtin\",\"description\":\"Searches the ingested product manuals for relevant passages\",\"actions\":[\"search-knowledge\"],\"preset_parameters\":{\"project_id\":\"$PROJECT_ID\",\"document_paths\":[\"/manuals/\"]}}" \
   | jq -r '.id')
 echo "KNOWLEDGE_TOOL_ID: $KNOWLEDGE_TOOL_ID"
 ```

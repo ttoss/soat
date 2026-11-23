@@ -14,7 +14,7 @@ import {
   sumProvenance,
 } from './generationProvenance';
 import { agentReferences } from './resourceReferences';
-import { joinVendorOptions, readVendorOptions } from './vendorOptions';
+import { readVendorOptions, replayStoredTurn } from './vendorOptions';
 import type { WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:generation');
@@ -54,7 +54,7 @@ const readMessageContent = async (
 
 const buildMessageEntry = async (args: {
   msg: ConversationMessage;
-}): Promise<{ role: string; content: string }> => {
+}): Promise<{ role: string; content: unknown }> => {
   const content = await readMessageContent(args.msg);
   if (args.msg.role === 'assistant') {
     return { role: 'assistant', content };
@@ -64,9 +64,19 @@ const buildMessageEntry = async (args: {
   // it does not reach the model: a caller who wants the model to see a field
   // writes it into the message.
   const speakerName = args.msg.actor?.name ?? 'participant';
+  const text = `[${speakerName}]: ${content}`;
+  const fileIds = args.msg.fileIds ?? [];
+  if (fileIds.length === 0) return { role: 'user', content: text };
+  // Each file goes to the model natively; the generation resolves and gates
+  // the parts as it does a caller's own (`generationInputMessages.ts`).
   return {
     role: 'user',
-    content: `[${speakerName}]: ${content}`,
+    content: [
+      { type: 'text', text },
+      ...fileIds.map((fileId) => {
+        return { type: 'file', file_id: fileId };
+      }),
+    ],
   };
 };
 
@@ -79,7 +89,7 @@ const buildConversationHistory = async (args: {
       // Expand stored AI SDK response messages (tool calls, tool results, final
       // text) so the LLM sees the full tool-use chain on subsequent turns.
       if (Array.isArray(responseMessages) && responseMessages.length > 0) {
-        return joinVendorOptions({
+        return replayStoredTurn({
           messages: responseMessages,
           vendorOptions: readVendorOptions(msg.vendorOptions),
         }) as Array<{ role: string; content: unknown }>;

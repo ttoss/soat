@@ -107,6 +107,12 @@ export const SOAT_EVENTS = {
     'memories.retracted':
       'A memory was retracted: the fact stopped holding with nothing replacing it, so it leaves knowledge search, dedup and the default listing. It stays readable by id, with its assertions.',
   },
+  oauth_connection: {
+    'oauth_connections.connected':
+      'An authorization completed and the connection is `connected`: a first connect and every re-authorization. A token refresh announces nothing. The payload never carries a token.',
+    'oauth_connections.disconnected':
+      'A connection moved to `disconnected`: the provider refused a refresh, or an authorization of an unconnected connection failed. The payload carries the `error`.',
+  },
   orchestration_run: {
     'orchestration_runs.started': 'An orchestration run started.',
     'orchestration_runs.awaiting_input':

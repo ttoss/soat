@@ -354,6 +354,8 @@ Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of
 | `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` | `0`      | Half-life in days of a recency decay applied to **memory** results after fusion. `0` disables the blend               |
 | `KNOWLEDGE_TEXT_SEARCH_CONFIG`     | `simple` | PostgreSQL text search configuration backing the lexical channel (e.g. `english`, `portuguese`)                       |
 
+`KNOWLEDGE_QUERY_TIMEOUT_MS` (default `30000`) is the statement timeout of each knowledge and memory search query, in milliseconds, and has no per-request field; a query past it is `422 QUERY_TIMEOUT`.
+
 `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` ships at `0`, so nothing decays until it is set and an upgrade reorders nothing. It accepts fractions (`0.5` is twelve hours), reads age from an entry's `updated_at`, and never touches document results. How many ranks a given half-life costs depends on `KNOWLEDGE_RRF_K`, and on a corpus mixing documents and memories it can cost more than it looks — measure it against your own data before enabling it. See [Recency blend](../modules/knowledge.md#recency-blend).
 
 ### Embeddings

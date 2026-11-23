@@ -1092,6 +1092,10 @@ components:
         model_aliases_only:
           type: boolean
           description: When `true`, a model that is not one of `model_aliases` is refused with `MODEL_NOT_OFFERED` (400).
+        model_input_modalities:
+          description: Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.
+          allOf:
+            - $ref: './ai-providers.yaml#/components/schemas/ModelInputModalities'
         require_priced_model:
           type: boolean
           description: When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project.
@@ -1259,6 +1263,23 @@ components:
           type: object
           nullable: true
           description: Pre-filled parameter values injected at execution time
+        preset_parameters_by_action:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: object
+          description: >-
+            For `builtin` tools: presets per action, keyed by a name in
+            `actions`. An action receives `preset_parameters` with its own
+            entry's keys over them, key by key; an action with no entry receives
+            `preset_parameters` alone. Each action's model-visible schema hides
+            only that action's effective keys. Every key the effective preset of
+            an action the tool can run (in `actions`, not in `denied_actions`)
+            carries must be a parameter that action declares (a
+            tool-level `action`, which selects the action of a direct call, is
+            exempt): otherwise the write is `400 VALIDATION_FAILED`, with
+            `meta.problems` naming the key path and the action. Values accept
+            `{{context:<key>}}` references, as `preset_parameters` does.
         pipeline:
           type: object
           nullable: true

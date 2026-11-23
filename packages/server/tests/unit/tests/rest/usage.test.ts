@@ -34,7 +34,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 const TURN = {
   steps: [],
   finishReason: 'stop',
-  maxSteps: undefined,
+  budget: { maxSteps: undefined, outputSchema: undefined },
   outcome: 'ok',
 } as const;
 

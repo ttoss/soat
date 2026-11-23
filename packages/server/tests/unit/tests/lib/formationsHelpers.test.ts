@@ -972,6 +972,14 @@ describe('formationsHelpers', () => {
       ).toBe(true);
     });
 
+    test.each([
+      [{ text: 'hi' }, { text: 'hi', config: null }, false],
+      [[{ id: 'a' }], [{ id: 'a', text: null }], false],
+      [{ text: null }, { text: 'hi' }, true],
+    ])('a nested null field compares as absent: %j against %j', (d, p, c) => {
+      expect(merge({ resolved: { d }, previous: { d: p } }).changed).toBe(c);
+    });
+
     test('a write-only property declared null is a change unless settled', () => {
       expect(
         merge({

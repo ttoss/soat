@@ -87,6 +87,7 @@ conversationSubResourcesRouter.post(
       actor_id?: string | null;
       position?: number;
       metadata?: unknown;
+      file_ids?: string[];
     };
 
     assertNotSystemRole({
@@ -120,6 +121,13 @@ conversationSubResourcesRouter.post(
       actorId: body.actor_id ?? null,
       position: body.position,
       metadata: readNullableMetadataBag(body.metadata) ?? undefined,
+      files: body.file_ids?.length
+        ? {
+            ids: body.file_ids,
+            authority: captureAuthority({ authUser: ctx.authUser }),
+            authUser: ctx.authUser,
+          }
+        : undefined,
       // Caller-written text: it carries no block that feeds a counter.
       provenance: NO_PROVENANCE,
     });

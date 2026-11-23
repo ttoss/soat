@@ -5,6 +5,8 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { mountedRoutes } from './iamRouteChecks.mjs';
+import { stringsOnEveryPath } from './routeStrings.mjs';
 import { stripComments } from './sourceText.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -20,8 +22,8 @@ const ADMISSION_REFUSED_REF =
   './errors.yaml#/components/responses/AdmissionRefused';
 
 /** Every operation admission can be declared for, as `METHOD path` → its responses. */
-const declarableWrites = () => {
-  const writes = new Map();
+const declarableOperations = () => {
+  const operations = [];
   for (const file of fs.readdirSync(specDir)) {
     if (!file.endsWith('.yaml')) continue;
     const spec = load(fs.readFileSync(path.join(specDir, file), 'utf-8'));
@@ -29,11 +31,19 @@ const declarableWrites = () => {
       for (const method of WRITE_METHODS) {
         const operation = item[method];
         if (!operation?.['x-iam-action']) continue;
-        writes.set(`${method.toUpperCase()} ${route}`, operation.responses);
+        operations.push({ method, route, operation });
       }
     }
   }
-  return writes;
+  return operations;
+};
+
+const declarableWrites = () => {
+  return new Map(
+    declarableOperations().map(({ method, route, operation }) => {
+      return [`${method.toUpperCase()} ${route}`, operation.responses];
+    })
+  );
 };
 
 /** Source with comments dropped, so prose naming a symbol is not a hit. */
@@ -81,6 +91,18 @@ const formationWrites = () => {
   return writes;
 };
 
+/** The `writes` `entry` imports, as `entry → write`. */
+const callsInto = (args) => {
+  const { entry, writes } = args;
+  return valueImports(path.join(srcDir, entry))
+    .filter((imported) => {
+      return writes.has(imported);
+    })
+    .map((imported) => {
+      return `${entry} → ${imported}`;
+    });
+};
+
 /**
  * Lib modules that call a formation write from inside a REST route's own
  * write, so the route's action is the one admission is asked about.
@@ -94,6 +116,36 @@ const REACHED_ONLY_FROM_A_ROUTE = new Set([
   'lib/orchestrationVersions.ts',
   'lib/playbookVersions.ts',
   'lib/workflowVersions.ts',
+]);
+
+/** Declarable writes whose route skips their action on some path. */
+const unaskedWrites = () => {
+  const routes = new Map(
+    mountedRoutes().map((route) => {
+      return [route.key, route];
+    })
+  );
+  return declarableOperations()
+    .filter(({ method, route, operation }) => {
+      const mounted = routes.get(`${method} ${route}`);
+      return (
+        !mounted || !stringsOnEveryPath(mounted).has(operation['x-iam-action'])
+      );
+    })
+    .map(({ method, route }) => {
+      return `${method.toUpperCase()} ${route}`;
+    });
+};
+
+/**
+ * Routes with a branch that authorizes nothing because it writes nothing,
+ * each with the reason; every other branch of a declarable write asks.
+ */
+const BRANCH_WRITES_NOTHING = new Map([
+  [
+    'POST /api/v1/chat/completions',
+    'an unknown `chat_id` is answered `CHAT_NOT_FOUND` by the lib before any model call',
+  ],
 ]);
 
 /**
@@ -125,6 +177,26 @@ describe('admission chokepoints', () => {
     );
   });
 
+  // The middleware asks only when the route authorizes under its action, so a
+  // route that authenticates and checks nothing, or checks on one branch only,
+  // executes unasked.
+  test('every declarable write authorizes under its declared action on every path', () => {
+    const unasked = unaskedWrites();
+    assert.deepEqual(
+      unasked.filter((operation) => {
+        return !BRANCH_WRITES_NOTHING.has(operation);
+      }),
+      []
+    );
+    assert.deepEqual(
+      [...BRANCH_WRITES_NOTHING.keys()].filter((operation) => {
+        return !unasked.includes(operation);
+      }),
+      [],
+      'an exemption whose route asks on every path is stale'
+    );
+  });
+
   test('defineFormationModule asks before a create and an update', () => {
     const source = code(
       path.join(formationModulesDir, 'defineFormationModule.ts')
@@ -144,13 +216,7 @@ describe('admission chokepoints', () => {
         );
       })
       .flatMap((entry) => {
-        return valueImports(path.join(srcDir, entry))
-          .filter((imported) => {
-            return writes.has(imported);
-          })
-          .map((imported) => {
-            return `${entry} → ${imported}`;
-          });
+        return callsInto({ entry, writes });
       });
     assert.deepEqual(outside, []);
   });
@@ -164,9 +230,6 @@ describe('admission chokepoints', () => {
     const withoutAdmission = recordsAllowed.filter((entry) => {
       return !/\badmitAuthorized\(/.test(code(path.join(srcDir, entry)));
     });
-    assert.deepEqual(withoutAdmission.sort(), [
-      // Records a template resource's action, never the route's own.
-      'rest/v1/formations.ts',
-    ]);
+    assert.deepEqual(withoutAdmission, []);
   });
 });

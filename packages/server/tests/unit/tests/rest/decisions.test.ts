@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
+import { declareDenialCodes, parseDenialCodes } from 'src/errors';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import {
@@ -562,6 +563,41 @@ describe('Decisions', () => {
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ACTION_NOT_HELD');
       expect(res.body.error.meta.action).toBe('agents:CreateAgentGeneration');
+      expect(await countDecisions(decider)).toBe(0);
+    });
+
+    test('a grant Deny carrying a denial answers its code', async () => {
+      declareDenialCodes({
+        codes: parseDenialCodes({
+          config: { denial_codes: [{ code: 'PLAN_LIMIT', hint: 'Upgrade.' }] },
+          source: 'test',
+        }),
+      });
+      const grant = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              { effect: 'Allow', action: ['deciders:CreateDecision'] },
+              {
+                effect: 'Deny',
+                action: ['agents:CreateAgentGeneration'],
+                denial: { code: 'PLAN_LIMIT', message: 'Not in this plan.' },
+              },
+            ],
+          },
+        });
+      expect(grant.status).toBe(201);
+      const decider = await createDecider({ policy_ids: [grant.body.id] });
+
+      const res = await decide({ decider });
+      declareDenialCodes({ codes: new Map() });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatchObject({
+        code: 'PLAN_LIMIT',
+        meta: { action: 'agents:CreateAgentGeneration' },
+      });
       expect(await countDecisions(decider)).toBe(0);
     });
 

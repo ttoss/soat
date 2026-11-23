@@ -631,7 +631,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 
 ### Reuse a tool result as the generation input
 
-A generation can start with [message content](/docs/modules/agents#tool-output-message-content) of type `tool_output`: the server executes the referenced tool, applies `output_path`, and feeds the extracted value to the model as the user message.
+A generation can start with [message content](/docs/modules/agents#message-content) of type `tool_output`: the server executes the referenced tool, applies `output_path`, and feeds the extracted value to the model as the user message.
 
 `messages` carries user and assistant turns only; steer the agent with its [`instructions`](/docs/modules/agents#instructions). A `role: "system"` entry is rejected with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
 

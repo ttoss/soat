@@ -23,7 +23,7 @@ import type { GenerationTurnFacts } from './usageAgentPricing';
 const FAILED_TURN: GenerationTurnFacts = {
   steps: [],
   finishReason: 'error',
-  maxSteps: null,
+  budget: { maxSteps: null, outputSchema: null },
   outcome: 'error',
 };
 
@@ -237,7 +237,7 @@ export const meterContinuationSegment = (args: {
     turn: {
       steps: args.result.steps,
       finishReason: args.result.finishReason,
-      maxSteps: args.pending.agentConfig.maxSteps,
+      budget: args.pending.agentConfig,
       outcome: 'ok',
     },
   });
@@ -256,7 +256,7 @@ const runCompletionSideEffects = async (
         // The turn's steps, not this segment's: a turn spends one budget
         // across every pause it takes.
         stepCount: args.pending.stepCount + args.result.steps.length,
-        maxSteps: args.pending.agentConfig.maxSteps,
+        budget: args.pending.agentConfig,
       }),
       assistantContent: args.result.text,
     },

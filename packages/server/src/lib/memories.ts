@@ -8,7 +8,7 @@ import {
 } from 'src/lib/contentBoundTags';
 import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import type { MemoryAssertionSource } from 'src/lib/memoryAssertions';
-import { recordMemoryAssertion } from 'src/lib/memoryAssertions';
+import { writeAssertedMemory } from 'src/lib/memoryAssertions';
 import { resolveMemoryContent } from 'src/lib/memoryContents';
 import { emitMemoryEvent } from 'src/lib/memoryEvents';
 import { mapMemory, memories, memoryIncludes } from 'src/lib/memoryMapper';
@@ -135,23 +135,28 @@ export const createMemory = async (args: {
     generationId: args.assertion.generationId,
   });
 
-  const entry = await db.Memory.create({
-    memoryStoreId: args.memoryStoreId,
-    contentId: content.id as number,
-    sourceType: args.sourceType ?? 'manual',
-    sourceId: args.sourceId ?? null,
-    tags: args.tags ?? null,
-    metadata: args.metadata ?? null,
-  });
-
-  await recordMemoryAssertion({
-    memoryStoreId: args.memoryStoreId,
-    contentId: content.id as number,
-    memoryId: entry.id as number,
-    outcome: 'created',
-    // Nothing was compared: this door does not dedup.
-    similarity: null,
-    source: args.assertion,
+  const entry = await writeAssertedMemory({
+    write: ({ transaction }) => {
+      return db.Memory.create(
+        {
+          memoryStoreId: args.memoryStoreId,
+          contentId: content.id as number,
+          sourceType: args.sourceType ?? 'manual',
+          sourceId: args.sourceId ?? null,
+          tags: args.tags ?? null,
+          metadata: args.metadata ?? null,
+        },
+        { transaction }
+      );
+    },
+    assertion: {
+      memoryStoreId: args.memoryStoreId,
+      contentId: content.id as number,
+      outcome: 'created',
+      // Nothing was compared: this door does not dedup.
+      similarity: null,
+      source: args.assertion,
+    },
   });
 
   const mapped = mapMemory(await memories.reload(entry));

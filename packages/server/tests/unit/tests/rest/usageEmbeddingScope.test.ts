@@ -1,3 +1,7 @@
+import {
+  type AdmissionService,
+  startAdmissionService,
+} from '../../fixtures/admissionService';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs } from '../../testClient';
 
@@ -71,6 +75,72 @@ describe('Usage — the project an embedding is billed to', () => {
       const after = await readEmbeddingMeters();
       expect(after).toHaveLength(before.length + 1);
       expect(after[0].project_id).toBe(otherProjectId);
+    });
+
+    test('a project-bound key whose policies withhold the spend is refused', async () => {
+      const policy = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['usage:ListEvents'] }],
+          },
+        });
+      expect(policy.status).toBe(201);
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'Bound key without spend',
+          project_id: otherProjectId,
+          policy_ids: [policy.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+      const before = await readEmbeddingMeters();
+
+      const res = await authenticatedTestClient(keyRes.body.key)
+        .post('/api/v1/embeddings')
+        .send({ input: 'withheld words' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(await readEmbeddingMeters()).toHaveLength(before.length);
+    });
+
+    describe('with admission declared for the spend', () => {
+      let service: AdmissionService;
+
+      beforeAll(async () => {
+        service = await startAdmissionService();
+      });
+
+      beforeEach(() => {
+        service.declare({ actions: ['embeddings:CreateEmbeddings'] });
+      });
+
+      afterEach(() => {
+        service.undeclare();
+      });
+
+      afterAll(async () => {
+        await service.close();
+      });
+
+      test('a project-bound key naming no project is asked about its project', async () => {
+        const keyRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Bound key admitted', project_id: otherProjectId });
+        expect(keyRes.status).toBe(201);
+
+        const res = await authenticatedTestClient(keyRes.body.key)
+          .post('/api/v1/embeddings')
+          .send({ input: 'admitted words' });
+
+        expect(res.status).toBe(200);
+        expect(service.asked).toHaveLength(1);
+        expect(service.asked[0].body).toMatchObject({
+          action: 'embeddings:CreateEmbeddings',
+          project_id: otherProjectId,
+        });
+      });
     });
   });
 

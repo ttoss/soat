@@ -53,7 +53,7 @@ export const readToolContextLayer = (
 };
 
 /** `under` without every key `over` names, in any casing, then `over` on top. */
-const overlay = (args: {
+export const overlayToolContext = (args: {
   under: Record<string, string>;
   over: Record<string, string>;
 }): Record<string, string> => {
@@ -77,7 +77,10 @@ export const callbackToolContextLayer = (args: {
   asserted?: Record<string, string>;
 }): Record<string, string> | undefined => {
   if (!args.asserted) return args.credential;
-  return overlay({ under: args.credential ?? {}, over: args.asserted });
+  return overlayToolContext({
+    under: args.credential ?? {},
+    over: args.asserted,
+  });
 };
 
 /**
@@ -92,7 +95,7 @@ export const stampToolContextLayer = (args: {
 }): Record<string, string> | undefined => {
   const layer = args.authority?.toolContext ?? null;
   if (!args.toolContext && !layer) return undefined;
-  const stamped = overlay({
+  const stamped = overlayToolContext({
     under: withoutReservedPrefixKeys(args.toolContext ?? {}),
     over: layer ?? {},
   });

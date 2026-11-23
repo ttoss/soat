@@ -208,6 +208,11 @@ export const buildPrepareStep = (args: {
    * continues one — the AI SDK's `stepNumber` restarts at 0 there regardless.
    */
   stepsAlreadySpent?: number;
+  /**
+   * The 1-indexed turn step that runs under `tool_choice: "none"` whatever
+   * its rule says (`resolveAnswerStep`), or `null`.
+   */
+  answerStep: number | null;
   /** The turn's tally, snapshotted as each step starts. */
   provenance: GenerationProvenance;
 }): ((opts: { stepNumber: number; messages: ModelMessage[] }) => {
@@ -245,14 +250,19 @@ export const buildPrepareStep = (args: {
       rule
     );
 
-    const result = resolvePrepareStepResult({
-      ruleToolChoice: normalizeToolChoice(rule?.tool_choice),
-      ruleActiveTools: resolveStepActiveTools({
-        activeToolIds: rule?.active_tool_ids,
-        toolIdToName,
-      }),
-      promptCachingEnabled,
-    });
+    // The tool block stays offered on the answer step: a history holding tool
+    // calls needs it, and it keeps the cached prefix.
+    const result =
+      oneIndexedStep === args.answerStep
+        ? { toolChoice: 'none' as const }
+        : resolvePrepareStepResult({
+            ruleToolChoice: normalizeToolChoice(rule?.tool_choice),
+            ruleActiveTools: resolveStepActiveTools({
+              activeToolIds: rule?.active_tool_ids,
+              toolIdToName,
+            }),
+            promptCachingEnabled,
+          });
     log('prepareStep (%s): result=%o', args.logContext, result);
     return markStep ? { ...result, messages: markStep(messages) } : result;
   };

@@ -88,7 +88,9 @@ const DOMAIN_LIFECYCLES: Record<string, string> = {
     'an acceptance is held or revoked',
   'tasks.yaml#Task.status':
     'a task is a work item moving through its workflow states',
-  'tasks.yaml#GET /api/v1/tasks.status':
+  'tasks.yaml#TaskStatusFilter.status':
+    'a task is a work item moving through its workflow states',
+  'tasks.yaml#TaskGraphNode.status':
     'a task is a work item moving through its workflow states',
   'tasks.yaml#TaskDependencyEnd.status':
     'a task is a work item moving through its workflow states',

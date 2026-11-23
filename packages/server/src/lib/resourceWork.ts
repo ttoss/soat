@@ -1,8 +1,8 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import { workCaller } from '../middleware/auth';
+import { actionNotHeld } from './authorizationDenial';
 import { buildSrn } from './iam';
 import {
   RESOURCE_GRANT_PRINCIPALS,
@@ -45,11 +45,12 @@ const assertGrantStarts = async (
     });
     if (allowed) continue;
     log('assertGrantStarts: %s %s refused %s', args.carrier, args.id, resource);
-    throw new DomainError(
-      'ACTION_NOT_HELD',
-      `The ${RESOURCE_GRANT_PRINCIPALS[args.carrier]}'s policy_ids do not allow ${start.action} on ${resource}.`,
-      { action: start.action, resource }
-    );
+    throw actionNotHeld({
+      refusedBy: authUser.isAllowed.refusedBy,
+      action: start.action,
+      resource,
+      message: `The ${RESOURCE_GRANT_PRINCIPALS[args.carrier]}'s policy_ids do not allow ${start.action} on ${resource}.`,
+    });
   }
 };
 

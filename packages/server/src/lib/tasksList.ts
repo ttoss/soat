@@ -13,6 +13,7 @@ import {
   blockedWhereSql,
   readinessOf,
   type TaskReadiness,
+  upstreamWhereSql,
 } from './taskReadiness';
 import { mapTask, taskIncludes, type TaskInstance } from './tasks';
 import { type TaskAutomationStatus } from './tasksAutomationStatus';
@@ -27,10 +28,31 @@ const log = createDebug('soat:tasks');
  */
 const TASK_METADATA_COLUMN = '"Task"."metadata"';
 
-type ListTasksArgs = Parameters<typeof listTasks>[0];
+/** The filters `listTasks` and `getTaskGraph` share. */
+export type TaskListFilters = {
+  projectIds: ProjectScope;
+  workflowId?: string;
+  state?: string;
+  statuses?: readonly ('open' | 'closed')[];
+  // ORed, `null` included. `status=open` narrows a board; it does not say which
+  // of those cards has an automation still dispatching.
+  automationStatuses?: (TaskAutomationStatus | null)[];
+  // ORed, `null` included, as `automationStatuses`.
+  priorities?: (TaskPriority | null)[];
+  assignee?: string;
+  /** Only tasks with (`true`) or without (`false`) an open dependency. */
+  blocked?: boolean;
+  /** Only the transitive dependencies of this task, not the task itself. */
+  upstreamOf?: string;
+  /** Structured question about the bag; see {@link compileStructuredWhere}. */
+  metadata?: StructuredFilter;
+};
+
 type TaskOrder = NonNullable<Parameters<typeof db.Task.findAll>[0]>['order'];
 
-const listWhere = (args: ListTasksArgs): Record<string, unknown> => {
+const listWhere = (
+  args: TaskListFilters & { upstreamOfId?: number }
+): Record<string, unknown> => {
   const where: Record<string, unknown> = projectScopeWhere({
     projectIds: args.projectIds,
   });
@@ -57,8 +79,38 @@ const listWhere = (args: ListTasksArgs): Record<string, unknown> => {
       ...(args.blocked === undefined
         ? []
         : [db.sequelize.literal(blockedWhereSql(args.blocked))]),
+      ...(args.upstreamOfId === undefined
+        ? []
+        : [db.sequelize.literal(upstreamWhereSql(args.upstreamOfId))]),
     ],
   });
+  return where;
+};
+
+/** An unknown id resolves to `-1`, so its filter yields nothing, not everything. */
+const internalIdOf = (row: { id?: unknown } | null): number => {
+  return row ? (row.id as number) : -1;
+};
+
+const byPublicId = (publicId: string) => {
+  return { where: { publicId }, attributes: ['id'] };
+};
+
+/** The `where` every task-list read applies, over the `Task` alias. */
+export const taskListWhere = async (
+  args: TaskListFilters
+): Promise<Record<string, unknown>> => {
+  const where = listWhere({
+    ...args,
+    upstreamOfId: args.upstreamOf
+      ? internalIdOf(await db.Task.findOne(byPublicId(args.upstreamOf)))
+      : undefined,
+  });
+  if (args.workflowId) {
+    where.workflowId = internalIdOf(
+      await db.Workflow.findOne(byPublicId(args.workflowId))
+    );
+  }
   return where;
 };
 
@@ -89,44 +141,25 @@ const pageReader = () => {
   return { read, map };
 };
 
-export const listTasks = async (args: {
-  projectIds: ProjectScope;
-  workflowId?: string;
-  state?: string;
-  statuses?: readonly ('open' | 'closed')[];
-  // ORed, `null` included. `status=open` narrows a board; it does not say which
-  // of those cards has an automation still dispatching.
-  automationStatuses?: (TaskAutomationStatus | null)[];
-  // ORed, `null` included, as `automationStatuses`.
-  priorities?: (TaskPriority | null)[];
-  assignee?: string;
-  /** Only tasks with (`true`) or without (`false`) an open dependency. */
-  blocked?: boolean;
-  /** Structured question about the bag; see {@link compileStructuredWhere}. */
-  metadata?: StructuredFilter;
-  /** Absent: newest first, paged by cursor. `next`: pull order, one page. */
-  order?: TaskListOrder;
-  limit?: number;
-  cursor?: string;
-}) => {
+export const listTasks = async (
+  args: TaskListFilters & {
+    /** Absent: newest first, paged by cursor. `next`: pull order, one page. */
+    order?: TaskListOrder;
+    limit?: number;
+    cursor?: string;
+  }
+) => {
   log(
-    'listTasks: projectIds=%o workflowId=%s state=%s statuses=%o metadata=%o order=%s',
+    'listTasks: projectIds=%o workflowId=%s state=%s statuses=%o upstreamOf=%s metadata=%o order=%s',
     args.projectIds,
     args.workflowId,
     args.state,
     args.statuses,
+    args.upstreamOf,
     args.metadata,
     args.order
   );
-  const where = listWhere(args);
-
-  if (args.workflowId) {
-    const workflow = await db.Workflow.findOne({
-      where: { publicId: args.workflowId },
-    });
-    // An unknown workflow filter yields an empty page rather than every task.
-    where.workflowId = workflow ? (workflow.id as number) : -1;
-  }
+  const where = await taskListWhere(args);
 
   const { read, map } = pageReader();
   if (args.order === 'next') {
@@ -153,6 +186,7 @@ export const listTasks = async (args: {
       priorities: args.priorities,
       assignee: args.assignee,
       blocked: args.blocked,
+      upstreamOf: args.upstreamOf,
       metadata: args.metadata,
     },
     where,

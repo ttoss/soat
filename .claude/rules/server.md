@@ -22,6 +22,20 @@ https://ttoss.dev/docs/modules/packages/http-server-mcp/.
   (`src/lib/soatTools.ts`, at runtime). Update it with every endpoint change.
 - `src/mcp/` — `index.ts`, `server.ts`, `toMcpText.ts`. No per-module tool files.
 
+## Paths
+
+Every segment is a kebab-case literal or a `{snake_case}` parameter; never a
+`:verb` suffix (`tests/harness/pathConvention.test.mjs`).
+
+| Case | Form | Example |
+|---|---|---|
+| Read derived from a collection | noun under it | `GET /tasks/graph` |
+| Action on a resource | verb under it | `POST /approvals/{approval_id}/approve` |
+| Resource with its own id | hyphenated top-level segment | `GET /trigger-firings/{trigger_firing_id}` |
+
+Register a literal before the parameter route it shares a prefix with
+(`/tasks/graph` before `/tasks/:task_id`), and test that it is not read as an id.
+
 ## Commands
 
 ```bash

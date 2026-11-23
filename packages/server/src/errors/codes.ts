@@ -335,7 +335,7 @@ export const ERROR_CODES = {
   ACTION_NOT_HELD: {
     httpStatus: 403,
     description:
-      'The resource being created or edited would perform an action the caller may not: start a target (an agent, tool, orchestration, eval, decider or workflow) or grant a shared action. A resource that acts later may do no more than whoever writes it. `meta` names the `action` and the `resource`.',
+      'The resource being created or edited would perform an action the caller may not: start a target (an agent, tool, orchestration, eval, decider or workflow) or grant a shared action. A resource that acts later may do no more than whoever writes it. `meta` names the `action` and the `resource`. A refusing `Deny` that carries a `denial` answers that denial instead.',
   },
   IAM_TOKEN_POLICY_INVALID: {
     httpStatus: 400,
@@ -580,6 +580,11 @@ export const ERROR_CODES = {
     httpStatus: 502,
     description:
       'The model returned an object that does not satisfy the agent output_schema (or was not valid JSON at all). Upstream-caused like AI_PROVIDER_ERROR: the request was well-formed, the model output was not.',
+  },
+  MAX_STEPS_REACHED: {
+    httpStatus: 422,
+    description:
+      'An agent with an output_schema spent every step of max_steps without producing the object: its last allowed step answered without it, or its tool_choice forces a tool, so no step could answer. `meta.max_steps` names the budget.',
   },
   TEXT_ENCODED_TOOL_CALL: {
     httpStatus: 502,
@@ -981,6 +986,11 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description: 'A closed task cannot gain a dependency.',
   },
+  TASK_GRAPH_TOO_LARGE: {
+    httpStatus: 422,
+    description:
+      'The task graph the filters select holds more tasks than one answer carries; a graph is never truncated. `meta.count` is how many it holds and `meta.limit` the ceiling, `TASK_GRAPH_LIMIT` (default 500).',
+  },
   TASK_MIGRATION_CONFLICT: {
     httpStatus: 409,
     description:
@@ -1019,7 +1029,7 @@ export const ERROR_CODES = {
   QUERY_TIMEOUT: {
     httpStatus: 422,
     description:
-      'A collection item listing ran past its statement timeout (`COLLECTION_QUERY_TIMEOUT_MS`, five seconds by default) and was cancelled. Equality and `in` on `?data=` and `?tags=` are answered by an index; a range is evaluated row by row. `meta.timeout_ms` is the limit that applied.',
+      'A query ran past its statement timeout and was cancelled: a collection item listing (`COLLECTION_QUERY_TIMEOUT_MS`, five seconds by default), or a knowledge or memory search (`KNOWLEDGE_QUERY_TIMEOUT_MS`, thirty seconds by default). On a collection, equality and `in` on `?data=` and `?tags=` are answered by an index; a range is evaluated row by row. `meta.timeout_ms` is the limit that applied.',
   },
   CONVERSATION_POSITION_CONFLICT: {
     httpStatus: 409,
@@ -1089,6 +1099,11 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description:
       'The project, or the AI provider a candidate model runs on, has `require_priced_model` set and no price-book row covers a billable token component of the model this call would run on (an agent generation, a chat completion, a memory extraction or an `llm_judge` scorer), so the spend it would incur could not be measured. The check runs before the provider is called: nothing is sent, spent or metered. `meta.unpriced_rows` names each `(provider, model, component)` to price. A call bound to a model route is held to every target it may fail over to, not just the first. Price the rows, or clear `require_priced_model` on the project or the provider to accept unmeasurable spend.',
+  },
+  INPUT_MODALITY_UNSUPPORTED: {
+    httpStatus: 400,
+    description:
+      "The model declares the input modalities it accepts, in its AI provider's `model_input_modalities`, and a message part is of a modality it lacks. Refused before the provider is called. `meta.model` names the model (or the model route when none of its targets accepts the input) and `meta.modalities` the refused modalities.",
   },
   MODEL_NOT_OFFERED: {
     httpStatus: 400,

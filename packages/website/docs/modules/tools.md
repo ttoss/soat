@@ -54,6 +54,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `denied_actions`        | `string[] \| null`                                               | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions).                                                                              |
 | `context_keys`          | `string[] \| null`                                               | Allowlist of [`tool_context`](../advanced/tool-context.md) keys forwarded to this tool as context headers. `null` forwards every key (the default); `[]` forwards none. See [Scoping which context keys reach a tool](#scoping-which-context-keys-reach-a-tool).                           |
 | `preset_parameters`     | `object \| null`                                                 | Fixed parameter values pinned on every call. Keys are hidden from the model, and a pinned value wins over one the caller sends. Values accept [`{{context:<key>}}`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) so a pin can be the _run's_ value.                  |
+| `preset_parameters_by_action` | `object \| null` | `builtin` only: presets per action, keyed by a name in `actions`, each overriding `preset_parameters` key by key for that action. See [Preset Parameters](#preset-parameters). |
 | `pipeline`              | `object \| null`                                                 | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).                                                                                                                                                                                 |
 | `output_mapping`        | `object \| null`                                                 | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).                                                                                                                                                                           |
 | `guardrail_ids`         | `array \| null`                                                  | Guardrails attached at the tool scope, governing this tool wherever it is used — see [Guardrails — Attachment](./guardrails.md#attachment)                                                                                                                                                 |
@@ -412,7 +413,21 @@ On every action that takes `project_id` the server pins it to the agent's own pr
 
 The action runs in-process through the same middleware stack and route handler as a client request (no network hop): per-call permission check against the caller's policies, strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply. No ambient authority: an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call not settled within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. From an orchestration the tool acts as the run's own identity — [Run identity](./orchestrations.md#durable-background-execution). Work that stores no authority, or whose authority names a user or key that no longer exists, makes no tool call of any type: each is refused `409 WORK_AUTHORITY_MISSING`.
 
-Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` and `max_call_depth` only for actions whose REST schema declares them (currently only `create-agent-generation`).
+Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` and `max_call_depth` only for actions whose REST schema declares them (`tool_context` on `create-agent-generation` and `call-tool`; the trace fields and depth on `create-agent-generation`).
+
+#### Which `tool_context` a nested call carries
+
+An action that takes `tool_context` (a nested generation, a `call-tool` relay) receives three layers, merged per key in any casing:
+
+```
+the action's own tool_context argument  <  the calling bag  <  the token's layer
+```
+
+- **The token's layer** ([Pinning a `tool_context` layer](./iam.md#pinning-a-tool_context-layer)) wins every key it names, at every depth.
+- **The calling bag** is the generation's or the direct call's `tool_context`, narrowed by the builtin tool's [`context_keys`](#scoping-which-context-keys-reach-a-tool), without keys under the reserved prefix. Its keys override the same keys in the argument.
+- **The argument** a model or caller writes keeps every key neither layer above names. A key under the reserved prefix in it is dropped by `call-tool` and refused by a nested generation, as on a direct request.
+
+The three keys a session populates are dropped by `call-tool` whichever layer sends them ([Auto-populated keys](../advanced/tool-context.md#auto-populated-keys-sessions)).
 
 ### pipeline
 
@@ -502,11 +517,26 @@ Without `output_mapping` the raw result is returned unchanged.
 
 ### Preset Parameters
 
-`preset_parameters` pins fixed values: a key matching an input-schema field is removed from the schema shown to the model and merged into every call before dispatch. On an `mcp` tool, a preset reaches only the actions whose input schema declares it, so one tool can pin `folder` for its `search` action and still call `fetch`; an action that publishes no `properties` receives every preset. Several tools can target different resources from one action: two `builtin` tools binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }`, one with `{ "id": "doc_xyz789" }`. End to end: [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
+`preset_parameters` pins fixed values: a key matching an input-schema field is removed from the schema shown to the model and merged into every call before dispatch. On an `mcp` tool, a preset reaches only the actions whose input schema declares it, so one tool can pin `folder` for its `search` action and still call `fetch`; an action that publishes no `properties` receives every preset. Several tools can target different resources from one action: two `builtin` tools binding `update-document`, one with `"preset_parameters": { "document_id": "doc_abc123" }`, one with `{ "document_id": "doc_xyz789" }`. End to end: [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
+
+On a `builtin` tool, `preset_parameters_by_action` gives an action presets of its own: the action receives `preset_parameters` with its entry's keys over them, key by key, and an action with no entry receives `preset_parameters` alone. Each action's schema hides only its own effective keys. One tool can pin `tags` as `list-documents`' query filter and as `update-document`'s body bag:
+
+```json
+{
+  "type": "builtin",
+  "actions": ["list-documents", "update-document"],
+  "preset_parameters_by_action": {
+    "list-documents": { "tags": "status:open" },
+    "update-document": { "tags": { "status": "reviewed" } }
+  }
+}
+```
+
+Every key the effective preset of an action the tool can run (in `actions`, not in `denied_actions`) carries must be a parameter that action declares, or the create or update is `400 VALIDATION_FAILED` with `meta.problems` naming the key path (`preset_parameters.limit`, `preset_parameters_by_action.update-document.limit`) and the action. A tool-level `action`, which [selects the action](#calling-a-tool-directly) of a direct call, is exempt. An entry for an action not in `actions`, and `preset_parameters_by_action` on any other tool type, are refused the same way. An [added action](#builtin)'s schema is its server's listing, read per call: it takes only the presets it declares, as an `mcp` action does.
 
 **A preset is a pin, not a default: it wins.** A value the call supplies for a pinned key (a model naming the hidden field, or an `input` to [`POST /tools/{id}/call`](/docs/api/tools/call-tool)) is replaced by the preset; unpinned keys come from the call. No tool schema sets `additionalProperties: false`, so a hidden key is not rejected; merge order is the guarantee.
 
-Holds on every tool type (`builtin`, `http`, `mcp`, `client`, `pipeline`) and dispatch surface (agent tool loop, direct call, pipeline step, orchestration tool node, converter invocation). A guardrail evaluates the pinned arguments the call carries (`args.*` in a guard condition, `arguments` on an approval item) — on an `mcp` action, only the presets that action declares; a `client` tool receives them pinned at the `requires_action` boundary.
+Holds on every tool type (`builtin`, `http`, `mcp`, `client`, `pipeline`) and dispatch surface (agent tool loop, direct call, pipeline step, orchestration tool node, converter invocation). A guardrail evaluates the pinned arguments the call carries (`args.*` in a guard condition, `arguments` on an approval item) — on an `mcp` action, only the presets that action declares, on a `builtin` action, its own effective presets; a `client` tool receives them pinned at the `requires_action` boundary.
 
 #### Pinning to a per-run value (`{{context:}}`)
 

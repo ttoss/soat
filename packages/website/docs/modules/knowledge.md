@@ -180,7 +180,9 @@ A row carrying no embedding is not a vector candidate: it is reachable through t
 
 **The lexical channel is an exact-token and exact-phrase channel, by design.** The default text search configuration is `simple`, which removes no stopwords and does no stemming, and `websearch_to_tsquery` requires *every* term it produces. So a natural-language question almost never matches lexically — identifiers, error codes, product names and SKUs do. The vector channel carries the rest. Set `KNOWLEDGE_TEXT_SEARCH_CONFIG` to a language-specific configuration (`english`, `portuguese`, …) where the deployment's language is known and stemming is wanted; the trade is that the channel stops being exact.
 
-If the lexical query fails — a text search configuration that does not exist is the realistic case — the search answers from the vector channel alone. If the embedding provider is unreachable, it answers from the lexical channel alone, and every result comes back without `similarity_score`.
+If the lexical query fails — a text search configuration that does not exist, or a query past the statement timeout — the search answers from the vector channel alone. If the embedding provider is unreachable, it answers from the lexical channel alone, and every result comes back without `similarity_score`.
+
+Every search query runs under a statement timeout (`KNOWLEDGE_QUERY_TIMEOUT_MS`, thirty seconds by default). A vector or unranked query past it ends the search as `422 QUERY_TIMEOUT`; scope the search with `document_paths`, `memory_store_ids` or `tags`, or lower `limit`.
 
 **No full-text index ships with this.** `to_tsvector` is computed per candidate row, which is cheaper than an index to maintain until a corpus is large. Promote to a stored `tsvector` column with a GIN index when either holds: lexical p95 latency exceeds vector p95, or a project passes roughly 100k chunks.
 
@@ -326,6 +328,7 @@ Metric definitions, the baseline table, its caveats and the per-deployment metho
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |
 | `KNOWLEDGE_TEXT_SEARCH_CONFIG` | No | PostgreSQL text search configuration for the lexical channel, defaults to `simple` — see [Hybrid retrieval](#hybrid-retrieval) |
 | `KNOWLEDGE_RRF_K`      | No       | Deployment default for `rrf_k`, itself `60`. A request's own `rrf_k` wins |
+| `KNOWLEDGE_QUERY_TIMEOUT_MS` | No | Statement timeout of each search query, in milliseconds (default `30000`) — see [Hybrid retrieval](#hybrid-retrieval) |
 
 ## Examples
 

@@ -1,3 +1,4 @@
+import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { claimMessageKey } from './conversationMessageIdempotency';
 import { insertMessage } from './conversationMessageWrites';
@@ -12,9 +13,11 @@ import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import type { ProvenanceCounts } from './generationProvenance';
+import { assertMessageFilesReadable } from './messageFileParts';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 import type { PublicMessages, VendorOptions } from './vendorOptions';
+import type { WorkAuthority } from './workAuthority';
 
 export const MESSAGE_ROLES = ['user', 'assistant'] as const;
 
@@ -67,6 +70,7 @@ export const mapMessage = async (message: ConversationMessageRow) => {
     agent_id: message.agent?.publicId ?? null,
     position: message.position,
     content: await readStoredFileContent(message.document?.file),
+    file_ids: message.fileIds ?? [],
     metadata: message.metadata ?? undefined,
     idempotency_key: message.idempotencyKey,
   };
@@ -157,6 +161,15 @@ type AddConversationMessageArgs = {
   agentId?: string | null;
   position?: number;
   metadata?: Record<string, unknown>;
+  /**
+   * Files the turn sends the model natively, and who names them: each must be
+   * in the conversation's project and downloadable by that writer.
+   */
+  files?: {
+    ids: string[];
+    authority: WorkAuthority | null;
+    authUser?: AuthUser;
+  };
   responseMessages?: PublicMessages;
   vendorOptions?: VendorOptions;
   idempotencyKey?: string | null;
@@ -177,6 +190,15 @@ const createTextMessage = async (
   });
   if (!participants) return null;
   const { actorDbId, agentDbId } = participants;
+  if (args.files) {
+    await assertMessageFilesReadable({
+      fileIds: args.files.ids,
+      role: args.role,
+      turnProjectId: conversation.projectId,
+      authority: args.files.authority,
+      authUser: args.files.authUser,
+    });
+  }
 
   const createdDoc = await createDocument({
     projectId: conversation.projectId,
@@ -212,6 +234,7 @@ const createTextMessage = async (
     agentId: agentDbId,
     position: args.position,
     metadata: args.metadata,
+    fileIds: args.files?.ids,
     responseMessages: args.responseMessages,
     vendorOptions: args.vendorOptions,
     idempotencyKey: args.idempotencyKey ?? null,

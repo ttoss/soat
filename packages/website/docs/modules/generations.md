@@ -229,6 +229,8 @@ It is written by the server when the turn starts and cannot be set by a caller. 
 
 A model's answer carries vendor-specific state its next call needs back: a reasoning signature, an item id, encrypted reasoning. The runtime stores it beside the turn's messages and rejoins it only when it builds a model call, so `output.response_messages`, the [transcript](#transcript), the stored trace steps, stream frames, webhooks and a `builtin` read of any of them carry no `providerOptions`, for every provider.
 
+A vendor binds reasoning to the prompt it was issued under, so a later turn of a session replays a finished turn without its reasoning: its text, tool calls and tool results reach the model, its reasoning and the vendor state paired with it do not. Editing an agent's instructions therefore never stops its open sessions from answering. Within one turn, each step still sends the previous step's reasoning back.
+
 ### Transcript
 
 [`GET /generations/{generation_id}/transcript`](/docs/api/generations/get-generation-transcript) reads one turn back step by step: what it

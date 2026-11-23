@@ -73,6 +73,7 @@ import { evalClaim } from './2026-11-21-evalClaim';
 import { evalRunDropPassed } from './2026-11-21-evalRunDropPassed';
 import { evalRunVerdict } from './2026-11-21-evalRunVerdict';
 import { evalResultHumanLabel } from './2026-11-22-evalResultHumanLabel';
+import { formationParameterTypes } from './2026-11-23-formationParameterTypes';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -167,4 +168,5 @@ export const MIGRATIONS: Migration[] = [
   agentVersionClaims,
   agentVersionPromotionClaims,
   evalResultHumanLabel,
+  formationParameterTypes,
 ];

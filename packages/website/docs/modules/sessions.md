@@ -51,10 +51,11 @@ Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./a
 
 A session's messages are its conversation's [Conversation Messages](./conversations.md#conversation-message), listed by [`GET /api/v1/conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages).
 
-When creating a session message (`POST .../messages`), send exactly one of:
+When creating a session message (`POST .../messages`), send one of:
 
 - `message`: raw text body
-- `document_id`: public ID of an existing document in the session's project (its content is used as the message text); one in another project answers `404 RESOURCE_NOT_FOUND`, as an unknown id does
+- `file_ids`: files sent to the model natively, with or without `message` ([Files in a turn](./conversations.md#files-in-a-turn))
+- `document_id`: public ID of an existing document in the session's project (its content is used as the message text); one in another project answers `404 RESOURCE_NOT_FOUND`, as an unknown id does. It excludes `message` and `file_ids`
 
 An optional `idempotency_key` string can accompany either variant — see [Idempotency](#idempotency).
 
@@ -259,7 +260,7 @@ Channels like WhatsApp use at-least-once webhook delivery, so the same inbound m
 - **First call** — message is saved and generation is triggered if `auto_generate` is on. Returns `201 Created`.
 - **Subsequent calls with the same key** — returns the original message with `200 OK`. No new message or generation is created.
 
-The key is scoped to the session and applies to both the `message` and the `document_id` variant. `message`, `document_id` and `tool_context` are the request a key names: reusing a key with any of them changed is `409 IDEMPOTENCY_KEY_REUSED` and saves nothing. The key's format, the `Idempotency-Key` header and how long a key lasts are in [Idempotency](../advanced/idempotency.md).
+The key is scoped to the session and applies to every variant. `message`, `file_ids`, `document_id` and `tool_context` are the request a key names: reusing a key with any of them changed is `409 IDEMPOTENCY_KEY_REUSED` and saves nothing. The key's format, the `Idempotency-Key` header and how long a key lasts are in [Idempotency](../advanced/idempotency.md).
 
 The saved message carries the key as `idempotency_key` in the session's [conversation messages](./conversations.md#conversation-message), so the transcript row for a provider message is found by its provider id.
 

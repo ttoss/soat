@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.126.1](https://github.com/ttoss/soat/compare/v0.126.0...v0.126.1) (2026-11-23)
+
+**Note:** Version bump only for package @soat/postgresdb
+
+# [0.126.0](https://github.com/ttoss/soat/compare/v0.125.0...v0.126.0) (2026-11-23)
+
+### Bug Fixes
+
+* **formations:** stored templates declare only parameter types plan accepts ([#2106](https://github.com/ttoss/soat/issues/2106)) ([511c583](https://github.com/ttoss/soat/commit/511c58321a1f01f62a78178a5b57361a48f5fa1e))
+
+### Features
+
+* **evals:** human labels on results, calibration per scorer, and evidence.min_calibration ([#1556](https://github.com/ttoss/soat/issues/1556) Part 5) ([#2102](https://github.com/ttoss/soat/issues/2102)) ([eaa3f74](https://github.com/ttoss/soat/commit/eaa3f745726d5cef966ae93a150e15267ca28ca0))
+
 # [0.125.0](https://github.com/ttoss/soat/compare/v0.124.0...v0.125.0) (2026-11-22)
 
 ### Bug Fixes
