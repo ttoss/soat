@@ -324,15 +324,18 @@ const boundToolIds = (typedAgent: TypedAgent): string[] => {
   return splitToolBindings(readAgentToolBindings(typedAgent)).toolIds;
 };
 
-export const buildGenerationContext = async (
-  args: BuildGenerationContextArgs
-): Promise<GenerationContext> => {
-  const toolContext = await resolvePinnedToolContext(args);
-
-  const { typedAgent, agentVersion } = await resolveTurnAgent(args);
-
-  const provenance = await turnProvenance(args);
-
+/**
+ * The authority the agent acts under and the messages it is sent, resolved
+ * against that authority and the identity-pinned tool context.
+ */
+const resolveTurnInput = async (
+  args: BuildGenerationContextArgs & {
+    typedAgent: TypedAgent;
+    toolContext: Awaited<ReturnType<typeof resolvePinnedToolContext>>;
+    provenance: GenerationProvenance;
+  }
+) => {
+  const { typedAgent, toolContext } = args;
   const agentAuthority = await resolveAgentAuthority({
     agentId: args.agentId,
     runAs: typedAgent.runAs,
@@ -351,6 +354,24 @@ export const buildGenerationContext = async (
     allowedToolIds: boundToolIds(typedAgent),
     agentAuthority,
     toolContext, // identity-pinned, not the raw caller bag
+    provenance: args.provenance,
+  });
+  return { agentAuthority, resolvedMessages };
+};
+
+export const buildGenerationContext = async (
+  args: BuildGenerationContextArgs
+): Promise<GenerationContext> => {
+  const toolContext = await resolvePinnedToolContext(args);
+
+  const { typedAgent, agentVersion } = await resolveTurnAgent(args);
+
+  const provenance = await turnProvenance(args);
+
+  const { agentAuthority, resolvedMessages } = await resolveTurnInput({
+    ...args,
+    typedAgent,
+    toolContext,
     provenance,
   });
   const { model } = await resolveGenerationModel({
