@@ -1808,7 +1808,7 @@ components:
         Required on every scorer and unique within the eval: the key its
         outcomes (`scores[].scorer`), aggregate scores and calibration go
         under. Several scorers of one type coexist under distinct names.
-      example: policy_judge
+      example: toxicity
     Scorers:
       type: array
       description: >-
@@ -2108,7 +2108,7 @@ components:
           type: string
           description: >-
             The `name` of the scorer that produced this entry
-          example: mentions_refund
+          example: toxicity
         score:
           type: number
           example: 1
