@@ -4554,7 +4554,7 @@ resources:
       expect(res.body.status).toBe('failed');
       expect(res.body.error).toEqual({
         code: 'VALIDATION_FAILED',
-        message: `'reasoning' must be { "effort": "none" | "low" | "medium" | "high" } or null.`,
+        message: '`reasoning.effort` must be one of: none, low, medium, high',
         meta: { logical_id: 'NestedEnumAgent', resource_type: 'agent' },
       });
     });
