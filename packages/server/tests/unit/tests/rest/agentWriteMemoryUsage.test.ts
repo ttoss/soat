@@ -1,6 +1,8 @@
 import { agentRefusal } from '../../fixtures/agentRefusal';
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
+  createTurnScript,
+  requestsOfTurn,
   startChatCompletionStub,
   toolResultsOf,
 } from '../../fixtures/chatCompletionStub';
@@ -11,23 +13,9 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * `tool_execution` usage event, so the `runtime.*.tool_calls` counters a guard
  * reads count it like an outbound call. Only the model is stubbed.
  */
-let remembering: string | null = null;
+const script = createTurnScript();
 
-const stubPromise = startChatCompletionStub({
-  reply: (request) => {
-    const answered = request.messages.some((message) => {
-      return message.role === 'tool';
-    });
-    if (remembering && !answered) {
-      return {
-        toolCalls: [
-          { name: 'write_memory', arguments: { content: remembering } },
-        ],
-      };
-    }
-    return { content: 'Done.' };
-  },
-});
+const stubPromise = startChatCompletionStub({ reply: script.reply });
 
 const TRIPWIRE = {
   status: 'tripwire',
@@ -101,14 +89,16 @@ describe('write_memory usage', () => {
   /** One turn whose model asks to remember `content`; the tool's answer. */
   const remember = async (args: { agentId: string; content: string }) => {
     const stub = await stubPromise;
-    const before = stub.requests.length;
-    remembering = args.content;
+    const marker = script.arm([
+      { name: 'write_memory', arguments: { content: args.content } },
+    ]);
     const res = await asAdmin()
       .post(`/api/v1/agents/${args.agentId}/generate?wait=true`)
-      .send({ messages: [{ role: 'user', content: 'Note this down.' }] });
-    remembering = null;
+      .send({
+        messages: [{ role: 'user', content: `Note this down. ${marker}` }],
+      });
     expect(res.status).toBe(200);
-    const requests = stub.requests.slice(before);
+    const requests = requestsOfTurn({ requests: stub.requests, marker });
     const [result] = toolResultsOf(requests[requests.length - 1]);
     return {
       generationId: res.body.id as string,

@@ -1,6 +1,8 @@
 import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   type ChatRequest,
+  createTurnScript,
+  requestsOfTurn,
   startChatCompletionStub,
   toolResultsOf,
 } from '../../fixtures/chatCompletionStub';
@@ -12,23 +14,9 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * that actor. The provider is a local chat-completions stub; retrieval and the
  * write run for real.
  */
-let rememberContent: string | null = null;
+const script = createTurnScript();
 
-const stubPromise = startChatCompletionStub({
-  reply: (request) => {
-    const answered = request.messages.some((message) => {
-      return message.role === 'tool';
-    });
-    if (rememberContent && !answered) {
-      return {
-        toolCalls: [
-          { name: 'write_memory', arguments: { content: rememberContent } },
-        ],
-      };
-    }
-    return { content: 'Done.' };
-  },
-});
+const stubPromise = startChatCompletionStub({ reply: script.reply });
 
 describe('Agent memory per actor', () => {
   let adminToken: string;
@@ -69,25 +57,33 @@ describe('Agent memory per actor', () => {
     });
   };
 
-  /** One turn in a session of `actorId`; every request the model received. */
+  /**
+   * One turn in a session of `actorId`, whose model asks to remember
+   * `remember` when given; every request the model received.
+   */
   const turn = async (args: {
     agentId: string;
     actorId?: string;
+    remember?: string;
   }): Promise<ChatRequest[]> => {
     const stub = await stubPromise;
-    const before = stub.requests.length;
+    const marker = script.arm(
+      args.remember
+        ? [{ name: 'write_memory', arguments: { content: args.remember } }]
+        : []
+    );
     const sessionId = await create('/api/v1/sessions', {
       agent_id: args.agentId,
       ...(args.actorId ? { actor_id: args.actorId } : {}),
     });
     await asAdmin()
       .post(`/api/v1/sessions/${sessionId}/messages`)
-      .send({ message: 'What do we know?' });
+      .send({ message: `What do we know? ${marker}` });
     const res = await asAdmin().post(
       `/api/v1/sessions/${sessionId}/generate?wait=true`
     );
     expect(res.status).toBe(200);
-    return stub.requests.slice(before);
+    return requestsOfTurn({ requests: stub.requests, marker });
   };
 
   const injected = (requests: ChatRequest[]): string => {
@@ -126,10 +122,6 @@ describe('Agent memory per actor', () => {
 
   afterAll(async () => {
     await (await stubPromise).close();
-  });
-
-  afterEach(() => {
-    rememberContent = null;
   });
 
   describe('retrieval from memory_store_ids', () => {
@@ -177,9 +169,11 @@ describe('Agent memory per actor', () => {
     test("writes a memory of the session's actor", async () => {
       const storeId = await newStore();
       const agentId = await agentWith({ write_memory_store_id: storeId });
-      rememberContent = 'A is vegetarian.';
-
-      const requests = await turn({ agentId, actorId: actorA });
+      const requests = await turn({
+        agentId,
+        actorId: actorA,
+        remember: 'A is vegetarian.',
+      });
 
       const { memoryId } = JSON.parse(
         toolResultsOf(requests[requests.length - 1])[0]
@@ -196,9 +190,11 @@ describe('Agent memory per actor', () => {
         actor_id: actorB,
       });
       const agentId = await agentWith({ write_memory_store_id: storeId });
-      rememberContent = 'A is vegetarian.';
-
-      const requests = await turn({ agentId, actorId: actorA });
+      const requests = await turn({
+        agentId,
+        actorId: actorA,
+        remember: 'A is vegetarian.',
+      });
 
       expect(
         JSON.parse(toolResultsOf(requests[requests.length - 1])[0])
@@ -216,11 +212,13 @@ describe('Agent memory per actor', () => {
         { write_memory_store_id: storeId },
         { guardrail_ids: [guardrailId] }
       );
-      rememberContent = 'Prefers email.';
-
       const approvalIds = [];
       for (const actorId of [actorA, actorB]) {
-        const requests = await turn({ agentId, actorId });
+        const requests = await turn({
+          agentId,
+          actorId,
+          remember: 'Prefers email.',
+        });
         approvalIds.push(
           JSON.parse(toolResultsOf(requests[requests.length - 1])[0])
             .approval_id
@@ -228,8 +226,6 @@ describe('Agent memory per actor', () => {
       }
       expect(new Set(approvalIds).size).toBe(2);
 
-      // The continuation turns answer rather than propose the write again.
-      rememberContent = null;
       for (const approvalId of approvalIds) {
         const res = await asAdmin()
           .post(`/api/v1/approvals/${approvalId}/approve`)
@@ -258,9 +254,10 @@ describe('Agent memory per actor', () => {
     test('a turn of no actor writes a memory of no actor', async () => {
       const storeId = await newStore();
       const agentId = await agentWith({ write_memory_store_id: storeId });
-      rememberContent = 'The office is in Lisbon.';
-
-      const requests = await turn({ agentId });
+      const requests = await turn({
+        agentId,
+        remember: 'The office is in Lisbon.',
+      });
 
       const { memoryId } = JSON.parse(
         toolResultsOf(requests[requests.length - 1])[0]

@@ -6,6 +6,8 @@ import { pollUntil } from '../../fixtures/agentToolTurn';
 import { testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatRequest,
+  createTurnScript,
+  requestsOfTurn,
   startChatCompletionStub,
   toolResultsOf,
 } from '../../fixtures/chatCompletionStub';
@@ -17,22 +19,12 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  *
  * The provider points at a local chat-completions stub, so retrieval, the
  * injected message, the tool dispatch and the memory write all run; only the
- * model is replaced. A test arms `toolCalls` to make the stub's first answer a
+ * model is replaced. A test arms `script` to make the stub's first answer a
  * tool call, and reads what the model was sent off `stub.requests`.
  */
-type ToolCall = { name: string; arguments: Record<string, unknown> };
+const script = createTurnScript();
 
-let toolCalls: ToolCall[] | null = null;
-
-const stubPromise = startChatCompletionStub({
-  reply: (request) => {
-    const answered = request.messages.some((message) => {
-      return message.role === 'tool';
-    });
-    if (toolCalls && !answered) return { toolCalls };
-    return { content: 'Done.' };
-  },
-});
+const stubPromise = startChatCompletionStub({ reply: script.reply });
 
 type Scope = { projectId: string; providerId: string };
 
@@ -139,10 +131,6 @@ describe('Agent knowledge', () => {
 
   afterAll(async () => {
     await (await stubPromise).close();
-  });
-
-  afterEach(() => {
-    toolCalls = null;
   });
 
   describe('POST /api/v1/agents/:agent_id/generate — knowledge injection', () => {
@@ -470,17 +458,17 @@ describe('Agent knowledge', () => {
     let otherStoreId: string;
     let prodStoreId: string;
 
-    const rememberCall = (content: string): ToolCall[] => {
-      return [{ name: 'write_memory', arguments: { content } }];
-    };
-
     /** Runs a turn whose model asks to remember `content`; returns the tool's answer. */
     const remember = async (args: { agentId: string; content: string }) => {
-      toolCalls = rememberCall(args.content);
+      const marker = script.arm([
+        { name: 'write_memory', arguments: { content: args.content } },
+      ]);
       const { generationId, requests } = await generate({
         agentId: args.agentId,
+        messages: [{ role: 'user', content: `Remember this. ${marker}` }],
       });
-      const [result] = toolResultsOf(requests[requests.length - 1]);
+      const turnRequests = requestsOfTurn({ requests, marker });
+      const [result] = toolResultsOf(turnRequests[turnRequests.length - 1]);
       return { generationId, result };
     };
 
@@ -876,8 +864,6 @@ describe('Agent knowledge', () => {
         content: string;
       }) => {
         const { generationId, result } = await remember(args);
-        // The continuation turn must answer, not propose the write again.
-        toolCalls = null;
         const approvalId = JSON.parse(result).approval_id as string;
         const approved = await asAdmin()
           .post(`/api/v1/approvals/${approvalId}/approve`)
@@ -982,7 +968,6 @@ describe('Agent knowledge', () => {
           agentId,
           content: 'A fact with nowhere to go.',
         });
-        toolCalls = null;
         const cleared = await asAdmin()
           .put(`/api/v1/agents/${agentId}`)
           .send({ knowledge_config: null });
@@ -1006,7 +991,6 @@ describe('Agent knowledge', () => {
           agentId,
           content: 'A fact the approver mangles.',
         });
-        toolCalls = null;
         const approvalId = JSON.parse(result).approval_id as string;
 
         const approved = await asAdmin()
