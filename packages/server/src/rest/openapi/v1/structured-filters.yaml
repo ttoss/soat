@@ -34,11 +34,19 @@ components:
         is neither a number nor a string — a boolean, `null`, a list, an object
         — has no ordering and is `400 VALIDATION_FAILED`, naming the field in
         `meta.field`.
+
+
+        `prefix` matches a string field that starts with the operand, read as
+        literal text: `%` and `_` are characters, not wildcards. It combines
+        with the ordering operators on the same field. A field holding another
+        type never matches, and an operand that is not a string is
+        `400 VALIDATION_FAILED`.
       additionalProperties: true
       example:
         quarter: 'Q1'
         revision: { gte: 3, lt: 11 }
         status: { in: ['draft', 'final'] }
+        path: { prefix: '/reports/' }
   parameters:
     MetadataQuery:
       name: metadata
