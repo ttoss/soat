@@ -76,7 +76,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `id`                | string           | Public identifier (`task_…`)                                            |
 | `project_id`        | string           | Owning project (hard security boundary)                                 |
 | `workflow_id`       | string           | The workflow definition this task is bound to                           |
-| `workflow_version`  | integer \| null  | The workflow version this task runs on, fixed when the task was created and changed only by a [migration](#migrating-a-task-to-a-newer-version). `null` for tasks created before pinning existed, which run on the live definition |
+| `workflow_version`  | integer          | The workflow version this task runs on, fixed when the task was created and changed only by a [migration](#migrating-a-task-to-a-newer-version) |
 | `title`             | string           | Human-readable label                                                    |
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
@@ -133,7 +133,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 | `orchestration_run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
 | `tool_id`       | string \| null  | The tool a `tool` dispatch called, when that dispatch caused the move. A tool call produces no record of its own, so the tool is the cause |
 | `note`          | string \| null  | Optional reason supplied by the caller                            |
-| `from_workflow_version` | integer \| null | On a [migration](#migrating-a-task-to-a-newer-version) row, the version the task left (`null` when it had none); `null` on every other row |
+| `from_workflow_version` | integer \| null | On a [migration](#migrating-a-task-to-a-newer-version) row, the version the task left; `null` on every other row |
 | `to_workflow_version` | integer \| null | On a migration row, the version the task moved onto; `null` on every other row |
 | `created_at`    | string          | ISO 8601 timestamp                                                |
 

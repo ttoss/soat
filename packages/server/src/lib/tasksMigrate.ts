@@ -154,7 +154,7 @@ const assertNewerVersion = (args: {
   toVersion: number;
 }): void => {
   const pinned = args.task.workflowVersion;
-  if (pinned != null && args.toVersion <= pinned) {
+  if (args.toVersion <= pinned) {
     throw new DomainError(
       'VALIDATION_FAILED',
       `Task '${args.task.publicId}' is on version ${pinned}; to_version must be newer.`,

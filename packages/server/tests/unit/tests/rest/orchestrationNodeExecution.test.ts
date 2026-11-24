@@ -736,16 +736,18 @@ describe('a node retry policy', () => {
     expect(await drainQueueOnce()).toBe(1);
     expect((await getRun(runId)).status).toBe('sleeping');
 
-    // A run with no pinned version executes the live graph, which an edit can
-    // rewire while the run sleeps on its retry.
-    await db.OrchestrationRun.update(
-      { orchestrationVersion: null },
-      { where: { publicId: runId } }
-    );
+    // A run whose pinned archive is gone executes the live graph, which an
+    // edit can rewire while the run sleeps on its retry.
     const patched = await authenticatedTestClient(userToken)
       .patch(`/api/v1/orchestrations/${orchestrationId}`)
       .send({ nodes: [{ id: 'other', type: 'transform', expression: 1 }] });
     expect(patched.status).toBe(200);
+    const orchestration = await db.Orchestration.findOne({
+      where: { publicId: orchestrationId },
+    });
+    await db.OrchestrationVersion.destroy({
+      where: { orchestrationId: orchestration!.id as number, version: 1 },
+    });
 
     await wakeAndDrain(runId);
 

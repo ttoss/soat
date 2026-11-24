@@ -5388,6 +5388,7 @@ describe('Orchestrations', () => {
       });
       return db.OrchestrationRun.create({
         orchestrationId: orch?.id as number,
+        orchestrationVersion: 1,
         projectId: project?.id as number,
         status: 'running',
         state: {},
@@ -5452,6 +5453,7 @@ describe('Orchestrations', () => {
       });
       const healthy = await db.OrchestrationRun.create({
         orchestrationId: orch?.id as number,
+        orchestrationVersion: 1,
         projectId: project?.id as number,
         status: 'running',
         state: {},
