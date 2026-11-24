@@ -313,12 +313,18 @@ describe('validateRequestBody', () => {
     });
 
     test('leaves collection fields to their routes', () => {
-      // `document_paths` takes a scalar prefix, which the route reads as a list.
+      // `scorers` is route-owned: the route names each scorer's own error.
       expect(() => {
         return validateRequestBody({
           method: 'post',
-          path: '/knowledge/search',
-          body: { query: 'q', document_paths: '/a' },
+          path: '/evals',
+          body: {
+            name: 'eval',
+            dataset_id: 'dst_1',
+            agent_id: 'agent_1',
+            policy_ids: ['pol_1'],
+            scorers: 'exact_match',
+          },
         });
       }).not.toThrow();
     });
