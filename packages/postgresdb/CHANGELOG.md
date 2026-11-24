@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.128.0](https://github.com/ttoss/soat/compare/v0.127.0...v0.128.0) (2026-11-24)
+
+* feat(files)!: upload tokens fix size and type, and take a raw-body PUT (#2154) ([c095306](https://github.com/ttoss/soat/commit/c09530634e8bcf0e982c614f1e85c82f94bc7e9b)), closes [#2154](https://github.com/ttoss/soat/issues/2154)
+
+### BREAKING CHANGES
+
+* a token's content_type is enforced on upload: an upload of
+  another type is refused with 415 UPLOAD_CONTENT_TYPE_MISMATCH instead of being
+  stored with its own type.
+
 # [0.127.0](https://github.com/ttoss/soat/compare/v0.126.1...v0.127.0) (2026-11-23)
 
 ### Features
