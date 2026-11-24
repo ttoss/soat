@@ -9,9 +9,6 @@
 export const ROUTE_OWNED_BODY_FIELDS: Readonly<
   Record<string, readonly string[]>
 > = {
-  // `role: "system"` answers `SYSTEM_MESSAGE_NOT_ALLOWED`.
-  'POST /api/v1/agents/{agent_id}/generate': ['messages.*.role'],
-  'POST /api/v1/conversations/{conversation_id}/messages': ['role'],
   // `INVALID_OUTPUT_SCHEMA`.
   'POST /api/v1/agents': ['output_schema'],
   'PUT /api/v1/agents/{agent_id}': ['output_schema'],
@@ -31,8 +28,6 @@ export const ROUTE_OWNED_BODY_FIELDS: Readonly<
   'PATCH /api/v1/ingestion-rules/{ingestion_rule_id}': ['chunk_strategy'],
   // `MEMORY_RULE_VALIDATION_FAILED`.
   'POST /api/v1/memory-rules': ['on'],
-  // The `message` / `document_id` union names the field the caller missed.
-  'POST /api/v1/sessions/{session_id}/messages': [''],
   // The graph validator answers `ORCHESTRATION_VALIDATION_FAILED` and
   // `INVALID_TOOL_CONTEXT_KEY` per node.
   'POST /api/v1/orchestrations': ['nodes', 'edges'],

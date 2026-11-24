@@ -199,16 +199,7 @@ The note is derived per segment, so a generation that parks for a [client tool](
 
 ### Instructions
 
-`instructions` is the only system prompt. A `role: "system"` entry in `messages` is refused:
-
-```json
-{
-  "error": {
-    "code": "SYSTEM_MESSAGE_NOT_ALLOWED",
-    "message": "A system message is not accepted in `messages`. An agent's system prompt is its `instructions` field — set it with `update-agent --instructions`, or create a separate agent."
-  }
-}
-```
+`instructions` is the only system prompt. A `role: "system"` entry in `messages` is refused with `400 VALIDATION_FAILED`, the request schema allowing `user` and `assistant` only.
 
 Caller-supplied system content could replace the operator's prompt (the AI SDK's `allowSystemInMessages` stays `false`; [retrieved knowledge](#knowledge-config) is never injected as `system` either). Instructions reach the provider as its `instructions` argument, never a message; `update-agent --instructions` archives a new [version](#agent-version). [Chats](./chats.md#system-instructions) take per-call system content through `instructions`, never `messages`.
 
