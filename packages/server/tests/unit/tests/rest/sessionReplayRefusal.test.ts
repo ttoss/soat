@@ -5,15 +5,17 @@ import type { AddressInfo } from 'node:net';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 const VENDOR_DETAIL = 'vendor-secret-detail';
+const PROMPT_TOO_LONG = `prompt is too long: 1100000 tokens > 1000000 maximum ${VENDOR_DETAIL}`;
 
 /**
  * A session turn the vendor refuses names a cause classified from the vendor's
- * status and the positions the turn replayed, never the vendor's text: on the
+ * status and body and the positions the turn replayed, never the vendor's text: on the
  * project's own provider, through a forwarded alias and through a share.
  */
 describe('Session replay refusal', () => {
   let stub: Server;
   let refuseWith: number | null = null;
+  let refusalText = VENDOR_DETAIL;
   let adminToken: string;
   let granteeKey: string;
   const agents: Record<'own' | 'forwarded' | 'shared', string> = {
@@ -31,7 +33,7 @@ describe('Session replay refusal', () => {
           res.end(
             JSON.stringify({
               type: 'error',
-              error: { type: 'invalid_request_error', message: VENDOR_DETAIL },
+              error: { type: 'invalid_request_error', message: refusalText },
             })
           );
           return;
@@ -66,6 +68,7 @@ describe('Session replay refusal', () => {
   const refusedTurn = async (args: {
     via: keyof typeof agents;
     status: number;
+    text?: string;
   }) => {
     const client = authenticatedTestClient(tokenFor(args.via));
     const session = await client
@@ -87,10 +90,12 @@ describe('Session replay refusal', () => {
     expect((await generate()).status).toBe(200);
     await say();
     refuseWith = args.status;
+    refusalText = args.text ?? VENDOR_DETAIL;
     try {
       return await generate();
     } finally {
       refuseWith = null;
+      refusalText = VENDOR_DETAIL;
     }
   };
 
@@ -195,17 +200,20 @@ describe('Session replay refusal', () => {
 
   describe('POST /api/v1/sessions/{session_id}/generate', () => {
     test.each([
-      ['own', 400, 'history_refused'],
-      ['own', 413, 'context_too_long'],
-      ['own', 422, 'request_refused'],
-      ['forwarded', 400, 'history_refused'],
-      ['forwarded', 413, 'context_too_long'],
-      ['shared', 400, 'history_refused'],
-      ['shared', 413, 'context_too_long'],
+      ['own', 400, VENDOR_DETAIL, 'history_refused'],
+      ['own', 413, VENDOR_DETAIL, 'context_too_long'],
+      ['own', 422, VENDOR_DETAIL, 'request_refused'],
+      ['own', 400, PROMPT_TOO_LONG, 'context_too_long'],
+      ['forwarded', 400, VENDOR_DETAIL, 'history_refused'],
+      ['forwarded', 413, VENDOR_DETAIL, 'context_too_long'],
+      ['forwarded', 400, PROMPT_TOO_LONG, 'context_too_long'],
+      ['shared', 400, VENDOR_DETAIL, 'history_refused'],
+      ['shared', 413, VENDOR_DETAIL, 'context_too_long'],
+      ['shared', 400, PROMPT_TOO_LONG, 'context_too_long'],
     ] as const)(
-      'a %s provider refusing with %i is REPLAY_REFUSED for %s',
-      async (via, status, cause) => {
-        const response = await refusedTurn({ via, status });
+      'a %s provider refusing with %i "%s" is REPLAY_REFUSED for %s',
+      async (via, status, text, cause) => {
+        const response = await refusedTurn({ via, status, text });
 
         expect(response.status).toBe(502);
         expect(response.body.error).toMatchObject({

@@ -4,6 +4,7 @@ import { APICallError, wrapLanguageModel } from 'ai';
 
 import { DomainError } from '../errors';
 import { isPlainObject } from './plainObject';
+import { withheldVendorFault } from './replayRefusal';
 
 /** An alias another provider of the same project serves, by its vendor id. */
 export type ForwardedModel = { ai_provider_id: string; model: string };
@@ -162,21 +163,22 @@ export const answeringAs = (alias: string): LanguageModelMiddleware => {
 };
 
 /**
- * The fault a forwarded call reports: the vendor's status and retryability,
- * never its message, body or URL, which name the target and its vendor id.
+ * The fault a forwarded call reports: the vendor's status, retryability and
+ * refusal cause, never its message, body or URL, which name the target and its
+ * vendor id.
  */
 const forwardedFault = (args: {
   error: unknown;
   facadeId: string;
   alias: string;
 }): APICallError => {
-  const known = APICallError.isInstance(args.error) ? args.error : undefined;
-  return new APICallError({
+  return withheldVendorFault({
+    error: args.error,
     message: `AI provider '${args.facadeId}' could not serve '${args.alias}'.`,
-    url: '',
-    requestBodyValues: {},
-    statusCode: known?.statusCode,
-    isRetryable: known?.isRetryable ?? false,
+    shared: false,
+    isRetryable: APICallError.isInstance(args.error)
+      ? args.error.isRetryable
+      : false,
   });
 };
 
