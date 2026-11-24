@@ -81,7 +81,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
 | `payload`           | object           | Caller-owned task data; input to guards and dispatch `input_mapping`s. The engine never writes into it except declared `payload_writes` |
-| `metadata`          | object   | Caller-owned annotations supplied at creation; invisible to guards and to `payload_writes` (see [Task metadata](#task-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
+| `metadata`          | object   | Caller-owned annotations, set at creation and replaced by an update; invisible to guards and to `payload_writes` (see [Task metadata](#task-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `priority`          | string \| null   | `very_high` \| `high` \| `medium` \| `low` \| `very_low`, or `null` when nobody prioritised the task. A person's assertion, never derived; guards read it as `task.priority` (see [Task priority](#task-priority)) |
@@ -142,7 +142,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 - **Single transition path.** The transition must exist, be valid from the current state, and its guard must pass, whoever fires it.
 - **Atomicity & conflicts.** The state change runs under a row lock; concurrent transitions on one task serialize. A transition no longer valid from the committed state, or on a `closed` task, is `TASK_TRANSITION_CONFLICT` (409). The post-dispatch write (`active_dispatch`, `automation_status`, `last_result`, `payload_writes`) re-validates under the same lock; a stale write is discarded.
 - **Delete is guarded.** A workflow with **open** tasks cannot be deleted (`WORKFLOW_HAS_OPEN_TASKS`); once every task is closed, deleting it removes those tasks and their history.
-- **Payload is working data.** [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) updates `payload`, `title` or `assignee`. `payload` is **shallow-merged** (omitted keys kept) and validated against `payload_schema`. No patch reaches read-only `last_result`, so a guard on `task.last_result` is satisfied only by a value an automation wrote. Payload writes are not versioned.
+- **Payload is working data.** [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) updates `payload`, `title`, `assignee` or `metadata`. `payload` is **shallow-merged** (omitted keys kept) and validated against `payload_schema`. No patch reaches read-only `last_result`, so a guard on `task.last_result` is satisfied only by a value an automation wrote. Payload writes are not versioned.
 
 ### Pinning a call to a workflow
 
@@ -503,12 +503,12 @@ Firing a `requires_approval: true` transition (user, API key or automation outco
 
 ### Task metadata
 
-`create-task` accepts a `metadata` bag: caller-owned annotations (tenant, originating ticket, import batch) stored on the task and returned verbatim by every read, the list included.
+`create-task` accepts a `metadata` bag: caller-owned annotations (tenant, originating ticket, import batch, labels) stored on the task and returned verbatim by every read, the list included. [`PATCH /api/v1/tasks/{task_id}`](/docs/api/tasks/update-task) replaces the whole bag, in any state, terminal included; `null` clears it and omitting it keeps it. Unlike `payload`, it is never merged.
 
 - **`payload` is part of the machine**: guards read `task.payload`, dispatch `input_mapping`s read it, `payload_writes` overwrite keys in it.
 - **`metadata` is inert**: no guard, mapping or engine write touches it. Everything the engine decides (`state`, `status`, `workflow_version`, `last_result`, `active_dispatch`, the automation fields) is a field of its own.
 
-Unlike write-only `tool_context`, `metadata` is readable, and it survives every transition (a transition supplies none). A non-object `metadata` is `400 VALIDATION_FAILED`; no task is created.
+Unlike write-only `tool_context`, `metadata` is readable, and it survives every transition (a transition supplies none). A non-object `metadata` is `400 VALIDATION_FAILED`: a create writes no task, an update keeps the stored bag.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

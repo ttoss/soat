@@ -1,6 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { parseMetadataBag } from 'src/lib/metadataBag';
+import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { readStructuredQuery } from 'src/lib/structuredFilter';
 import {
   createTask,
@@ -211,6 +211,7 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
     title?: string;
     payload?: Record<string, unknown>;
     assignee?: string | null;
+    metadata?: unknown;
   };
 
   ctx.body = await updateTask({
@@ -218,6 +219,7 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
     title: body.title,
     payload: body.payload,
     assignee: body.assignee,
+    metadata: readNullableMetadataBag(body.metadata),
   });
 });
 
