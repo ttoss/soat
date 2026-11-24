@@ -251,8 +251,14 @@ paths:
         Parses an already-uploaded file and creates one Document split into one or
         more embedded chunks. The source format is detected from the file's content
         type: PDFs are parsed page-by-page; `text/plain` and `text/markdown` files
-        are read as a single source. How the source is chunked is controlled by
+        are read as a single source. Any other type (`image/*`, `audio/*`, …) is
+        converted to text by the tool of the project's matching ingestion rule
+        (`POST /ingestion-rules`); with no matching rule it is refused with
+        `400 UNSUPPORTED_FILE_TYPE`. How the source is chunked is controlled by
         `chunk_strategy`.
+
+        Ingestion produces text for retrieval. For a model to read the original
+        file, send it as a `file` part of a generation instead.
 
         A file can only back one Document — a second call with the same `file_id`
         returns `409 FILE_ALREADY_INGESTED`. To re-process an already-ingested file
@@ -289,7 +295,7 @@ paths:
                 file_id:
                   x-soat-ref: files
                   type: string
-                  description: ID of the uploaded file. Must be one of application/pdf, text/plain, text/markdown.
+                  description: ID of the uploaded file. `application/pdf`, `text/plain` and `text/markdown` are extracted natively; any other content type needs a matching ingestion rule, whose tool converts it to text.
                   example: 'file_V1StGXR8Z5jdHi6B'
                 project_id:
                   x-soat-ref: projects
