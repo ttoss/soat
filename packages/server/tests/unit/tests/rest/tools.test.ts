@@ -681,15 +681,19 @@ describe('Tools', () => {
       );
     });
 
-    test('calling a builtin tool without action returns 400 with operationId in error message', async () => {
+    test('calling a builtin tool without action names the request field `action`', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
         .send({});
       expect(response.status).toBe(400);
-      expect(response.body.error.message).toMatch(/operationId/i);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe(
+        '`action` is required for builtin tools.'
+      );
+      expect(response.body.error.meta).toEqual({ field: 'action' });
     });
 
-    test('calling a builtin tool via preset_parameters.action does not return operationId-required error', async () => {
+    test('calling a builtin tool via preset_parameters.action does not return the action-required error', async () => {
       const presetToolRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -707,7 +711,7 @@ describe('Tools', () => {
         .post(`/api/v1/tools/${presetToolId}/call`)
         .send({});
       // The action comes from presetParameters, so this must not hit the
-      // "operationId required" 400. The self-call either reaches a concurrently
+      // action-required 400. The self-call either reaches a concurrently
       // bound port or is refused; either outcome proves it got past the 400.
       expect([200, 500]).toContain(response.status);
     });
@@ -2547,8 +2551,8 @@ describe('Tools', () => {
 
       expect(callRes.status).toBe(400);
       expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
-      expect(callRes.body.error.message).toMatch(
-        /action is required for mcp tools/i
+      expect(callRes.body.error.message).toBe(
+        '`action` is required for mcp tools.'
       );
     });
 

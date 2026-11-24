@@ -73,6 +73,8 @@ describe('a builtin call-tool whose target is a builtin tool', () => {
     const response = await authenticatedTestClient(adminToken)
       .post(`/api/v1/tools/${outerId}/call`)
       .send({ input: { action: 'call-tool' } });
-    expect(JSON.stringify(response.body)).toMatch(/operationId is required/);
+    expect(JSON.stringify(response.body)).toMatch(
+      /`action` is required for builtin tools/
+    );
   });
 });
