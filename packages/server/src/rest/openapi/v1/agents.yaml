@@ -3008,7 +3008,11 @@ components:
                 type: string
                 description: ID of the tool call to respond to
               output:
-                description: Result of the tool execution
+                description: >-
+                  Result of the tool execution. `{ "type": "file", "file_id" }`,
+                  or an array of `text` and `file` parts, reaches the model as
+                  native file parts, each read as the submitter
+                  (`files:DownloadFile`).
 
     AcceptedGenerationResponse:
       type: object

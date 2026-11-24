@@ -45,6 +45,7 @@ import {
 import type { GenerationProvenance } from './generationProvenance';
 import { segmentCallOptions } from './generationSegment';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { isInputBoundaryRefusal } from './modelInputBoundary';
 import {
   collectSystemInstructions,
   type Instructions,
@@ -62,6 +63,7 @@ import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
 } from './textEncodedToolCall';
+import { clientToolResultOutput } from './toolResultFiles';
 import {
   replaceTraceSteps,
   type TraceStepTarget,
@@ -97,13 +99,7 @@ const buildToolResultMessage = (result: ClientToolResult) => {
         type: 'tool-result' as const,
         toolCallId: result.toolCallId,
         toolName: result.toolName,
-        output: {
-          type: 'text' as const,
-          value:
-            typeof result.output === 'string'
-              ? result.output
-              : JSON.stringify(result.output),
-        },
+        output: clientToolResultOutput(result.output),
       },
     ],
   };
@@ -465,8 +461,8 @@ const callWithToolFallback = async (args: {
       throw error;
     }
     // The fallback is for a provider that chokes on our tool *definitions*,
-    // never for the model's own answer.
-    if (isModelAnswerFault(error)) throw error;
+    // never for the model's own answer or input this API refused.
+    if (isModelAnswerFault(error) || isInputBoundaryRefusal(error)) throw error;
     log(
       'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
       args.callArgs.agentId,

@@ -37,9 +37,20 @@ const partModality = (part: unknown): InputModality | undefined => {
   return match ? match[1] : 'file';
 };
 
+// A tool result read natively carries its parts under `output.value`.
+const withToolResultParts = (part: unknown): unknown[] => {
+  if (field(part, 'type') !== 'tool-result') return [part];
+  const output = field(part, 'output');
+  return field(output, 'type') === 'content'
+    ? [field(output, 'value')].flat()
+    : [];
+};
+
 const messageParts = (message: unknown): unknown[] => {
   const content = field(message, 'content');
-  return typeof content === 'string' ? [{ type: 'text' }] : [content].flat();
+  return typeof content === 'string'
+    ? [{ type: 'text' }]
+    : [content].flat().flatMap(withToolResultParts);
 };
 
 /**

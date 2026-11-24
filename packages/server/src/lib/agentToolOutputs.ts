@@ -29,6 +29,7 @@ import {
   withoutSystemMessages,
 } from './modelMessages';
 import { assertProjectAcceptsWork } from './projectPause';
+import { assertToolOutputFilesReadable } from './toolResultFiles';
 import {
   parseWorkAuthority,
   resumedAuthority,
@@ -190,6 +191,22 @@ export const submitToolOutputs = async (args: {
   // outputs can be submitted again once the project resumes.
   await assertProjectAcceptsWork({ projectId: pending.projectId });
 
+  // Before the pause is claimed, so a refused file leaves it resumable.
+  const toolResultMessages = buildToolResultMessages({
+    toolOutputs: args.toolOutputs,
+    pendingToolCalls: pending.pendingToolCalls,
+    outputMappingsByToolName: await loadOutputMappingsByToolName(pending),
+  });
+  for (const part of toolResultMessages.flatMap(({ content }) => {
+    return content;
+  })) {
+    await assertToolOutputFilesReadable({
+      output: part.output.value,
+      turnProjectId: pending.projectId,
+      authority,
+    });
+  }
+
   pendingGenerations.delete(args.generationId);
   if (
     !(await claimPausedGeneration({
@@ -208,11 +225,6 @@ export const submitToolOutputs = async (args: {
   pending.provenance.record(
     submittedOutputsProvenance({ toolOutputs: args.toolOutputs, pending })
   );
-  const toolResultMessages = buildToolResultMessages({
-    toolOutputs: args.toolOutputs,
-    pendingToolCalls: pending.pendingToolCalls,
-    outputMappingsByToolName: await loadOutputMappingsByToolName(pending),
-  });
   // Merge the results the guardrail gate synthesized for client calls it did not
   // release (class D / tripwire / pending_approval). They belong to the same
   // assistant turn, so the provider needs them alongside the client's outputs.
