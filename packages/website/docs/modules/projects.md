@@ -86,8 +86,6 @@ Creating and deleting a project are admin-only. [`PATCH /projects/{id}`](/docs/a
 
 A project-bound credential (an API key with a `project_id`, or an IAM token minted from one) names its project, so no route needs `project_id` from it: a list reads that project, a write lands in it, and a per-project route (the [activity](./activity.md), [audit-log](./audit-log.md) and [documents](./documents.md) exports, the [usage](./usage.md) aggregate) reads it with no selector. A `project_id` naming another project is refused. A credential bound to no project names the project with `project_id`; a per-project route without one is `400 VALIDATION_FAILED`.
 
-A deployment that issues only project-bound credentials can take `project_id` out of the query altogether with [`PROJECT_ID_QUERY_DISABLED`](../self-hosting/configuration.md#project-selection).
-
 ### Project agent cap
 
 `agent_policy_ids` holds a rule every agent in the project obeys — "agents read only screened content", "no agent writes outside `/reports/`" — in one place, so an agent created, restored or released without it is still bound:
