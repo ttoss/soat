@@ -5,6 +5,7 @@ import {
   readEmbeddingInputTokenPriceUsd,
 } from './embeddingPrice';
 import { headerPrefix } from './headerPrefix';
+import { readSecretsEncryptionKey } from './secretsEncryptionKey';
 import { reservedToolContextPrefix } from './toolContext';
 
 /**
@@ -17,6 +18,7 @@ export const loadBootConfig = (): void => {
   readEmbeddingInputTokenPriceUsd();
   headerPrefix();
   reservedToolContextPrefix();
+  readSecretsEncryptionKey();
 };
 
 /**

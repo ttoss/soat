@@ -220,7 +220,7 @@ openssl rand -hex 32
 ```
 
 :::danger
-`SECRETS_ENCRYPTION_KEY` must be set in production. Changing it makes stored secrets and webhook/trigger signing secrets unreadable.
+An unset or malformed `SECRETS_ENCRYPTION_KEY` stops the server and the worker at startup with an error naming the variable. Changing it makes stored secrets and webhook/trigger signing secrets unreadable.
 :::
 
 ### Outbound Egress

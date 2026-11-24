@@ -7,6 +7,7 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
+import { readSecretsEncryptionKey } from './secretsEncryptionKey';
 
 const log = createDebug('soat:secrets');
 
@@ -14,22 +15,8 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
-const getEncryptionKey = () => {
-  const key = process.env.SECRETS_ENCRYPTION_KEY;
-  if (!key) {
-    throw new Error('SECRETS_ENCRYPTION_KEY environment variable is not set');
-  }
-  const buf = Buffer.from(key, 'hex');
-  if (buf.length !== 32) {
-    throw new Error(
-      'SECRETS_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)'
-    );
-  }
-  return buf;
-};
-
 export const encryptValue = (plaintext: string): string => {
-  const key = getEncryptionKey();
+  const key = readSecretsEncryptionKey();
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv, {
     authTagLength: AUTH_TAG_LENGTH,
@@ -43,7 +30,7 @@ export const encryptValue = (plaintext: string): string => {
 };
 
 export const decryptValue = (ciphertext: string): string => {
-  const key = getEncryptionKey();
+  const key = readSecretsEncryptionKey();
   const buf = Buffer.from(ciphertext, 'base64');
   const iv = buf.subarray(0, IV_LENGTH);
   const authTag = buf.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
