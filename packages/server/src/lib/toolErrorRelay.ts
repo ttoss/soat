@@ -3,7 +3,7 @@
  * answer or an MCP `structuredContent` carries — and what it becomes, by who
  * registered the tool.
  */
-import { DomainError, errorBody } from '../errors';
+import { DomainError, domainErrorBody } from '../errors';
 import { denialCodeOf, isAuthorizationDenial } from './authorizationDenial';
 import { isPlainObject } from './plainObject';
 import { isErrorCode } from './storedError';
@@ -20,7 +20,13 @@ export type ToolErrorEnvelope = {
   status: number;
   code: string;
   message: string;
+  hint?: string | undefined;
   meta?: Record<string, unknown>;
+};
+
+/** A non-empty string `hint`; anything else is no hint. */
+const hintOf = (hint: unknown): string | undefined => {
+  return typeof hint === 'string' && hint !== '' ? hint : undefined;
 };
 
 const isErrorStatus = (value: unknown): value is number => {
@@ -32,14 +38,14 @@ const isErrorStatus = (value: unknown): value is number => {
   );
 };
 
-/** `body` is `{ error: { code, message, meta? } }`; `null` when it is not. */
+/** `body` is `{ error: { code, message, hint?, meta? } }`; `null` when it is not. */
 export const readToolErrorEnvelope = (args: {
   status: unknown;
   body: unknown;
 }): ToolErrorEnvelope | null => {
   const error = isPlainObject(args.body) ? args.body.error : undefined;
   if (!isErrorStatus(args.status) || !isPlainObject(error)) return null;
-  const { code, message, meta } = error;
+  const { code, message, hint, meta } = error;
   if (typeof code !== 'string' || code === '') return null;
   if (typeof message !== 'string') return null;
   if (meta !== undefined && !isPlainObject(meta)) return null;
@@ -47,6 +53,7 @@ export const readToolErrorEnvelope = (args: {
     status: args.status,
     code,
     message,
+    hint: hintOf(hint),
     ...(meta === undefined ? {} : { meta }),
   };
 };
@@ -57,11 +64,11 @@ const localCode = (code: string) => {
   return denialCodeOf(code) ?? 'BUILTIN_ACTION_FAILED';
 };
 
-/** A catalog action's error as REST answers it: status, code, message, meta. */
+/** A catalog action's error as REST answers it: status, code, message, hint, meta. */
 const relayed = (envelope: ToolErrorEnvelope): DomainError => {
-  const { status, code, message, meta } = envelope;
+  const { status, code, message, hint, meta } = envelope;
   return new DomainError(localCode(code), message, meta, {
-    relayed: { code, httpStatus: status },
+    relayed: { code, httpStatus: status, hint },
   });
 };
 
@@ -101,12 +108,7 @@ export const toolCallError = (args: {
 export const errorToolResult = (error: DomainError) => {
   return {
     status: error.httpStatus,
-    ...errorBody({
-      code: error.code,
-      wireCode: error.wireCode,
-      message: error.message,
-      meta: error.meta,
-    }),
+    ...domainErrorBody(error),
   };
 };
 

@@ -133,10 +133,15 @@ export const REFUSAL_CODE_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 type ServiceRefusal = {
   code: string;
   message: string;
-  meta?: Record<string, unknown>;
+  hint: string | undefined;
+  meta: Record<string, unknown> | undefined;
 };
 
-/** The `{ error: { code, message, meta? } }` a refusal carries, or `null` when it is malformed. */
+const isOptionalHint = (hint: unknown): hint is string | undefined => {
+  return hint === undefined || (typeof hint === 'string' && hint !== '');
+};
+
+/** The `{ error: { code, message, hint?, meta? } }` a refusal carries, or `null` when it is malformed. */
 const readRefusal = (raw: string): ServiceRefusal | null => {
   let parsed: unknown;
   try {
@@ -146,11 +151,12 @@ const readRefusal = (raw: string): ServiceRefusal | null => {
   }
   const error = isObjectRecord(parsed) ? parsed.error : undefined;
   if (!isObjectRecord(error)) return null;
-  const { code, message, meta } = error;
+  const { code, message, hint, meta } = error;
   if (typeof code !== 'string' || !REFUSAL_CODE_PATTERN.test(code)) return null;
   if (typeof message !== 'string') return null;
+  if (!isOptionalHint(hint)) return null;
   if (meta !== undefined && !isObjectRecord(meta)) return null;
-  return { code, message, ...(meta === undefined ? {} : { meta }) };
+  return { code, message, hint, meta };
 };
 
 /** A 4xx refusal is relayed under its own status and code; anything else is a 502. */
@@ -168,7 +174,7 @@ const refusalFrom = (args: {
     });
   }
   return new DomainError('ADMISSION_REFUSED', refusal.message, refusal.meta, {
-    relayed: { code: refusal.code, httpStatus: status },
+    relayed: { code: refusal.code, httpStatus: status, hint: refusal.hint },
   });
 };
 

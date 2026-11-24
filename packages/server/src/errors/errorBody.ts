@@ -1,4 +1,5 @@
 import type { ErrorCode } from './codes';
+import type { DomainError } from './DomainError';
 import { omittedErrorMeta } from './hintOverrides';
 import { docsUrlFor, resolutionFor } from './resolutions';
 
@@ -55,6 +56,8 @@ export const errorBody = (args: {
    * this is a policy's declared denial code.
    */
   wireCode?: string;
+  /** The deciding party's own hint, answered over the registry's. */
+  relayedHint?: string;
   message: string;
   meta?: Record<string, unknown>;
 }) => {
@@ -64,7 +67,9 @@ export const errorBody = (args: {
       code: args.wireCode ?? args.code,
       message: args.message,
       ...(!errorHintsOmitted() && {
-        hint: resolutionFor({ code: args.code, wireCode: args.wireCode }),
+        hint:
+          args.relayedHint ??
+          resolutionFor({ code: args.code, wireCode: args.wireCode }),
       }),
       ...(!errorDocsUrlOmitted() && {
         docs_url: docsUrlFor({ code: args.code }),
@@ -72,4 +77,15 @@ export const errorBody = (args: {
       ...(meta !== undefined && { meta }),
     },
   };
+};
+
+/** A `DomainError`'s response body. */
+export const domainErrorBody = (error: DomainError) => {
+  return errorBody({
+    code: error.code,
+    wireCode: error.wireCode,
+    relayedHint: error.relayedHint,
+    message: error.message,
+    meta: error.meta,
+  });
 };
