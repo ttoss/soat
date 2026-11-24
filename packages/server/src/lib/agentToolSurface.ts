@@ -17,6 +17,8 @@ import { collectUnavailableTools } from './agentToolUnavailable';
 import type { GenerationProvenance } from './generationProvenance';
 import { markedToolResult } from './toolCallOutcome';
 import { toolErrorAnswer } from './toolErrorRelay';
+import { withReadableFileOutputs } from './toolResultFiles';
+import { turnAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
 
 /**
@@ -88,6 +90,21 @@ const relayErrorsAsResults = (args: {
       ];
     })
   );
+};
+
+/** The merged bindings, each call's file output read under the turn's authority. */
+const servedTools = (args: {
+  merge: Parameters<typeof gateAndMergeBindings>[0];
+  turnProjectId: number;
+  authority: WorkAuthority | null;
+}): Record<string, Tool> => {
+  return relayErrorsAsResults({
+    tools: withReadableFileOutputs({
+      tools: gateAndMergeBindings(args.merge),
+      turnProjectId: args.turnProjectId,
+      authority: args.authority,
+    }),
+  });
 };
 
 export const resolveAgentToolSurface = async (args: {
@@ -192,11 +209,10 @@ export const resolveAgentToolSurface = async (args: {
       : [];
 
   return {
-    tools: relayErrorsAsResults({
-      tools: gateAndMergeBindings({
-        bindings: [...bindings, ...knowledgeBindings],
-        guardrail,
-      }),
+    tools: servedTools({
+      merge: { bindings: [...bindings, ...knowledgeBindings], guardrail },
+      turnProjectId: projectId,
+      authority: turnAuthority(args),
     }),
     unavailableToolNames: unavailable.names,
   };

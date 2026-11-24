@@ -400,6 +400,22 @@ A `file` part sends a stored [file](./files.md) to the model in its own media ty
 - A model whose AI provider [declares its input modalities](./ai-providers.md#input-modalities) and lacks the part's (`image`, `audio`, `video`, or `file` for any other type) refuses it with `400 INPUT_MODALITY_UNSUPPORTED` before the provider is called; `meta.model` and `meta.modalities` name what was refused. A model that declares nothing is sent the part, and a provider that cannot read it answers with its own error.
 - To have the model read a file as text, [ingest](./documents.md) it and send a `document` part.
 
+#### Tool results that return files
+
+A tool call's result reaches the model as file parts when it is exactly `{ "type": "file", "file_id" }`, or an array of `{ "type": "text", "text" }` and `{ "type": "file", "file_id" }` parts holding at least one file. Any other output, including an object with more keys, reaches the model as JSON.
+
+```json
+[
+  { "type": "text", "text": "Page one:" },
+  { "type": "file", "file_id": "file_V1StGXR8Z5jdHi6B" }
+]
+```
+
+- A server tool's (`http`, `mcp`, `builtin`, `pipeline`) file is read under the turn's authority, which needs `files:DownloadFile` on it; a file it may not read, or one outside the project the generation runs in, reaches the model as the tool's error.
+- A `client` tool's file, sent to [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), is read as the submitter: a file outside the project is `404 RESOURCE_NOT_FOUND`, one the submitter may not download `403`, and the generation stays paused.
+- The result stores the reference; the bytes are read each time the turn calls the model, and the model's [input modalities](./ai-providers.md#input-modalities) gate them as they do a `file` part (`400 INPUT_MODALITY_UNSUPPORTED`).
+- A provider whose API carries tool results only as text receives the file base64-encoded in that text.
+
 ### Streaming
 
 `stream: true` returns Server-Sent Events, each step's output as generated; a completed stream ends with `data: [DONE]`.

@@ -11,6 +11,7 @@ import {
   missingModalities,
   registerInputGate,
 } from './inputModalityGate';
+import { toolOutputParts } from './toolResultFiles';
 
 const log = createDebug('soat:model-input');
 
@@ -33,6 +34,12 @@ type CallParams = Parameters<
 type PromptMessage = CallParams['prompt'][number];
 type UserMessage = Extract<PromptMessage, { role: 'user' }>;
 type UserPart = UserMessage['content'][number];
+type ToolMessage = Extract<PromptMessage, { role: 'tool' }>;
+type ToolPart = ToolMessage['content'][number];
+type ToolContent = Extract<
+  Extract<ToolPart, { type: 'tool-result' }>['output'],
+  { type: 'content' }
+>['value'][number];
 type SupportedUrls = Awaited<
   ReturnType<NonNullable<LanguageModelMiddleware['overrideSupportedUrls']>>
 >;
@@ -49,19 +56,23 @@ const referencedFileId = (part: UserPart): string | null => {
 const readReferencedFile = async (args: {
   fileId: string;
   projectId: number;
-}): Promise<Uint8Array> => {
+}): Promise<{ bytes: Buffer; mediaType: string; filename: string | null }> => {
   const file = await db.File.findOne({
     where: { publicId: args.fileId, projectId: args.projectId },
-    attributes: ['storageType', 'storagePath'],
+    attributes: ['storageType', 'storagePath', 'contentType', 'filename'],
   });
   const bytes = file ? await readFileBuffer(file) : null;
-  if (!bytes) {
+  if (!file || !bytes) {
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
       `File '${args.fileId}' not found.`
     );
   }
-  return new Uint8Array(bytes);
+  return {
+    bytes,
+    mediaType: file.contentType ?? 'application/octet-stream',
+    filename: file.filename ?? null,
+  };
 };
 
 const withFileBytes = async (args: {
@@ -72,8 +83,8 @@ const withFileBytes = async (args: {
   const fileId = referencedFileId(part);
   if (fileId === null || part.type !== 'file') return part;
   log('withFileBytes: fileId=%s projectId=%d', fileId, args.projectId);
-  const data = await readReferencedFile({ fileId, projectId: args.projectId });
-  return { ...part, data: { type: 'data', data } };
+  const file = await readReferencedFile({ fileId, projectId: args.projectId });
+  return { ...part, data: { type: 'data', data: new Uint8Array(file.bytes) } };
 };
 
 // Only a user message is resolved: a reference anywhere else reaches the
@@ -88,6 +99,66 @@ const resolveFileReferences = (args: {
       const content = await Promise.all(
         message.content.map((part) => {
           return withFileBytes({ part, projectId: args.projectId });
+        })
+      );
+      return { ...message, content };
+    })
+  );
+};
+
+// A tool result returning files (`toolResultFiles.ts`) becomes native parts,
+// base64 so a provider that sends tool results as text still carries them.
+const toolContentOf = async (args: {
+  value: unknown;
+  projectId: number;
+}): Promise<ToolContent[] | null> => {
+  const parts = toolOutputParts(args.value);
+  if (!parts) return null;
+  return Promise.all(
+    parts.map(async (part): Promise<ToolContent> => {
+      if (part.type === 'text') return part;
+      log(
+        'toolContentOf: fileId=%s projectId=%d',
+        part.file_id,
+        args.projectId
+      );
+      const file = await readReferencedFile({
+        fileId: part.file_id,
+        projectId: args.projectId,
+      });
+      return {
+        type: 'file',
+        data: { type: 'data', data: file.bytes.toString('base64') },
+        mediaType: file.mediaType,
+        ...(file.filename ? { filename: file.filename } : {}),
+      };
+    })
+  );
+};
+
+const withToolResultFiles = async (args: {
+  part: ToolPart;
+  projectId: number;
+}): Promise<ToolPart> => {
+  const { part } = args;
+  if (part.type !== 'tool-result' || part.output.type !== 'json') return part;
+  const value = await toolContentOf({
+    value: part.output.value,
+    projectId: args.projectId,
+  });
+  return value ? { ...part, output: { type: 'content', value } } : part;
+};
+
+const resolveToolResultFiles = (args: {
+  prompt: CallParams['prompt'];
+  projectId: number;
+}): Promise<CallParams['prompt']> => {
+  return Promise.all(
+    args.prompt.map(async (message): Promise<PromptMessage> => {
+      if (message.role !== 'tool') return message;
+      const content = await Promise.all(
+        message.content.map((part) => {
+          return withToolResultFiles({ part, projectId: args.projectId });
         })
       );
       return { ...message, content };
@@ -117,9 +188,13 @@ export const withInputBoundary = (args: {
       return withFileReferenceUrls(await model.supportedUrls);
     },
     transformParams: async ({ params }) => {
+      const prompt = await resolveToolResultFiles({
+        prompt: params.prompt,
+        projectId: args.projectId,
+      });
       const missing = missingModalities({
         accepted: args.accepted,
-        required: readInputModalities(params.prompt),
+        required: readInputModalities(prompt),
       });
       if (missing.length > 0) {
         throw inputModalityRefusal({ model: args.modelName, missing });
@@ -127,7 +202,7 @@ export const withInputBoundary = (args: {
       return {
         ...params,
         prompt: await resolveFileReferences({
-          prompt: params.prompt,
+          prompt,
           projectId: args.projectId,
         }),
       };
@@ -141,6 +216,16 @@ export const withInputBoundary = (args: {
     },
   });
   return wrapped;
+};
+
+const INPUT_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  'INPUT_MODALITY_UNSUPPORTED',
+  'RESOURCE_NOT_FOUND',
+]);
+
+/** A refusal of the input this boundary decides, which no retry without tools answers. */
+export const isInputBoundaryRefusal = (error: unknown): boolean => {
+  return error instanceof DomainError && INPUT_REFUSAL_CODES.has(error.code);
 };
 
 export { FILE_REFERENCE_URL };
