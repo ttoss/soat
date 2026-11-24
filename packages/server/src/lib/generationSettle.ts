@@ -21,7 +21,6 @@ import { appendGenerationSettled } from './generationProgress';
 import { provenanceStatusUpdates } from './generationProvenance';
 import {
   endGenerationSegment,
-  generationDeadlineMs,
   NO_GENERATION_LEASE,
   segmentLeaseToken,
 } from './generationSegment';
@@ -42,23 +41,9 @@ export type SettleOutcome =
       requiredAction: GenerationRequiredActionWire;
     };
 
-/**
- * A running row whose lease lapsed. A row claimed without a lease (written by
- * a release that took none) counts once it is older than a deadline.
- */
+/** A running row whose lease lapsed. */
 const expiredLeaseWhere = (now: Date) => {
-  return {
-    status: 'running',
-    [Op.or]: [
-      { leaseExpiresAt: { [Op.lt]: now } },
-      {
-        leaseExpiresAt: null,
-        createdAt: {
-          [Op.lt]: new Date(now.getTime() - generationDeadlineMs()),
-        },
-      },
-    ],
-  };
+  return { status: 'running', leaseExpiresAt: { [Op.lt]: now } };
 };
 
 /** The oldest `limit` generations whose lease lapsed by `now`. */
