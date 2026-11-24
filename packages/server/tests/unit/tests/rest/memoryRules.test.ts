@@ -255,7 +255,7 @@ describe('Memory Rules API', () => {
       const res = await createRule({ on: 'conversation_messages.created' });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('MEMORY_RULE_VALIDATION_FAILED');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects a selector naming an agent from another project', async () => {

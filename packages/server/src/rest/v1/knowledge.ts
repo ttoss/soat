@@ -35,29 +35,14 @@ type KnowledgeSearchBody = {
   rrf_k?: number;
   recency_half_life_days?: number;
   limit?: number;
-  // Array-typed filters. Typed loosely to tolerate non-conforming clients that
-  // send a single value as a bare scalar; `toStringArray` normalizes them.
-  memory_store_ids?: string[] | string;
+  memory_store_ids?: string[];
   actor_id?: string;
-  document_paths?: string[] | string;
-  document_ids?: string[] | string;
+  document_paths?: string[];
+  document_ids?: string[];
   tags?: unknown;
   metadata?: unknown;
   include_documents?: boolean;
   include_memories?: boolean;
-};
-
-/**
- * Coerce an array-typed search filter to an array. Clients that send a single
- * value as a bare scalar (e.g. `document_paths: "/playbooks/"` instead of
- * `["/playbooks/"]`) must not crash the search — normalize the scalar into a
- * one-element array so downstream filtering treats it as a single prefix/id.
- */
-const toStringArray = (
-  value: string[] | string | undefined
-): string[] | undefined => {
-  if (value === undefined) return undefined;
-  return Array.isArray(value) ? value : [value];
 };
 
 /** One probe per search: a stored row's vector, or `query`, never both. */
@@ -179,9 +164,9 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     rrfK: body.rrf_k,
     recencyHalfLifeDays: body.recency_half_life_days,
     limit: body.limit,
-    paths: toStringArray(body.document_paths),
-    documentIds: toStringArray(body.document_ids),
-    memoryStoreIds: toStringArray(body.memory_store_ids),
+    paths: body.document_paths,
+    documentIds: body.document_ids,
+    memoryStoreIds: body.memory_store_ids,
     actorId: body.actor_id,
     tags,
     metadata,
