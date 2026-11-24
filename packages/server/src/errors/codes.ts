@@ -435,7 +435,7 @@ export const ERROR_CODES = {
   ADMISSION_REFUSED: {
     httpStatus: 403,
     description:
-      "The deployment's registered admission service refused this write. The response carries the service's own status, `code`, `message` and `meta`, not this code; this entry documents where such an answer comes from. A builtin action's non-2xx answer with no error envelope is this code itself, its `meta` carrying `tool_status_code`, `tool_action` and `tool_method`.",
+      "The deployment's registered admission service refused this write. The response carries the service's own status, `code`, `message`, `meta` and, when it sends one, `hint`, not this code; this entry documents where such an answer comes from. A builtin action's non-2xx answer with no error envelope is this code itself, its `meta` carrying `tool_status_code`, `tool_action` and `tool_method`.",
   },
   ADMISSION_UNAVAILABLE: {
     httpStatus: 502,

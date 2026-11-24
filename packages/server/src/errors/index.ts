@@ -6,7 +6,12 @@ export {
 } from './denialCodes';
 export { docsBaseUrl } from './docsBaseUrl';
 export { DomainError } from './DomainError';
-export { errorBody, errorDocsUrlOmitted, errorHintsOmitted } from './errorBody';
+export {
+  domainErrorBody,
+  errorBody,
+  errorDocsUrlOmitted,
+  errorHintsOmitted,
+} from './errorBody';
 export { initErrorHintOverrides } from './hintOverrides';
 export { hintRoutes, renderHint, routePrefix } from './hintRoutes';
 export {

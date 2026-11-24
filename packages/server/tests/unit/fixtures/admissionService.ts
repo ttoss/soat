@@ -37,6 +37,18 @@ export const REFUSAL: Reply = {
   },
 };
 
+/** A refusal carrying the service's own advice. */
+export const HINTED_REFUSAL: Reply = {
+  status: 409,
+  body: {
+    error: {
+      code: 'PLAN_LIMIT_REACHED',
+      message: 'The plan allows 3 of these.',
+      hint: 'Upgrade the plan to create more of these.',
+    },
+  },
+};
+
 /** A status no operation declares, under a lowercase code. */
 export const PAYMENT_REFUSAL: Reply = {
   status: 402,

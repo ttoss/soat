@@ -86,6 +86,13 @@ components:
               type: string
               description: Relayed to the caller as sent.
               example: The plan allows 3 of these.
+            hint:
+              type: string
+              minLength: 1
+              description: >-
+                Relayed to the caller as its `hint`; without it, the caller
+                receives the runtime's hint for an admission refusal.
+              example: Upgrade the plan to create more of these.
             meta:
               type: object
               additionalProperties: true

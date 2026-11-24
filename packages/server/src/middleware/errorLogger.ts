@@ -4,7 +4,7 @@ import { DatabaseError } from '@ttoss/postgresdb';
 import { APICallError } from 'ai';
 
 import type { Context } from '../Context';
-import { DomainError, errorBody } from '../errors';
+import { DomainError, domainErrorBody, errorBody } from '../errors';
 
 type Next = () => Promise<void>;
 
@@ -210,12 +210,7 @@ const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
   ctx.status = status;
 
   if (error instanceof DomainError) {
-    ctx.body = errorBody({
-      code: error.code,
-      wireCode: error.wireCode,
-      message: error.message,
-      meta: error.meta,
-    });
+    ctx.body = domainErrorBody(error);
     // A windowed refusal's contract includes a `Retry-After` header. The request
     // middleware sets it explicitly; other enforcement points (the token/cost
     // generation gate, a share's cap) rely on this fallback.
