@@ -73,8 +73,8 @@ import { evalClaim } from './2026-11-21-evalClaim';
 import { evalRunDropPassed } from './2026-11-21-evalRunDropPassed';
 import { evalRunVerdict } from './2026-11-21-evalRunVerdict';
 import { evalResultHumanLabel } from './2026-11-22-evalResultHumanLabel';
-import { evalCriteria } from './2026-11-23-evalCriteria';
 import { formationParameterTypes } from './2026-11-23-formationParameterTypes';
+import { evalCriteria } from './2026-11-24-evalCriteria';
 import { pinnedVersionsRequired } from './2026-11-24-pinnedVersionsRequired';
 
 /**

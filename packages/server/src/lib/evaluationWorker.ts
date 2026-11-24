@@ -35,6 +35,7 @@ import {
 } from './evaluationRunExecution';
 import { runAsJob } from './requestCorrelation';
 import { agentReferences } from './resourceReferences';
+import { isLiveRunStatus } from './runStatus';
 import { createScheduler } from './scheduler';
 import { parseWorkAuthority } from './workAuthority';
 
@@ -67,11 +68,6 @@ const abandonedAfterMs = (): number => {
   return Number.isFinite(configured) && configured > 0
     ? configured
     : DEFAULT_ABANDONED_AFTER_MS;
-};
-
-/** A run that still has work ahead of it, as opposed to one already settled. */
-const isLive = (status: string): boolean => {
-  return status === 'queued' || status === 'running';
 };
 
 type LoadedRun = {
@@ -149,7 +145,7 @@ const settleIfDrained = async (args: { evalRunId: number }): Promise<void> => {
   // a redelivered task arrived after it had already completed, or its first
   // item failed it for having no definition.
   const { definition } = context;
-  if (!isLive(context.run.status) || !definition) return;
+  if (!isLiveRunStatus(context.run.status) || !definition) return;
 
   await finalizeIfUnclaimed({ ...context, settlement: definition });
 };
@@ -204,7 +200,7 @@ const markRunUnderWay = async (args: {
     { where: { id: run.id as number, status: 'queued' } }
   );
   await run.reload();
-  return isLive(run.status);
+  return isLiveRunStatus(run.status);
 };
 
 /**
@@ -226,7 +222,7 @@ const handleEvalItemTask = async (args: {
   if (!context) return;
 
   const { run } = context;
-  if (!isLive(run.status)) {
+  if (!isLiveRunStatus(run.status)) {
     log(
       'handleEvalItemTask: run=%s is %s, dropping task %s',
       run.publicId,
@@ -285,7 +281,7 @@ const handleEvalItemTask = async (args: {
   // run publishes no `aggregate_scores`, so these counters are its only record
   // of the work that was really paid for.
   await run.reload();
-  if (!isLive(run.status)) {
+  if (!isLiveRunStatus(run.status)) {
     await recountEvalRunProgress({ run });
   }
 };

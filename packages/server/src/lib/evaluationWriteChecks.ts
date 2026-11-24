@@ -1,7 +1,7 @@
 /**
- * The checks an Eval write runs on what it leaves standing: its scorers,
- * named and runnable against the agent, and its criteria, binding every one
- * of those scorers.
+ * The checks an Eval's scorers and criteria are held to: on every write, on
+ * what the write leaves standing, and before scorers grade (a run's start and
+ * the probes dry run), on the scorers as stored.
  */
 import { validateCriteria } from './evaluationCriteria';
 import { validateScorerReferences } from './evaluationScorerReferences';

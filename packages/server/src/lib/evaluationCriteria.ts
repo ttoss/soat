@@ -204,8 +204,11 @@ export const validateCriteria = (args: {
     : `Scorer '${unplaced}' sits in no criterion; each scorer sits in exactly one.`;
 };
 
-/** A criterion as a run reads it: its name and the scorers it binds. */
-type CriterionBinding = { name: string; scorers: string[] };
+/**
+ * A criterion as a run reads it: its name, the scorers it binds, and its
+ * probes as written (`evaluationProbes.ts` reads them).
+ */
+type CriterionBinding = { name: string; scorers: string[]; probes: unknown };
 
 /** The criteria a definition recorded, read for their bindings; `[]` for none. */
 export const criterionBindings = (criteria: unknown): CriterionBinding[] => {
@@ -219,7 +222,7 @@ export const criterionBindings = (criteria: unknown): CriterionBinding[] => {
           return typeof name === 'string';
         })
       : [];
-    return [{ name: criterion.name, scorers }];
+    return [{ name: criterion.name, scorers, probes: criterion.probes }];
   });
 };
 

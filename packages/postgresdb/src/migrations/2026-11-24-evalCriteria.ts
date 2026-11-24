@@ -6,7 +6,7 @@ import { defineMigration } from '@ttoss/postgresdb';
  * carries its copy inside `eval_runs.definition`.
  */
 export const evalCriteria = defineMigration({
-  name: '2026-11-23-eval-criteria',
+  name: '2026-11-24-eval-criteria',
   description: 'evals.criteria, the properties a claim is made of.',
   isApplied: async (context) => {
     if (!(await context.tableExists({ table: 'evals' }))) return true;

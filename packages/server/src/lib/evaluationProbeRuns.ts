@@ -21,8 +21,10 @@ import {
 import { getEvalRow } from './evaluations';
 import { evalStarts } from './evaluationScorerReferences';
 import { scorerList } from './evaluationScorerValidation';
+import { assertScorers } from './evaluationWriteChecks';
 import { assertProjectAcceptsWork } from './projectPause';
 import { resourceWorkAuthority } from './resourceWork';
+import { isLiveRunStatus } from './runStatus';
 import { parseWorkAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
@@ -115,10 +117,6 @@ const settleOnProbes = async (args: RunProbeContext): Promise<unknown> => {
   return refusal;
 };
 
-const isLive = (status: unknown): boolean => {
-  return status === 'queued' || status === 'running';
-};
-
 /**
  * A synchronous run's probes, before its first item. A refusal fails the run
  * and is thrown to the caller; once they hold, the run goes on only if
@@ -147,7 +145,7 @@ export const assertRunProbesHold = async (args: {
   });
   if (refusal !== null) throw refusal;
   await run.reload();
-  return isLive(run.status);
+  return isLiveRunStatus(run.status);
 };
 
 /**
@@ -168,6 +166,9 @@ export const openRunProbeGate = async (
     authority: parseWorkAuthority(run.authority),
   });
   if (refusal !== null) return false;
+  // A cancel that landed while the probes ran settled the run: no item runs.
+  await run.reload();
+  if (!isLiveRunStatus(run.status)) return false;
   await releaseHeldEvalItemTasks({ evalRunId: run.id as number });
   await run.update({ startedAt: new Date() });
   return true;
@@ -191,6 +192,13 @@ export const dryRunProbes = async (args: {
 
   const projectId = evaluation.projectId as number;
   await assertProjectAcceptsWork({ projectId });
+  // The re-check a run makes, so a stale scorer is named, not a probe error.
+  await assertScorers({
+    written: undefined,
+    stored: evaluation.scorers,
+    agentOutputSchema: evaluation.agent?.outputSchema ?? null,
+    projectId,
+  });
   const scorers = scorerList(evaluation.scorers);
   const authority = await resourceWorkAuthority({
     carrier: 'evals',

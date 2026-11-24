@@ -10,6 +10,7 @@
  */
 import createDebug from 'debug';
 
+import { criterionBindings } from './evaluationCriteria';
 import { scoringFailure } from './evaluationRunExecution';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
 import { scorerOutcomeKey } from './evaluationScorerValidation';
@@ -85,23 +86,15 @@ const criterionProbes = (args: {
   criteria: unknown;
   scorers: unknown[];
 }): CriterionProbes[] => {
-  if (!Array.isArray(args.criteria)) return [];
-  return args.criteria.flatMap((criterion) => {
-    if (!isPlainObject(criterion) || typeof criterion.name !== 'string') {
-      return [];
-    }
-    const bound = new Set(
-      Array.isArray(criterion.scorers) ? criterion.scorers : []
-    );
-    return [
-      {
-        name: criterion.name,
-        scorers: args.scorers.filter((scorer) => {
-          return isPlainObject(scorer) && bound.has(scorerOutcomeKey(scorer));
-        }),
-        probes: probesOf(criterion.probes),
-      },
-    ];
+  return criterionBindings(args.criteria).map((binding) => {
+    const bound = new Set(binding.scorers);
+    return {
+      name: binding.name,
+      scorers: args.scorers.filter((scorer) => {
+        return isPlainObject(scorer) && bound.has(scorerOutcomeKey(scorer));
+      }),
+      probes: probesOf(binding.probes),
+    };
   });
 };
 

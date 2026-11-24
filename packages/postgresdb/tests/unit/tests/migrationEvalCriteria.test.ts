@@ -13,7 +13,7 @@ import {
 jest.setTimeout(180_000);
 
 const DATABASE = `soat_migration_eval_criteria_${process.pid}`;
-const NAME = '2026-11-23-eval-criteria';
+const NAME = '2026-11-24-eval-criteria';
 
 const runnerFor = (args: { client: Sequelize }) => {
   return createMigrationRunner({
