@@ -495,7 +495,7 @@ paths:
     put:
       tags:
         - Files
-      summary: Upload a file as the raw request body using an upload token
+      summary: Upload a raw file body with an upload token
       description: >-
         Uploads file content authorized by a single-use token from
         `POST /api/v1/files/presigned-url`, sending the file itself as the
