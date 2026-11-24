@@ -4,6 +4,11 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import {
+  startStubChatProvider,
+  type StubChatProvider,
+  stubCompletion,
+} from '../../fixtures/stubChatProvider';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -54,6 +59,12 @@ describe('Evaluations — probes', () => {
   let agentId: string;
   let datasetId: string;
   let otherProjectProviderId: string;
+  let judgeProviderId: string;
+  let judge: StubChatProvider;
+  /** Runs inside the judge's reply, before it answers. */
+  let whileJudging: () => Promise<void> = () => {
+    return Promise.resolve();
+  };
   let seq = 0;
 
   const unique = (base: string): string => {
@@ -124,6 +135,7 @@ describe('Evaluations — probes', () => {
         'evaluations:GetEval',
         'evaluations:ListEvals',
         'evaluations:RunEval',
+        'evaluations:CancelEvalRun',
         'agents:CreateAgentGeneration',
       ],
     });
@@ -150,6 +162,28 @@ describe('Evaluations — probes', () => {
     expect(agent.status).toBe(201);
     agentId = agent.body.id as string;
 
+    // Scores 0.9 a reply that offers help and 0.1 anything else.
+    judge = await startStubChatProvider({
+      reply: async (request) => {
+        await whileJudging();
+        const helpful = JSON.stringify(request).includes('Glad to help');
+        return stubCompletion({
+          content: `{"score": ${helpful ? 0.9 : 0.1}, "reasoning": "r"}`,
+        });
+      },
+    });
+    const judgeProvider = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'Probes Judge',
+        provider: 'ollama',
+        default_model: 'judge-model',
+        base_url: judge.baseUrl,
+      });
+    expect(judgeProvider.status).toBe(201);
+    judgeProviderId = judgeProvider.body.id as string;
+
     const otherProject = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
       .send({ name: unique('Probes Other Project') });
@@ -168,17 +202,27 @@ describe('Evaluations — probes', () => {
       .post('/api/v1/datasets')
       .send({ project_id: projectId, name: 'probe-cases' });
     datasetId = dataset.body.id as string;
-    const item = await asUser()
-      .post(`/api/v1/datasets/${datasetId}/items`)
-      .send({ input: [{ role: 'user', content: 'one' }] });
-    expect(item.status).toBe(201);
+    // Two items, so a queued run holds the second behind its probes.
+    for (const content of ['one', 'two']) {
+      const item = await asUser()
+        .post(`/api/v1/datasets/${datasetId}/items`)
+        .send({ input: [{ role: 'user', content }] });
+      expect(item.status).toBe(201);
+    }
   });
 
   beforeEach(() => {
     mockCreateGeneration.mockClear();
   });
 
-  afterAll(() => {
+  afterEach(() => {
+    whileJudging = () => {
+      return Promise.resolve();
+    };
+  });
+
+  afterAll(async () => {
+    await judge.close();
     mockCreateGeneration.mockReset();
     delete process.env.EVAL_WORKER_DISABLED;
   });
@@ -355,7 +399,54 @@ describe('Evaluations — probes', () => {
       await drain();
 
       expect((await runOf(evalId, res.body.id)).status).toBe('completed');
-      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+    });
+
+    test('a queued run cancelled while its probes are graded runs no item', async () => {
+      const evalId = await createEval({
+        scorers: [
+          ...SCORERS,
+          {
+            type: 'llm_judge',
+            name: 'judge',
+            ai_provider_id: judgeProviderId,
+            prompt: 'Rate {{output}}',
+            pass_threshold: 0.5,
+          },
+        ],
+        criteria: [
+          ...HOLDING,
+          {
+            name: 'judged',
+            description: 'Reads as helpful',
+            scorers: ['judge'],
+            probes: [
+              { output: 'Glad to help.', passed: true },
+              { output: 'No.', passed: false },
+            ],
+          },
+        ],
+      });
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+      expect(res.status).toBe(201);
+      const runId = res.body.id as string;
+      whileJudging = async () => {
+        whileJudging = () => {
+          return Promise.resolve();
+        };
+        const cancel = await asUser().post(
+          `/api/v1/evals/${evalId}/runs/${runId}/cancel`
+        );
+        expect(cancel.status).toBe(200);
+      };
+
+      await drain();
+
+      const run = await runOf(evalId, runId);
+      expect(run.status).toBe('cancelled');
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
     });
 
     test('a scorer that cannot grade a probe fails the run with its own error, not PROBE_FAILED', async () => {

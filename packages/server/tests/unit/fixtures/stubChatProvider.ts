@@ -67,7 +67,10 @@ export const stubCompletion = (args: {
 };
 
 export const startStubChatProvider = async (args?: {
-  reply?: (request: ChatRequest) => Record<string, unknown>;
+  /** May answer late: the reply can wait on what the test does meanwhile. */
+  reply?: (
+    request: ChatRequest
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
 }): Promise<StubChatProvider> => {
   let answered = 0;
   // The default answers as the model it was asked for, so a call meters
@@ -86,8 +89,10 @@ export const startStubChatProvider = async (args?: {
     req.on('end', () => {
       answered += 1;
       const body = raw ? (JSON.parse(raw) as ChatRequest) : {};
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(reply(body)));
+      void Promise.resolve(reply(body)).then((completion) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(completion));
+      });
     });
   });
   await new Promise<void>((resolve) => {
