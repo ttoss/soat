@@ -54,8 +54,6 @@ const parseNullableString = (v: unknown): string | null | undefined => {
   return undefined;
 };
 
-const DOCUMENT_ERROR = 'document must be a JSON object';
-
 /** Path-param `{version}` is a version *number*, not a public ID. */
 const parseVersionParam = (raw: string): number => {
   const version = Number(raw);
@@ -113,15 +111,7 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
   );
   if (!targetProjectId) return;
 
-  let document: object | null | undefined;
-  try {
-    document = coerceToJsonObject(body.document);
-  } catch {
-    throw new DomainError('VALIDATION_FAILED', DOCUMENT_ERROR);
-  }
-  if (!document) {
-    throw new DomainError('VALIDATION_FAILED', DOCUMENT_ERROR);
-  }
+  const document = body.document as object;
 
   const result = await createGuardrail({
     projectId: Number(targetProjectId),
@@ -189,19 +179,14 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
   });
   const body = ctx.request.body as Record<string, unknown>;
 
-  let document: object | null | undefined;
-  try {
-    document = coerceToJsonObject(body.document);
-  } catch {
-    throw new DomainError('VALIDATION_FAILED', DOCUMENT_ERROR);
-  }
+  const document = body.document as object | undefined;
 
   ctx.body = await updateGuardrail({
     projectIds,
     id: ctx.params.guardrail_id,
     name: parseStringOrUndefined(body.name),
     description: parseNullableString(body.description),
-    document: document ?? undefined,
+    document,
     contextToolId: parseNullableString(body.context_tool_id),
     contextMode: parseNullableString(body.context_mode),
     versionLabel: parseStringOrUndefined(body.version_label),

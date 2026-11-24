@@ -12,15 +12,6 @@ export const ROUTE_OWNED_BODY_FIELDS: Readonly<
   // `role: "system"` answers `SYSTEM_MESSAGE_NOT_ALLOWED`.
   'POST /api/v1/agents/{agent_id}/generate': ['messages.*.role'],
   'POST /api/v1/conversations/{conversation_id}/messages': ['role'],
-  // `document` may be a JSON-encoded object.
-  'POST /api/v1/guardrails': ['document'],
-  // A scalar `document_paths` is a single prefix.
-  'POST /api/v1/knowledge/search': ['document_paths'],
-  // `INGESTION_RULE_VALIDATION_FAILED`, including the tool/agent union.
-  'POST /api/v1/ingestion-rules': [''],
-  'PATCH /api/v1/ingestion-rules/{ingestion_rule_id}': ['chunk_strategy'],
-  // `MEMORY_RULE_VALIDATION_FAILED`.
-  'POST /api/v1/memory-rules': ['on'],
   // The `message` / `document_id` union names the field the caller missed.
   'POST /api/v1/sessions/{session_id}/messages': [''],
   // The graph validator answers `ORCHESTRATION_VALIDATION_FAILED` and
