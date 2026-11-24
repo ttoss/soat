@@ -15,8 +15,3 @@ export const RUN_STATUSES = [
 ] as const;
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
-
-/** A run that still has work ahead of it, as opposed to one already settled. */
-export const isLiveRunStatus = (status: unknown): boolean => {
-  return status === 'queued' || status === 'running';
-};

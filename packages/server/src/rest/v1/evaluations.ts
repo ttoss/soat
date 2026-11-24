@@ -13,7 +13,7 @@ import {
   updateDataset,
   updateDatasetItem,
 } from 'src/lib/evaluationDatasets';
-import { dryRunProbes } from 'src/lib/evaluationProbeRuns';
+import { dryRunProbes } from 'src/lib/evaluationProbeDryRun';
 import {
   getEvalRun,
   listEvalResults,

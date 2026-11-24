@@ -31,11 +31,11 @@ import {
   executeAndRecordItem,
   failEvalRun,
   finalizeIfUnclaimed,
+  isLiveRunStatus,
   recountEvalRunProgress,
 } from './evaluationRunExecution';
 import { runAsJob } from './requestCorrelation';
 import { agentReferences } from './resourceReferences';
-import { isLiveRunStatus } from './runStatus';
 import { createScheduler } from './scheduler';
 import { parseWorkAuthority } from './workAuthority';
 

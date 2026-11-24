@@ -108,6 +108,11 @@ const notCompleted = (generation: GenerationResult): StoredError => {
 };
 
 /** The scorer's own failure, named as one: the generation itself succeeded. */
+/** An eval run that still has work ahead of it, as opposed to one settled. */
+export const isLiveRunStatus = (status: unknown): boolean => {
+  return status === 'queued' || status === 'running';
+};
+
 export const scoringFailure = (error: unknown): StoredError => {
   const failure = toStoredErrorKeepingMessage({
     error,
