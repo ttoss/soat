@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -13,8 +14,6 @@ const EXPORTING_ROOTS = ['packages/server/src', 'packages/postgresdb/src'];
 
 /** Where a reference may come from. */
 const READING_ROOTS = ['packages', 'scripts', 'tests'];
-
-const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'build', '.docusaurus']);
 
 /**
  * Exports only tests reach: a reset, flush or probe a test drives because no
@@ -56,15 +55,22 @@ const TEST_SEAMS = [
   'packages/server/src/lib/vertexAwsCredentials.ts resetAwsExternalAccountAuthClientCache',
 ];
 
-const sourceFiles = (dir, out = []) => {
-  if (!fs.existsSync(dir)) return out;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (SKIPPED_DIRS.has(entry.name)) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) sourceFiles(full, out);
-    else if (/\.(c|m)?(j|t)sx?$/.test(entry.name)) out.push(full);
-  }
-  return out;
+/**
+ * Tracked source files only: a generated client (`src/generated/`) re-declares
+ * spec names, and reading it would make the verdict depend on what was built.
+ */
+const sourceFiles = (dir) => {
+  return execFileSync('git', ['ls-files', '-z', '--', dir], {
+    cwd: repoRoot,
+    encoding: 'utf-8',
+  })
+    .split('\0')
+    .filter((file) => {
+      return /\.(c|m)?(j|t)sx?$/.test(file);
+    })
+    .map((file) => {
+      return path.join(repoRoot, file);
+    });
 };
 
 const isTest = (file) => {
