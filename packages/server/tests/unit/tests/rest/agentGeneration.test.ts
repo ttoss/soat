@@ -245,9 +245,9 @@ describe('Agent Generation Routes', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.invalid_fields).toEqual([
-        expect.objectContaining({ field: 'messages.0.role' }),
-      ]);
+      expect(response.body.error.meta).toEqual({
+        invalid_fields: ['messages.0.role'],
+      });
     });
 
     /* Rejected before anything is started, so the caller is never handed a
