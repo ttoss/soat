@@ -141,6 +141,8 @@ curl "$SOAT_BASE_URL/api/v1/metadata-schemas?project_id=proj_V1StGXR8Z5jdHi6B&re
 
 ### Check a bag before writing it
 
+A `metadata` that is not a JSON object is `400 VALIDATION_FAILED`, as on every write; absent or `null` is judged as an empty bag.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 

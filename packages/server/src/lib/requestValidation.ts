@@ -37,7 +37,7 @@ const isMissing = (
  * The declared types a body value is checked against. A scalar is read as a
  * column value, where an object becomes a query operator and an array `IN`.
  * Collection fields keep their routes' documented coercions (a JSON-encoded
- * `parameters`, a scalar `document_paths`).
+ * guardrail `document`, a scalar `document_paths`).
  */
 const SCALAR_TYPES = new Set(['string', 'number', 'integer', 'boolean']);
 

@@ -233,7 +233,7 @@ describe('Agent Generation Routes', () => {
      * false and throws `InvalidPromptError` for the same reason: a system
      * message inside a caller-supplied array is a prompt-injection vector.
      */
-    test('returns 400 for a system message in messages, naming instructions', async () => {
+    test('returns 400 for a system message in messages, naming the role', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
@@ -244,8 +244,10 @@ describe('Agent Generation Routes', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
-      expect(response.body.error.message).toMatch(/instructions/);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta).toEqual({
+        invalid_fields: ['messages.0.role'],
+      });
     });
 
     /* Rejected before anything is started, so the caller is never handed a
@@ -668,6 +670,7 @@ describe('Agent Generation Routes', () => {
       });
       const pending: PendingGeneration = {
         provenance: createGenerationProvenance(),
+        replayed: null,
         agentId,
         projectId: projectDbId,
         projectPublicId,
@@ -836,6 +839,7 @@ describe('Agent Generation Routes', () => {
 
       pendingGenerations.set('gen_foreign_pending', {
         provenance: createGenerationProvenance(),
+        replayed: null,
         agentId,
         projectId: otherProject!.id as number,
         projectPublicId: otherProjectRes.body.id,
@@ -1204,6 +1208,7 @@ describe('Agent Generation Routes', () => {
 
         const pending: PendingGeneration = {
           provenance: createGenerationProvenance(),
+          replayed: null,
           agentId: pausingAgentId,
           projectId: projectDbId,
           projectPublicId,

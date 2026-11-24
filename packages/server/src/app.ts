@@ -23,6 +23,7 @@ import { authMiddleware } from './middleware/auth';
 import { causationMiddleware } from './middleware/causation';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { hookRawBodyMiddleware } from './middleware/hookRawBody';
+import { rawUploadBodyMiddleware } from './middleware/rawUploadBody';
 import { requestAttributionMiddleware } from './middleware/requestAttribution';
 import { requestIdMiddleware } from './middleware/requestId';
 import { unansweredApiRequestMiddleware } from './middleware/unansweredApiRequest';
@@ -52,6 +53,7 @@ app.use(causationMiddleware);
 // Capture the raw body for public inbound hook paths before the JSON body
 // parser runs, so signatures can be verified over the exact bytes.
 app.use(hookRawBodyMiddleware);
+app.use(rawUploadBodyMiddleware);
 // A formation template carries document bodies inline, so it outgrows the
 // parser's 1 MB default that every other route keeps.
 const formationBodyParser = bodyParser({ jsonLimit: '10mb' });

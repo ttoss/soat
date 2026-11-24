@@ -79,7 +79,7 @@ A webhook receives an event when its type matches any `events` item, **and** its
 }
 ```
 
-`event_data` is the [structured filter](./documents.md#metadata-filters) grammar: a top-level field to a value, or to `in`, `gt`, `gte`, `lt`, `lte`, ANDed across fields; an absent field never matches. On update, `null` clears `event_resources` or `event_data`. An invalid SRN pattern or filter is `400 VALIDATION_FAILED`.
+`event_data` is the [structured filter](./documents.md#metadata-filters) grammar: a top-level field to a value, or to `in`, `gt`, `gte`, `lt`, `lte`, `prefix`, ANDed across fields; an absent field never matches. On update, `null` clears `event_resources` or `event_data`. An invalid SRN pattern or filter is `400 VALIDATION_FAILED`.
 
 #### Event Patterns
 

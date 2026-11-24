@@ -373,9 +373,11 @@ The export is not an MCP tool (an unbounded stream has no JSON projection); tool
 | `"field": value` | The bag holds that field with exactly that value |
 | `{ "in": [...] }` | Any one of the listed values |
 | `{ "gt": v }`, `{ "gte": v }`, `{ "lt": v }`, `{ "lte": v }` | Ordering; bounds on one field combine |
+| `{ "prefix": "text" }` | A string starting with `text`, read literally (`%` and `_` are characters, not wildcards); combines with bounds |
 
 - **The match is exact.** `{"revision": 3}` and `{"revision": "3"}` are different filters, which is why the filter travels as JSON rather than as `key:value` pairs.
 - **Ordering compares by the operand's type.** `gt`/`gte`/`lt`/`lte` order the field against the value given: a number orders numerically, a string lexicographically. Any field, any scope. An operand with no ordering — a boolean, `null`, a list, an object — is `400 VALIDATION_FAILED` with `error.meta.field` naming it.
+- **A prefix matches only text.** Its operand must be a string, or the filter is `400 VALIDATION_FAILED`; a field holding a number or a boolean is left out, never converted.
 - **A range never matches another type.** A document whose field holds text is not below every number; it is not comparable, so it is left out of both directions rather than failing the query.
 - **A filter narrows what the caller may already see.** It is applied on top of the [IAM](./iam.md) policy, never instead of it.
 
@@ -391,6 +393,8 @@ The export is not an MCP tool (an unbounded stream has no JSON projection); tool
 | other (`image/*`, `audio/*`, …) | Converted to text by the tool named in the matching [Ingestion Rule](./ingestion-rules.md), then chunked normally |
 
 A content type with no built-in extractor and no matching [Ingestion Rule](./ingestion-rules.md) is rejected with `UNSUPPORTED_FILE_TYPE` (`400`).
+
+Ingestion produces text for retrieval. For a model to read the original file (an image as an image, audio as audio), send it as a [`file` part](./agents.md#file-parts) of a generation instead.
 
 `file_id` is unique across documents; ingesting an already-ingested file returns `409 FILE_ALREADY_INGESTED`. Use [Re-ingesting a Document](#re-ingesting-a-document) to re-chunk or recover it; upload a new copy to ingest the same source under another path.
 

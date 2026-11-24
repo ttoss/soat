@@ -119,7 +119,7 @@ describe('validateRequestBody', () => {
 
     // A union of closed objects still names a finite field set: a key no branch
     // declares is unknown whichever branch the body means. Which branch it is
-    // stays the handler's question, so a key any branch declares passes.
+    // is the full schema's question, so a key any branch declares is known.
     test('rejects a key no branch of a union declares', () => {
       const error = expectThrows(() => {
         return validateRequestBody({
@@ -131,14 +131,16 @@ describe('validateRequestBody', () => {
       expect(error.meta).toEqual({ unknown_fields: ['bogus'] });
     });
 
-    test('accepts fields drawn from more than one branch of a union', () => {
-      expect(() => {
+    test('reads fields drawn from more than one branch of a union as known', () => {
+      const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
           path: '/sessions/:session_id/messages',
           body: { message: 'hi', document_id: 'doc_1' },
         });
-      }).not.toThrow();
+      });
+      expect(error.meta).not.toHaveProperty('unknown_fields');
+      expect(error.message).toMatch(/must match exactly one schema in oneOf/);
     });
 
     test('rejects a key no scorer branch declares, with its indexed path', () => {
@@ -313,15 +315,17 @@ describe('validateRequestBody', () => {
     });
 
     test('leaves collection fields to their routes', () => {
-      // `parameters` takes a JSON-encoded string, which the route parses.
+      // `scorers` is route-owned: the route names each scorer's own error.
       expect(() => {
         return validateRequestBody({
           method: 'post',
-          path: '/tools',
+          path: '/evals',
           body: {
-            name: 'echo',
-            type: 'client',
-            parameters: '{"type":"object"}',
+            name: 'eval',
+            dataset_id: 'dst_1',
+            agent_id: 'agent_1',
+            policy_ids: ['pol_1'],
+            scorers: 'exact_match',
           },
         });
       }).not.toThrow();
@@ -391,8 +395,8 @@ describe('validateRequestBody', () => {
       expect(() => {
         return validateRequestBody({
           method: 'post',
-          path: generate,
-          body: { messages: [{ role: 'system', content: 'x' }] },
+          path: '/formations/validate',
+          body: { template: 42 },
         });
       }).not.toThrow();
     });

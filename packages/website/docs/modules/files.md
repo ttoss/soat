@@ -123,12 +123,25 @@ List queries apply policy filters in SQL. SRN syntax: [IAM](./iam.md); worked ex
 
 A two-step flow, the local-storage equivalent of an S3 presigned URL, usable from any client:
 
-1. **Request a token** — [`POST /api/v1/files/presigned-url`](/docs/api/files/create-presigned-url) returns a single-use `upload_token`, `upload_url`, and `expires_at` (15 minutes). Authenticated; requires `files:UploadFile`. `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`) unless `SOAT_BASE_URL` is set, in which case it is **absolute** (see [Configuration](#configuration)).
-2. **Upload the content** — [`POST /api/v1/files/upload/{token}`](/docs/api/files/upload-file-with-token) writes the file and returns the record. **No bearer credential**; the token is the credential. Accepts `multipart/form-data` (field `file`) or JSON with base64 `content`.
+1. **Request a token** — [`POST /api/v1/files/presigned-url`](/docs/api/files/create-presigned-url) returns a single-use `upload_token`, `upload_url`, `max_bytes`, `content_type` and `expires_at` (15 minutes). Authenticated; requires `files:UploadFile`. The token fixes where the file lands (`prefix`, `filename`), its byte ceiling (`max_bytes`, by default and at most `FILE_UPLOAD_MAX_BYTES`) and, when `content_type` is given, its type.
+2. **Upload the content** — **no bearer credential**; the token is the credential. Either form writes the file and returns the record:
+   - [`PUT /api/v1/files/upload/{token}`](/docs/api/files/put-file-with-token): the request body is the file, streamed to storage. It must carry `Content-Length`. This is what a browser sends: `fetch(upload_url, { method: 'PUT', body: file })`.
+   - [`POST /api/v1/files/upload/{token}`](/docs/api/files/upload-file-with-token): `multipart/form-data` (field `file`) or JSON with base64 `content`.
 
-The authorizing party (step 1) need not transfer the bytes (step 2): hand the token to a browser, worker, or CLI.
+The authorizing party (step 1) need not transfer the bytes (step 2): hand the token to a browser, worker, or CLI, and the browser uploads without holding a project credential.
 
-A token is invalidated after one successful upload: reuse `409`, expired `410`, unknown `404`.
+`upload_url` is this server's own route: **relative** (`/api/v1/files/upload/upt_xxx`) unless `SOAT_BASE_URL` is set, then **absolute**. A deployment that serves the route elsewhere, such as a gateway in front of the server, sets `FILES_UPLOAD_URL_TEMPLATE` and every `upload_url` is built from it (see [Configuration](#configuration)).
+
+| Refusal                                                                               | Status | Token afterwards |
+| ------------------------------------------------------------------------------------- | ------ | ---------------- |
+| Unknown token (`UPLOAD_TOKEN_NOT_FOUND`)                                              | `404`  | —                |
+| Already used (`UPLOAD_TOKEN_USED`)                                                    | `409`  | used             |
+| Expired (`UPLOAD_TOKEN_EXPIRED`)                                                      | `410`  | expired          |
+| `PUT` without `Content-Length` (`UPLOAD_LENGTH_REQUIRED`)                             | `411`  | usable           |
+| Over `max_bytes` or the deployment ceiling (`UPLOAD_TOO_LARGE`, `meta.limit`)         | `413`  | usable           |
+| Content type other than the token's (`UPLOAD_CONTENT_TYPE_MISMATCH`, `meta.expected`) | `415`  | usable           |
+
+The size and type are checked before the token is consumed, so a refused upload can be retried with the same token. A `PUT` is refused on its `Content-Length` before the body is read. An upload whose body breaks off mid-transfer stores nothing and consumes the token.
 
 ### Downloading from a tool
 
@@ -147,17 +160,18 @@ curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx
 
 ## Configuration
 
-| Environment Variable        | Required    | Description                                                                                                                                                                                      |
-| --------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `FILES_STORAGE_PROVIDER`    | No          | Storage backend: `local` (default) or `s3`. Selects where new files are written.                                                                                                                 |
-| `FILES_STORAGE_DIR`         | For `local` | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. Required when the provider is `local`.                                                   |
-| `FILES_S3_BUCKET`           | For `s3`    | Name of the S3 bucket that stores file objects. Required when the provider is `s3`.                                                                                                              |
-| `FILES_S3_REGION`           | No          | AWS region of the bucket. Falls back to `AWS_REGION` if unset.                                                                                                                                   |
-| `FILES_S3_KEY_PREFIX`       | No          | Key prefix prepended to every object, to namespace files within a shared bucket (e.g. `soat/`).                                                                                                  |
-| `FILES_S3_ENDPOINT`         | No          | Custom endpoint URL for S3-compatible stores (e.g. MinIO, Cloudflare R2). Omit for AWS S3.                                                                                                       |
-| `FILES_S3_FORCE_PATH_STYLE` | No          | Set to `true` to use path-style bucket addressing (required by some S3-compatible stores).                                                                                                       |
-| `FILE_UPLOAD_MAX_BYTES`     | No          | Ceiling on a multipart upload, in bytes. Defaults to `26214400` (25 MB). A larger body is refused with `UPLOAD_TOO_LARGE` (`413`) while it is still streaming, so nothing is buffered or stored. |
-| `SOAT_BASE_URL`             | No          | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed.   |
+| Environment Variable        | Required    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FILES_STORAGE_PROVIDER`    | No          | Storage backend: `local` (default) or `s3`. Selects where new files are written.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `FILES_STORAGE_DIR`         | For `local` | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. Required when the provider is `local`.                                                                                                                                                                                                                                                                                                                              |
+| `FILES_S3_BUCKET`           | For `s3`    | Name of the S3 bucket that stores file objects. Required when the provider is `s3`.                                                                                                                                                                                                                                                                                                                                                                                         |
+| `FILES_S3_REGION`           | No          | AWS region of the bucket. Falls back to `AWS_REGION` if unset.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `FILES_S3_KEY_PREFIX`       | No          | Key prefix prepended to every object, to namespace files within a shared bucket (e.g. `soat/`).                                                                                                                                                                                                                                                                                                                                                                             |
+| `FILES_S3_ENDPOINT`         | No          | Custom endpoint URL for S3-compatible stores (e.g. MinIO, Cloudflare R2). Omit for AWS S3.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `FILES_S3_FORCE_PATH_STYLE` | No          | Set to `true` to use path-style bucket addressing (required by some S3-compatible stores).                                                                                                                                                                                                                                                                                                                                                                                  |
+| `FILE_UPLOAD_MAX_BYTES`     | No          | Ceiling on an upload, in bytes, and on an upload token's `max_bytes`. Defaults to `26214400` (25 MB). A larger body is refused with `UPLOAD_TOO_LARGE` (`413`) while it is still streaming, so nothing is stored. A multipart upload is spooled to the server's temp directory (a raw-body `PUT` streams straight to the backend) (`TMPDIR`) and streamed to the backend, so memory stays flat and the temp directory needs room for this many bytes per concurrent upload. |
+| `SOAT_BASE_URL`             | No          | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed.                                                                                                                                                                                                                                                                              |
+| `FILES_UPLOAD_URL_TEMPLATE` | No          | Template every upload token's `upload_url` is built from, for a deployment serving the token route elsewhere (e.g. `https://gateway.example.com/v1/projects/{project_id}/files/upload/{token}`). `{token}` is required, or the server does not boot; `{project_id}` is the token's project. Unset, `upload_url` is this server's own route.                                                                                                                                 |
 
 AWS credentials for `s3` resolve through the standard AWS SDK chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, shared profile, or instance/task role).
 
@@ -289,11 +303,12 @@ if (error) throw new Error(JSON.stringify(error));
 TOKEN=$(curl -s -X POST https://api.example.com/api/v1/files/presigned-url \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"proj_ABC","prefix":"/documents","filename":"report.pdf"}' | jq -r .upload_token)
+  -d '{"project_id":"proj_ABC","prefix":"/documents","filename":"report.pdf","content_type":"application/pdf","max_bytes":104857600}' | jq -r .upload_token)
 
-# Step 2 — upload the file (token is the credential, no Authorization header)
-curl -X POST "https://api.example.com/api/v1/files/upload/$TOKEN" \
-  -F "file=@report.pdf"
+# Step 2 — upload the file as the body (token is the credential, no Authorization header)
+curl -X PUT "https://api.example.com/api/v1/files/upload/$TOKEN" \
+  -H "Content-Type: application/pdf" \
+  --data-binary "@report.pdf"
 ```
 
 </TabItem>

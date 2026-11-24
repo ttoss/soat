@@ -40,6 +40,3 @@ const scheduler = createScheduler({
  * injected `now`).
  */
 export const startContentRetentionScheduler = scheduler.start;
-
-/** Stops the retention sweep timer (graceful shutdown / test teardown). */
-export const stopContentRetentionScheduler = scheduler.stop;

@@ -186,6 +186,8 @@ With `on_item_error: "collect"`, a failed item's entry is an error in its origin
 { "error": { "code": "ORCHESTRATION_NESTED_RUN_FAILED", "message": "..." }, "orchestration_run_id": "..." }
 ```
 
+A failed child run files no [exception](./exceptions.md): under `collect` its entry in `results` is the record; under `fail` the parent run fails and files the one `run_failed`.
+
 A child run that could not be started at all, such as one past the [nesting depth bound](#nesting-depth), fails the node in either mode.
 
 ```json

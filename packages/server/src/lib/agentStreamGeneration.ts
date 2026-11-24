@@ -39,6 +39,7 @@ import {
   buildGenerationErrorPayload,
   toProviderDomainError,
 } from './providerError';
+import type { ReplayedWindow } from './replayRefusal';
 import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
@@ -256,6 +257,8 @@ type StreamRunArgs = {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   provenance: GenerationProvenance;
+  /** The conversation positions the turn replays; `null` when it replays none. */
+  replayed: ReplayedWindow | null;
   /** The request's own cancellation, beside the segment's. */
   abortSignal?: AbortSignal;
 };
@@ -294,6 +297,7 @@ const settleStreamedClientCalls = (args: {
     toolContext: run.toolContext ?? null,
     remainingDepth: run.remainingDepth ?? null,
     provenance: run.provenance,
+    replayed: run.replayed,
   });
 };
 

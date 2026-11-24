@@ -609,7 +609,17 @@ export const ERROR_CODES = {
   UPLOAD_TOO_LARGE: {
     httpStatus: 413,
     description:
-      'The multipart upload exceeds the byte ceiling this deployment accepts (`FILE_UPLOAD_MAX_BYTES`, 25 MB by default). The request is refused while the body is still streaming, so nothing was stored. Send a smaller file, or ask the operator to raise the ceiling.',
+      "The upload exceeds its byte ceiling: the upload token's `max_bytes`, or the deployment's (`FILE_UPLOAD_MAX_BYTES`, 25 MB by default). `meta.limit` is the ceiling that refused it. Nothing was stored, and a token refused this way can still be used.",
+  },
+  UPLOAD_CONTENT_TYPE_MISMATCH: {
+    httpStatus: 415,
+    description:
+      "The upload's content type is not the one its upload token fixes (`meta.expected`). Nothing was stored, and the token can still be used.",
+  },
+  UPLOAD_LENGTH_REQUIRED: {
+    httpStatus: 411,
+    description:
+      'A raw-body upload must declare its size in `Content-Length`; a chunked body is refused before it is read.',
   },
   FILE_TOO_LARGE_FOR_SYNC: {
     httpStatus: 413,

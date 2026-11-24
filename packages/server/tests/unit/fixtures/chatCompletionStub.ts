@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -133,4 +134,52 @@ export const toolResultsOf = (request: ChatRequest): string[] => {
         ? message.content
         : JSON.stringify(message.content);
     });
+};
+
+type ScriptedToolCall = { name: string; arguments: Record<string, unknown> };
+
+const carriesMarker = (args: { request: ChatRequest; marker: string }) => {
+  return JSON.stringify(args.request.messages).includes(args.marker);
+};
+
+/**
+ * Tool calls scripted for one turn: a request gets them only while it carries
+ * that turn's marker and no tool result yet. A stub is shared by a file's
+ * tests, so a turn still running in the background (an approval's
+ * continuation) must neither take the next turn's script nor be read as it.
+ */
+export const createTurnScript = () => {
+  let armed: { marker: string; toolCalls: ScriptedToolCall[] } | null = null;
+  return {
+    /** Scripts the next turn; its user message must carry the marker. */
+    arm: (toolCalls: ScriptedToolCall[]): string => {
+      const marker = `[turn ${randomUUID()}]`;
+      armed = { marker, toolCalls };
+      return marker;
+    },
+    reply: (request: ChatRequest): ChatReply => {
+      const answered = request.messages.some((message) => {
+        return message.role === 'tool';
+      });
+      if (
+        armed &&
+        armed.toolCalls.length > 0 &&
+        !answered &&
+        carriesMarker({ request, marker: armed.marker })
+      ) {
+        return { toolCalls: armed.toolCalls };
+      }
+      return { content: 'Done.' };
+    },
+  };
+};
+
+/** The requests of the turn whose messages carry `marker`, in order. */
+export const requestsOfTurn = (args: {
+  requests: ChatRequest[];
+  marker: string;
+}): ChatRequest[] => {
+  return args.requests.filter((request) => {
+    return carriesMarker({ request, marker: args.marker });
+  });
 };

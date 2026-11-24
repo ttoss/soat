@@ -294,7 +294,7 @@ describe('a sub-agent generation that outlives its builtin call', () => {
         return message.role === 'tool';
       });
       const text = contentText(toolMessage ?? {});
-      expect(text).toContain('SYSTEM_MESSAGE_NOT_ALLOWED');
+      expect(text).toContain('VALIDATION_FAILED');
       expect(text).not.toContain('timed out');
     } finally {
       process.env.SOAT_TOOL_CALL_TIMEOUT_MS = HANDOFF_AFTER_MS;

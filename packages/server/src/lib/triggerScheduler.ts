@@ -115,9 +115,3 @@ const scheduler = createScheduler({
  * never keeps the process alive, and repeated calls are a no-op.
  */
 export const startTriggerScheduler = scheduler.start;
-
-/**
- * Stops the background trigger scheduler loop if it is running. Used for
- * graceful shutdown and to tear the timer down in tests.
- */
-export const stopTriggerScheduler = scheduler.stop;

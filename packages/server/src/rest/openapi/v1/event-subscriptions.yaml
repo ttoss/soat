@@ -36,7 +36,8 @@ components:
     EventDataFilter:
       description: >-
         A filter the event's `data` must match: a top-level field to a value,
-        or to `in`, `gt`, `gte`, `lt`, `lte`. An absent field never matches.
+        or to `in`, `gt`, `gte`, `lt`, `lte`, `prefix`. An absent field never
+        matches.
       allOf:
         - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
     AttachedPolicyIds:

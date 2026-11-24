@@ -60,6 +60,10 @@ export class UploadToken extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare contentType?: string;
 
+  /** Upload ceiling in bytes. BIGINT reads back as a string. */
+  @Column({ type: DataType.BIGINT, allowNull: true })
+  declare maxBytes: string | null;
+
   @Column({ type: DataType.DATE, allowNull: false })
   declare expiresAt: Date;
 

@@ -1353,6 +1353,21 @@
       "hint": "The file's media type has no parser on this deployment. Convert it to a supported type, or add an ingestion rule that does.",
       "routes": []
     },
+    "UPLOAD_CONTENT_TYPE_MISMATCH": {
+      "http_status": 415,
+      "hint": "Send the upload with `Content-Type` set to `meta.expected`, or request a token for the type you have from POST /api/v1/files/presigned-url.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/files/presigned-url"
+        }
+      ]
+    },
+    "UPLOAD_LENGTH_REQUIRED": {
+      "http_status": 411,
+      "hint": "Send the body with a `Content-Length` header (a file or buffer body sets it); a streamed body of unknown length cannot be bounded before it is stored.",
+      "routes": []
+    },
     "UPLOAD_TOKEN_EXPIRED": {
       "http_status": 410,
       "hint": "Request a fresh upload token; tokens are single-use and short-lived by design.",
@@ -1370,8 +1385,13 @@
     },
     "UPLOAD_TOO_LARGE": {
       "http_status": 413,
-      "hint": "The upload is over this deployment's byte ceiling. Send a smaller file, or ask the operator to raise `FILE_UPLOAD_MAX_BYTES`.",
-      "routes": []
+      "hint": "Send a file within `meta.limit`. For a larger one, request a token with a larger `max_bytes` from POST /api/v1/files/presigned-url, up to the deployment ceiling an operator sets in `FILE_UPLOAD_MAX_BYTES`.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/files/presigned-url"
+        }
+      ]
     },
     "VALIDATION_FAILED": {
       "http_status": 400,
@@ -1439,8 +1459,16 @@
       "hint": "The resource existed and is gone for good. Create a new one; retrying against this id will keep failing.",
       "routes": []
     },
+    "411": {
+      "hint": "Send the request with a `Content-Length` header; this route bounds the body by its declared size before reading it.",
+      "routes": []
+    },
     "413": {
       "hint": "The payload exceeds the accepted size. Send less in one request, or use the upload flow for large bodies.",
+      "routes": []
+    },
+    "415": {
+      "hint": "Send the body with the content type the operation accepts; the message names it.",
       "routes": []
     },
     "422": {

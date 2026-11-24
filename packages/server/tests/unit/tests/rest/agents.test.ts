@@ -110,10 +110,9 @@ describe('Agents', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/JSON object/);
     });
 
-    test('coerces JSON-encoded string parameters to an object', async () => {
+    test('refuses a JSON-encoded string for parameters', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({
@@ -123,11 +122,8 @@ describe('Agents', () => {
           parameters: JSON.stringify({ type: 'object', properties: {} }),
         });
 
-      expect(response.status).toBe(201);
-      expect(response.body.parameters).toEqual({
-        type: 'object',
-        properties: {},
-      });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('creates an agent tool with required fields', async () => {
@@ -554,7 +550,7 @@ describe('Agents', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('INVALID_OUTPUT_SCHEMA');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('creates an agent with an ephemeral inline tool, echoed back but not persisted as a Tool', async () => {

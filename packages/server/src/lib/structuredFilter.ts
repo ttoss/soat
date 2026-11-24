@@ -19,6 +19,9 @@ import { isPlainObject } from './plainObject';
  * return each row whose field holds unrelated text. The guard and the
  * comparison are one expression per bound, so neither can be evaluated without
  * the other.
+ *
+ * A prefix asks the same way: only a string field is compared, and the operand
+ * is literal text, never a pattern.
  */
 
 type Scalar = string | number | boolean | null;
@@ -37,12 +40,23 @@ const RANGE_OPERATORS: Record<RangeOperator, symbol> = {
 
 const IN_OPERATOR = 'in';
 
-const OPERATOR_NAMES = [...Object.keys(RANGE_OPERATORS), IN_OPERATOR];
+const PREFIX_OPERATOR = 'prefix';
+
+const OPERATOR_NAMES = [
+  ...Object.keys(RANGE_OPERATORS),
+  PREFIX_OPERATOR,
+  IN_OPERATOR,
+];
+
+/** One condition on a field; every condition on a field must hold. */
+type Condition =
+  | { operator: RangeOperator; value: Orderable }
+  | { operator: typeof PREFIX_OPERATOR; value: string };
 
 type FieldFilter =
   | { kind: 'eq'; value: Scalar }
   | { kind: 'in'; values: Scalar[] }
-  | { kind: 'range'; bounds: { operator: RangeOperator; value: Orderable }[] };
+  | { kind: 'conditions'; conditions: Condition[] };
 
 export type StructuredFilter = Record<string, FieldFilter>;
 
@@ -86,28 +100,53 @@ const readIn = (args: {
   return { kind: 'in', values };
 };
 
-const readRange = (args: {
+const readCondition = (args: {
+  name: string;
+  field: string;
+  key: string;
+  operand: unknown;
+}): Condition => {
+  const { name, field, key, operand } = args;
+  if (key === PREFIX_OPERATOR) {
+    if (typeof operand !== 'string') {
+      return refuse(
+        `${name} filter '${field}': prefix matches the start of a string, so it takes a string.`,
+        field
+      );
+    }
+    return { operator: PREFIX_OPERATOR, value: operand };
+  }
+  if (!isRangeOperator(key)) {
+    return refuse(
+      `${name} filter '${field}': '${key}' is not an operator. Use one of: ${OPERATOR_NAMES.join(', ')}.`,
+      field
+    );
+  }
+  if (typeof operand !== 'string' && typeof operand !== 'number') {
+    return refuse(
+      `${name} filter '${field}': ${key} compares against a string or a number.`,
+      field
+    );
+  }
+  return { operator: key, value: operand };
+};
+
+const readConditions = (args: {
   name: string;
   field: string;
   operators: Record<string, unknown>;
 }): FieldFilter => {
-  const bounds: { operator: RangeOperator; value: Orderable }[] = [];
-  for (const [key, operand] of Object.entries(args.operators)) {
-    if (!isRangeOperator(key)) {
-      return refuse(
-        `${args.name} filter '${args.field}': '${key}' is not an operator. Use one of: ${OPERATOR_NAMES.join(', ')}.`,
-        args.field
-      );
-    }
-    if (typeof operand !== 'string' && typeof operand !== 'number') {
-      return refuse(
-        `${args.name} filter '${args.field}': ${key} compares against a string or a number.`,
-        args.field
-      );
-    }
-    bounds.push({ operator: key, value: operand });
-  }
-  return { kind: 'range', bounds };
+  return {
+    kind: 'conditions',
+    conditions: Object.entries(args.operators).map(([key, operand]) => {
+      return readCondition({
+        name: args.name,
+        field: args.field,
+        key,
+        operand,
+      });
+    }),
+  };
 };
 
 const readFieldFilter = (args: {
@@ -143,7 +182,7 @@ const readFieldFilter = (args: {
       value: args.value[IN_OPERATOR],
     });
   }
-  return readRange({
+  return readConditions({
     name: args.name,
     field: args.field,
     operators: args.value,
@@ -257,6 +296,59 @@ const boundWhere = (args: {
   };
 };
 
+/** `%`, `_` and the escape character itself, read literally by `LIKE`. */
+const likeLiteral = (value: string): string => {
+  return value.replace(/[\\%_]/g, (char) => {
+    return `\\${char}`;
+  });
+};
+
+/**
+ * A prefix, fenced like a bound: only a field holding a string is compared,
+ * and `LIKE` reads the operand literally (backslash is its default escape).
+ */
+const prefixWhere = (args: {
+  column: string;
+  field: string;
+  value: string;
+}) => {
+  const source = {
+    sql: `${args.column} -> ${db.sequelize.escape(args.field)}`,
+  };
+  return {
+    [Op.and]: [
+      db.sequelize.where(jsonbFn({ fn: 'typeof', source }), 'string'),
+      db.sequelize.where(
+        db.sequelize.literal(
+          `${args.column} ->> ${db.sequelize.escape(args.field)}`
+        ),
+        { [Op.like]: `${likeLiteral(args.value)}%` }
+      ),
+    ],
+  };
+};
+
+const conditionWhere = (args: {
+  column: string;
+  field: string;
+  condition: Condition;
+}) => {
+  const { condition } = args;
+  if (condition.operator === PREFIX_OPERATOR) {
+    return prefixWhere({
+      column: args.column,
+      field: args.field,
+      value: condition.value,
+    });
+  }
+  return boundWhere({
+    column: args.column,
+    field: args.field,
+    operator: condition.operator,
+    value: condition.value,
+  });
+};
+
 /**
  * ANDs compiled fragments — either bag's — into a where a caller is already
  * building.
@@ -313,9 +405,11 @@ export const compileStructuredWhere = (args: {
           }),
         });
         break;
-      case 'range':
-        for (const bound of filter.bounds) {
-          fragments.push(boundWhere({ ...bound, column: args.column, field }));
+      case 'conditions':
+        for (const condition of filter.conditions) {
+          fragments.push(
+            conditionWhere({ column: args.column, field, condition })
+          );
         }
         break;
     }
@@ -344,6 +438,18 @@ const isOrderable = (value: unknown): value is Orderable => {
   return typeof value === 'string' || typeof value === 'number';
 };
 
+const conditionHolds = (args: { condition: Condition; actual: unknown }) => {
+  const { condition, actual } = args;
+  if (condition.operator === PREFIX_OPERATOR) {
+    return typeof actual === 'string' && actual.startsWith(condition.value);
+  }
+  return (
+    isOrderable(actual) &&
+    typeof actual === jsonTypeOf(condition.value) &&
+    boundHolds({ operator: condition.operator, actual, value: condition.value })
+  );
+};
+
 const fieldMatches = (args: { filter: FieldFilter; actual: unknown }) => {
   const { filter, actual } = args;
   if (filter.kind === 'eq') return actual === filter.value;
@@ -352,20 +458,16 @@ const fieldMatches = (args: { filter: FieldFilter; actual: unknown }) => {
       return value === actual;
     });
   }
-  return filter.bounds.every((bound) => {
-    return (
-      isOrderable(actual) &&
-      typeof actual === jsonTypeOf(bound.value) &&
-      boundHolds({ operator: bound.operator, actual, value: bound.value })
-    );
+  return filter.conditions.every((condition) => {
+    return conditionHolds({ condition, actual });
   });
 };
 
 /**
  * The filter asked of one in-memory object, with the meaning the compiled
- * query gives it: equality and `in` compare a top-level value exactly, and an
- * ordering holds only on a value of its operand's type. An absent field never
- * matches.
+ * query gives it: equality and `in` compare a top-level value exactly, an
+ * ordering holds only on a value of its operand's type, and a prefix only on a
+ * string. An absent field never matches.
  */
 export const matchesStructuredFilter = (args: {
   filter: StructuredFilter | undefined;

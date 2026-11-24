@@ -45,6 +45,7 @@ import {
 import type { GenerationProvenance } from './generationProvenance';
 import { segmentCallOptions } from './generationSegment';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { isInputBoundaryRefusal } from './modelInputBoundary';
 import {
   collectSystemInstructions,
   type Instructions,
@@ -57,10 +58,12 @@ import {
 } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
 import { isModelAnswerFault } from './providerError';
+import type { ReplayedWindow } from './replayRefusal';
 import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
 } from './textEncodedToolCall';
+import { clientToolResultOutput } from './toolResultFiles';
 import {
   replaceTraceSteps,
   type TraceStepTarget,
@@ -96,13 +99,7 @@ const buildToolResultMessage = (result: ClientToolResult) => {
         type: 'tool-result' as const,
         toolCallId: result.toolCallId,
         toolName: result.toolName,
-        output: {
-          type: 'text' as const,
-          value:
-            typeof result.output === 'string'
-              ? result.output
-              : JSON.stringify(result.output),
-        },
+        output: clientToolResultOutput(result.output),
       },
     ],
   };
@@ -265,6 +262,7 @@ const settlePartition = async (args: {
       toolContext: args.pending.toolContext ?? null,
       remainingDepth: args.save.remainingDepth ?? null,
       provenance: args.pending.provenance,
+      replayed: args.pending.replayed,
     });
   }
   // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutually recursive with resolveToolOutputsResult
@@ -293,6 +291,7 @@ const buildInitialResumePending = (args: {
   initialSteps: unknown[];
   toolContext?: Record<string, string> | null;
   provenance: GenerationProvenance;
+  replayed: ReplayedWindow | null;
 }): PendingGeneration => {
   return {
     agentId: args.agentId,
@@ -318,6 +317,7 @@ const buildInitialResumePending = (args: {
     projectPublicId: args.typedAgent.project.publicId,
     toolContext: args.toolContext ?? undefined,
     provenance: args.provenance,
+    replayed: args.replayed,
   };
 };
 
@@ -348,6 +348,8 @@ export const settleInitialClientCalls = async (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   provenance: GenerationProvenance;
+  /** The conversation positions the turn replays; `null` when it replays none. */
+  replayed: ReplayedWindow | null;
 }): Promise<GenerationResult | null> => {
   const partition = await partitionClientCalls({
     steps: args.result.steps,
@@ -371,6 +373,7 @@ export const settleInitialClientCalls = async (args: {
       initialSteps: args.result.steps,
       toolContext: args.toolContext,
       provenance: args.provenance,
+      replayed: args.replayed,
     }),
     partition,
     save: {
@@ -399,6 +402,7 @@ const resolveGenerationResult = async (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   provenance: GenerationProvenance;
+  replayed: ReplayedWindow | null;
 }): Promise<GenerationResult> => {
   const paused = await settleInitialClientCalls({
     ...args,
@@ -457,8 +461,8 @@ const callWithToolFallback = async (args: {
       throw error;
     }
     // The fallback is for a provider that chokes on our tool *definitions*,
-    // never for the model's own answer.
-    if (isModelAnswerFault(error)) throw error;
+    // never for the model's own answer or input this API refused.
+    if (isModelAnswerFault(error) || isInputBoundaryRefusal(error)) throw error;
     log(
       'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
       args.callArgs.agentId,
@@ -547,6 +551,7 @@ export const runNonStreamGeneration = async (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   provenance: GenerationProvenance;
+  replayed: ReplayedWindow | null;
 }): Promise<GenerationResult> => {
   const system = collectSystemInstructions(args.allMessages);
   const nonSystemMessages = withoutSystemMessages(args.allMessages);

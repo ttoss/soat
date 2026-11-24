@@ -267,7 +267,11 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   UNSUPPORTED_FILE_TYPE:
     "The file's media type has no parser on this deployment. Convert it to a supported type, or add an ingestion rule that does.",
   UPLOAD_TOO_LARGE:
-    "The upload is over this deployment's byte ceiling. Send a smaller file, or ask the operator to raise `FILE_UPLOAD_MAX_BYTES`.",
+    'Send a file within `meta.limit`. For a larger one, request a token with a larger `max_bytes` from {{POST /files/presigned-url}}, up to the deployment ceiling an operator sets in `FILE_UPLOAD_MAX_BYTES`.',
+  UPLOAD_CONTENT_TYPE_MISMATCH:
+    'Send the upload with `Content-Type` set to `meta.expected`, or request a token for the type you have from {{POST /files/presigned-url}}.',
+  UPLOAD_LENGTH_REQUIRED:
+    'Send the body with a `Content-Length` header (a file or buffer body sets it); a streamed body of unknown length cannot be bounded before it is stored.',
   FILE_TOO_LARGE_FOR_SYNC:
     'The file is too large to parse inside the request. Call the same operation without `wait=true` and poll the handle it returns.',
   BOOTSTRAP_ALREADY_COMPLETED:
@@ -306,7 +310,9 @@ export const STATUS_RESOLUTIONS: Record<number, string> = {
   404: 'Check the id and the project the credential can see, then retry. Listing the collection confirms whether the resource exists.',
   409: 'The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.',
   410: 'The resource existed and is gone for good. Create a new one; retrying against this id will keep failing.',
+  411: 'Send the request with a `Content-Length` header; this route bounds the body by its declared size before reading it.',
   413: 'The payload exceeds the accepted size. Send less in one request, or use the upload flow for large bodies.',
+  415: 'Send the body with the content type the operation accepts; the message names it.',
   422: 'The request was accepted and then could not be carried out. The failure is in the work, not the request shape — read `meta` and the trace for which step failed before retrying.',
   429: 'Back off and retry after the window named by `Retry-After`.',
   500: 'Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.',

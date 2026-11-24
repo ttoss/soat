@@ -180,7 +180,7 @@ A turn that replays a conversation (a session or conversation turn) and that the
 | `context_too_long` | `413`, or a `4xx` saying the prompt exceeds the model's context window | Lower the session's `max_context_messages`, fork, or start a new session |
 | `request_refused` | any other `4xx` | Read the failed generation |
 
-`meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status and error text: neither reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) reports its refusal as `AI_PROVIDER_ERROR`.
+`meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status and error text: neither reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) is refused the same way and names the window the paused turn replayed, also after a restart.
 
 ### Metadata
 

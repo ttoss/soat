@@ -3,6 +3,56 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.128.0](https://github.com/ttoss/soat/compare/v0.127.0...v0.128.0) (2026-11-24)
+
+* feat(files)!: upload tokens fix size and type, and take a raw-body PUT (#2154) ([c095306](https://github.com/ttoss/soat/commit/c09530634e8bcf0e982c614f1e85c82f94bc7e9b)), closes [#2154](https://github.com/ttoss/soat/issues/2154)
+* refactor(api)!: a system role and a malformed session message answer from the schema (#2147) ([c9f609d](https://github.com/ttoss/soat/commit/c9f609df3c2430ee679184d40ba95ee47e84928e)), closes [#2147](https://github.com/ttoss/soat/issues/2147)
+* fix(formations)!: a plan refuses missing parameters as its deploy does (#2137) ([d730680](https://github.com/ttoss/soat/commit/d730680195b71f0a32b939b9e0dae3e262cfab90)), closes [#2137](https://github.com/ttoss/soat/issues/2137)
+* fix(shares)!: a vendor failure on a shared provider is SHARED_AI_PROVIDER_ERROR (#2135) ([40abe89](https://github.com/ttoss/soat/commit/40abe8911aa8dc100e497fe06c40c802f16bb443)), closes [#2135](https://github.com/ttoss/soat/issues/2135)
+* feat(evals)!: every scorer has a name, and the name is the outcome key (#1556 Part 6, names) (#2116) ([0036341](https://github.com/ttoss/soat/commit/003634173c9dc98c325e2e7485ac74866e68c410)), closes [#1556](https://github.com/ttoss/soat/issues/1556) [#2116](https://github.com/ttoss/soat/issues/2116) [#1556](https://github.com/ttoss/soat/issues/1556) [#1556](https://github.com/ttoss/soat/issues/1556)
+
+### Bug Fixes
+
+* **admission:** a relayed refusal carries the deciding party's own hint ([#2143](https://github.com/ttoss/soat/issues/2143)) ([d8bd347](https://github.com/ttoss/soat/commit/d8bd347e75e43d3395bbb1026d586e37b1ced695))
+* **agents:** output_schema answer under a forced tool_choice fails MAX_STEPS_REACHED ([#2136](https://github.com/ttoss/soat/issues/2136)) ([1595f6f](https://github.com/ttoss/soat/commit/1595f6fcfba6584572e7f76fac677e91a6d46f5c))
+* **exceptions:** a child run's failure files no run_failed exception ([#2159](https://github.com/ttoss/soat/issues/2159)) ([df8e802](https://github.com/ttoss/soat/commit/df8e802936a64574154ee898b063a5a59676291c))
+* **formations:** a nested template object's required field is checked at validation ([#2141](https://github.com/ttoss/soat/issues/2141)) ([6f5bdb5](https://github.com/ttoss/soat/commit/6f5bdb55e2c66c292d17a5e4fbb926ea50934232))
+* **formations:** a rolled-back update re-sends the write-only value the last deploy left ([#2132](https://github.com/ttoss/soat/issues/2132)) ([4af86d4](https://github.com/ttoss/soat/commit/4af86d4167b55082fdc01d2fba0534c0a5d0d7ec))
+* **formations:** a trigger's event_data accepts a ref, param or sub ([#2155](https://github.com/ttoss/soat/issues/2155)) ([347f1a6](https://github.com/ttoss/soat/commit/347f1a65fb4c23c21e53d662d6725cde6626df8a))
+* **iam:** a denial by an IAM token's bound names the principal it was minted for ([#2130](https://github.com/ttoss/soat/issues/2130)) ([69f9dee](https://github.com/ttoss/soat/commit/69f9dee5c4a30ac3ce6aa6a083644aff7f194127))
+* **secrets:** an unset or malformed SECRETS_ENCRYPTION_KEY stops boot ([#2134](https://github.com/ttoss/soat/issues/2134)) ([dd4066d](https://github.com/ttoss/soat/commit/dd4066db3775e6d16dcfb5fbf38c6e6476a79769))
+* **server:** name only accepted forms in project policy Allow refusals ([#2131](https://github.com/ttoss/soat/issues/2131)) ([243a6d2](https://github.com/ttoss/soat/commit/243a6d2fbc70aa2d756fb43954d68b73d4bc3246))
+* **sessions:** a refused continuation of a paused turn reports replay_refused ([#2153](https://github.com/ttoss/soat/issues/2153)) ([906c031](https://github.com/ttoss/soat/commit/906c031e2d141b94255e6ee4d870cbafbd3333dc))
+* **sessions:** a vendor refusal over the context window is context_too_long ([#2139](https://github.com/ttoss/soat/issues/2139)) ([7067cb6](https://github.com/ttoss/soat/commit/7067cb6395961fbf1b8e5e50b9c7123e6c03aa85))
+
+### Features
+
+* **agents:** a tool result that returns a file reaches the model as a native file part ([#2157](https://github.com/ttoss/soat/issues/2157)) ([6c81d46](https://github.com/ttoss/soat/commit/6c81d46e8ccdd8c4403e7eb1430093e4fe6eac2a))
+* **openapi:** each operation declares the error codes it can raise ([#2144](https://github.com/ttoss/soat/issues/2144)) ([984c2dc](https://github.com/ttoss/soat/commit/984c2dcd4003691745513cc211fa0650c43071b0))
+* **server:** structured filter gains a prefix operator ([#2160](https://github.com/ttoss/soat/issues/2160)) ([044ef40](https://github.com/ttoss/soat/commit/044ef4091fa793c4da8984ec978b8ff1d38b4be9))
+
+### Performance Improvements
+
+* **files:** stream uploads to storage instead of buffering them in memory ([#2148](https://github.com/ttoss/soat/issues/2148)) ([58af5af](https://github.com/ttoss/soat/commit/58af5af98956c0230f79053aa4e3f80719c39096))
+
+### BREAKING CHANGES
+
+* `POST /formations/plan` answers `400
+  FORMATION_MISSING_PARAMETERS` for a parameter with no value, no `default`
+  and (with `formation_id`) no `use_previous_value`.
+* a `role: "system"` entry in `POST /agents/{agent_id}/generate`
+  `messages`, or as the `role` of `POST /conversations/{conversation_id}/messages`,
+  answers `400 VALIDATION_FAILED` instead of `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
+  `POST /sessions/{session_id}/messages` answers a body matching no variant with
+  the schema's `VALIDATION_FAILED` message.
+* a token's content_type is enforced on upload: an upload of
+  another type is refused with 415 UPLOAD_CONTENT_TYPE_MISMATCH instead of being
+  stored with its own type.
+* a vendor failure on a provider another project shares
+  answers and records `SHARED_AI_PROVIDER_ERROR` instead of `AI_PROVIDER_ERROR`.
+* creating or updating an eval with a scorer that has no
+  name is 400 VALIDATION_FAILED.
+
 # [0.127.0](https://github.com/ttoss/soat/compare/v0.126.1...v0.127.0) (2026-11-23)
 
 ### Bug Fixes

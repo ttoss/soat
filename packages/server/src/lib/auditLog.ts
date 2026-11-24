@@ -28,13 +28,6 @@ const AUDIT_ENTRY_CREATED_EVENT = 'audit_entries.created';
 
 export type AuditPrincipalType = ActingPrincipalType;
 
-/** One authorization decision recorded during a request. */
-export type AuditCheck = {
-  action: string;
-  resource: string | null;
-  allowed: boolean;
-};
-
 type AuditEntryRow = InstanceType<(typeof db)['AuditEntry']> & {
   project?: InstanceType<(typeof db)['Project']> | null;
 };

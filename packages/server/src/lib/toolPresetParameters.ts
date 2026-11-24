@@ -26,8 +26,6 @@ export const mergePresetParameters = (args: {
   return { ...input, ...(args.presetParameters ?? {}) };
 };
 
-export type PresetParametersByAction = Record<string, Record<string, unknown>>;
-
 /**
  * The presets one `builtin` action takes: the tool's, with the keys of the
  * action's own entry in `preset_parameters_by_action` over them.

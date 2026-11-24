@@ -196,9 +196,7 @@ export const recordContinuationFailure = async (args: {
     usage: sumStepUsage(args.steps) ?? usageFromFailure(args.error),
     reportedModelId: reportedModelOfSteps(args.steps),
     stepsAlreadySpent: args.pending.stepCount,
-    // A paused turn does not keep its replayed window, so a refusal of its
-    // continuation stays `AI_PROVIDER_ERROR`.
-    replayed: null,
+    replayed: args.pending.replayed,
   });
 };
 

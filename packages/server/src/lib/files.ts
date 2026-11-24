@@ -29,6 +29,7 @@ import { hasPolicyConstraints } from './policyWhere';
 import { projectScopeWhere } from './projectScope';
 import { assertStorageQuota } from './quotaStorage';
 import { emitLoadedRecordEvent } from './recordEvents';
+import { bufferBody, type StorageBody } from './storageBody';
 import { nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, mergeTags } from './tags';
 
@@ -162,7 +163,7 @@ export const getFile = async (args: { id: string }) => {
 export const uploadFile = async (args: {
   projectId: number;
   projectPublicId?: string;
-  fileBuffer: Buffer;
+  body: StorageBody;
   /** Directory prefix (defaults to `/`). The key is `prefix` + `/` + filename. */
   prefix?: string;
   /** The original filename (download name) and the key's leaf segment. */
@@ -175,7 +176,7 @@ export const uploadFile = async (args: {
 }) => {
   await assertStorageQuota({
     projectId: args.projectId,
-    addedBytes: args.fileBuffer.length,
+    addedBytes: args.body.size,
   });
 
   const provider = getActiveStorageProvider();
@@ -202,7 +203,7 @@ export const uploadFile = async (args: {
       path: normalizedPath,
       filename,
       contentType: args.contentType,
-      size: args.fileBuffer.length,
+      size: args.body.size,
       storageType: provider.storageType,
       storagePath: '', // filled in below after we know the publicId
       metadata: args.metadata,
@@ -214,9 +215,10 @@ export const uploadFile = async (args: {
   await persistFileBytes({
     provider,
     file,
+    row: 'new',
     projectPublicId,
     category,
-    buffer: args.fileBuffer,
+    body: args.body,
     contentType: args.contentType,
   });
 
@@ -260,9 +262,10 @@ export const upsertFileByPath = async (args: {
     await persistFileBytes({
       provider: getStorageProvider({ storageType: existing.storageType }),
       file: existing,
+      row: 'existing',
       projectPublicId: args.projectPublicId,
       category,
-      buffer: args.fileBuffer,
+      body: bufferBody({ buffer: args.fileBuffer }),
       contentType: args.contentType,
     });
     return mapFile(existing);
@@ -284,9 +287,10 @@ export const upsertFileByPath = async (args: {
   await persistFileBytes({
     provider,
     file,
+    row: 'new',
     projectPublicId: args.projectPublicId,
     category,
-    buffer: args.fileBuffer,
+    body: bufferBody({ buffer: args.fileBuffer }),
     contentType: args.contentType,
   });
 

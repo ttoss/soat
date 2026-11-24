@@ -70,6 +70,3 @@ const scheduler = createScheduler({
  * timer is unref'd and repeated calls are a no-op.
  */
 export const startApprovalScheduler = scheduler.start;
-
-/** Stops the approvals expiry sweeper loop (graceful shutdown / test teardown). */
-export const stopApprovalScheduler = scheduler.stop;

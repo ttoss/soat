@@ -369,6 +369,26 @@ describe('Event trigger dispatch', () => {
       expect(await listFirings({ triggerId: otherData })).toHaveLength(0);
     }, 60_000);
 
+    test('an event_data prefix narrows which events fire it', async () => {
+      const emitter = await createEmitter();
+      const otherPrefix = await createEventTrigger({
+        targetId: inertOrchestrationId,
+        eventPattern: emitter.eventName,
+        filter: { event_data: { reason: { prefix: 'oth' } } },
+      });
+      const matching = await createEventTrigger({
+        targetId: inertOrchestrationId,
+        eventPattern: emitter.eventName,
+        filter: { event_data: { reason: { prefix: 'cy' } } },
+      });
+
+      await emitter.emit();
+
+      const [firing] = await waitForFirings({ triggerId: matching, count: 1 });
+      expect(firing.status).toBe('completed');
+      expect(await listFirings({ triggerId: otherPrefix })).toHaveLength(0);
+    }, 60_000);
+
     test('a trigger whose input cannot satisfy its target is skipped, the others still run', async () => {
       // An `input_schema` the event envelope cannot satisfy fails before any
       // firing row is written.

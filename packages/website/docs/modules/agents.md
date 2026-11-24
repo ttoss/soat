@@ -199,16 +199,7 @@ The note is derived per segment, so a generation that parks for a [client tool](
 
 ### Instructions
 
-`instructions` is the only system prompt. A `role: "system"` entry in `messages` is refused:
-
-```json
-{
-  "error": {
-    "code": "SYSTEM_MESSAGE_NOT_ALLOWED",
-    "message": "A system message is not accepted in `messages`. An agent's system prompt is its `instructions` field — set it with `update-agent --instructions`, or create a separate agent."
-  }
-}
-```
+`instructions` is the only system prompt. A `role: "system"` entry in `messages` is refused with `400 VALIDATION_FAILED`, the request schema allowing `user` and `assistant` only.
 
 Caller-supplied system content could replace the operator's prompt (the AI SDK's `allowSystemInMessages` stays `false`; [retrieved knowledge](#knowledge-config) is never injected as `system` either). Instructions reach the provider as its `instructions` argument, never a message; `update-agent --instructions` archives a new [version](#agent-version). [Chats](./chats.md#system-instructions) take per-call system content through `instructions`, never `messages`.
 
@@ -408,6 +399,22 @@ A `file` part sends a stored [file](./files.md) to the model in its own media ty
 - The generation stores the reference, not the bytes: the file is read from storage each time the turn calls the model, so deleting the file fails a turn that still names it.
 - A model whose AI provider [declares its input modalities](./ai-providers.md#input-modalities) and lacks the part's (`image`, `audio`, `video`, or `file` for any other type) refuses it with `400 INPUT_MODALITY_UNSUPPORTED` before the provider is called; `meta.model` and `meta.modalities` name what was refused. A model that declares nothing is sent the part, and a provider that cannot read it answers with its own error.
 - To have the model read a file as text, [ingest](./documents.md) it and send a `document` part.
+
+#### Tool results that return files
+
+A tool call's result reaches the model as file parts when it is exactly `{ "type": "file", "file_id" }`, or an array of `{ "type": "text", "text" }` and `{ "type": "file", "file_id" }` parts holding at least one file. Any other output, including an object with more keys, reaches the model as JSON.
+
+```json
+[
+  { "type": "text", "text": "Page one:" },
+  { "type": "file", "file_id": "file_V1StGXR8Z5jdHi6B" }
+]
+```
+
+- A server tool's (`http`, `mcp`, `builtin`, `pipeline`) file is read under the turn's authority, which needs `files:DownloadFile` on it; a file it may not read, or one outside the project the generation runs in, reaches the model as the tool's error.
+- A `client` tool's file, sent to [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), is read as the submitter: a file outside the project is `404 RESOURCE_NOT_FOUND`, one the submitter may not download `403`, and the generation stays paused.
+- The result stores the reference; the bytes are read each time the turn calls the model, and the model's [input modalities](./ai-providers.md#input-modalities) gate them as they do a `file` part (`400 INPUT_MODALITY_UNSUPPORTED`).
+- A provider whose API carries tool results only as text receives the file base64-encoded in that text.
 
 ### Streaming
 
@@ -639,7 +646,7 @@ A completed non-streaming generation returns the parsed value as `output.object`
 
 #### Answering at `max_steps`
 
-The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer, and an answer the model gives anyway on the last step is refused), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
+The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer, and an answer the model gives anyway on the last step is refused), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `400 VALIDATION_FAILED` at create/update.
 
 #### The schema is enforced, not advisory
 

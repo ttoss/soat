@@ -49,6 +49,3 @@ const scheduler = createScheduler({
 
 /** Starts the interrupted-decision sweep. Called once from `server.ts`. */
 export const startDecisionsScheduler = scheduler.start;
-
-/** Stops the sweep (graceful shutdown / test teardown). */
-export const stopDecisionsScheduler = scheduler.stop;

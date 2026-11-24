@@ -24,6 +24,21 @@ import type { WorkAuthority } from './workAuthority';
 
 const noopLogToolCallingError = () => {};
 
+/** The one refusal for a missing action: it names the request field. */
+const requireAction = (args: {
+  action: string | undefined;
+  type: 'builtin' | 'mcp';
+}): string => {
+  if (!args.action) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `\`action\` is required for ${args.type} tools.`,
+      { field: 'action' }
+    );
+  }
+  return args.action;
+};
+
 export const callHttpTool = (
   tool: CallableToolDefinition,
   mergedInput: Record<string, unknown>,
@@ -103,13 +118,10 @@ export const callSoatTool = async (
     typeof args.mergedInput['action'] === 'string'
       ? args.mergedInput['action']
       : undefined;
-  const action = args.action ?? inputAction;
-  if (!action) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'operationId is required for builtin tools.'
-    );
-  }
+  const action = requireAction({
+    action: args.action ?? inputAction,
+    type: 'builtin',
+  });
   if (!tool.actions?.includes(action)) {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -245,13 +257,8 @@ export const prepareMcpCall = async (args: {
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
 }): Promise<PreparedMcpCall> => {
-  const { tool, action } = args;
-  if (!action) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'action is required for mcp tools.'
-    );
-  }
+  const { tool } = args;
+  const action = requireAction({ action: args.action, type: 'mcp' });
   assertActionBound({ tool, action });
   const mcpConfig = tool.mcp as {
     url: string;
