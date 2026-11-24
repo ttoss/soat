@@ -425,6 +425,148 @@ describe('Exceptions', () => {
       expect(match.severity).toBe('critical');
     });
 
+    describe('child runs', () => {
+      const createOrchestration = async (body: Record<string, unknown>) => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({ project_id: projectId, edges: [], ...body });
+        expect(res.status).toBe(201);
+        return res.body.id as string;
+      };
+
+      // Its tool is deleted after the graph is written, so every run fails.
+      const createFailingChild = async (name: string) => {
+        const toolRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: `${name}Tool`,
+            type: 'http',
+            execute: { url: 'https://example.com/gone', method: 'POST' },
+          });
+        const childId = await createOrchestration({
+          name,
+          nodes: [
+            {
+              id: 'boom',
+              type: 'tool',
+              tool_id: toolRes.body.id,
+              input_mapping: {},
+            },
+          ],
+        });
+        await authenticatedTestClient(adminToken).delete(
+          `/api/v1/tools/${toolRes.body.id}`
+        );
+        return childId;
+      };
+
+      const startRun = async (args: {
+        orchestrationId: string;
+        input: Record<string, unknown>;
+      }) => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: args.orchestrationId,
+            input: args.input,
+          });
+        return res.body;
+      };
+
+      const childRunIds = async (parentRunId: string) => {
+        const rows = await db.OrchestrationRun.findAll({
+          where: { parentRunId },
+        });
+        expect(rows.length).toBeGreaterThan(0);
+        return rows.map((row) => {
+          return row.publicId as string;
+        });
+      };
+
+      const exceptionsOnRuns = async (runIds: string[]) => {
+        const res = await listExceptions('&kind=run_failed');
+        return res.body.data.filter(
+          (e: { orchestration_run_id: string | null }) => {
+            return runIds.includes(e.orchestration_run_id ?? '');
+          }
+        );
+      };
+
+      test('a loop child that fails under on_item_error collect files no run_failed exception', async () => {
+        const childId = await createFailingChild('Collected Child');
+        const parentId = await createOrchestration({
+          name: 'Exception Collecting Loop',
+          nodes: [
+            {
+              id: 'fan',
+              type: 'loop',
+              orchestration_id: childId,
+              collection: 'state.input.items',
+              on_item_error: 'collect',
+              state_mapping: {
+                'state.failed_count': { var: 'output.failed_count' },
+              },
+            },
+          ],
+        });
+
+        const run = await startRun({
+          orchestrationId: parentId,
+          input: { items: [1, 2] },
+        });
+        expect(run.status).toBe('completed');
+        expect(run.state.failed_count).toBe(2);
+
+        // A root failure emitted after the children settled bounds the wait.
+        const sentinel = 'run_loop_sentinel';
+        emitEvent({
+          id: randomUUID(),
+          type: 'orchestration_runs.failed',
+          projectId: projectInternalId,
+          projectPublicId: projectId,
+          resourceType: 'orchestration_run',
+          resourceId: sentinel,
+          data: { id: sentinel, parent_orchestration_run_id: null },
+          timestamp: new Date().toISOString(),
+        });
+        expect(
+          await waitForException((e) => {
+            return e.orchestration_run_id === sentinel;
+          })
+        ).not.toBeNull();
+
+        expect(await exceptionsOnRuns(await childRunIds(run.id))).toEqual([]);
+      });
+
+      test('a child failure its parent propagates files one run_failed exception, on the parent', async () => {
+        const childId = await createFailingChild('Propagated Child');
+        const parentId = await createOrchestration({
+          name: 'Exception Delegating Parent',
+          nodes: [
+            {
+              id: 'delegate',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+            },
+          ],
+        });
+
+        const run = await startRun({ orchestrationId: parentId, input: {} });
+        expect(run.status).toBe('failed');
+
+        const parentException = await waitForException((e) => {
+          return e.kind === 'run_failed' && e.orchestration_run_id === run.id;
+        });
+        expect(parentException).not.toBeNull();
+        expect(parentException.detail).toMatchObject({
+          code: 'RESOURCE_NOT_FOUND',
+        });
+        expect(await exceptionsOnRuns(await childRunIds(run.id))).toEqual([]);
+      });
+    });
+
     test('a guardrail tripwire on a tool node files a guardrail_tripwire exception', async () => {
       // class B with a guard that always fails, no escalate → tripwire.
       const guardrailRes = await authenticatedTestClient(userToken)
