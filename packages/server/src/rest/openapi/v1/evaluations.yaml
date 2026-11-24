@@ -1336,9 +1336,13 @@ paths:
             Bad request (non-boolean wait, dataset empty or over the synchronous
             cap, unknown agent_version, invalid baseline, scorers no longer valid
             against the agent, a `tool_context` key that cannot become a header),
-            or `PROBE_FAILED`: a probe of the eval's `criteria` did not hold, so
-            the run is settled `failed` before its first item and
-            `error.meta` names it (`eval_run_id`, `failed`)
+            or, on a synchronous run, `PROBE_FAILED`: a probe of the eval's
+            `criteria` did not hold, so the run is settled `failed` before its
+            first item and `error.meta` names it (`eval_run_id`, `failed`). A
+            scorer that cannot grade a probe fails the run with its own error
+            instead. A queued run grades its probes in the worker before any
+            item and settles `failed` (`eval_runs.failed`) when one does not
+            hold
           content:
             application/json:
               schema:
@@ -2354,6 +2358,14 @@ components:
           type: string
           description: The output the scorers grade
           example: Found order 48213, shipped on Monday.
+        object:
+          description: >-
+            The structured output the scorers grade, as a generation's
+            `output.object`: what `output_schema` validates and `json_logic`
+            reads as `object`. Any JSON value; absent grades text alone.
+        metadata:
+          type: object
+          description: The item metadata the scorers see, as `item.metadata` in `json_logic`
         passed:
           type: boolean
           description: The verdict every scorer of the criterion must give

@@ -14,6 +14,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { openRunProbeGate } from './evaluationProbeRuns';
 import {
   ackEvalItemTask,
   claimEvalItemTasks,
@@ -187,6 +188,26 @@ const loadRunnable = async (args: {
 };
 
 /**
+ * First item of a queued run: the run is now genuinely under way. Conditional
+ * on `queued`, since a sibling item may have settled the run since our read.
+ * A run with probes is stamped started once they hold (`openRunProbeGate`).
+ * Returns whether the run is still live.
+ */
+const markRunUnderWay = async (args: {
+  context: LoadedRun;
+}): Promise<boolean> => {
+  const { run, definition } = args.context;
+  if (run.status !== 'queued') return true;
+  const probed = Array.isArray(definition?.criteria);
+  await db.EvalRun.update(
+    { status: 'running', startedAt: probed ? null : new Date() },
+    { where: { id: run.id as number, status: 'queued' } }
+  );
+  await run.reload();
+  return isLive(run.status);
+};
+
+/**
  * Executes one claimed item task.
  *
  * A run that is no longer live (cancelled between the claim and here) drops the
@@ -215,20 +236,20 @@ const handleEvalItemTask = async (args: {
     return;
   }
 
-  // First item of a queued run: the run is now genuinely under way. Conditional
-  // on `queued`, since a sibling item may have settled the run since our read.
-  if (run.status === 'queued') {
-    await db.EvalRun.update(
-      { status: 'running', startedAt: run.startedAt ?? new Date() },
-      { where: { id: run.id as number, status: 'queued' } }
-    );
-    await run.reload();
-    if (!isLive(run.status)) return;
-  }
+  if (!(await markRunUnderWay({ context }))) return;
 
   const runnable = await loadRunnable({ context });
   if (!runnable) return;
   const { definition, agent } = runnable;
+  const gateOpen = await openRunProbeGate({
+    run,
+    evalPublicId: context.evalPublicId,
+    projectId: context.projectId,
+    definition,
+    agentOutputSchema: agent.outputSchema,
+    deciderVersions: run.deciderVersions,
+  });
+  if (!gateOpen) return;
   const item = await db.DatasetItem.findByPk(args.task.datasetItemId as number);
   /* istanbul ignore next -- deleting a dataset item cascades its task away
      before it can be claimed. */

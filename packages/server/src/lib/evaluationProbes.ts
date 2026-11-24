@@ -43,10 +43,20 @@ export type ProbeRunners = Pick<
 
 type Probe = {
   output: string;
+  /** The structured output, as `output.object` of a generation. */
+  object: unknown;
   passed: boolean;
   input: unknown;
   expectedOutput: string | null;
+  metadata: unknown;
 };
+
+/**
+ * What a scorer that cannot grade a probe does: `record` it on the probe,
+ * which then does not hold (the dry run reports it), or `throw` it, so a run
+ * fails on the scorer's own error rather than blaming the probe.
+ */
+export type ProbeErrors = 'record' | 'throw';
 
 type CriterionProbes = { name: string; scorers: unknown[]; probes: Probe[] };
 
@@ -57,8 +67,10 @@ const probesOf = (value: unknown): Probe[] => {
     return [
       {
         output: probe.output,
+        object: probe.object,
         passed: probe.passed === true,
         input: probe.input ?? null,
+        metadata: probe.metadata ?? null,
         expectedOutput:
           typeof probe.expected_output === 'string'
             ? probe.expected_output
@@ -99,6 +111,7 @@ const runProbe = async (args: {
   index: number;
   agentOutputSchema: unknown;
   runners: ProbeRunners;
+  errors: ProbeErrors;
 }): Promise<ProbeResult> => {
   const { criterion, probe } = args;
   const base = {
@@ -110,9 +123,12 @@ const runProbe = async (args: {
     const scores = await scoreOutput({
       scorers: criterion.scorers,
       input: probe.input,
-      output: { content: probe.output },
+      output: {
+        content: probe.output,
+        ...(probe.object !== undefined && { object: probe.object }),
+      },
       expectedOutput: probe.expectedOutput,
-      itemMetadata: null,
+      itemMetadata: probe.metadata,
       agentOutputSchema: args.agentOutputSchema,
       ...args.runners,
     });
@@ -121,6 +137,7 @@ const runProbe = async (args: {
     });
     return { ...base, passed, held: passed === probe.passed, scores };
   } catch (error) {
+    if (args.errors === 'throw') throw error;
     return {
       ...base,
       passed: false,
@@ -137,6 +154,7 @@ export const runProbes = async (args: {
   scorers: unknown[];
   agentOutputSchema: unknown;
   runners: ProbeRunners;
+  errors: ProbeErrors;
 }): Promise<ProbeReport> => {
   const probes: ProbeResult[] = [];
   for (const criterion of criterionProbes(args)) {
@@ -148,6 +166,7 @@ export const runProbes = async (args: {
           index,
           agentOutputSchema: args.agentOutputSchema,
           runners: args.runners,
+          errors: args.errors,
         })
       );
     }

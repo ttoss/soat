@@ -681,7 +681,7 @@ to the one it measures:
 | --- | --- |
 | Every scorer sits in exactly one criterion | a scorer in none or in two, or an unknown scorer name: `400 VALIDATION_FAILED` |
 | `name` is unique within the eval; `description` is a sentence a reviewer reads | `400 VALIDATION_FAILED` |
-| `probes` holds at least one probe that passes and one that fails; each is `{ output, passed, note?, input?, expected_output? }` | `400 VALIDATION_FAILED` |
+| `probes` holds at least one probe that passes and one that fails; each is `{ output, passed, object?, metadata?, note?, input?, expected_output? }` | `400 VALIDATION_FAILED` |
 
 An item passes a criterion when every scorer the criterion binds passed it. A run copies
 `criteria` into its `definition`, reports each criterion in `aggregate_scores.criteria`
@@ -694,15 +694,21 @@ keeps them; a scorer edit that leaves a criterion naming a missing scorer is ref
 eval without `criteria` reports none.
 
 A probe holds when its criterion's verdict on it (every scorer the criterion binds passed)
-is the `passed` it declares. A run grades every probe after its row exists and before its
-first item, queued or not; one that does not hold settles the run `failed` and the start
-answers `400 PROBE_FAILED`, whose `meta` names the run (`eval_run_id`) and each probe in
-`failed` (`criterion`, `index`, `expected`, `passed`, and `error` when a scorer could not
-grade it). [`POST /api/v1/evals/{eval_id}/probes`](/docs/api/evaluations/check-eval-probes)
+is the `passed` it declares. The scorers grade `output` as the text, `object` as the
+structured output (`output_schema`, and `object` in `json_logic`) and `metadata` as
+`item.metadata`. Every run grades its probes before its first item:
+
+| Run | Probe that does not hold | Scorer that cannot grade a probe |
+| --- | --- | --- |
+| `wait: true` | the run settles `failed`; `400 PROBE_FAILED`, `meta` naming the run (`eval_run_id`) and each probe in `failed` (`criterion`, `index`, `expected`, `passed`) | the run settles `failed`; the scorer's own error |
+| `wait: false` | answers `201 queued`; its first task grades the probes in the worker while the other items wait, then the run settles `failed` (`eval_runs.failed`) | the run settles `failed` (`eval_runs.failed`) |
+
+[`POST /api/v1/evals/{eval_id}/probes`](/docs/api/evaluations/check-eval-probes)
 (`evaluations:RunEval`) grades them the same way and returns the report,
-`{ passed, probes: [{ criterion, index, expected, passed, held, scores }] }`, without
-creating a run. Probes run under the authority a run of the eval holds and are metered as
-its scorers are; an eval write never runs them.
+`{ passed, probes: [{ criterion, index, expected, passed, held, scores, error? }] }`, without
+creating a run; there a scorer that cannot grade a probe is reported as its `error`. Probes
+run under the authority a run of the eval holds and are metered as its scorers are; an
+eval write never runs them.
 
 ### The claim
 

@@ -424,19 +424,20 @@ export const startEvalRun = async (args: {
     wait
   );
 
-  await assertRunProbesHold({ run, plan, authority });
-
   if (wait) {
-    await executeSyncRun({
-      projectIds: args.projectIds,
-      plan,
-      run,
-      toolContext,
-      authority,
-    });
+    if (await assertRunProbesHold({ run, plan, authority })) {
+      await executeSyncRun({
+        projectIds: args.projectIds,
+        plan,
+        run,
+        toolContext,
+        authority,
+      });
+    }
   } else {
     await enqueueEvalItemTasks({
       evalRunId: run.id as number,
+      start: plan.definition.criteria === null ? 'due' : 'held',
       datasetItemIds: plan.items.map((item) => {
         return item.id as number;
       }),

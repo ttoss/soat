@@ -21,6 +21,8 @@ export type CriterionRollup = {
 const CRITERION_FIELDS = new Set(['name', 'description', 'scorers', 'probes']);
 const PROBE_FIELDS = new Set([
   'output',
+  'object',
+  'metadata',
   'passed',
   'note',
   'input',
@@ -40,6 +42,28 @@ const unknownField = (args: {
     : `${args.path}.${extra} is not a known field.`;
 };
 
+const optionalProbeFieldProblem = (args: {
+  probe: Record<string, unknown>;
+  path: string;
+}): string | null => {
+  const { probe, path } = args;
+  if (probe.note !== undefined && typeof probe.note !== 'string') {
+    return `${path}.note must be a string.`;
+  }
+  if (probe.metadata !== undefined && !isPlainObject(probe.metadata)) {
+    return `${path}.metadata must be an object.`;
+  }
+  const expected = probe.expected_output;
+  if (
+    expected !== undefined &&
+    expected !== null &&
+    typeof expected !== 'string'
+  ) {
+    return `${path}.expected_output must be a string or null.`;
+  }
+  return null;
+};
+
 const probeProblem = (args: {
   probe: unknown;
   path: string;
@@ -54,18 +78,7 @@ const probeProblem = (args: {
   if (typeof probe.passed !== 'boolean') {
     return `${path}.passed is required and must be a boolean.`;
   }
-  if (probe.note !== undefined && typeof probe.note !== 'string') {
-    return `${path}.note must be a string.`;
-  }
-  const expected = probe.expected_output;
-  if (
-    expected !== undefined &&
-    expected !== null &&
-    typeof expected !== 'string'
-  ) {
-    return `${path}.expected_output must be a string or null.`;
-  }
-  return null;
+  return optionalProbeFieldProblem({ probe, path });
 };
 
 const probesProblem = (args: {
