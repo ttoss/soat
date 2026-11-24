@@ -26,6 +26,13 @@ paths:
         - Triggers
       summary: List triggers
       operationId: listTriggers
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: triggers:ListTriggers
       x-iam-resource-type: trigger
       parameters:
@@ -93,6 +100,30 @@ paths:
         - Triggers
       summary: Create a trigger
       operationId: createTrigger
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - EVENTS_UNREADABLE
+        - FORBIDDEN
+        - INVALID_CRON_EXPRESSION
+        - INVALID_EVENT_PATTERN
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - NAME_CONFLICT
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - TRIGGER_ACTION_NOT_ALLOWED
+        - TRIGGER_INTERVAL_BELOW_FLOOR
+        - TRIGGER_TARGET_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: triggers:CreateTrigger
       x-iam-resource-type: trigger
       requestBody:
@@ -151,6 +182,11 @@ paths:
         - Triggers
       summary: Count triggers
       operationId: countTriggers
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: triggers:ListTriggers
       x-iam-resource-type: trigger
       parameters:
@@ -221,6 +257,11 @@ paths:
         - Triggers
       summary: Get a trigger
       operationId: getTrigger
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: triggers:GetTrigger
       x-iam-resource-type: trigger
       parameters:
@@ -279,6 +320,29 @@ paths:
         - Triggers
       summary: Update a trigger
       operationId: updateTrigger
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - EVENTS_UNREADABLE
+        - FORBIDDEN
+        - INVALID_CRON_EXPRESSION
+        - INVALID_EVENT_PATTERN
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - NAME_CONFLICT
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - TRIGGER_ACTION_NOT_ALLOWED
+        - TRIGGER_INTERVAL_BELOW_FLOOR
+        - TRIGGER_TARGET_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: triggers:UpdateTrigger
       x-iam-resource-type: trigger
       parameters:
@@ -340,6 +404,11 @@ paths:
         - Triggers
       summary: Delete a trigger
       operationId: deleteTrigger
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: triggers:DeleteTrigger
       x-iam-resource-type: trigger
       parameters:
@@ -394,6 +463,90 @@ paths:
         - Triggers
       summary: Fire a trigger
       operationId: fireTrigger
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EVAL_SCORING_FAILED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_COMPLETED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - TRIGGER_INPUT_INVALID
+        - TRIGGER_NOT_ACTIVE
+        - TRIGGER_RECURSION_FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: triggers:FireTrigger
       x-iam-resource-type: trigger
       parameters:
@@ -463,6 +616,12 @@ paths:
         - Triggers
       summary: Get trigger secret
       operationId: getTriggerSecret
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - TRIGGER_ACTION_NOT_ALLOWED
+        - UNAUTHORIZED
       x-iam-action: triggers:GetTriggerSecret
       x-iam-resource-type: trigger
       x-soat-agent-exclude: true
@@ -515,6 +674,12 @@ paths:
         - Triggers
       summary: Rotate trigger secret
       operationId: rotateTriggerSecret
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - TRIGGER_ACTION_NOT_ALLOWED
+        - UNAUTHORIZED
       x-iam-action: triggers:RotateTriggerSecret
       x-iam-resource-type: trigger
       x-soat-agent-exclude: true
@@ -571,6 +736,13 @@ paths:
         - Triggers
       summary: List trigger firings
       operationId: listTriggerFirings
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: triggers:ListTriggerFirings
       x-iam-resource-type: trigger
       parameters:
@@ -621,6 +793,10 @@ paths:
         - Triggers
       summary: Get a trigger firing
       operationId: getTriggerFiring
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: triggers:GetTriggerFiring
       x-iam-resource-type: triggerFiring
       parameters:

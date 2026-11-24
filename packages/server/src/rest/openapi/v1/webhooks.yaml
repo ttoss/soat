@@ -26,6 +26,13 @@ paths:
         - Webhooks
       summary: List webhooks
       operationId: listWebhooks
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: webhooks:ListWebhooks
       x-iam-resource-type: webhook
       parameters:
@@ -73,6 +80,19 @@ paths:
         - Webhooks
       summary: Create a webhook
       operationId: createWebhook
+      x-raises:
+        - ACTION_NOT_HELD
+        - API_KEY_PROJECT_SCOPE
+        - EVENTS_UNREADABLE
+        - FORBIDDEN
+        - INVALID_EVENT_PATTERN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: webhooks:CreateWebhook
       x-iam-resource-type: webhook
       requestBody:
@@ -124,6 +144,11 @@ paths:
         - Webhooks
       summary: Get a webhook
       operationId: getWebhook
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: webhooks:GetWebhook
       x-iam-resource-type: webhook
       parameters:
@@ -169,6 +194,18 @@ paths:
         - Webhooks
       summary: Update a webhook
       operationId: updateWebhook
+      x-raises:
+        - ACTION_NOT_HELD
+        - EVENTS_UNREADABLE
+        - FORBIDDEN
+        - INVALID_EVENT_PATTERN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: webhooks:UpdateWebhook
       x-iam-resource-type: webhook
       parameters:
@@ -230,6 +267,11 @@ paths:
         - Webhooks
       summary: Delete a webhook
       operationId: deleteWebhook
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: webhooks:DeleteWebhook
       x-iam-resource-type: webhook
       parameters:
@@ -277,6 +319,13 @@ paths:
         - Webhooks
       summary: List webhook deliveries
       operationId: listWebhookDeliveries
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: webhooks:ListWebhookDeliveries
       x-iam-resource-type: webhook
       parameters:
@@ -327,6 +376,11 @@ paths:
         - Webhooks
       summary: Get a delivery
       operationId: getWebhookDelivery
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: webhooks:GetWebhookDelivery
       x-iam-resource-type: webhook
       parameters:
@@ -379,6 +433,11 @@ paths:
         - Webhooks
       summary: Redeliver a webhook delivery
       operationId: redeliverWebhookDelivery
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: webhooks:RedeliverWebhookDelivery
       x-iam-resource-type: webhook
       parameters:
@@ -431,6 +490,11 @@ paths:
         - Webhooks
       summary: Get webhook secret
       operationId: getWebhookSecret
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: webhooks:GetWebhookSecret
       x-iam-resource-type: webhook
       x-soat-agent-exclude: true
@@ -479,6 +543,11 @@ paths:
         - Webhooks
       summary: Rotate webhook secret
       operationId: rotateWebhookSecret
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_DECRYPTABLE
+        - UNAUTHORIZED
       x-iam-action: webhooks:RotateWebhookSecret
       x-iam-resource-type: webhook
       x-soat-agent-exclude: true

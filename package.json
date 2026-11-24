@@ -18,6 +18,7 @@
     "prepare": "husky",
     "docs-lint": "pnpm --filter @soat/cli generate && node scripts/docs-lint.mjs && pnpm --filter @soat/website check-client-examples",
     "test:harness": "node --test \"tests/harness/*.test.mjs\"",
+    "declare-error-codes": "node scripts/declareRouteErrorCodes.mjs",
     "design-bundle": "node scripts/buildDesignBundle.mjs",
     "smoke-tests": "docker compose -f tests/docker-compose.smoke.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from smoke-test",
     "postsmoke-tests": "docker compose -f tests/docker-compose.smoke.yml down --volumes",

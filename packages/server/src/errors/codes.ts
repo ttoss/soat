@@ -67,7 +67,7 @@ export const ERROR_CODES = {
   AI_PROVIDER_ERROR: {
     httpStatus: 502,
     description:
-      'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable).',
+      'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable). `meta.provider_status_code` is the status the provider answered with and `meta.provider_response_body` its body, each when the provider sent one; a forwarding provider keeps the status only. A failed generation adds its `generation_id` and `trace_id`.',
   },
   SHARED_AI_PROVIDER_ERROR: {
     httpStatus: 502,

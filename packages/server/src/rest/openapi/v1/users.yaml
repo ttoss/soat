@@ -28,6 +28,8 @@ paths:
       summary: Get the current authenticated user
       description: Returns the profile of the currently authenticated user
       operationId: getCurrentUser
+      x-raises:
+        - UNAUTHORIZED
       responses:
         '200':
           description: Current user returned successfully
@@ -54,6 +56,11 @@ paths:
       summary: List all users
       description: Returns a list of all users
       operationId: listUsers
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: users:ListUsers
       x-soat-agent-exclude: true
       parameters:
@@ -92,6 +99,9 @@ paths:
       summary: Create a user
       description: Creates a new user in the system
       operationId: createUser
+      x-raises:
+        - FORBIDDEN
+        - UNAUTHORIZED
       x-iam-action: users:CreateUser
       x-soat-agent-exclude: true
       requestBody:
@@ -150,6 +160,10 @@ paths:
       summary: Get a user by ID
       description: Returns the data of a specific user
       operationId: getUser
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: users:GetUser
       x-soat-agent-exclude: true
       parameters:
@@ -193,6 +207,10 @@ paths:
       summary: Delete a user by ID
       description: Deletes a specific user
       operationId: deleteUser
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: users:DeleteUser
       x-soat-agent-exclude: true
       parameters:
@@ -237,6 +255,8 @@ paths:
       summary: Create the first admin user
       description: Creates the first admin user. Returns 409 if any user already exists.
       operationId: bootstrapUser
+      x-raises:
+        - BOOTSTRAP_ALREADY_COMPLETED
       x-soat-agent-exclude: true
       security: []
       requestBody:
@@ -284,6 +304,8 @@ paths:
       summary: Login user
       description: Authenticates a user and returns a JWT token
       operationId: loginUser
+      x-raises:
+        - UNAUTHORIZED
       x-soat-agent-exclude: true
       security: []
       requestBody:
@@ -331,6 +353,15 @@ paths:
       summary: Attach policies to a user
       description: Replaces the user's policy list with the provided policy IDs. Requires admin role.
       operationId: attachUserPolicies
+      x-raises:
+        - ACTION_NOT_HELD
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: users:AttachUserPolicies
       x-soat-agent-exclude: true
       parameters:

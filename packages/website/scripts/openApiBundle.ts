@@ -134,7 +134,8 @@ special-case (401, 403, 429, 500) — is JSON of the same shape:
 \`error.code\` is stable and safe to branch on, and \`error.hint\` says what to do
 about the failure; the full catalog of codes, their
 HTTP statuses and what they mean is in this document's \`x-error-codes\`
-extension and at https://soat.ttoss.dev/errors.json.`;
+extension and at https://soat.ttoss.dev/errors.json; each operation's
+\`x-raises\` lists the codes it can answer.`;
 
 const ERROR_SHAPE_DESCRIPTION =
   'Every 4xx and 5xx response body. `error.code` is a stable identifier safe to branch on; `error.message` is human-readable and may change; `error.hint` says what to do about the failure and `error.docs_url` addresses the reference section for the code; `error.meta` carries per-code context when available.';

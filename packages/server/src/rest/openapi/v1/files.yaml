@@ -26,6 +26,12 @@ paths:
       summary: List all files
       description: Returns a list of all stored files
       operationId: listFiles
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: files:GetFile
       x-iam-resource-type: file
       parameters:
@@ -87,6 +93,18 @@ paths:
       summary: Create a file
       description: Creates a new file record in the system
       operationId: createFile
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: files:CreateFile
       x-iam-resource-type: file
       requestBody:
@@ -164,6 +182,18 @@ paths:
       summary: Upload a file
       description: Uploads a file to the server and stores it in the configured storage directory
       operationId: uploadFile
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: files:UploadFile
       x-iam-resource-type: file
       requestBody:
@@ -246,6 +276,18 @@ paths:
       summary: Upload a file using base64 encoding
       description: Uploads a file to the server using base64-encoded content
       operationId: uploadFileBase64
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: files:UploadFile
       x-iam-resource-type: file
       requestBody:
@@ -305,6 +347,11 @@ paths:
         fully-qualified absolute URL so MCP agents and other clients can POST to
         it without knowing the server base URL in advance.
       operationId: createPresignedUrl
+      x-raises:
+        - FORBIDDEN
+        - RESERVED_PATH
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: files:UploadFile
       x-iam-resource-type: file
       requestBody:
@@ -351,6 +398,18 @@ paths:
         the token is the credential. Accepts either multipart/form-data (field
         `file`) or JSON with a base64-encoded `content` field.
       operationId: uploadFileWithToken
+      x-raises:
+        - FILE_STORAGE_MISCONFIGURED
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UPLOAD_TOKEN_EXPIRED
+        - UPLOAD_TOKEN_NOT_FOUND
+        - UPLOAD_TOKEN_USED
+        - VALIDATION_FAILED
       security: []
       parameters:
         - name: token
@@ -430,6 +489,10 @@ paths:
       summary: Get a file by ID
       description: Returns the data and metadata of a specific file
       operationId: getFile
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: files:GetFile
       x-iam-resource-type: file
       parameters:
@@ -473,6 +536,12 @@ paths:
       summary: Delete a file
       description: Removes a file from the system by ID
       operationId: deleteFile
+      x-raises:
+        - FILE_HAS_DEPENDENTS
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: files:DeleteFile
       x-iam-resource-type: file
       parameters:
@@ -524,6 +593,11 @@ paths:
       summary: Download a file
       description: Streams the file content to the client
       operationId: downloadFile
+      x-raises:
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: files:DownloadFile
       x-iam-resource-type: file
       # Not a tool: a tool result is a JSON value, and this route's is a stream
@@ -579,6 +653,13 @@ paths:
       summary: Update file metadata
       description: Updates the metadata field of a file
       operationId: updateFileMetadata
+      x-raises:
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: files:UpdateFileMetadata
       x-iam-resource-type: file
       parameters:
@@ -651,6 +732,11 @@ paths:
       summary: Download file as base64
       description: Returns the file content encoded as base64
       operationId: downloadFileBase64
+      x-raises:
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: files:DownloadFile
       x-iam-resource-type: file
       parameters:
@@ -712,6 +798,9 @@ paths:
       summary: Get file tags
       description: Returns all tags attached to the file
       operationId: getFileTags
+      x-raises:
+        - RESERVED_PATH
+        - VALIDATION_FAILED
       x-iam-action: files:GetFile
       x-iam-resource-type: file
       parameters:
@@ -750,6 +839,9 @@ paths:
       summary: Replace file tags
       description: Replaces all tags on the file with the provided tags
       operationId: replaceFileTags
+      x-raises:
+        - RESERVED_PATH
+        - VALIDATION_FAILED
       x-iam-action: files:UpdateFileMetadata
       x-iam-resource-type: file
       parameters:
@@ -800,6 +892,9 @@ paths:
       summary: Merge file tags
       description: Merges provided tags into the file's existing tags (existing tags are preserved unless overridden)
       operationId: mergeFileTags
+      x-raises:
+        - RESERVED_PATH
+        - VALIDATION_FAILED
       x-iam-action: files:UpdateFileMetadata
       x-iam-resource-type: file
       parameters:

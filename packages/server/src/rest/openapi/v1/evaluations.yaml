@@ -28,6 +28,12 @@ paths:
       summary: List datasets
       description: Returns the datasets defined in a project
       operationId: listDatasets
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:ListDatasets
       x-iam-resource-type: dataset
       parameters:
@@ -87,6 +93,13 @@ paths:
         never deletes or mutates a dataset item, so erasing a generation cannot
         silently stop a test suite from being runnable.
       operationId: createDataset
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
       requestBody:
@@ -165,6 +178,14 @@ paths:
       summary: Get a dataset
       description: Returns a specific dataset
       operationId: getDataset
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:GetDataset
       x-iam-resource-type: dataset
       parameters:
@@ -212,6 +233,16 @@ paths:
       summary: Update a dataset
       description: Updates a dataset's name and/or description
       operationId: updateDataset
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
       parameters:
@@ -293,6 +324,14 @@ paths:
         runs that already scored those items keep their frozen copies of the
         input and expected output.
       operationId: deleteDataset
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:DeleteDataset
       x-iam-resource-type: dataset
       parameters:
@@ -341,6 +380,16 @@ paths:
       summary: List dataset items
       description: Returns the test cases in a dataset, oldest first
       operationId: listDatasetItems
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:ListDatasets
       x-iam-resource-type: dataset
       parameters:
@@ -398,6 +447,18 @@ paths:
         Adds one test case. `input` is replayed verbatim as the generation's
         messages, so it must be a non-empty array of `{ role, content }`.
       operationId: createDatasetItem
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
       parameters:
@@ -514,6 +575,22 @@ paths:
         it (`409 GENERATION_CONTENT_UNAVAILABLE`). Generations that predate input
         recording answer the same way.
       operationId: createDatasetItemFromGeneration
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_CONTENT_UNAVAILABLE
+        - GENERATION_NOT_COMPLETED
+        - GENERATION_NOT_FOUND
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
       parameters:
@@ -616,6 +693,15 @@ paths:
         Updates a test case. Runs that already scored it are unaffected — each
         result carries its own frozen copy of the input and expected output.
       operationId: updateDatasetItem
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
       parameters:
@@ -701,6 +787,14 @@ paths:
         Deletes a test case. Results of runs that already scored it stay
         readable; their `dataset_item_id` becomes null.
       operationId: deleteDatasetItem
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:CreateDataset
       x-iam-resource-type: dataset
       parameters:
@@ -756,6 +850,12 @@ paths:
       summary: List evals
       description: Returns the evals defined in a project
       operationId: listEvals
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:ListEvals
       x-iam-resource-type: eval
       parameters:
@@ -818,6 +918,20 @@ paths:
         drifting underneath it. Every scorer carries a `name`, unique within
         the eval.
       operationId: createEval
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CreateEval
       x-iam-resource-type: eval
       requestBody:
@@ -932,6 +1046,14 @@ paths:
       summary: Get an eval
       description: Returns a specific eval
       operationId: getEval
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:GetEval
       x-iam-resource-type: eval
       parameters:
@@ -982,6 +1104,20 @@ paths:
         the new agent, since an `output_schema` scorer that was legal against
         the old one may not be.
       operationId: updateEval
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CreateEval
       x-iam-resource-type: eval
       parameters:
@@ -1091,6 +1227,14 @@ paths:
       summary: Delete an eval
       description: Deletes an eval, its runs, and their results
       operationId: deleteEval
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:DeleteEval
       x-iam-resource-type: eval
       parameters:
@@ -1139,6 +1283,16 @@ paths:
       summary: List eval runs
       description: Returns an eval's runs, newest first
       operationId: listEvalRuns
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:ListEvals
       x-iam-resource-type: eval
       parameters:
@@ -1223,6 +1377,79 @@ paths:
         delta over a shifted dataset is therefore never presented as a clean
         comparison.
       operationId: startEvalRun
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EVAL_SCORING_FAILED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_COMPLETED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: evaluations:RunEval
       x-iam-resource-type: eval
       parameters:
@@ -1380,6 +1607,14 @@ paths:
       summary: Get an eval run
       description: Returns a run's status, counts, and aggregate scores
       operationId: getEvalRun
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:GetEval
       x-iam-resource-type: eval
       parameters:
@@ -1435,6 +1670,16 @@ paths:
       summary: List eval run results
       description: Returns the per-item results of a run, oldest first
       operationId: listEvalResults
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:ListEvals
       x-iam-resource-type: eval
       parameters:
@@ -1502,6 +1747,15 @@ paths:
         label is what each scorer's agreement is measured against
         (`GET /api/v1/evals/{eval_id}/runs/{eval_run_id}/calibration`).
       operationId: labelEvalResult
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:LabelEvalResult
       x-iam-resource-type: eval
       x-soat-agent-exclude: true
@@ -1588,6 +1842,14 @@ paths:
       summary: Clear an eval result's label
       description: Removes the label from one result; a result with none is unchanged.
       operationId: clearEvalResultLabel
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:LabelEvalResult
       x-iam-resource-type: eval
       x-soat-agent-exclude: true
@@ -1656,6 +1918,14 @@ paths:
         is a result whose scorer outcome in `scores` differs from its
         `human_label`.
       operationId: getEvalRunCalibration
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: evaluations:GetEval
       x-iam-resource-type: eval
       parameters:
@@ -1723,6 +1993,15 @@ paths:
 
         A run that has already finished is rejected with 400.
       operationId: cancelEvalRun
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: evaluations:CancelEvalRun
       x-iam-resource-type: eval
       parameters:
