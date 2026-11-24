@@ -26,6 +26,7 @@ import {
 } from './generationProvenance';
 import { createGenerationRecord, generations } from './generations';
 import { settleGeneration } from './generationSettle';
+import type { ReplayedWindow } from './replayRefusal';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
 import { type TraceStepTarget, writeTraceSteps } from './traceStepStore';
@@ -242,6 +243,8 @@ type PendingStateDb = {
   rootTraceId: string | null;
   toolContext: Record<string, string> | null;
   remainingDepth: number | null;
+  /** Absent on a pause that kept no window. */
+  replayed?: ReplayedWindow | null;
 };
 
 /**
@@ -339,6 +342,7 @@ const buildPendingFromState = async (args: {
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
     provenance,
+    replayed: args.pendingState.replayed ?? null,
   };
 };
 

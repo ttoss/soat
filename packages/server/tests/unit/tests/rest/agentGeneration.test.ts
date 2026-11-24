@@ -670,6 +670,7 @@ describe('Agent Generation Routes', () => {
       });
       const pending: PendingGeneration = {
         provenance: createGenerationProvenance(),
+        replayed: null,
         agentId,
         projectId: projectDbId,
         projectPublicId,
@@ -838,6 +839,7 @@ describe('Agent Generation Routes', () => {
 
       pendingGenerations.set('gen_foreign_pending', {
         provenance: createGenerationProvenance(),
+        replayed: null,
         agentId,
         projectId: otherProject!.id as number,
         projectPublicId: otherProjectRes.body.id,
@@ -1206,6 +1208,7 @@ describe('Agent Generation Routes', () => {
 
         const pending: PendingGeneration = {
           provenance: createGenerationProvenance(),
+          replayed: null,
           agentId: pausingAgentId,
           projectId: projectDbId,
           projectPublicId,
