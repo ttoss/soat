@@ -2715,8 +2715,9 @@ components:
             `output.object`: what `output_schema` validates and `json_logic`
             reads as `object`. Any JSON value; absent grades text alone.
         metadata:
-          type: object
           description: The item metadata the scorers see, as `item.metadata` in `json_logic`
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
         passed:
           type: boolean
           description: The verdict every scorer of the criterion must give
