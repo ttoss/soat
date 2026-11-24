@@ -55,7 +55,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | ------------------ | -------------- | ----------------------------------------------------------------- |
 | `id`               | string         | Public ID (`orch_run_` prefix)                                    |
 | `orchestration_id` | string         | Parent orchestration                                              |
-| `orchestration_version` | integer \| null | The orchestration version this run executes, fixed when the run started (see [Versioning](#versioning)). `null` for runs created before pinning existed, which execute the live graph |
+| `orchestration_version` | integer | The orchestration version this run executes, fixed when the run started (see [Versioning](#versioning)) |
 | `project_id`       | string         | Owning project                                                    |
 | `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `completed` \| `failed` \| `cancelled` \| `expired` |
 | `state`            | object         | Current mutable execution state                                   |

@@ -93,6 +93,7 @@ describe('Orchestration queue driver conformance', () => {
     const newRunRow = async (): Promise<number> => {
       const run = await db.OrchestrationRun.create({
         orchestrationId: orchestrationPk,
+        orchestrationVersion: 1,
         projectId: projectPk,
         status: 'queued',
         state: {},

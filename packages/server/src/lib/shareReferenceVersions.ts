@@ -112,16 +112,6 @@ type PinSource = {
   versionsOf: (where: VersionWhere) => Promise<number[]>;
 };
 
-const pinsOf = <T>(
-  rows: T[],
-  pin: (row: T) => { resourceId: number; version: number | null }
-): Pin[] => {
-  return rows.flatMap((row) => {
-    const { resourceId, version } = pin(row);
-    return version === null ? [] : [{ resourceId, version }];
-  });
-};
-
 const PIN_SOURCES = {
   /** An open task transitions on its pinned version's machine. */
   workflow: {
@@ -130,12 +120,11 @@ const PIN_SOURCES = {
         where: {
           projectId,
           status: 'open',
-          workflowVersion: { [Op.ne]: null },
         },
         attributes: ['workflowId', 'workflowVersion'],
         group: ['workflowId', 'workflowVersion'],
       });
-      return pinsOf(rows, (row) => {
+      return rows.map((row) => {
         return { resourceId: row.workflowId, version: row.workflowVersion };
       });
     },
@@ -158,12 +147,11 @@ const PIN_SOURCES = {
         where: {
           projectId,
           status: ['queued', 'running', 'sleeping', 'awaiting_input'],
-          orchestrationVersion: { [Op.ne]: null },
         },
         attributes: ['orchestrationId', 'orchestrationVersion'],
         group: ['orchestrationId', 'orchestrationVersion'],
       });
-      return pinsOf(rows, (row) => {
+      return rows.map((row) => {
         return {
           resourceId: row.orchestrationId,
           version: row.orchestrationVersion,
@@ -190,7 +178,7 @@ const PIN_SOURCES = {
         attributes: ['playbookId', 'playbookVersion'],
         group: ['playbookId', 'playbookVersion'],
       });
-      return pinsOf(rows, (row) => {
+      return rows.map((row) => {
         return { resourceId: row.playbookId, version: row.playbookVersion };
       });
     },

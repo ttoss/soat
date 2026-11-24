@@ -157,6 +157,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
   const createRunRow = async (orchPk: number) => {
     return db.OrchestrationRun.create({
       orchestrationId: orchPk,
+      orchestrationVersion: 1,
       projectId: projectPk,
       status: 'running',
       state: {},
@@ -787,6 +788,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       // leaves it after claiming), with a `wake` task enqueued.
       const run = await db.OrchestrationRun.create({
         orchestrationId: orchPk,
+        orchestrationVersion: 1,
         projectId: projectPk,
         status: 'sleeping',
         state: {},
@@ -851,6 +853,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       );
       const run = await db.OrchestrationRun.create({
         orchestrationId: orchPk,
+        orchestrationVersion: 1,
         projectId: projectPk,
         status: 'cancelled',
         state: {},
@@ -890,6 +893,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
     }> => {
       const run = await db.OrchestrationRun.create({
         orchestrationId: simpleOrchPk,
+        orchestrationVersion: 1,
         projectId: projectPk,
         status: 'queued',
         state: {},
@@ -955,6 +959,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       await setLimit(1);
       const run = await db.OrchestrationRun.create({
         orchestrationId: simpleOrchPk,
+        orchestrationVersion: 1,
         projectId: projectPk,
         status: 'queued',
         state: {},
@@ -1026,6 +1031,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       await seedQueuedRun();
       const otherRun = await db.OrchestrationRun.create({
         orchestrationId: simpleOrchPk,
+        orchestrationVersion: 1,
         projectId: otherProject.id as number,
         status: 'queued',
         state: {},

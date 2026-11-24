@@ -1242,6 +1242,7 @@ describe('Projects', () => {
       const orchestrationRun = await db.OrchestrationRun.create({
         projectId: internalProjectId,
         orchestrationId: orchestration.get('id'),
+        orchestrationVersion: 1,
         status: 'queued',
         input: {},
       });

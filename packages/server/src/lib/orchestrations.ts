@@ -191,9 +191,7 @@ export type MappedOrchestrationRun = {
   id: string;
   orchestration_id: string;
   // The orchestration version this run executes, fixed when the run started.
-  // Null for runs created before pinning existed, which execute the live
-  // graph — the only thing there is to fall back to.
-  orchestration_version: number | null;
+  orchestration_version: number;
   project_id: string;
   status: OrchestrationRunStatus;
   state: Record<string, unknown>;

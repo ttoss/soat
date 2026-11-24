@@ -2034,7 +2034,6 @@ components:
           description: Public ID of the parent orchestration.
         orchestration_version:
           type: integer
-          nullable: true
           description: >
             The orchestration version this run executes, fixed when the run
             started. Every later step of the run — the first drive, a wake from
@@ -2042,10 +2041,6 @@ components:
             resolves the graph from this version, so editing the orchestration
             never re-shapes a run already in flight. Fetch the graph it names at
             `GET /api/v1/orchestrations/{orchestration_id}/versions/{version}`.
-
-
-            Null for runs created before pinning existed, which execute the live
-            graph.
           example: 3
         project_id:
           x-soat-ref: projects

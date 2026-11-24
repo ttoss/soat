@@ -28,7 +28,7 @@ export type WorkflowDefinition = {
 /** The pin, as it is stamped on a task row. */
 type PinnedTask = {
   publicId: string;
-  workflowVersion: number | null;
+  workflowVersion: number;
 };
 
 /** The live definition, as persisted on the workflow row (already camelCase). */
@@ -80,18 +80,12 @@ export const findArchivedDefinition = async (args: {
 };
 
 /**
- * The state machine a task must run on: its pinned version's, falling back to
- * the live row when there is no pinned version.
+ * The state machine a task must run on: its pinned version's.
  *
- * The fallback covers one real case — a task created before pinning existed,
- * whose `workflowVersion` is null. The live row is the only machine those tasks
- * ever had, and refusing to transition them would strand every task open
- * across the deploy.
- *
- * A pinned version whose archive row is missing degrades the same way. It is
- * unreachable through the API, so this guards an out-of-band deletion rather
- * than a supported state; refusing instead would turn a bookkeeping
- * inconsistency into a permanently stuck task. The log line names either case.
+ * A pinned version whose archive row is missing degrades to the live row. It
+ * is unreachable through the API, so this guards an out-of-band deletion
+ * rather than a supported state; refusing instead would turn a bookkeeping
+ * inconsistency into a permanently stuck task.
  */
 export const resolveTaskDefinition = async (args: {
   task: PinnedTask;
@@ -105,14 +99,6 @@ export const resolveTaskDefinition = async (args: {
 }): Promise<WorkflowDefinition> => {
   const { task, workflow } = args;
   const version = task.workflowVersion;
-
-  if (version === null || version === undefined) {
-    log(
-      'resolveTaskDefinition: task=%s has no pinned version, using the live definition',
-      task.publicId
-    );
-    return liveDefinition(workflow);
-  }
 
   const archived = await findArchivedDefinition({
     workflowDbId: workflow.id as number,

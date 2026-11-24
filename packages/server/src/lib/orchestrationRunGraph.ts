@@ -74,32 +74,18 @@ const findArchivedGraph = async (args: {
 };
 
 /**
- * The graph a run must execute: its pinned version's, falling back to the live
- * row when there is no pinned version.
+ * The graph a run must execute: its pinned version's.
  *
- * The fallback covers one real case — a run created before pinning existed,
- * whose `orchestrationVersion` is null. The live row is the only graph those
- * runs ever had, and refusing to drive them would strand every run in flight
- * across the deploy.
- *
- * A pinned version whose archive row is missing degrades the same way. It is
- * unreachable through the API, so this guards an out-of-band deletion rather
- * than a supported state; failing the run instead would turn a bookkeeping
- * inconsistency into lost work. The log line names either case.
+ * A pinned version whose archive row is missing degrades to the live row. It
+ * is unreachable through the API, so this guards an out-of-band deletion
+ * rather than a supported state; failing the run instead would turn a
+ * bookkeeping inconsistency into lost work.
  */
 export const resolveRunGraph = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
   orchestration: InstanceType<typeof db.Orchestration>;
 }): Promise<RunGraph> => {
   const version = args.run.orchestrationVersion;
-
-  if (version === null || version === undefined) {
-    log(
-      'resolveRunGraph: run=%s has no pinned version, executing the live graph',
-      args.run.publicId
-    );
-    return liveGraph(args.orchestration);
-  }
 
   const archived = await findArchivedGraph({
     orchestrationDbId: args.orchestration.id as number,
@@ -125,22 +111,19 @@ export const resolveRunGraph = async (args: {
 
 /**
  * The `output_mapping` a run settles with: its pinned version's, else the live
- * row's, by the same fallback {@link resolveRunGraph} takes — so a run's
+ * row's, by the same degrade {@link resolveRunGraph} takes — so a run's
  * `output` has the shape of the graph it executed, not of a later edit.
  */
 export const resolveRunOutputMapping = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<Record<string, unknown> | null> => {
   const orchestrationDbId = args.run.orchestrationId;
-  const version = args.run.orchestrationVersion;
-
-  if (version !== null && version !== undefined) {
-    const config = await findArchivedConfig({ orchestrationDbId, version });
-    if (config) {
-      return isPlainObject(config.output_mapping)
-        ? config.output_mapping
-        : null;
-    }
+  const config = await findArchivedConfig({
+    orchestrationDbId,
+    version: args.run.orchestrationVersion,
+  });
+  if (config) {
+    return isPlainObject(config.output_mapping) ? config.output_mapping : null;
   }
 
   const live = await db.Orchestration.findByPk(orchestrationDbId);

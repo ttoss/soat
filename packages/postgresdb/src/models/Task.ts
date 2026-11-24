@@ -98,10 +98,9 @@ export class Task extends Model {
 
   // Stamped at creation and never changed, so editing a workflow cannot
   // re-shape a task already in flight. Every read of the state machine
-  // resolves through this rather than the live row. Null for tasks predating
-  // pinning, which fall back to the live row.
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare workflowVersion: number | null;
+  // resolves through this rather than the live row.
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare workflowVersion: number;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare title: string;
