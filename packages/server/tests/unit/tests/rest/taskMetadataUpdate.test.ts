@@ -3,7 +3,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('PATCH /tasks/{task_id} metadata', () => {
   let userToken: string;
-  let readOnlyToken: string;
+  let noPermToken: string;
   let projectId: string;
   let workflowId: string;
 
@@ -45,7 +45,7 @@ describe('PATCH /tasks/{task_id} metadata', () => {
       createNoPermUser: true,
     });
     userToken = setup.userToken;
-    readOnlyToken = setup.noPermToken!;
+    noPermToken = setup.noPermToken!;
     projectId = setup.projectId;
 
     const workflow = await authenticatedTestClient(userToken)
@@ -143,9 +143,13 @@ describe('PATCH /tasks/{task_id} metadata', () => {
     expect(response.status).toBe(401);
   });
 
-  test('403 without tasks:UpdateTask', async () => {
+  test('404 without tasks:UpdateTask, and the bag is kept', async () => {
     const id = await create({ label: 'x' });
-    const response = await patch(id, { metadata: { a: 1 } }, readOnlyToken);
-    expect(response.status).toBe(403);
+    const response = await patch(id, { metadata: { a: 1 } }, noPermToken);
+    expect(response.status).toBe(404);
+    const read = await authenticatedTestClient(userToken).get(
+      `/api/v1/tasks/${id}`
+    );
+    expect(read.body.metadata).toEqual({ label: 'x' });
   });
 });
