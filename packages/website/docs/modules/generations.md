@@ -176,11 +176,11 @@ A turn that replays a conversation (a session or conversation turn) and that the
 
 | `meta.cause` | Provider status | What to do |
 | --- | --- | --- |
-| `history_refused` | `400` | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
-| `context_too_long` | `413` | Lower the session's `max_context_messages`, fork, or start a new session |
+| `history_refused` | `400` not naming the context window | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
+| `context_too_long` | `413`, or a `4xx` saying the prompt exceeds the model's context window | Lower the session's `max_context_messages`, fork, or start a new session |
 | `request_refused` | any other `4xx` | Read the failed generation |
 
-`meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status alone: neither the provider's text nor its status reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) reports its refusal as `AI_PROVIDER_ERROR`.
+`meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status and error text: neither reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) reports its refusal as `AI_PROVIDER_ERROR`.
 
 ### Metadata
 

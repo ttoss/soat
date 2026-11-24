@@ -1,6 +1,7 @@
 import { APICallError, RetryError } from 'ai';
 
 import { DomainError } from '../errors';
+import { SharedProviderFailure } from './providerError';
 
 /** The conversation positions a turn sends the model, inclusive. */
 export type ReplayedWindow = { firstPosition: number; lastPosition: number };
@@ -34,29 +35,39 @@ const CAUSE_TEXT: Record<RefusalCause, string> = {
 };
 
 /**
- * A vendor refusal from its status alone: a non-retryable 4xx. A retryable
- * fault (408, 429, 5xx) says nothing about what the turn sent.
+ * How vendors say a prompt exceeds the model's context window. Anthropic and
+ * OpenAI answer it with `400`, which the status alone reads as
+ * `history_refused`.
+ */
+const CONTEXT_OVERFLOW_SIGNATURES: readonly RegExp[] = [
+  /prompt is too long/i,
+  /context_length_exceeded/i,
+  /maximum context length/i,
+  /exceeds the maximum number of tokens/i,
+];
+
+const overflowsContext = (args: { responseBody?: string }): boolean => {
+  const body = args.responseBody ?? '';
+  return CONTEXT_OVERFLOW_SIGNATURES.some((signature) => {
+    return signature.test(body);
+  });
+};
+
+/**
+ * A vendor refusal: a non-retryable 4xx, classified from its status and body.
+ * A retryable fault (408, 429, 5xx) says nothing about what the turn sent.
  */
 const refusalCause = (args: {
   statusCode?: number;
   isRetryable: boolean;
+  responseBody?: string;
 }): RefusalCause | null => {
   const { statusCode } = args;
   if (args.isRetryable || statusCode === undefined) return null;
   if (statusCode < 400 || statusCode >= 500) return null;
+  if (statusCode === 413 || overflowsContext(args)) return 'context_too_long';
   if (statusCode === 400) return 'history_refused';
-  if (statusCode === 413) return 'context_too_long';
   return 'request_refused';
-};
-
-/**
- * The cause an error that withholds the vendor's status carries instead, as
- * `APICallError.data`; read back by {@link replayRefusal}.
- */
-export const carriedCause = (error: unknown): Record<string, RefusalCause> => {
-  if (!APICallError.isInstance(error)) return {};
-  const cause = refusalCause(error);
-  return cause ? { [CAUSE_KEY]: cause } : {};
 };
 
 const isRefusalCause = (value: unknown): value is RefusalCause => {
@@ -79,6 +90,30 @@ const causeOf = (error: APICallError): RefusalCause | null => {
     return isRefusalCause(carried) ? carried : null;
   }
   return refusalCause(error);
+};
+
+/**
+ * The only way to rethrow a vendor fault without its message, body or URL: the
+ * fault carries the refusal's classified cause as `data`, read back by
+ * {@link replayRefusal}. A shared provider's also withholds the status.
+ */
+export const withheldVendorFault = (args: {
+  error: unknown;
+  message: string;
+  shared: boolean;
+  isRetryable: boolean;
+}): APICallError => {
+  const known = APICallError.isInstance(args.error) ? args.error : undefined;
+  const cause = known ? causeOf(known) : null;
+  const Fault = args.shared ? SharedProviderFailure : APICallError;
+  return new Fault({
+    message: args.message,
+    url: '',
+    requestBodyValues: {},
+    statusCode: args.shared ? undefined : known?.statusCode,
+    data: cause ? { [CAUSE_KEY]: cause } : {},
+    isRetryable: args.isRetryable,
+  });
 };
 
 /**
