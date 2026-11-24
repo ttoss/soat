@@ -12,6 +12,7 @@ import type { LanguageModel, LanguageModelUsage, Tool } from 'ai';
 
 import { type AgentRunAs, readAgentRunAs } from './agentRunAs';
 import type { GenerationProvenance } from './generationProvenance';
+import type { ReplayedWindow } from './replayRefusal';
 import type { PublicMessages, VendorOptions } from './vendorOptions';
 import type { WorkAuthority } from './workAuthority';
 
@@ -223,6 +224,8 @@ export type PendingGeneration = {
   toolContext?: Record<string, string>;
   /** The turn's tally, the one `resolvedTools` count into. */
   provenance: GenerationProvenance;
+  /** The conversation positions the turn replays; `null` when it replays none. */
+  replayed: ReplayedWindow | null;
 };
 
 export type GenerationResult = {

@@ -44,7 +44,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | Field         | Type           | Description                                                                                                                |
 | ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `document_id` | string         | ID of the Document attached as a message                                                                                   |
-| `role`        | string         | Role of the message: `user` or `assistant` — `system` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`, any other value with `400 VALIDATION_FAILED` |
+| `role`        | string         | Role of the message: `user` or `assistant`; any other value, `system` included, is `400 VALIDATION_FAILED` |
 | `actor_id`    | string \| null | Optional ID of the Actor who authored the message; `null` for messages not tied to an actor                                |
 | `agent_id`    | string \| null | Optional ID of the Agent that generated this message; `null` for non-generated messages                                    |
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
@@ -65,7 +65,7 @@ The pair `(conversation_id, position)` is uniquely indexed. See [Message orderin
 
 Messages are ordered Document references with a `role` and optional `actor_id`. A document may appear once per conversation; adding it twice returns `409 Conflict`.
 
-`role: "system"` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`: stored history feeds [agent generations](./agents.md#instructions), so a system entry would let conversation data rewrite the agent's prompt. System content belongs in the agent's `instructions` or the [actor persona](./actors.md).
+`role: "system"` is refused with `400 VALIDATION_FAILED`: stored history feeds [agent generations](./agents.md#instructions), so a system entry would let conversation data rewrite the agent's prompt. System content belongs in the agent's `instructions` or the [actor persona](./actors.md).
 
 Listed messages carry the document's full `content`, `role`, `actor_id`, `idempotency_key`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). They come in `position` order, ascending by default; `?order=desc` reads the transcript from its end. Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 

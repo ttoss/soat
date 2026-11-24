@@ -546,7 +546,6 @@ paths:
         - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
-        - SYSTEM_MESSAGE_NOT_ALLOWED
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
         - TOOL_CALL_FAILED
@@ -2721,7 +2720,7 @@ components:
           description: >-
             Conversation turns, oldest first. Roles are `user` and `assistant`:
             the system prompt is the agent's `instructions`, so a `system` entry is
-            refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
+            refused with `400 VALIDATION_FAILED`.
           type: array
           minItems: 1
           items:
@@ -2734,8 +2733,7 @@ components:
               role:
                 type: string
                 # No `system`: an agent's system prompt is its `instructions`
-                # field; a system entry here is refused with
-                # 400 SYSTEM_MESSAGE_NOT_ALLOWED.
+                # field.
                 enum:
                   - user
                   - assistant

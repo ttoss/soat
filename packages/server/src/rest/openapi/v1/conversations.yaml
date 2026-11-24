@@ -450,7 +450,6 @@ paths:
         - NAME_CONFLICT
         - RESERVED_PATH
         - RESOURCE_NOT_FOUND
-        - SYSTEM_MESSAGE_NOT_ALLOWED
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
@@ -482,9 +481,8 @@ paths:
                   example: 'Hello, how can I help you?'
                 role:
                   type: string
-                  # No `system`: refused with 400 SYSTEM_MESSAGE_NOT_ALLOWED —
-                  # stored history feeds generations, so a system entry here is
-                  # the completion/generation injection one layer down.
+                  # No `system`: stored history feeds generations, so a system
+                  # entry here would be a prompt injection.
                   enum: [user, assistant]
                   description: Role of the message sender
                   example: 'user'
@@ -1103,7 +1101,7 @@ components:
         role:
           type: string
           # Wider than what writes accept: `system` is refused on write with
-          # SYSTEM_MESSAGE_NOT_ALLOWED.
+          # VALIDATION_FAILED.
           enum: [user, assistant, system]
           description: Role of the message sender
           example: 'user'

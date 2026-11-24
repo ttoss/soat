@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+
 import type { MulterFile } from '@ttoss/http-server';
 import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
@@ -9,6 +12,7 @@ import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
 import { getUploadMaxBytes } from 'src/lib/requestBounds';
+import { bufferBody, fileBody } from 'src/lib/storageBody';
 import { readTagQuery } from 'src/lib/tags';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
@@ -20,15 +24,25 @@ import { compileReadPolicy } from './readPolicy';
 type Next = () => Promise<unknown>;
 
 /**
- * Buffers the `file` part of a multipart upload, bounded. The instance is built
- * per request because multer fixes its limits at construction, so a module-level
- * one would pin the ceiling to whatever the environment held at import time.
+ * Spools the `file` part of a multipart upload to the temp directory, bounded,
+ * so memory stays flat whatever the file's size; the spool is removed once the
+ * handler is done. Built per request because multer fixes its limits at
+ * construction.
  */
-const uploadSingleFile = (ctx: Context, next: Next) => {
-  return multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: getUploadMaxBytes(), files: 1 },
-  }).single('file')(ctx, next);
+const uploadSingleFile = async (ctx: Context, next: Next) => {
+  try {
+    await multer({
+      storage: multer.diskStorage({ destination: os.tmpdir() }),
+      limits: { fileSize: getUploadMaxBytes(), files: 1 },
+    }).single('file')(ctx, next);
+  } finally {
+    const spooled = ctx.file as MulterFile | undefined;
+    if (spooled?.path) await fs.promises.rm(spooled.path, { force: true });
+  }
+};
+
+const spooledBody = (file: MulterFile) => {
+  return fileBody({ path: file.path, size: file.size });
 };
 
 /**
@@ -143,7 +157,7 @@ filesRouter.post(
     });
     const record = await uploadFile({
       projectId: Number(targetProjectId),
-      fileBuffer: file.buffer,
+      body: spooledBody(file),
       prefix: body.prefix,
       // The uploaded file's name is the default filename unless overridden.
       filename: body.filename ?? file.originalname,
@@ -173,11 +187,9 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     action: 'files:UploadFile',
     resourceType: 'file',
   });
-  const fileBuffer = Buffer.from(body.content, 'base64');
-
   const record = await uploadFile({
     projectId: Number(targetProjectId),
-    fileBuffer,
+    body: bufferBody({ buffer: Buffer.from(body.content, 'base64') }),
     prefix: body.prefix,
     filename: body.filename,
     contentType: body.content_type,
@@ -262,14 +274,14 @@ filesRouter.post(
 
     const tokenData = await consumeUploadToken({ token: tokenValue });
 
-    const fileBuffer = multipartFile
-      ? multipartFile.buffer
-      : Buffer.from(body.content as string, 'base64');
+    const uploaded = multipartFile
+      ? spooledBody(multipartFile)
+      : bufferBody({ buffer: Buffer.from(body.content as string, 'base64') });
 
     const record = await uploadFile({
       projectId: tokenData.projectId,
       projectPublicId: tokenData.projectPublicId,
-      fileBuffer,
+      body: uploaded,
       // The token fixes the location: its pre-built path wins. The filename
       // falls back to the uploaded file's name only when the token set none.
       path: tokenData.path,

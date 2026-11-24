@@ -72,6 +72,7 @@ const seedReHandoffPending = (args: {
     toolsAuthority: args.ctx.toolsAuthority,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: null,
+    replayed: args.ctx.replayed,
   });
 };
 

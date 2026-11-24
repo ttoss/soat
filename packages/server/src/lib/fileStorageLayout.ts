@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { db } from '../db';
 import type { Transaction } from './dbTransaction';
 import type { FileStorageProvider } from './fileStorage';
+import type { StorageBody } from './storageBody';
 
 declare const storageObjectPathBrand: unique symbol;
 
@@ -12,8 +13,7 @@ declare const storageObjectPathBrand: unique symbol;
  * `FileStorageProvider.write` accepts nothing else, so the layout below is the
  * only shape any backend can ever be handed — a new provider (GCS, Azure) and a
  * new module inherit it without opting in. A hand-rolled key is a compile
- * error, which is what keeps a second convention from appearing the way one did
- * in the document writers.
+ * error, so no writer can start a second convention.
  */
 export type StorageObjectPath = string & {
   readonly [storageObjectPathBrand]: true;
@@ -63,7 +63,7 @@ export const persistFileBytes = async (args: {
   file: InstanceType<(typeof db)['File']>;
   projectPublicId: string;
   category: string;
-  buffer: Buffer;
+  body: StorageBody;
   contentType?: string;
   extension?: string;
   transaction?: Transaction;
@@ -76,13 +76,13 @@ export const persistFileBytes = async (args: {
       filename: args.file.filename,
       extension: args.extension,
     }),
-    buffer: args.buffer,
+    body: args.body,
     contentType: args.contentType,
   });
   await args.file.update(
     {
       storagePath,
-      size: args.buffer.length,
+      size: args.body.size,
       ...(args.contentType !== undefined
         ? { contentType: args.contentType }
         : {}),

@@ -30,7 +30,6 @@ import {
   parseToolContextBody,
   requireAuth,
 } from './helpers';
-import { assertNotSystemRole } from './systemMessageGuard';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const conversationSubResourcesRouter = new Router<Context>();
@@ -89,12 +88,6 @@ conversationSubResourcesRouter.post(
       metadata?: unknown;
       file_ids?: string[];
     };
-
-    assertNotSystemRole({
-      role: body.role,
-      remedy:
-        'Conversation history carries only `user` and `assistant` turns; system content belongs to the generating agent (its `instructions` field) or the actor persona.',
-    });
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,

@@ -492,14 +492,12 @@ describe('Tools', () => {
       expect(response.body.name).toBe('Updated Tool Name');
     });
 
-    test('accepts a JSON-encoded string for parameters', async () => {
+    test('refuses a JSON-encoded string for parameters', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/tools/${toolId}`)
         .send({ parameters: '{"message":{"type":"string"}}' });
-      expect(response.status).toBe(200);
-      expect(response.body.parameters).toEqual({
-        message: { type: 'string' },
-      });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('clears parameters with an explicit null', async () => {
@@ -2291,7 +2289,7 @@ describe('Tools', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
 

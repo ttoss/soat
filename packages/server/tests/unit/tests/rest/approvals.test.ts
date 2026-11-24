@@ -391,7 +391,7 @@ describe('Approvals', () => {
         .send({ arguments: [1, 2, 3] });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('APPROVAL_INVALID_EDIT');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('an item with no proposed action refuses edited arguments and stays pending', async () => {

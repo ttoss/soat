@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 import {
   DeleteObjectCommand,
@@ -12,6 +14,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import type { StorageObjectPath } from './fileStorageLayout';
+import type { StorageBody } from './storageBody';
 
 const log = createDebug('soat:file-storage');
 
@@ -49,9 +52,10 @@ export type StorageType = 'local' | 's3';
  */
 export interface FileStorageProvider {
   readonly storageType: StorageType;
+  /** Replaces the object whole or not at all: a failed body leaves nothing. */
   write(args: {
     objectPath: StorageObjectPath;
-    buffer: Buffer;
+    body: StorageBody;
     contentType?: string;
   }): Promise<{ storagePath: string }>;
   read(args: {
@@ -82,11 +86,20 @@ export const createLocalStorageProvider = (args: {
 }): FileStorageProvider => {
   return {
     storageType: 'local',
-    write: async ({ objectPath, buffer }) => {
+    write: async ({ objectPath, body }) => {
       const storagePath = path.join(args.storageDir, objectPath);
-      fs.mkdirSync(path.dirname(storagePath), { recursive: true });
-      fs.writeFileSync(storagePath, buffer);
-      log('local write: storagePath=%s size=%d', storagePath, buffer.length);
+      await fs.promises.mkdir(path.dirname(storagePath), { recursive: true });
+      // Written aside and renamed over the target, so a reader never sees a
+      // half-written object and a failed body keeps the previous one.
+      const partPath = `${storagePath}.${randomUUID()}.part`;
+      try {
+        await pipeline(body.stream, fs.createWriteStream(partPath));
+        await fs.promises.rename(partPath, storagePath);
+      } catch (error) {
+        await fs.promises.rm(partPath, { force: true });
+        throw error;
+      }
+      log('local write: storagePath=%s size=%d', storagePath, body.size);
       return { storagePath };
     },
     read: async ({ storagePath }) => {
@@ -141,22 +154,18 @@ export const createS3StorageProvider = (args: {
 
   return {
     storageType: 's3',
-    write: async ({ objectPath, buffer, contentType }) => {
+    write: async ({ objectPath, body, contentType }) => {
       const key = toKey(objectPath);
       await args.client.send(
         new PutObjectCommand({
           Bucket: args.bucket,
           Key: key,
-          Body: buffer,
+          Body: body.stream,
+          ContentLength: body.size,
           ContentType: contentType,
         })
       );
-      log(
-        's3 write: bucket=%s key=%s size=%d',
-        args.bucket,
-        key,
-        buffer.length
-      );
+      log('s3 write: bucket=%s key=%s size=%d', args.bucket, key, body.size);
       return { storagePath: key };
     },
     read: async ({ storagePath }) => {
@@ -194,6 +203,10 @@ const getS3Client = (): S3ClientLike => {
     const endpoint = process.env.FILES_S3_ENDPOINT;
     const forcePathStyle = process.env.FILES_S3_FORCE_PATH_STYLE === 'true';
     cachedS3Client = new S3Client({
+      // A streamed body under the default checksum mode is sent aws-chunked
+      // with a trailing checksum, which S3-compatible stores (GCS interop)
+      // refuse; the declared length and TLS already bound the upload.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
       ...(region ? { region } : {}),
       ...(endpoint ? { endpoint } : {}),
       ...(forcePathStyle ? { forcePathStyle: true } : {}),
