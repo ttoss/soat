@@ -34,6 +34,7 @@
     "purge-formation-secret-outputs": "tsx scripts/purgeFormationSecretOutputs.ts",
     "queue-soak": "tsx scripts/orchestrationQueueSoak.ts",
     "test": "jest --projects tests/unit",
+    "test:heap": "node scripts/checkTestHeap.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json"
   },
   "type": "module",
