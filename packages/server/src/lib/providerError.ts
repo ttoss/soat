@@ -119,10 +119,26 @@ const modelFaultDomainError = (error: unknown): DomainError | null => {
   }
 
   if (ToolChoiceViolationError.isInstance(error)) {
-    return new DomainError('AI_PROVIDER_ERROR', error.message);
+    const mapped = new DomainError('AI_PROVIDER_ERROR', error.message);
+    mapped.cause = error;
+    return mapped;
   }
 
   return null;
+};
+
+/**
+ * Whether a mapped failure is the model's own answer — one that broke the
+ * `output_schema` or the forcing `tool_choice` — rather than a provider
+ * refusing the request. Retrying it without tools could only answer without
+ * the tool the agent requires.
+ */
+export const isModelAnswerFault = (error: unknown): boolean => {
+  if (!(error instanceof DomainError)) return false;
+  return (
+    error.code === 'OUTPUT_SCHEMA_VALIDATION_FAILED' ||
+    ToolChoiceViolationError.isInstance(error.cause)
+  );
 };
 
 /**

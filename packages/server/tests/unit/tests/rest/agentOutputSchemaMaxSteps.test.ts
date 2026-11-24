@@ -195,6 +195,47 @@ describe('output_schema at max_steps', () => {
     ).toEqual(['required', 'required']);
   });
 
+  test('a forcing agent whose last step answers without a tool call fails with MAX_STEPS_REACHED', async () => {
+    const agentId = await createAgent({
+      name: 'Schema Budget Forcing Answering Agent',
+      max_steps: 2,
+      tool_choice: 'required',
+      stop_conditions: [{ type: 'has_tool_call', tool_name: 'done' }],
+      tool_bindings: [{ tool_id: lookupToolId }, { tool_id: doneToolId }],
+    });
+    stub.reply(() => {
+      return stub.completions.length < 2
+        ? lookupCall()
+        : textCompletion(JSON.stringify(ANSWER));
+    });
+
+    const res = await generate(agentId);
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('MAX_STEPS_REACHED');
+    expect(res.body.error.meta.max_steps).toBe(2);
+    expect(stub.completions).toHaveLength(2);
+  });
+
+  test('a forcing agent that answers before its last step fails with AI_PROVIDER_ERROR, untried without tools', async () => {
+    const agentId = await createAgent({
+      name: 'Schema Budget Forcing Early Agent',
+      max_steps: 3,
+      tool_choice: 'required',
+      stop_conditions: [{ type: 'has_tool_call', tool_name: 'done' }],
+      tool_bindings: [{ tool_id: lookupToolId }, { tool_id: doneToolId }],
+    });
+    stub.reply(() => {
+      return textCompletion(JSON.stringify(ANSWER));
+    });
+
+    const res = await generate(agentId);
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe('AI_PROVIDER_ERROR');
+    expect(stub.completions).toHaveLength(1);
+  });
+
   test('a resumed turn counts the steps it spent before the pause', async () => {
     const agentId = await createAgent({
       name: 'Schema Budget Resumed Agent',
