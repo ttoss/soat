@@ -267,7 +267,7 @@ describe('Orchestrations', () => {
         type: 'poll',
         tool_id: toolId,
         exit_condition: true,
-        interval: 60,
+        interval: '60s',
       });
 
       expect(res.status).toBe(400);
@@ -372,7 +372,7 @@ describe('Orchestrations', () => {
         });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toBe('nodes must be an array');
+      expect(response.body.error.message).toBe('`nodes` must be array');
     });
 
     test('non-array edges returns 400', async () => {
@@ -381,7 +381,7 @@ describe('Orchestrations', () => {
         .send({ ...simpleOrchestration, edges: {}, project_id: projectId });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toBe('edges must be an array');
+      expect(response.body.error.message).toBe('`edges` must be array');
     });
 
     test('invalid graph (dangling edge) returns 400 with validation error', async () => {
@@ -2454,7 +2454,7 @@ describe('Orchestrations', () => {
           });
 
           expect(res.status).toBe(400);
-          expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+          expect(res.body.error.code).toBe('VALIDATION_FAILED');
         });
 
         test('rejects an invalid entry on update', async () => {
@@ -3540,7 +3540,7 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(400);
     });
 
-    test('non-object output defaults to an empty object', async () => {
+    test('non-object output is refused by the schema', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({ ...humanNodeOrchestration, project_id: projectId });
@@ -3551,7 +3551,8 @@ describe('Orchestrations', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/orchestration-runs/${runRes.body.id}/human-input`)
         .send({ node_id: 'approval', output: 'not-an-object' });
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('submitting human input for a non-existent run returns 404', async () => {
@@ -4128,9 +4129,7 @@ describe('Orchestrations', () => {
       test('an unknown value is rejected at create', async () => {
         const createRes = await createLoop('ignore');
         expect(createRes.status).toBe(400);
-        expect(createRes.body.error.code).toBe(
-          'ORCHESTRATION_VALIDATION_FAILED'
-        );
+        expect(createRes.body.error.code).toBe('VALIDATION_FAILED');
       });
     });
 
