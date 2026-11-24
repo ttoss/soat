@@ -4539,6 +4539,25 @@ resources:
       expect(res.body.errors).toEqual([]);
       expect(res.body.valid).toBe(true);
     });
+
+    test('a parameter resolving to an out-of-vocabulary effort fails the apply', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `reasoning-param-effort-${Date.now()}`,
+          template: template({ effort: { param: 'Effort' } }),
+          parameters: { Effort: 'extreme' },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error).toEqual({
+        code: 'VALIDATION_FAILED',
+        message: `'reasoning' must be { "effort": "none" | "low" | "medium" | "high" } or null.`,
+        meta: { logical_id: 'NestedEnumAgent', resource_type: 'agent' },
+      });
+    });
   });
 
   // ── secret references via sub expressions ────────────────────────────────
