@@ -30,6 +30,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 * **agents:** a tool result that returns a file reaches the model as a native file part ([#2157](https://github.com/ttoss/soat/issues/2157)) ([6c81d46](https://github.com/ttoss/soat/commit/6c81d46e8ccdd8c4403e7eb1430093e4fe6eac2a))
 * **openapi:** each operation declares the error codes it can raise ([#2144](https://github.com/ttoss/soat/issues/2144)) ([984c2dc](https://github.com/ttoss/soat/commit/984c2dcd4003691745513cc211fa0650c43071b0))
+* **server:** structured filter gains a prefix operator ([#2160](https://github.com/ttoss/soat/issues/2160)) ([044ef40](https://github.com/ttoss/soat/commit/044ef4091fa793c4da8984ec978b8ff1d38b4be9))
 
 ### Performance Improvements
 
