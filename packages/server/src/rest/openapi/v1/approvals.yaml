@@ -298,8 +298,10 @@ paths:
               properties:
                 arguments:
                   type: object
+                  nullable: true
                   description: >-
                     Edited arguments to execute instead of the proposed ones.
+                    `null` or absent approves without an edit.
                     Editing composes a new call, so it additionally requires
                     permission to make that call: `tools:CallTool` on the tool,
                     and for a `builtin` proposal the action's own IAM action.

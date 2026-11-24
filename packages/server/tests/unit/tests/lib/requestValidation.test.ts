@@ -313,16 +313,12 @@ describe('validateRequestBody', () => {
     });
 
     test('leaves collection fields to their routes', () => {
-      // `parameters` takes a JSON-encoded string, which the route parses.
+      // `document_paths` takes a scalar prefix, which the route reads as a list.
       expect(() => {
         return validateRequestBody({
           method: 'post',
-          path: '/tools',
-          body: {
-            name: 'echo',
-            type: 'client',
-            parameters: '{"type":"object"}',
-          },
+          path: '/knowledge/search',
+          body: { query: 'q', document_paths: '/a' },
         });
       }).not.toThrow();
     });

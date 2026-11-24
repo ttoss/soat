@@ -12,20 +12,10 @@ export const ROUTE_OWNED_BODY_FIELDS: Readonly<
   // `role: "system"` answers `SYSTEM_MESSAGE_NOT_ALLOWED`.
   'POST /api/v1/agents/{agent_id}/generate': ['messages.*.role'],
   'POST /api/v1/conversations/{conversation_id}/messages': ['role'],
-  // `INVALID_OUTPUT_SCHEMA`.
-  'POST /api/v1/agents': ['output_schema'],
-  'PUT /api/v1/agents/{agent_id}': ['output_schema'],
-  'PATCH /api/v1/agents/{agent_id}': ['output_schema'],
-  // `parameters` may be a JSON-encoded object; `context_keys` answers
-  // `INVALID_TOOL_CONTEXT_KEY`.
-  'POST /api/v1/tools': ['parameters', 'context_keys'],
-  'PATCH /api/v1/tools/{tool_id}': ['parameters', 'context_keys'],
   // `document` may be a JSON-encoded object.
   'POST /api/v1/guardrails': ['document'],
   // A scalar `document_paths` is a single prefix.
   'POST /api/v1/knowledge/search': ['document_paths'],
-  // `APPROVAL_INVALID_EDIT`; `null` approves without an edit.
-  'POST /api/v1/approvals/{approval_id}/approve': ['arguments'],
   // `INGESTION_RULE_VALIDATION_FAILED`, including the tool/agent union.
   'POST /api/v1/ingestion-rules': [''],
   'PATCH /api/v1/ingestion-rules/{ingestion_rule_id}': ['chunk_strategy'],
@@ -56,8 +46,6 @@ export const ROUTE_OWNED_BODY_FIELDS: Readonly<
   'POST /api/v1/formations/plan': ['template'],
   'POST /api/v1/formations': ['template'],
   'PUT /api/v1/formations/{formation_id}': ['template'],
-  // The validator judges the bag and answers its verdict at 200.
-  'POST /api/v1/metadata-schemas/validate': ['metadata'],
 };
 
 /** Whether a violation at `path` (its segments) is the route's to answer. */
