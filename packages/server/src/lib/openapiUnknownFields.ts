@@ -11,8 +11,9 @@
  * nested key its own route answers `400` for.
  *
  * The same walk reports the values a level's `enum` does not list
- * ({@link collectEnumViolations}), so a template's enum check reaches every
- * depth its unknown-key check reaches.
+ * ({@link collectEnumViolations}) and the fields a level `required`s but the
+ * value lacks ({@link collectMissingRequiredFields}), so a template's checks
+ * reach every depth its unknown-key check reaches.
  *
  * The walk only ever *reads* the value. It reports; each caller decides whether
  * to throw or accumulate, and how to word the refusal.
@@ -294,5 +295,34 @@ export const collectEnumViolations = (
         return [{ path: joinPath(level.path, propName), allowed }];
       }
     );
+  });
+};
+
+/** A field a level `required`s and the value does not carry. */
+export type MissingRequiredField = {
+  /** Dotted path from the walked root: `reasoning.effort`. */
+  path: string;
+  /** Whether the level is the walked root, not an object nested in it. */
+  topLevel: boolean;
+};
+
+/**
+ * Walks the levels {@link collectUnknownFields} reads and reports each field a
+ * level's `required` lists that its value lacks. An opaque value stands for a
+ * whole value resolved later, so its level is never judged.
+ */
+export const collectMissingRequiredFields = (
+  args: { schema: unknown; value: unknown },
+  options: WalkOptions
+): MissingRequiredField[] => {
+  return readAllFrames(args, options).flatMap(({ level }) => {
+    if (!level) return [];
+    const { requiredFields } = deriveSchemaFields({ schema: level.schema });
+    return [...requiredFields].flatMap((field) => {
+      if (level.value[field] !== undefined) return [];
+      return [
+        { path: joinPath(level.path, field), topLevel: level.path === '' },
+      ];
+    });
   });
 };

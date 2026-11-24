@@ -559,6 +559,25 @@ describe('validateFormationTemplate', () => {
     ]);
   });
 
+  test('returns invalid for a nested object missing its required field', () => {
+    const result = validateFormationTemplate(agentWithReasoning({}));
+
+    expect(result.errors).toEqual([
+      {
+        path: 'resources.MyAgent.properties.reasoning.effort',
+        message: '`reasoning.effort` is required',
+      },
+    ]);
+  });
+
+  test('accepts an expression in place of a nested object', () => {
+    const result = validateFormationTemplate(
+      agentWithReasoning({ param: 'Effort' })
+    );
+
+    expect(result.errors).toEqual([]);
+  });
+
   test.each([{ effort: 'high' }, { effort: { param: 'Effort' } }, null])(
     'accepts a nested enum value the schema lists or an expression: %j',
     (reasoning) => {

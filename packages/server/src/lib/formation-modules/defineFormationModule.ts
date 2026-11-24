@@ -223,9 +223,13 @@ const buildValidator = <TResource>(args: {
       basePath,
       errors,
     });
-    if (!forUpdate || definition.requiredOnUpdate) {
-      pushRequiredFieldErrors({ spec, properties, basePath, errors });
-    }
+    pushRequiredFieldErrors({
+      schema: loadModuleSchema({ schemaName }),
+      properties,
+      basePath,
+      errors,
+      topLevel: !forUpdate || definition.requiredOnUpdate === true,
+    });
     const typeErrored = pushFieldTypeErrors({
       spec,
       properties,
