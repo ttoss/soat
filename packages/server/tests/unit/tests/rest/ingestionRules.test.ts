@@ -157,7 +157,7 @@ describe('IngestionRules', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects a rule with neither tool_id nor agent_id (400)', async () => {
@@ -170,7 +170,7 @@ describe('IngestionRules', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects an unknown field on the create body (400)', async () => {
@@ -247,7 +247,7 @@ describe('IngestionRules', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects an unknown tool_id (400 TOOL_NOT_FOUND)', async () => {

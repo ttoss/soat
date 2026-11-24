@@ -193,7 +193,7 @@ describe('validateRequestBody', () => {
     });
   });
 
-  describe('required fields (top level only)', () => {
+  describe('required fields', () => {
     test('rejects a missing top-level required field', () => {
       const error = expectThrows(() => {
         return validateRequestBody({
@@ -218,16 +218,16 @@ describe('validateRequestBody', () => {
       expect(error.meta).toEqual({ missing_fields: ['name'] });
     });
 
-    test('does not enforce required fields nested inside objects', () => {
-      // OrchestrationNode requires id+type, but nested required is out of scope —
-      // only the unknown-field walk runs nested. A node missing `type` passes.
-      expect(() => {
+    test('enforces required fields nested inside objects', () => {
+      const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
           path: '/orchestrations',
           body: { name: 'flow', nodes: [{ id: 'n1' }], edges: [] },
         });
-      }).not.toThrow();
+      });
+      expect(error.code).toBe('VALIDATION_FAILED');
+      expect(error.message).toBe('`nodes.0.type` is required');
     });
 
     test('does not throw for a route with no required fields and an empty body', () => {

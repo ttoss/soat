@@ -466,10 +466,7 @@ orchestrationsRouter.post(
     };
 
     const nodeId = typeof body.node_id === 'string' ? body.node_id : undefined;
-    const output =
-      typeof body.output === 'object' && body.output !== null
-        ? (body.output as Record<string, unknown>)
-        : {};
+    const output = (body.output ?? {}) as Record<string, unknown>;
 
     if (!nodeId) {
       throw new DomainError('VALIDATION_FAILED', 'nodeId is required');

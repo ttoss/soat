@@ -96,9 +96,11 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     projectId,
     name: body.name,
     description: body.description,
-    states: workflowCollectionToCamel<WorkflowState>(body.states) ?? [],
-    transitions:
-      workflowCollectionToCamel<WorkflowTransition>(body.transitions) ?? [],
+    // The request schema requires both as arrays.
+    states: workflowCollectionToCamel<WorkflowState>(body.states)!,
+    transitions: workflowCollectionToCamel<WorkflowTransition>(
+      body.transitions
+    )!,
     payloadSchema: body.payload_schema,
     versionLabel: parseVersionLabel(body.version_label),
     createdBy: requestPrincipalFromCtx(ctx),

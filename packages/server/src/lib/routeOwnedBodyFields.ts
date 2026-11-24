@@ -20,31 +20,10 @@ export const ROUTE_OWNED_BODY_FIELDS: Readonly<
   // `INVALID_TOOL_CONTEXT_KEY`.
   'POST /api/v1/tools': ['parameters', 'context_keys'],
   'PATCH /api/v1/tools/{tool_id}': ['parameters', 'context_keys'],
-  // `document` may be a JSON-encoded object.
-  'POST /api/v1/guardrails': ['document'],
-  // A scalar `document_paths` is a single prefix.
-  'POST /api/v1/knowledge/search': ['document_paths'],
   // `APPROVAL_INVALID_EDIT`; `null` approves without an edit.
   'POST /api/v1/approvals/{approval_id}/approve': ['arguments'],
-  // `INGESTION_RULE_VALIDATION_FAILED`, including the tool/agent union.
-  'POST /api/v1/ingestion-rules': [''],
-  'PATCH /api/v1/ingestion-rules/{ingestion_rule_id}': ['chunk_strategy'],
-  // `MEMORY_RULE_VALIDATION_FAILED`.
-  'POST /api/v1/memory-rules': ['on'],
   // The `message` / `document_id` union names the field the caller missed.
   'POST /api/v1/sessions/{session_id}/messages': [''],
-  // The graph validator answers `ORCHESTRATION_VALIDATION_FAILED` and
-  // `INVALID_TOOL_CONTEXT_KEY` per node.
-  'POST /api/v1/orchestrations': ['nodes', 'edges'],
-  'PATCH /api/v1/orchestrations/{orchestration_id}': ['nodes', 'edges'],
-  'POST /api/v1/orchestrations/validate': ['nodes', 'edges'],
-  // A non-object `output` reads as `{}`.
-  'POST /api/v1/orchestration-runs/{orchestration_run_id}/human-input': [
-    'output',
-  ],
-  // `WORKFLOW_VALIDATION_FAILED`.
-  'POST /api/v1/workflows': ['states', 'transitions'],
-  'PATCH /api/v1/workflows/{workflow_id}': ['states', 'transitions'],
   // `PLAYBOOK_CASE_UPSTREAM_INVALID`.
   'POST /api/v1/playbooks/{playbook_id}/cases': ['upstreams'],
   'POST /api/v1/playbook-cases/{case_id}/upgrade': ['upstreams'],
