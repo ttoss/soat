@@ -61,5 +61,3 @@ const scheduler = createScheduler({
 });
 
 export const startGenerationSweepScheduler = scheduler.start;
-
-export const stopGenerationSweepScheduler = scheduler.stop;

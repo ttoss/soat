@@ -22,6 +22,3 @@ const scheduler = createScheduler({
  * directly).
  */
 export const startUsageStorageScheduler = scheduler.start;
-
-/** Stops the snapshot timer (graceful shutdown / test teardown). */
-export const stopUsageStorageScheduler = scheduler.stop;

@@ -263,6 +263,3 @@ const scheduler = createScheduler({
 
 /** Starts the cascade's sweeps. Called once from `server.ts`. */
 export const startPlaybookScheduler = scheduler.start;
-
-/** Stops the sweeps (graceful shutdown / test teardown). */
-export const stopPlaybookScheduler = scheduler.stop;
