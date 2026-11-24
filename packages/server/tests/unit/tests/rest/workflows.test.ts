@@ -178,13 +178,13 @@ describe('Workflows', () => {
       });
     });
 
-    test('non-array states and transitions read as an empty definition', async () => {
+    test('non-array states and transitions are refused by the schema', async () => {
       const res = await createWorkflow(userToken, {
         states: 'triage',
         transitions: 'to_draft',
       });
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects a transition referencing an unknown state', async () => {
