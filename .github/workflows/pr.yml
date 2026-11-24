@@ -170,6 +170,11 @@ jobs:
           --coverageReporters=json
           --coverageThreshold={}
 
+      # One shard is enough: the check runs its own files, not the shard's.
+      - name: Check test files leave no heap behind
+        if: matrix.shard == 1
+        run: pnpm --filter @soat/server run test:heap
+
       - name: Upload shard coverage
         uses: actions/upload-artifact@v7
         with:

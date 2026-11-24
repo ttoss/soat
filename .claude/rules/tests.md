@@ -19,6 +19,7 @@ from `tests/unit/jest.config.ts`; pinned by `tests/harness/mergeCoverage.test.mj
 pnpm --filter @soat/server test --testPathPatterns=users.test.ts
 pnpm --filter @soat/server test --testPathPatterns="projects.test.ts|agents.test.ts"
 pnpm --filter @soat/server test          # full suite; only for cross-cutting changes
+pnpm --filter @soat/server test:heap     # fails when a test file leaves a handle open
 ```
 
 `globalSetup` starts one Postgres, builds the schema into a template named per
