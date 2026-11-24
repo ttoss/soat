@@ -763,4 +763,57 @@ describe('POST /api/v1/formations/plan — a write-only property no read returns
     expect(res.status).toBe(200);
     expect(requestsOfType('update')).toEqual([]);
   });
+
+  const nestedParameter = {
+    parameters: { Email: { type: 'string' } },
+    ...channel({
+      mode: 'allowlist',
+      allowlist: [{ email: { param: 'Email' } }],
+    }),
+  };
+
+  test('the template a read returns, with a parameter nested in a write-only property, plans as no-op', async () => {
+    const formationId = await deployed({
+      template: nestedParameter,
+      parameters: { Email: 'owner@example.com' },
+    });
+    const read = await authenticatedTestClient(userToken).get(
+      `/api/v1/formations/${formationId}`
+    );
+
+    const res = await planWith({
+      formationId,
+      template: read.body.template,
+      parameters: { Email: 'owner@example.com' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.changes[0].action).toBe('no-op');
+  });
+
+  test('the template a read returns, planned without its parameters, is refused as its update is', async () => {
+    const formationId = await deployed({
+      template: nestedParameter,
+      parameters: { Email: 'owner@example.com' },
+    });
+    const read = await authenticatedTestClient(userToken).get(
+      `/api/v1/formations/${formationId}`
+    );
+
+    const res = await plan({ formationId, template: read.body.template });
+    const update = await authenticatedTestClient(userToken)
+      .put(`/api/v1/formations/${formationId}`)
+      .send({ template: read.body.template });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
+    expect(res.body.error.meta.details).toEqual([
+      {
+        path: 'parameters.Email',
+        message: "Parameter 'Email' is required and cannot be empty",
+      },
+    ]);
+    expect(update.status).toBe(400);
+    expect(update.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
+  });
 });
