@@ -3,7 +3,6 @@ import { generateText } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import { gatePendingClientTools } from './agentClientToolGuardrail';
 import {
   buildCompletedGenerationResult,
@@ -35,6 +34,7 @@ import {
   readTurnObject,
   resolveAnswerStep,
   resolveStopWhen,
+  toTurnFailure,
 } from './agentStopConditions';
 import {
   fireCompletionSideEffects,
@@ -56,7 +56,7 @@ import {
   servedModelName,
 } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
-import { toProviderDomainError } from './providerError';
+import { isModelAnswerFault } from './providerError';
 import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
@@ -153,6 +153,7 @@ const callGenerateText = async (args: {
   onStepEnd: (step: unknown) => void;
   stepTarget: TraceStepTarget;
 }) => {
+  let stepCount = 0;
   try {
     return await generateText({
       model: args.model,
@@ -167,7 +168,10 @@ const callGenerateText = async (args: {
         steps: { target: args.stepTarget, firstIndex: 0 },
         tools: args.resolvedTools,
         signal: args.abortSignal,
-        onStepEnd: args.onStepEnd,
+        onStepEnd: (step) => {
+          stepCount += 1;
+          args.onStepEnd(step);
+        },
       }),
       // The route config is the only retry authority for a routed model; a
       // non-routed model keeps the SDK default.
@@ -182,7 +186,11 @@ const callGenerateText = async (args: {
       error instanceof Error ? error.message : String(error),
       error instanceof Error ? error.stack : ''
     );
-    throw toProviderDomainError(error) ?? error;
+    throw toTurnFailure({
+      budget: args.typedAgent,
+      stepCount: stepCount + 1,
+      error,
+    });
   }
 };
 
@@ -448,16 +456,9 @@ const callWithToolFallback = async (args: {
     if (Object.keys(args.resolvedTools).length === 0) {
       throw error;
     }
-    // The fallback is for a provider that chokes on our tool *definitions*. A
-    // schema violation is the model's output, so retrying without tools would
-    // burn a call to hit the same schema — or worse, succeed, answering without
-    // the tool the agent was required to use.
-    if (
-      error instanceof DomainError &&
-      error.code === 'OUTPUT_SCHEMA_VALIDATION_FAILED'
-    ) {
-      throw error;
-    }
+    // The fallback is for a provider that chokes on our tool *definitions*,
+    // never for the model's own answer.
+    if (isModelAnswerFault(error)) throw error;
     log(
       'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
       args.callArgs.agentId,
@@ -684,7 +685,11 @@ export const runToolOutputsGeneration = async (args: {
       generationId: args.generationId,
       pending: args.pending,
       steps: ranSteps,
-      error: toProviderDomainError(error) ?? error,
+      error: toTurnFailure({
+        budget: args.pending.agentConfig,
+        stepCount: stepsAlreadySpent + ranSteps.length + 1,
+        error,
+      }),
     });
   }
 };
