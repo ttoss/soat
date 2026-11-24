@@ -27,7 +27,6 @@ import { resolveStreamWait, withProgressFrames } from './generationStream';
 import { parseToolContextBody } from './helpers';
 import { idempotencyKeyOf } from './idempotencyKey';
 import { authorizeSharedUse } from './sharedAccess';
-import { assertNoSystemMessage } from './systemMessageGuard';
 
 const toSseFrame = (part: StreamedGenerationPart): SseFrame => {
   if (typeof part === 'string') {
@@ -98,14 +97,6 @@ const validateGenerateBody = (body: {
   }
   return null;
 };
-
-/**
- * An agent's system prompt is its `instructions` field, so a `role: "system"`
- * entry in a generation request is refused (`systemMessageGuard.ts` carries
- * the surface-wide rule and why it sits at the REST boundary).
- */
-const AGENT_SYSTEM_MESSAGE_REMEDY =
-  "An agent's system prompt is its `instructions` field \u2014 set it with `update-agent --instructions`, or create a separate agent.";
 
 export const agentGenerationRouter = new Router<Context>();
 
@@ -224,10 +215,6 @@ agentGenerationRouter.post(
     if (bodyError) {
       throw new DomainError('VALIDATION_FAILED', bodyError);
     }
-    assertNoSystemMessage({
-      messages: body.messages,
-      remedy: AGENT_SYSTEM_MESSAGE_REMEDY,
-    });
 
     const generationArgs = buildGenerationArgs({
       ctx,

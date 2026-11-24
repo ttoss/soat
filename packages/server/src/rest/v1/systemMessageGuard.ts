@@ -3,9 +3,9 @@ import { hasSystemMessage } from 'src/lib/modelMessages';
 
 /**
  * The single rule for system content on the wire: it never travels as a
- * message. Every REST surface accepting a caller-supplied `messages` array
- * refuses a `role: "system"` entry with the same 400 and points at that
- * surface's dedicated channel.
+ * message. Chat completions refuse a `role: "system"` entry in `messages` with
+ * this 400 and point at `instructions`; the request schemas of agent
+ * generations and conversation messages carry no `system` role at all.
  *
  * This mirrors the AI SDK, whose `allowSystemInMessages` defaults to false and
  * throws rather than lifting or stripping — a system entry inside a
@@ -25,23 +25,5 @@ export const assertNoSystemMessage = (args: {
   throw new DomainError(
     'SYSTEM_MESSAGE_NOT_ALLOWED',
     `A system message is not accepted in \`messages\`. ${args.remedy}`
-  );
-};
-
-/**
- * The same rule for endpoints that take one message at a time (a conversation's
- * add-message). A stored system message would flow into generation history and
- * be lifted into the model's instructions, so the door is closed where the
- * message enters.
- */
-export const assertNotSystemRole = (args: {
-  role: unknown;
-  remedy: string;
-}): void => {
-  if (args.role !== 'system') return;
-
-  throw new DomainError(
-    'SYSTEM_MESSAGE_NOT_ALLOWED',
-    `A system message is not accepted here. ${args.remedy}`
   );
 };
