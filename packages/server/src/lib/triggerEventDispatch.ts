@@ -310,15 +310,10 @@ const handleEvent = async (event: SoatEvent): Promise<void> => {
  * subscribe with `*` or with a user-authored name an orchestration `emit_event`
  * node produces, neither of which the registry-typed `types` filter can express.
  *
- * Exported separately from the subscription so a caller can drive one event
- * through the whole path without a live bus listener.
- *
  * `handleEvent` is total — it guards its own lookup and every trigger it
  * dispatches — so the subscriber can `void` it with no rejection handler of its
  * own, and there is no unreachable `.catch` here pretending otherwise.
  */
-export const dispatchEventTriggers = handleEvent;
-
 export const initializeTriggerEventListener = (): void => {
   onEvent({
     handler: (event) => {

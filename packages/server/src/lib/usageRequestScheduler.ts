@@ -26,6 +26,3 @@ const scheduler = createScheduler({
  * accepted for v1, symmetric across projects.
  */
 export const startUsageRequestScheduler = scheduler.start;
-
-/** Stops the flush timer (graceful shutdown / test teardown). */
-export const stopUsageRequestScheduler = scheduler.stop;

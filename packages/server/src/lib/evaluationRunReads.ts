@@ -15,11 +15,8 @@ import { namedScorers } from './evaluationScorerValidation';
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
-import { RUN_STATUSES } from './runStatus';
 
 const log = createDebug('soat:evaluations');
-
-export const EVAL_RUN_STATUSES = RUN_STATUSES;
 
 /** Terminal statuses — the only ones a baseline may be taken from. */
 export const TERMINAL_EVAL_RUN_STATUSES: readonly string[] = [

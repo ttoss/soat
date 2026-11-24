@@ -19,8 +19,6 @@ import { DomainError } from '../errors';
 
 export const ON_APPROVAL_EXPIRY_VALUES = ['terminate', 'react'] as const;
 
-export type OnApprovalExpiry = (typeof ON_APPROVAL_EXPIRY_VALUES)[number];
-
 /**
  * Rejects a value outside the vocabulary on write, so a typo cannot read as the
  * safe default at resume time. `null`/absent inherits the default rather than

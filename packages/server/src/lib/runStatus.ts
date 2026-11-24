@@ -13,5 +13,3 @@ export const RUN_STATUSES = [
   'failed',
   'cancelled',
 ] as const;
-
-export type RunStatus = (typeof RUN_STATUSES)[number];

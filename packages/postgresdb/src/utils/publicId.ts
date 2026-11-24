@@ -111,17 +111,3 @@ export const generatePublicId = (prefix: PublicIdPrefix): string => {
   );
   return `${prefix}${nanoid()}`;
 };
-
-/**
- * Validates if a string matches a public ID format
- * @param id - The ID to validate
- * @param prefix - Expected prefix
- * @returns true if valid
- */
-export const isValidPublicId = (
-  id: string,
-  prefix: PublicIdPrefix
-): boolean => {
-  const pattern = new RegExp(`^${prefix}[A-Za-z0-9]{16}$`);
-  return pattern.test(id);
-};

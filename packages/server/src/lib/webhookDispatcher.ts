@@ -488,9 +488,6 @@ const scheduler = createScheduler({
  */
 export const startWebhookScheduler = scheduler.start;
 
-/** Stops the outbox sweep loop (graceful shutdown / test teardown). */
-export const stopWebhookScheduler = scheduler.stop;
-
 export const initializeDispatcher = () => {
   // Deliberately unfiltered: a webhook can subscribe to `*`, and to the
   // user-authored names an orchestration `emit_event` node produces, so this

@@ -120,6 +120,3 @@ const scheduler = createScheduler({
  * instead. The timer is unref'd and repeated calls are a no-op.
  */
 export const startTasksScheduler = scheduler.start;
-
-/** Stops the task sweeper loop (graceful shutdown / test teardown). */
-export const stopTasksScheduler = scheduler.stop;

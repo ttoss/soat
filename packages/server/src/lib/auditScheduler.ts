@@ -37,6 +37,3 @@ const scheduler = createScheduler({
  * tests (they call {@link sweepExpiredAuditEntries} directly).
  */
 export const startAuditRetentionScheduler = scheduler.start;
-
-/** Stops the retention sweep timer (graceful shutdown / test teardown). */
-export const stopAuditRetentionScheduler = scheduler.stop;
