@@ -137,6 +137,18 @@ describe('Document metadata filters', () => {
       path: '/typed/string.txt',
       metadata: { revision: '3' },
     });
+    for (const [name, code] of [
+      ['underscore', 'a_b'],
+      ['letter', 'axb'],
+      ['percent', 'a%c'],
+      ['backslash', 'a\\d'],
+      ['number', 7],
+    ] as const) {
+      await createUngoverned({
+        path: `/codes/${name}.txt`,
+        metadata: { code },
+      });
+    }
   }, 90_000);
 
   const list = (metadata: unknown, query = '') => {
@@ -224,6 +236,50 @@ describe('Document metadata filters', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  describe('prefix', () => {
+    const listCodes = (code: unknown) => {
+      return listUngoverned({ code }, '&path_prefix=/codes');
+    };
+
+    test('matches every string that starts with it, and no other type', async () => {
+      const response = await listCodes({ prefix: 'a' });
+
+      expect(response.status).toBe(200);
+      expect(pathsOf(response.body)).toEqual([
+        '/codes/backslash.txt',
+        '/codes/letter.txt',
+        '/codes/percent.txt',
+        '/codes/underscore.txt',
+      ]);
+    });
+
+    test.each([
+      ['a_', '/codes/underscore.txt'],
+      ['a%', '/codes/percent.txt'],
+      ['a\\', '/codes/backslash.txt'],
+    ])('reads %s literally, never as a wildcard', async (prefix, path) => {
+      const response = await listCodes({ prefix });
+
+      expect(response.status).toBe(200);
+      expect(pathsOf(response.body)).toEqual([path]);
+    });
+
+    test('combines with a bound on the same field', async () => {
+      const response = await listCodes({ prefix: 'a', gte: 'ax' });
+
+      expect(response.status).toBe(200);
+      expect(pathsOf(response.body)).toEqual(['/codes/letter.txt']);
+    });
+
+    test('refuses an operand that is not a string', async () => {
+      const response = await listCodes({ prefix: 7 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta.field).toBe('code');
     });
   });
 

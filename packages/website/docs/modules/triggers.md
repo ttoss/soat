@@ -267,7 +267,7 @@ A trigger fires when the event's type matches any `events` item, **and** its
 resource matches any `event_resources` item (IAM wildcard rules, absent = any
 resource in the project), **and** its `data` matches `event_data`. `event_data`
 is the [structured filter](./documents.md#metadata-filters) grammar: a top-level field to a
-value, or to `in`, `gt`, `gte`, `lt`, `lte`, ANDed across fields; an absent
+value, or to `in`, `gt`, `gte`, `lt`, `lte`, `prefix`, ANDed across fields; an absent
 field never matches. A different combination per type (X only from A, Y only
 from B) is two triggers.
 
