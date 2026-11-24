@@ -32,6 +32,12 @@ paths:
         - Tasks
       summary: List tasks
       operationId: listTasks
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:ListTasks
       x-iam-resource-type: task
       parameters:
@@ -117,6 +123,84 @@ paths:
         - Tasks
       summary: Create a task
       operationId: createTask
+      x-raises:
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: tasks:CreateTask
       x-iam-resource-type: task
       parameters:
@@ -202,6 +286,12 @@ paths:
         - Tasks
       summary: Get a task graph
       operationId: getTaskGraph
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - TASK_GRAPH_TOO_LARGE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:ListTasks
       x-iam-resource-type: task
       parameters:
@@ -258,6 +348,11 @@ paths:
         - Tasks
       summary: Get a task
       operationId: getTask
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
@@ -311,6 +406,12 @@ paths:
         - Tasks
       summary: Update a task
       operationId: updateTask
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:UpdateTask
       x-iam-resource-type: task
       parameters:
@@ -375,6 +476,11 @@ paths:
         - Tasks
       summary: Delete a task
       operationId: deleteTask
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:DeleteTask
       x-iam-resource-type: task
       parameters:
@@ -429,6 +535,11 @@ paths:
         - Tasks
       summary: List a task's transitions
       operationId: listTaskTransitions
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
@@ -490,6 +601,12 @@ paths:
         - Tasks
       summary: Transition a task
       operationId: transitionTask
+      x-raises:
+        - FORBIDDEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:TransitionTask
       x-iam-resource-type: task
       parameters:
@@ -571,6 +688,11 @@ paths:
         - Tasks
       summary: Migrate a task to a newer workflow version
       operationId: migrateTask
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:MigrateTask
       x-iam-resource-type: task
       parameters:
@@ -651,6 +773,11 @@ paths:
         - Tasks
       summary: Set a task's priority
       operationId: setTaskPriority
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:SetTaskPriority
       x-iam-resource-type: task
       parameters:
@@ -729,6 +856,12 @@ paths:
         - Tasks
       summary: Pause a task
       operationId: pauseTask
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - TASK_NOT_PAUSABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:PauseTask
       x-iam-resource-type: task
       parameters:
@@ -803,6 +936,81 @@ paths:
         - Tasks
       summary: Resume a task
       operationId: resumeTask
+      x-raises:
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_NOT_PAUSED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: tasks:ResumeTask
       x-iam-resource-type: task
       parameters:
@@ -866,6 +1074,15 @@ paths:
         - Tasks
       summary: Add a task dependency
       operationId: addTaskDependency
+      x-raises:
+        - FORBIDDEN
+        - TASK_DEPENDENCY_CLOSED
+        - TASK_DEPENDENCY_CYCLE
+        - TASK_DEPENDENCY_SELF
+        - TASK_DEPENDENCY_TARGET_NOT_FOUND
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:UpdateTaskDependencies
       x-iam-resource-type: task
       parameters:
@@ -947,6 +1164,12 @@ paths:
         - Tasks
       summary: List a task's dependencies
       operationId: listTaskDependencies
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
@@ -1005,6 +1228,12 @@ paths:
         - Tasks
       summary: List a task's dependents
       operationId: listTaskDependents
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:
@@ -1065,6 +1294,11 @@ paths:
         - Tasks
       summary: Remove a task dependency
       operationId: removeTaskDependency
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:UpdateTaskDependencies
       x-iam-resource-type: task
       parameters:
@@ -1120,6 +1354,11 @@ paths:
         - Tasks
       summary: Get task history
       operationId: getTaskHistory
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: tasks:GetTask
       x-iam-resource-type: task
       parameters:

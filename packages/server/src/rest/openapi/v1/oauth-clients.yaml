@@ -29,6 +29,12 @@ paths:
       summary: List OAuth clients
       description: Returns the OAuth clients of a project.
       operationId: listOauthClients
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: oauth-clients:ListOauthClients
       x-iam-resource-type: oauth_client
       parameters:
@@ -72,6 +78,12 @@ paths:
         `{{secret:sec_...}}` reference, and the caller needs
         `secrets:UseSecret` on it.
       operationId: createOauthClient
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: oauth-clients:CreateOauthClient
       x-iam-resource-type: oauth_client
       requestBody:
@@ -150,6 +162,14 @@ paths:
       summary: Get an OAuth client
       description: Returns the client; `client_secret` is its secret reference.
       operationId: getOauthClient
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: oauth-clients:GetOauthClient
       x-iam-resource-type: oauth_client
       responses:
@@ -175,6 +195,15 @@ paths:
       summary: Update an OAuth client
       description: Changes only the fields sent; `null` clears a nullable one.
       operationId: updateOauthClient
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: oauth-clients:UpdateOauthClient
       x-iam-resource-type: oauth_client
       requestBody:
@@ -239,6 +268,14 @@ paths:
       summary: Delete an OAuth client
       description: Deletes the client and every connection made through it.
       operationId: deleteOauthClient
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: oauth-clients:DeleteOauthClient
       x-iam-resource-type: oauth_client
       responses:

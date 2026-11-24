@@ -33,6 +33,13 @@ paths:
         `memory_store_id` — that form is authorized against the store itself, so
         it answers "what feeds this store?" in one call.
       operationId: listMemoryRules
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:ListMemoryRules
       x-iam-resource-type: memory_store
       parameters:
@@ -100,6 +107,19 @@ paths:
         `tool_id` the built-in extractor runs, configurable through `prompt`,
         `ai_provider_id` and `model`.
       operationId: createMemoryRule
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - MEMORY_RULE_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:CreateMemoryRule
       x-iam-resource-type: memory_store
       requestBody:
@@ -231,6 +251,10 @@ paths:
       summary: Get a memory rule
       description: Returns a specific memory rule
       operationId: getMemoryRule
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: memories:GetMemoryRule
       x-iam-resource-type: memory_store
       parameters:
@@ -281,6 +305,19 @@ paths:
         stand after the change, so a one-field update cannot pair a handler with
         a stored extractor override from the side.
       operationId: updateMemoryRule
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - MEMORY_RULE_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:UpdateMemoryRule
       x-iam-resource-type: memory_store
       parameters:
@@ -386,6 +423,10 @@ paths:
         Deletes a memory rule. The assertions it wrote are kept; their `rule_id`
         becomes null.
       operationId: deleteMemoryRule
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: memories:DeleteMemoryRule
       x-iam-resource-type: memory_store
       parameters:

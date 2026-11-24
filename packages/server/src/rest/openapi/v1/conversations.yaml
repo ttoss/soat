@@ -26,6 +26,12 @@ paths:
       summary: List conversations
       description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. project keys are scoped to a single project automatically.
       operationId: listConversations
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:ListConversations
       x-iam-resource-type: conversation
       parameters:
@@ -83,6 +89,12 @@ paths:
       summary: Create a conversation
       description: Creates a new conversation. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createConversation
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:CreateConversation
       x-iam-resource-type: conversation
       requestBody:
@@ -160,6 +172,10 @@ paths:
       summary: Get a conversation by ID
       description: Returns a conversation by its ID
       operationId: getConversation
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: conversations:GetConversation
       x-iam-resource-type: conversation
       parameters:
@@ -207,6 +223,14 @@ paths:
       summary: Update a conversation
       description: Updates the status of a conversation
       operationId: updateConversation
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - EMBEDDING_NOT_CONFIGURED
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
       parameters:
@@ -288,6 +312,13 @@ paths:
       summary: Delete a conversation
       description: Deletes a conversation by its ID
       operationId: deleteConversation
+      x-raises:
+        - FILE_HAS_DEPENDENTS
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:DeleteConversation
       x-iam-resource-type: conversation
       parameters:
@@ -336,6 +367,13 @@ paths:
       summary: List conversation messages
       description: Returns all messages (documents) attached to a conversation, ordered by position
       operationId: listConversationMessages
+      x-raises:
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:GetConversation
       x-iam-resource-type: conversation
       parameters:
@@ -399,6 +437,24 @@ paths:
       summary: Add a message to a conversation
       description: Creates a document from the message text and attaches it to the conversation at the given position. If position is omitted, it is appended at the end.
       operationId: addConversationMessage
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - CONVERSATION_POSITION_CONFLICT
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - IDEMPOTENCY_KEY_REUSED
+        - INTERNAL_ERROR
+        - NAME_CONFLICT
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SYSTEM_MESSAGE_NOT_ALLOWED
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
       parameters:
@@ -528,6 +584,70 @@ paths:
         caller must submit tool outputs via the Agents module and re-invoke
         generate — so a flow using client tools should pass `?wait=true`.
       operationId: generateConversationMessage
+      x-raises:
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: conversations:GenerateConversationMessage
       x-iam-resource-type: conversation
       parameters:
@@ -687,6 +807,13 @@ paths:
       summary: Remove a message from a conversation
       description: Removes a document from a conversation
       operationId: removeConversationMessage
+      x-raises:
+        - FILE_HAS_DEPENDENTS
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
       parameters:
@@ -742,6 +869,11 @@ paths:
       summary: Get conversation tags
       description: Returns all tags attached to the conversation
       operationId: getConversationTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:GetConversation
       x-iam-resource-type: conversation
       parameters:
@@ -789,6 +921,11 @@ paths:
       summary: Replace conversation tags
       description: Replaces all tags on the conversation with the provided tags
       operationId: replaceConversationTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
       parameters:
@@ -848,6 +985,11 @@ paths:
       summary: Merge conversation tags
       description: Merges provided tags into the conversation's existing tags (existing tags are preserved unless overridden)
       operationId: mergeConversationTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
       parameters:

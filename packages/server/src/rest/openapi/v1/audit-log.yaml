@@ -34,6 +34,12 @@ paths:
         match (e.g. `srn:{project}:secret:` matches every secret action); every
         other filter is exact.
       operationId: listAuditEntries
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: audit:ListAuditEntries
       x-iam-resource-type: audit
       parameters:
@@ -144,6 +150,11 @@ paths:
         Filters behave exactly as
         they do on the list endpoint.
       operationId: exportAuditEntries
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: audit:ExportAuditEntries
       x-iam-resource-type: audit
       # Not a tool, for two independent reasons. The response is a stream, which
@@ -236,6 +247,14 @@ paths:
       summary: Get an audit entry
       description: Returns a single audit-log entry, including its `detail` payload
       operationId: getAuditEntry
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: audit:GetAuditEntry
       x-iam-resource-type: audit
       parameters:

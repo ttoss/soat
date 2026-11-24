@@ -34,6 +34,12 @@ paths:
       summary: List traces
       description: Returns a paginated list of execution traces for the project.
       operationId: listTraces
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: traces:ListTraces
       x-iam-resource-type: trace
       parameters:
@@ -93,6 +99,14 @@ paths:
       summary: Get a trace
       description: Returns a single trace by ID.
       operationId: getTrace
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: traces:GetTrace
       x-iam-resource-type: trace
       parameters:
@@ -147,6 +161,14 @@ paths:
         by `GET /api/v1/generations?trace_id=`, and a node's direct children
         page by `GET /api/v1/traces?parent_trace_id=`.
       operationId: getTraceTree
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: traces:GetTraceTree
       x-iam-resource-type: trace
       parameters:
@@ -211,6 +233,16 @@ paths:
         Idempotent — purging an already-purged trace succeeds and leaves the
         original `content_redacted_at` in place.
       operationId: purgeTraceContent
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: traces:PurgeTraceContent
       x-iam-resource-type: trace
       parameters:

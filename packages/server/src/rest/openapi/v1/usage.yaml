@@ -49,6 +49,15 @@ paths:
         the filter, so a mistyped narrowing can never widen the list past what
         was asked for.
       operationId: listUsageEvents
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: usage:ListEvents
       x-iam-resource-type: usage
       parameters:
@@ -256,6 +265,11 @@ paths:
         and never the bucketing: omit `group_by` and `totals` is unchanged
         while `groups` is empty.
       operationId: getUsageAggregate
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: usage:GetAggregate
       x-iam-resource-type: usage
       parameters:
@@ -515,6 +529,11 @@ paths:
         over a calendar-month or rolling-24h window crosses the configured
         value.
       operationId: listUsageThresholds
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: usage:ListThresholds
       x-iam-resource-type: usage
       parameters:
@@ -566,6 +585,11 @@ paths:
         apart from deletion — to change one, delete and recreate it (which
         resets its fire state).
       operationId: createUsageThreshold
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: usage:ManageThresholds
       x-iam-resource-type: usage
       requestBody:
@@ -619,6 +643,14 @@ paths:
         Deletes a usage threshold, resetting its fire state. Recreating a
         threshold starts its once-per-window / hysteresis state fresh.
       operationId: deleteUsageThreshold
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: usage:ManageThresholds
       x-iam-resource-type: usage
       parameters:
@@ -673,6 +705,12 @@ paths:
         plus totals). Exactly one of generation_id or orchestration_run_id must
         be supplied.
       operationId: getUsageReceipt
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: usage:GetReceipt
       x-iam-resource-type: usage
       parameters:
@@ -733,6 +771,8 @@ paths:
         prices used to compute usage cost at write time. Readable by any
         authenticated user.
       operationId: getPriceBook
+      x-raises:
+        - UNAUTHORIZED
       x-iam-action: usage:GetPriceBook
       x-iam-resource-type: usage
       responses:
@@ -766,6 +806,13 @@ paths:
         rows. A first price, with no row in this scope or any broader one, may
         be dated now or earlier.
       operationId: upsertPriceBook
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: usage:ManagePriceBook
       x-iam-resource-type: usage
       requestBody:

@@ -34,6 +34,12 @@ paths:
         `user_id` (unrestricted admin only) to list only the policies attached
         to that user.
       operationId: listPolicies
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: policies:ListPolicies
       x-iam-resource-type: policy
       parameters:
@@ -96,6 +102,12 @@ paths:
         Without a project, creates a global policy, which only the
         unrestricted admin may.
       operationId: createPolicy
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - POLICY_DENIAL_RESERVED
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: policies:CreatePolicy
       x-iam-resource-type: policy
       x-soat-agent-exclude: true
@@ -170,6 +182,14 @@ paths:
         Returns a policy. A project policy needs `policies:GetPolicy` in its
         project; a global one, the unrestricted admin.
       operationId: getPolicy
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: policies:GetPolicy
       x-iam-resource-type: policy
       parameters:
@@ -220,6 +240,17 @@ paths:
         project and its `Allow` statements stay within that project; a global
         one, the unrestricted admin. The project never changes.
       operationId: updatePolicy
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - POLICY_DENIAL_RESERVED
+        - POLICY_GRANT_NOT_HELD
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: policies:UpdatePolicy
       x-iam-resource-type: policy
       x-soat-agent-exclude: true
@@ -300,6 +331,15 @@ paths:
         POLICY_HAS_DEPENDENTS` while a trigger, agent, webhook, user or API key names it in
         its `policy_ids`.
       operationId: deletePolicy
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - POLICY_HAS_DEPENDENTS
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: policies:DeletePolicy
       x-iam-resource-type: policy
       x-soat-agent-exclude: true

@@ -29,6 +29,12 @@ paths:
       summary: List playbooks
       description: Returns the playbooks defined in a project, newest first.
       operationId: listPlaybooks
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ListPlaybooks
       x-iam-resource-type: playbook
       parameters:
@@ -97,6 +103,21 @@ paths:
         (`EXECUTOR_TOOL_UNSUPPORTED`), nor a transformation's tool a `client`
         or `mcp` tool (`TRANSFORMATION_TOOL_UNSUPPORTED`).
       operationId: createPlaybook
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - PLAYBOOK_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:CreatePlaybook
       x-iam-resource-type: playbook
       requestBody:
@@ -169,6 +190,15 @@ paths:
         `playbooks:ListPlaybooks` on the project. Without it, only the
         definition's own graph is checked.
       operationId: validatePlaybook
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ValidatePlaybook
       x-iam-resource-type: playbook
       requestBody:
@@ -228,6 +258,14 @@ paths:
       summary: Get a playbook
       description: Returns a playbook with its current definition and version.
       operationId: getPlaybook
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: playbooks:GetPlaybook
       x-iam-resource-type: playbook
       parameters:
@@ -280,6 +318,21 @@ paths:
         for a `client` tool executor, `TRANSFORMATION_TOOL_UNSUPPORTED` for a
         `client` or `mcp` transformation tool.
       operationId: updatePlaybook
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - PLAYBOOK_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:UpdatePlaybook
       x-iam-resource-type: playbook
       parameters:
@@ -344,6 +397,16 @@ paths:
         current definition declares as an upstream with
         `409 PLAYBOOK_HAS_DEPENDENTS`.
       operationId: deletePlaybook
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - PLAYBOOK_HAS_CASES
+        - PLAYBOOK_HAS_DEPENDENTS
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: playbooks:DeletePlaybook
       x-iam-resource-type: playbook
       parameters:
@@ -395,6 +458,22 @@ paths:
         Returns the playbook's archived definitions, newest first. A version is
         written on create and on every write that changes `definition`.
       operationId: listPlaybookVersions
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - PLAYBOOK_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ListPlaybookVersions
       x-iam-resource-type: playbook
       parameters:
@@ -442,6 +521,22 @@ paths:
         Returns the definition a version held: what a case pinned to it is
         evaluated against.
       operationId: getPlaybookVersion
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - PLAYBOOK_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:GetPlaybookVersion
       x-iam-resource-type: playbook
       parameters:
@@ -489,6 +584,22 @@ paths:
         archived `policy_ids` are restored with it, the playbook's own when the
         version archived none; the write is checked as an update.
       operationId: restorePlaybookVersion
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - PLAYBOOK_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:RestorePlaybookVersion
       x-iam-resource-type: playbook
       parameters:
@@ -558,6 +669,93 @@ paths:
         `400 PLAYBOOK_CASE_UPSTREAM_INVALID`. The binding is fixed for the
         life of the case.
       operationId: createPlaybookCase
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_UPSTREAM_INVALID
+        - PLAYBOOK_EXECUTION_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:CreatePlaybookCase
       x-iam-resource-type: playbook
       parameters:
@@ -619,6 +817,13 @@ paths:
         Returns a project's cases, newest first, without node states; read one
         case for those.
       operationId: listPlaybookCases
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ListPlaybookCases
       x-iam-resource-type: playbook_case
       parameters:
@@ -710,6 +915,16 @@ paths:
         Returns a case with every node's state, computed from its entries on
         each read and never stored.
       operationId: getPlaybookCase
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - EXPRESSION_FAILED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:GetPlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -751,6 +966,18 @@ paths:
         bound to as their upstream is refused with
         `409 PLAYBOOK_CASE_HAS_DEPENDENTS`.
       operationId: deletePlaybookCase
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FILE_HAS_DEPENDENTS
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - PLAYBOOK_CASE_HAS_DEPENDENTS
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:DeletePlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -816,6 +1043,95 @@ paths:
         generation made, or by the work of a case reading it as an upstream, at
         any depth, is `403 PLAYBOOK_SELF_WRITE`.
       operationId: writePlaybookCaseInputs
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_INPUT_CONFLICT
+        - PLAYBOOK_INPUT_INVALID
+        - PLAYBOOK_SELF_WRITE
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:WritePlaybookCaseInputs
       x-iam-resource-type: playbook_case
       parameters:
@@ -889,6 +1205,15 @@ paths:
         to, each with that case's `case_id`, so one read lists everything to
         ask and each answer is written to its own case.
       operationId: getPlaybookCaseMissing
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:GetPlaybookCaseMissing
       x-iam-resource-type: playbook_case
       parameters:
@@ -940,6 +1265,16 @@ paths:
         Returns every value written to the case, newest first. Entries are never
         rewritten, so this is the case's full history.
       operationId: listPlaybookCaseEntries
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ListPlaybookCaseEntries
       x-iam-resource-type: playbook_case
       parameters:
@@ -1025,6 +1360,93 @@ paths:
         waiting on a person or a timer, settles the node when it closes or
         ends.
       operationId: runPlaybookCaseNode
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_NODE_NOT_RUNNABLE
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:RunPlaybookCaseNode
       x-iam-resource-type: playbook_case
       parameters:
@@ -1092,6 +1514,16 @@ paths:
       summary: List a case's executions
       description: Returns every run of the case's nodes, newest first.
       operationId: listPlaybookCaseExecutions
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ListPlaybookCaseExecutions
       x-iam-resource-type: playbook_case
       parameters:
@@ -1144,6 +1576,15 @@ paths:
       summary: Get an execution
       description: Returns one run of a case's node.
       operationId: getPlaybookCaseExecution
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:GetPlaybookCaseExecution
       x-iam-resource-type: playbook_case
       parameters:
@@ -1203,6 +1644,85 @@ paths:
         background; with `wait: true` it answers once each has its file or its
         error.
       operationId: exportPlaybookCaseNode
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_HAS_DEPENDENTS
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_EXPORT_FAILED
+        - PLAYBOOK_EXPORT_FORMAT_MISMATCH
+        - PLAYBOOK_NODE_NOT_EXPORTABLE
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ExportPlaybookCaseNode
       x-iam-resource-type: playbook_case
       parameters:
@@ -1281,6 +1801,16 @@ paths:
       summary: List a case's exports
       description: Returns every file rendered from the case's final nodes, newest first.
       operationId: listPlaybookCaseExports
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ListPlaybookCaseExports
       x-iam-resource-type: playbook_case
       parameters:
@@ -1339,6 +1869,15 @@ paths:
       summary: Get an export
       description: Returns one file rendered from a case's final node.
       operationId: getPlaybookCaseExport
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:GetPlaybookCaseExport
       x-iam-resource-type: playbook_case
       parameters:
@@ -1402,6 +1941,95 @@ paths:
         case's own work, or that of a case reading it as an upstream, runs as
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: upgradePlaybookCase
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_BUSY
+        - PLAYBOOK_CASE_UPSTREAM_INVALID
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_SELF_WRITE
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:UpgradePlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -1472,6 +2100,16 @@ paths:
       summary: List a case's upgrades
       description: Returns every version change of the case, newest first.
       operationId: listPlaybookCaseUpgrades
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:ListPlaybookCaseUpgrades
       x-iam-resource-type: playbook_case
       parameters:
@@ -1522,6 +2160,16 @@ paths:
         settle. Input writes are still accepted. Pausing a paused case keeps the
         first pause.
       operationId: pausePlaybookCase
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - EXPRESSION_FAILED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: playbooks:PausePlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -1574,6 +2222,93 @@ paths:
         one in a paused project is `409 PROJECT_PAUSED` and stays paused until
         the project resumes.
       operationId: resumePlaybookCase
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_NOT_PAUSED
+        - PLAYBOOK_EXECUTION_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ResumePlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -1646,6 +2381,95 @@ paths:
         case's own work, or that of a case reading it as an upstream, runs as
         is `403 PLAYBOOK_SELF_WRITE`.
       operationId: confirmPlaybookCaseNode
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_INPUT_CONFLICT
+        - PLAYBOOK_NODE_NOT_CONFIRMABLE
+        - PLAYBOOK_SELF_WRITE
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ConfirmPlaybookCaseNode
       x-iam-resource-type: playbook_case
       parameters:

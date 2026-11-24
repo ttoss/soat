@@ -26,6 +26,12 @@ paths:
       summary: List memories
       description: Returns all memories in a memory store
       operationId: listMemories
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:ListMemories
       x-iam-resource-type: memory
       x-iam-also-checked-on:
@@ -120,6 +126,16 @@ paths:
         comparison entirely, retiring the memory it names. Every call records
         one assertion, whatever the outcome.
       operationId: createMemory
+      x-raises:
+        - ACTOR_NOT_FOUND
+        - FORBIDDEN
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:CreateMemory
       x-iam-resource-type: memory_store
       requestBody:
@@ -291,6 +307,11 @@ paths:
       summary: Get a memory
       description: Returns a single memory by ID
       operationId: getMemory
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:GetMemory
       x-iam-resource-type: memory_store
       parameters:
@@ -343,6 +364,19 @@ paths:
       summary: Update a memory
       description: Updates an existing memory. Regenerates the embedding if content changes.
       operationId: updateMemory
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - EMBEDDING_NOT_CONFIGURED
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: memories:UpdateMemory
       x-iam-resource-type: memory_store
       parameters:
@@ -438,6 +472,11 @@ paths:
       summary: Delete a memory
       description: Deletes a memory
       operationId: deleteMemory
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:DeleteMemory
       x-iam-resource-type: memory_store
       parameters:
@@ -506,6 +545,13 @@ paths:
         The memory stays readable by id, with its text and its assertions.
         `DELETE` remains the way to remove it outright.
       operationId: retractMemory
+      x-raises:
+        - FORBIDDEN
+        - MEMORY_ALREADY_INVALIDATED
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: memories:RetractMemory
       x-iam-resource-type: memory_store
       parameters:
@@ -592,6 +638,12 @@ paths:
         superseded another memory in its favour. A superseded memory keeps its
         own assertions, so the chain can be walked in both directions.
       operationId: listMemoryAssertions
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:ListMemoryAssertions
       x-iam-resource-type: memory_store
       parameters:
@@ -653,6 +705,11 @@ paths:
       summary: Get memory tags
       description: Returns all tags attached to the memory
       operationId: getMemoryTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:GetMemory
       x-iam-resource-type: memory_store
       parameters:
@@ -702,6 +759,11 @@ paths:
       summary: Replace memory tags
       description: Replaces all tags on the memory with the provided tags (not merged)
       operationId: replaceMemoryTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:UpdateMemory
       x-iam-resource-type: memory_store
       parameters:
@@ -767,6 +829,11 @@ paths:
       summary: Merge memory tags
       description: Merges provided tags into the memory's existing tags (existing tags are preserved unless overridden)
       operationId: mergeMemoryTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:UpdateMemory
       x-iam-resource-type: memory_store
       parameters:

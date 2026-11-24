@@ -33,6 +33,12 @@ paths:
       summary: List exception items
       description: Returns exception items for a project, filterable by status, severity, and kind.
       operationId: listExceptions
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: exceptions:ListExceptions
       x-iam-resource-type: exception
       parameters:
@@ -121,6 +127,10 @@ paths:
       summary: Get an exception item
       description: Returns a single exception item with its full detail.
       operationId: getException
+      x-raises:
+        - EXCEPTION_NOT_FOUND
+        - FORBIDDEN
+        - UNAUTHORIZED
       x-iam-action: exceptions:GetException
       x-iam-resource-type: exception
       parameters:
@@ -166,6 +176,12 @@ paths:
         A no-op that returns the item unchanged when already acknowledged;
         rejected when already resolved.
       operationId: acknowledgeException
+      x-raises:
+        - EXCEPTION_ALREADY_RESOLVED
+        - EXCEPTION_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: exceptions:AcknowledgeException
       x-iam-resource-type: exception
       parameters:
@@ -218,6 +234,12 @@ paths:
       summary: Resolve an exception item
       description: Moves the item to `resolved` ("fixed"), recording who and an optional note.
       operationId: resolveException
+      x-raises:
+        - EXCEPTION_ALREADY_RESOLVED
+        - EXCEPTION_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: exceptions:ResolveException
       x-iam-resource-type: exception
       parameters:

@@ -33,6 +33,20 @@ paths:
         with `403 PUBLIC_SHARES_DISABLED` unless the deployment sets
         `SHARES_ALLOW_PUBLIC=true`.
       operationId: createShare
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - PUBLIC_SHARES_DISABLED
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: shares:CreateShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -133,6 +147,12 @@ paths:
         shares it accepted, each with the project's own `acceptance`. A public
         share the project never accepted is not listed.
       operationId: listShares
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: shares:ListShares
       x-iam-resource-type: share
       parameters:
@@ -205,6 +225,14 @@ paths:
         named by `project_id` or by its scoped credential, reads a share
         addressed to it or a public one, with its own `acceptance`.
       operationId: getShare
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: shares:GetShare
       x-iam-resource-type: share
       parameters:
@@ -257,6 +285,19 @@ paths:
         Changes a share's `cap`, as its publisher. The next call through the
         share reads the new cap; a changed `window` starts a fresh count.
       operationId: updateShare
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: shares:UpdateShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -327,6 +368,14 @@ paths:
         Deletes a share and every acceptance of it. Each project whose
         acceptance was active gets a `share_revoked` activity entry.
       operationId: deleteShare
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: shares:DeleteShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -375,6 +424,16 @@ paths:
         `403 SHARE_REVOKED` until the publisher deletes that acceptance. A
         suspended share can be accepted and grants nothing until resumed.
       operationId: acceptShare
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SHARE_REVOKED
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: shares:AcceptShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -448,6 +507,15 @@ paths:
         any. Reversible with resume; nobody re-accepts. Each project with an
         active acceptance gets a `share_suspended` activity entry. Idempotent.
       operationId: suspendShare
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SHARE_REVOKED
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: shares:SuspendShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -497,6 +565,15 @@ paths:
         Clears `suspended_at`. Each project with an active acceptance gets a
         `share_resumed` activity entry. Idempotent.
       operationId: resumeShare
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SHARE_REVOKED
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: shares:SuspendShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -552,6 +629,15 @@ paths:
         that answers `409 SHARE_IN_USE` unless `force=true`. A publisher's
         revoke is never refused on that account. Idempotent.
       operationId: revokeShare
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - SHARE_IN_USE
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: shares:RevokeShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -649,6 +735,16 @@ paths:
         `project_id` or by its scoped credential; the publisher holds none of
         these and is answered `400`.
       operationId: listShareReferences
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: shares:GetShare
       x-iam-resource-type: share
       parameters:
@@ -703,6 +799,16 @@ paths:
       summary: List a share's acceptances
       description: The projects that accepted the share, for its publisher.
       operationId: listShareAcceptances
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: shares:ListShares
       x-iam-resource-type: share
       parameters:
@@ -766,6 +872,14 @@ paths:
         `403 SHARE_REVOKED` until the publisher deletes it. The project gets a
         `share_revoked` activity entry if the acceptance was active.
       operationId: revokeShareAcceptance
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: shares:RevokeShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true
@@ -817,6 +931,14 @@ paths:
         revoked accept again. The project gets a `share_revoked` activity entry
         if the acceptance was active.
       operationId: deleteShareAcceptance
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: shares:DeleteShare
       x-iam-resource-type: share
       x-soat-agent-exclude: true

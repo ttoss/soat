@@ -26,6 +26,12 @@ paths:
       summary: List actors
       description: Returns all actors the caller has access to. If projectId is provided, returns only actors in that project. project keys are scoped to a single project automatically. JWT users without projectId receive actors across all their accessible projects.
       operationId: listActors
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: actors:ListActors
       x-iam-resource-type: actor
       parameters:
@@ -113,6 +119,17 @@ paths:
       summary: Create an actor
       description: Creates a new actor. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createActor
+      x-raises:
+        - AGENT_AND_CHAT_EXCLUSIVE
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - CHAT_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: actors:CreateActor
       x-iam-resource-type: actor
       requestBody:
@@ -199,6 +216,14 @@ paths:
       summary: Get an actor by ID
       description: Returns an actor by its ID
       operationId: getActor
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: actors:GetActor
       x-iam-resource-type: actor
       parameters:
@@ -246,6 +271,15 @@ paths:
       summary: Delete an actor
       description: Deletes an actor by its ID
       operationId: deleteActor
+      x-raises:
+        - ACTOR_HAS_MESSAGES
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: actors:DeleteActor
       x-iam-resource-type: actor
       parameters:
@@ -300,6 +334,18 @@ paths:
       summary: Update an actor
       description: Updates an actor's properties
       operationId: updateActor
+      x-raises:
+        - AGENT_AND_CHAT_EXCLUSIVE
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - CHAT_NOT_FOUND
+        - FORBIDDEN
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: actors:UpdateActor
       x-iam-resource-type: actor
       parameters:
@@ -384,6 +430,11 @@ paths:
       summary: Get actor tags
       description: Returns all tags attached to the actor
       operationId: getActorTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: actors:GetActor
       x-iam-resource-type: actor
       parameters:
@@ -431,6 +482,11 @@ paths:
       summary: Replace actor tags
       description: Replaces all tags on the actor with the provided tags (not merged)
       operationId: replaceActorTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: actors:UpdateActor
       x-iam-resource-type: actor
       parameters:
@@ -490,6 +546,11 @@ paths:
       summary: Merge actor tags
       description: Merges provided tags into the actor's existing tags (existing tags are preserved unless overridden)
       operationId: mergeActorTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: actors:UpdateActor
       x-iam-resource-type: actor
       parameters:

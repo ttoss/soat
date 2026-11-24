@@ -29,6 +29,12 @@ paths:
       summary: List ingestion rules
       description: Returns the ingestion rules for a project
       operationId: listIngestionRules
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ingestion-rules:ListIngestionRules
       x-iam-resource-type: ingestionRule
       parameters:
@@ -83,6 +89,21 @@ paths:
         Creates a rule mapping a content_type glob to a converter. Exactly one
         of tool_id or agent_id must be set.
       operationId: createIngestionRule
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INGESTION_RULE_GLOB_CONFLICT
+        - INGESTION_RULE_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ingestion-rules:CreateIngestionRule
       x-iam-resource-type: ingestionRule
       requestBody:
@@ -208,6 +229,14 @@ paths:
       summary: Get an ingestion rule
       description: Returns a specific ingestion rule
       operationId: getIngestionRule
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: ingestion-rules:GetIngestionRule
       x-iam-resource-type: ingestionRule
       parameters:
@@ -255,6 +284,21 @@ paths:
       summary: Update an ingestion rule
       description: Updates fields of an ingestion rule
       operationId: updateIngestionRule
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INGESTION_RULE_GLOB_CONFLICT
+        - INGESTION_RULE_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ingestion-rules:UpdateIngestionRule
       x-iam-resource-type: ingestionRule
       parameters:
@@ -368,6 +412,14 @@ paths:
       summary: Delete an ingestion rule
       description: Deletes an ingestion rule
       operationId: deleteIngestionRule
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: ingestion-rules:DeleteIngestionRule
       x-iam-resource-type: ingestionRule
       parameters:

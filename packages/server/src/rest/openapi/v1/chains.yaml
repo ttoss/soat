@@ -40,6 +40,12 @@ paths:
         `status` to find the chains that may still be spending (`active`) or the
         ones a budget stopped (`budget_exhausted`).
       operationId: listChains
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: chains:ListChains
       x-iam-resource-type: chain
       parameters:
@@ -114,6 +120,15 @@ paths:
         Returns a single continuation chain. To read the generations in it, list
         generations filtered by `chain_id`.
       operationId: getChain
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - CHAIN_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: chains:GetChain
       x-iam-resource-type: chain
       parameters:

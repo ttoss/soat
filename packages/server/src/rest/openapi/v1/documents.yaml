@@ -26,6 +26,13 @@ paths:
       summary: List documents
       description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. project keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
       operationId: listDocuments
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:ListDocuments
       x-iam-resource-type: document
       parameters:
@@ -113,6 +120,23 @@ paths:
       summary: Create a document
       description: Creates a new text document and generates an embedding vector for semantic search. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createDocument
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - API_KEY_PROJECT_SCOPE
+        - DOCUMENT_PATH_OUTSIDE_PREFIX
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:CreateDocument
       x-iam-resource-type: document
       parameters:
@@ -236,6 +260,12 @@ paths:
         `POST /documents/{document_id}/ingest`; to ingest the same source under a
         different path, upload a new copy of the file first.
       operationId: ingestDocument
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESERVED_TAG_KEY
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:IngestDocument
       x-iam-resource-type: document
       parameters:
@@ -359,6 +389,11 @@ paths:
         the same caller, so a policy that hides a document hides it here too,
         and withdrawn documents and the reserved `/.system/` root are left out.
       operationId: exportDocuments
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:ExportDocuments
       x-iam-resource-type: document
       # Not a tool: the response is a stream with no JSON projection, and an
@@ -420,6 +455,16 @@ paths:
       summary: Get a document by ID
       description: Returns a document with its text content
       operationId: getDocument
+      x-raises:
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:GetDocument
       x-iam-resource-type: document
       parameters:
@@ -468,6 +513,16 @@ paths:
       summary: Delete a document
       description: Deletes a document and its underlying file
       operationId: deleteDocument
+      x-raises:
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:DeleteDocument
       x-iam-resource-type: document
       parameters:
@@ -516,6 +571,26 @@ paths:
       summary: Update a document
       description: Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
       operationId: updateDocument
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - CONVERSION_TIMEOUT
+        - DOCUMENT_PATH_OUTSIDE_PREFIX
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - INTERNAL_ERROR
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:UpdateDocument
       x-iam-resource-type: document
       parameters:
@@ -621,6 +696,18 @@ paths:
         document claims — use `?related_to=` on the listing to find what
         claims something about it.
       operationId: listDocumentRelations
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:GetDocument
       x-iam-resource-type: document
       parameters:
@@ -685,6 +772,18 @@ paths:
         which is what lets an agent record what its own report derives from
         without being able to make another report claim anything.
       operationId: createDocumentRelation
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - CONVERSION_TIMEOUT
+        - DOCUMENT_RELATION_EXISTS
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:UpdateDocument
       x-iam-resource-type: document
       parameters:
@@ -775,6 +874,17 @@ paths:
         Removes an edge this document asserts. Both documents are left as they
         are — retracting a claim is not a change to what it was about.
       operationId: deleteDocumentRelation
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:UpdateDocument
       x-iam-resource-type: document
       parameters:
@@ -835,6 +945,11 @@ paths:
         ingestion has stalled (no progress past the configured timeout) is
         transitioned to `failed` with `error=INGESTION_TIMEOUT` on read.
       operationId: getDocumentStatus
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:GetDocument
       x-iam-resource-type: document
       parameters:
@@ -900,6 +1015,11 @@ paths:
         Withdrawal is the reversible act. It does not apply under `/.system/`:
         a platform-written document keeps the owning module's lifecycle.
       operationId: withdrawDocument
+      x-raises:
+        - DOCUMENT_ALREADY_WITHDRAWN
+        - RESERVED_PATH
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:WithdrawDocument
       x-iam-resource-type: document
       parameters:
@@ -992,6 +1112,20 @@ paths:
         content or its annotations, and a withdrawal is archived as a version
         carrying no content.
       operationId: listDocumentVersions
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_STORAGE_MISCONFIGURED
+        - INTERNAL_ERROR
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:ListDocumentVersions
       x-iam-resource-type: document
       parameters:
@@ -1051,6 +1185,20 @@ paths:
         version, which is what lets a run that cited a version read what it
         read.
       operationId: getDocumentVersion
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_STORAGE_MISCONFIGURED
+        - INTERNAL_ERROR
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:GetDocumentVersion
       x-iam-resource-type: document
       parameters:
@@ -1123,6 +1271,20 @@ paths:
         A tombstone version has no content, so naming one is
         `400 VALIDATION_FAILED`: restore the version before it instead.
       operationId: restoreDocumentVersion
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_STORAGE_MISCONFIGURED
+        - INTERNAL_ERROR
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:RestoreDocumentVersion
       x-iam-resource-type: document
       parameters:
@@ -1220,6 +1382,11 @@ paths:
         without re-uploading the file. Background by default (`202`); pass
         `?wait=true` to run synchronously (`201`).
       operationId: reingestDocument
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:IngestDocument
       x-iam-resource-type: document
       parameters:
@@ -1342,6 +1509,8 @@ paths:
         attempt; rejected with `409` if the attempt already completed, timed
         out, or was superseded by a re-ingest.
       operationId: completeIngestionCallback
+      x-raises:
+        - INGESTION_CALLBACK_INVALID_TOKEN
       parameters:
         - name: document_id
           in: path
@@ -1433,6 +1602,17 @@ paths:
       summary: Get document tags
       description: Returns all tags attached to the document
       operationId: getDocumentTags
+      x-raises:
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:GetDocument
       x-iam-resource-type: document
       parameters:
@@ -1481,6 +1661,17 @@ paths:
       summary: Replace document tags
       description: Replaces all tags on the document with the provided tags (not merged)
       operationId: replaceDocumentTags
+      x-raises:
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:UpdateDocument
       x-iam-resource-type: document
       parameters:
@@ -1541,6 +1732,17 @@ paths:
       summary: Merge document tags
       description: Merges provided tags into the document's existing tags (existing tags are preserved unless overridden)
       operationId: mergeDocumentTags
+      x-raises:
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - INGESTION_TIMEOUT
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: documents:UpdateDocument
       x-iam-resource-type: document
       parameters:
