@@ -4496,29 +4496,38 @@ resources:
       ).toBe(false);
     });
 
-    test('a reasoning object without an effort fails the apply', async () => {
+    test('validate reports a missing nested required field by its dotted path', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: template({}) });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual([
+        {
+          path: 'resources.NestedEnumAgent.properties.reasoning.effort',
+          message: '`reasoning.effort` is required',
+        },
+      ]);
+    });
+
+    test('a reasoning object without an effort is refused before any apply', async () => {
+      const name = `reasoning-without-effort-${Date.now()}`;
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
-        .send({
-          project_id: projectId,
-          name: `reasoning-without-effort-${Date.now()}`,
-          template: {
-            resources: {
-              NestedEnumAgent: {
-                type: 'agent',
-                properties: agentProperties({}),
-              },
-            },
-          },
-        });
+        .send({ project_id: projectId, name, template: template({}) });
 
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('failed');
-      expect(res.body.error).toEqual({
-        code: 'VALIDATION_FAILED',
-        message: `'reasoning' must be { "effort": "none" | "low" | "medium" | "high" } or null.`,
-        meta: { logical_id: 'NestedEnumAgent', resource_type: 'agent' },
-      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations?project_id=${projectId}`
+      );
+      expect(
+        listRes.body.data.some((formation: { name: string }) => {
+          return formation.name === name;
+        })
+      ).toBe(false);
     });
 
     test('an expression at that depth validates', async () => {
@@ -4529,6 +4538,25 @@ resources:
       expect(res.status).toBe(200);
       expect(res.body.errors).toEqual([]);
       expect(res.body.valid).toBe(true);
+    });
+
+    test('a parameter resolving to an out-of-vocabulary effort fails the apply', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `reasoning-param-effort-${Date.now()}`,
+          template: template({ effort: { param: 'Effort' } }),
+          parameters: { Effort: 'extreme' },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error).toEqual({
+        code: 'VALIDATION_FAILED',
+        message: '`reasoning.effort` must be one of: none, low, medium, high',
+        meta: { logical_id: 'NestedEnumAgent', resource_type: 'agent' },
+      });
     });
   });
 
