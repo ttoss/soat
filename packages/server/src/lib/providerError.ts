@@ -63,11 +63,25 @@ const streamedProviderErrorMessage = (error: unknown): string | null => {
 };
 
 /**
+ * A vendor failure on a provider another project shares, with the vendor's
+ * detail withheld (`sharedProviderModel.ts`). An `APICallError`, so the SDK
+ * still retries it by `isRetryable`.
+ */
+export class SharedProviderFailure extends APICallError {}
+
+/**
  * The `AI_PROVIDER_ERROR` for a failed provider *request*, naming the
  * provider's own status so an unavailable model is distinguishable from a fault
- * in the runtime, and carrying its response body for post-mortem reading.
+ * in the runtime, and carrying its response body for post-mortem reading. A
+ * shared provider's is `SHARED_AI_PROVIDER_ERROR`: the grantee holds neither
+ * its credential nor its account.
  */
 const apiCallDomainError = (error: APICallError): DomainError => {
+  if (error instanceof SharedProviderFailure) {
+    const shared = new DomainError('SHARED_AI_PROVIDER_ERROR', error.message);
+    shared.cause = error;
+    return shared;
+  }
   const statusCode = error.statusCode;
   const message = statusCode
     ? `Provider returned ${statusCode}: ${error.message}`

@@ -153,9 +153,11 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 
 `meta.provider_status_code` is the status the provider answered with, and `meta.provider_response_body` its raw response body, each present when the provider sent one; a network fault carries neither. `meta` also carries the `generation_id` and `trace_id` of the failed run for inspection via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
 
+On a provider another project [shares](./shares.md) with the caller's, the same failure is `502 SHARED_AI_PROVIDER_ERROR` with the message `The shared AI provider failed to answer.` and neither `provider_status_code` nor `provider_response_body`: the vendor's answer, the credential and the account behind it are the sharing project's.
+
 ### A replay the provider refuses (`REPLAY_REFUSED`)
 
-A turn that replays a conversation (a session or conversation turn) and that the provider refuses answers `502` `REPLAY_REFUSED` instead of `AI_PROVIDER_ERROR`, on the project's own provider, through a forwarded alias and through a shared provider alike. A refusal is a non-retryable `4xx`; a rate limit, timeout or `5xx` stays `AI_PROVIDER_ERROR`.
+A turn that replays a conversation (a session or conversation turn) and that the provider refuses answers `502` `REPLAY_REFUSED` instead of `AI_PROVIDER_ERROR`, on the project's own provider, through a forwarded alias and through a shared provider alike. A refusal is a non-retryable `4xx`; a rate limit, timeout or `5xx` stays `AI_PROVIDER_ERROR` (`SHARED_AI_PROVIDER_ERROR` on a shared provider).
 
 ```json
 {

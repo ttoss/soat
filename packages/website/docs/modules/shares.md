@@ -199,7 +199,7 @@ A model call through the share:
 - **Runs on the publisher's credential**: its secret, `base_url`, `config` and model aliases.
 - **Is governed by the grantee**: the call is recorded in the grantee project, under its quotas and retention.
 - **Is metered in the grantee**: its `llm_tokens` events belong to the grantee, with `ai_provider_id` naming the shared provider, priced from the publisher's price book. `require_priced_model` on the provider refuses an unpriced model before the call. See [Usage](./usage.md#calls-through-a-share).
-- **Hides the vendor's answer**: a vendor failure is `502 AI_PROVIDER_ERROR` with a generic message, without the vendor's status or body.
+- **Hides the vendor's answer**: a vendor failure is `502 SHARED_AI_PROVIDER_ERROR` with a generic message, without the vendor's status or body.
 
 The grantee reads the provider's projection with [`GET /api/v1/ai-providers/{ai_provider_id}`](/docs/api/ai-providers/get-ai-provider). Updating, deleting, pricing it and listing its vendor models stay the publisher's: those routes answer `404` to the grantee.
 

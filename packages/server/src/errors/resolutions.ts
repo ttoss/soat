@@ -128,6 +128,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The MCP server answered the call with a failure rather than a result — `meta.mcp_tool` names the tool and `meta.mcp_url` the server, and `meta.upstream_code` the code it answered, when it answered one. The message carries what the server said; fix the arguments or the server-side condition it names, then retry. The call reached the server, so this is not a connectivity or allowlist problem.',
   AI_PROVIDER_ERROR:
     'The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
+  SHARED_AI_PROVIDER_ERROR:
+    "The provider another project shares with this one failed, not this server, and its credential and account are the sharing project's. Retry with backoff; a failure that persists is the sharing project's to fix, or move the caller to a provider this project holds.",
   REPLAY_REFUSED:
     'The stored history the turn replays is what the provider refused, so retrying the same session fails the same way. `history_refused`: fork the session at a `position` before the message the provider objects to, within `meta.replayed_window`, with {{POST /sessions/{session_id}/fork}}, or start a new session. `context_too_long`: lower the session `max_context_messages` with {{PATCH /sessions/{session_id}}}, fork, or start a new session. `request_refused`: read the failed generation with {{GET /generations/{generation_id}}}.',
   OUTPUT_SCHEMA_VALIDATION_FAILED:
