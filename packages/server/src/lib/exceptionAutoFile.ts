@@ -7,10 +7,8 @@
  * events. Every handler is fire-and-forget — a filing
  * failure must never disturb the producer.
  *
- * Split out of `exceptions.ts`, which carries the CRUD/query half of the
- * module and was at the `max-lines` limit; this half shares nothing with that
- * one but the `fileException` writer, which is why it can leave (mirrors how
- * `agentDelete.ts` split from `agents.ts`).
+ * `exceptions.ts` carries the CRUD/query half of the module; this half shares
+ * only its `fileException` writer.
  */
 import { onEvent, retryOrRecordDrop, type SoatEvent } from './eventBus';
 import { fileException } from './exceptions';
@@ -34,6 +32,9 @@ const asNumberOrNull = (value: unknown): number | null => {
 };
 
 const fileRunFailedException = async (event: SoatEvent): Promise<void> => {
+  // A child run's failure is its parent node's to answer: `collect` records it
+  // in the node's results, anything else fails the parent, which files it.
+  if (asStringOrNull(event.data.parent_orchestration_run_id)) return;
   const orchestrationRunId = event.resourceId;
   await fileException({
     projectId: event.projectId,
@@ -149,8 +150,7 @@ const handleEvent = (event: SoatEvent): void => {
     ? EXCEPTION_FILERS.get(event.type)
     : undefined;
   if (!filer) return;
-  // Was a bare `.catch(log)`, so a blip on the insert silently dropped the
-  // auto-filed exception with nothing left to retry it.
+  // A failed insert is retried or recorded as a drop, never lost silently.
   retryOrRecordDrop({
     stage: 'exception_file',
     label: 'handleEvent.fileException',
