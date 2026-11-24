@@ -421,7 +421,6 @@ describe('A loop node’s item_tool_context', () => {
       ['a reserved identity key', { actor_id: { var: 'actor.id' } }],
       ['a reserved key in another casing', { Session_ID: 's' }],
       ['calling_project_id', { calling_project_id: 'proj_x' }],
-      ['a value that is not an object', ['x_actor']],
     ])('rejects %s at create', async (_label, itemToolContext) => {
       const res = await createOrchestration({
         name: 'Rejected Fan-out',
@@ -429,6 +428,15 @@ describe('A loop node’s item_tool_context', () => {
       });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    });
+
+    test('rejects a value that is not an object at create', async () => {
+      const res = await createOrchestration({
+        name: 'Rejected Fan-out',
+        nodes: [loopNode({ childId, itemToolContext: ['x_actor'] })],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects a reserved key on update', async () => {
