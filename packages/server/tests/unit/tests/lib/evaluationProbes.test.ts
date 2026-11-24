@@ -18,6 +18,7 @@ describe('evaluationProbes', () => {
         criteria: null,
         scorers: SCORERS,
         agentOutputSchema: null,
+        errors: 'record',
         runners: {},
       })
     ).toEqual({ passed: true, probes: [] });
@@ -42,6 +43,7 @@ describe('evaluationProbes', () => {
       ],
       scorers: ['not a scorer', ...SCORERS],
       agentOutputSchema: null,
+      errors: 'record',
       runners: {},
     });
 
@@ -63,6 +65,7 @@ describe('evaluationProbes', () => {
       ],
       scorers: SCORERS,
       agentOutputSchema: null,
+      errors: 'record',
       runners: {
         runJudge: () => {
           return Promise.reject(new Error('provider down'));
@@ -93,10 +96,63 @@ describe('evaluationProbes', () => {
       ],
       scorers: SCORERS,
       agentOutputSchema: null,
+      errors: 'record',
       runners: {},
     });
     expect(failedProbes(report)).toEqual([
       { criterion: 'matches', index: 0, expected: true, passed: false },
     ]);
+  });
+
+  test('with errors thrown, a scorer that cannot grade fails the grading with its own error', async () => {
+    await expect(
+      runProbes({
+        criteria: [
+          {
+            name: 'judged',
+            scorers: ['judge'],
+            probes: [{ output: 'x', passed: true }],
+          },
+        ],
+        scorers: SCORERS,
+        agentOutputSchema: null,
+        errors: 'throw',
+        runners: {
+          runJudge: () => {
+            return Promise.reject(new Error('provider down'));
+          },
+        },
+      })
+    ).rejects.toThrow('provider down');
+  });
+
+  test('grades the structured object of a probe as the output a schema scorer reads', async () => {
+    const report = await runProbes({
+      criteria: [
+        {
+          name: 'shaped',
+          scorers: ['shape'],
+          probes: [
+            { output: '{}', object: { amount: 1 }, passed: true },
+            { output: 'none', passed: false },
+          ],
+        },
+      ],
+      scorers: [
+        {
+          type: 'output_schema',
+          name: 'shape',
+          schema: {
+            type: 'object',
+            required: ['amount'],
+            properties: { amount: { type: 'number' } },
+          },
+        },
+      ],
+      agentOutputSchema: null,
+      errors: 'record',
+      runners: {},
+    });
+    expect(report.passed).toBe(true);
   });
 });

@@ -1,3 +1,5 @@
+import { drainEvalQueueOnce } from 'src/lib/evaluationWorker';
+
 import {
   createScopedPrincipal,
   setupProjectWithUsers,
@@ -51,6 +53,7 @@ describe('Evaluations — probes', () => {
   let projectId: string;
   let agentId: string;
   let datasetId: string;
+  let otherProjectProviderId: string;
   let seq = 0;
 
   const unique = (base: string): string => {
@@ -79,10 +82,22 @@ describe('Evaluations — probes', () => {
     return res.body.id as string;
   };
 
+  const drain = async () => {
+    while ((await drainEvalQueueOnce()) > 0) {
+      // A probe gate releases the run's other items for the next claim.
+    }
+  };
+
+  const runOf = async (evalId: string, runId: string) => {
+    const res = await asUser().get(`/api/v1/evals/${evalId}/runs/${runId}`);
+    expect(res.status).toBe(200);
+    return res.body as { status: string };
+  };
+
   const runCount = async (evalId: string) => {
     const res = await asUser().get(`/api/v1/evals/${evalId}/runs`);
     expect(res.status).toBe(200);
-    return (res.body.data as unknown[]).length;
+    return (res.body.data as Array<{ id: string }>).length;
   };
 
   beforeAll(async () => {
@@ -134,6 +149,20 @@ describe('Evaluations — probes', () => {
       });
     expect(agent.status).toBe(201);
     agentId = agent.body.id as string;
+
+    const otherProject = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: unique('Probes Other Project') });
+    const otherProvider = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: otherProject.body.id,
+        name: 'Other Probes Provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    expect(otherProvider.status).toBe(201);
+    otherProjectProviderId = otherProvider.body.id as string;
 
     const dataset = await asUser()
       .post('/api/v1/datasets')
@@ -199,6 +228,49 @@ describe('Evaluations — probes', () => {
       ]);
     });
 
+    test('grades the structured object and the metadata of a probe', async () => {
+      const evalId = await createEval({
+        scorers: [
+          {
+            type: 'json_logic',
+            name: 'approved',
+            expression: {
+              and: [
+                { '==': [{ var: 'object.approved' }, true] },
+                { '==': [{ var: 'item.metadata.kind' }, 'refund'] },
+              ],
+            },
+          },
+        ],
+        criteria: [
+          {
+            name: 'approves_refunds',
+            description: 'Approves a refund request',
+            scorers: ['approved'],
+            probes: [
+              {
+                output: 'Approved.',
+                object: { approved: true },
+                metadata: { kind: 'refund' },
+                passed: true,
+              },
+              {
+                output: 'Declined.',
+                object: { approved: false },
+                metadata: { kind: 'refund' },
+                passed: false,
+              },
+            ],
+          },
+        ],
+      });
+
+      const res = await asUser().post(`/api/v1/evals/${evalId}/probes`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.passed).toBe(true);
+    });
+
     test('an eval without criteria has no probes to run', async () => {
       const evalId = await createEval({});
       const res = await asUser().post(`/api/v1/evals/${evalId}/probes`);
@@ -235,33 +307,93 @@ describe('Evaluations — probes', () => {
   });
 
   describe('POST /api/v1/evals/{eval_id}/runs', () => {
-    test.each([true, false])(
-      'a probe that does not hold fails the run before its first item (wait=%s)',
-      async (wait) => {
-        const evalId = await createEval({ criteria: BROKEN });
+    test('a probe that does not hold fails a synchronous run before its first item', async () => {
+      const evalId = await createEval({ criteria: BROKEN });
 
-        const res = await asUser()
-          .post(`/api/v1/evals/${evalId}/runs`)
-          .send({ wait });
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: true });
 
-        expect(res.status).toBe(400);
-        expect(res.body.error.code).toBe('PROBE_FAILED');
-        expect(res.body.error.meta).toMatchObject({
-          failed: [
-            expect.objectContaining({
-              criterion: 'offers_cancellation',
-              index: 0,
-            }),
-          ],
-        });
-        const runId = res.body.error.meta.eval_run_id as string;
-        const run = await asUser().get(`/api/v1/evals/${evalId}/runs/${runId}`);
-        expect(run.body.status).toBe('failed');
-        expect(mockCreateGeneration).not.toHaveBeenCalled();
-      }
-    );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PROBE_FAILED');
+      expect(res.body.error.meta).toMatchObject({
+        failed: [
+          expect.objectContaining({
+            criterion: 'offers_cancellation',
+            index: 0,
+          }),
+        ],
+      });
+      const runId = res.body.error.meta.eval_run_id as string;
+      expect((await runOf(evalId, runId)).status).toBe('failed');
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+    });
 
-    test('holding probes let the run go on', async () => {
+    test('a queued run answers at once, and a probe that does not hold fails it in the worker', async () => {
+      const evalId = await createEval({ criteria: BROKEN });
+
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('queued');
+
+      await drain();
+
+      expect((await runOf(evalId, res.body.id)).status).toBe('failed');
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+    });
+
+    test('a queued run whose probes hold runs every item', async () => {
+      const evalId = await createEval({ criteria: HOLDING });
+
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+      expect(res.status).toBe(201);
+
+      await drain();
+
+      expect((await runOf(evalId, res.body.id)).status).toBe('completed');
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    test('a scorer that cannot grade a probe fails the run with its own error, not PROBE_FAILED', async () => {
+      const evalId = await createEval({
+        scorers: [
+          ...SCORERS,
+          {
+            type: 'llm_judge',
+            name: 'judge',
+            ai_provider_id: otherProjectProviderId,
+            prompt: 'Rate {{output}}',
+            pass_threshold: 0.5,
+          },
+        ],
+        criteria: [
+          ...HOLDING,
+          {
+            name: 'judged',
+            description: 'Reads as helpful',
+            scorers: ['judge'],
+            probes: [
+              { output: 'Glad to help.', passed: true },
+              { output: 'No.', passed: false },
+            ],
+          },
+        ],
+      });
+
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+    });
+
+    test('holding probes let a synchronous run go on', async () => {
       const evalId = await createEval({ criteria: HOLDING });
       const res = await asUser()
         .post(`/api/v1/evals/${evalId}/runs`)
