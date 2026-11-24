@@ -12,7 +12,7 @@ import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
 import { getUploadMaxBytes } from 'src/lib/requestBounds';
-import { bufferBody, fileBody } from 'src/lib/storageBody';
+import { bufferBody, fileBody, requestBody } from 'src/lib/storageBody';
 import { readTagQuery } from 'src/lib/tags';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
@@ -208,6 +208,7 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     prefix?: string;
     filename?: string;
     content_type?: string;
+    max_bytes?: number;
   };
 
   const resource = buildSrn({
@@ -237,14 +238,47 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
 
   const token = await createPresignedUrl({
     projectId: project.id,
+    projectPublicId: project.publicId,
     prefix: body.prefix,
     filename: body.filename,
     contentType: body.content_type,
+    maxBytes: body.max_bytes,
   });
 
   ctx.status = 201;
   ctx.body = token;
 });
+
+/** The file a token upload carries: a multipart `file` or base64 `content`. */
+const tokenUploadOf = (ctx: Context) => {
+  const multipartFile = ctx.file as MulterFile | undefined;
+  const body = ctx.request.body as {
+    content?: string;
+    filename?: string;
+    content_type?: string;
+    metadata?: unknown;
+  };
+  if (multipartFile) {
+    return {
+      body: spooledBody(multipartFile),
+      filename: multipartFile.originalname,
+      contentType: multipartFile.mimetype,
+      metadata: body.metadata,
+    };
+  }
+  if (!body.content) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'No file provided: the request carries neither multipart field "file" nor base64 "content".'
+    );
+  }
+  return {
+    body: bufferBody({ buffer: Buffer.from(body.content, 'base64') }),
+    filename: body.filename,
+    contentType: body.content_type,
+    metadata: body.metadata,
+  };
+};
 
 /**
  * Token-authenticated upload. No bearer credential is required — the single-use
@@ -255,47 +289,63 @@ filesRouter.post(
   '/files/upload/:token',
   uploadSingleFile,
   async (ctx: Context) => {
-    const tokenValue = ctx.params.token;
-
-    const multipartFile = ctx.file as MulterFile | undefined;
-    const body = ctx.request.body as {
-      content?: string;
-      filename?: string;
-      content_type?: string;
-      metadata?: unknown;
-    };
-
-    if (!multipartFile && !body.content) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'No file provided: the request carries neither multipart field "file" nor base64 "content".'
-      );
-    }
-
-    const tokenData = await consumeUploadToken({ token: tokenValue });
-
-    const uploaded = multipartFile
-      ? spooledBody(multipartFile)
-      : bufferBody({ buffer: Buffer.from(body.content as string, 'base64') });
+    const upload = tokenUploadOf(ctx);
+    const tokenData = await consumeUploadToken({
+      token: ctx.params.token,
+      size: upload.body.size,
+      contentType: upload.contentType,
+    });
 
     const record = await uploadFile({
       projectId: tokenData.projectId,
       projectPublicId: tokenData.projectPublicId,
-      body: uploaded,
+      body: upload.body,
       // The token fixes the location: its pre-built path wins. The filename
       // falls back to the uploaded file's name only when the token set none.
       path: tokenData.path,
-      filename:
-        tokenData.filename ?? multipartFile?.originalname ?? body.filename,
-      contentType:
-        multipartFile?.mimetype ?? body.content_type ?? tokenData.contentType,
-      metadata: parseMetadataBagField(body.metadata),
+      filename: tokenData.filename ?? upload.filename,
+      contentType: tokenData.contentType,
+      metadata: parseMetadataBagField(upload.metadata),
     });
 
     ctx.status = 201;
     ctx.body = record;
   }
 );
+
+/**
+ * Token-authenticated raw-body upload: the request body is the file, streamed
+ * to storage, so a browser can PUT a `File` as is. The body parser is off for
+ * this route (`rawUploadBodyMiddleware`).
+ */
+filesRouter.put('/files/upload/:token', async (ctx: Context) => {
+  const declared = ctx.get('content-length');
+  const size = Number(declared);
+  if (!declared || !Number.isSafeInteger(size) || size < 0) {
+    throw new DomainError(
+      'UPLOAD_LENGTH_REQUIRED',
+      'The upload declares no Content-Length.'
+    );
+  }
+
+  const tokenData = await consumeUploadToken({
+    token: ctx.params.token,
+    size,
+    contentType: ctx.get('content-type') || undefined,
+  });
+
+  const record = await uploadFile({
+    projectId: tokenData.projectId,
+    projectPublicId: tokenData.projectPublicId,
+    body: requestBody({ stream: ctx.req, size }),
+    path: tokenData.path,
+    filename: tokenData.filename,
+    contentType: tokenData.contentType,
+  });
+
+  ctx.status = 201;
+  ctx.body = record;
+});
 
 registerFileAccessRoutes({ filesRouter });
 

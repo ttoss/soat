@@ -27,6 +27,7 @@ const PERMISSIONLESS_OPERATIONS = new Map([
   ['getCurrentUser', 'self-scoped: reads the caller behind the token'],
   ['checkIamPermission', "self-scoped: evaluates the caller's own policies"],
   ['uploadFileWithToken', 'the upload token is the credential'],
+  ['putFileWithToken', 'the upload token is the credential'],
   ['completeIngestionCallback', 'internal ingestion callback'],
   ['getOauthAuthorizationServerMetadata', 'public OAuth discovery'],
   ['getOauthProtectedResourceMetadata', 'public OAuth discovery'],

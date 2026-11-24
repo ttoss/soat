@@ -67,6 +67,7 @@ export const createDocumentTextFile = async (args: {
   await persistFileBytes({
     provider,
     file,
+    row: 'new',
     projectPublicId: await resolveProjectPublicId({
       projectId: args.projectId,
     }),
@@ -255,6 +256,7 @@ export const commitDocumentChunkChanges = async (args: {
     await persistFileBytes({
       provider: getStorageProvider({ storageType: file.storageType }),
       file,
+      row: 'existing',
       projectPublicId: await resolveProjectPublicId({
         projectId: file.projectId,
       }),

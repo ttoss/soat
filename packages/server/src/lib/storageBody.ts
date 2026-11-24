@@ -36,3 +36,15 @@ export const fileBody = (args: { path: string; size: number }): StorageBody => {
   };
   return brand({ stream: Readable.from(open()), size: args.size });
 };
+
+/**
+ * A request body whose `Content-Length` is `size`. HTTP framing ends the
+ * stream after exactly that many bytes or fails it, so the size holds without
+ * counting.
+ */
+export const requestBody = (args: {
+  stream: Readable;
+  size: number;
+}): StorageBody => {
+  return brand(args);
+};

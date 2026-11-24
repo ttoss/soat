@@ -57,10 +57,15 @@ export const buildObjectPath = (args: {
  * Writes a file record's bytes through `provider` and records the resulting
  * `storagePath` and `size` back onto the row. Every writer goes through here so
  * the row never disagrees with where the bytes actually landed.
+ *
+ * `row: 'new'` is a row created for these bytes: a failed write removes it, so
+ * no row points at bytes that never landed. `'existing'` keeps the row, whose
+ * previous object the provider leaves in place.
  */
 export const persistFileBytes = async (args: {
   provider: FileStorageProvider;
   file: InstanceType<(typeof db)['File']>;
+  row: 'new' | 'existing';
   projectPublicId: string;
   category: string;
   body: StorageBody;
@@ -68,17 +73,25 @@ export const persistFileBytes = async (args: {
   extension?: string;
   transaction?: Transaction;
 }) => {
-  const { storagePath } = await args.provider.write({
-    objectPath: buildObjectPath({
-      projectPublicId: args.projectPublicId,
-      category: args.category,
-      fileId: args.file.publicId,
-      filename: args.file.filename,
-      extension: args.extension,
-    }),
-    body: args.body,
-    contentType: args.contentType,
-  });
+  let storagePath: string;
+  try {
+    ({ storagePath } = await args.provider.write({
+      objectPath: buildObjectPath({
+        projectPublicId: args.projectPublicId,
+        category: args.category,
+        fileId: args.file.publicId,
+        filename: args.file.filename,
+        extension: args.extension,
+      }),
+      body: args.body,
+      contentType: args.contentType,
+    }));
+  } catch (error) {
+    if (args.row === 'new') {
+      await args.file.destroy({ transaction: args.transaction });
+    }
+    throw error;
+  }
   await args.file.update(
     {
       storagePath,

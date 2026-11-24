@@ -215,6 +215,7 @@ export const uploadFile = async (args: {
   await persistFileBytes({
     provider,
     file,
+    row: 'new',
     projectPublicId,
     category,
     body: args.body,
@@ -261,6 +262,7 @@ export const upsertFileByPath = async (args: {
     await persistFileBytes({
       provider: getStorageProvider({ storageType: existing.storageType }),
       file: existing,
+      row: 'existing',
       projectPublicId: args.projectPublicId,
       category,
       body: bufferBody({ buffer: args.fileBuffer }),
@@ -285,6 +287,7 @@ export const upsertFileByPath = async (args: {
   await persistFileBytes({
     provider,
     file,
+    row: 'new',
     projectPublicId: args.projectPublicId,
     category,
     body: bufferBody({ buffer: args.fileBuffer }),
