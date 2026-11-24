@@ -255,15 +255,18 @@ describe('File upload tokens', () => {
     test('a body cut off mid-upload leaves no file behind', async () => {
       const token = await issueToken({ prefix: '/cut', filename: 'cut.bin' });
       const handle = app.callback();
-      let markReceived: (handled: Promise<unknown>) => void = () => {};
       // Koa's handler answers with the request's own promise, so the test
-      // waits for the server to finish with the aborted upload.
-      const handled = new Promise<Promise<unknown>>((resolve) => {
+      // waits for the server to finish with the aborted upload. It travels
+      // boxed: resolving with a bare promise would wait for that promise.
+      let markReceived: (request: {
+        done: Promise<unknown>;
+      }) => void = () => {};
+      const received = new Promise<{ done: Promise<unknown> }>((resolve) => {
         markReceived = resolve;
       });
       const server = http
         .createServer((req, res) => {
-          markReceived(Promise.resolve(handle(req, res)));
+          markReceived({ done: Promise.resolve(handle(req, res)) });
         })
         .listen(0);
       try {
@@ -280,9 +283,9 @@ describe('File upload tokens', () => {
         request.on('error', () => {});
         request.write(Buffer.alloc(1024));
 
-        const inFlight = await handled;
+        const { done } = await received;
         request.destroy();
-        await inFlight;
+        await done;
 
         expect(await listPaths()).not.toContain('/cut/cut.bin');
       } finally {
