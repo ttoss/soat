@@ -630,7 +630,7 @@ A completed non-streaming generation returns the parsed value as `output.object`
 
 #### Answering at `max_steps`
 
-The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer, and an answer the model gives anyway on the last step is refused), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
+The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer, and an answer the model gives anyway on the last step is refused), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `400 VALIDATION_FAILED` at create/update.
 
 #### The schema is enforced, not advisory
 

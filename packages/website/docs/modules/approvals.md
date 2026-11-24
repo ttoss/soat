@@ -197,7 +197,8 @@ answer `409 APPROVAL_ALREADY_RESOLVED`.
   result flowing into the
   [continuation generation](#how-producers-suspend-and-resume).
 - **Edit-then-approve** replaces the arguments via `arguments` on the approve
-  call. They must be a JSON object satisfying the tool's `parameters` schema,
+  call. `null` or absent approves without an edit; otherwise they must be a JSON
+  object satisfying the tool's `parameters` schema,
   or a native tool's own input rules (`400 APPROVAL_INVALID_EDIT` otherwise,
   the item staying `pending`). An item with no `proposed_action`
   (`task_transition`) has nothing to edit, so `arguments` on it is

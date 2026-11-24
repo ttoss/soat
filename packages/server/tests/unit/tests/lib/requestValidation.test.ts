@@ -315,15 +315,17 @@ describe('validateRequestBody', () => {
     });
 
     test('leaves collection fields to their routes', () => {
-      // `parameters` takes a JSON-encoded string, which the route parses.
+      // `scorers` is route-owned: the route names each scorer's own error.
       expect(() => {
         return validateRequestBody({
           method: 'post',
-          path: '/tools',
+          path: '/evals',
           body: {
-            name: 'echo',
-            type: 'client',
-            parameters: '{"type":"object"}',
+            name: 'eval',
+            dataset_id: 'dst_1',
+            agent_id: 'agent_1',
+            policy_ids: ['pol_1'],
+            scorers: 'exact_match',
           },
         });
       }).not.toThrow();
@@ -393,8 +395,8 @@ describe('validateRequestBody', () => {
       expect(() => {
         return validateRequestBody({
           method: 'post',
-          path: '/agents',
-          body: { ai_provider_id: 'aip_1', output_schema: 'not-an-object' },
+          path: '/formations/validate',
+          body: { template: 42 },
         });
       }).not.toThrow();
     });

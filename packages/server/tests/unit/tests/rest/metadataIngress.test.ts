@@ -9,10 +9,9 @@ import { authenticatedTestClient } from '../../testClient';
  * invisible read.
  *
  * So every entry point that stores a bag answers the same way, through
- * `lib/metadataBag.ts`. Two surfaces that mention `metadata` are deliberately
- * not ingresses and are asserted as such below: knowledge search takes a
- * filter over bags, and the metadata-schema validator judges a bag instead of
- * keeping one.
+ * `lib/metadataBag.ts`, and the metadata-schema validator, which judges a bag
+ * rather than keeping one, refuses it by its schema. Knowledge search is not an
+ * ingress: it takes a filter over bags.
  */
 describe('every metadata ingress refuses a non-object bag', () => {
   let userToken: string;
@@ -189,23 +188,13 @@ describe('every metadata ingress refuses a non-object bag', () => {
         .put(`/api/v1/formations/${formationId}`)
         .send({ template: { resources: {} }, metadata });
     });
-  });
 
-  describe('a bag that is read rather than stored', () => {
-    test('the metadata-schema validator judges it instead of refusing it', async () => {
-      // This endpoint's answer *is* a verdict on a bag, so it reports one
-      // rather than refusing the request. What the verdict says depends on the
-      // schemas governing the path, which `metadataSchemas.test.ts` covers.
-      const response = await client()
-        .post('/api/v1/metadata-schemas/validate')
-        .send({
-          project_id: projectId,
-          path: '/reports/q1.md',
-          metadata: NOT_A_BAG,
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body.valid).toBeDefined();
+    refuses('POST /api/v1/metadata-schemas/validate', async (metadata) => {
+      return client().post('/api/v1/metadata-schemas/validate').send({
+        project_id: projectId,
+        path: '/reports/q1.md',
+        metadata,
+      });
     });
   });
 });
