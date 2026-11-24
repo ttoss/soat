@@ -18,6 +18,7 @@ import {
   streamToBuffer,
 } from './fileStorage';
 import { categoryFromPath, persistFileBytes } from './fileStorageLayout';
+import { bufferBody } from './storageBody';
 
 const log = createDebug('soat:documents');
 
@@ -70,7 +71,7 @@ export const createDocumentTextFile = async (args: {
       projectId: args.projectId,
     }),
     category: categoryFromPath(args.normalizedPath),
-    buffer: Buffer.from(args.content, 'utf-8'),
+    body: bufferBody({ buffer: Buffer.from(args.content, 'utf-8') }),
     contentType: 'text/plain',
     extension: DOCUMENT_TEXT_EXTENSION,
   });
@@ -258,7 +259,7 @@ export const commitDocumentChunkChanges = async (args: {
         projectId: file.projectId,
       }),
       category: change.category,
-      buffer: Buffer.from(change.content, 'utf-8'),
+      body: bufferBody({ buffer: Buffer.from(change.content, 'utf-8') }),
       contentType: 'text/plain',
       extension: DOCUMENT_TEXT_EXTENSION,
       transaction,

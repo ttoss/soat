@@ -20,6 +20,7 @@ import {
   streamToBuffer,
 } from 'src/lib/fileStorage';
 import type { StorageObjectPath } from 'src/lib/fileStorageLayout';
+import { bufferBody, fileBody } from 'src/lib/storageBody';
 
 /**
  * The branded object path exists to stop production code inventing its own
@@ -38,6 +39,21 @@ const drain = async (stream: Readable): Promise<Buffer> => {
   return Buffer.concat(chunks);
 };
 
+/** A body whose source is gone by the time it is read. */
+const failingBody = () => {
+  return fileBody({
+    path: path.join(os.tmpdir(), `soat-missing-${Date.now()}.bin`),
+    size: 7,
+  });
+};
+
+/** A spooled upload: a file on disk, read in chunks. */
+const spooledBody = (args: { dir: string; content: string }) => {
+  const spool = path.join(args.dir, 'spool.bin');
+  fs.writeFileSync(spool, args.content);
+  return fileBody({ path: spool, size: Buffer.byteLength(args.content) });
+};
+
 /**
  * An in-memory stand-in for the S3 client. Not a mock of code we own — it
  * fakes the external S3 boundary (which cannot run in CI) by interpreting the
@@ -46,11 +62,21 @@ const drain = async (stream: Readable): Promise<Buffer> => {
 const createFakeS3 = () => {
   const store = new Map<string, { body: Buffer; contentType?: string }>();
   let missing = false;
+  const puts: { key: string; contentLength?: number; streamed: boolean }[] = [];
   const client: S3ClientLike = {
     send: async (command) => {
       if (command instanceof PutObjectCommand) {
+        const { Body } = command.input;
+        const streamed = Body instanceof Readable;
+        // Like S3, a failed body stores nothing under the key.
+        const body = streamed ? await drain(Body) : Buffer.from(Body as Buffer);
+        puts.push({
+          key: command.input.Key as string,
+          contentLength: command.input.ContentLength,
+          streamed,
+        });
         store.set(command.input.Key as string, {
-          body: Buffer.from(command.input.Body as Buffer),
+          body,
           contentType: command.input.ContentType,
         });
         return {};
@@ -82,6 +108,7 @@ const createFakeS3 = () => {
   return {
     client,
     store,
+    puts,
     setMissing: (value: boolean) => {
       missing = value;
     },
@@ -104,7 +131,7 @@ describe('fileStorage', () => {
       const provider = createLocalStorageProvider({ storageDir: dir });
       const { storagePath } = await provider.write({
         objectPath: objectPath('proj_1/files/file_abc.txt'),
-        buffer: Buffer.from('hello'),
+        body: bufferBody({ buffer: Buffer.from('hello') }),
       });
 
       expect(storagePath).toBe(path.join(dir, 'proj_1/files/file_abc.txt'));
@@ -115,7 +142,7 @@ describe('fileStorage', () => {
       const provider = createLocalStorageProvider({ storageDir: dir });
       const { storagePath } = await provider.write({
         objectPath: objectPath('a/b.txt'),
-        buffer: Buffer.from('content'),
+        body: bufferBody({ buffer: Buffer.from('content') }),
       });
 
       const result = await provider.read({ storagePath });
@@ -136,7 +163,7 @@ describe('fileStorage', () => {
       const provider = createLocalStorageProvider({ storageDir: dir });
       const { storagePath } = await provider.write({
         objectPath: objectPath('x.txt'),
-        buffer: Buffer.from('bye'),
+        body: bufferBody({ buffer: Buffer.from('bye') }),
       });
 
       await provider.delete({ storagePath });
@@ -144,9 +171,76 @@ describe('fileStorage', () => {
       // second delete does not throw
       await expect(provider.delete({ storagePath })).resolves.toBeUndefined();
     });
+    test('write streams a spooled body', async () => {
+      const provider = createLocalStorageProvider({ storageDir: dir });
+      const { storagePath } = await provider.write({
+        objectPath: objectPath('proj_1/files/file_big.bin'),
+        body: spooledBody({ dir, content: 'abcde' }),
+      });
+
+      expect(fs.readFileSync(storagePath, 'utf-8')).toBe('abcde');
+    });
+
+    test('a body that fails leaves the previous object and no partial file', async () => {
+      const provider = createLocalStorageProvider({ storageDir: dir });
+      const target = objectPath('proj_1/files/file_x.txt');
+      const { storagePath } = await provider.write({
+        objectPath: target,
+        body: bufferBody({ buffer: Buffer.from('previous') }),
+      });
+
+      await expect(
+        provider.write({ objectPath: target, body: failingBody() })
+      ).rejects.toThrow('ENOENT');
+
+      expect(fs.readFileSync(storagePath, 'utf-8')).toBe('previous');
+      expect(fs.readdirSync(path.dirname(storagePath))).toEqual([
+        path.basename(storagePath),
+      ]);
+    });
   });
 
   describe('s3 provider', () => {
+    test('write streams the body with its length declared', async () => {
+      const fake = createFakeS3();
+      const provider = createS3StorageProvider({
+        client: fake.client,
+        bucket: 'my-bucket',
+      });
+
+      await provider.write({
+        objectPath: objectPath('proj_1/files/file_big.bin'),
+        body: spooledBody({
+          dir: fs.mkdtempSync(path.join(os.tmpdir(), 'soat-s3-spool-')),
+          content: 'abcde',
+        }),
+      });
+
+      expect(fake.puts).toEqual([
+        { key: 'proj_1/files/file_big.bin', contentLength: 5, streamed: true },
+      ]);
+      expect(fake.store.get('proj_1/files/file_big.bin')?.body.toString()).toBe(
+        'abcde'
+      );
+    });
+
+    test('a body that fails stores nothing', async () => {
+      const fake = createFakeS3();
+      const provider = createS3StorageProvider({
+        client: fake.client,
+        bucket: 'my-bucket',
+      });
+
+      await expect(
+        provider.write({
+          objectPath: objectPath('proj_1/files/file_x.txt'),
+          body: failingBody(),
+        })
+      ).rejects.toThrow('ENOENT');
+
+      expect(fake.store.size).toBe(0);
+    });
+
     test('write uploads under the bucket and returns the object key', async () => {
       const fake = createFakeS3();
       const provider = createS3StorageProvider({
@@ -156,7 +250,7 @@ describe('fileStorage', () => {
 
       const { storagePath } = await provider.write({
         objectPath: objectPath('proj_1/files/file_abc.txt'),
-        buffer: Buffer.from('hello'),
+        body: bufferBody({ buffer: Buffer.from('hello') }),
         contentType: 'text/plain',
       });
 
@@ -179,7 +273,7 @@ describe('fileStorage', () => {
 
       const { storagePath } = await provider.write({
         objectPath: objectPath('/proj_1/files/f.txt'),
-        buffer: Buffer.from('x'),
+        body: bufferBody({ buffer: Buffer.from('x') }),
       });
 
       expect(storagePath).toBe('soat/proj_1/files/f.txt');
@@ -193,7 +287,7 @@ describe('fileStorage', () => {
       });
       const { storagePath } = await provider.write({
         objectPath: objectPath('k.txt'),
-        buffer: Buffer.from('payload'),
+        body: bufferBody({ buffer: Buffer.from('payload') }),
       });
 
       const result = await provider.read({ storagePath });
@@ -222,7 +316,7 @@ describe('fileStorage', () => {
       });
       const { storagePath } = await provider.write({
         objectPath: objectPath('k.txt'),
-        buffer: Buffer.from('x'),
+        body: bufferBody({ buffer: Buffer.from('x') }),
       });
 
       await provider.delete({ storagePath });
@@ -297,7 +391,7 @@ describe('fileStorage', () => {
         storageDir,
       }).write({
         objectPath: objectPath('a/b.txt'),
-        buffer: Buffer.from('hi there'),
+        body: bufferBody({ buffer: Buffer.from('hi there') }),
       });
 
       const buffer = await readFileBuffer({
@@ -336,11 +430,11 @@ describe('fileStorage', () => {
       const provider = createLocalStorageProvider({ storageDir: dir });
       const a = await provider.write({
         objectPath: objectPath('a.txt'),
-        buffer: Buffer.from('a'),
+        body: bufferBody({ buffer: Buffer.from('a') }),
       });
       const b = await provider.write({
         objectPath: objectPath('b.txt'),
-        buffer: Buffer.from('b'),
+        body: bufferBody({ buffer: Buffer.from('b') }),
       });
 
       await deleteStorageObjects([
@@ -424,6 +518,20 @@ describe('fileStorage', () => {
     test('streamToBuffer coerces non-Buffer chunks', async () => {
       const buffer = await streamToBuffer(Readable.from(['a', 'b', 'c']));
       expect(buffer.toString()).toBe('abc');
+    });
+  });
+  describe('the storage-body boundary', () => {
+    test('a provider only accepts a body minted by storageBody', () => {
+      const write = (_args: { body: ReturnType<typeof bufferBody> }) => {
+        return null;
+      };
+      // The brand keeps a stream whose size nobody stated from reaching a
+      // backend that has to declare it up front.
+      // @ts-expect-error a raw stream and size is not a StorageBody
+      write({ body: { stream: Readable.from([]), size: 0 } });
+      expect(
+        write({ body: bufferBody({ buffer: Buffer.alloc(0) }) })
+      ).toBeNull();
     });
   });
 });

@@ -119,7 +119,7 @@ describe('validateRequestBody', () => {
 
     // A union of closed objects still names a finite field set: a key no branch
     // declares is unknown whichever branch the body means. Which branch it is
-    // stays the handler's question, so a key any branch declares passes.
+    // is the full schema's question, so a key any branch declares is known.
     test('rejects a key no branch of a union declares', () => {
       const error = expectThrows(() => {
         return validateRequestBody({
@@ -131,14 +131,16 @@ describe('validateRequestBody', () => {
       expect(error.meta).toEqual({ unknown_fields: ['bogus'] });
     });
 
-    test('accepts fields drawn from more than one branch of a union', () => {
-      expect(() => {
+    test('reads fields drawn from more than one branch of a union as known', () => {
+      const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
           path: '/sessions/:session_id/messages',
           body: { message: 'hi', document_id: 'doc_1' },
         });
-      }).not.toThrow();
+      });
+      expect(error.meta).not.toHaveProperty('unknown_fields');
+      expect(error.message).toMatch(/must match exactly one schema in oneOf/);
     });
 
     test('rejects a key no scorer branch declares, with its indexed path', () => {
@@ -193,7 +195,7 @@ describe('validateRequestBody', () => {
     });
   });
 
-  describe('required fields (top level only)', () => {
+  describe('required fields', () => {
     test('rejects a missing top-level required field', () => {
       const error = expectThrows(() => {
         return validateRequestBody({
@@ -218,16 +220,16 @@ describe('validateRequestBody', () => {
       expect(error.meta).toEqual({ missing_fields: ['name'] });
     });
 
-    test('does not enforce required fields nested inside objects', () => {
-      // OrchestrationNode requires id+type, but nested required is out of scope —
-      // only the unknown-field walk runs nested. A node missing `type` passes.
-      expect(() => {
+    test('enforces required fields nested inside objects', () => {
+      const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
           path: '/orchestrations',
           body: { name: 'flow', nodes: [{ id: 'n1' }], edges: [] },
         });
-      }).not.toThrow();
+      });
+      expect(error.code).toBe('VALIDATION_FAILED');
+      expect(error.message).toBe('`nodes.0.type` is required');
     });
 
     test('does not throw for a route with no required fields and an empty body', () => {
@@ -393,8 +395,8 @@ describe('validateRequestBody', () => {
       expect(() => {
         return validateRequestBody({
           method: 'post',
-          path: generate,
-          body: { messages: [{ role: 'system', content: 'x' }] },
+          path: '/formations/validate',
+          body: { template: 42 },
         });
       }).not.toThrow();
     });

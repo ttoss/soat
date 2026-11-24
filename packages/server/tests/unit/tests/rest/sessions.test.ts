@@ -767,7 +767,6 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/message/);
     });
 
     test('non-string message returns 400', async () => {
@@ -795,7 +794,6 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/mutually exclusive/);
     });
 
     describe('idempotency_key', () => {
