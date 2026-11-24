@@ -69,6 +69,11 @@ export const ERROR_CODES = {
     description:
       'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable).',
   },
+  SHARED_AI_PROVIDER_ERROR: {
+    httpStatus: 502,
+    description:
+      "An AI provider another project shares with this one failed. The vendor's status and body are the sharing project's and are not relayed.",
+  },
   REPLAY_REFUSED: {
     httpStatus: 502,
     description:

@@ -369,7 +369,9 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR) — the provider
+            Upstream AI provider error (AI_PROVIDER_ERROR, or
+            SHARED_AI_PROVIDER_ERROR on a provider another project shares,
+            without the vendor's status or message) — the provider
             rejected the completion (an unavailable model, a refused
             credential) or could not be reached. The message names the
             provider's own status and message, so an unavailable model is

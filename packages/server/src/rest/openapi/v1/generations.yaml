@@ -753,7 +753,8 @@ components:
           nullable: true
           description: >-
             Why the generation failed: `AI_PROVIDER_ERROR` for an upstream
-            provider failure, `GENERATION_FAILED` for any other failure of the
+            provider failure (`SHARED_AI_PROVIDER_ERROR` on a provider another
+            project shares), `GENERATION_FAILED` for any other failure of the
             turn.
         action_id:
           type: string

@@ -573,7 +573,9 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR); model output that
+            Upstream AI provider error (AI_PROVIDER_ERROR, or
+            SHARED_AI_PROVIDER_ERROR on a provider another project shares);
+            model output that
             does not satisfy the agent's `output_schema`
             (OUTPUT_SCHEMA_VALIDATION_FAILED — the violated field is named in
             the message); or a model that wrote a tool invocation out as plain
@@ -673,7 +675,9 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR); model output that
+            Upstream AI provider error (AI_PROVIDER_ERROR, or
+            SHARED_AI_PROVIDER_ERROR on a provider another project shares);
+            model output that
             does not satisfy the agent's `output_schema`
             (OUTPUT_SCHEMA_VALIDATION_FAILED); or a model that wrote a tool
             invocation out as plain assistant text instead of calling the tool

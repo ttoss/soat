@@ -470,7 +470,8 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR), or
+            Upstream AI provider error (AI_PROVIDER_ERROR, or
+            SHARED_AI_PROVIDER_ERROR on a provider another project shares), or
             REPLAY_REFUSED when the provider refused the replayed history
             (`meta.cause`, `meta.replayed_window`). The error `meta`
             includes the `generation_id` and `trace_id` of the failed

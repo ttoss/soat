@@ -415,7 +415,10 @@ describe('Shared AI providers', () => {
         const body = JSON.stringify(response.body);
 
         expect(JSON.stringify(own.body)).toContain(VENDOR_DETAIL);
+        expect(own.body.error.code).toBe('AI_PROVIDER_ERROR');
         expect(response.status).toBe(502);
+        expect(response.body.error.code).toBe('SHARED_AI_PROVIDER_ERROR');
+        expect(response.body.error.hint).not.toBe(own.body.error.hint);
         expect(body).not.toContain(VENDOR_DETAIL);
         expect(body).not.toContain('provider_status_code');
       } finally {
@@ -430,6 +433,7 @@ describe('Shared AI providers', () => {
         const response = await generateStream(agent.body.id);
 
         expect(response.text).not.toContain(VENDOR_DETAIL);
+        expect(response.text).toContain('SHARED_AI_PROVIDER_ERROR');
       } finally {
         failing = false;
       }
@@ -442,6 +446,7 @@ describe('Shared AI providers', () => {
         const response = await generateStream(agent.body.id);
 
         expect(response.text).not.toContain(VENDOR_DETAIL);
+        expect(response.text).toContain('SHARED_AI_PROVIDER_ERROR');
       } finally {
         streamFailing = false;
       }
@@ -458,6 +463,7 @@ describe('Shared AI providers', () => {
       const response = await generate(agent.body.id);
 
       expect(response.status).toBe(502);
+      expect(response.body.error.code).toBe('SHARED_AI_PROVIDER_ERROR');
       expect(JSON.stringify(response.body)).not.toContain('127.0.0.1');
     });
 
