@@ -16,6 +16,17 @@ const server = http.createServer(app.callback());
 server.listen(0);
 server.unref();
 
+// An open server roots this file's whole module graph (app, models, schemas)
+// in the worker after the file ends, so every file would add its own to the heap.
+afterAll(async () => {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => {
+    server.close(() => {
+      resolve();
+    });
+  });
+});
+
 const agent = request(server);
 
 /**
