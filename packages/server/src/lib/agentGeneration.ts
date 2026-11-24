@@ -53,27 +53,7 @@ const dispatchGeneration = (args: {
   rootTraceId?: string | null;
   abortSignal?: AbortSignal;
 }): Promise<GenerationResult | ReadableStream> => {
-  if (args.stream) {
-    assertStreamingSupportsOutputSchema(args.ctx.typedAgent.outputSchema);
-    return runStreamGeneration({
-      model: args.ctx.model,
-      allMessages: args.ctx.allMessages,
-      resolvedTools: args.ctx.resolvedTools,
-      toolsAuthority: args.ctx.toolsAuthority,
-      typedAgent: args.ctx.typedAgent,
-      toolChoice: args.ctx.toolChoice,
-      generationId: args.ctx.generationId,
-      traceId: args.traceId,
-      agentId: args.agentId,
-      parentTraceId: args.parentTraceId ?? null,
-      rootTraceId: args.rootTraceId ?? null,
-      toolContext: args.ctx.toolContext ?? null,
-      remainingDepth: args.ctx.remainingDepth ?? null,
-      provenance: args.ctx.provenance,
-      abortSignal: args.abortSignal,
-    });
-  }
-  return runNonStreamGeneration({
+  const turn = {
     model: args.ctx.model,
     allMessages: args.ctx.allMessages,
     resolvedTools: args.ctx.resolvedTools,
@@ -85,11 +65,15 @@ const dispatchGeneration = (args: {
     agentId: args.agentId,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
-    abortSignal: args.abortSignal,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: args.ctx.remainingDepth ?? null,
     provenance: args.ctx.provenance,
-  });
+    replayed: args.ctx.replayed,
+    abortSignal: args.abortSignal,
+  };
+  if (!args.stream) return runNonStreamGeneration(turn);
+  assertStreamingSupportsOutputSchema(args.ctx.typedAgent.outputSchema);
+  return runStreamGeneration(turn);
 };
 
 /** What {@link resolveContextAndRecord} needs to build a turn and record it. */

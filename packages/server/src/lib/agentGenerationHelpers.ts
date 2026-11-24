@@ -15,6 +15,7 @@ import { logSettleFailure, settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
 import { routedAiProviderId, servedModelName } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
+import type { ReplayedWindow } from './replayRefusal';
 import { assertNoTextEncodedToolCall } from './textEncodedToolCall';
 import {
   mergePresetParameters,
@@ -160,6 +161,7 @@ const storePendingGenerationState = (args: {
   remainingDepth?: number | null;
   aiProviderId: string | null;
   provenance: GenerationProvenance;
+  replayed: ReplayedWindow | null;
   requiredAction: GenerationRequiredActionWire;
 }): Promise<unknown> => {
   // Computed once rather than twice below, so a change to how a turn is frozen
@@ -194,6 +196,7 @@ const storePendingGenerationState = (args: {
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
     provenance: args.provenance,
+    replayed: args.replayed,
   });
 
   // Persist pending state to DB so it can be recovered after a server restart.
@@ -207,6 +210,7 @@ const storePendingGenerationState = (args: {
     rootTraceId: args.rootTraceId ?? null,
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
+    replayed: args.replayed,
   };
   // Its own column: `metadata` is the caller's bag. Awaited: a submission
   // claims the pause by its status, so it must land before the caller can
@@ -257,6 +261,8 @@ export const savePendingGeneration = async (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
   provenance: GenerationProvenance;
+  /** The conversation positions the turn replays; `null` when it replays none. */
+  replayed: ReplayedWindow | null;
 }): Promise<GenerationResult> => {
   const aiProviderId = servedAiProviderId({
     model: args.model,
