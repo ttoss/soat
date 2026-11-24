@@ -18,7 +18,7 @@ import {
 } from '../triggers';
 import { defineFormationModule } from './defineFormationModule';
 import {
-  isFormationExpression,
+  holdsFormationExpression,
   isObjectRecord,
   pushStringBagValueErrors,
 } from './formationSpecLoader';
@@ -34,28 +34,37 @@ const toOptionalBoolean = (value: unknown): boolean | undefined => {
   return value != null ? Boolean(value) : undefined;
 };
 
-/**
- * A field supplied as an unresolved formation expression (`{ sub }`, `{ param }`,
- * `{ ref }`) is treated as *present* for the presence/exclusivity checks — its
- * literal value only exists after parameter/ref resolution at apply time, where
- * the real cron string is re-validated. Without this, a parameterized `cron`
- * (e.g. `cron: { sub: "${healthcheck_cron}" }`) normalizes to `null` here and
- * trips "cron is required for schedule triggers" even though it is provided.
- */
-const EXPRESSION_PLACEHOLDER = '<expression>';
+type ShapeField = Exclude<
+  keyof Parameters<typeof validateTriggerShape>[0],
+  'type' | 'targetType'
+>;
 
-const shapeFieldValue = (value: unknown): string | null => {
-  if (isFormationExpression(value)) return EXPRESSION_PLACEHOLDER;
-  return toNullableString(value) ?? null;
+/**
+ * What each shape field reads as while it holds a `ref`/`param`/`sub`
+ * anywhere: present, and passing the checks of its literal kind. The shape
+ * error is reported on the resource, not the field, so the validator cannot
+ * drop it; the apply re-runs the shape on the resolved value.
+ */
+const SHAPE_PLACEHOLDERS: Record<ShapeField, unknown> = {
+  action: '<expression>',
+  cron: '<expression>',
+  events: ['*'],
+  eventResources: ['*'],
+  eventData: {},
 };
 
-/** A list field whose items may be expressions, with each one resolved later. */
-const shapeListValue = (value: unknown): unknown => {
-  if (isFormationExpression(value)) return ['*'];
-  if (!Array.isArray(value)) return value;
-  return value.map((item) => {
-    return isFormationExpression(item) ? '*' : item;
-  });
+const shapeValue = (args: { field: ShapeField; value: unknown }): unknown => {
+  return holdsFormationExpression(args.value)
+    ? SHAPE_PLACEHOLDERS[args.field]
+    : args.value;
+};
+
+const shapeString = (args: {
+  field: 'action' | 'cron';
+  value: unknown;
+}): string | null => {
+  const value = shapeValue(args);
+  return toNullableString(value) ?? null;
 };
 
 /** The template's `events`, `event_pattern` spelling included. */
@@ -90,16 +99,24 @@ const pushShapeRuleErrors = (args: {
     validateTriggerShape({
       type: properties.type,
       targetType: properties.target_type,
-      action: shapeFieldValue(properties.action),
-      cron: shapeFieldValue(properties.cron),
-      events: shapeListValue(
-        properties.events ??
+      action: shapeString({ field: 'action', value: properties.action }),
+      cron: shapeString({ field: 'cron', value: properties.cron }),
+      events: shapeValue({
+        field: 'events',
+        value:
+          properties.events ??
           (properties.event_pattern == null
             ? undefined
-            : [properties.event_pattern])
-      ),
-      eventResources: shapeListValue(properties.event_resources),
-      eventData: properties.event_data,
+            : [properties.event_pattern]),
+      }),
+      eventResources: shapeValue({
+        field: 'eventResources',
+        value: properties.event_resources,
+      }),
+      eventData: shapeValue({
+        field: 'eventData',
+        value: properties.event_data,
+      }),
     });
     // Only a literal cron can be parsed here; an expression's real value is
     // validated at apply time once the parameter/ref is resolved.

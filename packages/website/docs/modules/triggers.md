@@ -437,7 +437,10 @@ resource type with properties `name`, `description`, `type`, `target_type`,
 `target_id`, `action`, `input`, `cron`, `events`, `event_pattern`,
 `event_resources`, `event_data`, `active`, and `policy_ids`. Use
 `{ "ref": "LogicalId" }` for `target_id` and each `policy_ids` item, and
-`ref_attr` to capture a webhook trigger's generated secret as an output:
+`ref_attr` to capture a webhook trigger's generated secret as an output. A
+`ref`, `param` or `sub` may also stand for any value in `cron`, `events`,
+`event_resources` or `event_data` (an `event_data` value, `in` item or
+bound); a field holding one is checked once it resolves, at apply:
 
 ```json
 {
