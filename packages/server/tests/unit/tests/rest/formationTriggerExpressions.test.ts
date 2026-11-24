@@ -41,7 +41,8 @@ const eventTrigger = (fields: Record<string, unknown>) => {
 beforeAll(async () => {
   const setup = await setupProjectWithUsers({
     prefix: 'fmtrigexpr',
-    policyActions: ['formations:GetFormation'],
+    // The trigger's policy must read the events it subscribes to.
+    policyActions: ['formations:GetFormation', 'agents:GetAgent'],
     createNoPermUser: false,
   });
   adminToken = setup.adminToken;
@@ -120,6 +121,7 @@ describe('POST /api/v1/formations — a trigger event_data ref', () => {
         parameters: { Value: 'unused' },
       });
     expect(res.status).toBe(201);
+    expect(res.body.error).toBeNull();
     const resources: { logical_id: string; physical_resource_id: string }[] =
       res.body.resources;
     const physicalId = (logicalId: string) => {
