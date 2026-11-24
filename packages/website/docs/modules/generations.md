@@ -153,9 +153,11 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 
 `meta.provider_status_code` is the status the provider answered with, and `meta.provider_response_body` its raw response body, each present when the provider sent one; a network fault carries neither. `meta` also carries the `generation_id` and `trace_id` of the failed run for inspection via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
 
+On a provider another project [shares](./shares.md) with the caller's, the same failure is `502 SHARED_AI_PROVIDER_ERROR` with the message `The shared AI provider failed to answer.` and neither `provider_status_code` nor `provider_response_body`: the vendor's answer, the credential and the account behind it are the sharing project's.
+
 ### A replay the provider refuses (`REPLAY_REFUSED`)
 
-A turn that replays a conversation (a session or conversation turn) and that the provider refuses answers `502` `REPLAY_REFUSED` instead of `AI_PROVIDER_ERROR`, on the project's own provider, through a forwarded alias and through a shared provider alike. A refusal is a non-retryable `4xx`; a rate limit, timeout or `5xx` stays `AI_PROVIDER_ERROR`.
+A turn that replays a conversation (a session or conversation turn) and that the provider refuses answers `502` `REPLAY_REFUSED` instead of `AI_PROVIDER_ERROR`, on the project's own provider, through a forwarded alias and through a shared provider alike. A refusal is a non-retryable `4xx`; a rate limit, timeout or `5xx` stays `AI_PROVIDER_ERROR` (`SHARED_AI_PROVIDER_ERROR` on a shared provider).
 
 ```json
 {
@@ -174,11 +176,11 @@ A turn that replays a conversation (a session or conversation turn) and that the
 
 | `meta.cause` | Provider status | What to do |
 | --- | --- | --- |
-| `history_refused` | `400` | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
-| `context_too_long` | `413` | Lower the session's `max_context_messages`, fork, or start a new session |
+| `history_refused` | `400` not naming the context window | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
+| `context_too_long` | `413`, or a `4xx` saying the prompt exceeds the model's context window | Lower the session's `max_context_messages`, fork, or start a new session |
 | `request_refused` | any other `4xx` | Read the failed generation |
 
-`meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status alone: neither the provider's text nor its status reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) reports its refusal as `AI_PROVIDER_ERROR`.
+`meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status and error text: neither reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) reports its refusal as `AI_PROVIDER_ERROR`.
 
 ### Metadata
 

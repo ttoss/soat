@@ -1,4 +1,3 @@
-import { db } from 'src/db';
 import { flushTaskAutomations } from 'src/lib/tasks';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -450,27 +449,6 @@ describe('POST /api/v1/tasks/:task_id/migrate', () => {
     const older = await migrate(task.id, { to_version: 1 });
     expect(older.status).toBe(400);
     expect(older.body.error.code).toBe('VALIDATION_FAILED');
-  });
-
-  test('a task with no pinned version is pinned by the migration', async () => {
-    const { task } = await reviewTaskWithV2();
-    await db.Task.update(
-      { workflowVersion: null },
-      { where: { publicId: task.id } }
-    );
-
-    const res = await migrate(task.id, { to_version: 1 });
-    expect(res.status).toBe(200);
-    expect(res.body.workflow_version).toBe(1);
-
-    const history = await authenticatedTestClient(userToken).get(
-      `/api/v1/tasks/${task.id}/history`
-    );
-    const rows = history.body.data as Record<string, unknown>[];
-    expect(rows[rows.length - 1]).toMatchObject({
-      from_workflow_version: null,
-      to_workflow_version: 1,
-    });
   });
 
   test('an unknown task is 404', async () => {

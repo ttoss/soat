@@ -101,6 +101,7 @@ describe('Orchestration → generation attribution', () => {
 
     return db.OrchestrationRun.create({
       orchestrationId: orch?.id as number,
+      orchestrationVersion: 1,
       projectId: projectPk,
       status: 'running',
       state: {},

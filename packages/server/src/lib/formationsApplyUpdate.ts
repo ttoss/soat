@@ -17,6 +17,7 @@ import {
 import {
   type DeployedResource,
   propertyComparisonFor,
+  writeOnlyAsDeployed,
 } from './formationsComparison';
 import { mergeWithPrevious } from './formationsProperties';
 import { clearablePropertiesOf } from './formationsRegistry';
@@ -243,6 +244,8 @@ const mergeWithLastApplied = (args: {
   deployed: DeployedResource | undefined;
 }): ReturnType<typeof mergeWithPrevious> & {
   lastApplied: Record<string, unknown>;
+  /** The write-only properties `merged` sends, at the value the last deploy left. */
+  previousWriteOnly: Record<string, unknown>;
 } => {
   const lastApplied = (args.existing.lastAppliedProperties ?? {}) as Record<
     string,
@@ -261,7 +264,16 @@ const mergeWithLastApplied = (args: {
       deployed: args.deployed,
     }),
   });
-  return { ...merge, lastApplied };
+  const asDeployed = writeOnlyAsDeployed({
+    resourceType: args.resourceType,
+    deployed: args.deployed,
+  });
+  const previousWriteOnly = Object.fromEntries(
+    Object.entries(asDeployed).filter(([name]) => {
+      return name in merge.merged;
+    })
+  );
+  return { ...merge, lastApplied, previousWriteOnly };
 };
 
 const deferDisposal = async (args: {
@@ -351,6 +363,7 @@ export const applyUpdateChange = async (args: {
       previousPhysicalResourceId,
       previousStatus,
       previousProperties: merge.lastApplied,
+      previousWriteOnly: merge.previousWriteOnly,
       ...(replaced
         ? { replacementPhysicalResourceId: physicalResourceId }
         : {}),

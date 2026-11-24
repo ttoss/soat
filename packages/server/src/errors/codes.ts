@@ -67,12 +67,17 @@ export const ERROR_CODES = {
   AI_PROVIDER_ERROR: {
     httpStatus: 502,
     description:
-      'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable).',
+      'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable). `meta.provider_status_code` is the status the provider answered with and `meta.provider_response_body` its body, each when the provider sent one; a forwarding provider keeps the status only. A failed generation adds its `generation_id` and `trace_id`.',
+  },
+  SHARED_AI_PROVIDER_ERROR: {
+    httpStatus: 502,
+    description:
+      "An AI provider another project shares with this one failed. The vendor's status and body are the sharing project's and are not relayed.",
   },
   REPLAY_REFUSED: {
     httpStatus: 502,
     description:
-      'The AI provider refused a turn that replays a conversation. `meta.cause` classifies it from the provider status (`history_refused`, `context_too_long`, `request_refused`) and `meta.replayed_window` names the first and last conversation `position` the turn sent. The provider text is not relayed.',
+      'The AI provider refused a turn that replays a conversation. `meta.cause` classifies it from the provider status and error text (`history_refused`, `context_too_long`, `request_refused`) and `meta.replayed_window` names the first and last conversation `position` the turn sent. The provider text is not relayed.',
   },
   GENERATION_FAILED: {
     httpStatus: 500,
@@ -435,7 +440,7 @@ export const ERROR_CODES = {
   ADMISSION_REFUSED: {
     httpStatus: 403,
     description:
-      "The deployment's registered admission service refused this write. The response carries the service's own status, `code`, `message` and `meta`, not this code; this entry documents where such an answer comes from. A builtin action's non-2xx answer with no error envelope is this code itself, its `meta` carrying `tool_status_code`, `tool_action` and `tool_method`.",
+      "The deployment's registered admission service refused this write. The response carries the service's own status, `code`, `message`, `meta` and, when it sends one, `hint`, not this code; this entry documents where such an answer comes from. A builtin action's non-2xx answer with no error envelope is this code itself, its `meta` carrying `tool_status_code`, `tool_action` and `tool_method`.",
   },
   ADMISSION_UNAVAILABLE: {
     httpStatus: 502,

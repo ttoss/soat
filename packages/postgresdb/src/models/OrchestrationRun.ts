@@ -67,10 +67,9 @@ export class OrchestrationRun extends Model {
 
   // Stamped at start and never changed, so editing the orchestration cannot
   // re-shape a run already in flight. Every execution entry point
-  // resolves the graph through this rather than the live row. Null for runs
-  // predating pinning, which fall back to the live row.
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare orchestrationVersion: number | null;
+  // resolves the graph through this rather than the live row.
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare orchestrationVersion: number;
 
   @ForeignKey(() => {
     return Project;

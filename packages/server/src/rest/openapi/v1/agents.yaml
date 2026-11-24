@@ -34,6 +34,31 @@ paths:
       summary: Create an agent
       description: Creates a new agent bound to an AI provider. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: createAgent
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:CreateAgent
       x-iam-resource-type: agent
       requestBody:
@@ -105,6 +130,12 @@ paths:
       summary: List agents
       description: Returns all agents in the project.
       operationId: listAgents
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:ListAgents
       x-iam-resource-type: agent
       parameters:
@@ -158,6 +189,14 @@ paths:
         agent is shared with, through an accepted share, reads its `id` and
         `name` only.
       operationId: getAgent
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: agents:GetAgent
       x-iam-resource-type: agent
       parameters:
@@ -199,6 +238,31 @@ paths:
       summary: Update an agent
       description: Updates an existing agent. Identical to PATCH — both perform partial updates. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: updateAgent
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:UpdateAgent
       x-iam-resource-type: agent
       parameters:
@@ -255,6 +319,31 @@ paths:
       summary: Partially update an agent
       description: Partially updates an existing agent. Identical to PUT — both perform partial updates. A `{{secret:...}}` reference in an inline `tool_bindings[].tool` also needs `secrets:UseSecret` on that secret, else `403`.
       operationId: patchAgent
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:UpdateAgent
       x-iam-resource-type: agent
       parameters:
@@ -316,6 +405,18 @@ paths:
         traces are deleted along with the agent and the shares are revoked.
         Every share of the agent is revoked when it is deleted.
       operationId: deleteAgent
+      x-raises:
+        - AGENT_HAS_DEPENDENTS
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FILE_HAS_DEPENDENTS
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:DeleteAgent
       x-iam-resource-type: agent
       parameters:
@@ -394,6 +495,71 @@ paths:
         accepted share, runs it in that project: on the publisher's
         configuration, recorded, metered and governed in the grantee project.
       operationId: createAgentGeneration
+      x-raises:
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - SYSTEM_MESSAGE_NOT_ALLOWED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: agents:CreateAgentGeneration
       x-iam-resource-type: agent
       parameters:
@@ -539,6 +705,9 @@ paths:
           description: >-
             `IDEMPOTENCY_KEY_REUSED` — the key is already claimed by a
             generation started from a different request. Nothing runs.
+            `MODEL_NOT_PRICED` — the project or AI provider has
+            `require_priced_model` and no price row covers the model;
+            `error.meta.unpriced_rows` names each row to price.
           content:
             application/json:
               schema:
@@ -573,7 +742,9 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR); model output that
+            Upstream AI provider error (AI_PROVIDER_ERROR, or
+            SHARED_AI_PROVIDER_ERROR on a provider another project shares);
+            model output that
             does not satisfy the agent's `output_schema`
             (OUTPUT_SCHEMA_VALIDATION_FAILED — the violated field is named in
             the message); or a model that wrote a tool invocation out as plain
@@ -602,6 +773,25 @@ paths:
         runs under the generation's stored authority held to the caller's, so
         a resume never widens what the turn may do.
       operationId: submitAgentToolOutputs
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - CONVERSATION_POSITION_CONFLICT
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INTERNAL_ERROR
+        - NAME_CONFLICT
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: generations:ResumeGeneration
       x-iam-resource-type: generation
       parameters:
@@ -673,7 +863,9 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR); model output that
+            Upstream AI provider error (AI_PROVIDER_ERROR, or
+            SHARED_AI_PROVIDER_ERROR on a provider another project shares);
+            model output that
             does not satisfy the agent's `output_schema`
             (OUTPUT_SCHEMA_VALIDATION_FAILED); or a model that wrote a tool
             invocation out as plain assistant text instead of calling the tool
@@ -695,6 +887,32 @@ paths:
         through the REST API or a formation apply alike. See
         [Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
       operationId: listAgentVersions
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_CURSOR
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:ListAgentVersions
       x-iam-resource-type: agent
       parameters:
@@ -748,6 +966,32 @@ paths:
         Returns the exact configuration the agent held at a given version, so a
         generation can be traced back to the config that produced it.
       operationId: getAgentVersion
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_CURSOR
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:GetAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -803,6 +1047,16 @@ paths:
         promotion keeps:
         [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion).
       operationId: listAgentVersionClaims
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:GetAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -864,6 +1118,16 @@ paths:
         version no promotion made live.
         The live read is `GET /api/v1/agents/{agent_id}/versions/{version}/claims`.
       operationId: listAgentVersionPromotionClaims
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:GetAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -930,6 +1194,32 @@ paths:
         config, so a tool, provider, or guardrail deleted since the snapshot was
         taken fails the request instead of writing a broken agent.
       operationId: restoreAgentVersion
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_CURSOR
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:RestoreAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -1005,6 +1295,20 @@ paths:
         further edits archive new versions but do not disturb either side of the
         running split. End the rollout with `promote` or `abort`.
       operationId: setAgentRelease
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
       parameters:
@@ -1095,6 +1399,35 @@ paths:
         /api/v1/agents/{agent_id}/versions/{version}/promotion-claims`) and the
         release's `released_claims`.
       operationId: promoteAgentRelease
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_CURSOR
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - NO_ACTIVE_RELEASE
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - PROMOTION_CLAIM_UNMET
+        - PROMOTION_GATE_UNMET
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
       parameters:
@@ -1154,6 +1487,33 @@ paths:
         rollout was measured against — not to whatever draft the live columns
         happened to hold.
       operationId: abortAgentRelease
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AGENT_RUN_AS_REQUIRES_POLICIES
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - FORCED_TOOL_CHOICE_CANNOT_STOP
+        - GUARDRAIL_NOT_FOUND
+        - INVALID_CURSOR
+        - INVALID_OUTPUT_SCHEMA
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LITERAL_CREDENTIAL
+        - MEMORY_STORE_NOT_FOUND
+        - MODEL_NOT_OFFERED
+        - NO_ACTIVE_RELEASE
+        - PIPELINE_INVALID_STEP
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
       parameters:

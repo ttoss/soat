@@ -32,6 +32,16 @@ paths:
       summary: Create a chat
       description: Creates a new chat resource bound to an AI provider.
       operationId: createChat
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - MODEL_NOT_OFFERED
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: chats:CreateChat
       x-iam-resource-type: chat
       requestBody:
@@ -99,6 +109,12 @@ paths:
       summary: List chats
       description: Returns all chats in the project.
       operationId: listChats
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: chats:ListChats
       x-iam-resource-type: chat
       parameters:
@@ -149,6 +165,10 @@ paths:
       summary: Get a chat
       description: Returns a single chat by ID.
       operationId: getChat
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: chats:GetChat
       x-iam-resource-type: chat
       parameters:
@@ -190,6 +210,10 @@ paths:
       summary: Delete a chat
       description: Deletes a chat by ID.
       operationId: deleteChat
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: chats:DeleteChat
       x-iam-resource-type: chat
       parameters:
@@ -255,6 +279,74 @@ paths:
         Chats hold no message history — send the full `messages` array every
         time.
       operationId: createChatCompletion
+      x-raises:
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CHAT_NOT_FOUND
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - SYSTEM_MESSAGE_NOT_ALLOWED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: chats:CreateChatCompletion
       x-iam-resource-type: chat
       requestBody:
@@ -369,7 +461,9 @@ paths:
           $ref: './errors.yaml#/components/responses/AdmissionRefused'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR) — the provider
+            Upstream AI provider error (AI_PROVIDER_ERROR, or
+            SHARED_AI_PROVIDER_ERROR on a provider another project shares,
+            without the vendor's status or message) — the provider
             rejected the completion (an unavailable model, a refused
             credential) or could not be reached. The message names the
             provider's own status and message, so an unavailable model is

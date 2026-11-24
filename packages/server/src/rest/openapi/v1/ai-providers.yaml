@@ -26,6 +26,12 @@ paths:
       summary: List AI providers
       description: Returns a list of AI provider configurations for a project
       operationId: listAiProviders
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ai-providers:ListAiProviders
       x-iam-resource-type: aiProvider
       parameters:
@@ -149,6 +155,17 @@ paths:
         chain, Google Application Default Credentials), which is refused with
         `400 VALIDATION_FAILED` unless the deployment allows it.
       operationId: createAiProvider
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - MODEL_NOT_OFFERED
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ai-providers:CreateAiProvider
       x-iam-resource-type: aiProvider
       requestBody:
@@ -307,6 +324,13 @@ paths:
         its `id`, `name`, `provider`, `default_model` and `model_alias_names`
         only.
       operationId: getAiProvider
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: ai-providers:GetAiProvider
       x-iam-resource-type: aiProvider
       parameters:
@@ -401,6 +425,16 @@ paths:
       summary: Update an AI provider
       description: Updates an AI provider configuration. Setting `base_url` or `secret_id` so the record holds both also needs `secrets:UseSecret` on the secret, else `403`.
       operationId: updateAiProvider
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - MODEL_NOT_OFFERED
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ai-providers:UpdateAiProvider
       x-iam-resource-type: aiProvider
       parameters:
@@ -529,6 +563,11 @@ paths:
         reports the counts, a sample of offending IDs, and a `forcible` flag that
         is `true` when a `force=true` retry would succeed.
       operationId: deleteAiProvider
+      x-raises:
+        - AI_PROVIDER_HAS_DEPENDENTS
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: ai-providers:DeleteAiProvider
       x-iam-resource-type: aiProvider
       parameters:
@@ -642,6 +681,19 @@ paths:
         `cursor` narrow and page what it returned. A request without `limit`
         gets the first 50 models.
       operationId: listAiProviderModels
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - MODEL_LISTING_FAILED
+        - MODEL_LISTING_UNSUPPORTED
+        - RESOURCE_NOT_FOUND
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ai-providers:ListAiProviderModels
       x-iam-resource-type: aiProvider
       parameters:
@@ -720,6 +772,11 @@ paths:
         time. Authorized by the caller's access to the provider's project — so,
         unlike the global price book, a project's own overrides are visible here.
       operationId: getAiProviderPrices
+      x-raises:
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: ai-providers:GetAiProviderPrices
       x-iam-resource-type: aiProvider
       parameters:
@@ -776,6 +833,12 @@ paths:
         yet may be dated now or earlier, so a new provider is never live and
         unpriced.
       operationId: updateAiProviderPrices
+      x-raises:
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: ai-providers:ManageAiProviderPrices
       x-iam-resource-type: aiProvider
       x-soat-agent-exclude: true

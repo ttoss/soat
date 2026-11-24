@@ -29,6 +29,12 @@ paths:
       summary: List collections
       description: Returns the collections in scope, oldest first.
       operationId: listCollections
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: collections:ListCollections
       x-iam-resource-type: collection
       parameters:
@@ -73,6 +79,13 @@ paths:
         of the same name is `409 NAME_CONFLICT`. A `schema` is compiled here,
         so one JSON Schema cannot parse is refused rather than stored.
       operationId: createCollection
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: collections:CreateCollection
       x-iam-resource-type: collection
       requestBody:
@@ -134,6 +147,14 @@ paths:
       summary: Get a collection
       description: Returns one collection.
       operationId: getCollection
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: collections:GetCollection
       x-iam-resource-type: collection
       parameters:
@@ -165,6 +186,16 @@ paths:
         Renames the collection or replaces its `schema`. A new schema governs
         the next write of each item; items already stored are not re-judged.
       operationId: updateCollection
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: collections:UpdateCollection
       x-iam-resource-type: collection
       parameters:
@@ -220,6 +251,14 @@ paths:
       summary: Delete a collection
       description: Deletes the collection and every item in it.
       operationId: deleteCollection
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: collections:DeleteCollection
       x-iam-resource-type: collection
       parameters:
@@ -253,6 +292,17 @@ paths:
         `tags`. The listing is bounded by `limit` (at most 100) and a statement
         timeout; a query past it is `422 QUERY_TIMEOUT`.
       operationId: listCollectionItems
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - QUERY_TIMEOUT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: collections:ListCollectionItems
       x-iam-resource-type: collection
       x-iam-also-checked-on:
@@ -301,6 +351,15 @@ paths:
       summary: Get an item
       description: Returns the item at `key`.
       operationId: getCollectionItem
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: collections:GetCollectionItem
       x-iam-resource-type: collection
       x-iam-also-checked-on:
@@ -340,6 +399,20 @@ paths:
         `expected_version`) names a version of an existing item, so it is
         `404` for a free key.
       operationId: putCollectionItem
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: collections:PutCollectionItem
       x-iam-resource-type: collection
       x-iam-also-checked-on:
@@ -419,6 +492,20 @@ paths:
         object merges key by key, `null` removes a key, any other value
         replaces it. The merged `data` is judged as a put's is.
       operationId: updateCollectionItem
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
       x-iam-also-checked-on:
@@ -489,6 +576,15 @@ paths:
       summary: Delete an item
       description: Deletes the item at `key`.
       operationId: deleteCollectionItem
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: collections:DeleteCollectionItem
       x-iam-resource-type: collection
       x-iam-also-checked-on:
@@ -523,6 +619,16 @@ paths:
       summary: Get item tags
       description: Returns the item's tags.
       operationId: getCollectionItemTags
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: collections:GetCollectionItem
       x-iam-resource-type: collection
       x-iam-also-checked-on:
@@ -556,6 +662,16 @@ paths:
       summary: Replace item tags
       description: Replaces every tag on the item. Bumps the item's `version`.
       operationId: replaceCollectionItemTags
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
       x-iam-also-checked-on:
@@ -613,6 +729,16 @@ paths:
         Merges the given tags into the item's; a key not sent is kept. Bumps
         the item's `version`.
       operationId: mergeCollectionItemTags
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: collections:UpdateCollectionItem
       x-iam-resource-type: collection
       x-iam-also-checked-on:

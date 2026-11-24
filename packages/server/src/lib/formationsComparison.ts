@@ -99,36 +99,53 @@ const resolvedAsDeployed = (args: {
 };
 
 /**
+ * Each write-only property of `resourceType` the formation's last deploy
+ * declared, as that deploy resolved it; one it cannot resolve is left out.
+ * What the resource holds after that deploy, though no read returns it.
+ */
+export const writeOnlyAsDeployed = (args: {
+  resourceType: string;
+  deployed: DeployedResource | undefined;
+}): Record<string, unknown> => {
+  const { deployed } = args;
+  const names =
+    getFormationModule({ resourceType: args.resourceType })
+      ?.writeOnlyProperties ?? [];
+  if (names.length === 0 || deployed?.declaration.type !== args.resourceType) {
+    return {};
+  }
+  const before = normalizeDeclaredProperties(
+    deployed.declaration.properties ?? {}
+  );
+  return Object.fromEntries(
+    names.flatMap((name) => {
+      if (before[name] === undefined) return [];
+      const value = resolvedAsDeployed({ value: before[name], deployed });
+      return value === undefined ? [] : [[name, value]];
+    })
+  );
+};
+
+/**
  * The write-only properties whose resolved declaration equals the value the
- * formation last deployed: the resource holds that one, though no read returns
- * it. `declared` carries resolved values; one still holding an expression is
- * never settled.
+ * formation last deployed. `declared` carries resolved values; one still
+ * holding an expression is never settled.
  */
 const settledWriteOnlyProperties = (args: {
   declared: ResourceDeclaration;
   deployed: DeployedResource | undefined;
 }): ReadonlySet<string> => {
-  const { declared, deployed } = args;
-  const names =
-    getFormationModule({ resourceType: declared.type })?.writeOnlyProperties ??
-    [];
-  if (names.length === 0 || deployed?.declaration.type !== declared.type) {
-    return new Set();
-  }
-
-  const now = normalizeDeclaredProperties(declared.properties ?? {});
-  const before = normalizeDeclaredProperties(
-    deployed.declaration.properties ?? {}
-  );
+  const asDeployed = writeOnlyAsDeployed({
+    resourceType: args.declared.type,
+    deployed: args.deployed,
+  });
+  const now = normalizeDeclaredProperties(args.declared.properties ?? {});
   return new Set(
-    names.filter((name) => {
+    Object.keys(asDeployed).filter((name) => {
       return (
         now[name] !== undefined &&
         !holdsFormationExpression(now[name]) &&
-        isDeepStrictEqual(
-          now[name],
-          resolvedAsDeployed({ value: before[name], deployed })
-        )
+        isDeepStrictEqual(now[name], asDeployed[name])
       );
     })
   );

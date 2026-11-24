@@ -43,6 +43,15 @@ paths:
         execution record carries no generation id, so the pointer lives here,
         alongside the run's other attribution columns.
       operationId: listGenerations
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: generations:ListGenerations
       x-iam-resource-type: generation
       parameters:
@@ -170,6 +179,15 @@ paths:
         structured `error` payload when the generation failed (e.g. because the
         upstream AI provider returned an error).
       operationId: getGeneration
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
       parameters:
@@ -224,6 +242,16 @@ paths:
         retrieval served) lives in its own top-level fields and cannot be
         written from here.
       operationId: updateGeneration
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: generations:UpdateGeneration
       x-iam-resource-type: generation
       parameters:
@@ -315,6 +343,15 @@ paths:
         Idempotent — purging an already-purged generation succeeds and leaves the
         original `content_redacted_at` in place.
       operationId: purgeGenerationContent
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: generations:PurgeGenerationContent
       x-iam-resource-type: generation
       parameters:
@@ -371,6 +408,16 @@ paths:
         the generation's per-rule `extraction` counts. Reading them is reading
         the generation (`generations:GetGeneration`).
       operationId: listGenerationMemoryAssertions
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
       parameters:
@@ -441,6 +488,18 @@ paths:
         ended so far and its `in_flight_tool_calls`; `status` says it runs.
         To follow it as it runs, read `GET /api/v1/generations/{generation_id}/events`.
       operationId: getGenerationTranscript
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_CALL_FAILED
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
       parameters:
@@ -513,6 +572,20 @@ paths:
         its `Last-Event-ID` header, which this route reads as `after_seq`. Every
         reconnect is authorized afresh.
       operationId: listGenerationEvents
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_NOT_FOUND
+        - INTERNAL_ERROR
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - TOOL_CALL_FAILED
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: generations:GetGeneration
       x-iam-resource-type: generation
       parameters:
@@ -753,7 +826,8 @@ components:
           nullable: true
           description: >-
             Why the generation failed: `AI_PROVIDER_ERROR` for an upstream
-            provider failure, `GENERATION_FAILED` for any other failure of the
+            provider failure (`SHARED_AI_PROVIDER_ERROR` on a provider another
+            project shares), `GENERATION_FAILED` for any other failure of the
             turn.
         action_id:
           type: string

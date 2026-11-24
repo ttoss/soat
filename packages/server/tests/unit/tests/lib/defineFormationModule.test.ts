@@ -79,17 +79,31 @@ describe('defineFormationModule — extra checks', () => {
 
   test.each([
     ['itself', { sub: 'x' }],
-    ['nested', { statement: [{ resource: [{ ref: 'Other' }] }] }],
-    ['deep', { statement: [{ resource: [{ param: 'P' }] }] }],
+    [
+      'nested',
+      {
+        statement: [
+          { effect: 'Allow', action: ['*'], resource: [{ ref: 'Other' }] },
+        ],
+      },
+    ],
+    [
+      'deep',
+      {
+        statement: [
+          { effect: 'Allow', action: ['*'], resource: [{ param: 'P' }] },
+        ],
+      },
+    ],
   ])('leave a field holding an expression %s to the apply', (_where, doc) => {
     expect(messagesFor(doc)).toEqual(['whole', 'name']);
   });
 
   test('check a field holding only literals', () => {
-    expect(messagesFor({ statement: [{ resource: ['foo'] }] })).toEqual([
-      'whole',
-      'document',
-      'name',
-    ]);
+    expect(
+      messagesFor({
+        statement: [{ effect: 'Allow', action: ['*'], resource: ['foo'] }],
+      })
+    ).toEqual(['whole', 'document', 'name']);
   });
 });

@@ -133,14 +133,6 @@ constraint owns the index.
 | `SOAT_OPENAPI_DOCUMENT_PATH` | `/api/v1/openapi.json` | The path a `hint` names the OpenAPI document at, set apart from `SOAT_ROUTE_PREFIX`                                                                                                                                                                                                                                                                                                                                                                                |
 | `SOAT_ERROR_HINTS_CONFIG`    | —                      | Path to a JSON file `{ "hints": { "<CODE>": "<hint>" }, "omit_meta": { "<CODE>": ["<key>"] } }`. A `hints` entry replaces the runtime's hint for that code; a route in it is written `{{PATCH /agents/{agent_id}}}`, relative to the prefix, and the OpenAPI document `{{openapi_document}}`. An `omit_meta` entry leaves those keys out of that code's `meta` on every surface. A code the runtime does not define, an empty hint or an empty key list fails boot |
 
-### Project Selection
-
-| Variable                    | Default | Description                                                                                                                            |
-| --------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `PROJECT_ID_QUERY_DISABLED` | `false` | `true` takes `project_id` out of every route's query parameters, for a deployment that issues only [project-bound credentials](../modules/projects.md#project-selection) |
-
-With it on, `?project_id=` is `400 VALIDATION_FAILED` naming it in `unknown_query_parameters`, the served `/api/v1/openapi.json` and the MCP tools declare no `project_id` query parameter, and the project comes from the credential. A credential bound to no project then reaches per-project routes (the exports, the usage aggregate) by no means.
-
 ### Header Prefix
 
 | Variable             | Default   | Description                                |
@@ -220,7 +212,7 @@ openssl rand -hex 32
 ```
 
 :::danger
-`SECRETS_ENCRYPTION_KEY` must be set in production. Changing it makes stored secrets and webhook/trigger signing secrets unreadable.
+An unset or malformed `SECRETS_ENCRYPTION_KEY` stops the server and the worker at startup with an error naming the variable. Changing it makes stored secrets and webhook/trigger signing secrets unreadable.
 :::
 
 ### Outbound Egress

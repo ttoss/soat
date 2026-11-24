@@ -30,6 +30,10 @@ paths:
         - JWT regular user: returns only projects granted by the user's policies.
         - API key scoped to a project: returns only that project.
       operationId: listProjects
+      x-raises:
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: projects:ListProjects
       security:
         - bearerAuth: []
@@ -67,6 +71,10 @@ paths:
       summary: Create a project
       description: Creates a new project. Requires admin role.
       operationId: createProject
+      x-raises:
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: projects:CreateProject
       requestBody:
         required: true
@@ -132,6 +140,10 @@ paths:
       summary: Get a project
       description: Returns details of a specific project.
       operationId: getProject
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: projects:GetProject
       parameters:
         - name: project_id
@@ -195,6 +207,19 @@ paths:
         guardrails:DetachGuardrail. The caller must hold every grant
         `agent_policy_ids` carries, else `403 POLICY_GRANT_NOT_HELD`.
       operationId: updateProject
+      x-raises:
+        - ACTION_NOT_HELD
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - GUARDRAIL_NOT_FOUND
+        - MODEL_ROUTE_NOT_FOUND
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - PROJECT_DEFAULT_ROUTE_INHERITED
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: projects:UpdateProject
       parameters:
         - name: project_id
@@ -428,6 +453,13 @@ paths:
         project, keeping their record with `project_id` cleared. A deleted
         formation and a usage event with no cost go with the project.
       operationId: deleteProject
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - PROJECT_HAS_DEPENDENTS
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: projects:DeleteProject
       parameters:
         - name: project_id
@@ -506,6 +538,15 @@ paths:
         Idempotent: pausing a paused project answers it unchanged and keeps the
         first `reason`. Emits `projects.paused`.
       operationId: pauseProject
+      x-raises:
+        - FORBIDDEN
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_PAUSABLE
+        - RESOURCE_NOT_FOUND
+        - TASK_NOT_FOUND
+        - TASK_NOT_PAUSABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: projects:PauseProject
       parameters:
         - name: project_id
@@ -577,6 +618,94 @@ paths:
         before the project was paused keeps its own pause. Eval runs continue
         from the item they stopped at. Emits `projects.resumed`.
       operationId: resumeProject
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_AWAITING_INPUT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_EXECUTION_FAILED
+        - PROJECT_NOT_PAUSED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_NOT_PAUSED
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: projects:ResumeProject
       x-soat-agent-exclude: true
       parameters:
@@ -640,6 +769,10 @@ paths:
         these, and these win over the global default. Authorized by the caller's
         access to the project.
       operationId: getProjectPrices
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: projects:GetProjectPrices
       parameters:
         - name: project_id
@@ -693,6 +826,14 @@ paths:
         corrections ship as new future-dated rows. A first price, with no row for
         the project or the global default, may be dated now or earlier.
       operationId: updateProjectPrices
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: projects:ManageProjectPrices
       x-soat-agent-exclude: true
       parameters:

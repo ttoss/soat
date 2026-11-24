@@ -17,6 +17,7 @@ import {
   isStepCount,
   NoOutputGeneratedError,
   type StopCondition,
+  ToolChoiceViolationError,
   type ToolSet,
 } from 'ai';
 
@@ -24,6 +25,7 @@ import { DomainError } from '../errors';
 import { forcesATool } from './agentStepRules';
 import { resolveMaxSteps, type TurnBudget } from './generationStopReason';
 import { isPlainObject } from './plainObject';
+import { toProviderDomainError } from './providerError';
 
 /**
  * The condition vocabulary. Not every entry is a per-turn predicate: a condition
@@ -266,6 +268,14 @@ export const resolveAnswerStep = (config: {
   return resolveMaxSteps(config.maxSteps);
 };
 
+const maxStepsReached = (maxSteps: number): DomainError => {
+  return new DomainError(
+    'MAX_STEPS_REACHED',
+    `The turn spent all ${maxSteps} steps of max_steps without producing the output_schema object.`,
+    { max_steps: maxSteps }
+  );
+};
+
 /**
  * The turn's `output_schema` object, or `undefined` for an agent without one.
  *
@@ -288,11 +298,34 @@ export const readTurnObject = (args: {
   }
   const maxSteps = resolveMaxSteps(args.budget.maxSteps);
   if (args.stepCount < maxSteps) throw new NoOutputGeneratedError();
-  throw new DomainError(
-    'MAX_STEPS_REACHED',
-    `The turn spent all ${maxSteps} steps of max_steps without producing the output_schema object.`,
-    { max_steps: maxSteps }
-  );
+  throw maxStepsReached(maxSteps);
+};
+
+/**
+ * The error a failed `generateText` call of a turn fails with.
+ *
+ * An `output_schema` agent's model can answer under a forcing `tool_choice`
+ * (the provider's structured-output channel), which `ai` refuses as a
+ * `ToolChoiceViolationError`. On the last allowed step that refusal leaves the
+ * budget spent without the object, so it fails as {@link readTurnObject} does.
+ */
+export const toTurnFailure = (args: {
+  budget: TurnBudget;
+  /** Every step the turn spent, across its pauses, the failing one included. */
+  stepCount: number;
+  error: unknown;
+}): unknown => {
+  const maxSteps = resolveMaxSteps(args.budget.maxSteps);
+  if (
+    isPlainObject(args.budget.outputSchema) &&
+    ToolChoiceViolationError.isInstance(args.error) &&
+    args.stepCount >= maxSteps
+  ) {
+    const failure = maxStepsReached(maxSteps);
+    failure.cause = args.error;
+    return failure;
+  }
+  return toProviderDomainError(args.error) ?? args.error;
 };
 
 /**

@@ -55,7 +55,7 @@ An API key scoped to a project issues a short-lived token that acts as the key h
 }
 ```
 
-It answers `201 { "token", "jti", "expires_at" }`; `jti` is the id a denial by the bound names in `meta.denied_by` and the audit log records.
+It answers `201 { "token", "jti", "expires_at" }`; `jti` is the id the audit log records. A denial by the bound names `principal` in `meta.denied_by` and the message (`denied_by: { "type": "service", "id": "billing-sync" }`), or the token, `iam_token` with its `jti`, when it was minted with none.
 
 - The bound is `policy`, an inline document, or `policy_ids`, policies of the key's project or global ones; exactly one. An invalid document or an unknown id is `400 IAM_TOKEN_POLICY_INVALID`.
 - `ttl_seconds` runs from 30 to 900 (default 300). An expired token is `401`.
@@ -289,7 +289,7 @@ A deployment that gates runtime writes for its own reasons (a plan limit, a cap)
 `principal.type` is one of `user`, `api_key`, `trigger`, `eval`, `decider`, `ingestion_rule`, `memory_rule`, `playbook_version` (`ActingPrincipalType`). The question is the `AdmissionRequest` schema and a refusal's body the `AdmissionRefusal` schema, both in the spec `GET /api/v1/openapi.json` serves (source: `admission.yaml`).
 
 - A `2xx` admits the write.
-- A `4xx` with `{ "error": { "code", "message", "meta"? } }` refuses it: the caller receives that status, `code`, `message` and `meta` as sent, on every write the service can be asked about (each documents it as its `4XX` response). `code` is any identifier matching `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, so a service's own lowercase codes pass unchanged.
+- A `4xx` with `{ "error": { "code", "message", "hint"?, "meta"? } }` refuses it: the caller receives that status, `code`, `message`, `hint` and `meta` as sent (without a `hint`, the `ADMISSION_REFUSED` one), on every write the service can be asked about (each documents it as its `4XX` response). `code` is any identifier matching `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, so a service's own lowercase codes pass unchanged.
 - Anything else (unreachable, timed out, `5xx`, a refusal outside that shape) refuses it with `502 ADMISSION_UNAVAILABLE`. An unanswered question is never a pass.
 
 It is asked where the write is decided, so every way in is covered: a REST call, a `builtin` tool call (which runs through the same stack, see [Tools](./tools.md#builtin)) and a formation's create or update ([Formations](./formations.md#admission)). A start is a declared action like any other (`agents:CreateAgentGeneration`, `orchestrations:StartRun`, `triggers:FireTrigger`, `tools:CallTool`): asked once where a caller starts the work, before a streamed answer opens, and not again for the steps the run takes or for a scheduled firing, which runs the trigger's own work. A read and an undeclared action never call it. Admission only refuses: it cannot allow what authorization refused.
@@ -442,7 +442,7 @@ Every `403 FORBIDDEN` has one shape, whoever was refused: the caller's credentia
 }
 ```
 
-- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, `project` (`id` the project, for its [`agent_policy_ids`](./projects.md#project-agent-cap) capping an agent), or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: `iam_token` for an [IAM token](#iam-tokens)'s bound (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the credential that made the call an `On-Behalf-Of` assertion was sent for (the calling agent's `policy_ids` and its project's `agent_policy_ids` keep their own `agent` and `project` names through it), `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown.
+- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, `project` (`id` the project, for its [`agent_policy_ids`](./projects.md#project-agent-cap) capping an agent), or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: the `principal` an [IAM token](#iam-tokens) was minted for, for its bound, else `iam_token` (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the credential that made the call an `On-Behalf-Of` assertion was sent for (the calling agent's `policy_ids` and its project's `agent_policy_ids` keep their own `agent` and `project` names through it), `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown.
 - `resource` is `null` for a check that names none (an admin-only route, a resource-less boundary check). A refusal of several actions (a formation template, several secrets) names the first in `action`/`resource` and every one in the message.
 - The same body reaches an agent as a refused tool's result, the [MCP endpoint](../mcp/introduction.md) as an `isError` result whose text is `FORBIDDEN: <message>` and whose `structuredContent` is `{ status: 403, error }` with this body's `error`, and an `mcp` or `http` tool's caller when the server it calls answers this body: that denial is relayed with the same code, action and message.
 

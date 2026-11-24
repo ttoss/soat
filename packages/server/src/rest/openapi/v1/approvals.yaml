@@ -31,6 +31,12 @@ paths:
       summary: List approval items
       description: Returns approval items for a project, filterable by status, origin, and expiry.
       operationId: listApprovals
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: approvals:ListApprovals
       x-iam-resource-type: approval
       parameters:
@@ -127,6 +133,12 @@ paths:
         read recurring rejections side by side and graduate the pattern into a
         guardrail `deny`. Exact-key grouping only; no cluster state is stored.
       operationId: listApprovalRecurrences
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: approvals:ListApprovalRecurrences
       x-iam-resource-type: approval
       parameters:
@@ -206,6 +218,10 @@ paths:
       summary: Get an approval item
       description: Returns a single approval item with its full evidence.
       operationId: getApproval
+      x-raises:
+        - APPROVAL_NOT_FOUND
+        - FORBIDDEN
+        - UNAUTHORIZED
       x-iam-action: approvals:GetApproval
       x-iam-resource-type: approval
       parameters:
@@ -252,6 +268,21 @@ paths:
         item. Expiry is re-checked at decision time — an expired item can never
         be approved.
       operationId: approveApproval
+      x-raises:
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - APPROVAL_ALREADY_RESOLVED
+        - APPROVAL_EXPIRED
+        - APPROVAL_INVALID_EDIT
+        - APPROVAL_NOT_FOUND
+        - FORBIDDEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: approvals:ResolveApproval
       x-iam-resource-type: approval
       x-soat-agent-exclude: true
@@ -347,6 +378,13 @@ paths:
       summary: Reject an approval item
       description: Rejects the item. A reason is required and preserved on the item.
       operationId: rejectApproval
+      x-raises:
+        - APPROVAL_ALREADY_RESOLVED
+        - APPROVAL_EXPIRED
+        - APPROVAL_NOT_FOUND
+        - APPROVAL_REASON_REQUIRED
+        - FORBIDDEN
+        - UNAUTHORIZED
       x-iam-action: approvals:ResolveApproval
       x-iam-resource-type: approval
       x-soat-agent-exclude: true

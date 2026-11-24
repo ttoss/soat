@@ -1094,6 +1094,11 @@
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
+    "SHARED_AI_PROVIDER_ERROR": {
+      "http_status": 502,
+      "hint": "The provider another project shares with this one failed, not this server, and its credential and account are the sharing project's. Retry with backoff; a failure that persists is the sharing project's to fix, or move the caller to a provider this project holds.",
+      "routes": []
+    },
     "SHARE_CAP_EXCEEDED": {
       "http_status": 429,
       "hint": "Wait `retry_after` seconds for the share's window to reset, or ask the publisher to raise its cap.",

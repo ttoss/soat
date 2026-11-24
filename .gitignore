@@ -130,3 +130,6 @@ tsup.config.bundled*.mjs
 # Written by `pnpm --filter @soat/server eval:knowledge`; `baseline.json` beside
 # it is the committed artifact.
 packages/server/tests/eval/knowledge/report.json
+
+# Copies `pnpm --filter @soat/server test:heap` writes and removes.
+packages/server/tests/unit/tests/rest/*.heap-check.test.ts

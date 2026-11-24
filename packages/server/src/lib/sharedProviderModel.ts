@@ -3,12 +3,21 @@ import { APICallError } from 'ai';
 import createDebug from 'debug';
 
 import { isFetchFailure } from './providerError';
-import { carriedCause } from './replayRefusal';
+import { withheldVendorFault } from './replayRefusal';
 import { admitSharedCall } from './shareCaps';
 
 const log = createDebug('soat:shares');
 
 const SHARED_FAILURE = 'The shared AI provider failed to answer.';
+
+const sharedFailure = (args: { error: unknown; isRetryable: boolean }) => {
+  return withheldVendorFault({
+    error: args.error,
+    message: SHARED_FAILURE,
+    shared: true,
+    isRetryable: args.isRetryable,
+  });
+};
 
 /**
  * The vendor's status and body belong to the publisher, whose credential and
@@ -28,11 +37,8 @@ const withheld = (args: {
     `shared AI provider ${args.providerPublicId} failed:`,
     args.error
   );
-  return new APICallError({
-    message: SHARED_FAILURE,
-    url: '',
-    requestBodyValues: {},
-    data: carriedCause(args.error),
+  return sharedFailure({
+    error: args.error,
     isRetryable: APICallError.isInstance(args.error)
       ? args.error.isRetryable
       : true,
@@ -97,7 +103,10 @@ export const throughShare = (args: {
               );
               controller.enqueue({
                 ...part,
-                error: { message: SHARED_FAILURE },
+                error: sharedFailure({
+                  error: part.error,
+                  isRetryable: false,
+                }),
               });
             },
           })

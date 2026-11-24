@@ -27,6 +27,7 @@ describe('recordComputeUsage idempotency', () => {
     });
     const run = await db.OrchestrationRun.create({
       orchestrationId: orchestration.id,
+      orchestrationVersion: 1,
       projectId,
       status: 'completed',
       state: {},

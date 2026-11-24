@@ -189,10 +189,7 @@ const selectItems = async (args: {
     where: {
       workflowId: args.workflowDbId,
       status: 'open',
-      [Op.or]: [
-        { workflowVersion: null },
-        { workflowVersion: { [Op.lt]: args.toVersion } },
-      ],
+      workflowVersion: { [Op.lt]: args.toVersion },
     },
     attributes: ['id', 'publicId'],
     order: [['id', 'ASC']],

@@ -31,6 +31,20 @@ paths:
       summary: Create an orchestration
       description: Creates a new orchestration (pipeline) definition in the project.
       operationId: createOrchestration
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - ORCHESTRATION_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:CreateOrchestration
       x-iam-resource-type: orchestration
       requestBody:
@@ -81,6 +95,12 @@ paths:
       summary: List orchestrations
       description: Returns orchestrations accessible to the caller.
       operationId: listOrchestrations
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:ListOrchestrations
       x-iam-resource-type: orchestration
       parameters:
@@ -140,6 +160,8 @@ paths:
         ORCHESTRATION_VALIDATION_FAILED` listing the same items under
         `meta.problems` and `meta.warnings`.
       operationId: validateOrchestration
+      x-raises:
+        - UNAUTHORIZED
       x-iam-action: orchestrations:ValidateOrchestration
       x-iam-resource-type: orchestration
       requestBody:
@@ -196,6 +218,12 @@ paths:
         withheld rather than approximated. An unrestricted caller (the action
         granted on every project) gets the deployment-wide figures.
       operationId: getQueueStats
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - QUEUE_DRIVER_MISCONFIGURED
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:GetQueueStats
       x-iam-resource-type: orchestration
       security:
@@ -237,6 +265,13 @@ paths:
         A project-scoped caller sees its own projects only. Guarded by
         `orchestrations:GetQueueStats`.
       operationId: listQueueStatsProjects
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - QUEUE_DRIVER_MISCONFIGURED
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:GetQueueStats
       x-iam-resource-type: orchestration
       security:
@@ -283,6 +318,15 @@ paths:
       summary: Get an orchestration
       description: Returns the orchestration with nodes and edges.
       operationId: getOrchestration
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - ORCHESTRATION_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: orchestrations:GetOrchestration
       x-iam-resource-type: orchestration
       parameters:
@@ -325,6 +369,22 @@ paths:
       summary: Update an orchestration
       description: Partially updates an orchestration definition.
       operationId: updateOrchestration
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:UpdateOrchestration
       x-iam-resource-type: orchestration
       parameters:
@@ -386,6 +446,15 @@ paths:
       summary: Delete an orchestration
       description: Deletes an orchestration definition and all its runs.
       operationId: deleteOrchestration
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - ORCHESTRATION_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: orchestrations:DeleteOrchestration
       x-iam-resource-type: orchestration
       parameters:
@@ -435,6 +504,23 @@ paths:
         archive a version. See
         [Versioning](/docs/modules/orchestrations#versioning).
       operationId: listOrchestrationVersions
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - INVALID_TOOL_CONTEXT_KEY
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:ListOrchestrationVersions
       x-iam-resource-type: orchestration
       parameters:
@@ -490,6 +576,23 @@ paths:
         for its whole life, so this is how you read the topology a run actually
         took — including a run whose orchestration has been rewired since.
       operationId: getOrchestrationVersion
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - INVALID_TOOL_CONTEXT_KEY
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:GetOrchestrationVersion
       x-iam-resource-type: orchestration
       parameters:
@@ -558,6 +661,23 @@ paths:
         already in flight are unaffected either way — a restore is an ordinary
         edit, and pinning is what keeps it from reaching them.
       operationId: restoreOrchestrationVersion
+      x-raises:
+        - ACTION_NOT_HELD
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - INVALID_TOOL_CONTEXT_KEY
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_VALIDATION_FAILED
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:RestoreOrchestrationVersion
       x-iam-resource-type: orchestration
       parameters:
@@ -635,6 +755,12 @@ paths:
         scheduler, surviving restarts. Pass wait=true to block until the run
         reaches a terminal or awaiting_input state.
       operationId: startOrchestrationRun
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:StartRun
       x-iam-resource-type: orchestration
       parameters:
@@ -722,6 +848,12 @@ paths:
         counts the children more than once. Pass `nested=false` to sum over
         runs a caller started.
       operationId: listOrchestrationRuns
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:ListRuns
       x-iam-resource-type: orchestration
       parameters:
@@ -833,6 +965,16 @@ paths:
       summary: Cancel an orchestration run
       description: Cancels a run that has not yet reached a terminal state.
       operationId: cancelOrchestrationRun
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: orchestrations:CancelRun
       x-iam-resource-type: orchestration
       parameters:
@@ -907,6 +1049,16 @@ paths:
 
         Idempotent: pausing an already-paused run answers with it unchanged.
       operationId: pauseOrchestrationRun
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: orchestrations:PauseRun
       x-iam-resource-type: orchestration
       parameters:
@@ -968,6 +1120,17 @@ paths:
       summary: Submit human input
       description: Provides human input to a run that is awaiting_input at a human node.
       operationId: submitHumanInput
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:SubmitHumanInput
       x-iam-resource-type: orchestration
       parameters:
@@ -1043,6 +1206,16 @@ paths:
         `paused` re-drives the frontier that had not run yet, and one paused
         mid-timer goes back to `sleeping` for the wake it was already due.
       operationId: resumeOrchestrationRun
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: orchestrations:ResumeRun
       x-iam-resource-type: orchestration
       parameters:
@@ -1096,6 +1269,16 @@ paths:
       summary: Get an orchestration run
       description: Returns the status, state, and artifacts of a specific run.
       operationId: getOrchestrationRun
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: orchestrations:GetRun
       x-iam-resource-type: orchestration
       parameters:
@@ -1144,6 +1327,18 @@ paths:
         analogue of an LLM trace. Reading them is reading the run
         (`orchestrations:GetRun`).
       operationId: listOrchestrationRunNodeExecutions
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: orchestrations:GetRun
       x-iam-resource-type: orchestration
       parameters:
@@ -1839,7 +2034,6 @@ components:
           description: Public ID of the parent orchestration.
         orchestration_version:
           type: integer
-          nullable: true
           description: >
             The orchestration version this run executes, fixed when the run
             started. Every later step of the run — the first drive, a wake from
@@ -1847,10 +2041,6 @@ components:
             resolves the graph from this version, so editing the orchestration
             never re-shapes a run already in flight. Fetch the graph it names at
             `GET /api/v1/orchestrations/{orchestration_id}/versions/{version}`.
-
-
-            Null for runs created before pinning existed, which execute the live
-            graph.
           example: 3
         project_id:
           x-soat-ref: projects

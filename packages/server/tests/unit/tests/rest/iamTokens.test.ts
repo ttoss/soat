@@ -319,7 +319,25 @@ describe('IAM tokens', () => {
       expect((await generate(token)).status).toBe(200);
     });
 
-    test('a denial by the bound names the token, not the key', async () => {
+    test.each([
+      [{ type: 'api_key', id: 'key_minted' }, 'API key key_minted'],
+      [{ type: 'mcp_server', id: 'srv_minted' }, 'mcp_server srv_minted'],
+    ])(
+      'a denial by the bound of a token minted for %o names that principal',
+      async (principal, named) => {
+        const token = await mintToken({ policy: GENERATE_ONLY, principal });
+        const resource = `srn:${turn.projectId}:document:${documentId}`;
+
+        const read = await readDocument(token);
+
+        expect(read.body.error).toMatchObject({
+          message: `Forbidden: ${named}'s policies deny documents:GetDocument on ${resource}`,
+          meta: { denied_by: principal },
+        });
+      }
+    );
+
+    test('a denial by the bound of a token minted with no principal names its jti', async () => {
       const token = await mintToken({ policy: GENERATE_ONLY });
       const { jti } = jwt.decode(token, { json: true }) ?? {};
       const resource = `srn:${turn.projectId}:document:${documentId}`;
@@ -552,6 +570,16 @@ describe('IAM tokens', () => {
         expect(res.status).toBe(200);
         return JSON.parse(res.body.output.content)[0];
       };
+      const principal = { type: 'api_key', id: 'key_turn' };
+      const minted = await mintToken({ policy: GENERATE_ONLY, principal });
+      expect(await readThroughTurn(minted)).toMatchObject({
+        error: {
+          message: expect.stringMatching(
+            /^Forbidden: API key key_turn's policies deny documents:GetDocument on srn:/
+          ),
+          meta: { denied_by: principal },
+        },
+      });
       const token = await mintToken({ policy: GENERATE_ONLY });
 
       expect((await readThroughTurn(key)).id).toBe(documentId);

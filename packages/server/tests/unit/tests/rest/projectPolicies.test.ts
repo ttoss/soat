@@ -192,6 +192,46 @@ describe('Project policies', () => {
 
       expect(res.status).toBe(201);
     });
+
+    test.each([
+      [
+        '*',
+        () => {
+          return ['*'];
+        },
+      ],
+      [
+        'srn:<project>:*',
+        () => {
+          return [`srn:${projectId}:*`];
+        },
+      ],
+    ])(
+      'refusing an Allow on %s names only a form a project policy accepts',
+      async (_label, resource) => {
+        const res = await createProjectPolicy({
+          token: projectAdminToken,
+          project: projectId,
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['files:GetFile'],
+                resource: resource(),
+              },
+            ],
+          },
+        });
+
+        expect(res.status).toBe(400);
+        const details: string[] = res.body.error.meta.details;
+        expect(details.length).toBeGreaterThan(0);
+        for (const message of details) {
+          expect(message).toContain(`srn:${projectId}:<type>:<id>`);
+          expect(message).not.toMatch(/must be \*/);
+        }
+      }
+    );
   });
 
   describe('GET /api/v1/policies', () => {

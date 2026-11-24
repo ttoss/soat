@@ -195,6 +195,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
     const run = await db.OrchestrationRun.create({
       projectId: internalProjectId,
       orchestrationId: orchestration!.id,
+      orchestrationVersion: 1,
       status: 'queued',
     });
     await saveTrace({

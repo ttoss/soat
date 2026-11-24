@@ -36,6 +36,9 @@ paths:
         with `allowed: false`, never `403`. Only policies are evaluated: the
         answer says nothing about whether the resource exists.
       operationId: checkIamPermission
+      x-raises:
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       requestBody:
         required: true
         content:
@@ -82,6 +85,13 @@ paths:
         keys. The audit log records the token's `jti` and `principal` under
         `detail.iam_token` on every entry the token makes.
       operationId: createIamToken
+      x-raises:
+        - FORBIDDEN
+        - IAM_TOKEN_ISSUER_NOT_ALLOWED
+        - IAM_TOKEN_POLICY_INVALID
+        - INVALID_TOOL_CONTEXT_KEY
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: iam:CreateToken
       x-iam-resource-type: iam_token
       x-soat-agent-exclude: true
@@ -131,6 +141,11 @@ paths:
         a resume included, fails `WORK_AUTHORITY_MISSING`. Revoking a principal
         already revoked is `204` too.
       operationId: revokeIamPrincipal
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: iam:RevokePrincipal
       x-iam-resource-type: iam_principal
       x-soat-agent-exclude: true
@@ -326,8 +341,10 @@ components:
         jti:
           type: string
           description: >-
-            The token's id: `meta.denied_by.id` of a denial its bound causes,
-            and `detail.iam_token.jti` on the audit entries it makes.
+            The token's id: `detail.iam_token.jti` on the audit entries it
+            makes, and `meta.denied_by.id` of a denial its bound causes when it
+            was minted with no `principal`; with one, the denial names that
+            principal.
           example: 3f2c1a9e-7b4d-4e8a-9c1f-2d5e6a7b8c9d
         expires_at:
           type: string

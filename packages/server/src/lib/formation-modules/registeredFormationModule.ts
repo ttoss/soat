@@ -82,14 +82,14 @@ const buildValidator = (args: {
       resolveRef: resolveInlineSchema,
     });
     // A template update is a patch, exactly as for a built-in type.
-    if (!validateArgs.forUpdate) {
-      pushRequiredFieldErrors({
-        spec,
-        properties,
-        basePath: validateArgs.basePath,
-        errors,
-      });
-    }
+    pushRequiredFieldErrors({
+      schema: registration.schema,
+      properties,
+      basePath: validateArgs.basePath,
+      errors,
+      topLevel: !validateArgs.forUpdate,
+      resolveRef: resolveInlineSchema,
+    });
     pushFieldTypeErrors({
       spec,
       properties,

@@ -30,6 +30,12 @@ paths:
         - Workflows
       summary: List workflows
       operationId: listWorkflows
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: workflows:ListWorkflows
       x-iam-resource-type: workflow
       parameters:
@@ -77,6 +83,16 @@ paths:
         - Workflows
       summary: Create a workflow
       operationId: createWorkflow
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:CreateWorkflow
       x-iam-resource-type: workflow
       requestBody:
@@ -134,6 +150,10 @@ paths:
         - Workflows
       summary: Get a workflow
       operationId: getWorkflow
+      x-raises:
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - WORKFLOW_NOT_FOUND
       x-iam-action: workflows:GetWorkflow
       x-iam-resource-type: workflow
       parameters:
@@ -182,6 +202,16 @@ paths:
         - Workflows
       summary: Update a workflow
       operationId: updateWorkflow
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:UpdateWorkflow
       x-iam-resource-type: workflow
       parameters:
@@ -246,6 +276,11 @@ paths:
         - Workflows
       summary: Delete a workflow
       operationId: deleteWorkflow
+      x-raises:
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - WORKFLOW_HAS_OPEN_TASKS
+        - WORKFLOW_NOT_FOUND
       x-iam-action: workflows:DeleteWorkflow
       x-iam-resource-type: workflow
       parameters:
@@ -305,6 +340,17 @@ paths:
         - Workflows
       summary: List a workflow's versions
       operationId: listWorkflowVersions
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:ListWorkflowVersions
       x-iam-resource-type: workflow
       parameters:
@@ -365,6 +411,17 @@ paths:
         - Workflows
       summary: Fetch an archived workflow version
       operationId: getWorkflowVersion
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:GetWorkflowVersion
       x-iam-resource-type: workflow
       parameters:
@@ -438,6 +495,17 @@ paths:
         - Workflows
       summary: Restore an archived workflow state machine
       operationId: restoreWorkflowVersion
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - NAME_CONFLICT
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:RestoreWorkflowVersion
       x-iam-resource-type: workflow
       parameters:
@@ -518,6 +586,19 @@ paths:
         - Workflows
       summary: Migrate a workflow's open tasks to one of its versions
       operationId: createWorkflowMigration
+      x-raises:
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - TASK_MIGRATION_CONFLICT
+        - TASK_MIGRATION_STATE_UNMAPPED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORKFLOW_MIGRATION_NOT_FOUND
+        - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VERSION_NOT_FOUND
       x-iam-action: workflows:MigrateWorkflowTasks
       x-iam-resource-type: workflow
       parameters:
@@ -585,6 +666,11 @@ paths:
         - Workflows
       summary: Get a workflow migration
       operationId: getWorkflowMigration
+      x-raises:
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - WORKFLOW_MIGRATION_NOT_FOUND
+        - WORKFLOW_NOT_FOUND
       x-iam-action: workflows:GetWorkflowMigration
       x-iam-resource-type: workflow
       parameters:

@@ -1,7 +1,10 @@
+import { resolutionFor } from 'src/errors';
+
 import {
   type AdmissionService,
   ADMIT,
   DOWN_URL,
+  HINTED_REFUSAL,
   PAYMENT_REFUSAL,
   REFUSAL,
   startAdmissionService,
@@ -163,6 +166,42 @@ describe('admission — a declared write is asked about before it executes', () 
       expect(res.body.error.code).toBe('PLAN_LIMIT_REACHED');
       expect(res.body.error.message).toBe('The plan allows 3 of these.');
       expect(res.body.error.meta).toEqual({ limit: 3 });
+    });
+
+    test("answers the service's own hint", async () => {
+      service.reply = HINTED_REFUSAL;
+
+      const res = await createOverRest();
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.hint).toBe(
+        'Upgrade the plan to create more of these.'
+      );
+    });
+
+    test('answers the registry hint when the service sends none', async () => {
+      service.reply = REFUSAL;
+
+      const res = await createOverRest();
+
+      expect(res.body.error.hint).toBe(
+        resolutionFor({ code: 'ADMISSION_REFUSED' })
+      );
+    });
+
+    test.each([
+      ['a non-string hint', 3],
+      ['an empty hint', ''],
+    ])('is a 502 for %s', async (_, hint) => {
+      service.reply = {
+        status: 409,
+        body: { error: { code: 'PLAN_LIMIT_REACHED', message: 'x', hint } },
+      };
+
+      const res = await createOverRest();
+
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe('ADMISSION_UNAVAILABLE');
     });
 
     test('answers a refusal under its own status and lowercase code', async () => {
@@ -328,6 +367,17 @@ describe('admission — a declared write is asked about before it executes', () 
       const refused = await refusedCall(generationId);
       expect(refused.status).toBe(409);
       expect(refused.error.code).toBe('PLAN_LIMIT_REACHED');
+    });
+
+    test("carries the service's own hint", async () => {
+      service.reply = HINTED_REFUSAL;
+
+      const { generationId } = await createTriggerByBuiltin();
+
+      const refused = await refusedCall(generationId);
+      expect(refused.error.hint).toBe(
+        'Upgrade the plan to create more of these.'
+      );
     });
 
     test('carries a refusal under its own status and lowercase code', async () => {

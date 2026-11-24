@@ -10,7 +10,6 @@ import {
   type FormationAuthorizer,
   type FormationTemplate,
   getFormation,
-  getMissingParams,
   listFormationEvents,
   listFormations,
   parseFormationTemplateInput,
@@ -20,10 +19,8 @@ import {
   validateFormationTemplateAsync,
 } from 'src/lib/formations';
 import { deployableTemplate } from 'src/lib/formationsDeployTemplate';
-import {
-  parameterValueErrors,
-  resolveParameterValues,
-} from 'src/lib/formationsParameters';
+import { missingParameterErrors } from 'src/lib/formationsHelpers';
+import { parameterValueErrors } from 'src/lib/formationsParameters';
 import type { FormationAuthorizationRequest } from 'src/lib/formationsTypes';
 import { buildSrn } from 'src/lib/iam';
 import { namesRequestTag } from 'src/lib/iamConditionKeys';
@@ -132,17 +129,6 @@ const formationActorOf = (
   };
 };
 
-const missingParamsToErrors = (
-  missing: string[]
-): { path: string; message: string }[] => {
-  return missing.map((name) => {
-    return {
-      path: `parameters.${name}`,
-      message: `Parameter '${name}' is required and cannot be empty`,
-    };
-  });
-};
-
 // Only `template.metadata` resolves at deploy, so an expression here is
 // rejected loudly instead of being stored verbatim and never resolved.
 const assertStaticMetadata = (metadata: unknown): void => {
@@ -160,23 +146,6 @@ const assertStaticMetadata = (metadata: unknown): void => {
   );
 };
 
-// Refused here, before the formation is created, rather than as a failed apply.
-const assertDeployableParams = (
-  template: FormationTemplate,
-  provided: Record<string, string> | undefined,
-  forUpdate = false
-): void => {
-  const missing = getMissingParams(template, provided, forUpdate);
-  if (missing.length > 0) {
-    throw new DomainError(
-      'FORMATION_MISSING_PARAMETERS',
-      `Missing required parameters: ${missing.join(', ')}`,
-      { details: missingParamsToErrors(missing) }
-    );
-  }
-  resolveParameterValues(template, provided);
-};
-
 formationsRouter.post('/formations/validate', async (ctx: Context) => {
   requireAuth(ctx);
   await admitAuthorized(ctx, 'formations:ValidateFormation');
@@ -192,12 +161,12 @@ formationsRouter.post('/formations/validate', async (ctx: Context) => {
   });
 
   if (validation.valid && body.parameters !== undefined) {
-    const missing = getMissingParams(
-      parsedTemplate as FormationTemplate,
-      body.parameters
-    );
     const errors = [
-      ...missingParamsToErrors(missing),
+      ...missingParameterErrors({
+        template: parsedTemplate as FormationTemplate,
+        provided: body.parameters,
+        forUpdate: false,
+      }),
       ...parameterValueErrors(
         parsedTemplate as FormationTemplate,
         body.parameters
@@ -233,6 +202,7 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
   });
   const parsedTemplate = await deployableTemplate({
     input: body.template,
+    parameters: body.parameters,
     projectPublicId,
     stored: {
       formationId: body.formation_id,
@@ -272,10 +242,9 @@ formationsRouter.post('/formations', async (ctx: Context) => {
   });
   const parsedTemplate = await deployableTemplate({
     input: body.template,
+    parameters: body.parameters,
     projectPublicId,
   });
-
-  assertDeployableParams(parsedTemplate, body.parameters);
   const metadata = readNullableMetadataBag(body.metadata);
   assertStaticMetadata(metadata);
 
@@ -369,10 +338,10 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   if (body.template !== undefined) {
     parsedTemplate = await deployableTemplate({
       input: body.template,
+      parameters: body.parameters,
       projectPublicId: formation.project_id,
       stored: { formationId: formation.id },
     });
-    assertDeployableParams(parsedTemplate, body.parameters, true);
   }
 
   const updated = await updateFormation({

@@ -314,6 +314,21 @@ export const getMissingParams = (
   });
 };
 
+export const missingParameterErrors = (args: {
+  template: FormationTemplate;
+  provided: Record<string, string> | undefined;
+  forUpdate: boolean;
+}): { path: string; message: string }[] => {
+  return getMissingParams(args.template, args.provided, args.forUpdate).map(
+    (name) => {
+      return {
+        path: `parameters.${name}`,
+        message: `Parameter '${name}' is required and cannot be empty`,
+      };
+    }
+  );
+};
+
 // ── Dependency Graph ──────────────────────────────────────────────────────
 
 export const buildDependencyGraph = (

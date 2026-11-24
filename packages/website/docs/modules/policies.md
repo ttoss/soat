@@ -69,7 +69,7 @@ Format and evaluation: [IAM — Policy Documents](./iam.md#policy-documents). Ex
 - `POST` with `project_id`, or with a project-scoped API key (its project is the default), creates a project policy; without either, a global one. The project never changes; deleting the project deletes its policies.
 - A `policy` resource in a [formation](./formations.md) is a project policy of the formation's project.
 - An `Allow` with no `resource` grants every resource of the policy's project, as `srn:<project_id>:*:*`; the document is stored as written.
-- An `Allow` on `*`, `srn:*:…`, a project glob, or another project's SRN is refused (`400 VALIDATION_FAILED`, `meta.details`). A `Deny` may name anything.
+- An `Allow` on `*`, `srn:*:…`, a project glob, or another project's SRN is refused (`400 VALIDATION_FAILED`, `meta.details`). Each refusal names the form an `Allow` resource takes: `srn:<project_id>:<type>:<id>`, or no `resource` for every resource of the project. A `Deny` may name anything.
 - Listing returns only the projects' policies the caller may list; the unrestricted admin also sees global ones.
 - A project policy read outside the caller's reach is `404`, and so is a `GET`, `PUT` or `DELETE` of an id that names no policy; a global policy is `403` to anyone but the unrestricted admin.
 - `policy_ids` naming another project's policy is `400 POLICY_OUTSIDE_PROJECT` (`meta.policy_id`). Attaching or editing an attached policy still needs a writer who holds its grants (`403 POLICY_GRANT_NOT_HELD`).

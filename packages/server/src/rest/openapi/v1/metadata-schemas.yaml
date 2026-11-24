@@ -32,6 +32,12 @@ paths:
         Returns the declarations in scope, oldest first. `resource_type`
         narrows them to one governed resource.
       operationId: listMetadataSchemas
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: metadata-schemas:ListMetadataSchemas
       x-iam-resource-type: metadata_schema
       parameters:
@@ -100,6 +106,13 @@ paths:
         `/.system` cannot be governed: a platform-written document carries no
         caller metadata.
       operationId: createMetadataSchema
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: metadata-schemas:CreateMetadataSchema
       x-iam-resource-type: metadata_schema
       requestBody:
@@ -204,6 +217,12 @@ paths:
         resource's own write path, because a check a writer has to call is
         advisory and the writer who skips it is the one the rule exists for.
       operationId: validateMetadata
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: metadata-schemas:ListMetadataSchemas
       x-iam-resource-type: metadata_schema
       requestBody:
@@ -304,6 +323,14 @@ paths:
       summary: Get a metadata schema
       description: Returns one declaration by id.
       operationId: getMetadataSchema
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: metadata-schemas:GetMetadataSchema
       x-iam-resource-type: metadata_schema
       parameters:
@@ -354,6 +381,16 @@ paths:
         the row, so changing it would silently repoint the declaration at a
         different door — delete it and declare again instead.
       operationId: updateMetadataSchema
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: metadata-schemas:UpdateMetadataSchema
       x-iam-resource-type: metadata_schema
       parameters:
@@ -439,6 +476,14 @@ paths:
         Removes the declaration. Documents already stored keep the metadata they
         hold — the rule governed writes, not rows.
       operationId: deleteMetadataSchema
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: metadata-schemas:DeleteMetadataSchema
       x-iam-resource-type: metadata_schema
       parameters:

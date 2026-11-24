@@ -26,6 +26,12 @@ paths:
       summary: List memory stores
       description: Returns a list of memory store configurations for a project
       operationId: listMemoryStores
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:ListMemoryStores
       x-iam-resource-type: memory_store
       parameters:
@@ -79,6 +85,13 @@ paths:
       summary: Create a memory store
       description: Creates a new memory store configuration in a project
       operationId: createMemoryStore
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:CreateMemoryStore
       x-iam-resource-type: memory_store
       requestBody:
@@ -185,6 +198,10 @@ paths:
       summary: Get a memory store
       description: Returns a single memory store configuration by ID
       operationId: getMemoryStore
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: memories:GetMemoryStore
       x-iam-resource-type: memory_store
       parameters:
@@ -235,6 +252,12 @@ paths:
       summary: Update a memory store
       description: Updates an existing memory store configuration
       operationId: updateMemoryStore
+      x-raises:
+        - FORBIDDEN
+        - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:UpdateMemoryStore
       x-iam-resource-type: memory_store
       parameters:
@@ -345,6 +368,10 @@ paths:
       summary: Delete a memory store
       description: Deletes a memory store configuration
       operationId: deleteMemoryStore
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: memories:DeleteMemoryStore
       x-iam-resource-type: memory_store
       parameters:
@@ -400,6 +427,12 @@ paths:
         store?" is asked — a question no column on a memory row could answer,
         because a skipped write produced no memory at all.
       operationId: listMemoryStoreAssertions
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:ListMemoryAssertions
       x-iam-resource-type: memory_store
       parameters:
@@ -515,6 +548,11 @@ paths:
         the file holds what the store currently asserts. The rows are the rows
         the listing returns for the same caller.
       operationId: exportMemories
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:ExportMemories
       x-iam-resource-type: memory_store
       x-iam-also-checked-on:
@@ -586,6 +624,11 @@ paths:
       summary: Get memory store tags
       description: Returns all tags attached to the memory store
       operationId: getMemoryStoreTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:GetMemoryStore
       x-iam-resource-type: memory_store
       parameters:
@@ -633,6 +676,11 @@ paths:
       summary: Replace memory store tags
       description: Replaces all tags on the memory store with the provided tags (not merged)
       operationId: replaceMemoryStoreTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:UpdateMemoryStore
       x-iam-resource-type: memory_store
       parameters:
@@ -696,6 +744,11 @@ paths:
       summary: Merge memory store tags
       description: Merges provided tags into the memory store's existing tags (existing tags are preserved unless overridden)
       operationId: mergeMemoryStoreTags
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: memories:UpdateMemoryStore
       x-iam-resource-type: memory_store
       parameters:

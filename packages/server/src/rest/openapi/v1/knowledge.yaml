@@ -26,6 +26,20 @@ paths:
       summary: Search knowledge
       description: Searches across documents and memories using hybrid retrieval — a vector query and a full-text query per source, fused by reciprocal rank — by the stored vector of an existing document or memory (`similar_to_document_id`, `similar_to_memory_id`), or by file paths, document IDs, memory store IDs, or tags. At least one of `query`, `similar_to_document_id`, `similar_to_memory_id`, `tags`, `document_paths`, `document_ids`, or `memory_store_ids` must be provided.
       operationId: searchKnowledge
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - API_KEY_PROJECT_SCOPE
+        - EMBEDDING_NOT_CONFIGURED
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESOURCE_NOT_FOUND
+        - SIMILARITY_SOURCE_NOT_EMBEDDED
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: knowledge:SearchKnowledge
       x-iam-resource-type: document
       x-iam-also-checked-on:

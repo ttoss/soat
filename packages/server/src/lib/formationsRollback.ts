@@ -29,6 +29,11 @@ export type AppliedUpdate = {
   previousPhysicalResourceId: string;
   previousStatus: string;
   previousProperties: Record<string, unknown>;
+  /**
+   * Each write-only property the update sent, at the value the last deploy
+   * left; one that deploy cannot resolve is absent, so it is never settled.
+   */
+  previousWriteOnly: Record<string, unknown>;
   /** Set when the update replaced the resource instead of changing it. */
   replacementPhysicalResourceId?: string;
 };
@@ -103,21 +108,25 @@ const unwindCreate = async (args: Unwind): Promise<FormationEvent> => {
 /**
  * What re-applying the overwritten properties sends: a property the update set
  * and the previous state lacked is cleared by the same rule a template that
- * drops it follows, since an absent field leaves the stored value alone.
+ * drops it follows, since an absent field leaves the stored value alone. A
+ * write-only property is never stored, so it is re-sent from the last deploy.
  */
 const restoreProperties = (args: {
   resourceRow: ResourceRow;
-  previousProperties: Record<string, unknown>;
+  update: AppliedUpdate;
 }): Record<string, unknown> => {
   return mergeWithPrevious({
-    resolved: args.previousProperties,
+    resolved: {
+      ...args.update.previousProperties,
+      ...args.update.previousWriteOnly,
+    },
     previous: {},
     lastApplied: args.resourceRow.lastAppliedProperties ?? {},
     clearable: clearablePropertiesOf(args.resourceRow.resourceType),
     comparison: propertyComparisonFor({
       declared: {
         type: args.resourceRow.resourceType,
-        properties: args.previousProperties,
+        properties: args.update.previousProperties,
       },
       deployed: undefined,
     }),
@@ -127,8 +136,7 @@ const restoreProperties = (args: {
 /**
  * A replacement is deleted and the row pointed back at what it superseded,
  * which a failed deploy never disposes of. An in-place update is re-applied
- * with the properties it overwrote; a write-only property is never stored, so
- * it keeps the value the deploy sent.
+ * with the properties it overwrote.
  */
 const unwindUpdate = async (
   args: Unwind & { update: AppliedUpdate }
@@ -149,10 +157,7 @@ const unwindUpdate = async (
     const outcome = await applyUpdateResource({
       resourceType: resourceRow.resourceType,
       physicalResourceId: previousId,
-      resolvedProperties: restoreProperties({
-        resourceRow,
-        previousProperties: update.previousProperties,
-      }),
+      resolvedProperties: restoreProperties({ resourceRow, update }),
       projectId: args.projectId,
       actor: args.actor,
       logicalId: resourceRow.logicalId,

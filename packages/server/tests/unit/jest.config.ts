@@ -23,8 +23,8 @@ export default jestUnitConfig({
     },
   },
   maxWorkers: 4,
-  // A worker's heap grows with every file it runs; past this it restarts, so
-  // four workers never exhaust the heap or starve the CI runner.
+  // V8 collects a worker's heap lazily and coverage counters accumulate in it;
+  // past this it restarts, so four workers never starve the CI runner.
   workerIdleMemoryLimit: '1GB',
   // One PostgreSQL for the whole run, with a pre-built schema every test file
   // clones. See `testDatabase.ts`.

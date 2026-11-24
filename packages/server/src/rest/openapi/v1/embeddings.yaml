@@ -35,6 +35,18 @@ paths:
         none and is bound to none is `400 VALIDATION_FAILED`. The caller needs
         `embeddings:CreateEmbeddings` on the project billed.
       operationId: createEmbeddings
+      x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - API_KEY_PROJECT_SCOPE
+        - EMBEDDING_NOT_CONFIGURED
+        - FORBIDDEN
+        - INTERNAL_ERROR
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: embeddings:CreateEmbeddings
       x-iam-resource-type: embedding
       requestBody:

@@ -26,6 +26,12 @@ paths:
       summary: List model routes
       description: Returns the model routes defined in a project
       operationId: listModelRoutes
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: model-routes:ListModelRoutes
       x-iam-resource-type: model_route
       parameters:
@@ -84,6 +90,17 @@ paths:
         10 (400 naming the computed total). A duplicate `name` in the project is
         rejected with 409.
       operationId: createModelRoute
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - MODEL_NOT_OFFERED
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: model-routes:CreateModelRoute
       x-iam-resource-type: model_route
       requestBody:
@@ -192,6 +209,14 @@ paths:
       summary: Get a model route
       description: Returns a specific model route
       operationId: getModelRoute
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: model-routes:GetModelRoute
       x-iam-resource-type: model_route
       parameters:
@@ -241,6 +266,17 @@ paths:
         Updates a model route's name, targets, retry classes, or breaker
         configuration. Omitted fields are left unchanged.
       operationId: updateModelRoute
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - MODEL_NOT_OFFERED
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: model-routes:UpdateModelRoute
       x-iam-resource-type: model_route
       parameters:
@@ -332,6 +368,15 @@ paths:
         a routed agent has no pinned provider to fall back on, so the reference
         must be repointed or the agent deleted first.
       operationId: deleteModelRoute
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - MODEL_ROUTE_HAS_DEPENDENTS
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: model-routes:DeleteModelRoute
       x-iam-resource-type: model_route
       parameters:

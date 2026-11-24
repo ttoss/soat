@@ -26,6 +26,12 @@ paths:
       summary: List quotas
       description: Returns the quotas defined in a project
       operationId: listQuotas
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: quotas:ListQuotas
       x-iam-resource-type: quota
       parameters:
@@ -96,6 +102,16 @@ paths:
         create — with `409 QUOTA_STORAGE_EXCEEDED` and no `Retry-After`, since
         no window reset clears a footprint.
       operationId: createQuota
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - QUOTA_CONFLICT
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: quotas:CreateQuota
       x-iam-resource-type: quota
       requestBody:
@@ -252,6 +268,14 @@ paths:
       summary: Get a quota
       description: Returns a specific quota, including current window usage
       operationId: getQuota
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: quotas:GetQuota
       x-iam-resource-type: quota
       parameters:
@@ -299,6 +323,15 @@ paths:
       summary: Update a quota
       description: Updates a quota's limit and/or mode. Other fields are immutable.
       operationId: updateQuota
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: quotas:UpdateQuota
       x-iam-resource-type: quota
       parameters:
@@ -380,6 +413,14 @@ paths:
       summary: Delete a quota
       description: Deletes a quota and drops its window counters
       operationId: deleteQuota
+      x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - TOOL_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: quotas:DeleteQuota
       x-iam-resource-type: quota
       parameters:

@@ -21,6 +21,7 @@ import { resolveSchemaRef } from '../openapiSpec';
 import type { SchemaRefResolver } from '../openapiUnknownFields';
 import {
   collectEnumViolations,
+  collectMissingRequiredFields,
   collectUnknownFields,
 } from '../openapiUnknownFields';
 
@@ -234,19 +235,39 @@ export const pushUnknownFieldErrors = (args: {
   }
 };
 
+/**
+ * Reports every field a schema level `required`s and the template lacks, at
+ * every depth {@link pushUnknownFieldErrors} reads, so a nested object missing
+ * its required field is refused at validate time rather than mid-apply. A
+ * `ref`/`param`/`sub` resolves at deploy time and is never judged.
+ */
 export const pushRequiredFieldErrors = (args: {
-  spec: ModuleOpenApiSpec;
+  schema: SchemaWithProperties;
   properties: Record<string, unknown>;
   basePath: string;
   errors: ValidationError[];
+  /**
+   * Whether the top level's `required` applies: a template update is a patch,
+   * so it may omit a top-level field; a nested object it sends is whole.
+   */
+  topLevel: boolean;
+  /** How a nested `$ref` is followed, as for {@link pushUnknownFieldErrors}. */
+  resolveRef?: SchemaRefResolver;
 }): void => {
-  for (const requiredField of args.spec.requiredFields) {
-    if (args.properties[requiredField] === undefined) {
-      args.errors.push({
-        path: `${args.basePath}.${requiredField}`,
-        message: `\`${requiredField}\` is required`,
-      });
+  const missing = collectMissingRequiredFields(
+    { schema: args.schema, value: args.properties },
+    {
+      resolveRef: args.resolveRef ?? resolveSchemaRef,
+      isOpaque: isFormationExpression,
     }
+  );
+
+  for (const field of missing) {
+    if (field.topLevel && !args.topLevel) continue;
+    args.errors.push({
+      path: `${args.basePath}.${field.path}`,
+      message: `\`${field.path}\` is required`,
+    });
   }
 };
 

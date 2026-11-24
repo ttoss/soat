@@ -4,6 +4,8 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { missingParameterErrors } from './formationsHelpers';
+import { resolveParameterValues } from './formationsParameters';
 import type { FormationTemplate } from './formationsTypes';
 import { parseFormationTemplateInput } from './formationsValidation';
 import { validateFormationTemplateAsync } from './formationsValidationAsync';
@@ -85,10 +87,13 @@ export const restoreTemplateSecrets = (args: {
 /**
  * The template a create, update or plan deploys: parsed, its placeholders
  * restored from `stored` (the formation it redeploys), and valid, or
- * `400 VALIDATION_FAILED`.
+ * `400 VALIDATION_FAILED`; `parameters` give every parameter it reads a value
+ * of its type, or `400 FORMATION_MISSING_PARAMETERS` /
+ * `FORMATION_INVALID_PARAMETERS`. A plan previews only what its deploy accepts.
  */
 export const deployableTemplate = async (args: {
   input: unknown;
+  parameters: Record<string, string> | undefined;
   projectPublicId: string;
   stored?: { formationId: string | undefined; projectId?: number };
 }): Promise<FormationTemplate> => {
@@ -117,5 +122,23 @@ export const deployableTemplate = async (args: {
       details: validation.errors,
     });
   }
-  return template as FormationTemplate;
+  const deployable = template as FormationTemplate;
+  const missing = missingParameterErrors({
+    template: deployable,
+    provided: args.parameters,
+    forUpdate: args.stored?.formationId !== undefined,
+  });
+  if (missing.length > 0) {
+    throw new DomainError(
+      'FORMATION_MISSING_PARAMETERS',
+      `Missing required parameters: ${missing
+        .map((error) => {
+          return error.path.slice('parameters.'.length);
+        })
+        .join(', ')}`,
+      { details: missing }
+    );
+  }
+  resolveParameterValues(deployable, args.parameters);
+  return deployable;
 };

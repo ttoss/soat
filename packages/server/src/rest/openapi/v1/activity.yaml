@@ -38,6 +38,12 @@ paths:
         `cursor` to fetch the next one; a `null` `next_cursor` means there is
         no more data.
       operationId: listActivity
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: activity:ListActivity
       x-iam-resource-type: activity
       parameters:
@@ -150,6 +156,11 @@ paths:
         start to end. The export is per-project: `project_id` names it, or a
         project-bound credential implies its own. Filters behave exactly as they do on the list endpoint.
       operationId: exportActivity
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: activity:ExportActivity
       x-iam-resource-type: activity
       # Not a tool: the response is a stream with no JSON projection, and an

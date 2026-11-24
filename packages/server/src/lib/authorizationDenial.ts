@@ -5,6 +5,21 @@ import { principalFromAuthUser } from './principals';
 import type { ResourceGrantPrincipalType } from './resourceGrantCarriers';
 import type { ActingPrincipal } from './workAuthority';
 
+type DeniedPrincipalType =
+  | 'user'
+  | 'api_key'
+  | 'caller'
+  | 'iam_token'
+  | 'on_behalf_of'
+  | 'generation'
+  | 'project'
+  | 'agent'
+  | 'trigger'
+  | ResourceGrantPrincipalType;
+
+/** The caller's own principal an IAM token was minted for, opaque to the server. */
+export type MintedPrincipal = { type: string; id: string };
+
 /**
  * Whose policies refused: the request's credential (`user`, `api_key`, or
  * `caller` where the site holds its policies but not its id), what narrows it
@@ -12,22 +27,11 @@ import type { ActingPrincipal } from './workAuthority';
  * execution identity, a `project`'s `agent_policy_ids`), or a resource acting
  * under its own `policy_ids` (`agent`, `trigger`, or a
  * `RESOURCE_GRANT_PRINCIPALS` type). `id` is `null` where the refusing site holds the policy
- * but not its owner's id.
+ * but not its owner's id. An `iam_token` minted for a `principal` carries it.
  */
-export type DeniedPrincipal = {
-  type:
-    | 'user'
-    | 'api_key'
-    | 'caller'
-    | 'iam_token'
-    | 'on_behalf_of'
-    | 'generation'
-    | 'project'
-    | 'agent'
-    | 'trigger'
-    | ResourceGrantPrincipalType;
-  id: string | null;
-};
+export type DeniedPrincipal =
+  | { type: Exclude<DeniedPrincipalType, 'iam_token'>; id: string | null }
+  | { type: 'iam_token'; id: string | null; principal?: MintedPrincipal };
 
 /**
  * Whose set refused a check, and the `denial` of the `Deny` statement that
@@ -67,11 +71,26 @@ const PRINCIPAL_LABELS: Record<DeniedPrincipal['type'], string> = {
   playbook_version: 'playbook version',
 };
 
-const owner = (principal: DeniedPrincipal): string => {
-  const label = PRINCIPAL_LABELS[principal.type];
-  return principal.id === null
-    ? `the ${label}'s`
-    : `${label} ${principal.id}'s`;
+const LABELS: Readonly<Record<string, string>> = PRINCIPAL_LABELS;
+
+/**
+ * Whom a refusal names: a token minted for a principal names that principal,
+ * since its jti never reaches the minter's caller.
+ */
+const namedBy = (
+  principal: DeniedPrincipal
+): { type: string; id: string | null } => {
+  if (principal.type === 'iam_token' && principal.principal) {
+    return principal.principal;
+  }
+  return { type: principal.type, id: principal.id };
+};
+
+const owner = (named: { type: string; id: string | null }): string => {
+  const label = Object.hasOwn(LABELS, named.type)
+    ? LABELS[named.type]
+    : named.type;
+  return named.id === null ? `the ${label}'s` : `${label} ${named.id}'s`;
 };
 
 const describeAction = (denied: DeniedAction): string => {
@@ -84,7 +103,7 @@ export const authorizationDenialMessage = (args: {
   principal: DeniedPrincipal;
   denied: DeniedAction[];
 }): string => {
-  return `Forbidden: ${owner(args.principal)} policies deny ${args.denied
+  return `Forbidden: ${owner(namedBy(args.principal))} policies deny ${args.denied
     .map(describeAction)
     .join(', ')}`;
 };
@@ -114,7 +133,7 @@ export const authorizationDenied = (args: {
       ...args.extra,
       action: first.action,
       resource: first.resource,
-      denied_by: { type: args.principal.type, id: args.principal.id },
+      denied_by: namedBy(args.principal),
     },
     denial ? { relayed: { code: denial.code, httpStatus: 403 } } : undefined
   );
@@ -205,15 +224,30 @@ export const isAuthorizationDenial = (error: unknown): error is DomainError => {
   return error instanceof DomainError && error.code === 'FORBIDDEN';
 };
 
-const PRINCIPAL_TYPES = Object.keys(PRINCIPAL_LABELS);
+const isDeniedPrincipalType = (type: unknown): type is DeniedPrincipalType => {
+  return typeof type === 'string' && Object.hasOwn(PRINCIPAL_LABELS, type);
+};
+
+const readMintedPrincipal = (value: unknown): MintedPrincipal | null => {
+  return isPlainObject(value) &&
+    typeof value.type === 'string' &&
+    typeof value.id === 'string'
+    ? { type: value.type, id: value.id }
+    : null;
+};
+
+/** A stored or sealed refusing principal; null for one that does not read. */
+export const readDeniedPrincipal = (value: unknown): DeniedPrincipal | null => {
+  if (!isPlainObject(value) || !isDeniedPrincipalType(value.type)) return null;
+  const { type, id } = value;
+  if (id !== null && typeof id !== 'string') return null;
+  if (value.principal === undefined) return { type, id };
+  const principal = readMintedPrincipal(value.principal);
+  return type === 'iam_token' && principal ? { type, id, principal } : null;
+};
 
 export const isDeniedPrincipal = (value: unknown): value is DeniedPrincipal => {
-  return (
-    isPlainObject(value) &&
-    typeof value.type === 'string' &&
-    PRINCIPAL_TYPES.includes(value.type) &&
-    (typeof value.id === 'string' || value.id === null)
-  );
+  return readDeniedPrincipal(value) !== null;
 };
 
 /**

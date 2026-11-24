@@ -7,8 +7,12 @@ const camelCaseKeys = (meta: Record<string, unknown> | undefined): string[] => {
   });
 };
 
-/** A refusal another party decided, answered with its own status and code. */
-export type RelayedRefusal = { code: string; httpStatus: number };
+/** A refusal another party decided, answered with its own status, code and hint. */
+export type RelayedRefusal = {
+  code: string;
+  httpStatus: number;
+  hint?: string;
+};
 
 export class DomainError extends Error {
   /** The registry entry: hint, docs page and, unless relayed, the status. */
@@ -19,6 +23,8 @@ export class DomainError extends Error {
   public readonly meta: Record<string, unknown> | undefined;
   /** Another party decided it: its status and code are answered as given. */
   public readonly relayed: boolean;
+  /** The deciding party's own advice, answered over the registry's hint. */
+  public readonly relayedHint: string | undefined;
 
   constructor(
     code: ErrorCode,
@@ -29,11 +35,14 @@ export class DomainError extends Error {
     super(message, options);
     this.name = 'DomainError';
     this.code = code;
-    this.wireCode = options?.relayed?.code ?? code;
-    this.httpStatus =
-      options?.relayed?.httpStatus ?? ERROR_CODES[code].httpStatus;
+    const relayed = options?.relayed;
+    this.wireCode = relayed ? relayed.code : code;
+    this.httpStatus = relayed
+      ? relayed.httpStatus
+      : ERROR_CODES[code].httpStatus;
     this.meta = meta;
-    this.relayed = options?.relayed !== undefined;
+    this.relayed = relayed !== undefined;
+    this.relayedHint = relayed?.hint;
 
     // `meta` reaches the wire as-is (error bodies, MCP results, stored
     // `StoredError`s), whose contract is snake_case. Its top-level keys are

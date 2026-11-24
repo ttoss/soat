@@ -241,7 +241,7 @@ With a model route the model resolves through the route's ordered provider+model
 
 Otherwise [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop). `max_chain_generations` bounds a chain, not a turn, and does not satisfy it. The check reads the resulting config: removing the condition from a forcing agent, or a [version restore](#versioning-and-staged-rollout) to such a config, is refused too. Or keep `"auto"` and force one step with [Step Rules](#step-rules).
 
-**A forcing value is enforced on the answer, not only on the request.** A model that replies with text instead of calling the tool it was told to call fails the generation with [`AI_PROVIDER_ERROR`](../error-codes.md#ai_provider_error) — returning that text as the answer would be a silent data-integrity failure, the same reason [`TEXT_ENCODED_TOOL_CALL`](../error-codes.md#text_encoded_tool_call) exists.
+**A forcing value is enforced on the answer, not only on the request.** A model that replies with text instead of calling the tool it was told to call fails the generation with [`AI_PROVIDER_ERROR`](../error-codes.md#ai_provider_error) — returning that text as the answer would be a silent data-integrity failure, the same reason [`TEXT_ENCODED_TOOL_CALL`](../error-codes.md#text_encoded_tool_call) exists. That turn is not retried without tools. An [`output_schema`](#structured-output) agent answering so on its last allowed step fails with `MAX_STEPS_REACHED` instead.
 
 **Every turn of a chain uses the agent's `tool_choice`**, continuations included; a turn ending on the step budget reports `stop_reason: "max_steps"`.
 
@@ -639,7 +639,7 @@ A completed non-streaming generation returns the parsed value as `output.object`
 
 #### Answering at `max_steps`
 
-The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
+The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer, and an answer the model gives anyway on the last step is refused), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `INVALID_OUTPUT_SCHEMA` at create/update.
 
 #### The schema is enforced, not advisory
 

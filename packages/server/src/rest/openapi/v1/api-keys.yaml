@@ -34,6 +34,10 @@ paths:
           authority over it, and a key's metadata names its owner, prefix and attached
           policies.
       operationId: listApiKeys
+      x-raises:
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: api-keys:ListApiKeys
       x-iam-resource-type: apiKey
       security:
@@ -79,6 +83,17 @@ paths:
         - When the request is authenticated with a **project-scoped API key**, the new key is confined to that same project: omitting `project_id` defaults to it, naming a different project returns `403 API_KEY_PROJECT_SCOPE`, and `project_id: null` (an unscoped key) is likewise refused. Minting an unscoped key requires an unscoped credential.
         - When the request is authenticated with an **API key narrowed by `policy_ids`**, the new key stays inside that boundary: omitting `policy_ids` inherits the caller's own, a non-empty subset of them is accepted, and an empty list or any other policy returns `403 API_KEY_POLICY_BOUNDARY`.
       operationId: createApiKey
+      x-raises:
+        - ACTION_NOT_HELD
+        - API_KEY_POLICY_BOUNDARY
+        - API_KEY_PROJECT_SCOPE
+        - CREDENTIAL_NARROWED
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: api-keys:CreateApiKey
       x-iam-resource-type: apiKey
       x-soat-agent-exclude: true
@@ -151,6 +166,11 @@ paths:
       summary: Get an API key
       description: Returns details of an API key. Only the owner or an unrestricted admin can access it, and a project-scoped credential can only reach keys in its own project.
       operationId: getApiKey
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: api-keys:GetApiKey
       x-iam-resource-type: apiKey
       x-soat-agent-exclude: true
@@ -199,6 +219,18 @@ paths:
       summary: Update an API key
       description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an unrestricted admin (a login, or a key bound to no project and narrowed by no policy) can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it. An API key narrowed by `policy_ids` can only set `policy_ids` to a non-empty subset of its own (`403 API_KEY_POLICY_BOUNDARY` otherwise). A request narrowed beyond its credential's own grant (an OAuth or IAM token, `On-Behalf-Of`, or a call durable work makes under its stored authority) never updates a key (`403 CREDENTIAL_NARROWED`).
       operationId: updateApiKey
+      x-raises:
+        - ACTION_NOT_HELD
+        - API_KEY_POLICY_BOUNDARY
+        - API_KEY_PROJECT_SCOPE
+        - CREDENTIAL_NARROWED
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
       x-iam-action: api-keys:UpdateApiKey
       x-iam-resource-type: apiKey
       x-soat-agent-exclude: true
@@ -281,6 +313,11 @@ paths:
       summary: Delete an API key
       description: Deletes an API key. Only the owner or an unrestricted admin can delete it, and a project-scoped credential can only delete keys in its own project.
       operationId: deleteApiKey
+      x-raises:
+        - API_KEY_PROJECT_SCOPE
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
       x-iam-action: api-keys:DeleteApiKey
       x-iam-resource-type: apiKey
       x-soat-agent-exclude: true

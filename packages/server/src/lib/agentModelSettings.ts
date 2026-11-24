@@ -39,9 +39,7 @@ export const assertValidReasoning = (value: unknown): void => {
   if (!isPlainObject(value) || !isReasoningEffort(value.effort)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `'reasoning' must be { "effort": ${REASONING_EFFORTS.map((effort) => {
-        return `"${effort}"`;
-      }).join(' | ')} } or null.`
+      `'reasoning' must be { "effort": "${REASONING_EFFORTS.join('" | "')}" } or null.`
     );
   }
 };

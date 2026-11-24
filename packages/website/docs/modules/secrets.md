@@ -77,7 +77,7 @@ Deleting a secret still referenced by AI providers returns `409 Conflict`; `?for
 
 | Environment Variable     | Required | Description                                                                                      |
 | ------------------------ | -------- | ------------------------------------------------------------------------------------------------ |
-| `SECRETS_ENCRYPTION_KEY` | Yes      | 64-character hex string (32 bytes). Used for AES-256-GCM encryption of all stored secret values. |
+| `SECRETS_ENCRYPTION_KEY` | Yes      | 64-character hex string (32 bytes). Used for AES-256-GCM encryption of all stored secret values. Unset or malformed, the server and the worker do not start. |
 
 Generate a key with:
 

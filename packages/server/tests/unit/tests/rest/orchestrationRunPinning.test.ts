@@ -196,28 +196,8 @@ describe('a run woken from `sleeping`', () => {
     expect(settled.state.answer).toBe('v1');
   });
 
-  // The two fallbacks no entry point produces — a run predating pinning, and an
-  // archive row deleted out of band — so each perturbs one row. Both degrade
-  // to the live graph rather than strand the run.
-  test('a run with no pinned version executes the live graph', async () => {
-    const settled = await sleepThenWake({
-      edit: async ({ orchestrationId, runId }) => {
-        await db.OrchestrationRun.update(
-          { orchestrationVersion: null },
-          { where: { publicId: runId } }
-        );
-        await rewire({
-          orchestrationId,
-          nodes: [DELAY_NODE, markerNode('v2')],
-          edges: EDGES,
-        });
-      },
-    });
-
-    expect(settled.status).toBe('completed');
-    expect(settled.state.answer).toBe('v2');
-  });
-
+  // No entry point deletes an archive row, so this perturbs one. The run
+  // degrades to the live graph rather than strand.
   test('a pinned version whose archive is gone executes the live graph', async () => {
     const settled = await sleepThenWake({
       edit: async ({ orchestrationId }) => {

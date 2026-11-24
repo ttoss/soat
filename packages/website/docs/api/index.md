@@ -103,6 +103,10 @@ as the `x-error-codes` extension of [/openapi.json](/openapi.json), and on the
 [Error Codes](/docs/error-codes) page. `INTERNAL_ERROR` always carries exactly
 that message; the underlying exception is logged server-side, never forwarded.
 
+Each operation's `x-raises` extension lists the codes its handler can raise,
+derived from the server source. A handler that reaches a registry lists every
+entry's code, so the list may name one a given request never meets.
+
 ### Recorded failures
 
 Work that fails after its request has answered records the error body without
