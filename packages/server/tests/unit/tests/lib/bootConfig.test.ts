@@ -12,6 +12,7 @@ const SETTINGS = [
   { env: 'SOAT_RESERVED_TOOL_CONTEXT_PREFIX', valid: 'plat_' },
   { env: 'SOAT_HEADER_PREFIX', valid: 'X-Acme-' },
   { env: 'EMBEDDING_INPUT_1M_TOKEN_PRICE_USD', valid: '0.02' },
+  { env: 'SECRETS_ENCRYPTION_KEY', valid: 'ab'.repeat(32) },
 ];
 
 describe('loadBootConfig', () => {
@@ -45,6 +46,20 @@ describe('loadBootConfig', () => {
     expect(() => {
       return loadBootConfig();
     }).toThrow(env);
+  });
+
+  test.each([
+    ['unset', undefined],
+    ['64 hex characters and trailing junk', `${'ab'.repeat(32)}zz`],
+  ])('a SECRETS_ENCRYPTION_KEY %s fails boot, naming it', (_, value) => {
+    if (value === undefined) {
+      delete process.env.SECRETS_ENCRYPTION_KEY;
+    } else {
+      process.env.SECRETS_ENCRYPTION_KEY = value;
+    }
+    expect(() => {
+      return loadBootConfig();
+    }).toThrow('SECRETS_ENCRYPTION_KEY');
   });
 });
 
