@@ -109,7 +109,7 @@ describe('Guardrails', () => {
       expect(response.body.document.class).toBe('C');
     });
 
-    test('accepts a document supplied as a JSON-encoded string', async () => {
+    test('a document supplied as a JSON-encoded string is refused by the schema', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/guardrails')
         .send({
@@ -117,8 +117,8 @@ describe('Guardrails', () => {
           name: 'String Document',
           document: JSON.stringify({ class: 'B', escalate: true }),
         });
-      expect(response.status).toBe(201);
-      expect(response.body.document.escalate).toBe(true);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -202,6 +202,7 @@ describe('Guardrails', () => {
           document: '{not valid json',
         });
       expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('invalid context_mode returns 400', async () => {

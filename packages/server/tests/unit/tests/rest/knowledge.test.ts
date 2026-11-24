@@ -275,30 +275,12 @@ describe('Knowledge', () => {
       ).toBe(true);
     });
 
-    test('coerces a scalar document_paths into a single-prefix filter', async () => {
-      // Defensive: a client that sends `document_paths` as a bare string
-      // (rather than an array) must not crash the search with a 500. The value
-      // is coerced to a one-element array and matched as a prefix.
-      await authenticatedTestClient(userToken).post('/api/v1/documents').send({
-        project_id: projectId,
-        content: 'Scalar-path coercion probe.',
-        filename: 'scalar.txt',
-        path: '/scalar-probe/scalar.txt',
-      });
-
+    test('a scalar document_paths is refused by the schema', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({
-          project_id: projectId,
-          // Intentionally a string, not an array — mimics a non-conforming client.
-          document_paths: '/scalar-probe/',
-        });
-      expect(response.status).toBe(200);
-      expect(
-        response.body.results.some((r: { path?: string }) => {
-          return r.path === '/scalar-probe/scalar.txt';
-        })
-      ).toBe(true);
+        .send({ project_id: projectId, document_paths: '/scalar-probe/' });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     describe('tags', () => {
