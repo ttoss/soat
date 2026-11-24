@@ -6,6 +6,8 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { assertCallerPath } from './filePaths';
 import { buildPath } from './files';
+import { getUploadMaxBytes } from './requestBounds';
+import { buildUploadUrl } from './uploadUrlTemplate';
 
 const log = createDebug('soat:upload-tokens');
 
@@ -23,24 +25,50 @@ const fingerprintToken = (token: string): string => {
 /** Default upload-token lifetime: 15 minutes. */
 const UPLOAD_TOKEN_TTL_MS = 15 * 60 * 1000;
 
+/** `application/pdf; charset=binary` and `Application/PDF` are one type. */
+const mediaType = (contentType: string): string => {
+  return contentType.split(';')[0].trim().toLowerCase();
+};
+
+const assertMaxBytes = (args: { maxBytes: number; ceiling: number }) => {
+  if (
+    !Number.isInteger(args.maxBytes) ||
+    args.maxBytes < 1 ||
+    args.maxBytes > args.ceiling
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `max_bytes must be an integer from 1 to ${args.ceiling}, this deployment's upload ceiling.`,
+      { limit: args.ceiling }
+    );
+  }
+};
+
 /**
  * Creates a short-lived, single-use presigned upload URL for a project — the
- * local-storage equivalent of an S3 presigned URL. The returned token value is
- * embedded in the upload URL the client then POSTs the file content to.
+ * local-storage equivalent of an S3 presigned URL. The token fixes where the
+ * upload lands, its byte ceiling and, when given, its content type.
  */
 export const createPresignedUrl = async (args: {
   projectId: number;
+  projectPublicId: string;
   prefix?: string;
   filename?: string;
   contentType?: string;
+  maxBytes?: number;
   ttlMs?: number;
 }) => {
   log(
-    'createPresignedUrl: projectId=%d prefix=%s filename=%s',
+    'createPresignedUrl: projectId=%d prefix=%s filename=%s maxBytes=%s',
     args.projectId,
     args.prefix,
-    args.filename
+    args.filename,
+    args.maxBytes
   );
+
+  const ceiling = getUploadMaxBytes();
+  const maxBytes = args.maxBytes ?? ceiling;
+  assertMaxBytes({ maxBytes, ceiling });
 
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? UPLOAD_TOKEN_TTL_MS));
 
@@ -50,6 +78,7 @@ export const createPresignedUrl = async (args: {
     projectId: args.projectId,
     filename: args.filename,
     contentType: args.contentType,
+    maxBytes: String(maxBytes),
     path: assertCallerPath(
       buildPath({ prefix: args.prefix, filename: args.filename })
     ),
@@ -58,49 +87,109 @@ export const createPresignedUrl = async (args: {
 
   log('createPresignedUrl: created token=%s', fingerprintToken(token.publicId));
 
-  const baseUrl = process.env.SOAT_BASE_URL?.replace(/\/$/, '') ?? '';
   return {
     upload_token: token.publicId,
-    upload_url: `${baseUrl}/api/v1/files/upload/${token.publicId}`,
+    upload_url: buildUploadUrl({
+      projectPublicId: args.projectPublicId,
+      token: token.publicId,
+    }),
+    max_bytes: maxBytes,
+    content_type: token.contentType ?? undefined,
     expires_at: token.expiresAt,
   };
 };
 
-/**
- * Validates and consumes an upload token. Throws a DomainError when the token
- * is unknown, expired, or already used. On success the token is marked used
- * (single-use) and its metadata is returned for the upload to proceed.
- */
-export const consumeUploadToken = async (args: { token: string }) => {
-  log('consumeUploadToken: token=%s', fingerprintToken(args.token));
+type UploadTokenRow = InstanceType<(typeof db)['UploadToken']>;
 
-  const token = await db.UploadToken.findOne({
-    where: { publicId: args.token },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
+const assertTokenOpen = (token: UploadTokenRow | null): UploadTokenRow => {
   if (!token) {
     throw new DomainError(
       'UPLOAD_TOKEN_NOT_FOUND',
       'The upload token was not found.'
     );
   }
-
   if (token.usedAt) {
     throw new DomainError(
       'UPLOAD_TOKEN_USED',
       'The upload token has already been used.'
     );
   }
-
   if (token.expiresAt.getTime() <= Date.now()) {
     throw new DomainError(
       'UPLOAD_TOKEN_EXPIRED',
       'The upload token has expired.'
     );
   }
+  return token;
+};
 
-  await token.update({ usedAt: new Date() });
+const assertUploadFits = (args: {
+  token: UploadTokenRow;
+  size: number;
+  contentType?: string;
+}) => {
+  const ceiling = getUploadMaxBytes();
+  const fixed = args.token.maxBytes;
+  const limit = Math.min(fixed === null ? ceiling : Number(fixed), ceiling);
+  if (args.size > limit) {
+    throw new DomainError(
+      'UPLOAD_TOO_LARGE',
+      `The upload is ${args.size} bytes; this token accepts at most ${limit}.`,
+      { limit }
+    );
+  }
+
+  const expected = args.token.contentType;
+  if (
+    expected &&
+    args.contentType &&
+    mediaType(expected) !== mediaType(args.contentType)
+  ) {
+    throw new DomainError(
+      'UPLOAD_CONTENT_TYPE_MISMATCH',
+      `The upload is ${mediaType(args.contentType)}; this token accepts ${mediaType(expected)}.`,
+      { expected }
+    );
+  }
+};
+
+/**
+ * Checks an upload against its token and consumes the token. Everything that
+ * can refuse the upload is checked before the token is marked used, so a
+ * refused upload leaves the token usable; the mark itself is conditional, so
+ * two uploads racing on one token cannot both pass.
+ */
+export const consumeUploadToken = async (args: {
+  token: string;
+  /** The upload's exact size in bytes. */
+  size: number;
+  /** The content type the upload declares, if any. */
+  contentType?: string;
+}) => {
+  log(
+    'consumeUploadToken: token=%s size=%d',
+    fingerprintToken(args.token),
+    args.size
+  );
+
+  const token = assertTokenOpen(
+    await db.UploadToken.findOne({
+      where: { publicId: args.token },
+      include: [{ model: db.Project, as: 'project' }],
+    })
+  );
+  assertUploadFits({ token, size: args.size, contentType: args.contentType });
+
+  const [marked] = await db.UploadToken.update(
+    { usedAt: new Date() },
+    { where: { id: token.id, usedAt: null } }
+  );
+  if (marked === 0) {
+    throw new DomainError(
+      'UPLOAD_TOKEN_USED',
+      'The upload token has already been used.'
+    );
+  }
 
   log(
     'consumeUploadToken: consumed token=%s',
@@ -111,7 +200,7 @@ export const consumeUploadToken = async (args: { token: string }) => {
     projectId: token.projectId,
     projectPublicId: token.project?.publicId,
     filename: token.filename,
-    contentType: token.contentType,
+    contentType: token.contentType ?? args.contentType,
     path: token.path ?? undefined,
   };
 };

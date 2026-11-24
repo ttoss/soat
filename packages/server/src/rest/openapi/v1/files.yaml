@@ -340,12 +340,12 @@ paths:
       summary: Create a presigned upload URL
       description: >-
         Creates a short-lived, single-use presigned upload URL — the
-        local-storage equivalent of an S3 presigned URL. The client then uploads
-        the file content directly to the returned `upload_url` via
-        `POST /api/v1/files/upload/{token}`, bypassing MCP payload size limits.
-        When the server is configured with `SOAT_BASE_URL`, `upload_url` is a
-        fully-qualified absolute URL so MCP agents and other clients can POST to
-        it without knowing the server base URL in advance.
+        local-storage equivalent of an S3 presigned URL. The token fixes where
+        the file lands, its byte ceiling (`max_bytes`) and, when
+        `content_type` is given, its type. The client then uploads the file to
+        the returned `upload_url` with no credential: as the raw body with
+        `PUT /api/v1/files/upload/{token}` (what a browser sends), or as
+        multipart or base64 with `POST /api/v1/files/upload/{token}`.
       operationId: createPresignedUrl
       x-raises:
         - FORBIDDEN
@@ -406,9 +406,11 @@ paths:
         - QUOTA_UNENFORCEABLE
         - RESERVED_PATH
         - RESOURCE_NOT_FOUND
+        - UPLOAD_CONTENT_TYPE_MISMATCH
         - UPLOAD_TOKEN_EXPIRED
         - UPLOAD_TOKEN_NOT_FOUND
         - UPLOAD_TOKEN_USED
+        - UPLOAD_TOO_LARGE
         - VALIDATION_FAILED
       security: []
       parameters:
@@ -472,10 +474,137 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           description: >-
-            The upload is over this deployment's byte ceiling
-            (`UPLOAD_TOO_LARGE`; `FILE_UPLOAD_MAX_BYTES`, 25 MB by default).
-            The request is refused while the body is still streaming, so
-            nothing was stored.
+            The upload is over the token's `max_bytes` or this deployment's
+            byte ceiling (`UPLOAD_TOO_LARGE`). Nothing was stored, and the
+            token can still be used.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '415':
+          description: >-
+            The file's content type is not the one the token fixes
+            (`UPLOAD_CONTENT_TYPE_MISMATCH`). Nothing was stored, and the token
+            can still be used.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    put:
+      tags:
+        - Files
+      summary: Upload a raw file body with an upload token
+      description: >-
+        Uploads file content authorized by a single-use token from
+        `POST /api/v1/files/presigned-url`, sending the file itself as the
+        request body, so a browser can `PUT` a `File` to the token's
+        `upload_url` with no credential. The body is streamed to storage. It
+        must declare its size in `Content-Length`, at most the token's
+        `max_bytes`; when the token fixes a content type, `Content-Type` must
+        match it. A refused upload leaves the token usable.
+      operationId: putFileWithToken
+      x-raises:
+        - FILE_STORAGE_MISCONFIGURED
+        - NAME_CONFLICT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - UPLOAD_CONTENT_TYPE_MISMATCH
+        - UPLOAD_LENGTH_REQUIRED
+        - UPLOAD_TOKEN_EXPIRED
+        - UPLOAD_TOKEN_NOT_FOUND
+        - UPLOAD_TOKEN_USED
+        - UPLOAD_TOO_LARGE
+        - VALIDATION_FAILED
+      # Its body is the file's raw bytes, which a tool call's JSON arguments
+      # cannot carry; tools upload through uploadFileWithToken.
+      x-soat-mcp-exclude: true
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: The single-use upload token (e.g. upt_...)
+          schema:
+            type: string
+            example: 'upt_V1StGXR8Z5jdHi6B'
+        - name: Content-Length
+          in: header
+          required: true
+          description: >-
+            The file's size in bytes, at most the token's `max_bytes`. A body
+            without it is refused with `411 UPLOAD_LENGTH_REQUIRED`.
+          schema:
+            type: integer
+            minimum: 0
+        - name: Content-Type
+          in: header
+          required: false
+          description: >-
+            The file's content type, stored on the file. When the token fixes
+            one, it must match (`415 UPLOAD_CONTENT_TYPE_MISMATCH`).
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          '*/*':
+            schema:
+              type: string
+              format: binary
+              description: The file content
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '404':
+          description: Upload token not found (`UPLOAD_TOKEN_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            Upload token already used, a file already at the token's path, or
+            the project's `storage_bytes` quota is exceeded
+            (`QUOTA_STORAGE_EXCEEDED`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '410':
+          description: Upload token expired (`UPLOAD_TOKEN_EXPIRED`)
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '411':
+          description: >-
+            The body declares no `Content-Length` (`UPLOAD_LENGTH_REQUIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          description: >-
+            `Content-Length` is over the token's `max_bytes` or this
+            deployment's byte ceiling (`UPLOAD_TOO_LARGE`), refused before the
+            body is read. The token can still be used.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '415':
+          description: >-
+            `Content-Type` is not the one the token fixes
+            (`UPLOAD_CONTENT_TYPE_MISMATCH`). The token can still be used.
           content:
             application/json:
               schema:
@@ -996,8 +1125,19 @@ components:
           example: 'report.pdf'
         content_type:
           type: string
-          description: MIME type of the file to be uploaded
+          description: >-
+            Content type the upload must declare; an upload of another type is
+            refused with `415 UPLOAD_CONTENT_TYPE_MISMATCH`. Omitted, any type
+            is accepted.
           example: 'application/pdf'
+        max_bytes:
+          type: integer
+          minimum: 1
+          description: >-
+            Largest upload the token accepts, in bytes. Defaults to, and may
+            not exceed, the deployment's upload ceiling
+            (`FILE_UPLOAD_MAX_BYTES`).
+          example: 104857600
     PresignedUrlResponse:
       type: object
       properties:
@@ -1008,9 +1148,19 @@ components:
         upload_url:
           type: string
           description: >-
-            Fully-qualified URL to POST the file content to (absolute when
-            SOAT_BASE_URL is configured, relative otherwise).
+            URL to upload the file to. Built from the deployment's
+            `FILES_UPLOAD_URL_TEMPLATE` when it sets one; otherwise this
+            server's own route, absolute when `SOAT_BASE_URL` is configured
+            and relative otherwise.
           example: 'https://api.example.com/api/v1/files/upload/upt_V1StGXR8Z5jdHi6B'
+        max_bytes:
+          type: integer
+          description: Largest upload the token accepts, in bytes
+          example: 104857600
+        content_type:
+          type: string
+          description: Content type the upload must declare, when the token fixes one
+          example: 'application/pdf'
         expires_at:
           type: string
           format: date-time

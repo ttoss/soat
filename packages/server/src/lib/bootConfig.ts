@@ -7,6 +7,7 @@ import {
 import { headerPrefix } from './headerPrefix';
 import { readSecretsEncryptionKey } from './secretsEncryptionKey';
 import { reservedToolContextPrefix } from './toolContext';
+import { readUploadUrlTemplate } from './uploadUrlTemplate';
 
 /**
  * Loads the deployment's registrations and reads every setting that is
@@ -19,6 +20,7 @@ export const loadBootConfig = (): void => {
   headerPrefix();
   reservedToolContextPrefix();
   readSecretsEncryptionKey();
+  readUploadUrlTemplate();
 };
 
 /**

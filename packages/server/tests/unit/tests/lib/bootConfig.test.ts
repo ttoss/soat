@@ -13,6 +13,11 @@ const SETTINGS = [
   { env: 'SOAT_HEADER_PREFIX', valid: 'X-Acme-' },
   { env: 'EMBEDDING_INPUT_1M_TOKEN_PRICE_USD', valid: '0.02' },
   { env: 'SECRETS_ENCRYPTION_KEY', valid: 'ab'.repeat(32) },
+  {
+    env: 'FILES_UPLOAD_URL_TEMPLATE',
+    valid:
+      'https://gateway.example.com/v1/projects/{project_id}/files/upload/{token}',
+  },
 ];
 
 describe('loadBootConfig', () => {
