@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.130.0](https://github.com/ttoss/soat/compare/v0.129.0...v0.130.0) (2026-11-25)
+
+### Features
+
+* **agents:** {{generation:now}} instruction tokens and agent timezone ([#2172](https://github.com/ttoss/soat/issues/2172)) ([33006c1](https://github.com/ttoss/soat/commit/33006c121deee8eecffa45d766956fbb730f09f9))
+* **agents:** cite pages of attached files on any provider ([#2175](https://github.com/ttoss/soat/issues/2175)) ([320a31f](https://github.com/ttoss/soat/commit/320a31f2e3500a3b7842035f2c5e3911f9d7b2a4))
+* **agents:** verified structured citations on agent generations ([#2173](https://github.com/ttoss/soat/issues/2173)) ([e352b3f](https://github.com/ttoss/soat/commit/e352b3fa93e182ebef741d1025d59c5aa6295597))
+* **playbooks:** auto_upgrade moves a playbook's cases to each new version ([#2170](https://github.com/ttoss/soat/issues/2170)) ([1e901be](https://github.com/ttoss/soat/commit/1e901be349bcda3e968ae413881c282b4f3eff1c))
+* **server:** per-model input limits checked before the provider call and served with the model ([#2171](https://github.com/ttoss/soat/issues/2171)) ([c32def4](https://github.com/ttoss/soat/commit/c32def4a0deade871c675df269e9c9149fd59dee))
+
+### BREAKING CHANGES
+
+* **agents:** a citation's origin may be attached_file, whose
+  document_id and chunk_id are null.
+
 # [0.129.0](https://github.com/ttoss/soat/compare/v0.128.0...v0.129.0) (2026-11-25)
 
 ### Features
