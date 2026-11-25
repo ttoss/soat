@@ -39,6 +39,11 @@ import {
 } from './generationProvenance';
 import { readInputModalities } from './inputModalities';
 import { assertModelAcceptsInput } from './inputModalityGate';
+import {
+  type GenerationClock,
+  resolveGenerationClock,
+  resolveInstructionTokens,
+} from './instructionTemplates';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { withPromptCacheBreakpoint } from './promptCaching';
 import { type ReplayedWindow, replayedWindowOf } from './replayRefusal';
@@ -104,6 +109,8 @@ export type GenerationContext = {
   toolChoice: TurnToolChoice;
   /** The conversation positions the turn replays, `null` outside a conversation. */
   replayed: ReplayedWindow | null;
+  /** What the instructions' `{{generation:...}}` tokens rendered from. */
+  clock: GenerationClock;
 };
 
 /**
@@ -148,6 +155,7 @@ const assembleContextMessages = async (args: {
   unavailableToolNames: string[];
   /** The turn's end user, from the identity-pinned `tool_context`. */
   actorId?: string;
+  clock: GenerationClock;
 }): Promise<{
   allMessages: Array<{ role: string; content: unknown }>;
   retrieval: KnowledgeRetrieval;
@@ -199,10 +207,13 @@ const assembleContextMessages = async (args: {
     // The note goes in before the breakpoint is placed: the mark belongs at the
     // end of the system block, and the note is part of it.
     messages: withUnavailableToolsNote({
-      messages: buildAllMessages(args.typedAgent.instructions, [
-        ...knowledge.messages,
-        ...args.resolvedMessages,
-      ]),
+      messages: buildAllMessages(
+        resolveInstructionTokens({
+          instructions: args.typedAgent.instructions,
+          clock: args.clock,
+        }),
+        [...knowledge.messages, ...args.resolvedMessages]
+      ),
       unavailableToolNames: args.unavailableToolNames,
     }),
   });
@@ -255,6 +266,8 @@ export type BuildGenerationContextArgs = {
   initiatorGenerationId?: string | null;
   /** The conversation this turn answers, whose messages' counts it adds. */
   conversation?: GenerationConversation;
+  /** Overrides the agent's `timezone` for this turn. */
+  timezone?: unknown;
 };
 
 const requireLiveAgent = async (args: {
@@ -366,6 +379,12 @@ export const buildGenerationContext = async (
 
   const { typedAgent, agentVersion } = await resolveTurnAgent(args);
 
+  // Read before anything the turn starts, so a bad timezone refuses it whole.
+  const clock = resolveGenerationClock({
+    requestedTimezone: args.timezone,
+    agentTimezone: typedAgent.timezone,
+  });
+
   const provenance = await turnProvenance(args);
 
   const { agentAuthority, resolvedMessages } = await resolveTurnInput({
@@ -415,6 +434,7 @@ export const buildGenerationContext = async (
     agentAuthority,
     unavailableToolNames: toolSurface.unavailableToolNames,
     actorId: toolContext?.actor_id,
+    clock,
   });
   provenance.record(countOf('knowledge_results', retrieval?.length ?? 0));
   trackGenerationProvenance({ generationId, provenance });
@@ -436,5 +456,6 @@ export const buildGenerationContext = async (
     provenance,
     toolChoice: normalizeToolChoice(typedAgent.toolChoice),
     replayed: replayedWindowOf(args.conversation),
+    clock,
   };
 };

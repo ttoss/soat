@@ -4,6 +4,11 @@ import { parseAgentRunAs } from '../agentRunAs';
 import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import type { ValidationError } from '../formationsTypes';
+import {
+  DEFAULT_TIMEZONE,
+  findInvalidInstructionTokens,
+  VALID_INSTRUCTION_TOKENS,
+} from '../instructionTemplates';
 import { validateModelRouteExclusivity } from '../modelRoutes';
 import {
   toNullableArray,
@@ -58,6 +63,24 @@ const pushModelBindingErrors = (args: {
   if (message) errors.push({ path: basePath, message });
 };
 
+/** The REST write's token rule, reported per field before the apply. */
+const pushInstructionTokenErrors = (args: {
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+}): void => {
+  const { properties, basePath, errors } = args;
+  if (typeof properties.instructions !== 'string') return;
+  for (const token of new Set(
+    findInvalidInstructionTokens(properties.instructions)
+  )) {
+    errors.push({
+      path: `${basePath}.instructions`,
+      message: `'${token}' is not a valid token; the valid ones are ${VALID_INSTRUCTION_TOKENS}`,
+    });
+  }
+};
+
 // Bindings are stored camelCase but authored snake_case. Only `tool_id`
 // entries are supported in formations — declare a tool resource instead of an
 // inline `tool` — so the conversion enumerates known keys.
@@ -109,6 +132,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     onApprovalExpiry: toOptional(
       toOptionalString(properties.on_approval_expiry)
     ),
+    timezone: toOptionalString(properties.timezone),
     guardrailIds: toOptional(toNullableArray<string>(properties.guardrail_ids)),
     stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
     policyIds: toOptional(toNullableArray<string>(properties.policy_ids)),
@@ -145,6 +169,7 @@ export const agentsFormationModule = defineFormationModule({
   extraChecks: ({ properties, basePath, errors }) => {
     pushToolBindingErrors({ properties, basePath, errors });
     pushModelBindingErrors({ properties, basePath, errors });
+    pushInstructionTokenErrors({ properties, basePath, errors });
   },
 
   create: async ({ properties, projectId, actor }) => {
@@ -174,6 +199,8 @@ export const agentsFormationModule = defineFormationModule({
       stopConditions: toNullableArray<object>(properties.stop_conditions),
       activeToolIds: toNullableArray<string>(properties.active_tool_ids),
       onApprovalExpiry: toNullableString(properties.on_approval_expiry),
+      // The template is the whole desired state: an undeclared timezone is UTC.
+      timezone: toOptionalString(properties.timezone) ?? DEFAULT_TIMEZONE,
       guardrailIds: toNullableArray<string>(properties.guardrail_ids),
       stepRules: toNullableArray<object>(properties.step_rules),
       policyIds: toNullableArray<string>(properties.policy_ids),
@@ -224,6 +251,7 @@ export const agentsFormationModule = defineFormationModule({
       stop_conditions: agent.stop_conditions,
       active_tool_ids: agent.active_tool_ids,
       on_approval_expiry: agent.on_approval_expiry,
+      timezone: agent.timezone,
       guardrail_ids: agent.guardrail_ids,
       step_rules: agent.step_rules,
       policy_ids: agent.policy_ids,

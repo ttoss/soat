@@ -46,6 +46,7 @@ export type MappedAgent = {
   trace_content_mode: string | null;
   /** `terminate` (the default when null) or `react` — see `agentApprovalExpiry`. */
   on_approval_expiry: string | null;
+  timezone: string;
   guardrail_ids: string[] | null;
   /** Current config version; starts at 1 and bumps on every config change. */
   version: number;

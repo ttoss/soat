@@ -112,6 +112,7 @@ type GenerateRequestBody = {
   action_id?: string;
   metadata?: unknown;
   guardrail_context?: unknown;
+  timezone?: unknown;
 };
 
 /**
@@ -149,6 +150,7 @@ const buildGenerationArgs = (args: {
       ? body.guardrail_context
       : undefined,
     idempotencyKey: idempotencyKeyOf(ctx),
+    timezone: body.timezone,
   };
 };
 

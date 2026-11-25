@@ -58,6 +58,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `single_session_per_actor` | boolean          | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)                                                       |
 | `trace_content_mode`       | string \| null   | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written             |
 | `on_approval_expiry`       | string \| null   | What happens when a held tool call expires un-approved — `null`/`terminate` (default) ends the chain, `react` reports it to the agent. See [Approval Expiry](#approval-expiry) |
+| `timezone`                 | string           | IANA timezone the [instruction tokens](#instruction-tokens) render in (default: `UTC`)                                                                                         |
 | `version`                  | number           | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                                                                  |
 | `active_release`           | object/null      | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                                                              |
 | `created_at`               | string           | ISO 8601 creation timestamp                                                                                                                                                    |
@@ -106,7 +107,8 @@ One agent execution; its steps are on its [trace](./traces.md).
 | `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                                                                                       |
 | `initiator_generation_id`   | string/null | Generation that started this one — see [Generations](./generations.md#initiated-generations)                                          |
 | `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status)                                                                 |
-| `started_at`                | string      | ISO 8601 timestamp when execution began                                                                                               |
+| `started_at`                | string      | ISO 8601 timestamp when execution began; the instant `{{generation:now}}` rendered                                                    |
+| `timezone`                  | string/null | Timezone the turn's [instruction tokens](#instruction-tokens) rendered in                                                             |
 | `completed_at`              | string/null | ISO 8601 timestamp when execution finished                                                                                            |
 | `last_activity_at`          | string/null | ISO 8601 timestamp of last step activity                                                                                              |
 | `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)                                                                            |
@@ -130,14 +132,14 @@ One agent execution; its steps are on its [trace](./traces.md).
 
 Set when `status` is `completed`:
 
-| Stop Reason   | Description                                                                                                                                                |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stop`        | The model produced a final response with no tool calls                                                                                                     |
-| `tool-calls`  | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named |
+| Stop Reason   | Description                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stop`        | The model produced a final response with no tool calls                                                                                                        |
+| `tool-calls`  | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named    |
 | `max_steps`   | The turn spent its whole `max_steps` budget: on tool calls, or, with an `output_schema`, answering on its last step ([Structured Output](#structured-output)) |
-| `depth_guard` | A nested call exceeded `max_call_depth`                                                                                                                    |
-| `chain_limit` | A [continuation chain](./chains.md) reached its generation budget and was not resumed                                                                      |
-| `error`       | The turn failed; the `error` field carries the details                                                                                                     |
+| `depth_guard` | A nested call exceeded `max_call_depth`                                                                                                                       |
+| `chain_limit` | A [continuation chain](./chains.md) reached its generation budget and was not resumed                                                                         |
+| `error`       | The turn failed; the `error` field carries the details                                                                                                        |
 
 Other values are the provider's finish reason (`length`, `content-filter`, …) relayed unchanged; `max_steps` is platform-named because the provider reports `tool-calls` for an exhausted budget and a pause alike, and `stop` for an `output_schema` agent's last step.
 
@@ -202,6 +204,66 @@ The note is derived per segment, so a generation that parks for a [client tool](
 `instructions` is the only system prompt. A `role: "system"` entry in `messages` is refused with `400 VALIDATION_FAILED`, the request schema allowing `user` and `assistant` only.
 
 Caller-supplied system content could replace the operator's prompt (the AI SDK's `allowSystemInMessages` stays `false`; [retrieved knowledge](#knowledge-config) is never injected as `system` either). Instructions reach the provider as its `instructions` argument, never a message; `update-agent --instructions` archives a new [version](#agent-version). [Chats](./chats.md#system-instructions) take per-call system content through `instructions`, never `messages`.
+
+#### Instruction tokens
+
+`instructions` may hold `{{generation:...}}` tokens, resolved on every generation path ([`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), conversations, sessions, orchestrations, triggers):
+
+| Token                         | Renders                                                     | Example                     |
+| ----------------------------- | ----------------------------------------------------------- | --------------------------- |
+| `{{generation:now}}`          | The generation's start, ISO 8601 with the timezone's offset | `2026-11-25T09:54:17-03:00` |
+| `{{generation:now:<format>}}` | The same instant through a pattern of the fields below      | `Wednesday 25 November`     |
+| `{{generation:timezone}}`     | The timezone's IANA name                                    | `America/Sao_Paulo`         |
+
+| Field                       | Renders                          | Field       | Renders                   |
+| --------------------------- | -------------------------------- | ----------- | ------------------------- |
+| `yyyy` / `yy`               | `2026` / `26`                    | `HH` / `H`  | hour `00`–`23` / `0`–`23` |
+| `MMMM` / `MMM` / `MM` / `M` | `November` / `Nov` / `11` / `11` | `hh` / `h`  | hour `01`–`12` / `1`–`12` |
+| `dd` / `d`                  | `05` / `5`                       | `a`         | `AM` / `PM`               |
+| `EEEE` / `EEE`              | `Wednesday` / `Wed`              | `mm` / `ss` | minute / second           |
+| `Z`                         | offset, `-03:00`                 | `'text'`    | literal text              |
+
+- **One instant per generation.** `now` is the generation's `started_at`, the same for every step and every resume of the turn.
+- **Timezone.** The agent's `timezone` (IANA name, default `UTC`); a `timezone` on the generate request overrides it for that turn. The generation records the one it rendered in as `timezone`. An unknown name is `400 VALIDATION_FAILED`.
+- **Refused at write.** An unknown `generation:` token, an argument it does not take, or a format with a letter outside the table is `400 VALIDATION_FAILED` on create, update and formation validate/deploy, naming the token and the valid ones. Other `{{...}}` text is sent as written.
+- **Reads are unresolved.** `GET` returns the instructions as written; only the system prompt sent to the model is resolved. Instructions without a token are sent byte-identical.
+- **Keep the prompt cache.** A rendered value changes the instructions, so use the coarsest format the agent needs (`{{generation:now:EEEE yyyy-MM-dd}}` changes once a day, `{{generation:now}}` every turn) and put the token at the end of `instructions`, so the text before it stays a stable prefix. See [Prompt Caching](#prompt-caching).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat patch-agent --agent-id agent_xyz --timezone America/Sao_Paulo \
+  --instructions 'You book appointments. Today is {{generation:now:EEEE yyyy-MM-dd}} ({{generation:timezone}}).'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.patchAgent({
+  path: { agent_id: 'agent_xyz' },
+  body: {
+    timezone: 'America/Sao_Paulo',
+    instructions:
+      'You book appointments. Today is {{generation:now:EEEE yyyy-MM-dd}} ({{generation:timezone}}).',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "timezone": "America/Sao_Paulo", "instructions": "You book appointments. Today is {{generation:now:EEEE yyyy-MM-dd}} ({{generation:timezone}})." }'
+```
+
+</TabItem>
+</Tabs>
 
 ### AI Provider Resolution
 
@@ -519,6 +581,8 @@ Consequences worth knowing before turning it on:
 - **What you get back.** Cache reads are metered as `cached_tokens` and cache writes as `cache_write_tokens` — separate components, because they are separately priced. See [Usage — Token Components](./usage.md#token-components).
 - **Price the write.** Every step writes what it appended, so writes are routine. A `cache_write_tokens` component with no price row of its own bills at the `input_tokens` rate, which understates a provider that charges a premium for writes; add the row before enabling caching on a priced deployment. See [Usage — Pricing](./usage.md#pricing).
 - **`active_tool_ids` on a step rule breaks the prefix.** The tool block is inside the cached prefix, so a [step rule](#step-rules) that changes the active set makes that step write a new cache entry, and the step after it — back to the full set — write another: the prefix is bought twice to save it once. Narrowing by `active_tool_ids` is a capability restriction and is honored anyway; a rule that only forces a tool by name does not narrow on a caching agent, because `tool_choice` already obliges the call.
+
+- **An [instruction token](#instruction-tokens) that renders a new value writes a new system entry.** Every step of a turn renders the same instant, so steps still read it; across turns, a coarse format and a token at the end of `instructions` keep the entry stable.
 
 Nothing else about the turn changes: the same messages, tools and instructions are sent, and the model sees an identical prompt.
 
@@ -874,7 +938,7 @@ curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
 
 #### What a version captures
 
-`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
+`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `timezone`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
 
 Runtime-injected context is not snapshotted: a version records the `knowledge_config`, not the documents or memories it resolves at generation time.
 

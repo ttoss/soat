@@ -122,6 +122,7 @@ const buildGuardResult = async (args: {
     rootTraceId: args.rootTraceId ?? null,
     authority: args.authority,
     actsAsAgent: null,
+    clock: null,
   }).then(
     () => {
       return true;

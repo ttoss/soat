@@ -47,6 +47,7 @@ export const generationRequestDigest = (args: CreateGenerationArgs): string => {
     actionId: args.actionId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,
+    timezone: args.timezone,
   });
 };
 

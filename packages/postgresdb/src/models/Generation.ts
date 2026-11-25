@@ -307,6 +307,11 @@ export class Generation extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare agentVersion: number | null;
 
+  // The timezone the turn's instruction tokens rendered in; `startedAt` is
+  // the instant they rendered. Null on a turn refused before its context.
+  @Column({ type: DataType.STRING(64), allowNull: true })
+  declare timezone: string | null;
+
   // The model route's own record of which target served the generation and
   // every attempt it burned getting there. Written by modelRouteMetadata.ts.
   @Column({ type: DataType.JSON, allowNull: true })

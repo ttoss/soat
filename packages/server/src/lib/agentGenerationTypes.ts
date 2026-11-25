@@ -60,6 +60,8 @@ export type TypedAgent = {
   outputSchema: unknown;
   promptCaching: unknown;
   guardrailIds?: string[] | null;
+  /** Read through `resolveGenerationClock`, never raw. */
+  timezone?: unknown;
   /**
    * Internal row id of the live agent. Present on a row loaded from the DB;
    * absent on a config rebuilt from an archived version. Used to look up the

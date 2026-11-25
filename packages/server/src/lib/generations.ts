@@ -36,6 +36,7 @@ import {
 } from './generationSegment';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { readInputModalities } from './inputModalities';
+import type { GenerationClock } from './instructionTemplates';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { emptyPage, paginatedList } from './pagination';
 import { type StartedWork, startedWorkColumns } from './principals';
@@ -98,22 +99,15 @@ const traceOfNewGeneration = async (helperArgs: {
   });
 };
 
+const clockColumns = (clock: GenerationClock | null) => {
+  return {
+    startedAt: clock?.now ?? new Date(),
+    timezone: clock?.timezone ?? null,
+  };
+};
+
 const commitGenerationWithTrace = async (helperArgs: {
-  args: GenerationAttribution &
-    StartedWork & {
-      publicId: string;
-      projectId: number;
-      traceId: string;
-      parentTraceId?: string | null;
-      rootTraceId?: string | null;
-      rootGenerationId?: string | null;
-      toolSurface?: Record<string, unknown> | null;
-      inputModalities: string[];
-      retrieval?: KnowledgeRetrieval;
-      idempotency?: GenerationIdempotency;
-      provenance?: ProvenanceCounts;
-      parentCall?: ParentToolCall | null;
-    };
+  args: NewGenerationRecord & { inputModalities: string[] };
   agentDbId: number;
   initiatorDbId: number | null;
   conversation: Awaited<ReturnType<typeof conversationColumns>>;
@@ -155,7 +149,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         // Created running is a claim: the creating process holds the lease.
         status: 'running',
         ...lease,
-        startedAt: new Date(),
+        ...clockColumns(args.clock),
         // Zero, not null: its steps are step objects, never the legacy object.
         stepCount: 0,
         // Not a content column: three integers describing the request, which a
@@ -219,6 +213,9 @@ type NewGenerationRecord = GenerationAttribution &
     // counts, its input and its knowledge injection.
     provenance?: ProvenanceCounts;
     parentCall?: ParentToolCall | null;
+    // The clock the turn's instructions rendered from: its instant is the
+    // record's `startedAt`. Null for a turn refused before its context.
+    clock: GenerationClock | null;
   };
 
 const insertGenerationRecord = async (args: NewGenerationRecord) => {

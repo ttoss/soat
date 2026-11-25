@@ -42,7 +42,8 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `acted_as`                           | object \| null | `{ principal_type, principal_id }` the latest segment's tool calls ran as (see [Acting principal](#acting-principal)); `null` when it ran with none                             |
 | `acts_for`                           | object \| null | `{ type, id }` the starter acted for, from its IAM token or `On-Behalf-Of` assertion (see [Starting principal](#starting-principal)); `null` when none                          |
 | `status`                             | string         | Lifecycle status: `running`, `requires_action`, `completed`, or `failed`                                                                                                        |
-| `started_at`                         | string         | When the generation started                                                                                                                                                     |
+| `started_at`                         | string         | When the generation started; the instant its agent's [instruction tokens](./agents.md#instruction-tokens) rendered                                                              |
+| `timezone`                           | string \| null | Timezone the instruction tokens rendered in; `null` for a generation refused before its context was built                                                                       |
 | `completed_at`                       | string \| null | When the generation reached a terminal state                                                                                                                                    |
 | `last_activity_at`                   | string \| null | Last activity timestamp                                                                                                                                                         |
 | `stop_reason`                        | string \| null | Why the generation stopped — see [Stop Reason](./agents.md#stop-reason)                                                                                                         |
@@ -174,11 +175,11 @@ A turn that replays a conversation (a session or conversation turn) and that the
 }
 ```
 
-| `meta.cause` | Provider status | What to do |
-| --- | --- | --- |
-| `history_refused` | `400` not naming the context window | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
-| `context_too_long` | `413`, or a `4xx` saying the prompt exceeds the model's context window | Lower the session's `max_context_messages`, fork, or start a new session |
-| `request_refused` | any other `4xx` | Read the failed generation |
+| `meta.cause`       | Provider status                                                        | What to do                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `history_refused`  | `400` not naming the context window                                    | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
+| `context_too_long` | `413`, or a `4xx` saying the prompt exceeds the model's context window | Lower the session's `max_context_messages`, fork, or start a new session                                               |
+| `request_refused`  | any other `4xx`                                                        | Read the failed generation                                                                                             |
 
 `meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status and error text: neither reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) is refused the same way and names the window the paused turn replayed, also after a restart.
 

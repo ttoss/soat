@@ -106,6 +106,7 @@ type ResolveContextArgs = {
   source?: string | null;
   idempotency?: GenerationIdempotency;
   outputSchemaOverride?: Record<string, unknown>;
+  timezone?: unknown;
 };
 
 const parentCallOf = (authUser: AuthUser | undefined) => {
@@ -138,6 +139,7 @@ const resolveContextAndRecord = async (
     outputSchemaOverride: args.outputSchemaOverride,
     initiatorGenerationId: args.initiatorGenerationId,
     conversation: args.conversation,
+    timezone: args.timezone,
   });
 
   // Awaited so the record reliably exists before the generation runs and a
@@ -177,6 +179,7 @@ const resolveContextAndRecord = async (
     // would also push this function past its complexity ceiling.
     nodeAttempt: args.nodeAttempt,
     agentVersion: ctx.agentVersion ?? null,
+    clock: ctx.clock,
     source: args.source ?? null,
     metadata: args.metadata ?? null,
     // The turn's own input, so a completed generation stays promotable into an
@@ -251,6 +254,8 @@ export type CreateGenerationArgs = {
   // The schema a decider's question set compiles to. Internal only: no route
   // reads a per-call schema, so a call site cannot widen what an agent answers.
   outputSchemaOverride?: Record<string, unknown>;
+  // Overrides the agent's `timezone` for this turn's instruction tokens.
+  timezone?: unknown;
   // Called once the record exists and before the provider is, so a caller
   // blocked on the turn can name it while it runs. Internal only.
   onRecorded?: (args: GenerationIds) => Promise<void> | void;
@@ -360,6 +365,7 @@ const prepareGeneration = async (
     source: args.source,
     idempotency: args.idempotency,
     outputSchemaOverride: args.outputSchemaOverride,
+    timezone: args.timezone,
   });
 
   return { kind: 'ready', ctx, traceId, ...lineage };

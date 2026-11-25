@@ -18,6 +18,7 @@ import {
   agentVersionStore,
   configToolBindings,
 } from './agentVersionSnapshot';
+import { DEFAULT_TIMEZONE } from './instructionTemplates';
 import type { RequestPrincipal } from './principals';
 import { type ActiveRelease, parseActiveRelease } from './releaseAssignment';
 import {
@@ -154,6 +155,8 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
     singleSessionPerActor: configBoolean(config.single_session_per_actor),
     guardrailIds: configArray<string>(config.guardrail_ids),
     onApprovalExpiry: configString(config.on_approval_expiry),
+    // A version archived with no timezone renders in UTC.
+    timezone: configString(config.timezone) ?? DEFAULT_TIMEZONE,
   };
 };
 

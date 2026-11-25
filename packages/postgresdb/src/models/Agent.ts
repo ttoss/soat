@@ -173,6 +173,10 @@ export class Agent extends Model {
   @Column({ type: DataType.STRING(16), allowNull: true })
   declare onApprovalExpiry: string | null;
 
+  /** The IANA timezone `{{generation:...}}` instruction tokens render in. */
+  @Column({ type: DataType.STRING(64), allowNull: false, defaultValue: 'UTC' })
+  declare timezone: string;
+
   /**
    * Current config version, starting at 1. Bumped by the shared lib update path
    * only when a write actually changes the config; each bump archives an
