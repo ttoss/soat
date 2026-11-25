@@ -1140,6 +1140,16 @@ components:
             x-soat-ref: files
             type: string
           description: Files the turn sends the model natively, in order; empty when none.
+        citations:
+          type: array
+          nullable: true
+          description: >-
+            The `output.citations` of the generation that produced this
+            assistant message, `quoted_text` included; `answer_span` points
+            into `content`. Empty when that turn cited and none verified; null
+            when no citing turn produced the message.
+          items:
+            $ref: './generations.yaml#/components/schemas/Citation'
         idempotency_key:
           type: string
           nullable: true

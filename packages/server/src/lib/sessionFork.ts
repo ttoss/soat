@@ -17,6 +17,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { contentColumns } from './conversationMessageWrites';
 import { provenanceColumns, storedProvenance } from './generationProvenance';
 import { paginatedList } from './pagination';
 import { agentReferences } from './resourceReferences';
@@ -152,10 +153,7 @@ const copyMessagesIntoFork = async (args: {
         actorId: message.actorId ?? null,
         agentId: message.agentId ?? null,
         position: message.position,
-        metadata: message.metadata ?? null,
-        fileIds: message.fileIds ?? null,
-        responseMessages: message.responseMessages ?? null,
-        vendorOptions: message.vendorOptions ?? null,
+        ...contentColumns(message),
         ...provenanceColumns(storedProvenance(message)),
         idempotencyKey: null,
       };

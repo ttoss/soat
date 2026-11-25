@@ -280,6 +280,19 @@ export type GenerateConversationMessageResult =
       requiredAction: NonNullable<GenerationResult['requiredAction']>;
     };
 
+/** What a completed turn's output stores on its reply beside the text. */
+const replyContent = (output: GenerationResult['output']) => {
+  const responseMessages = output?.responseMessages;
+  return {
+    responseMessages:
+      responseMessages && responseMessages.length > 0
+        ? responseMessages
+        : undefined,
+    vendorOptions: output?.vendorOptions,
+    citations: output?.citations?.citations,
+  };
+};
+
 /**
  * Stores a completed turn and announces it as
  * `conversation_messages.generated`. Every route that completes a conversation
@@ -304,7 +317,6 @@ const storeGeneratedTurn = async (args: {
   Extract<GenerateConversationMessageResult, { status: 'completed' }>
 > => {
   const content = args.output?.content ?? '';
-  const responseMessages = args.output?.responseMessages;
   const message = await addConversationMessage({
     conversationId: args.conversation.publicId,
     message: content,
@@ -312,11 +324,7 @@ const storeGeneratedTurn = async (args: {
     agentId: args.agentId,
     position:
       args.snapshotPosition === null ? undefined : args.snapshotPosition + 1,
-    responseMessages:
-      responseMessages && responseMessages.length > 0
-        ? responseMessages
-        : undefined,
-    vendorOptions: args.output?.vendorOptions,
+    ...replyContent(args.output),
     provenance: await readGenerationProvenance({
       generationId: args.generationId,
       withoutReplayed: true,

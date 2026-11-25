@@ -796,6 +796,7 @@ A citation of an attached file has `origin: "attached_file"`, the file in `file_
 - Both arrays are present only when the turn cites. Whether the model cites, and whether a quote supports its statement, are the model's: a verified citation proves the quote is in the source, not that it backs the claim.
 - A [streamed](#streaming) turn sends its text without markup and ends with an `event: citations` frame carrying both arrays.
 - The generation records the citations as pointers, without `quoted_text`: see [What the answer cited](./generations.md#what-the-answer-cited).
+- A [conversation](./conversations.md#citations) or [session](./sessions.md) turn stores them, `quoted_text` included, on the `assistant` message it saves.
 
 ### Orchestrated thinking
 

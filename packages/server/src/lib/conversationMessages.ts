@@ -1,5 +1,6 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
+import type { Citation } from './citationVerification';
 import { claimMessageKey } from './conversationMessageIdempotency';
 import { insertMessage } from './conversationMessageWrites';
 import { conversationEmbedsTurns } from './conversationRetrieval';
@@ -72,6 +73,7 @@ export const mapMessage = async (message: ConversationMessageRow) => {
     content: await readStoredFileContent(message.document?.file),
     file_ids: message.fileIds ?? [],
     metadata: message.metadata ?? undefined,
+    citations: message.citations ?? null,
     idempotency_key: message.idempotencyKey,
   };
 };
@@ -172,6 +174,8 @@ type AddConversationMessageArgs = {
   };
   responseMessages?: PublicMessages;
   vendorOptions?: VendorOptions;
+  /** The verified citations of the turn an assistant message answers. */
+  citations?: Citation[];
   idempotencyKey?: string | null;
   idempotencyDigest?: string | null;
   provenance: ProvenanceCounts;
@@ -237,6 +241,7 @@ const createTextMessage = async (
     fileIds: args.files?.ids,
     responseMessages: args.responseMessages,
     vendorOptions: args.vendorOptions,
+    citations: args.citations,
     idempotencyKey: args.idempotencyKey ?? null,
     idempotencyDigest: args.idempotencyDigest,
     provenance: args.provenance,

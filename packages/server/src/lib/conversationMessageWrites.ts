@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { lockForTransaction } from './advisoryLocks';
+import type { Citation } from './citationVerification';
 import { type Transaction } from './dbTransaction';
 import {
   provenanceColumns,
@@ -52,6 +53,18 @@ const resolveMessagePosition = async (args: {
 
 const POSITION_INDEX = 'conversation_messages_conversation_id_position_unique';
 
+/**
+ * What a message row carries beside who wrote it and where: the one list a
+ * fork copies and an insert writes, so a new column reaches both.
+ */
+type MessageContent = {
+  metadata?: Record<string, unknown> | null;
+  fileIds?: string[] | null;
+  responseMessages?: unknown[] | null;
+  vendorOptions?: unknown[] | null;
+  citations?: unknown[] | null;
+};
+
 type InsertMessageArgs = {
   conversationId: number;
   documentId: number;
@@ -63,19 +76,23 @@ type InsertMessageArgs = {
   fileIds?: string[];
   responseMessages?: PublicMessages;
   vendorOptions?: VendorOptions;
+  /** The producing turn's verified citations; `[]` when it cited none. */
+  citations?: Citation[];
   idempotencyKey: string | null;
   idempotencyDigest?: string | null;
   /** What the message's content feeds a turn it is sent to. */
   provenance: ProvenanceCounts;
 };
 
-// Absent and empty optional bags are both stored as null.
-const contentColumns = (args: InsertMessageArgs) => {
+// Absent and empty optional bags are both stored as null; `citations` keeps
+// `[]`, a turn that cited and had none verified.
+export const contentColumns = (args: MessageContent) => {
   return {
     metadata: args.metadata ?? null,
     fileIds: args.fileIds?.length ? args.fileIds : null,
     responseMessages: args.responseMessages ?? null,
     vendorOptions: args.vendorOptions?.length ? args.vendorOptions : null,
+    citations: args.citations ?? null,
   };
 };
 
