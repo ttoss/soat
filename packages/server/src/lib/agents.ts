@@ -6,6 +6,11 @@ import {
   type MappedAgent,
 } from './agentAccessor';
 import {
+  AGENT_CREATE_DEFAULTS,
+  type AgentUpdateFields,
+  buildAgentUpdates,
+} from './agentConfigFields';
+import {
   type AgentRunAs,
   assertRunAsHasPolicies,
   readAgentRunAs,
@@ -30,6 +35,7 @@ import {
   resolveCreateModelBinding,
 } from './agentWriteValidation';
 import { emitResourceEvent } from './eventBus';
+import { assertValidInstructionTokens } from './instructionTemplates';
 import { resolveModelRouteDbId } from './modelRoutes';
 import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
@@ -79,6 +85,7 @@ export const mapAgent = (agent: AgentRow): MappedAgent => {
     guardrail_ids: agent.guardrailIds,
     trace_content_mode: agent.traceContentMode,
     on_approval_expiry: agent.onApprovalExpiry,
+    timezone: agent.timezone,
     version: agent.version,
     // Normalized rather than echoed raw, so the release the API reports is
     // exactly the one the generation path will act on.
@@ -90,34 +97,6 @@ export const mapAgent = (agent: AgentRow): MappedAgent => {
 
 // ── Agent CRUD Helpers ────────────────────────────────────────────────────
 
-type AgentUpdateFields = {
-  aiProviderId?: string | null;
-  modelRouteId?: string | null;
-  name?: string | null;
-  instructions?: string | null;
-  model?: string | null;
-  toolBindings?: AgentToolBinding[] | null;
-  maxSteps?: number | null;
-  toolChoice?: string | object | null;
-  stopConditions?: object[] | null;
-  activeToolIds?: string[] | null;
-  stepRules?: object[] | null;
-  policyIds?: string[] | null;
-  runAs?: AgentRunAs;
-  temperature?: number | null;
-  maxOutputTokens?: number | null;
-  reasoning?: object | null;
-  knowledgeConfig?: object | null;
-  outputSchema?: object | null;
-  promptCaching?: object | null;
-  citationConfig?: object | null;
-  maxContextMessages?: number | null;
-  singleSessionPerActor?: boolean;
-  guardrailIds?: string[] | null;
-  traceContentMode?: string | null;
-  onApprovalExpiry?: string | null;
-};
-
 /**
  * Who caused a config write, and an optional tag for the version it archives.
  * Accepted by both write paths so history records an author regardless of
@@ -125,71 +104,7 @@ type AgentUpdateFields = {
  */
 type AgentVersionAuthorship = VersionedWrite;
 
-// `toolBindings` is handled by the binding-normalization path, not copied
-// verbatim.
-/**
- * Every agent config column a write may set. Exported because it is also the
- * contract `agentConfigEnforcement.test.ts` holds the runtime to: a field the
- * API accepts and stores must reach a place that acts on it, which
- * `active_tool_ids` and `stop_conditions` both failed to do.
- */
-export const AGENT_SCALAR_FIELDS = [
-  'name',
-  'instructions',
-  'model',
-  'maxSteps',
-  'toolChoice',
-  'stopConditions',
-  'activeToolIds',
-  'stepRules',
-  'policyIds',
-  'runAs',
-  'temperature',
-  'maxOutputTokens',
-  'reasoning',
-  'knowledgeConfig',
-  'outputSchema',
-  'promptCaching',
-  'citationConfig',
-  'maxContextMessages',
-  'singleSessionPerActor',
-  'guardrailIds',
-  'traceContentMode',
-  'onApprovalExpiry',
-] as const;
-
-const buildAgentUpdates = (
-  args: AgentUpdateFields
-): Record<string, unknown> => {
-  const updates: Record<string, unknown> = {};
-  for (const field of AGENT_SCALAR_FIELDS) {
-    if (args[field] !== undefined) updates[field] = args[field];
-  }
-  return updates;
-};
-
 // ── Agent CRUD ───────────────────────────────────────────────────────────
-
-/** Column defaults applied to a new agent, before the caller's own fields. */
-const AGENT_CREATE_DEFAULTS = {
-  name: null,
-  instructions: null,
-  model: null,
-  maxSteps: 20,
-  toolChoice: null,
-  stopConditions: null,
-  activeToolIds: null,
-  stepRules: null,
-  policyIds: null,
-  runAs: 'caller',
-  temperature: null,
-  maxOutputTokens: null,
-  reasoning: null,
-  promptCaching: null,
-  citationConfig: null,
-  maxContextMessages: null,
-  onApprovalExpiry: null,
-};
 
 /**
  * An agent's generations run under its `policyIds` and send the secrets of
@@ -243,10 +158,12 @@ export const createAgent = async (
     guardrailIds?: string[] | null;
     traceContentMode?: string | null;
     onApprovalExpiry?: string | null;
+    timezone?: unknown;
     writer: Writer;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   assertValidAgentSettings(args);
+  assertValidInstructionTokens(args.instructions);
   assertForcedToolChoiceCanStop({
     toolChoice: args.toolChoice,
     stopConditions: args.stopConditions,
@@ -392,6 +309,7 @@ export const updateAgent = async (
     AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   assertValidAgentSettings(args);
+  assertValidInstructionTokens(args.instructions);
 
   // Loaded with its joins so the pre-write config can be snapshotted through
   // the same mapper that serializes the response — the diff is then between two

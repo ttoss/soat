@@ -213,6 +213,7 @@ describe('POST /api/v1/agents/:agent_id/generate — builtin resource kinds', ()
       agentId,
       traceId: 'trc_kinds',
       actsAsAgent: null,
+      clock: null,
     });
     const chain = await db.GenerationChain.create({
       projectId: internalProjectId,

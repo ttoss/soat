@@ -74,6 +74,7 @@ const buildTypedAgentFromConfig = (args: {
     knowledgeConfig: configObject(config.knowledge_config),
     outputSchema: configObject(config.output_schema),
     promptCaching: configObject(config.prompt_caching),
+    timezone: configString(config.timezone),
     citationConfig: configObject(config.citation_config),
     // A shared agent's own guardrails name guardrails in its owner's project.
     guardrailIds: live.ownerProject
@@ -118,6 +119,7 @@ export const withOutputSchema = (args: {
     knowledgeConfig: typedAgent.knowledgeConfig,
     outputSchema,
     promptCaching: typedAgent.promptCaching,
+    timezone: typedAgent.timezone,
     citationConfig: typedAgent.citationConfig,
     guardrailIds: typedAgent.guardrailIds,
     project: typedAgent.project,

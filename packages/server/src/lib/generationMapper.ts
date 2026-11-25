@@ -30,6 +30,7 @@ export type PersistedGeneration = {
   node_id: string | null;
   node_attempt: number | null;
   agent_version: number | null;
+  timezone: string | null;
   source: string | null;
   routing: Record<string, unknown> | null;
   extraction: Record<string, unknown> | null;
@@ -140,6 +141,7 @@ export const mapGeneration = (
     node_id: gen.nodeId,
     node_attempt: gen.nodeAttempt,
     agent_version: gen.agentVersion,
+    timezone: gen.timezone,
     // `eval` or `decider` when an eval run or a decider question produced this
     // generation; null for production traffic. Part of the attribution
     // skeleton a content purge preserves.

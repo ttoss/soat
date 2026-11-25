@@ -290,6 +290,7 @@ describe('Generations', () => {
         await createGenerationRecord({
           authority: null,
           actsAsAgent: null,
+          clock: null,
           publicId,
           projectId: project!.id as number,
           agentId,
@@ -371,6 +372,7 @@ describe('Generations', () => {
       await createGenerationRecord({
         authority: null,
         actsAsAgent: null,
+        clock: null,
         publicId: 'gen_conv_edge',
         projectId: project!.id as number,
         agentId,
@@ -407,6 +409,7 @@ describe('Generations', () => {
       await createGenerationRecord({
         authority: null,
         actsAsAgent: null,
+        clock: null,
         publicId: 'gen_eval_source',
         projectId: project!.id as number,
         agentId,

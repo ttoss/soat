@@ -202,6 +202,7 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
     await createGenerationRecord({
       authority: workAuthorityOf({ project: projectId, user: me.body.id }),
       actsAsAgent: null,
+      clock: null,
       publicId: proposingGenerationId,
       projectId: projectInternalId,
       agentId,

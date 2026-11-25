@@ -31,7 +31,6 @@
     "generate-error-hints": "tsx scripts/generateErrorHints.ts",
     "lint": "pnpm run lint-openapi && eslint src tests",
     "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
-    "purge-formation-secret-outputs": "tsx scripts/purgeFormationSecretOutputs.ts",
     "queue-soak": "tsx scripts/orchestrationQueueSoak.ts",
     "test": "jest --projects tests/unit",
     "test:heap": "node scripts/checkTestHeap.mjs",

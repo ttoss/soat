@@ -1,13 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { AGENT_SCALAR_FIELDS } from 'src/lib/agents';
+import { AGENT_SCALAR_FIELDS } from 'src/lib/agentConfigFields';
 
-// Two agent config fields have shipped accepted-but-inert: the API took them,
-// the version snapshot archived them, and nothing at runtime read them —
-// `active_tool_ids` and `stop_conditions`. Both looked correct
-// from every read surface, which is why neither was caught by the tests that
-// existed. This pins the third from happening the same way.
+// An agent config field can be accepted-but-inert: the API takes it, the
+// version snapshot archives it, and nothing at runtime reads it, while every
+// read surface looks correct. This pins each field to where it is enforced.
 //
 // The contract is "reaches its enforcement point", not "reaches the model
 // call": `stop_conditions` carries `max_chain_generations`, which is enforced
@@ -211,6 +209,11 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
   traceContentMode: {
     modules: ['traceContentPolicy.ts'],
     enforces: 'Decides whether turn content is persisted at all.',
+  },
+  timezone: {
+    modules: ['agentGenerationContext.ts'],
+    enforces:
+      'The timezone the `{{generation:...}}` instruction tokens render in, unless the request names one.',
   },
   onApprovalExpiry: {
     modules: ['agentToolApprovalContinuation.ts'],

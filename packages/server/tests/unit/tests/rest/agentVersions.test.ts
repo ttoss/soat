@@ -157,6 +157,8 @@ describe('Agent versions', () => {
           'step_rules',
           'stop_conditions',
           'temperature',
+          // Configuration: the date the instructions render changes with it.
+          'timezone',
           'tool_bindings',
           'tool_choice',
           // Configuration, not bookkeeping: the mode an agent ran under is part

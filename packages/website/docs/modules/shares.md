@@ -60,7 +60,7 @@ The types a share may name, and what it may grant on each, are one fixed table. 
 | ------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `tool`       | `tools:CallTool`               | `id`, `name`, `description`, `parameters` — never `execute`, `mcp`, headers or `output_mapping`                  |
 | `agent`      | `agents:CreateAgentGeneration` | `id`, `name` — never instructions, provider or tools                                                             |
-| `aiProvider` | `ai-providers:UseAiProvider`   | `id`, `name`, `provider`, `default_model`, `model_alias_names` — never the secret, `base_url`, `config` or prices |
+| `aiProvider` | `ai-providers:UseAiProvider`   | `id`, `name`, `provider`, `default_model`, `model_alias_names`, `model_input_modalities`, `model_input_limits` — never the secret, `base_url`, `config` or prices |
 
 `resource` names one concrete resource in the publishing project. There is no wildcard: `srn:proj_P:tool:*` would grant tools that do not exist yet, so ten tools are ten shares. A resource in another project is `400 VALIDATION_FAILED`, and one that does not exist is `400 TOOL_NOT_FOUND` / `400 AGENT_NOT_FOUND` / `400 AI_PROVIDER_NOT_FOUND`.
 

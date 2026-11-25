@@ -440,6 +440,11 @@
       "hint": "Ingest the document again. A large file or a busy worker can outlast the window; raise `INGESTION_STALL_TIMEOUT_MS` when it does so repeatedly.",
       "routes": []
     },
+    "INPUT_LIMIT_EXCEEDED": {
+      "http_status": 400,
+      "hint": "Send a smaller file, fewer pages or fewer file parts than the model's limit (`meta.max`), split the input across turns, or send it to a model whose AI provider's `model_input_limits` allows it.",
+      "routes": []
+    },
     "INPUT_MODALITY_UNSUPPORTED": {
       "http_status": 400,
       "hint": "Send the part to a model whose AI provider's `model_input_modalities` lists its modality, or ingest the file and send it as a `document` part, which the model reads as text.",
