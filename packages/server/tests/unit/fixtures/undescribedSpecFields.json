@@ -153,7 +153,6 @@
   "triggers.yaml query target_type @listTriggers",
   "triggers.yaml query type @listTriggers",
   "usage.yaml CreateUsageThresholdRequest.metric",
-  "usage.yaml CreateUsageThresholdRequest.project_id",
   "usage.yaml CreateUsageThresholdRequest.window",
   "usage.yaml UpsertPricesRequest.prices",
   "users.yaml bootstrapUser.password",

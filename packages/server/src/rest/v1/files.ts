@@ -4,11 +4,8 @@ import os from 'node:os';
 import type { MulterFile } from '@ttoss/http-server';
 import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import { callerDenied } from 'src/lib/authorizationDenial';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
-import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
 import { getUploadMaxBytes } from 'src/lib/requestBounds';
@@ -204,41 +201,22 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
   requireAuth(ctx);
 
   const body = ctx.request.body as {
-    project_id: string;
+    project_id?: string;
     prefix?: string;
     filename?: string;
     content_type?: string;
     max_bytes?: number;
   };
 
-  const resource = buildSrn({
-    projectPublicId: body.project_id,
-    resourceType: 'file',
-    resourceId: '*',
-  });
-  const allowed = await ctx.authUser.isAllowed({
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
     projectPublicId: body.project_id,
     action: 'files:UploadFile',
-    resource,
+    resourceType: 'file',
   });
-  if (!allowed) {
-    throw callerDenied({
-      authUser: ctx.authUser,
-      action: 'files:UploadFile',
-      resource,
-    });
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: body.project_id },
-  });
-  if (!project) {
-    throw new DomainError('VALIDATION_FAILED', 'Invalid project ID');
-  }
 
   const token = await createPresignedUrl({
-    projectId: project.id,
-    projectPublicId: project.publicId,
+    projectId: Number(targetProjectId),
     prefix: body.prefix,
     filename: body.filename,
     contentType: body.content_type,
