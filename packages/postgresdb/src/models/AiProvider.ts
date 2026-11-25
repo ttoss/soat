@@ -105,6 +105,10 @@ export class AiProvider extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare modelInputModalities: Record<string, string[]> | null;
 
+  /** Model name → the input limits it declares; a name absent declares none. */
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare modelInputLimits: Record<string, Record<string, unknown>> | null;
+
   /** Refuse a model that is not one of `modelAliases`. */
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare modelAliasesOnly: boolean;

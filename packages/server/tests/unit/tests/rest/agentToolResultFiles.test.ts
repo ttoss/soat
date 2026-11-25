@@ -45,6 +45,7 @@ describe('tool results that return files', () => {
     name: string;
     toolId: string;
     modalities?: string[];
+    limits?: Record<string, unknown>;
   }): Promise<string> => {
     const model = `${args.name.replace(/\s+/g, '-')}-model`;
     const provider = await authenticatedTestClient(adminToken)
@@ -57,6 +58,9 @@ describe('tool results that return files', () => {
         base_url: stub.baseUrl,
         ...(args.modalities
           ? { model_input_modalities: { [model]: args.modalities } }
+          : {}),
+        ...(args.limits
+          ? { model_input_limits: { [model]: args.limits } }
           : {}),
       });
     expect(provider.status).toBe(201);
@@ -202,6 +206,32 @@ describe('tool results that return files', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INPUT_MODALITY_UNSUPPORTED');
       expect(res.body.error.meta.modalities).toEqual(['image']);
+      expect(stub.completions).toHaveLength(1);
+    });
+
+    test('a file over a limit the model declares is refused before it is called', async () => {
+      const agentId = await createAgent({
+        name: 'server byte-limited',
+        toolId: scanToolId,
+        limits: { max_bytes: { image: IMAGE_BYTES.byteLength - 1 } },
+      });
+      scanReply = { type: 'file', file_id: imageFileId };
+      stub.reply(
+        toolCallCompletion([{ id: 'call_scan', name: 'scan' }]),
+        textCompletion('A scan.')
+      );
+      stub.completions.length = 0;
+
+      const res = await generate({ token: adminToken, agentId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INPUT_LIMIT_EXCEEDED');
+      expect(res.body.error.meta).toMatchObject({
+        limit: 'max_bytes',
+        modality: 'image',
+        value: IMAGE_BYTES.byteLength,
+        part: { part_index: 0, content_index: 0 },
+      });
       expect(stub.completions).toHaveLength(1);
     });
 

@@ -1130,6 +1130,11 @@ export const ERROR_CODES = {
     description:
       "The model declares the input modalities it accepts, in its AI provider's `model_input_modalities`, and a message part is of a modality it lacks. Refused before the provider is called. `meta.model` names the model (or the model route when none of its targets accepts the input) and `meta.modalities` the refused modalities.",
   },
+  INPUT_LIMIT_EXCEEDED: {
+    httpStatus: 400,
+    description:
+      "The model declares a limit on its input, in its AI provider's `model_input_limits`, and the request exceeds it: a file part over `max_bytes` for its modality, a PDF over `max_pages`, or more file parts than `max_parts`. Refused before the provider is called. `meta.model` names the model, `meta.limit` the limit, `meta.modality` the part's modality, `meta.max` the declared limit, `meta.value` what the request carries and `meta.part` the part (`message_index`, `part_index`, `content_index` inside a tool result, `file_id` when it names a stored file).",
+  },
   MODEL_NOT_OFFERED: {
     httpStatus: 400,
     description:

@@ -25,16 +25,20 @@ const MEDIA_TYPE_MODALITIES: ReadonlyArray<[string, InputModality]> = [
   ['video/', 'video'],
 ];
 
+/** The modality of a `file` part of `mediaType`: `image`, `audio`, `video`, else `file`. */
+export const mediaTypeModality = (mediaType: string): InputModality => {
+  const match = MEDIA_TYPE_MODALITIES.find(([prefix]) => {
+    return mediaType.startsWith(prefix);
+  });
+  return match ? match[1] : 'file';
+};
+
 // A `file` part is read by its media type: the provider prompt carries an
 // image as a `file` part too.
 const partModality = (part: unknown): InputModality | undefined => {
   const type = String(field(part, 'type'));
   if (type !== 'file') return PART_MODALITIES.get(type);
-  const mediaType = String(field(part, 'mediaType'));
-  const match = MEDIA_TYPE_MODALITIES.find(([prefix]) => {
-    return mediaType.startsWith(prefix);
-  });
-  return match ? match[1] : 'file';
+  return mediaTypeModality(String(field(part, 'mediaType')));
 };
 
 // A tool result read natively carries its parts under `output.value`.

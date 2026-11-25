@@ -30,6 +30,7 @@ import { DomainError } from '../errors';
 import { buildModel } from './agentModel';
 import type { ModelProvider } from './aiProviderModelAliases';
 import type { UnpricedRow } from './costEnforceability';
+import { limitsFor, type ModelInputLimits } from './inputLimits';
 import { declaredFor, type ModelInputModalities } from './inputModalityGate';
 import { withInputBoundary } from './modelInputBoundary';
 import { getEffectivePrice } from './priceBook';
@@ -54,6 +55,8 @@ export type PricedModelProvider = ModelProvider & {
   requirePricedModel: boolean;
   /** What each model accepts; the input gate reads it off the built model. */
   modelInputModalities: ModelInputModalities;
+  /** What each model declares it reads per request; the boundary enforces it. */
+  modelInputLimits: ModelInputLimits;
 };
 
 /** A `(provider, model)` pair a call may bill against. */
@@ -149,6 +152,10 @@ export const buildPricedModels = async (args: {
       modelName: binding.model,
       accepted: declaredFor({
         modelInputModalities: binding.aiProvider.modelInputModalities,
+        model: binding.model,
+      }),
+      limits: limitsFor({
+        modelInputLimits: binding.aiProvider.modelInputLimits,
         model: binding.model,
       }),
       projectId: args.spendProjectId,

@@ -1164,6 +1164,10 @@ components:
           description: Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.
           allOf:
             - $ref: './ai-providers.yaml#/components/schemas/ModelInputModalities'
+        model_input_limits:
+          description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked.'
+          allOf:
+            - $ref: './ai-providers.yaml#/components/schemas/ModelInputLimits'
         require_priced_model:
           type: boolean
           description: When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project.

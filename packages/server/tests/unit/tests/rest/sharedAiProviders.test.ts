@@ -246,6 +246,7 @@ describe('Shared AI providers', () => {
         default_model: 'claude-shared-test',
         model_alias_names: ['fast'],
         model_input_modalities: {},
+        model_input_limits: {},
       });
     });
 
@@ -304,6 +305,7 @@ describe('Shared AI providers', () => {
         default_model: 'claude-shared-test',
         model_alias_names: [],
         model_input_modalities: {},
+        model_input_limits: {},
       });
     });
 
