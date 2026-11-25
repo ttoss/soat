@@ -14,8 +14,9 @@
  *
  * - a **read** a caller may not perform is `404`, so a resource in a project
  *   they cannot see — or one their policy does not name — does not announce its
- *   existence, unless a policy's declared `denial` refused it: that answers as
- *   a write does;
+ *   existence, unless a policy's declared `denial` refused it or another read
+ *   the caller holds already shows them the resource: that answers as a write
+ *   does (see {@link readRefusal});
  * - a **write** is `403`, so a caller who can read a resource is told plainly
  *   that changing it is refused — unless the resource is in a project
  *   they reach for nothing, where that would leak existence and it is `404`
@@ -37,7 +38,11 @@
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
 import { callerDenied, requestRefusal } from 'src/lib/authorizationDenial';
-import { buildSrn, policySetsConcernProject } from 'src/lib/iam';
+import {
+  buildSrn,
+  evaluatePolicies,
+  policySetsConcernProject,
+} from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { findSharedUse } from 'src/lib/resourceReferences';
 import { findGranteeScope } from 'src/lib/shares';
@@ -201,6 +206,57 @@ const refusedWithDenial = (args: {
 };
 
 /**
+ * Whether a read in `shownBy` the caller holds on `resource` already shows
+ * it to them. Evaluated over the policy sets rather than `isAllowed`, so the
+ * probe is neither audited nor admitted as a check of its own.
+ */
+const shownToCaller = async (args: {
+  ctx: AuthenticatedContext;
+  projectPublicId: string;
+  resource: string;
+  context: Record<string, string>;
+  shownBy: readonly string[];
+}): Promise<boolean> => {
+  if (args.shownBy.length === 0) return false;
+  const sets = await args.ctx.authUser.getPolicies(args.projectPublicId);
+  return args.shownBy.some((action) => {
+    return sets.every((policies) => {
+      return evaluatePolicies({
+        policies,
+        action,
+        resource: args.resource,
+        context: args.context,
+      }).allowed;
+    });
+  });
+};
+
+/**
+ * The error for a refused read of one resource: its `notFound`, unless a
+ * policy's declared `denial` refused it or a read in `shownBy` already shows
+ * the resource to the caller. Then the `404` would contradict what the caller
+ * reads elsewhere, so it is {@link resourceRefusal}'s answer.
+ */
+export const readRefusal = async (args: {
+  ctx: Context;
+  projectPublicId: string;
+  notFound: DomainError;
+  action: string;
+  resource: string;
+  context: Record<string, string>;
+  /** The reads that list or get this same resource. */
+  shownBy: readonly string[];
+}): Promise<DomainError> => {
+  const { ctx } = args;
+  requireAuth(ctx);
+  const stated =
+    refusedWithDenial({ ctx, args, resource: args.resource }) ||
+    (await shownToCaller({ ...args, ctx }));
+  if (!stated) return args.notFound;
+  return resourceRefusal(args);
+};
+
+/**
  * One by-id check: returns when the caller may perform it, else throws
  * {@link resourceRefusal}'s answer for it.
  */
@@ -232,6 +288,8 @@ export const authorizeResource = async (args: {
   scope: ResourceScope | null;
   /** The type the SRN names, which for a nested resource is the parent's. */
   resourceType: string;
+  /** See {@link readRefusal}; read only when `onDenied` is `hide`. */
+  shownBy?: readonly string[];
   /** The id the SRN names, likewise the parent's where the scope is. */
   resourceId: string;
   action: string;
@@ -293,25 +351,31 @@ export const authorizeResource = async (args: {
     resourceType: args.resourceType,
     resourceId: args.resourceId,
   });
+  // The tags come off the same row the SRN names — `scope`, not a second
+  // lookup — so a `iam:ResourceTag/<key>` condition can never be evaluated
+  // against one resource while the SRN names another.
+  const context = buildResourceTagContext({
+    resourceType: args.resourceType,
+    tags: args.scope.tags,
+  });
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: args.scope.projectPublicId,
     action: args.action,
     resource,
-    // The tags come off the same row the SRN names — `scope`, not a second
-    // lookup — so a `iam:ResourceTag/<key>` condition can never be evaluated
-    // against one resource while the SRN names another.
-    context: buildResourceTagContext({
-      resourceType: args.resourceType,
-      tags: args.scope.tags,
-    }),
+    context,
   });
 
   if (!allowed) {
-    if (
-      args.onDenied === 'hide' &&
-      !refusedWithDenial({ ctx, args, resource })
-    ) {
-      throw notFound;
+    if (args.onDenied === 'hide') {
+      throw await readRefusal({
+        ctx,
+        projectPublicId: args.scope.projectPublicId,
+        notFound,
+        action: args.action,
+        resource,
+        context,
+        shownBy: args.shownBy ?? [],
+      });
     }
     throw await resourceRefusal({
       ctx,
@@ -351,6 +415,8 @@ export const makeItemRouteAuthorizer = (config: {
   label: string;
   /** See {@link authorizeResource}'s `errorCode`. */
   errorCode?: ErrorCode;
+  /** See {@link readRefusal}. */
+  shownBy?: readonly string[];
 }) => {
   const authorize = async (
     args: ItemRouteArgs & { onDenied: 'hide' | 'refuse' }
@@ -364,6 +430,7 @@ export const makeItemRouteAuthorizer = (config: {
       resourceId,
       label: config.label,
       errorCode: config.errorCode,
+      shownBy: config.shownBy,
       action: args.action,
       onDenied: args.onDenied,
     });
