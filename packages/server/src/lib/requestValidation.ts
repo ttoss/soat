@@ -19,7 +19,6 @@ import {
   isOpenOrAmbiguous,
 } from './openapiUnknownFields';
 import { collectSchemaViolations } from './requestSchemaViolations';
-import { isRouteOwnedField } from './routeOwnedBodyFields';
 
 const log = createDebug('soat:requestValidation');
 
@@ -45,26 +44,18 @@ const SCALAR_TYPES = new Set(['string', 'number', 'integer', 'boolean']);
 
 /**
  * The required fields the body does not carry below the top level, by dotted
- * path, from the walk that finds unknown keys. Fields the route answers itself
- * (`ROUTE_OWNED_BODY_FIELDS`) are left to it.
+ * path, from the walk that finds unknown keys.
  */
 const nestedMissingFields = (args: {
   schema: Record<string, unknown>;
   body: Record<string, unknown>;
-  operation: string;
 }): string[] => {
   return collectMissingRequiredFields(
     { schema: args.schema, value: args.body },
     { resolveRef: resolveSchemaRef }
   )
     .filter((field) => {
-      return (
-        !field.topLevel &&
-        !isRouteOwnedField({
-          operation: args.operation,
-          path: field.path.split('.'),
-        })
-      );
+      return !field.topLevel;
     })
     .map((field) => {
       return field.path;
@@ -117,8 +108,8 @@ const topLevelFieldErrors = (args: {
  *   types** at the top level (`invalid_fields`).
  * - **The full schema** is checked once those pass: a value of any depth that
  *   breaks its type, union, enum, bound or required list is in
- *   `invalid_fields`, except fields `ROUTE_OWNED_BODY_FIELDS` leaves to the
- *   route.
+ *   `invalid_fields`; a union names what breaks the one branch its value is
+ *   of.
  *
  * `path` is the route as registered (`/agents/:agent_id`), normalized to the
  * OpenAPI path key internally. Field names are compared against the spec's own
@@ -152,11 +143,7 @@ export const validateRequestBody = (args: {
   const fieldErrors = topLevelFieldErrors({ schema, body });
   const missingFields = [
     ...fieldErrors.missingFields,
-    ...nestedMissingFields({
-      schema,
-      body,
-      operation: `${args.method.toUpperCase()} ${template}`,
-    }),
+    ...nestedMissingFields({ schema, body }),
   ];
   const typeErrors =
     unknownFields.length > 0 ||

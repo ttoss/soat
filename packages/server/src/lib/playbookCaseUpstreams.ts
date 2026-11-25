@@ -50,13 +50,11 @@ const boundIds = (args: {
   raw: unknown;
   bound: string[];
 }): Map<string, unknown> => {
-  const raw = args.raw ?? {};
+  // The request schema holds a written `upstreams` to an object of strings.
+  const raw = isPlainObject(args.raw) ? args.raw : {};
   const declared = (args.definition.upstreams ?? []).map((upstream) => {
     return upstream.name;
   });
-  if (!isPlainObject(raw)) {
-    throw invalid({ message: 'upstreams must be an object.', name: '' });
-  }
   for (const name of Object.keys(raw)) {
     if (!declared.includes(name)) {
       throw invalid({

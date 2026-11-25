@@ -705,13 +705,13 @@ components:
   schemas:
     FormationTemplateInput:
       description: >
-        A formation template supplied as either a JSON object or a YAML/JSON
-        string. When a string is provided the server parses it with a YAML
-        parser (JSON is valid YAML) before processing.
-      oneOf:
-        - $ref: '#/components/schemas/FormationTemplate'
-        - type: string
-          description: YAML or JSON string representation of a FormationTemplate
+        A formation template, shaped as `FormationTemplate`, supplied as either
+        a JSON object or a YAML/JSON string. When a string is provided the
+        server parses it with a YAML parser (JSON is valid YAML) before
+        processing. Any value is accepted here and judged by the template
+        validator, one judgement for both forms: what it breaks is the
+        `errors` of a validation, at 200, and `400 VALIDATION_FAILED` with
+        `meta.details` on a plan, create or update.
 
     FormationTemplate:
       type: object

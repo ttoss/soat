@@ -603,7 +603,9 @@ describe('Evaluations', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toMatch(/pass_threshold is required/);
+      expect(res.body.error.message).toMatch(
+        /`scorers\.0\.pass_threshold` is required/
+      );
     });
 
     test('an llm_judge scorer without a pass_threshold is rejected', async () => {
@@ -621,7 +623,9 @@ describe('Evaluations', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toMatch(/pass_threshold is required/);
+      expect(res.body.error.message).toMatch(
+        /`scorers\.0\.pass_threshold` is required/
+      );
     });
 
     test('an output_schema scorer against an agent with no output_schema is rejected', async () => {

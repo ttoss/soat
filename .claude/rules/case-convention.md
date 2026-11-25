@@ -61,7 +61,7 @@ camelCase. MCP tool inputs are the spec property names verbatim
 
 | Check | Catches |
 |---|---|
-| `strictFields` middleware (read-only) | a body its request schema refuses, at any depth → `400 VALIDATION_FAILED`; `ROUTE_OWNED_BODY_FIELDS` (`lib/routeOwnedBodyFields.ts`) names the fields a route answers itself |
+| `strictFields` middleware (read-only) | a body its request schema refuses, at any depth → `400 VALIDATION_FAILED`; a failed union names what breaks the branch its value is of |
 | `responseContract` middleware (read-only) | camelCase response key → throws in tests; undeclared snake_case key → debug log (pre-existing drift, `tests/unit/openapiContract.ts`) |
 | `rest/wireKeyContract.test.ts` | a handler reading a camelCase key off `ctx.request.body` / `ctx.query` |
 | `lib/libReturnKeyContract.test.ts` | a camelCase key inside an otherwise snake_case object literal in lib |
