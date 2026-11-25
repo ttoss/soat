@@ -542,7 +542,7 @@ Plan and apply share one change rule:
 - An **empty field** is not a change: a `null` field equals an absent one at every depth, so a declared `null` equals a property the read leaves out and a nested field the read holds `null` equals one the template omits; except a top-level write-only property, which no read returns.
 - A **schema default** is not a change: both sides are compared with every `default` the type's properties schema declares filled in, at every depth, so a playbook node omitting `final` equals one read back with `final: false`. A value the deployment stores for an empty property fills in the same way: an `oauth_client` declaring `redirect_uri: null` equals one holding `OAUTH_DEFAULT_REDIRECT_URI`.
 - A **write-only property** compares equal when it resolves to the value the formation last deployed, including one sent back as `{ "no_echo": true }`: the same declaration, each `param` it reads given the value that deploy recorded in `resolved_parameters`, and each `ref` naming a resource the deploy does not replace. A different value, or a `param` declared `no_echo` (never recorded), is a change.
-- A property resolving to `undefined` (a kept `use_previous_value` parameter) reuses the previous value, or is dropped when there is none.
+- A value resolving to `undefined` (a kept `use_previous_value` parameter), at any depth, reuses the previous value at the same path, or is dropped when there is none: a kept `param` inside `document.statement[0].action` keeps that action while the rest of the statement updates.
 
 ### A Formation Only Does What the Caller Could Do Directly
 
