@@ -23,6 +23,7 @@ import { isUnitInterval } from './evaluationToolScorerContract';
  * nothing about the agent (the same rule as a failed judge).
  */
 export type EmbeddingScorerRunner = (args: {
+  scorer: Record<string, unknown>;
   texts: string[];
 }) => Promise<number[][]>;
 
@@ -78,6 +79,7 @@ export const scoreEmbeddingSimilarity = async (args: {
   }
 
   const [outputVector, expectedVector] = await args.runEmbeddings({
+    scorer: args.scorer,
     texts: [args.output.content, args.expectedOutput],
   });
 

@@ -15,6 +15,7 @@ import { generateText } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import type { JudgeBinding } from './evaluationScorerModels';
 import { meterCompletion, routedMaxRetries } from './modelRoutes';
 import { isPlainObject } from './plainObject';
 import { resolveProjectScopedModel } from './projectScopedModel';
@@ -148,8 +149,8 @@ export const parseJudgeVerdict = (text: string): JudgeVerdict => {
  * Model resolution is project-scoped (`resolveProjectScopedModel`): the
  * scorer's `ai_provider_id` must belong to the eval's project (so a scorer
  * config can never borrow another project's provider secret), and a project
- * default model route applies when the scorer pins no provider. That is the same
- * resolution every non-agent completion in the platform already uses.
+ * default model route applies when the scorer pins no provider. The run pins
+ * what that resolves to when it starts (`evaluationScorerModels.ts`).
  *
  * `temperature: 0` because a judge is a measuring instrument — the run-to-run
  * variance that makes a red run ambiguous is exactly what this module exists to
@@ -162,18 +163,12 @@ export const runJudgeCompletion = async (args: {
   output: string;
   expected: string | null;
   abortSignal?: AbortSignal;
+  /** The run's pin for this judge, else its own config (`judgeBindingOf`). */
+  binding: JudgeBinding;
 }): Promise<JudgeVerdict> => {
-  const aiProviderId =
-    typeof args.scorer.ai_provider_id === 'string'
-      ? args.scorer.ai_provider_id
-      : null;
-  const pinnedModel =
-    typeof args.scorer.model === 'string' ? args.scorer.model : null;
-
   const { model, modelName, attribution } = await resolveProjectScopedModel({
     projectId: args.projectId,
-    aiProviderId,
-    model: pinnedModel,
+    ...args.binding,
   });
   await assertProjectSpendWithinQuota({ projectId: args.projectId });
 

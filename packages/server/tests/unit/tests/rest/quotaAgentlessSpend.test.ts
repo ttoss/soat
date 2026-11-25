@@ -132,6 +132,11 @@ describe('token and cost quotas on agentless model spend', () => {
           input: 'q',
           output: 'a',
           expected: null,
+          binding: {
+            aiProviderId: ctx.aiProviderPublicId,
+            model: null,
+            modelRouteId: null,
+          },
         })
       ).rejects.toMatchObject({
         code: 'QUOTA_EXCEEDED',

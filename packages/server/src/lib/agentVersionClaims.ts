@@ -23,6 +23,7 @@ import {
   type EvalRunDefinition,
   readEvalRunDefinition,
 } from './evaluationRunDefinition';
+import { readScorerModels } from './evaluationScorerModels';
 import {
   isVerdict,
   type Verdict,
@@ -210,6 +211,7 @@ const calibrationSideReasons = async (args: {
     fingerprint: scorerFingerprint({
       scorers: args.definition.scorers,
       deciderVersions: args.run.deciderVersions,
+      scorerModels: readScorerModels(args.run.scorerModels),
     }),
   });
   return calibrationReasons({ rule: parsed.rule, keys, runs });

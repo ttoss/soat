@@ -36,21 +36,22 @@ export type EvalResultRow = InstanceType<(typeof db)['EvalResult']> & {
   generation?: InstanceType<(typeof db)['Generation']> | null;
 };
 
+const wireDefinition = (definition: EvalRunRow['definition']) => {
+  return definition === null
+    ? null
+    : { ...definition, scorers: namedScorers(definition.scorers) };
+};
+
 export const mapEvalRun = (run: EvalRunRow) => {
   return {
     id: run.publicId,
     eval_id: run.eval?.publicId,
     agent_id: run.agentPublicId ?? null,
     agent_version: run.agentVersion,
-    definition:
-      run.definition === null
-        ? null
-        : {
-            ...run.definition,
-            scorers: namedScorers(run.definition.scorers),
-          },
+    definition: wireDefinition(run.definition),
     claim: run.claim ?? null,
     decider_versions: run.deciderVersions ?? null,
+    scorer_models: run.scorerModels ?? null,
     status: run.status,
     baseline_run_id: run.baselineRun?.publicId ?? null,
     trigger_id: run.triggerId ?? null,

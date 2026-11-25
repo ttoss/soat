@@ -13,6 +13,7 @@ import {
   findEvalRun,
   mapEvalResult,
 } from './evaluationRunReads';
+import { readScorerModels } from './evaluationScorerModels';
 import type { RequestPrincipal } from './principals';
 
 const log = createDebug('soat:evaluations');
@@ -83,6 +84,7 @@ export const getEvalRunCalibration = async (args: {
       ? scorerFingerprint({
           scorers: definition.scorers,
           deciderVersions: run.deciderVersions,
+          scorerModels: readScorerModels(run.scorerModels),
         })
       : null,
     ...calibrationOf({
@@ -120,7 +122,7 @@ export const versionRunCalibrations = async (args: {
       agentVersion: args.version,
       status: 'completed',
     },
-    attributes: ['id', 'definition', 'deciderVersions'],
+    attributes: ['id', 'definition', 'deciderVersions', 'scorerModels'],
   });
   const graded = runs.flatMap((run) => {
     const definition = readEvalRunDefinition({ run });
@@ -128,6 +130,7 @@ export const versionRunCalibrations = async (args: {
     const fingerprint = scorerFingerprint({
       scorers: definition.scorers,
       deciderVersions: run.deciderVersions,
+      scorerModels: readScorerModels(run.scorerModels),
     });
     return fingerprint === args.fingerprint
       ? [{ runId: run.id as number, scorers: definition.scorers }]

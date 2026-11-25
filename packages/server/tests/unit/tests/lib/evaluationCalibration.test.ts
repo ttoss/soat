@@ -25,6 +25,7 @@ describe('evaluationCalibration', () => {
       const a = scorerFingerprint({
         scorers: [{ ...JUDGE, nested: { b: 1, a: 2 } }, DECIDER],
         deciderVersions: { review: 2, other: 1 },
+        scorerModels: null,
       });
       const b = scorerFingerprint({
         scorers: [
@@ -37,6 +38,7 @@ describe('evaluationCalibration', () => {
           { decider_id: 'dcd_1', name: 'review', type: 'decider' },
         ],
         deciderVersions: { other: 1, review: 2 },
+        scorerModels: null,
       });
       expect(a).toBe(b);
       expect(a).toMatch(/^sha256:[0-9a-f]{64}$/);
@@ -47,8 +49,15 @@ describe('evaluationCalibration', () => {
         scorerFingerprint({
           scorers: [{ ...JUDGE, name: 'llm_judge' }],
           deciderVersions: null,
+          scorerModels: null,
         })
-      ).toBe(scorerFingerprint({ scorers: [JUDGE], deciderVersions: null }));
+      ).toBe(
+        scorerFingerprint({
+          scorers: [JUDGE],
+          deciderVersions: null,
+          scorerModels: null,
+        })
+      );
     });
 
     test('swapping the names of two scorers moves it', () => {
@@ -61,6 +70,7 @@ describe('evaluationCalibration', () => {
             { ...b, name: 'second' },
           ],
           deciderVersions: null,
+          scorerModels: null,
         })
       ).not.toBe(
         scorerFingerprint({
@@ -69,6 +79,7 @@ describe('evaluationCalibration', () => {
             { ...b, name: 'first' },
           ],
           deciderVersions: null,
+          scorerModels: null,
         })
       );
     });
@@ -77,28 +88,54 @@ describe('evaluationCalibration', () => {
       const base = scorerFingerprint({
         scorers: [JUDGE, DECIDER],
         deciderVersions: { review: 1 },
+        scorerModels: null,
       });
       const changed = [
         scorerFingerprint({
           scorers: [{ ...JUDGE, prompt: 'Grade {{output}}' }, DECIDER],
           deciderVersions: { review: 1 },
+          scorerModels: null,
         }),
         scorerFingerprint({
           scorers: [{ ...JUDGE, pass_threshold: 0.7 }, DECIDER],
           deciderVersions: { review: 1 },
+          scorerModels: null,
         }),
         scorerFingerprint({
           scorers: [JUDGE, DECIDER],
           deciderVersions: { review: 2 },
+          scorerModels: null,
         }),
       ];
       expect(new Set([base, ...changed]).size).toBe(4);
     });
 
+    test('moves with the model a judge pinned', () => {
+      const pinned = (routeId: string) => {
+        return scorerFingerprint({
+          scorers: [JUDGE],
+          deciderVersions: null,
+          scorerModels: { llm_judge: { model_route_id: routeId } },
+        });
+      };
+      expect(pinned('route_a')).toBe(pinned('route_a'));
+      expect(pinned('route_a')).not.toBe(pinned('route_b'));
+    });
+
     test('a run with no pinned decider reads as no versions', () => {
       expect(
-        scorerFingerprint({ scorers: [JUDGE], deciderVersions: null })
-      ).toBe(scorerFingerprint({ scorers: [JUDGE], deciderVersions: {} }));
+        scorerFingerprint({
+          scorers: [JUDGE],
+          deciderVersions: null,
+          scorerModels: null,
+        })
+      ).toBe(
+        scorerFingerprint({
+          scorers: [JUDGE],
+          deciderVersions: {},
+          scorerModels: null,
+        })
+      );
     });
   });
 

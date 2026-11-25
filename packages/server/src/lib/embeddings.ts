@@ -2,7 +2,11 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { getEmbeddings, projectEmbeddingBilling } from './embedding';
+import {
+  type EmbeddingModelChoice,
+  getEmbeddings,
+  projectEmbeddingBilling,
+} from './embedding';
 import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 
 const log = createDebug('soat:embeddings');
@@ -29,12 +33,14 @@ const resolveBillingProjectId = async (args: {
 export const embedForProject = async (args: {
   projectId: number;
   texts: string[];
+  pinned?: EmbeddingModelChoice;
 }): Promise<number[][]> => {
   await assertProjectSpendWithinQuota({ projectId: args.projectId });
   return getEmbeddings({
     texts: args.texts,
     billing: projectEmbeddingBilling({ projectId: args.projectId }),
     subject: null,
+    pinned: args.pinned,
   });
 };
 

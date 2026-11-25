@@ -74,7 +74,9 @@ export const buildEmbeddingModel = (args: {
   }
 };
 
-const isEmbeddingProvider = (value: string): value is EmbeddingProvider => {
+export const isEmbeddingProvider = (
+  value: string
+): value is EmbeddingProvider => {
   return value === 'ollama' || value === 'openai' || value === 'bedrock';
 };
 
@@ -162,11 +164,20 @@ const embedInProviderCalls = async (args: {
   return { embeddings, tokens, failure };
 };
 
-export const getEmbeddings = async (args: {
-  texts: string[];
-  billing: EmbeddingBilling;
-  subject: EmbeddingSubject;
-}): Promise<number[][]> => {
+export type EmbeddingModelChoice = {
+  provider: EmbeddingProvider;
+  model: string;
+};
+
+/** The deployment's embedding model, or null when none is configured. */
+export const findConfiguredEmbeddingModel = (): EmbeddingModelChoice | null => {
+  const provider = process.env.EMBEDDING_PROVIDER;
+  const model = process.env.EMBEDDING_MODEL;
+  if (!provider || !model || !isEmbeddingProvider(provider)) return null;
+  return { provider, model };
+};
+
+const configuredEmbeddingModel = (): EmbeddingModelChoice => {
   const provider = process.env.EMBEDDING_PROVIDER;
   const model = process.env.EMBEDDING_MODEL;
 
@@ -186,6 +197,17 @@ export const getEmbeddings = async (args: {
       `Unsupported embedding provider: ${provider}`
     );
   }
+  return { provider, model };
+};
+
+export const getEmbeddings = async (args: {
+  texts: string[];
+  billing: EmbeddingBilling;
+  subject: EmbeddingSubject;
+  /** A model pinned earlier (an eval run's); the deployment's when absent. */
+  pinned?: EmbeddingModelChoice;
+}): Promise<number[][]> => {
+  const { provider, model } = args.pinned ?? configuredEmbeddingModel();
 
   log(
     'getEmbeddings: provider=%s model=%s count=%d billing=%o',

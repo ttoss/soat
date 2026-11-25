@@ -117,7 +117,7 @@ An `llm_judge` or `embedding_similarity` score is a model's opinion; its `pass_t
 
 For an `llm_judge` ([LLM judge](../modules/evaluations.md#llm-judge)):
 
-- **Pin `ai_provider_id` and `model`.** A judge that pins none follows the project's default model route, so changing the default changes every score and breaks comparison with past runs.
+- **Pin `ai_provider_id` and `model`.** A judge that pins none follows the project's default model route: each run pins the route it resolved (`scorer_models`), so changing the default moves `scorer_fingerprint` and breaks comparison with past runs, and an edit to the route's targets changes scores without moving it.
 - **Write the rubric into the prompt**: what `1.0`, `0.5` and `0` mean for this criterion. A judge asked for "a score" drifts toward the top.
 - **Grade against `{{expected}}`** when a reference exists; it is more repeatable than grading in the abstract.
 - **Judge with a different model than the agent's.** Models tend to rate their own output higher.
