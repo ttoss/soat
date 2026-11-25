@@ -18,7 +18,10 @@ import {
   updateFormation,
   validateFormationTemplateAsync,
 } from 'src/lib/formations';
-import { deployableTemplate } from 'src/lib/formationsDeployTemplate';
+import {
+  deployableTemplate,
+  redeployableTemplate,
+} from 'src/lib/formationsDeployTemplate';
 import { missingParameterErrors } from 'src/lib/formationsHelpers';
 import { parameterValueErrors } from 'src/lib/formationsParameters';
 import type { FormationAuthorizationRequest } from 'src/lib/formationsTypes';
@@ -334,11 +337,11 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   const metadata = readNullableMetadataBag(body.metadata);
   assertStaticMetadata(metadata);
 
-  const parsedTemplate = await deployableTemplate({
+  const parsedTemplate = await redeployableTemplate({
     input: body.template,
     parameters: body.parameters,
     projectPublicId: formation.project_id,
-    stored: { formationId: formation.id },
+    formationId: formation.id,
   });
 
   const updated = await updateFormation({

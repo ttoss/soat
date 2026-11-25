@@ -138,28 +138,15 @@ const storedTemplate = async (
   return formation.template as FormationTemplate;
 };
 
-/**
- * The template a create, update or plan deploys: parsed, its placeholders
- * restored from `stored` (the formation it redeploys), and valid, or
- * `400 VALIDATION_FAILED`; with no `input`, the template `stored` holds.
- * `parameters` give every parameter it reads a value of its type, or
- * `400 FORMATION_MISSING_PARAMETERS` / `FORMATION_INVALID_PARAMETERS`. A plan
- * previews only what its deploy accepts.
- */
-export const deployableTemplate = async (args: {
-  input: unknown;
+const withParameters = (args: {
+  template: FormationTemplate;
   parameters: Record<string, string> | undefined;
-  projectPublicId: string;
-  stored?: StoredFormation;
-}): Promise<FormationTemplate> => {
-  const deployable =
-    args.input === undefined && args.stored?.formationId !== undefined
-      ? await storedTemplate(args.stored)
-      : await validTemplate(args);
+  forUpdate: boolean;
+}): FormationTemplate => {
   const missing = missingParameterErrors({
-    template: deployable,
+    template: args.template,
     provided: args.parameters,
-    forUpdate: args.stored?.formationId !== undefined,
+    forUpdate: args.forUpdate,
   });
   if (missing.length > 0) {
     throw new DomainError(
@@ -172,6 +159,48 @@ export const deployableTemplate = async (args: {
       { details: missing }
     );
   }
-  resolveParameterValues(deployable, args.parameters);
-  return deployable;
+  resolveParameterValues(args.template, args.parameters);
+  return args.template;
+};
+
+/**
+ * The template a create or plan deploys: parsed, its placeholders restored
+ * from `stored` (the formation it redeploys), and valid, or
+ * `400 VALIDATION_FAILED`; `parameters` give every parameter it reads a value
+ * of its type, or `400 FORMATION_MISSING_PARAMETERS` /
+ * `FORMATION_INVALID_PARAMETERS`. A plan previews only what its deploy accepts.
+ */
+export const deployableTemplate = async (args: {
+  input: unknown;
+  parameters: Record<string, string> | undefined;
+  projectPublicId: string;
+  stored?: StoredFormation;
+}): Promise<FormationTemplate> => {
+  return withParameters({
+    template: await validTemplate(args),
+    parameters: args.parameters,
+    forUpdate: args.stored?.formationId !== undefined,
+  });
+};
+
+/**
+ * The template an update deploys: as `deployableTemplate` for the formation
+ * `formationId`, or with no `input` the template it stores, checked against
+ * `parameters` the same way.
+ */
+export const redeployableTemplate = async (args: {
+  input: unknown;
+  parameters: Record<string, string> | undefined;
+  projectPublicId: string;
+  formationId: string;
+}): Promise<FormationTemplate> => {
+  const stored = { formationId: args.formationId };
+  return withParameters({
+    template:
+      args.input === undefined
+        ? await storedTemplate(stored)
+        : await validTemplate({ ...args, stored }),
+    parameters: args.parameters,
+    forUpdate: true,
+  });
 };
