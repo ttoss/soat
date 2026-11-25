@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.129.0](https://github.com/ttoss/soat/compare/v0.128.0...v0.129.0) (2026-11-25)
+
+### Bug Fixes
+
+* **formations:** an omitted nested use_previous_value param keeps its previous value ([#2165](https://github.com/ttoss/soat/issues/2165)) ([21417b5](https://github.com/ttoss/soat/commit/21417b5ee225b3d4e2bc1c37dd7f965427847a80))
+* **formations:** check parameters when an update redeploys the stored template ([#2164](https://github.com/ttoss/soat/issues/2164)) ([1d76f9d](https://github.com/ttoss/soat/commit/1d76f9d5b4dad3d7f86bce14e64488783fd05320))
+* **server:** a project key writes without project_id where a schema required it ([#2166](https://github.com/ttoss/soat/issues/2166)) ([2309dca](https://github.com/ttoss/soat/commit/2309dcacac50736ea9b71e2e6ecf0ffb76da0f5b))
+* **server:** name a nested required field a REST body leaves out in missing_fields ([#2167](https://github.com/ttoss/soat/issues/2167)) ([284b220](https://github.com/ttoss/soat/commit/284b2202cbd0f0b81548e2c02cb09c5a2622c045))
+
+### Features
+
+* **evals:** criteria on an eval, defined by probes that run before every run and on a dry run ([#1556](https://github.com/ttoss/soat/issues/1556) Part 6, criteria and probes) ([#2129](https://github.com/ttoss/soat/issues/2129)) ([4525f2f](https://github.com/ttoss/soat/commit/4525f2fd0f885b0d23abc04e31cca70a272a88b8))
+* **tasks:** update replaces a task's metadata ([#2161](https://github.com/ttoss/soat/issues/2161)) ([233e7d9](https://github.com/ttoss/soat/commit/233e7d9d7a3a7f81a4a319b9f2812d121e614ada))
+
+### BREAKING CHANGES
+
+* **evals:** creating or updating an eval with a scorer that has no
+  name is 400 VALIDATION_FAILED.
+
 # [0.128.0](https://github.com/ttoss/soat/compare/v0.127.0...v0.128.0) (2026-11-24)
 
 * feat(files)!: upload tokens fix size and type, and take a raw-body PUT (#2154) ([c095306](https://github.com/ttoss/soat/commit/c09530634e8bcf0e982c614f1e85c82f94bc7e9b)), closes [#2154](https://github.com/ttoss/soat/issues/2154)
