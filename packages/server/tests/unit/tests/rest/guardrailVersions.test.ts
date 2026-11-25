@@ -453,18 +453,16 @@ describe('Guardrail versions', () => {
       ).id;
     });
 
-    // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the guardrail's own SRN;
-    // `restore` is a write and keeps `403`.
-    test('without ListGuardrailVersions returns 404', async () => {
+    // The key still lists guardrails, so the refused read is stated.
+    test('without ListGuardrailVersions returns 403', async () => {
       const rawKey = await createRestrictedApiKey(
         'guardrails:ListGuardrailVersions'
       );
       const res = await authenticatedTestClient(rawKey).get(
         `/api/v1/guardrails/${restrictedGuardrailId}/versions`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
     test('without RestoreGuardrailVersion returns 403', async () => {

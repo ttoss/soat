@@ -264,6 +264,8 @@ paths:
                 $ref: '#/components/schemas/OauthConnection'
         '401':
           $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
         '404':
           $ref: './errors.yaml#/components/responses/NotFound'
         '400':

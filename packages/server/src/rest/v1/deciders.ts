@@ -25,6 +25,7 @@ import {
 } from 'src/lib/decisions';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { captureAuthority } from 'src/lib/workAuthority';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -45,6 +46,7 @@ const decidersRouter = new Router<Context>();
 const deciderAccess = makeItemRouteAuthorizer({
   findScope: deciders.findScope,
   resourceType: 'decider',
+  shownBy: readsShowing({ module: 'deciders', noun: 'Decider' }),
   param: 'decider_id',
   label: 'Decider',
 });
@@ -53,6 +55,7 @@ const deciderAccess = makeItemRouteAuthorizer({
 const decisionAccess = makeItemRouteAuthorizer({
   findScope: decisions.findScope,
   resourceType: 'decision',
+  shownBy: readsShowing({ module: 'deciders', noun: 'Decision' }),
   param: 'decision_id',
   label: 'Decision',
 });

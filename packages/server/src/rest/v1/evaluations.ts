@@ -31,6 +31,7 @@ import {
 import { generations } from 'src/lib/generations';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { captureAuthority } from 'src/lib/workAuthority';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -61,6 +62,7 @@ const evaluationsRouter = new Router<Context>();
 const datasetAccess = makeItemRouteAuthorizer({
   findScope: datasets.findScope,
   resourceType: 'dataset',
+  shownBy: readsShowing({ module: 'evaluations', noun: 'Dataset' }),
   param: 'dataset_id',
   label: 'Dataset',
 });
@@ -68,6 +70,7 @@ const datasetAccess = makeItemRouteAuthorizer({
 export const evalAccess = makeItemRouteAuthorizer({
   findScope: evals.findScope,
   resourceType: 'eval',
+  shownBy: readsShowing({ module: 'evaluations', noun: 'Eval' }),
   param: 'eval_id',
   label: 'Eval',
 });
@@ -240,6 +243,10 @@ evaluationsRouter.post(
             ctx,
             scope: await generations.findScope({ id: generationId }),
             resourceType: 'generation',
+            shownBy: readsShowing({
+              module: 'generations',
+              noun: 'Generation',
+            }),
             resourceId: generationId,
             label: 'Generation',
             // The generation is a *referenced* entity here, not the route's

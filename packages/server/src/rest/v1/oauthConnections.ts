@@ -9,6 +9,7 @@ import {
   oauthConnections,
   startOauthConnection,
 } from 'src/lib/oauthConnections';
+import { readsShowing } from 'src/lib/permissionCatalog';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
 import { resolveListScope } from './listScope';
@@ -19,6 +20,10 @@ const oauthConnectionsRouter = new Router<Context>();
 const oauthConnectionAccess = makeItemRouteAuthorizer({
   findScope: oauthConnections.findScope,
   resourceType: 'oauth_connection',
+  shownBy: readsShowing({
+    module: 'oauth-connections',
+    noun: 'OauthConnection',
+  }),
   param: 'oauth_connection_id',
   label: 'OAuth connection',
 });

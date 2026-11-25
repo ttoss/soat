@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { purgeTraceContent } from 'src/lib/contentPurge';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { getTrace, getTraceTree, listTraces, traceRows } from 'src/lib/traces';
 
 import {
@@ -21,6 +22,7 @@ export const tracesRouter = new Router<Context>();
 const traceAccess = makeItemRouteAuthorizer({
   findScope: traceRows.findScope,
   resourceType: 'trace',
+  shownBy: readsShowing({ module: 'traces', noun: 'Trace' }),
   param: 'trace_id',
   label: 'Trace',
 });

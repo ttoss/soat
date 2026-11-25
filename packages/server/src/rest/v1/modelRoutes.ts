@@ -9,6 +9,7 @@ import {
   modelRoutes,
   updateModelRoute,
 } from 'src/lib/modelRoutes';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
@@ -24,6 +25,7 @@ const modelRoutesRouter = new Router<Context>();
 const modelRouteAccess = makeItemRouteAuthorizer({
   findScope: modelRoutes.findScope,
   resourceType: 'model_route',
+  shownBy: readsShowing({ module: 'model-routes', noun: 'ModelRoute' }),
   param: 'route_id',
   label: 'Model route',
 });

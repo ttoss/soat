@@ -364,11 +364,8 @@ describe('Model Routes', () => {
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
-    // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the route's own SRN. The id has
-    // to name a real route for the check to be reached at all — a made-up one
-    // answers `404` before any policy is consulted.
-    test('project-scoped key without GetModelRoute returns 404', async () => {
+    // The key still lists model routes, so the refused read is stated.
+    test('project-scoped key without GetModelRoute returns 403', async () => {
       const created = await createRoute(userToken, {
         name: 'unreadable-route',
         targets: [{ ai_provider_id: providerA, model: 'm' }],
@@ -377,8 +374,8 @@ describe('Model Routes', () => {
       const res = await authenticatedTestClient(key).get(
         `/api/v1/model-routes/${created.body.id}`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
     test('unknown route returns 404', async () => {

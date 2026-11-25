@@ -703,7 +703,7 @@ describe('Agent version claims — live evidence', () => {
         200
       );
       const refused = await authenticatedTestClient(other).get(path);
-      expect(refused.status).toBe(404);
+      expect(refused.status).toBe(403);
       expect(refused.body.data).toBeUndefined();
     });
 

@@ -1,6 +1,7 @@
 import {
   getPermissionCatalog,
   listAllActions,
+  readsShowing,
 } from '../../../../src/lib/permissionCatalog';
 
 describe('permissionCatalog', () => {
@@ -75,6 +76,41 @@ describe('permissionCatalog', () => {
       const actions = listAllActions();
       expect(actions.has('agents:CreateAgent')).toBe(true);
       expect(actions.has('projects:GetProject')).toBe(true);
+    });
+  });
+
+  describe('readsShowing', () => {
+    test('names the Get and List reads of the noun and of what it holds', () => {
+      expect(
+        readsShowing({ module: 'collections', noun: 'Collection' })
+      ).toEqual(
+        [
+          'collections:ListCollections',
+          'collections:GetCollection',
+          'collections:ListCollectionItems',
+          'collections:GetCollectionItem',
+        ].sort()
+      );
+    });
+
+    test('reads a plural that ends in -ies', () => {
+      expect(readsShowing({ module: 'audit', noun: 'AuditEntry' })).toEqual([
+        'audit:GetAuditEntry',
+        'audit:ListAuditEntries',
+      ]);
+    });
+
+    test('keeps a sibling noun of the module out', () => {
+      expect(readsShowing({ module: 'deciders', noun: 'Decision' })).toEqual([
+        'deciders:GetDecision',
+        'deciders:ListDecisions',
+      ]);
+    });
+
+    test('throws when the noun names no read of the module', () => {
+      expect(() => {
+        return readsShowing({ module: 'tools', noun: 'Tol' });
+      }).toThrow(/tools.*Tol/);
     });
   });
 });

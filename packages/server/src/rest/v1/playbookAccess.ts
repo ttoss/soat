@@ -1,5 +1,6 @@
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { findCasePinnedFields, playbookCases } from 'src/lib/playbookCases';
 import { playbooks } from 'src/lib/playbooks';
 
@@ -10,6 +11,7 @@ import { resourcePins } from './resourcePins';
 export const playbookAccess = makeItemRouteAuthorizer({
   findScope: playbooks.findScope,
   resourceType: 'playbook',
+  shownBy: readsShowing({ module: 'playbooks', noun: 'Playbook' }),
   param: 'playbook_id',
   label: 'Playbook',
 });
@@ -17,6 +19,7 @@ export const playbookAccess = makeItemRouteAuthorizer({
 const caseAuthorizer = makeItemRouteAuthorizer({
   findScope: playbookCases.findScope,
   resourceType: 'playbook_case',
+  shownBy: readsShowing({ module: 'playbooks', noun: 'PlaybookCase' }),
   param: 'case_id',
   label: 'Playbook case',
 });
@@ -67,6 +70,7 @@ export const caseReadableBy = (ctx: Context) => {
       ctx,
       scope: await playbookCases.findScope({ id: casePublicId }),
       resourceType: 'playbook_case',
+      shownBy: readsShowing({ module: 'playbooks', noun: 'PlaybookCase' }),
       resourceId: casePublicId,
       action: 'playbooks:GetPlaybookCase',
       onDenied: 'hide',

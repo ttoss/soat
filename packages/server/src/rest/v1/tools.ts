@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { pinCallerActorToolContext } from 'src/lib/generationAttribution';
 import { buildSrn } from 'src/lib/iam';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { toOptionalBoolean } from 'src/lib/resource-inputs/normalizers';
 import { getShareProjection } from 'src/lib/shareableTypes';
 import { listToolActions } from 'src/lib/toolActions';
@@ -47,6 +48,7 @@ export const toolsRouter = new Router<Context>();
 const toolAccess = makeItemRouteAuthorizer({
   findScope: tools.findScope,
   resourceType: 'tool',
+  shownBy: readsShowing({ module: 'tools', noun: 'Tool' }),
   param: 'tool_id',
   label: 'Tool',
 });

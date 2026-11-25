@@ -13,6 +13,7 @@ import {
   validateActorExclusivity,
 } from 'src/lib/actors';
 import { emptyPage } from 'src/lib/pagination';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { assertNoSystemTagKeys, readTagBag, readTagQuery } from 'src/lib/tags';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
@@ -35,6 +36,7 @@ const actorsRouter = new Router<Context>();
 const actorAccess = makeItemRouteAuthorizer({
   findScope: actors.findScope,
   resourceType: 'actor',
+  shownBy: readsShowing({ module: 'actors', noun: 'Actor' }),
   param: 'actor_id',
   label: 'Actor',
 });

@@ -476,7 +476,7 @@ describe('Deciders', () => {
       expect(res.body.questions).toEqual(QUESTIONS);
     });
 
-    test('project-scoped key without GetDecider returns 404', async () => {
+    test('project-scoped key without GetDecider returns 403', async () => {
       const created = await createDecider(userToken);
       const key = await createRestrictedApiKey('deciders:GetDecider');
 
@@ -484,7 +484,7 @@ describe('Deciders', () => {
         `/api/v1/deciders/${created.body.id}`
       );
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
     });
 
     test('unknown decider returns 404', async () => {
@@ -716,7 +716,7 @@ describe('Deciders', () => {
       expect(res.status).toBe(404);
     });
 
-    test('project-scoped key without ListDeciderVersions returns 404', async () => {
+    test('project-scoped key without ListDeciderVersions returns 403', async () => {
       const created = await createDecider(userToken);
       const key = await createRestrictedApiKey('deciders:ListDeciderVersions');
 
@@ -724,7 +724,7 @@ describe('Deciders', () => {
         `/api/v1/deciders/${created.body.id}/versions`
       );
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
     });
 
     test('unauthenticated request returns 401', async () => {

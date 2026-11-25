@@ -6,6 +6,7 @@ import {
   listAuditEntries,
   streamAuditEntriesNdjson,
 } from 'src/lib/auditLog';
+import { readsShowing } from 'src/lib/permissionCatalog';
 
 import { parseDateQuery, parsePagination, requireAuth } from './helpers';
 import { resolveListScope } from './listScope';
@@ -21,6 +22,7 @@ const auditLogRouter = new Router<Context>();
 const auditEntryAccess = makeItemRouteAuthorizer({
   findScope: auditEntries.findScope,
   resourceType: 'audit',
+  shownBy: readsShowing({ module: 'audit', noun: 'AuditEntry' }),
   param: 'entry_id',
   label: 'Audit entry',
 });

@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import {
   createSecret,
   deleteSecret,
@@ -27,6 +28,7 @@ const secretsRouter = new Router<Context>();
 const secretAccess = makeItemRouteAuthorizer({
   findScope: secrets.findScope,
   resourceType: 'secret',
+  shownBy: readsShowing({ module: 'secrets', noun: 'Secret' }),
   param: 'secret_id',
   label: 'Secret',
 });

@@ -67,7 +67,7 @@ describe('Tools', () => {
   // used to exercise the `projectIds === null` (403) branch on routes that
   // don't take a `project_id` param (unlike `noPermToken`, which resolves to
   // an empty project list and 404s instead).
-  const createRestrictedApiKey = async (excludedAction: string) => {
+  const createRestrictedApiKey = async (...excludedActions: string[]) => {
     const allowedActions = [
       'tools:CreateTool',
       'tools:ListTools',
@@ -76,7 +76,7 @@ describe('Tools', () => {
       'tools:DeleteTool',
       'tools:CallTool',
     ].filter((action) => {
-      return action !== excludedAction;
+      return !excludedActions.includes(action);
     });
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
@@ -87,7 +87,7 @@ describe('Tools', () => {
     const keyRes = await authenticatedTestClient(userToken)
       .post('/api/v1/api-keys')
       .send({
-        name: `No ${excludedAction} Key`,
+        name: `No ${excludedActions.join(' ')} Key`,
         project_id: projectId,
         policy_ids: [policyRes.body.id],
       });
@@ -467,13 +467,26 @@ describe('Tools', () => {
       expect(response.status).toBe(404);
     });
 
-    // A read a caller may not perform is indistinguishable from absence, since
-    // the route authorizes against the tool's own SRN rather than the project
-    // wildcard. A `403` here would mean the refusal came from the project
-    // probe, before any tool was resolved — the write routes below keep `403`,
-    // which is the deliberate half of the pair.
-    test('project-scoped API key without GetTool permission returns 404', async () => {
+    test('a key that lists tools but may not get one is refused with 403', async () => {
       const rawKey = await createRestrictedApiKey('tools:GetTool');
+      const response = await authenticatedTestClient(rawKey).get(
+        `/api/v1/tools/${toolId}`
+      );
+      expect(response.status).toBe(403);
+      expect(response.body.error).toMatchObject({
+        code: 'FORBIDDEN',
+        meta: {
+          action: 'tools:GetTool',
+          resource: `srn:${projectId}:tool:${toolId}`,
+        },
+      });
+    });
+
+    test('a key that reads no tool gets 404', async () => {
+      const rawKey = await createRestrictedApiKey(
+        'tools:GetTool',
+        'tools:ListTools'
+      );
       const response = await authenticatedTestClient(rawKey).get(
         `/api/v1/tools/${toolId}`
       );
