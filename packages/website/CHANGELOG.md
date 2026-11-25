@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.131.0](https://github.com/ttoss/soat/compare/v0.130.0...v0.131.0) (2026-11-25)
+
+### Bug Fixes
+
+* **iam:** refuse an empty policy_ids entry on every carrier ([#2182](https://github.com/ttoss/soat/issues/2182)) ([71603b3](https://github.com/ttoss/soat/commit/71603b379786e2f0993814fd56871dbe1e49fd32))
+
+### Features
+
+* **agents:** a tool_output block whose tool returns files sends file parts ([#2180](https://github.com/ttoss/soat/issues/2180)) ([5ef5c5b](https://github.com/ttoss/soat/commit/5ef5c5b24950b528be34f1d37824d48d5b66b540))
+* **evaluations:** pin each model-backed scorer's model on the run ([#2181](https://github.com/ttoss/soat/issues/2181)) ([14b539e](https://github.com/ttoss/soat/commit/14b539e421d1a322853544e2e0324c4ad12fe604))
+
 # [0.130.0](https://github.com/ttoss/soat/compare/v0.129.0...v0.130.0) (2026-11-25)
 
 ### Bug Fixes

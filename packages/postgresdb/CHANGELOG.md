@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.131.0](https://github.com/ttoss/soat/compare/v0.130.0...v0.131.0) (2026-11-25)
+
+### Features
+
+* **evaluations:** pin each model-backed scorer's model on the run ([#2181](https://github.com/ttoss/soat/issues/2181)) ([14b539e](https://github.com/ttoss/soat/commit/14b539e421d1a322853544e2e0324c4ad12fe604))
+
 # [0.130.0](https://github.com/ttoss/soat/compare/v0.129.0...v0.130.0) (2026-11-25)
 
 ### Features

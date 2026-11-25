@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.131.0](https://github.com/ttoss/soat/compare/v0.130.0...v0.131.0) (2026-11-25)
+
+### Bug Fixes
+
+* **formations:** share agent citation_config and prompt_caching with the agents spec ([#2183](https://github.com/ttoss/soat/issues/2183)) ([27071e7](https://github.com/ttoss/soat/commit/27071e71fe3bd87f6f34bdb4ecf0fd93d1f60a19))
+* **iam:** refuse an empty policy_ids entry on every carrier ([#2182](https://github.com/ttoss/soat/issues/2182)) ([71603b3](https://github.com/ttoss/soat/commit/71603b379786e2f0993814fd56871dbe1e49fd32))
+* **iam:** state a refused read the caller already sees in every module ([#2184](https://github.com/ttoss/soat/issues/2184)) ([b5a2bb6](https://github.com/ttoss/soat/commit/b5a2bb63))
+* **sessions:** classify Bedrock context overflow as context_too_long ([#2179](https://github.com/ttoss/soat/issues/2179)) ([6cd130e](https://github.com/ttoss/soat/commit/6cd130ec92fb9701bd280dc2873cc6a32afbef3e))
+
+### Features
+
+* **agents:** a tool_output block whose tool returns files sends file parts ([#2180](https://github.com/ttoss/soat/issues/2180)) ([5ef5c5b](https://github.com/ttoss/soat/commit/5ef5c5b24950b528be34f1d37824d48d5b66b540))
+* **evaluations:** pin each model-backed scorer's model on the run ([#2181](https://github.com/ttoss/soat/issues/2181)) ([14b539e](https://github.com/ttoss/soat/commit/14b539e421d1a322853544e2e0324c4ad12fe604))
+
+### BREAKING CHANGES
+
+* **iam:** a refused by-id read answers 403, not 404, in every module when
+  a Get or List read the caller holds already shows the resource.
+
 # [0.130.0](https://github.com/ttoss/soat/compare/v0.129.0...v0.130.0) (2026-11-25)
 
 ### Bug Fixes
