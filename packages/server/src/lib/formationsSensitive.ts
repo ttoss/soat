@@ -102,9 +102,7 @@ export const isSensitiveAttribute = (args: {
  * The output names a template resolves from a sensitive attribute.
  *
  * Read from the template rather than from the stored outputs, because an output
- * value is a bare string that says nothing about where it came from. Shared by
- * the read-side redaction and the one-off purge of rows written before outputs
- * like these were refused.
+ * value is a bare string that says nothing about where it came from.
  */
 export const sensitiveOutputNames = (args: {
   template: FormationTemplate;
