@@ -39,11 +39,37 @@ describe('output_schema at max_steps', () => {
     return toolCallCompletion([{ id: `call_${callCount}`, name: 'lookup' }]);
   };
 
-  /** A model that calls `lookup` whenever it may, and answers only when it must not. */
+  /** A model that calls `lookup` whenever a tool is offered. */
   const toolHappyModel = (request: RecordedRequest): StubReply => {
-    return request.body.tool_choice === 'none'
-      ? textCompletion(JSON.stringify(ANSWER))
-      : lookupCall();
+    const tools = request.body.tools;
+    return Array.isArray(tools) && tools.length > 0
+      ? lookupCall()
+      : textCompletion(JSON.stringify(ANSWER));
+  };
+
+  /**
+   * A model that ignores `tool_choice: "none"`: it calls `lookup` whenever the
+   * request offers a tool or its history holds a tool call.
+   */
+  const toolChoiceDeafModel = (request: RecordedRequest): StubReply => {
+    const tools = request.body.tools;
+    const messages = request.body.messages;
+    const offersTool = Array.isArray(tools) && tools.length > 0;
+    const historyHoldsToolCall =
+      Array.isArray(messages) &&
+      messages.some((message: { role?: unknown; tool_calls?: unknown }) => {
+        return message.role === 'tool' || message.tool_calls !== undefined;
+      });
+    return offersTool || historyHoldsToolCall
+      ? lookupCall()
+      : textCompletion(JSON.stringify(ANSWER));
+  };
+
+  const offeredToolCounts = () => {
+    return stub.completions.map((request) => {
+      const tools = request.body.tools;
+      return Array.isArray(tools) ? tools.length : 0;
+    });
   };
 
   const createTool = async (body: Record<string, unknown>): Promise<string> => {
@@ -149,12 +175,70 @@ describe('output_schema at max_steps', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('completed');
     expect(res.body.output.object).toEqual(ANSWER);
-    expect(
-      stub.completions.map((request) => {
-        return request.body.tool_choice;
-      })
-    ).toEqual(['auto', 'auto', 'none']);
+    expect(offeredToolCounts()).toEqual([1, 1, 0]);
     expect(await readStopReason(res.body.id)).toBe('max_steps');
+  });
+
+  test('the last allowed step offers no tool and no tool call in its history', async () => {
+    const agentId = await createAgent({
+      name: 'Schema Budget Deaf Agent',
+      max_steps: 2,
+      tool_bindings: [{ tool_id: lookupToolId }],
+    });
+    stub.reply(toolChoiceDeafModel);
+
+    const res = await generate(agentId);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('completed');
+    expect(res.body.output.object).toEqual(ANSWER);
+    expect(offeredToolCounts()).toEqual([1, 0]);
+    expect(JSON.stringify(stub.completions[1].body.messages)).toContain(
+      'something'
+    );
+    expect(await readStopReason(res.body.id)).toBe('max_steps');
+  });
+
+  test('a resumed last step offers no tool and no tool call in its history', async () => {
+    const agentId = await createAgent({
+      name: 'Schema Budget Deaf Resumed Agent',
+      max_steps: 2,
+      step_rules: [
+        { step: 1, tool_choice: { type: 'tool', tool_name: 'ask_user' } },
+      ],
+      tool_bindings: [{ tool_id: lookupToolId }, { tool_id: askToolId }],
+    });
+    stub.reply(
+      toolCallCompletion([{ id: 'call_ask_deaf', name: 'ask_user' }]),
+      toolChoiceDeafModel
+    );
+
+    const paused = await generate(agentId);
+    expect(paused.status).toBe(200);
+    expect(paused.body.status).toBe('requires_action');
+
+    stub.completions.length = 0;
+    const resumed = await asAdmin()
+      .post(`/api/v1/agents/${agentId}/generate/${paused.body.id}/tool-outputs`)
+      .send({
+        tool_outputs: [
+          { tool_call_id: 'call_ask_deaf', output: { answer: 'yes' } },
+        ],
+      });
+
+    expect(resumed.status).toBe(200);
+    expect(resumed.body.status).toBe('completed');
+    expect(resumed.body.output.object).toEqual(ANSWER);
+    expect(offeredToolCounts()).toEqual([0]);
+    const stopReason = await pollUntil({
+      read: () => {
+        return readStopReason(paused.body.id);
+      },
+      done: (value) => {
+        return value !== null;
+      },
+    });
+    expect(stopReason).toBe('max_steps');
   });
 
   test('a last step that still yields no object fails with MAX_STEPS_REACHED', async () => {
@@ -261,11 +345,7 @@ describe('output_schema at max_steps', () => {
     expect(resumed.status).toBe(200);
     expect(resumed.body.status).toBe('completed');
     expect(resumed.body.output.object).toEqual(ANSWER);
-    expect(
-      stub.completions.map((request) => {
-        return request.body.tool_choice;
-      })
-    ).toEqual(['auto', 'none']);
+    expect(offeredToolCounts()).toEqual([2, 0]);
     // A resumed turn settles its generation after it responds.
     const stopReason = await pollUntil({
       read: () => {

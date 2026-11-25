@@ -45,6 +45,7 @@ describe('tool results that return files', () => {
     name: string;
     toolId: string;
     modalities?: string[];
+    extra?: Record<string, unknown>;
   }): Promise<string> => {
     const model = `${args.name.replace(/\s+/g, '-')}-model`;
     const provider = await authenticatedTestClient(adminToken)
@@ -68,6 +69,7 @@ describe('tool results that return files', () => {
         ai_provider_id: provider.body.id,
         tool_bindings: [{ tool_id: args.toolId }],
         max_steps: 3,
+        ...args.extra,
       });
     expect(res.status).toBe(201);
     return res.body.id;
@@ -245,6 +247,43 @@ describe('tool results that return files', () => {
       expect(sent).toContain(imageFileId);
       expect(sent).not.toContain(IMAGE_BASE64);
     });
+  });
+
+  test('an output_schema answer step sends the file in a user message, with no tool', async () => {
+    const agentId = await createAgent({
+      name: 'schema reader',
+      toolId: scanToolId,
+      modalities: ['text', 'image'],
+      extra: {
+        max_steps: 2,
+        output_schema: {
+          type: 'object',
+          required: ['summary'],
+          properties: { summary: { type: 'string' } },
+        },
+      },
+    });
+    scanReply = [
+      { type: 'text', text: 'the caption' },
+      { type: 'file', file_id: imageFileId },
+    ];
+    stub.reply(
+      toolCallCompletion([{ id: 'call_scan', name: 'scan' }]),
+      textCompletion(JSON.stringify({ summary: 'A scan.' }))
+    );
+    stub.completions.length = 0;
+
+    const res = await generate({ token: adminToken, agentId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.output.object).toEqual({ summary: 'A scan.' });
+    const answer = stub.completions[1].body;
+    expect(answer.tools).toBeUndefined();
+    expect(toolMessage(stub.completions[1])).toBe('[]');
+    const sent = JSON.stringify(answer.messages);
+    expect(sent).toContain('the caption');
+    expect(sent).toContain(IMAGE_BASE64);
+    expect(sent).not.toContain('soat-file:');
   });
 
   describe('a client tool output', () => {

@@ -11,6 +11,7 @@ import {
   missingModalities,
   registerInputGate,
 } from './inputModalityGate';
+import { toToolFreeCall } from './toolFreeCall';
 import { toolOutputParts } from './toolResultFiles';
 
 const log = createDebug('soat:model-input');
@@ -173,7 +174,8 @@ const withFileReferenceUrls = (urls: SupportedUrls): SupportedUrls => {
 /**
  * Every model a provider row serves crosses this boundary
  * (`modelPricingGate.ts`): a call carrying input the model declares it cannot
- * read is refused before it leaves, and a file reference becomes its bytes.
+ * read is refused before it leaves, a file reference becomes its bytes, and a
+ * `tool_choice: "none"` call names no tool (`toolFreeCall.ts`).
  */
 export const withInputBoundary = (args: {
   model: LanguageModel;
@@ -188,10 +190,14 @@ export const withInputBoundary = (args: {
       return withFileReferenceUrls(await model.supportedUrls);
     },
     transformParams: async ({ params }) => {
-      const prompt = await resolveToolResultFiles({
-        prompt: params.prompt,
-        projectId: args.projectId,
+      const sent = toToolFreeCall({
+        ...params,
+        prompt: await resolveToolResultFiles({
+          prompt: params.prompt,
+          projectId: args.projectId,
+        }),
       });
+      const { prompt } = sent;
       const missing = missingModalities({
         accepted: args.accepted,
         required: readInputModalities(prompt),
@@ -200,7 +206,7 @@ export const withInputBoundary = (args: {
         throw inputModalityRefusal({ model: args.modelName, missing });
       }
       return {
-        ...params,
+        ...sent,
         prompt: await resolveFileReferences({
           prompt,
           projectId: args.projectId,

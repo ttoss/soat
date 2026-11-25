@@ -219,6 +219,9 @@ With a model route the model resolves through the route's ordered provider+model
 | `"auto"` (default)                      | The model decides whether to call a tool or produce text |
 | `"required"`                            | The model must call a tool at every step                 |
 | `{ type: "tool", tool_name: "<name>" }` | The model must call the specified tool                   |
+| `"none"`                                | The step offers no tool; it answers in text              |
+
+**A `"none"` step names no tool at all.** It is sent with no tool definitions, and the turn's earlier tool calls and results reach it as text (a file a tool returned as a file part), so no model can call a tool on it, whatever its provider makes of `"none"`. Under [`prompt_caching`](#prompt-caching) such a step does not reuse the cached prefix.
 
 `"required"` plus a tool without `execute` (a "done" tool) forces tool use every step; the loop stops when that tool is called.
 
@@ -730,7 +733,7 @@ A completed non-streaming generation returns the parsed value as `output.object`
 
 #### Answering at `max_steps`
 
-The last step `max_steps` allows runs with `tool_choice: "none"`, whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer, and an answer the model gives anyway on the last step is refused), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `400 VALIDATION_FAILED` at create/update.
+The last step `max_steps` allows runs with [`tool_choice: "none"`](#tool-choice), whatever `step_rules` say, so a turn that spent its budget on tool calls still returns the object from what it gathered, with `stop_reason: "max_steps"`. A resumed turn counts the steps it spent before the pause. When that step yields no object, or the agent's `tool_choice` forces a tool (no step can answer, and an answer the model gives anyway on the last step is refused), the generation is `failed` with error code `MAX_STEPS_REACHED` (`422`), `meta.max_steps` naming the budget. `stream: true` with `output_schema` is `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`; a non-object schema is `400 VALIDATION_FAILED` at create/update.
 
 #### The schema is enforced, not advisory
 
