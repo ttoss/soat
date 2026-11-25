@@ -705,14 +705,14 @@ describe('Files', () => {
       expect(response.status).toBe(403);
     });
 
-    test('returns 400 for a well-formed but non-existent project_id', async () => {
+    test('returns 403 for a project that does not exist, as for one the caller cannot reach', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/files/presigned-url')
         .send({ project_id: 'proj_nonexistent12345', filename: 'x.txt' });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toBe('Invalid project ID');
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('FORBIDDEN');
+      expect(response.body.error.meta.action).toBe('files:UploadFile');
     });
   });
 
@@ -893,9 +893,9 @@ describe('Files', () => {
     });
 
     test('returns 403 when project does not exist', async () => {
-      // Project resolution now flows through resolveProjectIds, which
-      // returns 403 for a project the caller cannot prove access to —
-      // including one that does not exist — rather than leaking its absence.
+      // Project resolution answers 403 for a project the caller cannot prove
+      // access to, including one that does not exist, so its absence never
+      // leaks.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files')
         .send({
