@@ -99,21 +99,7 @@ const traceOfNewGeneration = async (helperArgs: {
 };
 
 const commitGenerationWithTrace = async (helperArgs: {
-  args: GenerationAttribution &
-    StartedWork & {
-      publicId: string;
-      projectId: number;
-      traceId: string;
-      parentTraceId?: string | null;
-      rootTraceId?: string | null;
-      rootGenerationId?: string | null;
-      toolSurface?: Record<string, unknown> | null;
-      inputModalities: string[];
-      retrieval?: KnowledgeRetrieval;
-      idempotency?: GenerationIdempotency;
-      provenance?: ProvenanceCounts;
-      parentCall?: ParentToolCall | null;
-    };
+  args: NewGenerationRecord & { inputModalities: string[] };
   agentDbId: number;
   initiatorDbId: number | null;
   conversation: Awaited<ReturnType<typeof conversationColumns>>;
@@ -165,6 +151,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         inputModalities: args.inputModalities,
         // Pointers, not text — see the column.
         retrieval: args.retrieval ?? null,
+        citations: args.citesSources ? [] : null,
         // Counts, not content — see the columns.
         ...provenanceColumns(args.provenance ?? NO_PROVENANCE),
         idempotencyKey: args.idempotency?.key ?? null,
@@ -213,6 +200,8 @@ type NewGenerationRecord = GenerationAttribution &
     // Measured, never caller-supplied. Not content — see the column.
     toolSurface?: Record<string, unknown> | null;
     retrieval?: KnowledgeRetrieval;
+    // Whether the turn cites: `citations` starts empty, else null.
+    citesSources?: boolean;
     // A unique violation on it is the caller's retry losing the race.
     idempotency?: GenerationIdempotency;
     // What the turn's context already holds when it starts: its chain's

@@ -58,6 +58,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `idempotency_key`                    | string \| null | Key the generation was started under, unique within the project (see [Running a generation at most once](./agents.md#running-a-generation-at-most-once))                        |
 | `routing`                            | object \| null | What the [model route](./model-routes.md) did for this generation                                                                                                               |
 | `retrieval`                          | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served))                       |
+| `citations`                          | array \| null  | What the answer cited, verified, as pointers; `null` when the turn did not cite (see [What the answer cited](#what-the-answer-cited))                                           |
 | `extraction`                         | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))                                |
 | `content_redacted_at`                | string \| null | When the generation's content was purged; `null` while content is intact                                                                                                        |
 | `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system`                                                                                  |
@@ -174,11 +175,11 @@ A turn that replays a conversation (a session or conversation turn) and that the
 }
 ```
 
-| `meta.cause` | Provider status | What to do |
-| --- | --- | --- |
-| `history_refused` | `400` not naming the context window | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
-| `context_too_long` | `413`, or a `4xx` saying the prompt exceeds the model's context window | Lower the session's `max_context_messages`, fork, or start a new session |
-| `request_refused` | any other `4xx` | Read the failed generation |
+| `meta.cause`       | Provider status                                                        | What to do                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `history_refused`  | `400` not naming the context window                                    | [Fork the session](/docs/api/sessions/fork-session) before the message the provider objects to, or start a new session |
+| `context_too_long` | `413`, or a `4xx` saying the prompt exceeds the model's context window | Lower the session's `max_context_messages`, fork, or start a new session                                               |
+| `request_refused`  | any other `4xx`                                                        | Read the failed generation                                                                                             |
 
 `meta.replayed_window` names the first and last conversation `position` the turn sent. The cause comes from the provider's status and error text: neither reaches the response or the record, so a grantee of a shared provider learns the cause and nothing of the publisher's vendor. A continuation of a paused turn ([`POST /sessions/:session_id/tool-outputs`](/docs/api/sessions/submit-session-tool-outputs)) is refused the same way and names the window the paused turn replayed, also after a restart.
 
@@ -253,6 +254,29 @@ Together with `agent_version`, it answers "which playbook version produced this 
 `null` means no retrieval ran — no `knowledge_config`, or neither a query nor a filter to search with. `[]` means it ran and matched nothing.
 
 It is written by the server when the turn starts and cannot be set by a caller. Being pointers and no text, it is not content: it survives a [purge](#content-purge) and is written even on a zero-retention agent.
+
+### What the answer cited
+
+A turn with [`citation_config`](./agents.md#citations) on records what its answer cited, verified: each entry of `output.citations` without its `quoted_text`.
+
+```json
+"citations": [
+  {
+    "origin": "retrieval",
+    "document_id": "doc_V1StGXR8Z5jdHi6B",
+    "document_version": 3,
+    "chunk_id": "dchunk_V1StGXR8Z5jdHi6B",
+    "file_id": null,
+    "page": 12,
+    "page_end": 12,
+    "source_span": { "start": 2, "end": 26 },
+    "answer_span": { "start": 10, "end": 31 },
+    "verification": "runtime"
+  }
+]
+```
+
+`null` means the turn did not ask for citations; `[]` means it is still running, or its answer cited nothing that verified. `source_span` locates the quote in the chunk while `chunk_id` resolves. Being pointers, it survives a [purge](#content-purge).
 
 ### Vendor options
 
@@ -428,7 +452,7 @@ Being three integers and no text, `tool_surface` is not content: it survives a [
 
 [`DELETE /generations/{generation_id}/content`](/docs/api/generations/purge-generation-content) clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
 
-The usage and audit skeleton is preserved (the billing ledger outlives the erasure): ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`, `retrieval`). A purged generation reads back as that skeleton, not a 404.
+The usage and audit skeleton is preserved (the billing ledger outlives the erasure): ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`, `retrieval`, `citations`). A purged generation reads back as that skeleton, not a 404.
 
 The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
 

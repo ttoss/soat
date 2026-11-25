@@ -36,6 +36,7 @@ import {
   resolveStopWhen,
   toTurnFailure,
 } from './agentStopConditions';
+import { resolveTurnCitations } from './citations';
 import {
   fireCompletionSideEffects,
   meterContinuationSegment,
@@ -745,6 +746,10 @@ const completeContinuation = async (args: {
     });
   }
 
+  const cited = await resolveTurnCitations({
+    generationId: args.generationId,
+    text: args.result.text,
+  });
   const completedResult: GenerationResult = {
     id: args.generationId,
     traceId: args.pending.traceId,
@@ -761,10 +766,11 @@ const completeContinuation = async (args: {
         model: args.pending.resolvedModel,
         reportedModelId: args.result.response.modelId,
       }),
-      content: args.result.text,
+      content: cited.content,
       finishReason: args.result.finishReason,
       ...servedTurnMessages(args.turnMessages),
       ...(args.pending.agentConfig.outputSchema ? { object } : {}),
+      ...(cited.turn ? { citations: cited.turn } : {}),
     },
   };
 
@@ -775,6 +781,7 @@ const completeContinuation = async (args: {
     generationId: args.generationId,
     pending: args.pending,
     result: args.result,
+    cited,
   });
 
   return completedResult;

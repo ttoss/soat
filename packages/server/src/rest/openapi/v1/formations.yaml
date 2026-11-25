@@ -1063,6 +1063,18 @@ components:
             enabled:
               type: boolean
               description: Whether the breakpoint is marked. Defaults to false.
+        citation_config:
+          type: object
+          nullable: true
+          description: >-
+            Structured citations for this agent's turns. `{"enabled": true}`
+            asks the model to cite the injected knowledge it uses; each
+            citation is verified before it is returned. Null or omitted is off.
+          additionalProperties: false
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the turn asks for and returns citations. Defaults to false.
 
     ActorResourceProperties:
       description: >-

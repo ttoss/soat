@@ -151,6 +151,8 @@ const buildGuardResult = async (args: {
         status: 'completed',
         stopReason: args.kind,
         assistantContent: message,
+        // The runtime's own message, not the model's: nothing to cite.
+        citations: null,
       },
       effects: () => {
         return [saveGuardTrace()];

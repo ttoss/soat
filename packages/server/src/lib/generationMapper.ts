@@ -1,4 +1,5 @@
 import type { db } from '../db';
+import type { CitationPointer } from './citations';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import type { UsageTotals } from './usageTotals';
 import { parseWorkAuthority } from './workAuthority';
@@ -47,6 +48,7 @@ export type PersistedGeneration = {
   usage?: UsageTotals | null;
   tool_surface: Record<string, unknown> | null;
   retrieval: KnowledgeRetrieval;
+  citations: CitationPointer[] | null;
   idempotency_key: string | null;
   metadata?: Record<string, unknown>;
   content_redacted_at: Date | null;
@@ -148,6 +150,8 @@ export const mapGeneration = (
     // Written only by `knowledgeRetrievalRecord.ts`'s mapper, so the stored
     // shape is the wire shape.
     retrieval: gen.retrieval as KnowledgeRetrieval,
+    // Written only by `toCitationPointers`, so the stored shape is the wire shape.
+    citations: gen.citations as CitationPointer[] | null,
     idempotency_key: gen.idempotencyKey,
     // Caller-owned bag, verbatim. `pendingState` has no entry here at all.
     metadata: gen.metadata ?? undefined,

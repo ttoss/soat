@@ -21,6 +21,8 @@ import {
   type TurnToolChoice,
 } from './agentStepRules';
 import { resolveAnswerStep, resolveStopWhen } from './agentStopConditions';
+import { citationMarkupStripStream } from './citationMarkup';
+import { resolveTurnCitations, type TurnCitations } from './citations';
 import {
   recordGenerationFailure,
   recordSegmentUsage,
@@ -97,6 +99,8 @@ const fireStreamEndSideEffects = (args: {
   steps: unknown[];
   /** The text of the step the run ended on, never an earlier one's. */
   finalText: string;
+  /** {@link finalText} after `resolveTurnCitations`. */
+  cited: { content: string; turn: TurnCitations | null };
   finishReason: string;
   usage?: LanguageModelUsage;
   /** The model id the provider answered with. */
@@ -161,7 +165,8 @@ const fireStreamEndSideEffects = (args: {
         stepCount: args.steps.length,
         budget: args.typedAgent,
       }),
-      assistantContent: args.finalText,
+      assistantContent: args.cited.content,
+      citations: args.cited.turn,
     },
     effects: () => {
       return [usageWrite];
@@ -205,7 +210,8 @@ const recordStreamFailure = async (args: {
  * stream itself ended on — paused on a client tool, or resumed past a gated
  * one — which only its record can tell the caller.
  */
-export type StreamedGenerationPart = string | { generation: GenerationResult };
+export type StreamedGenerationPart =
+  string | { generation: GenerationResult } | { citations: TurnCitations };
 
 /**
  * Wraps `streamText`'s stream so a captured failure reaches the caller.
@@ -220,6 +226,7 @@ const withTerminalError = (args: {
   source: ReadableStream<string>;
   readStreamError: () => unknown;
   readTerminalGeneration: () => GenerationResult | undefined;
+  readCitations: () => TurnCitations | null;
   recordFailure: (error: unknown) => Promise<unknown>;
 }): ReadableStream<StreamedGenerationPart> => {
   const reader = args.source.getReader();
@@ -234,6 +241,8 @@ const withTerminalError = (args: {
       if (streamError === undefined) {
         const generation = args.readTerminalGeneration();
         if (generation) controller.enqueue({ generation });
+        const citations = args.readCitations();
+        if (citations) controller.enqueue({ citations });
         controller.close();
         return;
       }
@@ -261,6 +270,8 @@ type StreamRunArgs = {
   replayed: ReplayedWindow | null;
   /** The request's own cancellation, beside the segment's. */
   abortSignal?: AbortSignal;
+  /** Strips citation markup from the text and verifies it at the end. */
+  citesSources: boolean;
 };
 
 /** What `streamText` hands `onEnd` that the turn's records are built from. */
@@ -304,6 +315,7 @@ const settleStreamedClientCalls = (args: {
 const fireStreamEnd = (args: {
   run: StreamRunArgs;
   end: StreamEnd;
+  cited: { content: string; turn: TurnCitations | null };
   failed: boolean;
 }): void => {
   const { run, end } = args;
@@ -318,6 +330,7 @@ const fireStreamEnd = (args: {
     resolvedTools: run.resolvedTools,
     steps: end.steps,
     finalText: end.text,
+    cited: args.cited,
     finishReason: end.finishReason,
     usage: end.usage,
     reportedModelId: end.response.modelId,
@@ -332,6 +345,47 @@ const carryStreamEndSpend = (args: { error: unknown; end: StreamEnd }) => {
     usage: args.end.usage,
     reportedModelId: args.end.response.modelId,
   });
+};
+
+/** What the stream learns while it runs, read once it ends. */
+type StreamState = {
+  streamError?: unknown;
+  terminalGeneration?: GenerationResult;
+  citations: TurnCitations | null;
+};
+
+/**
+ * Settles a stream that ended: a pause on client calls, else the completed (or
+ * failed) turn. Awaited by `streamText` before the text stream closes, so the
+ * record exists before the caller reads the frame announcing it.
+ */
+const endStream = async (args: {
+  run: StreamRunArgs;
+  state: StreamState;
+  end: StreamEnd;
+}): Promise<void> => {
+  const { run, state, end } = args;
+  if (state.streamError === undefined) {
+    try {
+      state.terminalGeneration =
+        (await settleStreamedClientCalls({ run, end })) ?? undefined;
+    } catch (error) {
+      // The settle owns this turn's records; `recordFailure` writes the
+      // terminal status, and meters the calls the turn already made.
+      state.streamError = carryStreamEndSpend({ error, end });
+      return;
+    }
+    if (state.terminalGeneration) return;
+  }
+  const failed = state.streamError !== undefined;
+  const cited = failed
+    ? { content: end.text, turn: null }
+    : await resolveTurnCitations({
+        generationId: run.generationId,
+        text: end.text,
+      });
+  state.citations = cited.turn;
+  fireStreamEnd({ run, end, cited, failed });
 };
 
 export const runStreamGeneration = async (
@@ -351,8 +405,7 @@ export const runStreamGeneration = async (
   log('runStreamGeneration: agentId=%s toolCount=%d', args.agentId, toolCount);
   // Captured, not acted on: `onError` fires mid-read, and the failure must not
   // overtake chunks already on their way to the caller.
-  let streamError: unknown;
-  let terminalGeneration: GenerationResult | undefined;
+  const state: StreamState = { citations: null };
   const result = streamText({
     model: args.model,
     // Routed models own every attempt themselves (see `routedMaxRetries`).
@@ -370,41 +423,35 @@ export const runStreamGeneration = async (
       signal: args.abortSignal,
     }),
     onError: ({ error }) => {
-      streamError = error;
+      state.streamError = error;
     },
-    // Awaited by `streamText` before the text stream closes, so the pause is
-    // recorded before the caller reads the frame announcing it.
-    onEnd: async (event) => {
-      const end: StreamEnd = {
-        steps: event.steps as unknown[],
-        text: event.text,
-        finishReason: event.finishReason,
-        usage: event.usage,
-        response: event.response,
-        responseMessages: event.responseMessages,
-      };
-      if (streamError === undefined) {
-        try {
-          terminalGeneration =
-            (await settleStreamedClientCalls({ run: args, end })) ?? undefined;
-        } catch (error) {
-          // The settle owns this turn's records; `recordFailure` writes the
-          // terminal status, and meters the calls the turn already made.
-          streamError = carryStreamEndSpend({ error, end });
-          return;
-        }
-        if (terminalGeneration) return;
-      }
-      fireStreamEnd({ run: args, end, failed: streamError !== undefined });
+    onEnd: (event) => {
+      return endStream({
+        run: args,
+        state,
+        end: {
+          steps: event.steps as unknown[],
+          text: event.text,
+          finishReason: event.finishReason,
+          usage: event.usage,
+          response: event.response,
+          responseMessages: event.responseMessages,
+        },
+      });
     },
   });
   return withTerminalError({
-    source: result.textStream,
+    source: args.citesSources
+      ? result.textStream.pipeThrough(citationMarkupStripStream())
+      : result.textStream,
     readStreamError: () => {
-      return streamError;
+      return state.streamError;
     },
     readTerminalGeneration: () => {
-      return terminalGeneration;
+      return state.terminalGeneration;
+    },
+    readCitations: () => {
+      return state.citations;
     },
     recordFailure: (error) => {
       return recordStreamFailure({

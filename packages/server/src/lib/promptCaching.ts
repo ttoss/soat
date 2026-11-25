@@ -25,10 +25,13 @@ import type {
   SystemModelMessage,
 } from 'ai';
 
-import { DomainError } from '../errors';
-import { isPlainObject } from './plainObject';
+import {
+  assertValidEnabledConfig,
+  type EnabledConfig,
+  readEnabledConfig,
+} from './enabledConfig';
 
-export type PromptCachingConfig = { enabled: boolean };
+export type PromptCachingConfig = EnabledConfig;
 
 /**
  * The breakpoint, in every spelling the providers that honour one read.
@@ -47,52 +50,15 @@ const CACHE_BREAKPOINT: SystemModelMessage['providerOptions'] = {
   bedrock: { cachePoint: { type: 'default' } },
 };
 
-/** The `prompt_caching` key set a write may set. */
-const PROMPT_CACHING_KEYS = new Set(['enabled']);
-
-/**
- * Reads an agent's stored `prompt_caching`. Absent, malformed or `enabled`
- * anything but `true` reads as off: the column is untyped JSON, and the
- * failure mode of guessing "on" is a bill, not a broken turn.
- */
+/** Reads an agent's stored `prompt_caching` (`enabledConfig.ts`). */
 export const readPromptCachingConfig = (
   value: unknown
 ): PromptCachingConfig => {
-  if (!isPlainObject(value)) return { enabled: false };
-  return { enabled: value.enabled === true };
+  return readEnabledConfig(value);
 };
 
-/**
- * Rejects a `prompt_caching` a write cannot mean. Unknown keys are refused
- * rather than ignored so a typo surfaces as a `400` instead of an agent that
- * reads as caching-enabled to its author and never caches.
- */
 export const assertValidPromptCaching = (value: unknown): void => {
-  if (value === null || value === undefined) return;
-
-  if (!isPlainObject(value)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      "'prompt_caching' must be an object."
-    );
-  }
-
-  const unknown = Object.keys(value).filter((key) => {
-    return !PROMPT_CACHING_KEYS.has(key);
-  });
-  if (unknown.length > 0) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `'prompt_caching' has no such field(s): ${unknown.join(', ')}.`
-    );
-  }
-
-  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      "'prompt_caching.enabled' must be a boolean."
-    );
-  }
+  assertValidEnabledConfig({ field: 'prompt_caching', value });
 };
 
 /**

@@ -70,6 +70,7 @@ const dispatchGeneration = (args: {
     provenance: args.ctx.provenance,
     replayed: args.ctx.replayed,
     abortSignal: args.abortSignal,
+    citesSources: args.ctx.citesSources,
   };
   if (!args.stream) return runNonStreamGeneration(turn);
   assertStreamingSupportsOutputSchema(args.ctx.typedAgent.outputSchema);
@@ -92,6 +93,7 @@ type ResolveContextArgs = {
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
   knowledgeConfig?: object;
+  citationConfig?: object;
   actionId?: string;
   triggerId?: string;
   orchestrationRunId?: string;
@@ -128,6 +130,7 @@ const resolveContextAndRecord = async (
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
     knowledgeConfig: args.knowledgeConfig,
+    citationConfig: args.citationConfig,
     guardrailContext: args.guardrailContext,
     // Carries the end user into config resolution: a staged rollout keys its
     // split on the actor behind this session, so the same end user keeps the
@@ -184,6 +187,7 @@ const resolveContextAndRecord = async (
     inputMessages: ctx.inputMessages,
     toolSurface: ctx.toolSurface,
     retrieval: ctx.retrieval,
+    citesSources: ctx.citesSources,
     provenance: provenanceForNewRow(ctx.provenance),
     idempotency: args.idempotency,
     parentCall: parentCallOf(args.authUser),
@@ -219,6 +223,7 @@ export type CreateGenerationArgs = {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   knowledgeConfig?: object;
+  citationConfig?: object;
   actionId?: string;
   triggerId?: string;
   orchestrationRunId?: string;
@@ -346,6 +351,7 @@ const prepareGeneration = async (
     initiatorGenerationId: args.initiatorGenerationId,
     remainingDepth: maxDepth,
     knowledgeConfig: args.knowledgeConfig,
+    citationConfig: args.citationConfig,
     actionId: args.actionId,
     triggerId: args.triggerId,
     orchestrationRunId: args.orchestrationRunId,
