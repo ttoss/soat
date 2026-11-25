@@ -256,6 +256,7 @@ export const withInputBoundary = (args: {
 const INPUT_REFUSAL_CODES: ReadonlySet<string> = new Set([
   'INPUT_MODALITY_UNSUPPORTED',
   'INPUT_LIMIT_EXCEEDED',
+  'MEDIA_PARSE_FAILED',
   'PDF_PARSE_FAILED',
   'RESOURCE_NOT_FOUND',
 ]);

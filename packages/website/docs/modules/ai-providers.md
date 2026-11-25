@@ -329,19 +329,22 @@ An alias may map to `{ ai_provider_id, model }`: another provider of the same pr
 | Limit | Holds |
 | --- | --- |
 | `max_bytes` | Bytes per file part, by modality: `image`, `file`, `audio`, `video` |
+| `max_duration_seconds` | Seconds per file part, by modality: `audio`, `video` |
 | `max_pages` | Pages per PDF file part |
 | `max_parts` | File parts per request, across every message and tool result |
 
 ```json
 {
   "model_input_limits": {
-    "claude-sonnet": { "max_bytes": { "image": 5242880 }, "max_pages": 100 }
+    "claude-sonnet": { "max_bytes": { "image": 5242880 }, "max_pages": 100 },
+    "whisper-large": { "max_duration_seconds": { "audio": 600 } }
   }
 }
 ```
 
 - A request over a limit is refused with `400 INPUT_LIMIT_EXCEEDED` before the provider is called. `meta` names the `model`, the `limit`, the part's `modality`, the declared `max`, the request's `value`, and the `part` (`message_index`, `part_index`, `content_index` inside a tool result, `file_id` for a stored file).
 - A limit a model omits is not checked, nor is a part sent by URL, whose bytes the runtime never holds.
+- `max_duration_seconds` is read from the part's container headers: WAV, MP3, AAC (ADTS), FLAC, Ogg Opus or Vorbis, MP4/MOV/M4A and Matroska/WebM. A part whose duration cannot be read is refused with `400 MEDIA_PARSE_FAILED` before the provider is called; `meta` names the `model`, the `limit`, the `modality` and the `part`.
 - The model listing serves each model's declaration as `input_limits`, so a catalog reads the limits the gate enforces.
 - An unknown limit or modality, or a value that is not a positive integer, is `400 VALIDATION_FAILED` on the write. `PATCH` replaces the whole map; `null` clears it.
 - A [model route](./model-routes.md) target over its limit refuses the call; targets are not filtered by limits.

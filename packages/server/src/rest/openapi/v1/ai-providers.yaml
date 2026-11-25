@@ -960,6 +960,20 @@ components:
             video:
               type: integer
               minimum: 1
+        max_duration_seconds:
+          type: object
+          description: >
+            Seconds per audio or video file part, read from the container's
+            headers; a part whose duration cannot be read is refused with
+            `MEDIA_PARSE_FAILED`
+          additionalProperties: false
+          properties:
+            audio:
+              type: integer
+              minimum: 1
+            video:
+              type: integer
+              minimum: 1
         max_pages:
           type: integer
           minimum: 1
@@ -972,6 +986,8 @@ components:
         max_bytes:
           image: 5242880
           file: 33554432
+        max_duration_seconds:
+          audio: 600
         max_pages: 100
         max_parts: 20
     ModelInputLimits:

@@ -1133,7 +1133,12 @@ export const ERROR_CODES = {
   INPUT_LIMIT_EXCEEDED: {
     httpStatus: 400,
     description:
-      "The model declares a limit on its input, in its AI provider's `model_input_limits`, and the request exceeds it: a file part over `max_bytes` for its modality, a PDF over `max_pages`, or more file parts than `max_parts`. Refused before the provider is called. `meta.model` names the model, `meta.limit` the limit, `meta.modality` the part's modality, `meta.max` the declared limit, `meta.value` what the request carries and `meta.part` the part (`message_index`, `part_index`, `content_index` inside a tool result, `file_id` when it names a stored file).",
+      "The model declares a limit on its input, in its AI provider's `model_input_limits`, and the request exceeds it: a file part over `max_bytes` for its modality, an audio or video part over `max_duration_seconds`, a PDF over `max_pages`, or more file parts than `max_parts`. Refused before the provider is called. `meta.model` names the model, `meta.limit` the limit, `meta.modality` the part's modality, `meta.max` the declared limit, `meta.value` what the request carries and `meta.part` the part (`message_index`, `part_index`, `content_index` inside a tool result, `file_id` when it names a stored file).",
+  },
+  MEDIA_PARSE_FAILED: {
+    httpStatus: 400,
+    description:
+      "The model declares `max_duration_seconds` for an audio or video part, in its AI provider's `model_input_limits`, and the part's duration cannot be read from its bytes (WAV, MP3, AAC (ADTS), FLAC, Ogg Opus or Vorbis, MP4/MOV/M4A, Matroska/WebM). Refused before the provider is called. `meta` names the `model`, the `limit`, the part's `modality` and the `part`.",
   },
   MODEL_NOT_OFFERED: {
     httpStatus: 400,

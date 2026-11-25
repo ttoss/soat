@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import * as pdfModule from 'src/lib/pdf';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { wavBytes } from '../../fixtures/media';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -14,6 +15,9 @@ import { authenticatedTestClient } from '../../testClient';
 
 const IMAGE_BYTES = Buffer.alloc(64, 1);
 const PDF_BYTES = Buffer.from('%PDF-1.4 pages measured by countPdfPages');
+const AUDIO_SECONDS = 3;
+const AUDIO_BYTES = wavBytes({ seconds: AUDIO_SECONDS });
+const UNREADABLE_AUDIO_BYTES = Buffer.from('no container header here');
 
 type LlmStub = {
   baseUrl: string;
@@ -70,6 +74,8 @@ describe('model input limits', () => {
   let projectId: string;
   let imageFileId: string;
   let pdfFileId: string;
+  let audioFileId: string;
+  let unreadableAudioFileId: string;
   let stub: LlmStub;
 
   const upload = async (args: {
@@ -165,6 +171,16 @@ describe('model input limits', () => {
       filename: 'report.pdf',
       contentType: 'application/pdf',
     });
+    audioFileId = await upload({
+      bytes: AUDIO_BYTES,
+      filename: 'call.wav',
+      contentType: 'audio/wav',
+    });
+    unreadableAudioFileId = await upload({
+      bytes: UNREADABLE_AUDIO_BYTES,
+      filename: 'call.aiff',
+      contentType: 'audio/aiff',
+    });
   });
 
   afterAll(async () => {
@@ -178,7 +194,11 @@ describe('model input limits', () => {
   describe('POST /api/v1/ai-providers model_input_limits', () => {
     test('stores the declaration and returns it', async () => {
       const limits = {
-        reader: { max_bytes: { image: 1024, file: 2048 }, max_pages: 10 },
+        reader: {
+          max_bytes: { image: 1024, file: 2048 },
+          max_duration_seconds: { audio: 600, video: 60 },
+          max_pages: 10,
+        },
       };
 
       const res = await createProvider({
@@ -201,6 +221,14 @@ describe('model input limits', () => {
     test.each([
       ['an unknown limit', { reader: { max_tokens: 10 } }],
       ['an unknown modality', { reader: { max_bytes: { smell: 10 } } }],
+      [
+        'a duration for a modality with none',
+        { reader: { max_duration_seconds: { image: 10 } } },
+      ],
+      [
+        'a duration that is not a positive integer',
+        { reader: { max_duration_seconds: { audio: 0 } } },
+      ],
       ['a limit that is not a positive integer', { reader: { max_parts: 0 } }],
       ['a model that is not an object', { reader: 5 }],
     ])('refuses %s', async (_label, limits) => {
@@ -347,6 +375,75 @@ describe('model input limits', () => {
         part: { file_id: pdfFileId },
       });
       expect(count).toHaveBeenCalled();
+      expect(stub.calls()).toBe(before);
+    });
+
+    test('refuses audio over max_duration_seconds before calling the provider', async () => {
+      const agentId = await agentOn({
+        name: 'short audio reader',
+        model: 'short-audio-model',
+        modelInputLimits: {
+          'short-audio-model': {
+            max_duration_seconds: { audio: AUDIO_SECONDS - 1 },
+          },
+        },
+      });
+      const before = stub.calls();
+
+      const res = await generate({ agentId, fileIds: [audioFileId] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INPUT_LIMIT_EXCEEDED');
+      expect(res.body.error.meta).toMatchObject({
+        model: 'short-audio-model',
+        limit: 'max_duration_seconds',
+        modality: 'audio',
+        max: AUDIO_SECONDS - 1,
+        value: AUDIO_SECONDS,
+        part: { message_index: 0, part_index: 1, file_id: audioFileId },
+      });
+      expect(stub.calls()).toBe(before);
+    });
+
+    test('sends audio within max_duration_seconds', async () => {
+      const agentId = await agentOn({
+        name: 'long audio reader',
+        model: 'long-audio-model',
+        modelInputLimits: {
+          'long-audio-model': {
+            max_duration_seconds: { audio: AUDIO_SECONDS },
+          },
+        },
+      });
+      const before = stub.calls();
+
+      const res = await generate({ agentId, fileIds: [audioFileId] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      expect(stub.calls()).toBe(before + 1);
+    });
+
+    test('refuses audio whose duration cannot be read', async () => {
+      const agentId = await agentOn({
+        name: 'timed audio reader',
+        model: 'timed-audio-model',
+        modelInputLimits: {
+          'timed-audio-model': { max_duration_seconds: { audio: 600 } },
+        },
+      });
+      const before = stub.calls();
+
+      const res = await generate({ agentId, fileIds: [unreadableAudioFileId] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MEDIA_PARSE_FAILED');
+      expect(res.body.error.meta).toMatchObject({
+        model: 'timed-audio-model',
+        limit: 'max_duration_seconds',
+        modality: 'audio',
+        part: { file_id: unreadableAudioFileId },
+      });
       expect(stub.calls()).toBe(before);
     });
 

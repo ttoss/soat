@@ -442,7 +442,7 @@
     },
     "INPUT_LIMIT_EXCEEDED": {
       "http_status": 400,
-      "hint": "Send a smaller file, fewer pages or fewer file parts than the model's limit (`meta.max`), split the input across turns, or send it to a model whose AI provider's `model_input_limits` allows it.",
+      "hint": "Send a smaller or shorter file, fewer pages or fewer file parts than the model's limit (`meta.max`), split the input across turns, or send it to a model whose AI provider's `model_input_limits` allows it.",
       "routes": []
     },
     "INPUT_MODALITY_UNSUPPORTED": {
@@ -513,6 +513,11 @@
     "MCP_TOOL_ERROR": {
       "http_status": 502,
       "hint": "The MCP server answered the call with a failure rather than a result — `meta.mcp_tool` names the tool and `meta.mcp_url` the server, and `meta.upstream_code` the code it answered, when it answered one. The message carries what the server said; fix the arguments or the server-side condition it names, then retry. The call reached the server, so this is not a connectivity or allowlist problem.",
+      "routes": []
+    },
+    "MEDIA_PARSE_FAILED": {
+      "http_status": 400,
+      "hint": "Send the audio or video in a container whose duration can be read (WAV, MP3, AAC (ADTS), FLAC, Ogg Opus or Vorbis, MP4, WebM), or send it to a model whose AI provider's `model_input_limits` declares no `max_duration_seconds` for it.",
       "routes": []
     },
     "MEMORY_ALREADY_INVALIDATED": {
