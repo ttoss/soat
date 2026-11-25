@@ -7,12 +7,7 @@ import { countPdfPages } from './pdf';
 const log = createDebug('soat:input-limits');
 
 /** The modalities a byte limit is declared for: every file part is one of them. */
-const BYTE_LIMITED_MODALITIES = [
-  'image',
-  'file',
-  'audio',
-  'video',
-] as const;
+const BYTE_LIMITED_MODALITIES = ['image', 'file', 'audio', 'video'] as const;
 
 type ByteLimitedModality = (typeof BYTE_LIMITED_MODALITIES)[number];
 
