@@ -3369,8 +3369,14 @@ echo "Agent SSE stream OK."
 
 # 22b1. A citing turn reads an attached text file as labelled text.
 echo "--- Running a citing generation with an attached file ---"
+CITE_FILE_BASE64=$(printf 'Smoke notes: the release ships on Tuesday.\n' | base64 | tr -d '\n')
+CITE_FILE_ID=$($SOAT_CLI upload-file-base64 \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --filename smoke-cite.txt \
+  --content "$CITE_FILE_BASE64" \
+  --content_type text/plain | jq -r '.id')
 FILE_CITE_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
-  --messages "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Summarize the attached notes.\"},{\"type\":\"file\",\"file_id\":\"$MD_FILE_ID\"}]}]" | sanitize_json)
+  --messages "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Summarize the attached notes.\"},{\"type\":\"file\",\"file_id\":\"$CITE_FILE_ID\"}]}]" | sanitize_json)
 if ! printf '%s\n' "$FILE_CITE_RESP" | jq -e '.status == "completed" and (.output.citations | type) == "array" and (.output.rejected_citations | type) == "array"' >/dev/null 2>&1; then
   echo "ERROR: a citing generation with an attached file did not complete with citations arrays" >&2
   printf '%s\n' "$FILE_CITE_RESP" >&2
