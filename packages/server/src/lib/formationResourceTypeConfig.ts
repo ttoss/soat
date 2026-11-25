@@ -25,6 +25,7 @@ import {
   hasProperties,
   isObjectRecord,
 } from './openapiSchemaFields';
+import { resolveInlineSchema } from './openapiUnknownFields';
 
 export const FORMATION_RESOURCE_TYPES_CONFIG_ENV =
   'FORMATION_RESOURCE_TYPES_CONFIG';
@@ -338,7 +339,10 @@ const parseEntry = (args: {
   }
 
   const description = entry.description;
-  const schemaFields = deriveSchemaFields({ schema });
+  const schemaFields = deriveSchemaFields({
+    schema,
+    resolveRef: resolveInlineSchema,
+  });
 
   return {
     name,

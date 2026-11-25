@@ -99,12 +99,29 @@ export const getMergedOpenApiSpec = (): MergedSpec => {
   return cachedSpec;
 };
 
+/**
+ * Follows a single `$ref` to its named component schema; returns the schema
+ * object unchanged when it is inline (no `$ref`), or `null` when the ref cannot
+ * be resolved to an object schema. Used to walk nested request schemas.
+ */
+export const resolveSchemaRef = (
+  schema: unknown
+): Record<string, unknown> | null => {
+  if (!isObjectRecord(schema)) return null;
+  const ref = schema.$ref;
+  if (typeof ref !== 'string') return schema;
+  const schemaName = ref.split('/').pop();
+  if (!schemaName) return null;
+  const named = getMergedOpenApiSpec().components.schemas[schemaName];
+  return isObjectRecord(named) ? named : null;
+};
+
 // Request bodies arrive in the wire contract's snake_case, so the kernel keys
 // every set/spec by the spec's own property name — no conversion in between.
 export type RequestSchemaFields = SchemaFields;
 
 const deriveFields = (schema: SchemaWithProperties): RequestSchemaFields => {
-  return deriveSchemaFields({ schema });
+  return deriveSchemaFields({ schema, resolveRef: resolveSchemaRef });
 };
 
 /**
@@ -213,23 +230,6 @@ const resolveJsonRequestSchema = (operation: unknown): unknown => {
   const json = content['application/json'];
   if (!isObjectRecord(json)) return undefined;
   return json.schema;
-};
-
-/**
- * Follows a single `$ref` to its named component schema; returns the schema
- * object unchanged when it is inline (no `$ref`), or `null` when the ref cannot
- * be resolved to an object schema. Used to walk nested request schemas.
- */
-export const resolveSchemaRef = (
-  schema: unknown
-): Record<string, unknown> | null => {
-  if (!isObjectRecord(schema)) return null;
-  const ref = schema.$ref;
-  if (typeof ref !== 'string') return schema;
-  const schemaName = ref.split('/').pop();
-  if (!schemaName) return null;
-  const named = getMergedOpenApiSpec().components.schemas[schemaName];
-  return isObjectRecord(named) ? named : null;
 };
 
 /**

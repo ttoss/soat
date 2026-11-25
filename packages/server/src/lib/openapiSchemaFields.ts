@@ -34,6 +34,11 @@ export type SchemaFields = {
   fieldSpecs: Record<string, FieldSpec>;
 };
 
+/** Follows a `$ref`, or returns an inline schema unchanged. */
+export type SchemaRefResolver = (
+  schema: unknown
+) => Record<string, unknown> | null;
+
 export type SchemaWithProperties = {
   properties: Record<string, unknown>;
   required?: unknown;
@@ -57,9 +62,12 @@ export const hasProperties = (
  * OpenAPI object schema, keyed by the spec's own property names. Callers compare
  * against those names verbatim — there is deliberately no key-transform hook, so
  * a field name can never be rewritten on its way from the spec to a validator.
+ * A property written as a `$ref` takes its type, nullability and enum from the
+ * component `resolveRef` names.
  */
 export const deriveSchemaFields = (args: {
   schema: SchemaWithProperties;
+  resolveRef: SchemaRefResolver;
 }): SchemaFields => {
   const required = Array.isArray(args.schema.required)
     ? args.schema.required
@@ -67,7 +75,7 @@ export const deriveSchemaFields = (args: {
 
   const fieldSpecs: Record<string, FieldSpec> = {};
   for (const [key, value] of Object.entries(args.schema.properties)) {
-    const propertySchema = isObjectRecord(value) ? value : {};
+    const propertySchema = args.resolveRef(value) ?? {};
     fieldSpecs[key] = {
       type:
         typeof propertySchema.type === 'string'

@@ -69,8 +69,9 @@ pass it → `read` returns it (if declared).
   depth the schema declares; the template's enum check (`pushFieldEnumErrors`)
   reads the same walk.
 - Declare a nested object's fields and enums in **both** the REST spec and the
-  `*ResourceProperties` schema, or the two paths diverge
-  (`formationsCreateEnumParity.test.ts` holds the enums).
+  `*ResourceProperties` schema, or the two paths diverge; a field the create
+  route `$ref`s, the template `$ref`s too, never a copy
+  (`formationsCreateRouteParity.test.ts` holds the enums and the `$ref`s).
 - An object with no `properties` is a free-form bag, never read.
 - `tests/unit/tests/lib/openapiClosedSchemas.test.ts` holds the declared lists
   closed.

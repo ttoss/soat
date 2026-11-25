@@ -180,6 +180,7 @@ export const DECLARATIONS: Record<string, Declaration[]> = {
       return {
         name: 'Nullable Store',
         description: 'facts',
+        tags: { team: 'nullable' },
         duplicate_threshold: 0.95,
         supersede_threshold: 0.85,
       };

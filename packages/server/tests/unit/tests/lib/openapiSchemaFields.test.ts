@@ -3,6 +3,7 @@ import {
   hasProperties,
   isObjectRecord,
 } from 'src/lib/openapiSchemaFields';
+import { resolveInlineSchema } from 'src/lib/openapiUnknownFields';
 
 describe('openapiSchemaFields', () => {
   describe('isObjectRecord', () => {
@@ -35,7 +36,10 @@ describe('openapiSchemaFields', () => {
     };
 
     test('keeps snake_case keys with the default identity transform', () => {
-      const fields = deriveSchemaFields({ schema });
+      const fields = deriveSchemaFields({
+        schema,
+        resolveRef: resolveInlineSchema,
+      });
 
       expect([...fields.allowedFields].sort()).toEqual([
         'boundary_policy',
@@ -49,6 +53,7 @@ describe('openapiSchemaFields', () => {
 
     test('carries a declared enum through to the field spec', () => {
       const fields = deriveSchemaFields({
+        resolveRef: resolveInlineSchema,
         schema: {
           properties: {
             mode: { type: 'string', enum: ['enforce', 'monitor'] },
@@ -72,6 +77,7 @@ describe('openapiSchemaFields', () => {
 
     test('ignores a non-array enum', () => {
       const fields = deriveSchemaFields({
+        resolveRef: resolveInlineSchema,
         schema: { properties: { mode: { type: 'string', enum: 'enforce' } } },
       });
 
@@ -82,7 +88,10 @@ describe('openapiSchemaFields', () => {
       // There is deliberately no key-transform hook: a validator compares
       // against the spec's own names, so a field name can never be rewritten on
       // its way from the spec to the check that uses it.
-      const fields = deriveSchemaFields({ schema });
+      const fields = deriveSchemaFields({
+        schema,
+        resolveRef: resolveInlineSchema,
+      });
 
       expect(fields.allowedFields.has('project_id')).toBe(true);
       expect(fields.allowedFields.has('boundary_policy')).toBe(true);
@@ -94,7 +103,10 @@ describe('openapiSchemaFields', () => {
     });
 
     test('derives type and nullable per field', () => {
-      const fields = deriveSchemaFields({ schema });
+      const fields = deriveSchemaFields({
+        schema,
+        resolveRef: resolveInlineSchema,
+      });
 
       expect(fields.fieldSpecs.project_id).toEqual({
         type: 'string',
@@ -108,6 +120,7 @@ describe('openapiSchemaFields', () => {
 
     test('tolerates a non-object property schema and a missing required array', () => {
       const fields = deriveSchemaFields({
+        resolveRef: resolveInlineSchema,
         schema: { properties: { weird: 'not-a-schema' } },
       });
 

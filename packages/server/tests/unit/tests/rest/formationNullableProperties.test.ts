@@ -1,8 +1,11 @@
+import { schemaNameForResourceType } from 'src/lib/formation-modules/defineFormationModule';
+import { loadModuleSchema } from 'src/lib/formation-modules/formationSpecLoader';
 import {
   builtInResourceTypes,
   clearablePropertiesOf,
   getFormationModule,
 } from 'src/lib/formationsRegistry';
+import { resolveSchemaRef } from 'src/lib/openapiSpec';
 
 import {
   nextSeed,
@@ -69,6 +72,19 @@ const declarationFor = (args: { type: string; field: string }) => {
     });
   return declare;
 };
+
+describe('a nullable property is clearable', () => {
+  test.each(UPDATABLE_TYPES)('%s, through a $ref too', (type) => {
+    const { properties } = loadModuleSchema({
+      schemaName: schemaNameForResourceType(type),
+    });
+    const nullable = Object.keys(properties).filter((field) => {
+      return resolveSchemaRef(properties[field])?.nullable === true;
+    });
+
+    expect([...clearablePropertiesOf(type)].sort()).toEqual(nullable.sort());
+  });
+});
 
 describe('the declarations set every nullable property', () => {
   test.each(UPDATABLE_TYPES)('%s', (type) => {

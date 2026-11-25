@@ -80,7 +80,10 @@ const topLevelFieldErrors = (args: {
     return { missingFields: [], typeErrors: [] };
   }
 
-  const { requiredFields, fieldSpecs } = deriveSchemaFields({ schema });
+  const { requiredFields, fieldSpecs } = deriveSchemaFields({
+    schema,
+    resolveRef: resolveSchemaRef,
+  });
   const missingFields = [...requiredFields].filter((field) => {
     return isMissing(body[field], fieldSpecs[field]);
   });
