@@ -13,7 +13,10 @@ import {
   verifyCitations,
 } from './citationVerification';
 import { assertValidEnabledConfig, readEnabledConfig } from './enabledConfig';
-import { isPlainObject } from './plainObject';
+import type {
+  KnowledgeRetrieval,
+  KnowledgeRetrievalEntry,
+} from './knowledgeRetrievalRecord';
 
 const log = createDebug('soat:citations');
 
@@ -57,15 +60,10 @@ export const toCitationPointers = (
   });
 };
 
-const readRetrievedDocuments = (
-  retrieval: unknown
-): Array<{ ref: string; entry: Record<string, unknown> }> => {
-  if (!Array.isArray(retrieval)) return [];
-  return retrieval.flatMap((entry: unknown, index) => {
-    if (!isPlainObject(entry) || entry.source_type !== 'document') return [];
-    return [{ ref: citationRef(index), entry }];
-  });
-};
+type RetrievedDocument = Extract<
+  KnowledgeRetrievalEntry,
+  { source_type: 'document' }
+>;
 
 /**
  * Every ref the turn was given, from its own `retrieval` record — the ids it
@@ -73,42 +71,43 @@ const readRetrievedDocuments = (
  * longer resolves is `null`.
  */
 const loadCitationSources = async (args: {
-  retrieval: unknown;
+  retrieval: KnowledgeRetrieval;
 }): Promise<Record<string, CitationSource | null>> => {
-  const documents = readRetrievedDocuments(args.retrieval);
-  const chunkIds = documents.map(({ entry }) => {
-    return String(entry.chunk_id);
+  const documents = (args.retrieval ?? []).flatMap((entry, index) => {
+    return entry.source_type === 'document'
+      ? [{ ref: citationRef(index), entry }]
+      : [];
   });
-  const chunks = chunkIds.length
-    ? await db.DocumentChunk.findAll({
-        where: { publicId: chunkIds },
-        attributes: ['publicId', 'content'],
-      })
-    : [];
+  const chunks = await db.DocumentChunk.findAll({
+    where: {
+      publicId: documents.map(({ entry }) => {
+        return entry.chunk_id;
+      }),
+    },
+    attributes: ['publicId', 'content'],
+  });
   const contentById = new Map(
     chunks.map((chunk) => {
       return [chunk.publicId, chunk.content];
     })
   );
-  const sources: Record<string, CitationSource | null> = {};
-  for (const { ref, entry } of documents) {
-    const text = contentById.get(String(entry.chunk_id));
-    sources[ref] =
-      text === undefined
-        ? null
-        : {
-            origin: 'retrieval',
-            documentId: String(entry.document_id),
-            documentVersion:
-              typeof entry.document_version === 'number'
-                ? entry.document_version
-                : null,
-            chunkId: String(entry.chunk_id),
-            page: typeof entry.page === 'number' ? entry.page : null,
-            text,
-          };
-  }
-  return sources;
+  const toSource = (entry: RetrievedDocument): CitationSource | null => {
+    const text = contentById.get(entry.chunk_id);
+    if (text === undefined) return null;
+    return {
+      origin: 'retrieval',
+      documentId: entry.document_id,
+      documentVersion: entry.document_version,
+      chunkId: entry.chunk_id,
+      page: entry.page,
+      text,
+    };
+  };
+  return Object.fromEntries(
+    documents.map(({ ref, entry }) => {
+      return [ref, toSource(entry)];
+    })
+  );
 };
 
 /**
@@ -129,7 +128,10 @@ export const resolveTurnCitations = async (args: {
     return { content: args.text, turn: null };
   }
   const parsed = parseCitationMarkup({ text: args.text });
-  const sources = await loadCitationSources({ retrieval: gen.retrieval });
+  // Written only by `toKnowledgeRetrieval`, so the stored shape is the type.
+  const sources = await loadCitationSources({
+    retrieval: gen.retrieval as KnowledgeRetrieval,
+  });
   const turn = verifyCitations({
     marks: parsed.marks,
     malformed: parsed.malformed,

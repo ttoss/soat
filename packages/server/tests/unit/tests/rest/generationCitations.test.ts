@@ -26,7 +26,7 @@ const labelOfPage = (args: {
   return match ? match[1] : 'c0';
 };
 
-let answer: (messages: StubMessage[]) => string = () => {
+let answer: (messages: StubMessage[]) => string | Promise<string> = () => {
   return 'Done.';
 };
 const received: StubMessage[][] = [];
@@ -63,13 +63,13 @@ const startProvider = async (): Promise<{ server: Server; url: string }> => {
     req.on('data', (chunk) => {
       raw += chunk;
     });
-    req.on('end', () => {
+    req.on('end', async () => {
       const body = JSON.parse(raw) as {
         messages: StubMessage[];
         stream?: boolean;
       };
       received.push(body.messages);
-      const content = answer(body.messages);
+      const content = await answer(body.messages);
       if (body.stream) {
         writeStream(res, content);
         return;
@@ -436,6 +436,94 @@ describe('Generation citations', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a citing turn that injected nothing rejects every label', async () => {
+      const agentId = await create('/api/v1/agents', {
+        project_id: projectId,
+        ai_provider_id: providerId,
+        name: 'cite-no-knowledge',
+        citation_config: { enabled: true },
+      });
+      answer = () => {
+        return '<cite ref="c1" quote="dose">x</cite>';
+      };
+
+      const body = await generate({ agentId });
+
+      expect(body.output.content).toBe('x');
+      expect(body.output.citations).toEqual([]);
+      expect(body.output.rejected_citations).toEqual([
+        { ref: 'c1', quoted_text: 'dose', reason: 'UNKNOWN_REF' },
+      ]);
+    });
+
+    test('a memory result carries no label and documents beside it still cite', async () => {
+      const memoryStoreId = await create('/api/v1/memory-stores', {
+        project_id: projectId,
+        name: 'Citation memories',
+      });
+      await create('/api/v1/memories', {
+        memory_store_id: memoryStoreId,
+        content: 'O paciente prefere a dose noturna.',
+      });
+      const agentId = await create('/api/v1/agents', {
+        project_id: projectId,
+        ai_provider_id: providerId,
+        name: 'cite-with-memory',
+        knowledge_config: {
+          document_paths: ['/protocols/'],
+          memory_store_ids: [memoryStoreId],
+        },
+        citation_config: { enabled: true },
+      });
+      answer = citePage12({
+        quote: 'dose máxima de 40 mg/dia',
+        claim: 'O máximo é 40 mg/dia.',
+      });
+      const before = received.length;
+
+      const body = await generate({ agentId });
+
+      const sent = JSON.stringify(received.slice(before)[0]);
+      expect(sent).toMatch(/\[Memory store: Citation memories \(mem_[^)]+\)\]/);
+      expect(body.output.citations).toHaveLength(1);
+      expect(body.output.citations[0].page).toBe(12);
+    });
+
+    test('a chunk re-chunked before the answer is verified is SOURCE_UNAVAILABLE', async () => {
+      const volatileId = await create('/api/v1/documents', {
+        project_id: projectId,
+        content: 'Volatile dose guidance.',
+        path: '/volatile/guide.md',
+      });
+      const agentId = await create('/api/v1/agents', {
+        project_id: projectId,
+        ai_provider_id: providerId,
+        name: 'cite-volatile',
+        knowledge_config: { document_paths: ['/volatile/'] },
+        citation_config: { enabled: true },
+      });
+      answer = async (messages) => {
+        const match = JSON.stringify(messages).match(
+          /\[Document: \/volatile\/guide\.md (c\d+)\]/
+        );
+        const edit = await asAdmin()
+          .patch(`/api/v1/documents/${volatileId}`)
+          .send({ content: 'Rewritten guidance.' });
+        expect(edit.status).toBe(200);
+        return `<cite ref="${match ? match[1] : 'c0'}" quote="dose">x</cite>`;
+      };
+
+      const body = await generate({ agentId });
+
+      expect(body.output.rejected_citations).toEqual([
+        {
+          ref: expect.stringMatching(/^c\d+$/),
+          quoted_text: 'dose',
+          reason: 'SOURCE_UNAVAILABLE',
+        },
+      ]);
     });
 
     test('a stream carries no markup and ends with the verified citations', async () => {
