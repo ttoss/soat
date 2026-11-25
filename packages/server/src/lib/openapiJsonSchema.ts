@@ -97,6 +97,40 @@ const ajvFor = (spec: MergedSpec): Ajv => {
   return ajv;
 };
 
+// A `#/...` ref inside a fragment names a place in the spec, not the fragment.
+const anchorRefs = (node: unknown): unknown => {
+  if (Array.isArray(node)) return node.map(anchorRefs);
+  if (!isObjectRecord(node)) return node;
+  return Object.fromEntries(
+    Object.entries(node).map(([key, value]) => {
+      return key === '$ref' &&
+        typeof value === 'string' &&
+        value.startsWith('#')
+        ? [key, `${SPEC_ID}${value}`]
+        : [key, anchorRefs(value)];
+    })
+  );
+};
+
+const fragmentValidators = new WeakMap<object, ValidateFunction>();
+
+/**
+ * The validator of one fragment of the compiled spec, such as a branch of a
+ * union a request body failed, with its `$ref`s resolved inside the spec.
+ */
+export const getSpecFragmentValidator = (
+  fragment: Record<string, unknown>
+): ValidateFunction => {
+  const cached = fragmentValidators.get(fragment);
+  if (cached) return cached;
+  const schema = anchorRefs(fragment);
+  const validator = ajvFor(getMergedOpenApiSpec()).compile(
+    isObjectRecord(schema) ? schema : {}
+  );
+  fragmentValidators.set(fragment, validator);
+  return validator;
+};
+
 const hasJsonRequestBody = (args: {
   spec: MergedSpec;
   template: string;

@@ -473,18 +473,6 @@ describe('Playbook upstreams', () => {
           return { company: 'pbk_case_doesNotExist0000' };
         },
       ],
-      [
-        'a value that is not a case id',
-        () => {
-          return { company: 42 };
-        },
-      ],
-      [
-        'upstreams that are not an object',
-        () => {
-          return 'company';
-        },
-      ],
     ])('%s is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async (_label, bind) => {
       const company = await filledCompany();
 
@@ -495,6 +483,20 @@ describe('Playbook upstreams', () => {
       });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
+    });
+
+    test.each([
+      ['a value that is not a string', { company: 42 }, 'upstreams.company'],
+      ['upstreams that are not an object', 'company', 'upstreams'],
+    ])('%s is 400 VALIDATION_FAILED', async (_label, upstreams, field) => {
+      const res = await createPlaybookCase({
+        client: admin(),
+        playbookId: dreId,
+        body: { subject: unique('case'), upstreams },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({ invalid_fields: [field] });
     });
 
     test('a case of another playbook is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async () => {
@@ -763,12 +765,6 @@ describe('Playbook upstreams', () => {
           return { company: 'pbk_case_doesNotExist0000' };
         },
       ],
-      [
-        'upstreams that are not an object',
-        () => {
-          return 'company';
-        },
-      ],
     ])('%s is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async (_label, bind) => {
       const company = await filledCompany();
       const dre = await caseGainingUpstream();
@@ -779,6 +775,15 @@ describe('Playbook upstreams', () => {
       });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PLAYBOOK_CASE_UPSTREAM_INVALID');
+    });
+
+    test('upstreams that are not an object is 400 VALIDATION_FAILED', async () => {
+      const dre = await caseGainingUpstream();
+
+      const res = await upgrade(dre.id, { version: 2, upstreams: 'company' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({ invalid_fields: ['upstreams'] });
     });
 
     test('naming an upstream the case already binds is 400 PLAYBOOK_CASE_UPSTREAM_INVALID', async () => {

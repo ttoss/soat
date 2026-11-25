@@ -1,9 +1,5 @@
 import { DomainError } from '../../../../src/errors';
-import { getRequestBodyValidator } from '../../../../src/lib/openapiJsonSchema';
-import { isObjectRecord } from '../../../../src/lib/openapiSchemaFields';
-import { getRouteRequestSchema } from '../../../../src/lib/openapiSpec';
 import { validateRequestBody } from '../../../../src/lib/requestValidation';
-import { ROUTE_OWNED_BODY_FIELDS } from '../../../../src/lib/routeOwnedBodyFields';
 
 const expectThrows = (fn: () => void): DomainError => {
   let thrown: unknown;
@@ -336,9 +332,8 @@ describe('validateRequestBody', () => {
       expect(error.message).toBe('`ai_provider_id` must be a string or null');
     });
 
-    test('leaves collection fields to their routes', () => {
-      // `scorers` is route-owned: the route names each scorer's own error.
-      expect(() => {
+    test('leaves a collection field to the full schema', () => {
+      const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
           path: '/evals',
@@ -350,7 +345,8 @@ describe('validateRequestBody', () => {
             scorers: 'exact_match',
           },
         });
-      }).not.toThrow();
+      });
+      expect(error.message).toBe('`scorers` must be array');
     });
 
     test('reports a missing required field once, not also as mistyped', () => {
@@ -368,7 +364,7 @@ describe('validateRequestBody', () => {
   describe('the full request schema', () => {
     const generate = '/agents/:agent_id/generate';
 
-    test('refuses a nested value that matches no branch of its union', () => {
+    test('refuses a nested union value by what breaks the branch its type selects', () => {
       const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
@@ -384,7 +380,9 @@ describe('validateRequestBody', () => {
         });
       });
       expect(error.code).toBe('VALIDATION_FAILED');
-      expect(error.meta).toEqual({ invalid_fields: ['messages.0.content'] });
+      expect(error.meta).toEqual({
+        invalid_fields: ['messages.0.content.document_id'],
+      });
     });
 
     test('refuses a nested required field the body leaves out', () => {
@@ -413,32 +411,43 @@ describe('validateRequestBody', () => {
       );
     });
 
-    test('leaves a route-owned field to its route', () => {
-      expect(() => {
-        return validateRequestBody({
-          method: 'post',
-          path: '/formations/validate',
-          body: { template: 42 },
+    describe('a union names what breaks the branch its value is of', () => {
+      const evalWith = (scorer: Record<string, unknown>) => {
+        return {
+          name: 'eval',
+          dataset_id: 'dst_1',
+          agent_id: 'agent_1',
+          policy_ids: ['pol_1'],
+          scorers: [scorer],
+        };
+      };
+
+      test('the branch its tag selects', () => {
+        const error = expectThrows(() => {
+          return validateRequestBody({
+            method: 'post',
+            path: '/evals',
+            body: evalWith({ type: 'llm_judge', name: 'judge', prompt: 'p' }),
+          });
         });
-      }).not.toThrow();
+        expect(error.message).toBe('`scorers.0.pass_threshold` is required');
+        expect(error.meta).toEqual({
+          invalid_fields: ['scorers.0.pass_threshold'],
+        });
+      });
+
+      test('the tag every branch refuses, with the values they allow', () => {
+        const error = expectThrows(() => {
+          return validateRequestBody({
+            method: 'post',
+            path: '/evals',
+            body: evalWith({ type: 'vibes', name: 'vibes' }),
+          });
+        });
+        expect(error.message).toMatch(
+          /^`scorers\.0\.type` must be one of: exact_match, contains, .*decider \(got "vibes"\)$/
+        );
+      });
     });
   });
-});
-
-describe('ROUTE_OWNED_BODY_FIELDS', () => {
-  test.each(Object.entries(ROUTE_OWNED_BODY_FIELDS))(
-    '%s names an operation with a JSON body and fields it declares',
-    (operation, fields) => {
-      const [method, template] = operation.split(' ');
-      expect(getRequestBodyValidator({ method, template })).not.toBeNull();
-      const schema = getRouteRequestSchema({ method, path: template });
-      const properties = isObjectRecord(schema?.properties)
-        ? Object.keys(schema.properties)
-        : [];
-      for (const field of fields) {
-        if (field === '') continue;
-        expect(properties).toContain(field.split('.')[0]);
-      }
-    }
-  );
 });

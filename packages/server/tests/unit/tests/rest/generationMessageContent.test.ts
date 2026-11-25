@@ -314,7 +314,7 @@ describe('POST /api/v1/agents/:agent_id/generate — resolved message content', 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
       expect(res.body.error.meta).toEqual({
-        invalid_fields: ['messages.0.content'],
+        invalid_fields: ['messages.0.content.document_id'],
       });
     });
 
