@@ -141,7 +141,9 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   INPUT_MODALITY_UNSUPPORTED:
     "Send the part to a model whose AI provider's `model_input_modalities` lists its modality, or ingest the file and send it as a `document` part, which the model reads as text.",
   INPUT_LIMIT_EXCEEDED:
-    "Send a smaller file, fewer pages or fewer file parts than the model's limit (`meta.max`), split the input across turns, or send it to a model whose AI provider's `model_input_limits` allows it.",
+    "Send a smaller or shorter file, fewer pages or fewer file parts than the model's limit (`meta.max`), split the input across turns, or send it to a model whose AI provider's `model_input_limits` allows it.",
+  MEDIA_PARSE_FAILED:
+    "Send the audio or video in a container whose duration can be read (WAV, MP3, AAC (ADTS), FLAC, Ogg Opus or Vorbis, MP4, WebM), or send it to a model whose AI provider's `model_input_limits` declares no `max_duration_seconds` for it.",
   MODEL_NOT_OFFERED:
     "Name one of the provider's `model_aliases` (read the AI provider), or have someone who may update it add the alias or clear `model_aliases_only`.",
   EMBEDDING_NOT_CONFIGURED:

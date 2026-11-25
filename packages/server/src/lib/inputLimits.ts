@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { mediaTypeModality } from './inputModalities';
+import { readMediaDuration } from './mediaDuration';
 import { countPdfPages } from './pdf';
 
 const log = createDebug('soat:input-limits');
@@ -11,9 +12,15 @@ const BYTE_LIMITED_MODALITIES = ['image', 'file', 'audio', 'video'] as const;
 
 type ByteLimitedModality = (typeof BYTE_LIMITED_MODALITIES)[number];
 
+/** The modalities a duration limit is declared for. */
+const TIMED_MODALITIES = ['audio', 'video'] as const;
+
+type TimedModality = (typeof TIMED_MODALITIES)[number];
+
 /** What one model declares it reads per request; an absent limit is unknown, not unlimited. */
 export type InputLimits = {
   max_bytes?: Partial<Record<ByteLimitedModality, number>>;
+  max_duration_seconds?: Partial<Record<TimedModality, number>>;
   max_pages?: number;
   max_parts?: number;
 };
@@ -31,24 +38,33 @@ const isPositiveInteger = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 };
 
-const isByteLimits = (value: unknown): boolean => {
+const isModalityLimits = (
+  value: unknown,
+  modalities: readonly string[]
+): boolean => {
   return (
     isRecord(value) &&
     Object.entries(value).every(([modality, max]) => {
-      return (
-        BYTE_LIMITED_MODALITIES.some((known) => {
-          return known === modality;
-        }) && isPositiveInteger(max)
-      );
+      return modalities.includes(modality) && isPositiveInteger(max);
     })
   );
 };
+
+/** The limits declared per modality, and the modalities each one names. */
+const MODALITY_LIMITS: ReadonlyMap<string, readonly string[]> = new Map<
+  string,
+  readonly string[]
+>([
+  ['max_bytes', BYTE_LIMITED_MODALITIES],
+  ['max_duration_seconds', TIMED_MODALITIES],
+]);
 
 const isInputLimits = (value: unknown): value is InputLimits => {
   return (
     isRecord(value) &&
     Object.entries(value).every(([limit, max]) => {
-      if (limit === 'max_bytes') return isByteLimits(max);
+      const modalities = MODALITY_LIMITS.get(limit);
+      if (modalities) return isModalityLimits(max, modalities);
       return (
         COUNT_LIMITS.some((known) => {
           return known === limit;
@@ -72,7 +88,7 @@ export const assertModelInputLimits = (value: unknown): void => {
   if (valid) return;
   throw new DomainError(
     'VALIDATION_FAILED',
-    `model_input_limits maps a model name to positive integers: max_parts, max_pages, and max_bytes per ${BYTE_LIMITED_MODALITIES.join(', ')}.`
+    `model_input_limits maps a model name to positive integers: max_parts, max_pages, max_bytes per ${BYTE_LIMITED_MODALITIES.join(', ')}, and max_duration_seconds per ${TIMED_MODALITIES.join(', ')}.`
   );
 };
 
@@ -158,38 +174,71 @@ const fileParts = (prompt: readonly unknown[]): FilePart[] => {
 };
 
 type Exceeded = {
-  limit: 'max_bytes' | 'max_pages' | 'max_parts';
+  limit: 'max_bytes' | 'max_duration_seconds' | 'max_pages' | 'max_parts';
   modality?: string;
   max: number;
-  value: number;
+  /** `null` when the part's bytes do not say: its duration is unreadable. */
+  value: number | null;
   part: FilePart;
 };
+
+type PartCheck = (args: {
+  limits: InputLimits;
+  part: FilePart & { bytes: Uint8Array };
+  modality: string;
+}) => Promise<Omit<Exceeded, 'part' | 'modality'> | null>;
+
+const isTimedModality = (modality: string): modality is TimedModality => {
+  return TIMED_MODALITIES.some((known) => {
+    return known === modality;
+  });
+};
+
+const byteCheck: PartCheck = async ({ limits, part, modality }) => {
+  const max = limits.max_bytes?.[modality as ByteLimitedModality];
+  const value = part.bytes.byteLength;
+  return max !== undefined && value > max
+    ? { limit: 'max_bytes', max, value }
+    : null;
+};
+
+const durationCheck: PartCheck = async ({ limits, part, modality }) => {
+  if (!isTimedModality(modality)) return null;
+  const max = limits.max_duration_seconds?.[modality];
+  if (max === undefined) return null;
+  const seconds = readMediaDuration({ bytes: part.bytes });
+  if (seconds !== null && seconds <= max) return null;
+  const value = seconds === null ? null : Math.round(seconds * 1000) / 1000;
+  return { limit: 'max_duration_seconds', max, value };
+};
+
+const pageCheck: PartCheck = async ({ limits, part }) => {
+  const max = limits.max_pages;
+  if (max === undefined || part.mediaType !== 'application/pdf') return null;
+  const value = await countPdfPages({ bytes: part.bytes });
+  return value > max ? { limit: 'max_pages', max, value } : null;
+};
+
+/** Every limit read off one part's bytes, cheapest first. */
+const PART_CHECKS: readonly PartCheck[] = [byteCheck, durationCheck, pageCheck];
 
 const exceededByPart = async (args: {
   limits: InputLimits;
   part: FilePart;
 }): Promise<Exceeded | null> => {
   const { limits, part } = args;
-  if (!part.bytes) return null;
+  const { bytes } = part;
+  if (!bytes) return null;
   const modality = mediaTypeModality(part.mediaType);
-  const maxBytes = limits.max_bytes?.[modality as ByteLimitedModality];
-  if (maxBytes !== undefined && part.bytes.byteLength > maxBytes) {
-    const value = part.bytes.byteLength;
-    return { limit: 'max_bytes', modality, max: maxBytes, value, part };
+  for (const check of PART_CHECKS) {
+    const exceeded = await check({
+      limits,
+      part: { ...part, bytes },
+      modality,
+    });
+    if (exceeded) return { ...exceeded, modality, part };
   }
-  if (limits.max_pages === undefined || part.mediaType !== 'application/pdf') {
-    return null;
-  }
-  const pages = await countPdfPages({ bytes: part.bytes });
-  return pages > limits.max_pages
-    ? {
-        limit: 'max_pages',
-        modality,
-        max: limits.max_pages,
-        value: pages,
-        part,
-      }
-    : null;
+  return null;
 };
 
 const firstExceeded = async (args: {
@@ -238,6 +287,18 @@ export const assertWithinInputLimits = async (args: {
     ...exceeded.part.position,
     ...(fileId ? { file_id: fileId } : {}),
   };
+  if (exceeded.value === null) {
+    throw new DomainError(
+      'MEDIA_PARSE_FAILED',
+      `Model '${args.model}' accepts ${exceeded.limit} ${exceeded.max} for ${exceeded.modality} input, and the part's duration could not be read from its bytes.`,
+      {
+        model: args.model,
+        limit: exceeded.limit,
+        modality: exceeded.modality,
+        part,
+      }
+    );
+  }
   throw new DomainError(
     'INPUT_LIMIT_EXCEEDED',
     `Model '${args.model}' accepts ${exceeded.limit} ${exceeded.max}${exceeded.modality ? ` for ${exceeded.modality} input` : ''}; the request carries ${exceeded.value}.`,

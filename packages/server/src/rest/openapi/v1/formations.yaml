@@ -1150,7 +1150,7 @@ components:
           allOf:
             - $ref: './ai-providers.yaml#/components/schemas/ModelInputModalities'
         model_input_limits:
-          description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked.'
+          description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_duration_seconds` per audio or video part, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked.'
           allOf:
             - $ref: './ai-providers.yaml#/components/schemas/ModelInputLimits'
         require_priced_model:
