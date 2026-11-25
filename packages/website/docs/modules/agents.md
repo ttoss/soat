@@ -54,6 +54,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `knowledge_config`         | object           | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                                                                        |
 | `output_schema`            | object           | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)                                                         |
 | `prompt_caching`           | object/null      | `{ "enabled": true }` caches the turn's static prefix on providers that support it — see [Prompt Caching](#prompt-caching)                                                     |
+| `citation_config`          | object/null      | `{ "enabled": true }` makes the answer cite the injected knowledge it uses, each citation verified — see [Citations](#citations)                                               |
 | `max_context_messages`     | number           | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)                                                   |
 | `single_session_per_actor` | boolean          | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)                                                       |
 | `trace_content_mode`       | string \| null   | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written             |
@@ -130,14 +131,14 @@ One agent execution; its steps are on its [trace](./traces.md).
 
 Set when `status` is `completed`:
 
-| Stop Reason   | Description                                                                                                                                                |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stop`        | The model produced a final response with no tool calls                                                                                                     |
-| `tool-calls`  | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named |
+| Stop Reason   | Description                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stop`        | The model produced a final response with no tool calls                                                                                                        |
+| `tool-calls`  | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named    |
 | `max_steps`   | The turn spent its whole `max_steps` budget: on tool calls, or, with an `output_schema`, answering on its last step ([Structured Output](#structured-output)) |
-| `depth_guard` | A nested call exceeded `max_call_depth`                                                                                                                    |
-| `chain_limit` | A [continuation chain](./chains.md) reached its generation budget and was not resumed                                                                      |
-| `error`       | The turn failed; the `error` field carries the details                                                                                                     |
+| `depth_guard` | A nested call exceeded `max_call_depth`                                                                                                                       |
+| `chain_limit` | A [continuation chain](./chains.md) reached its generation budget and was not resumed                                                                         |
+| `error`       | The turn failed; the `error` field carries the details                                                                                                        |
 
 Other values are the provider's finish reason (`length`, `content-filter`, …) relayed unchanged; `max_steps` is platform-named because the provider reports `tool-calls` for an exhausted budget and a pause alike, and `stop` for an `output_schema` agent's last step.
 
@@ -618,6 +619,89 @@ Retrieval and `write_memory` reach only the agent's own project (its owner's, fo
 
 Only `memory_store_ids` set → memory-only search. Document search runs when `document_ids`/`document_paths` are set or no scoping filter is set. `tags` scopes both stores, so it counts on both sides ([Knowledge](./knowledge.md#search-modes)).
 
+### Citations
+
+`citation_config: { "enabled": true }` makes a turn cite the [knowledge](#knowledge-config) it was given and return each citation verified. `citation_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the agent's for one call.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat patch-agent --agent-id agent_xyz --citation-config '{"enabled": true}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.patchAgent({
+  path: { agent_id: 'agent_xyz' },
+  body: { citation_config: { enabled: true } },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "citation_config": { "enabled": true } }'
+```
+
+</TabItem>
+</Tabs>
+
+Each injected document chunk's tag carries a label (`[Document: /protocols/x.pdf (page 12) c1]`), and the knowledge message asks the model to wrap each statement it supports in `<cite ref="c1" quote="exact text">statement</cite>`. Memory results carry no label and are not citable.
+
+After the model answers, the server:
+
+1. removes the markup from `output.content`;
+2. resolves each `ref` to a chunk this turn injected (recorded in [`retrieval`](./generations.md#what-retrieval-served));
+3. looks for `quote` in that chunk's text, matching exactly after Unicode NFC and with each whitespace run read as one space;
+4. returns what passed in `output.citations` and what failed in `output.rejected_citations`.
+
+```json
+"citations": [
+  {
+    "origin": "retrieval",
+    "document_id": "doc_V1StGXR8Z5jdHi6B",
+    "document_version": 3,
+    "chunk_id": "dchunk_V1StGXR8Z5jdHi6B",
+    "file_id": null,
+    "page": 12,
+    "page_end": 12,
+    "quoted_text": "dose máxima de 40 mg/dia",
+    "source_span": { "start": 2, "end": 26 },
+    "answer_span": { "start": 10, "end": 31 },
+    "verification": "runtime"
+  }
+],
+"rejected_citations": [
+  { "ref": "c4", "quoted_text": "40 mg duas vezes ao dia", "reason": "QUOTE_NOT_FOUND" }
+]
+```
+
+| Field              | Meaning                                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quoted_text`      | The chunk's own text at `source_span`, never the model's quote                                                                                 |
+| `source_span`      | Code points into the chunk's text (its NFC form)                                                                                               |
+| `answer_span`      | Code points into `output.content`: the statement the citation wraps                                                                            |
+| `page`, `page_end` | The chunk's page; `null` for a source with no pages. A `chunk_strategy: "page"` chunk is one page, so `source_span` is a position on that page |
+
+| `reason`             | When                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `UNKNOWN_REF`        | `ref` names no chunk this turn injected                                              |
+| `SOURCE_UNAVAILABLE` | The chunk no longer exists                                                           |
+| `QUOTE_NOT_FOUND`    | The quote is not in the chunk                                                        |
+| `MALFORMED_CITE`     | A tag lacks `ref` or a non-blank `quote`, is unclosed, or a `</cite>` closes nothing |
+
+- Both arrays are present only when the turn cites. Whether the model cites, and whether a quote supports its statement, are the model's: a verified citation proves the quote is in the source, not that it backs the claim.
+- A [streamed](#streaming) turn sends its text without markup and ends with an `event: citations` frame carrying both arrays.
+- The generation records the citations as pointers, without `quoted_text`: see [What the answer cited](./generations.md#what-the-answer-cited).
+
 ### Orchestrated thinking
 
 `reasoning` is not an agent field; on create, update or as a generation override it is `400`. Compose multi-step thinking in the caller, an [orchestration](./orchestrations.md) or a [workflow](./workflows.md).
@@ -874,7 +958,7 @@ curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
 
 #### What a version captures
 
-`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
+`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `citation_config`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
 
 Runtime-injected context is not snapshotted: a version records the `knowledge_config`, not the documents or memories it resolves at generation time.
 

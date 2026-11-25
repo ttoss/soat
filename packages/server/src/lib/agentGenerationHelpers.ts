@@ -8,6 +8,7 @@ import {
   toAgentConfig,
   type TypedAgent,
 } from './agentGenerationTypes';
+import { resolveTurnCitations } from './citations';
 import type { GenerationRequiredActionWire } from './generationEvents';
 import { recordSegmentUsage } from './generationLifecycle';
 import type { GenerationProvenance } from './generationProvenance';
@@ -74,6 +75,12 @@ export const mapGenerationResult = (result: GenerationResult) => {
               : {}),
             ...('object' in result.output
               ? { object: result.output.object }
+              : {}),
+            ...(result.output.citations
+              ? {
+                  citations: result.output.citations.citations,
+                  rejected_citations: result.output.citations.rejected,
+                }
               : {}),
           },
         }
@@ -368,6 +375,10 @@ export const buildCompletedGenerationResult = async (args: {
   });
   const reportedModelId = args.result.response.modelId;
   const model = servedModelName({ model: args.model, reportedModelId });
+  const cited = await resolveTurnCitations({
+    generationId: args.generationId,
+    text: args.result.text,
+  });
 
   const completedResult: GenerationResult = {
     id: args.generationId,
@@ -376,12 +387,13 @@ export const buildCompletedGenerationResult = async (args: {
     aiProviderId: servedAiProviderId(args),
     output: {
       model,
-      content: args.result.text,
+      content: cited.content,
       finishReason: args.result.finishReason,
       ...servedTurnMessages(args.result.responseMessages),
       ...(args.result.object !== undefined
         ? { object: args.result.object }
         : {}),
+      ...(cited.turn ? { citations: cited.turn } : {}),
     },
   };
 
@@ -397,7 +409,8 @@ export const buildCompletedGenerationResult = async (args: {
         stepCount: args.result.steps.length,
         budget: args.typedAgent,
       }),
-      assistantContent: args.result.text,
+      assistantContent: cited.content,
+      citations: cited.turn,
     },
     effects: () => {
       return [meterCompletedTurn({ ...args, reportedModelId })];

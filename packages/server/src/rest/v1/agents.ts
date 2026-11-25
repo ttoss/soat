@@ -55,6 +55,7 @@ type CreateAgentBody = {
   knowledge_config?: unknown;
   output_schema?: unknown;
   prompt_caching?: unknown;
+  citation_config?: unknown;
   max_context_messages?: unknown;
   single_session_per_actor?: unknown;
   guardrail_ids?: unknown;
@@ -107,6 +108,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     // the lib owns the shape, so an unknown key is a 400 rather than an agent
     // its author believes caches and that never does.
     promptCaching: parseOptional<object | null>(body.prompt_caching),
+    citationConfig: parseOptional<object | null>(body.citation_config),
     maxContextMessages: parseOptional<number | null>(body.max_context_messages),
     singleSessionPerActor:
       typeof body.single_session_per_actor === 'boolean'
@@ -197,6 +199,7 @@ const buildCreateAgentArgs = (args: {
       object | undefined,
     outputSchema: body.output_schema as object | undefined,
     promptCaching: parseOptional<object>(body.prompt_caching),
+    citationConfig: parseOptional<object>(body.citation_config),
     maxContextMessages: parseNumber(body.max_context_messages),
     singleSessionPerActor:
       typeof body.single_session_per_actor === 'boolean'

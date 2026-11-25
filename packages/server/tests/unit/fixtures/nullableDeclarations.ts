@@ -77,6 +77,7 @@ export const DECLARATIONS: Record<string, Declaration[]> = {
         knowledge_config: { memory_store_ids: [fx.memoryStoreId], limit: 25 },
         output_schema: { type: 'object' },
         prompt_caching: { enabled: true },
+        citation_config: { enabled: true },
       };
     },
     (fx) => {

@@ -21,7 +21,12 @@ export const settleTestGeneration = async (args: {
             status: args.status,
             error: { code: 'GENERATION_FAILED', message: 'failed' },
           }
-        : { status: args.status, stopReason: 'stop', assistantContent: '' };
+        : {
+            status: args.status,
+            stopReason: 'stop',
+            assistantContent: '',
+            citations: null,
+          };
   const settled = await settleGeneration({
     generationId: args.publicId,
     fence: 'lease',
