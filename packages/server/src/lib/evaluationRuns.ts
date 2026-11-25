@@ -34,6 +34,7 @@ import {
   TERMINAL_EVAL_RUN_STATUSES,
 } from './evaluationRunReads';
 import { getEvalRow } from './evaluations';
+import { pinScorerModels, type ScorerModels } from './evaluationScorerModels';
 import { evalStarts } from './evaluationScorerReferences';
 import { kickEvalWorker } from './evaluationWorker';
 import { assertScorers } from './evaluationWriteChecks';
@@ -192,6 +193,7 @@ type RunPlan = {
   agentVersion: number;
   definition: EvalRunDefinition;
   deciderVersions: Record<string, number> | null;
+  scorerModels: ScorerModels | null;
   baselineRunDbId: number | null;
 };
 
@@ -270,6 +272,10 @@ const planRun = async (args: {
       scorers: evaluation.scorers,
       projectId: evaluation.projectId as number,
     }),
+    scorerModels: await pinScorerModels({
+      scorers: evaluation.scorers,
+      projectId: evaluation.projectId as number,
+    }),
     baselineRunDbId: await resolveBaselineRun({
       evalDbId: evaluation.id as number,
       baselineRunId: args.baselineRunId,
@@ -306,6 +312,7 @@ const executeSyncRun = async (args: {
           evalId: plan.evaluation.publicId,
           runId: run.publicId,
         },
+        scorerModels: plan.scorerModels,
         item,
         toolContext: args.toolContext,
       });
@@ -392,6 +399,7 @@ export const startEvalRun = async (args: {
     definition: storedEvalRunDefinition({ definition: plan.definition }),
     claim: plan.evaluation.claim ?? null,
     deciderVersions: plan.deciderVersions,
+    scorerModels: plan.scorerModels,
     // A queued run has not started yet — `startedAt` is stamped by the first
     // worker that picks up one of its items.
     status: wait ? 'running' : 'queued',

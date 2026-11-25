@@ -34,6 +34,7 @@ import {
   isLiveRunStatus,
   recountEvalRunProgress,
 } from './evaluationRunExecution';
+import { readScorerModels } from './evaluationScorerModels';
 import { runAsJob } from './requestCorrelation';
 import { agentReferences } from './resourceReferences';
 import { createScheduler } from './scheduler';
@@ -244,6 +245,7 @@ const handleEvalItemTask = async (args: {
     definition,
     agentOutputSchema: agent.outputSchema,
     deciderVersions: run.deciderVersions,
+    scorerModels: readScorerModels(run.scorerModels),
   });
   if (!gateOpen) return;
   const item = await db.DatasetItem.findByPk(args.task.datasetItemId as number);
@@ -270,6 +272,7 @@ const handleEvalItemTask = async (args: {
       evalId: context.evalPublicId,
       runId: run.publicId,
     },
+    scorerModels: readScorerModels(run.scorerModels),
     item,
     // Re-read from the row per item: this process has no request behind it, and
     // the bag is what makes the item's generation match production.

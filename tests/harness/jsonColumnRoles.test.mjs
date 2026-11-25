@@ -71,6 +71,7 @@ const ROLES = {
     'EvalRun.deciderVersions',
     'EvalRun.definition',
     'EvalRun.metadata',
+    'EvalRun.scorerModels',
     'EvalRun.authority',
     'EvalRun.toolContext',
     'EvalRun.verdictReasons',

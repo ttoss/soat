@@ -44,10 +44,12 @@ export const resolveProjectScopedModel = async (args: {
   projectId: number;
   aiProviderId?: string | null;
   model?: string | null;
+  modelRouteId?: string | null;
 }): Promise<ResolvedProjectScopedModel> => {
   const route = await resolveConsumerModelRoute({
     projectId: args.projectId,
     aiProviderId: args.aiProviderId,
+    modelRouteId: args.modelRouteId,
   });
 
   if (route) {

@@ -106,6 +106,13 @@ export class EvalRun extends Model {
   @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare deciderVersions: Record<string, number> | null;
 
+  /**
+   * The model each model-backed scorer grades under, keyed by scorer name and
+   * resolved at run start. Null when the eval has no model-backed scorer.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare scorerModels: Record<string, Record<string, string>> | null;
+
   /** `queued` | `running` | `completed` | `failed` | `cancelled`. */
   @Column({ type: DataType.STRING, allowNull: false })
   declare status: string;

@@ -5,6 +5,7 @@
  *
  * Pure: the label reads (`evaluationLabels.ts`) hand it the rows.
  */
+import type { ScorerModels } from './evaluationScorerModels';
 import {
   EXTERNALLY_GRADED,
   isScorerType,
@@ -28,14 +29,17 @@ export type RunCalibration = {
 
 /**
  * Each scorer's configuration under its outcome key, and the decider versions
- * the run pinned, digested without regard to key order: any change to what
- * graded, or to which key a configuration answers under, moves it. The name
+ * and scorer models the run pinned, digested without regard to key order: any
+ * change to what graded, or to which key a configuration answers under, moves
+ * it. A model route's content is not versioned, so an edit to the route a
+ * judge pinned leaves the fingerprint in place. The name
  * is the key rather than part of the configuration, so naming a scorer after
  * the key it already had leaves its labels counting.
  */
 export const scorerFingerprint = (args: {
   scorers: unknown[];
   deciderVersions: Record<string, number> | null;
+  scorerModels: ScorerModels | null;
 }): string => {
   const byKey: Record<string, unknown> = {};
   for (const scorer of args.scorers) {
@@ -46,6 +50,7 @@ export const scorerFingerprint = (args: {
   return `sha256:${stableDigest({
     scorers: byKey,
     decider_versions: args.deciderVersions ?? {},
+    scorer_models: args.scorerModels ?? {},
   })}`;
 };
 

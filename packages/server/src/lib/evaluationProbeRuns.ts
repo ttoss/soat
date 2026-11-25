@@ -18,6 +18,7 @@ import {
   failEvalRun,
   isLiveRunStatus,
 } from './evaluationRunExecution';
+import type { ScorerModels } from './evaluationScorerModels';
 import { parseWorkAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
@@ -32,6 +33,7 @@ type RunProbeContext = {
   definition: EvalRunDefinition;
   agentOutputSchema: unknown;
   deciderVersions: Record<string, number> | null;
+  scorerModels: ScorerModels | null;
   authority: WorkAuthority | null;
 };
 
@@ -49,6 +51,7 @@ const gradeRunProbes = (args: RunProbeContext): Promise<ProbeReport> => {
         evalId: args.evalPublicId,
         runId: args.run.publicId,
       },
+      scorerModels: args.scorerModels,
       datasetItemId: null,
       authority: args.authority,
     }),
@@ -122,6 +125,7 @@ export const assertRunProbesHold = async (args: {
     agent: { outputSchema: unknown };
     definition: EvalRunDefinition;
     deciderVersions: Record<string, number> | null;
+    scorerModels: ScorerModels | null;
   };
   authority: WorkAuthority | null;
 }): Promise<boolean> => {
@@ -134,6 +138,7 @@ export const assertRunProbesHold = async (args: {
     definition: plan.definition,
     agentOutputSchema: plan.agent.outputSchema,
     deciderVersions: plan.deciderVersions,
+    scorerModels: plan.scorerModels,
     authority: args.authority,
   });
   if (refusal !== null) throw refusal;

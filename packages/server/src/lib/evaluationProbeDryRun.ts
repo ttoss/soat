@@ -10,6 +10,7 @@ import { pinDeciderVersions } from './evaluationDeciderScorer';
 import { type ProbeReport, runProbes } from './evaluationProbes';
 import { buildScorerRunners } from './evaluationRunExecution';
 import { getEvalRow } from './evaluations';
+import { pinScorerModels } from './evaluationScorerModels';
 import { evalStarts } from './evaluationScorerReferences';
 import { scorerList } from './evaluationScorerValidation';
 import { assertScorers } from './evaluationWriteChecks';
@@ -67,6 +68,7 @@ export const dryRunProbes = async (args: {
         evalId: evaluation.publicId,
         runId: null,
       },
+      scorerModels: await pinScorerModels({ scorers, projectId }),
       datasetItemId: null,
       authority,
     }),

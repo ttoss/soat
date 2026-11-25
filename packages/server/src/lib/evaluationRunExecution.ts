@@ -21,11 +21,18 @@ import {
   type DeciderScoring,
   runDeciderScorerCall,
 } from './evaluationDeciderScorer';
+import type { EmbeddingScorerRunner } from './evaluationEmbeddingScorer';
 import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
 import { JUDGE_USAGE_SOURCE, runJudgeCompletion } from './evaluationJudge';
 import { buildRunAggregate } from './evaluationRunAggregate';
 import type { EvalRunDefinition } from './evaluationRunDefinition';
+import {
+  embeddingChoiceOf,
+  judgeBindingOf,
+  type ScorerModels,
+} from './evaluationScorerModels';
 import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
+import { scorerOutcomeKey } from './evaluationScorerValidation';
 import { runToolScorerCall, SCORER_USAGE_SOURCE } from './evaluationToolScorer';
 import { runVerdict } from './evaluationVerdict';
 import type { GenerationInputMessage } from './generationInputMessages';
@@ -129,10 +136,15 @@ export const scoringFailure = (error: unknown): StoredError => {
 export const buildScorerRunners = (args: {
   projectId: number;
   deciderScoring: DeciderScoring;
+  /** The run's `scorer_models`; a scorer without a pin grades as configured. */
+  scorerModels: ScorerModels | null;
   /** The item graded, or null for a probe, which grades no item. */
   datasetItemId: string | null;
   authority: WorkAuthority | null;
 }) => {
+  const pinOf = (scorer: Record<string, unknown>) => {
+    return args.scorerModels?.[scorerOutcomeKey(scorer)];
+  };
   return {
     runJudge: (judge: {
       scorer: Record<string, unknown>;
@@ -140,7 +152,14 @@ export const buildScorerRunners = (args: {
       output: string;
       expected: string | null;
     }) => {
-      return runJudgeCompletion({ projectId: args.projectId, ...judge });
+      return runJudgeCompletion({
+        projectId: args.projectId,
+        ...judge,
+        binding: judgeBindingOf({
+          scorer: judge.scorer,
+          pin: pinOf(judge.scorer),
+        }),
+      });
     },
     runToolScorer: (call: {
       scorer: Record<string, unknown>;
@@ -152,11 +171,12 @@ export const buildScorerRunners = (args: {
         ...call,
       });
     },
-    // The embedding stack is env-configured (EMBEDDING_PROVIDER / _MODEL — the
-    // same one document ingestion uses), so the only thing bound here is the
-    // project the scorer's embeddings are billed to.
-    runEmbeddings: (embed: { texts: string[] }) => {
-      return embedForProject({ projectId: args.projectId, texts: embed.texts });
+    runEmbeddings: (embed: Parameters<EmbeddingScorerRunner>[0]) => {
+      return embedForProject({
+        projectId: args.projectId,
+        texts: embed.texts,
+        pinned: embeddingChoiceOf(pinOf(embed.scorer)),
+      });
     },
     runDecider: (call: { scorer: Record<string, unknown>; input: unknown }) => {
       return runDeciderScorerCall({
@@ -189,6 +209,7 @@ export const runEvalItem = async (args: {
   agentOutputSchema: unknown;
   scorers: unknown[];
   deciderScoring: DeciderScoring;
+  scorerModels: ScorerModels | null;
   datasetItemId: string;
   input: unknown;
   expectedOutput: string | null;
@@ -250,12 +271,7 @@ export const runEvalItem = async (args: {
       expectedOutput: args.expectedOutput,
       itemMetadata: args.itemMetadata,
       agentOutputSchema: args.agentOutputSchema,
-      ...buildScorerRunners({
-        projectId: args.projectId,
-        deciderScoring: args.deciderScoring,
-        datasetItemId: args.datasetItemId,
-        authority: args.authority,
-      }),
+      ...buildScorerRunners(args),
     });
   } catch (error) {
     // An ungraded answer is an item error, not a 0 — recording 0 would
@@ -297,6 +313,7 @@ export const executeAndRecordItem = async (args: {
   agentVersion: number;
   scorers: unknown[];
   deciderScoring: DeciderScoring;
+  scorerModels: ScorerModels | null;
   item: DatasetItemRow;
   toolContext?: Record<string, string>;
   authority: WorkAuthority | null;
@@ -310,6 +327,7 @@ export const executeAndRecordItem = async (args: {
     agentOutputSchema: args.agent.outputSchema,
     scorers: args.scorers,
     deciderScoring: args.deciderScoring,
+    scorerModels: args.scorerModels,
     datasetItemId: args.item.publicId,
     input: args.item.input,
     expectedOutput: args.item.expectedOutput,

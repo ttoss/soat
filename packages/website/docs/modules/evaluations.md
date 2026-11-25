@@ -99,6 +99,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `definition` | object \| null | The eval's `scorers`, `pass_threshold`, `group_by`, `evidence` and `criteria` as they were when the run was created, which every item is scored and the run settled by; see [Version pinning](#version-pinning). `null` on a run that recorded none |
 | `claim` | object \| null | The eval's `claim` as it was when the run was created: what this run tested; see [The claim](#the-claim). `null` when the eval stated none |
 | `decider_versions` | object \| null | Scorer name → the decider version each [`decider` scorer](#decider-scorers-decider) grades under, resolved when the run started; `null` when the eval has none |
+| `scorer_models` | object \| null | Scorer name → the model each `llm_judge` and `embedding_similarity` scorer grades under, resolved when the run started: `{ ai_provider_id, model }` or `{ model_route_id }` for a judge, `{ embedding_provider, model }` for an embedding scorer; `null` when the run pins none |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `cancelled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
@@ -198,8 +199,9 @@ and its meaning differs per embedding model, so calibrate it against your own da
 - An **embedding backend failure** marks the *item* errored — never the run failed, never
   a score of 0.
 
-Scores from runs executed under different `EMBEDDING_MODEL` values are not comparable;
-re-run the baseline when the embedding model changes.
+The run pins the embedding model in `scorer_models` when it starts and grades every item
+with it. Scores from runs pinned to different embedding models are not comparable; re-run
+the baseline when the embedding model changes.
 
 ### LLM judge
 
@@ -518,6 +520,13 @@ the [`verdict`](#pass-semantics) reads `definition.pass_threshold` and
 (its agent, scorers, threshold, grouping key or evidence) applies to runs created after it;
 a queued run keeps what it started with, and a finished run still says what graded it.
 
+What a model-backed scorer resolves is pinned the same way, in `scorer_models`: the model
+route an `llm_judge` pinning no provider follows (the project's default), the model a judge
+pinning only `ai_provider_id` runs (the provider's `default_model`), and the embedding
+model of an `embedding_similarity` scorer. A change to any of them reaches only runs
+created after it. A model route is not versioned, so an edit to its targets reaches a
+queued run.
+
 ```json
 {
   "id": "evrun_V1StGXR8Z5jdHi6B",
@@ -635,12 +644,13 @@ records the verdict and who gave it.
 reports, per scorer keyed as `scores[].scorer` keys it, the labeled results it graded,
 its `agreement` with the labels (`null` with none), its `false_pass` (passed what the
 label failed) and its `false_fail` (the reverse), under `scorer_fingerprint`: a hash of
-each scorer the run recorded, under its name, and the decider versions it pinned. Any change to a
-scorer's configuration (prompt, a pinned `model` or `ai_provider_id`, threshold, a decider
-version) moves the fingerprint. What a scorer resolves when it runs is not in it: an
-`llm_judge` pinning no provider follows the project's default model route, an
-`embedding_similarity` the project's embedding model, and a `tool` scorer its tool's
-current pipeline; after changing one of those, label a new run.
+each scorer the run recorded, under its name, and the decider versions and
+`scorer_models` it pinned. Any change to a scorer's configuration (prompt, a pinned
+`model` or `ai_provider_id`, threshold), a decider version, or the model a scorer
+resolves (the project's default model route for an `llm_judge` pinning no provider, a
+provider's default model, the embedding model) moves the fingerprint. An edit to the
+targets of a pinned model route, and a `tool` scorer's pipeline, do not: after changing
+one of those, label a new run.
 
 `evidence.min_calibration: { labeled, agreement }` makes the claim require it: for every
 scorer whose verdict comes from outside the eval (`llm_judge`, `embedding_similarity`,

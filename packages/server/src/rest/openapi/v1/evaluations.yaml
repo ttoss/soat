@@ -3231,6 +3231,19 @@ components:
             has no decider scorer.
           example:
             review: 2
+        scorer_models:
+          type: object
+          nullable: true
+          additionalProperties:
+            $ref: '#/components/schemas/ScorerModelPin'
+          description: >-
+            The model each `llm_judge` and `embedding_similarity` scorer
+            grades under, keyed by scorer name and resolved when the run
+            started: every item grades with it, and it enters the run's
+            `scorer_fingerprint`. Null when the run pins no model.
+          example:
+            judge:
+              model_route_id: route_V1StGXR8Z5jdHi6B
         status:
           type: string
           enum: [queued, running, completed, failed, cancelled]
@@ -3316,6 +3329,28 @@ components:
           $ref: '#/components/schemas/Evidence'
         criteria:
           $ref: '#/components/schemas/Criteria'
+    ScorerModelPin:
+      type: object
+      additionalProperties: false
+      description: >-
+        What a model-backed scorer grades under. A judge pinning a provider
+        records `ai_provider_id` and `model` (the provider's default when
+        the scorer names none); a judge pinning no provider records the
+        project's default `model_route_id`; an `embedding_similarity`
+        scorer records `embedding_provider` and `model`.
+      properties:
+        ai_provider_id:
+          type: string
+          example: aip_V1StGXR8Z5jdHi6B
+        model:
+          type: string
+          example: gpt-4o-mini
+        model_route_id:
+          type: string
+          example: route_V1StGXR8Z5jdHi6B
+        embedding_provider:
+          type: string
+          enum: [ollama, openai, bedrock]
     EvalRunCalibration:
       type: object
       additionalProperties: false
@@ -3326,12 +3361,12 @@ components:
           nullable: true
           description: >-
             SHA-256 of each scorer the run recorded, under its name, and the
-            decider versions it pinned, key order aside: a changed prompt,
-            pinned model or
-            provider, threshold or decider version moves it. What a scorer
-            resolves when it runs (the project's default model route or
-            embedding model, a tool's pipeline) is not in it. Null when the
-            run recorded no definition.
+            decider versions and scorer models it pinned, key order aside: a
+            changed prompt, threshold, decider version or resolved model
+            (`scorer_models`, so a change of the project's default model
+            route or of the embedding model too) moves it. An edit to a
+            pinned model route's targets, or to a tool's pipeline, does not.
+            Null when the run recorded no definition.
           example: sha256:9f2c4e7a1b3d5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcd
         labeled_count:
           type: integer
