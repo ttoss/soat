@@ -22,6 +22,7 @@ export type AgentUpdateFields = {
   knowledgeConfig?: object | null;
   outputSchema?: object | null;
   promptCaching?: object | null;
+  citationConfig?: object | null;
   maxContextMessages?: number | null;
   singleSessionPerActor?: boolean;
   guardrailIds?: string[] | null;
@@ -52,6 +53,7 @@ export const AGENT_SCALAR_FIELDS = [
   'knowledgeConfig',
   'outputSchema',
   'promptCaching',
+  'citationConfig',
   'maxContextMessages',
   'singleSessionPerActor',
   'guardrailIds',
@@ -92,6 +94,7 @@ export const AGENT_CREATE_DEFAULTS = {
   maxOutputTokens: null,
   reasoning: null,
   promptCaching: null,
+  citationConfig: null,
   maxContextMessages: null,
   onApprovalExpiry: null,
   timezone: DEFAULT_TIMEZONE,

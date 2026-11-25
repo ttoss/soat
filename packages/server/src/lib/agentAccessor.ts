@@ -41,6 +41,8 @@ export type MappedAgent = {
   output_schema: object | null;
   /** `{ enabled }` — see `promptCaching.ts`. Null is off. */
   prompt_caching: object | null;
+  /** `{ enabled }` — see `citations.ts`. Null is off. */
+  citation_config: object | null;
   max_context_messages: number | null;
   single_session_per_actor: boolean;
   trace_content_mode: string | null;

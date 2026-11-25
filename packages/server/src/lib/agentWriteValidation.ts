@@ -9,25 +9,34 @@
  */
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { assertValidOnApprovalExpiry } from './agentApprovalExpiry';
 import { readKnowledgeConfig } from './agentKnowledgeConfig';
+import {
+  assertValidMaxOutputTokens,
+  assertValidReasoning,
+} from './agentModelSettings';
 import {
   assertNamedToolsOffered,
   knownOfferedToolNames,
 } from './agentNamedTools';
 import { collectStepRuleActiveToolIds } from './agentStepRules';
+import { assertValidStopConditions } from './agentStopConditions';
 import {
   type AgentToolBinding,
   readAgentToolBindings,
   splitToolBindings,
 } from './agentToolBindings';
 import { assertModelOfferedByProvider } from './aiProviders';
+import { assertValidCitationConfig } from './citations';
 import { assertGuardrailsExist } from './guardrails';
 import {
   assertModelBindingResolvable,
   resolveModelRouteDbId,
   validateModelRouteExclusivity,
 } from './modelRoutes';
+import { validateOutputSchema } from './outputSchema';
 import { isPlainObject } from './plainObject';
+import { assertValidPromptCaching } from './promptCaching';
 import {
   aiProviderReferences,
   documentReferences,
@@ -35,6 +44,25 @@ import {
   toolReferences,
 } from './resourceReferences';
 import { validateAgentTraceContentMode } from './traceContentPolicy';
+
+/** The shape of each setting a create or an update may carry. */
+export const assertValidAgentSettings = (args: {
+  outputSchema?: unknown;
+  onApprovalExpiry?: unknown;
+  stopConditions?: unknown;
+  promptCaching?: unknown;
+  citationConfig?: unknown;
+  maxOutputTokens?: unknown;
+  reasoning?: unknown;
+}): void => {
+  validateOutputSchema(args.outputSchema);
+  assertValidOnApprovalExpiry(args.onApprovalExpiry);
+  assertValidStopConditions(args.stopConditions);
+  assertValidPromptCaching(args.promptCaching);
+  assertValidCitationConfig(args.citationConfig);
+  assertValidMaxOutputTokens(args.maxOutputTokens);
+  assertValidReasoning(args.reasoning);
+};
 
 /**
  * Every declared cross-resource reference on an agent write, checked together.

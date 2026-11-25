@@ -11,6 +11,7 @@
 import type { LanguageModel, LanguageModelUsage, Tool } from 'ai';
 
 import { type AgentRunAs, readAgentRunAs } from './agentRunAs';
+import type { TurnCitations } from './citations';
 import type { GenerationProvenance } from './generationProvenance';
 import type { ReplayedWindow } from './replayRefusal';
 import type { PublicMessages, VendorOptions } from './vendorOptions';
@@ -59,6 +60,7 @@ export type TypedAgent = {
   knowledgeConfig: unknown;
   outputSchema: unknown;
   promptCaching: unknown;
+  citationConfig: unknown;
   guardrailIds?: string[] | null;
   /** Read through `resolveGenerationClock`, never raw. */
   timezone?: unknown;
@@ -180,6 +182,8 @@ export const fromAgentConfig = (pending: PendingGeneration): TypedAgent => {
     // assembled and is persisted on it, so a continuation replays the mark
     // rather than re-deriving it from a config that may have changed since.
     promptCaching: null,
+    // A continuation reads whether its turn cites from the generation record.
+    citationConfig: null,
     outputSchema: pending.agentConfig.outputSchema,
     project: { id: pending.projectId, publicId: pending.projectPublicId },
     aiProvider: { publicId: '' },
@@ -252,6 +256,8 @@ export type GenerationResult = {
     vendorOptions?: VendorOptions;
     /** Structured object matching the agent's `outputSchema`, when configured. */
     object?: unknown;
+    /** Present when the turn cites (`citations.ts`). */
+    citations?: TurnCitations;
   };
   requiredAction?: {
     type: 'submit_tool_outputs';

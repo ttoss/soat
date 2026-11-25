@@ -5,25 +5,17 @@ import {
   getAgentIncludes,
   type MappedAgent,
 } from './agentAccessor';
-import { assertValidOnApprovalExpiry } from './agentApprovalExpiry';
 import {
   AGENT_CREATE_DEFAULTS,
   type AgentUpdateFields,
   buildAgentUpdates,
 } from './agentConfigFields';
 import {
-  assertValidMaxOutputTokens,
-  assertValidReasoning,
-} from './agentModelSettings';
-import {
   type AgentRunAs,
   assertRunAsHasPolicies,
   readAgentRunAs,
 } from './agentRunAs';
-import {
-  assertForcedToolChoiceCanStop,
-  assertValidStopConditions,
-} from './agentStopConditions';
+import { assertForcedToolChoiceCanStop } from './agentStopConditions';
 import {
   type AgentToolBinding,
   readAgentToolBindings,
@@ -38,16 +30,15 @@ import {
 import {
   assertAgentReferencesExist,
   assertModelBinding,
+  assertValidAgentSettings,
   requireAiProviderDbId,
   resolveCreateModelBinding,
 } from './agentWriteValidation';
 import { emitResourceEvent } from './eventBus';
 import { assertValidInstructionTokens } from './instructionTemplates';
 import { resolveModelRouteDbId } from './modelRoutes';
-import { validateOutputSchema } from './outputSchema';
 import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
-import { assertValidPromptCaching } from './promptCaching';
 import { parseActiveRelease } from './releaseAssignment';
 import { toResourceRef } from './resourceVersions';
 import { inlineBindingSecretIds } from './secretUse';
@@ -88,6 +79,7 @@ export const mapAgent = (agent: AgentRow): MappedAgent => {
     knowledge_config: (agent.knowledgeConfig as object | null) ?? null,
     output_schema: agent.outputSchema,
     prompt_caching: agent.promptCaching,
+    citation_config: agent.citationConfig,
     max_context_messages: agent.maxContextMessages,
     single_session_per_actor: agent.singleSessionPerActor,
     guardrail_ids: agent.guardrailIds,
@@ -160,6 +152,7 @@ export const createAgent = async (
     knowledgeConfig?: object;
     outputSchema?: object;
     promptCaching?: object;
+    citationConfig?: object;
     maxContextMessages?: number;
     singleSessionPerActor?: boolean;
     guardrailIds?: string[] | null;
@@ -169,13 +162,8 @@ export const createAgent = async (
     writer: Writer;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
-  validateOutputSchema(args.outputSchema);
+  assertValidAgentSettings(args);
   assertValidInstructionTokens(args.instructions);
-  assertValidOnApprovalExpiry(args.onApprovalExpiry);
-  assertValidStopConditions(args.stopConditions);
-  assertValidPromptCaching(args.promptCaching);
-  assertValidMaxOutputTokens(args.maxOutputTokens);
-  assertValidReasoning(args.reasoning);
   assertForcedToolChoiceCanStop({
     toolChoice: args.toolChoice,
     stopConditions: args.stopConditions,
@@ -320,13 +308,8 @@ export const updateAgent = async (
   } & AgentUpdateFields &
     AgentVersionAuthorship
 ): Promise<MappedAgent> => {
-  validateOutputSchema(args.outputSchema);
+  assertValidAgentSettings(args);
   assertValidInstructionTokens(args.instructions);
-  assertValidOnApprovalExpiry(args.onApprovalExpiry);
-  assertValidStopConditions(args.stopConditions);
-  assertValidPromptCaching(args.promptCaching);
-  assertValidMaxOutputTokens(args.maxOutputTokens);
-  assertValidReasoning(args.reasoning);
 
   // Loaded with its joins so the pre-write config can be snapshotted through
   // the same mapper that serializes the response — the diff is then between two

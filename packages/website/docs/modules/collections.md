@@ -78,7 +78,7 @@ Item bytes (`data`, `key`, `tags`) count toward the project's [`gb_day`](./usage
 - Collection routes authorize against `srn:<project>:collection:<id>`.
 - Every item route passes two checks: the action against the collection's SRN, then against the item's, `srn:<project>:collection_item:<key>`, with the item's tags as `iam:ResourceTag/<key>`. A listing compiles the second check into the query, so it returns only the items the caller may read.
 - A write is judged against the tags the item holds and the tags it will hold, so a principal scoped by tag cannot move an item into or out of its scope.
-- A read the caller may not make answers `404`.
+- A read the caller may not make answers `404`, unless another read they hold already shows them the resource: a caller who may list a collection's items but not get one is refused `403 FORBIDDEN`, naming the action and `denied_by`.
 
 To confine a principal to one actor's items, grant the collection and condition the items:
 

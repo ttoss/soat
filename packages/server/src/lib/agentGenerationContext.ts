@@ -21,6 +21,7 @@ import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
+import { resolveCitationsEnabled } from './citations';
 import {
   type GenerationConversation,
   resolveServerToolContextIdentity,
@@ -75,6 +76,11 @@ export type GenerationContext = {
    * {@link GenerationContext.allMessages}. Stamped on the generation record.
    */
   retrieval: KnowledgeRetrieval;
+  /**
+   * Whether the turn labelled its injected knowledge for citation and verifies
+   * the citations its answer makes (`citations.ts`).
+   */
+  citesSources: boolean;
   /**
    * The caller's messages after content resolution, without the agent's
    * instructions or its knowledge injections — the replayable half of
@@ -150,6 +156,7 @@ const assembleContextMessages = async (args: {
   typedAgent: TypedAgent;
   resolvedMessages: Array<{ role: string; content: unknown }>;
   knowledgeConfig?: object;
+  citesSources: boolean;
   authority: WorkAuthority | null;
   agentAuthority: AgentAuthority;
   unavailableToolNames: string[];
@@ -189,6 +196,7 @@ const assembleContextMessages = async (args: {
     },
     messages: args.resolvedMessages,
     actorId: args.actorId,
+    citesSources: args.citesSources,
   });
 
   log(
@@ -254,6 +262,8 @@ export type BuildGenerationContextArgs = {
   rootTraceId?: string | null;
   remainingDepth?: number;
   knowledgeConfig?: object;
+  /** The request's own `citation_config`, over the agent's. */
+  citationConfig?: object;
   guardrailContext?: Record<string, unknown> | null;
   sessionId?: string | null;
   /** An actor with no session — see `resolveGenerationEndUser`. */
@@ -424,12 +434,17 @@ export const buildGenerationContext = async (
   const resolvedTools = toolSurface.tools;
   assertSurfaceOffersNamedTools({ typedAgent, toolSurface });
 
+  const citesSources = resolveCitationsEnabled({
+    stored: typedAgent.citationConfig,
+    requested: args.citationConfig,
+  });
   const { allMessages, retrieval } = await assembleContextMessages({
     agentId: args.agentId,
     generationId,
     typedAgent,
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
+    citesSources,
     authority: args.authority,
     agentAuthority,
     unavailableToolNames: toolSurface.unavailableToolNames,
@@ -448,6 +463,7 @@ export const buildGenerationContext = async (
     toolSurface: await measureToolSurface({ tools: resolvedTools }),
     allMessages,
     retrieval,
+    citesSources,
     inputMessages: resolvedMessages,
     generationId,
     toolContext: toolContext ?? null,

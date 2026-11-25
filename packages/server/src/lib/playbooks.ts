@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { type Page, paginatedList } from './pagination';
+import { autoUpgradePlaybookCases } from './playbookAutoUpgrade';
 import type { PlaybookDefinition } from './playbookDefinition';
 import {
   assertWriterCanRun,
@@ -59,6 +60,7 @@ export const mapPlaybook = (row: PlaybookRow) => {
     version: row.version,
     definition: row.definition,
     policy_ids: row.policyIds ?? [],
+    auto_upgrade: row.autoUpgrade,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -162,6 +164,7 @@ export const createPlaybook = async (
     description?: unknown;
     definition: unknown;
     policyIds: string[] | null | undefined;
+    autoUpgrade?: boolean;
     writer: Writer;
   } & VersionedWrite
 ): Promise<MappedPlaybook> => {
@@ -192,6 +195,7 @@ export const createPlaybook = async (
     version: 1,
     definition,
     policyIds: args.policyIds,
+    autoUpgrade: args.autoUpgrade ?? false,
   });
   const mapped = mapPlaybook(await playbooks.reload(playbook));
 
@@ -254,6 +258,7 @@ export const updatePlaybook = async (
     description?: unknown;
     definition?: unknown;
     policyIds?: string[] | null;
+    autoUpgrade?: boolean;
     writer: Writer;
   } & VersionedWrite
 ): Promise<MappedPlaybook> => {
@@ -301,9 +306,11 @@ export const updatePlaybook = async (
   }
   if (definition !== undefined) playbook.definition = definition;
   if (args.policyIds !== undefined) playbook.policyIds = args.policyIds;
+  if (args.autoUpgrade !== undefined) playbook.autoUpgrade = args.autoUpgrade;
 
   // Only a changed definition or grant bumps the version; a rename or an
   // identical rewrite leaves it where it is.
+  const previousVersion = playbook.version;
   await playbookVersionStore.commitConfigChange({
     resource: toResourceRef(playbook),
     expectedVersion: args.expectedVersion,
@@ -319,7 +326,13 @@ export const updatePlaybook = async (
     },
   });
 
-  return mapPlaybook(await playbooks.reload(playbook));
+  const updated = await playbooks.reload(playbook);
+  await autoUpgradePlaybookCases({
+    playbook: updated,
+    previousVersion,
+    createdBy: args.createdBy,
+  });
+  return mapPlaybook(updated);
 };
 
 const casesOf = (playbook: PlaybookRow): Promise<number> => {

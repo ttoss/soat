@@ -130,6 +130,9 @@ describe('Agent versions', () => {
         [
           'active_tool_ids',
           'ai_provider_id',
+          // Configuration: whether a turn cites changes what it returns, so a
+          // restore has to bring it back.
+          'citation_config',
           'guardrail_ids',
           'instructions',
           'knowledge_config',

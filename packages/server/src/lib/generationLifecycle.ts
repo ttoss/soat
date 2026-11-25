@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import type { PendingGeneration } from './agentGenerationTypes';
+import type { TurnCitations } from './citations';
 import { segmentAbortReason } from './generationSegment';
 import { logSettleFailure, settleGeneration } from './generationSettle';
 import { resolveStopReason } from './generationStopReason';
@@ -209,6 +210,8 @@ type CompletionSideEffectsArgs = {
     text: string;
     response?: { modelId?: string };
   };
+  /** The answer after `resolveTurnCitations`. */
+  cited: { content: string; turn: TurnCitations | null };
 };
 
 /**
@@ -265,7 +268,8 @@ const runCompletionSideEffects = async (
         stepCount: args.pending.stepCount + args.result.steps.length,
         budget: args.pending.agentConfig,
       }),
-      assistantContent: args.result.text,
+      assistantContent: args.cited.content,
+      citations: args.cited.turn,
     },
     effects: () => {
       return [

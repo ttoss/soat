@@ -59,6 +59,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `idempotency_key`                    | string \| null | Key the generation was started under, unique within the project (see [Running a generation at most once](./agents.md#running-a-generation-at-most-once))                        |
 | `routing`                            | object \| null | What the [model route](./model-routes.md) did for this generation                                                                                                               |
 | `retrieval`                          | array \| null  | What `knowledge_config` retrieval injected — document, version and chunk, or memory — for this turn (see [What retrieval served](#what-retrieval-served))                       |
+| `citations`                          | array \| null  | What the answer cited, verified, as pointers; `null` when the turn did not cite (see [What the answer cited](#what-the-answer-cited))                                           |
 | `extraction`                         | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))                                |
 | `content_redacted_at`                | string \| null | When the generation's content was purged; `null` while content is intact                                                                                                        |
 | `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system`                                                                                  |
@@ -255,6 +256,29 @@ Together with `agent_version`, it answers "which playbook version produced this 
 
 It is written by the server when the turn starts and cannot be set by a caller. Being pointers and no text, it is not content: it survives a [purge](#content-purge) and is written even on a zero-retention agent.
 
+### What the answer cited
+
+A turn with [`citation_config`](./agents.md#citations) on records what its answer cited, verified: each entry of `output.citations` without its `quoted_text`.
+
+```json
+"citations": [
+  {
+    "origin": "retrieval",
+    "document_id": "doc_V1StGXR8Z5jdHi6B",
+    "document_version": 3,
+    "chunk_id": "dchunk_V1StGXR8Z5jdHi6B",
+    "file_id": null,
+    "page": 12,
+    "page_end": 12,
+    "source_span": { "start": 2, "end": 26 },
+    "answer_span": { "start": 10, "end": 31 },
+    "verification": "runtime"
+  }
+]
+```
+
+`null` means the turn did not ask for citations; `[]` means it is still running, or its answer cited nothing that verified. `source_span` locates the quote in the chunk while `chunk_id` resolves. Being pointers, it survives a [purge](#content-purge).
+
 ### Vendor options
 
 A model's answer carries vendor-specific state its next call needs back: a reasoning signature, an item id, encrypted reasoning. The runtime stores it beside the turn's messages and rejoins it only when it builds a model call, so `output.response_messages`, the [transcript](#transcript), the stored trace steps, stream frames, webhooks and a `builtin` read of any of them carry no `providerOptions`, for every provider.
@@ -429,7 +453,7 @@ Being three integers and no text, `tool_surface` is not content: it survives a [
 
 [`DELETE /generations/{generation_id}/content`](/docs/api/generations/purge-generation-content) clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
 
-The usage and audit skeleton is preserved (the billing ledger outlives the erasure): ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`, `retrieval`). A purged generation reads back as that skeleton, not a 404.
+The usage and audit skeleton is preserved (the billing ledger outlives the erasure): ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`, `retrieval`, `citations`). A purged generation reads back as that skeleton, not a 404.
 
 The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
 

@@ -44,6 +44,7 @@ export const generationRequestDigest = (args: CreateGenerationArgs): string => {
     remainingDepth: args.remainingDepth,
     toolContext: args.toolContext,
     knowledgeConfig: args.knowledgeConfig,
+    citationConfig: args.citationConfig,
     actionId: args.actionId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,

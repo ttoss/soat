@@ -135,6 +135,10 @@ export class Agent extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare outputSchema: object | null;
 
+  /** `{ enabled }` — see `citations.ts`. Null is off. */
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare citationConfig: object | null;
+
   /**
    * `{ enabled }` — whether this agent's turns mark a prompt-cache breakpoint
    * at the end of their static prefix. Null (the default) is off: a cache write

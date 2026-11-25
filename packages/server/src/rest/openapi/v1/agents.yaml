@@ -638,6 +638,13 @@ paths:
                   frame.
 
 
+                  A turn that cites (`citation_config`) streams its text without
+                  the citation markup, and ends with an `event: citations`
+                  frame whose `data` is `{"citations": [...],
+                  "rejected_citations": [...]}`, verified as `output.citations`
+                  is.
+
+
                   A turn that pauses on a `client` tool ends with one more frame
                   before `[DONE]`: the generation as the non-streaming path
                   returns it, `status: requires_action` with `required_action`
@@ -1792,6 +1799,21 @@ components:
             enabled:
               type: boolean
               description: Whether the breakpoint is marked. Defaults to false.
+        citation_config:
+          type: object
+          nullable: true
+          description: >-
+            Structured citations for this agent's turns. `{"enabled": true}`
+            labels each `knowledge_config` result the turn injects and asks the
+            model to cite the passages it uses. Every citation is checked
+            before it is returned: its source was injected into this turn and
+            its quoted text is in that source. One that fails lands in
+            `output.rejected_citations` with its reason, never in
+            `output.citations`. Null or omitted is off.
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the turn asks for and returns citations. Defaults to false.
         max_context_messages:
           type: integer
           nullable: true
@@ -2358,6 +2380,22 @@ components:
             enabled:
               type: boolean
               description: Whether the breakpoint is marked. Defaults to false.
+        citation_config:
+          type: object
+          nullable: true
+          description: >-
+            Structured citations for this agent's turns. `{"enabled": true}`
+            labels each `knowledge_config` result the turn injects and asks the
+            model to cite the passages it uses. Every citation is checked
+            before it is returned: its source was injected into this turn and
+            its quoted text is in that source. One that fails lands in
+            `output.rejected_citations` with its reason, never in
+            `output.citations`. Null or omitted is off.
+          additionalProperties: false
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the turn asks for and returns citations. Defaults to false.
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -2654,6 +2692,22 @@ components:
             enabled:
               type: boolean
               description: Whether the breakpoint is marked. Defaults to false.
+        citation_config:
+          type: object
+          nullable: true
+          description: >-
+            Structured citations for this agent's turns. `{"enabled": true}`
+            labels each `knowledge_config` result the turn injects and asks the
+            model to cite the passages it uses. Every citation is checked
+            before it is returned: its source was injected into this turn and
+            its quoted text is in that source. One that fails lands in
+            `output.rejected_citations` with its reason, never in
+            `output.citations`. Null or omitted is off.
+          additionalProperties: false
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the turn asks for and returns citations. Defaults to false.
         max_context_messages:
           type: integer
           nullable: true
@@ -2931,6 +2985,16 @@ components:
               type: integer
               description: >
                 Maximum number of results to inject. Omitted, 10 are injected.
+        citation_config:
+          type: object
+          additionalProperties: false
+          description: >-
+            Per-generation citations, over the agent's stored
+            `citation_config`. Omitted, the agent's applies.
+          properties:
+            enabled:
+              type: boolean
+              description: Whether this turn asks for and returns citations.
 
     MessageContentPart:
       oneOf:
@@ -3137,6 +3201,23 @@ components:
               type: object
               nullable: true
               description: Structured object matching the agent's `output_schema` (when `output_schema` is set)
+            citations:
+              type: array
+              description: >-
+                Present when the turn cites (`citation_config`). Each passage
+                the answer cites, verified: its source was injected into this
+                turn and `quoted_text` is that source's own text. In the order
+                the answer cites them.
+              items:
+                $ref: './generations.yaml#/components/schemas/Citation'
+            rejected_citations:
+              type: array
+              description: >-
+                Present when the turn cites. Each citation the answer made that
+                failed verification, with its reason; none of them is in
+                `citations`.
+              items:
+                $ref: './generations.yaml#/components/schemas/RejectedCitation'
         required_action:
           type: object
           nullable: true

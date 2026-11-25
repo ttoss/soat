@@ -343,6 +343,12 @@ export class Generation extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare retrieval: Array<Record<string, unknown>> | null;
 
+  // What the answer cited, verified (`citations.ts`): pointers and spans, never
+  // the quoted text, so it survives a purge like `retrieval`. Null when the turn
+  // did not ask for citations; empty from creation until a citing turn settles.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare citations: Array<Record<string, unknown>> | null;
+
   // How many results from untrusted tools, and from knowledge, had entered the
   // turn's context, its continuation chain included. Counts, not content, so a
   // purge keeps them; only `generationProvenance.ts` computes their writes.
