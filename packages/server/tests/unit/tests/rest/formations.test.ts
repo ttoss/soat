@@ -2703,6 +2703,84 @@ resources:
     });
   });
 
+  describe('Formation nested use_previous_value parameter', () => {
+    let formationId: string;
+
+    const template = (other: string) => {
+      return {
+        parameters: {
+          Action: { type: 'string', use_previous_value: true },
+        },
+        resources: {
+          NestedPolicy: {
+            type: 'policy',
+            properties: {
+              document: {
+                statement: [
+                  {
+                    effect: 'Deny',
+                    action: [{ param: 'Action' }, other],
+                    resource: ['*'],
+                  },
+                ],
+              },
+            },
+          },
+        },
+      };
+    };
+
+    const readPolicyDocument = async () => {
+      const formation = await authenticatedTestClient(adminToken).get(
+        `/api/v1/formations/${formationId}`
+      );
+      const policyId = formation.body.resources[0].physical_resource_id;
+      const policy = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies/${policyId}`
+      );
+      return policy.body.document;
+    };
+
+    test('an omitted nested param keeps its previous value on update', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `nested-keep-${Date.now()}`,
+          template: template('memories:GetMemory'),
+          parameters: { Action: 'memories:CreateMemory' },
+        });
+      expect(created.status).toBe(201);
+      formationId = created.body.id;
+
+      const plan = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: formationId,
+          template: template('memories:GetMemory'),
+        });
+      expect(plan.status).toBe(200);
+      expect(plan.body.changes[0].action).toBe('no-op');
+
+      const updated = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/formations/${formationId}`)
+        .send({ template: template('memories:UpdateMemory') });
+      expect(updated.status).toBe(200);
+      expect(updated.body.status).toBe('active');
+
+      expect(await readPolicyDocument()).toEqual({
+        statement: [
+          {
+            effect: 'Deny',
+            action: ['memories:CreateMemory', 'memories:UpdateMemory'],
+            resource: ['*'],
+          },
+        ],
+      });
+    });
+  });
+
   // ── tool resource type ───────────────────────────────────────────────
 
   describe('Formation with tool resources', () => {

@@ -34,14 +34,45 @@ export const normalizeDeclaredProperties = (
   return normalizePropertyKeys(properties);
 };
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+// Fills each `undefined` in `value` from `previous` at the same path; one with
+// no previous value is left out, an array item included.
+const keepUnresolved = (args: {
+  value: unknown;
+  previous: unknown;
+}): unknown => {
+  const { value, previous } = args;
+  if (value === undefined) return previous;
+  if (Array.isArray(value)) {
+    const before = Array.isArray(previous) ? previous : [];
+    return value.flatMap((item, index) => {
+      const kept = keepUnresolved({ value: item, previous: before[index] });
+      return kept === undefined ? [] : [kept];
+    });
+  }
+  if (isPlainObject(value)) {
+    const before = isPlainObject(previous) ? previous : {};
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      const kept = keepUnresolved({ value: item, previous: before[key] });
+      if (kept !== undefined) result[key] = kept;
+    }
+    return result;
+  }
+  return value;
+};
+
 /**
- * Applies the "an undefined property reuses the previous value" rule and
+ * Applies the "an undefined value reuses the previous value" rule and
  * reports whether the result differs from `previous`.
  *
- * A property resolving to `undefined` means its parameter was kept: reuse the
- * previous value where there is one, otherwise drop the field so the underlying
- * resource preserves what it has (a secret's encrypted value is never
- * re-applied).
+ * A value resolving to `undefined`, at any depth, means its parameter was kept:
+ * reuse the previous value at the same path where there is one, otherwise drop
+ * the field so the underlying resource preserves what it has (a secret's
+ * encrypted value is never re-applied).
  *
  * A property `lastApplied` declared that the template no longer declares is
  * removed: `null` when `clearable` names it (left out of `snapshot`, the
@@ -67,11 +98,8 @@ export const mergeWithPrevious = (args: {
   const { resolved, previous, lastApplied, clearable } = args;
   const merged: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(resolved)) {
-    if (value === undefined) {
-      if (key in previous) merged[key] = previous[key];
-    } else {
-      merged[key] = value;
-    }
+    const kept = keepUnresolved({ value, previous: previous[key] });
+    if (kept !== undefined) merged[key] = kept;
   }
   const cleared = new Set<string>();
   for (const key of Object.keys(lastApplied)) {
