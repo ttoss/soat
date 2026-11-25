@@ -62,7 +62,6 @@ describe('evaluation scorers', () => {
       return validateScorers({
         scorers,
         agentHasOutputSchema,
-        names: 'required',
       });
     };
 
@@ -1006,7 +1005,6 @@ describe('evaluation scorers', () => {
         return validateScorers({
           scorers: [config],
           agentHasOutputSchema: false,
-          names: 'required',
         });
       };
 

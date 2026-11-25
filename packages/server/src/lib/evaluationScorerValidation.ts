@@ -56,29 +56,8 @@ const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
  * The key a scorer's outcomes, aggregates and calibration go under: its name.
  */
 export const scorerOutcomeKey = (scorer: Record<string, unknown>): string => {
-  // expand-contract: scorers stored before names were required read by type
-  return typeof scorer.name === 'string' ? scorer.name : String(scorer.type);
+  return String(scorer.name);
 };
-
-/**
- * Scorers as the wire shows them: each under its name, so an Eval or a run
- * stored before names were required reads as the spec declares it.
- */
-export const namedScorers = (scorers: unknown): unknown => {
-  if (!Array.isArray(scorers)) return scorers;
-  return scorers.map((scorer) => {
-    // expand-contract: scorers stored before names were required
-    return isPlainObject(scorer) && typeof scorer.name !== 'string'
-      ? { ...scorer, name: scorerOutcomeKey(scorer) }
-      : scorer;
-  });
-};
-
-/**
- * Whether a scorer must carry its name: `required` on every write, `stored`
- * for the run-start re-check of an Eval written before names were required.
- */
-export type ScorerNames = 'required' | 'stored';
 
 /**
  * Whether a scorer type's verdict comes from outside the eval (a model, a
@@ -189,7 +168,6 @@ const validateOneScorer = (args: {
   scorer: Record<string, unknown>;
   path: string;
   agentHasOutputSchema: boolean;
-  names: ScorerNames;
 }): string | null => {
   const { scorer, path } = args;
   const type = scorer.type;
@@ -207,9 +185,7 @@ const validateOneScorer = (args: {
   }
 
   const { name } = scorer;
-  // expand-contract: scorers stored before names were required carry none
-  const unnamedAllowed = args.names === 'stored' && name === undefined;
-  if (!unnamedAllowed && (typeof name !== 'string' || name.trim() === '')) {
+  if (typeof name !== 'string' || name.trim() === '') {
     return `${path}.name is required and must be a non-empty string.`;
   }
 
@@ -229,7 +205,6 @@ const validateOneScorer = (args: {
 export const validateScorers = (args: {
   scorers: unknown;
   agentHasOutputSchema: boolean;
-  names: ScorerNames;
 }): string | null => {
   if (!Array.isArray(args.scorers) || args.scorers.length === 0) {
     return 'scorers must be a non-empty array.';
@@ -246,7 +221,6 @@ export const validateScorers = (args: {
       scorer,
       path,
       agentHasOutputSchema: args.agentHasOutputSchema,
-      names: args.names,
     });
     if (error) return error;
 
