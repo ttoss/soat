@@ -2137,6 +2137,22 @@ describe('Agents', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
       expect(res.body.error.message).toMatch(/reasoning/);
     });
+
+    test('names reasoning.effort when reasoning leaves it out', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'reasoning-without-effort',
+          reasoning: {},
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({
+        missing_fields: ['reasoning.effort'],
+      });
+    });
   });
   describe('stop_conditions validation', () => {
     const create = (stop_conditions: unknown) => {
