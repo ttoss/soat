@@ -35,6 +35,7 @@ describe('a trace stored as one steps object', () => {
       await createGenerationRecord({
         authority: null,
         actsAsAgent: null,
+        clock: null,
         publicId: generationId,
         projectId: projectDbId,
         agentId,

@@ -1001,6 +1001,11 @@ components:
             What happens when a held tool call expires un-approved:
             `terminate` (the default when null) ends the chain, `react` spawns
             a continuation that reports the staleness to the agent.
+        timezone:
+          type: string
+          description: >-
+            IANA timezone the `{{generation:...}}` tokens in `instructions`
+            render in. Undeclared, `UTC`.
         knowledge_config:
           type: object
           nullable: true

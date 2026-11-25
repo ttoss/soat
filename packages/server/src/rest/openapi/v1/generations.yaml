@@ -799,6 +799,9 @@ components:
         started_at:
           type: string
           format: date-time
+          description: >-
+            When the generation started: the instant its instructions'
+            `{{generation:now}}` tokens render.
         completed_at:
           type: string
           format: date-time
@@ -868,6 +871,14 @@ components:
             Agent config version that served this generation, resolved by the
             served-version resolver (see
             [agent versions](/docs/modules/agents#versions-and-releases)).
+        timezone:
+          type: string
+          nullable: true
+          example: America/Sao_Paulo
+          description: >-
+            The IANA timezone the instructions' `{{generation:...}}` tokens
+            rendered in: the generate request's `timezone`, else the agent's.
+            Null for a turn refused before it started.
         source:
           type: string
           nullable: true

@@ -25,6 +25,7 @@ describe('traceStepStore', () => {
     await createGenerationRecord({
       authority: null,
       actsAsAgent: null,
+      clock: null,
       publicId: generationId,
       projectId,
       agentId: agentPublicId,
