@@ -480,6 +480,7 @@ A tool call's result reaches the model as file parts when it is exactly `{ "type
 
 - A server tool's (`http`, `mcp`, `builtin`, `pipeline`) file is read under the turn's authority, which needs `files:DownloadFile` on it; a file it may not read, or one outside the project the generation runs in, reaches the model as the tool's error.
 - A `client` tool's file, sent to [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), is read as the submitter: a file outside the project is `404 RESOURCE_NOT_FOUND`, one the submitter may not download `403`, and the generation stays paused.
+- A [`tool_output` message](#message-content) whose result returns files becomes those parts, each read as a [`file` part](#file-parts) the caller names: a file outside the project is `404 RESOURCE_NOT_FOUND`, one the caller may not download `403`, and one outside a `user` message `400 VALIDATION_FAILED`, before a generation is recorded.
 - The result stores the reference; the bytes are read each time the turn calls the model, and the model's [input modalities](./ai-providers.md#input-modalities) gate them as they do a `file` part (`400 INPUT_MODALITY_UNSUPPORTED`).
 - A provider whose API carries tool results only as text receives the file base64-encoded in that text.
 

@@ -316,6 +316,149 @@ describe('tool results that return files', () => {
     expect(sent).not.toContain('soat-file:');
   });
 
+  describe('a tool_output message block', () => {
+    const generateWith = (args: {
+      token: string;
+      agentId: string;
+      messages: unknown[];
+    }) => {
+      stub.reply(textCompletion('A scan.'));
+      stub.completions.length = 0;
+      return authenticatedTestClient(args.token)
+        .post(`/api/v1/agents/${args.agentId}/generate?wait=true`)
+        .send({ messages: args.messages });
+    };
+
+    const block = () => {
+      return { type: 'tool_output', tool_id: scanToolId };
+    };
+
+    test('its file reaches the model as a file part beside the text', async () => {
+      const agentId = await createAgent({
+        name: 'block reader',
+        toolId: scanToolId,
+        modalities: ['text', 'image'],
+      });
+      scanReply = [
+        { type: 'text', text: 'the caption' },
+        { type: 'file', file_id: imageFileId },
+      ];
+
+      const res = await generateWith({
+        token: adminToken,
+        agentId,
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'Look at the scan.' }, block()],
+          },
+        ],
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      const sent = JSON.stringify(stub.completions[0].body.messages);
+      expect(sent).toContain('the caption');
+      expect(sent).toContain(IMAGE_BASE64);
+      expect(sent).not.toContain(imageFileId);
+    });
+
+    test('as a message’s whole content, its file reaches the model', async () => {
+      const agentId = await createAgent({
+        name: 'block whole',
+        toolId: scanToolId,
+        modalities: ['text', 'image'],
+      });
+      scanReply = { type: 'file', file_id: imageFileId };
+
+      const res = await generateWith({
+        token: adminToken,
+        agentId,
+        messages: [{ role: 'user', content: block() }],
+      });
+
+      expect(res.status).toBe(200);
+      const sent = JSON.stringify(stub.completions[0].body.messages);
+      expect(sent).toContain(IMAGE_BASE64);
+      expect(sent).not.toContain(imageFileId);
+    });
+
+    test('a file in another project is not found', async () => {
+      const agentId = await createAgent({
+        name: 'block cross-project',
+        toolId: scanToolId,
+      });
+      scanReply = { type: 'file', file_id: otherProjectFileId };
+
+      const res = await generateWith({
+        token: adminToken,
+        agentId,
+        messages: [{ role: 'user', content: [block()] }],
+      });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(stub.completions).toHaveLength(0);
+    });
+
+    test('is read as the caller, who needs files:DownloadFile', async () => {
+      const agentId = await createAgent({
+        name: 'block caller-checked',
+        toolId: scanToolId,
+      });
+      scanReply = { type: 'file', file_id: imageFileId };
+
+      const res = await generateWith({
+        token: userToken,
+        agentId,
+        messages: [{ role: 'user', content: [block()] }],
+      });
+
+      expect(res.status).toBe(403);
+      expect(stub.completions).toHaveLength(0);
+    });
+
+    test('a file outside a user message is refused', async () => {
+      const agentId = await createAgent({
+        name: 'block assistant',
+        toolId: scanToolId,
+      });
+      scanReply = { type: 'file', file_id: imageFileId };
+
+      const res = await generateWith({
+        token: adminToken,
+        agentId,
+        messages: [
+          { role: 'user', content: 'Scan it.' },
+          { role: 'assistant', content: [block()] },
+          { role: 'user', content: 'What did you see?' },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(stub.completions).toHaveLength(0);
+    });
+
+    test('an output with no file still reaches the model as text', async () => {
+      const agentId = await createAgent({
+        name: 'block text',
+        toolId: scanToolId,
+      });
+      scanReply = { found: 'nothing' };
+
+      const res = await generateWith({
+        token: adminToken,
+        agentId,
+        messages: [{ role: 'user', content: [block()] }],
+      });
+
+      expect(res.status).toBe(200);
+      const sent = JSON.stringify(stub.completions[0].body.messages);
+      expect(sent).toContain('nothing');
+    });
+  });
+
   describe('a client tool output', () => {
     const pause = async (args: { token: string; agentId: string }) => {
       stub.reply(
