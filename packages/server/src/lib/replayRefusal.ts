@@ -35,8 +35,8 @@ const CAUSE_TEXT: Record<RefusalCause, string> = {
 };
 
 /**
- * How vendors say a prompt exceeds the model's context window. Anthropic and
- * OpenAI answer it with `400`, which the status alone reads as
+ * How vendors say a prompt exceeds the model's context window. Anthropic,
+ * OpenAI and Bedrock answer it with `400`, which the status alone reads as
  * `history_refused`.
  */
 const CONTEXT_OVERFLOW_SIGNATURES: readonly RegExp[] = [
@@ -44,6 +44,8 @@ const CONTEXT_OVERFLOW_SIGNATURES: readonly RegExp[] = [
   /context_length_exceeded/i,
   /maximum context length/i,
   /exceeds the maximum number of tokens/i,
+  /input tokens exceeds maximum length/i,
+  /input is too long for requested model/i,
 ];
 
 const overflowsContext = (args: { responseBody?: string }): boolean => {
