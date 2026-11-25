@@ -6,6 +6,8 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 const VENDOR_DETAIL = 'vendor-secret-detail';
 const PROMPT_TOO_LONG = `prompt is too long: 1100000 tokens > 1000000 maximum ${VENDOR_DETAIL}`;
+const INPUT_TOO_LONG = `Input is too long for requested model. ${VENDOR_DETAIL}`;
+const INPUT_TOKENS_EXCEEDED = `Input Tokens Exceeded: Number of input tokens exceeds maximum length. Please update the input to try again. ${VENDOR_DETAIL}`;
 
 /**
  * A session turn the vendor refuses names a cause classified from the vendor's
@@ -204,12 +206,15 @@ describe('Session replay refusal', () => {
       ['own', 413, VENDOR_DETAIL, 'context_too_long'],
       ['own', 422, VENDOR_DETAIL, 'request_refused'],
       ['own', 400, PROMPT_TOO_LONG, 'context_too_long'],
+      ['own', 400, INPUT_TOKENS_EXCEEDED, 'context_too_long'],
+      ['own', 400, INPUT_TOO_LONG, 'context_too_long'],
       ['forwarded', 400, VENDOR_DETAIL, 'history_refused'],
       ['forwarded', 413, VENDOR_DETAIL, 'context_too_long'],
       ['forwarded', 400, PROMPT_TOO_LONG, 'context_too_long'],
       ['shared', 400, VENDOR_DETAIL, 'history_refused'],
       ['shared', 413, VENDOR_DETAIL, 'context_too_long'],
       ['shared', 400, PROMPT_TOO_LONG, 'context_too_long'],
+      ['shared', 400, INPUT_TOKENS_EXCEEDED, 'context_too_long'],
     ] as const)(
       'a %s provider refusing with %i "%s" is REPLAY_REFUSED for %s',
       async (via, status, text, cause) => {
