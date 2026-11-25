@@ -125,6 +125,13 @@ export class PlaybookCase extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare pauseRequestedAt: Date | null;
 
+  /**
+   * Why the playbook's `autoUpgrade` left the case on its version, as a
+   * `StoredError`; cleared when the case moves to another version.
+   */
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare upgradeError: object | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

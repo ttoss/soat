@@ -97,9 +97,8 @@ const mapFormation = (
     project_id: instance.project?.publicId ?? '',
     name: instance.name,
     template: template ? redactTemplateSecrets({ template }) : template,
-    // Outputs written before a `ref_attr` to a signing secret was refused are
-    // dropped on the way out too: the refusal keeps new ones from being written,
-    // and `purge-formation-secret-outputs` clears the rows themselves.
+    // A stored output resolved from a signing secret is dropped on the way out;
+    // the template validator refuses new ones.
     outputs: template
       ? redactSensitiveOutputs({ template, outputs: instance.outputs })
       : instance.outputs,

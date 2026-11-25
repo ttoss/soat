@@ -96,6 +96,7 @@ export const mapPlaybookCase = async (row: PlaybookCaseRow) => {
     ),
     revision: row.revision,
     ...(await caseAutomation({ rows: [row] }))(row),
+    upgrade_error: row.upgradeError ?? null,
     nodes: mapNodes({
       definition,
       snapshot,
@@ -126,6 +127,7 @@ const mapCaseSummary = (args: {
     upstreams: args.upstreams(row.id as number),
     revision: row.revision,
     ...automation(row),
+    upgrade_error: row.upgradeError ?? null,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };

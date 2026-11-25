@@ -32,6 +32,15 @@ const toSseFrame = (part: StreamedGenerationPart): SseFrame => {
   if (typeof part === 'string') {
     return { data: { choices: [{ delta: { content: part } }] } };
   }
+  if ('citations' in part) {
+    return {
+      event: 'citations',
+      data: {
+        citations: part.citations.citations,
+        rejected_citations: part.citations.rejected,
+      },
+    };
+  }
   return { data: mapGenerationResult(part.generation) };
 };
 
@@ -109,6 +118,7 @@ type GenerateRequestBody = {
   max_call_depth?: unknown;
   tool_context?: unknown;
   knowledge_config?: object;
+  citation_config?: object;
   action_id?: string;
   metadata?: unknown;
   guardrail_context?: unknown;
@@ -143,6 +153,7 @@ const buildGenerationArgs = (args: {
     }),
     actorId: ctx.authUser?.actor ?? undefined,
     knowledgeConfig: toObjectOrUndefined(body.knowledge_config),
+    citationConfig: toObjectOrUndefined(body.citation_config),
     actionId: typeof body.action_id === 'string' ? body.action_id : undefined,
     metadata: isRecord(body.metadata) ? body.metadata : undefined,
     guardrailContext: isRecord(body.guardrail_context)

@@ -320,19 +320,97 @@ paths:
       operationId: updatePlaybook
       x-raises:
         - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
         - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
         - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_BUSY
+        - PLAYBOOK_CASE_UPSTREAM_INVALID
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_INPUT_INVALID
         - PLAYBOOK_VALIDATION_FAILED
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
         - POLICY_OUTSIDE_PROJECT
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
         - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:UpdatePlaybook
       x-iam-resource-type: playbook
       parameters:
@@ -460,20 +538,98 @@ paths:
       operationId: listPlaybookVersions
       x-raises:
         - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
         - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
         - INVALID_CURSOR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
         - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_BUSY
+        - PLAYBOOK_CASE_UPSTREAM_INVALID
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_INPUT_INVALID
         - PLAYBOOK_VALIDATION_FAILED
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
         - POLICY_OUTSIDE_PROJECT
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
         - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ListPlaybookVersions
       x-iam-resource-type: playbook
       parameters:
@@ -523,20 +679,98 @@ paths:
       operationId: getPlaybookVersion
       x-raises:
         - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
         - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
         - INVALID_CURSOR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
         - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_BUSY
+        - PLAYBOOK_CASE_UPSTREAM_INVALID
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_INPUT_INVALID
         - PLAYBOOK_VALIDATION_FAILED
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
         - POLICY_OUTSIDE_PROJECT
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
         - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:GetPlaybookVersion
       x-iam-resource-type: playbook
       parameters:
@@ -586,20 +820,98 @@ paths:
       operationId: restorePlaybookVersion
       x-raises:
         - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
         - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
         - INVALID_CURSOR
+        - INVALID_TEMPLATE_TOKEN
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
         - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_DISPATCH_FAILED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_BUSY
+        - PLAYBOOK_CASE_UPSTREAM_INVALID
+        - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_INPUT_INVALID
         - PLAYBOOK_VALIDATION_FAILED
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
         - POLICY_OUTSIDE_PROJECT
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TASK_NOT_FOUND
+        - TASK_PAYLOAD_INVALID
+        - TASK_STATE_NOT_FOUND
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
         - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORKFLOW_NOT_FOUND
+        - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:RestorePlaybookVersion
       x-iam-resource-type: playbook
       parameters:
@@ -2009,6 +2321,7 @@ paths:
         - PLAYBOOK_CASE_BUSY
         - PLAYBOOK_CASE_UPSTREAM_INVALID
         - PLAYBOOK_EXECUTION_FAILED
+        - PLAYBOOK_INPUT_INVALID
         - PLAYBOOK_SELF_WRITE
         - PROJECT_PAUSED
         - QUERY_TIMEOUT
@@ -2874,6 +3187,13 @@ components:
             x-soat-ref: policies
             type: string
           example: ['pol_V1StGXR8Z5jdHi6B']
+        auto_upgrade:
+          type: boolean
+          description: >-
+            Whether each new version moves the playbook's cases to it, as
+            `POST /playbook-cases/{case_id}/upgrade` does. A case whose stored
+            manual input the new version's schema refuses, or that is busy,
+            stays on its version and records why in its `upgrade_error`.
         created_at:
           type: string
           format: date-time
@@ -2909,6 +3229,11 @@ components:
           description: The nodes and how their inputs are sourced
           allOf:
             - $ref: '#/components/schemas/PlaybookDefinition'
+        auto_upgrade:
+          type: boolean
+          description: >-
+            Whether each new version moves the playbook's cases to it.
+            Defaults to `false`.
         version_label:
           type: string
           description: Optional tag for version 1, e.g. `initial`
@@ -2934,6 +3259,11 @@ components:
             new version.
           allOf:
             - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
+        auto_upgrade:
+          type: boolean
+          description: >-
+            Whether each new version moves the playbook's cases to it. Archives
+            no version; omitted leaves it.
         version_label:
           type: string
           description: >-
@@ -3209,6 +3539,15 @@ components:
           format: date-time
           nullable: true
           description: When the case was paused; null while it runs
+        upgrade_error:
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
+          nullable: true
+          description: >-
+            Why the playbook's `auto_upgrade` left the case on its version:
+            `PLAYBOOK_INPUT_INVALID` names in `meta.inputs` each stored manual
+            input the new version refuses. Null once the case moves to another
+            version.
         created_at:
           type: string
           format: date-time

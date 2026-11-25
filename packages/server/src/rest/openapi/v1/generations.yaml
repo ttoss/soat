@@ -970,6 +970,16 @@ components:
               mapping:
                 document: '#/components/schemas/GenerationRetrievedDocument'
                 memory: '#/components/schemas/GenerationRetrievedMemory'
+        citations:
+          type: array
+          nullable: true
+          description: >-
+            What the answer cited, verified, as pointers: the citation without
+            its `quoted_text`. Null when the turn did not ask for citations;
+            empty while a citing turn runs, or when its answer cited nothing
+            that verified. Not content: a content purge leaves it standing.
+          items:
+            $ref: '#/components/schemas/CitationPointer'
         idempotency_key:
           type: string
           nullable: true
@@ -1082,6 +1092,124 @@ components:
           type: string
           format: date-time
 
+    CitationSpan:
+      type: object
+      required:
+        - start
+        - end
+      properties:
+        start:
+          type: integer
+          description: Offset of the first code point (0-indexed).
+          example: 418
+        end:
+          type: integer
+          description: Offset just past the last code point.
+          example: 442
+    CitationPointer:
+      type: object
+      required:
+        - origin
+        - document_id
+        - document_version
+        - chunk_id
+        - file_id
+        - page
+        - page_end
+        - source_span
+        - answer_span
+        - verification
+      properties:
+        origin:
+          type: string
+          enum:
+            - retrieval
+          description: The cited passage was injected by `knowledge_config` retrieval.
+        document_id:
+          x-soat-ref: documents
+          type: string
+          example: 'doc_V1StGXR8Z5jdHi6B'
+        document_version:
+          type: integer
+          nullable: true
+          description: The document version the cited chunk was read from.
+          example: 3
+        chunk_id:
+          type: string
+          description: Public ID of the cited chunk.
+          example: 'dchunk_V1StGXR8Z5jdHi6B'
+        file_id:
+          type: string
+          nullable: true
+          description: Null for a `retrieval` citation.
+        page:
+          type: integer
+          nullable: true
+          description: Page of the cited chunk (1-indexed). Null for plain text.
+          example: 12
+        page_end:
+          type: integer
+          nullable: true
+          description: Last page of the cited passage; equal to `page` for a chunk.
+          example: 12
+        source_span:
+          description: >-
+            Where `quoted_text` sits in the cited chunk's text, in code points
+            of its NFC form.
+          allOf:
+            - $ref: '#/components/schemas/CitationSpan'
+        answer_span:
+          description: >-
+            The cited statement in `output.content`, in code points.
+          allOf:
+            - $ref: '#/components/schemas/CitationSpan'
+        verification:
+          type: string
+          enum:
+            - runtime
+          description: >-
+            `runtime`: the server found `quoted_text` in the source it injected.
+    Citation:
+      allOf:
+        - $ref: '#/components/schemas/CitationPointer'
+        - type: object
+          required:
+            - quoted_text
+          properties:
+            quoted_text:
+              type: string
+              description: >-
+                The source's own text at `source_span` — copied from the chunk,
+                never from the model.
+              example: 'dose máxima de 40 mg/dia'
+    RejectedCitation:
+      type: object
+      required:
+        - ref
+        - quoted_text
+        - reason
+      properties:
+        ref:
+          type: string
+          nullable: true
+          description: The source label the answer named, e.g. `c4`.
+          example: c4
+        quoted_text:
+          type: string
+          nullable: true
+          description: The quote as the model wrote it.
+        reason:
+          type: string
+          enum:
+            - UNKNOWN_REF
+            - SOURCE_UNAVAILABLE
+            - QUOTE_NOT_FOUND
+            - MALFORMED_CITE
+          description: >-
+            `UNKNOWN_REF`: the label names no source this turn injected.
+            `SOURCE_UNAVAILABLE`: the cited chunk no longer exists.
+            `QUOTE_NOT_FOUND`: the quote is not in the source.
+            `MALFORMED_CITE`: the citation markup is incomplete.
     GenerationRetrievedDocument:
       type: object
       required:

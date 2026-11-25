@@ -3239,6 +3239,21 @@ expect_cli_error_status 400 patch-agent --agent-id "$AGENT_ID" \
 # breakpoint.
 echo "Prompt caching toggle OK"
 
+echo "--- Agent citation toggle ---"
+CITING_AGENT_RESP=$($SOAT_CLI patch-agent --agent-id "$AGENT_ID" \
+  --citation_config '{"enabled":true}')
+if [ "$(printf '%s\n' "$CITING_AGENT_RESP" | jq -r '.citation_config.enabled')" != "true" ]; then
+  echo "ERROR: patch-agent did not persist citation_config" >&2
+  printf '%s\n' "$CITING_AGENT_RESP" >&2
+  exit 1
+fi
+
+expect_cli_error_status 400 patch-agent --agent-id "$AGENT_ID" \
+  --citation_config '{"enable":true}'
+
+# Left enabled: the generation below returns `output.citations`.
+echo "Citation toggle OK"
+
 # 21. Run the agent — ask it to list projects (non-streaming)
 echo "--- Running agent generation ---"
 GEN_IDEM_KEY="smoke-gen-$$"
@@ -3254,6 +3269,10 @@ if [ "$GEN_STATUS" != "completed" ]; then
   exit 1
 fi
 echo "Generation completed."
+if ! printf '%s\n' "$GEN_RESP" | jq -e '(.output.citations | type) == "array" and (.output.rejected_citations | type) == "array"' >/dev/null 2>&1; then
+  echo "ERROR: a citing agent's generation did not return citations arrays" >&2
+  exit 1
+fi
 
 # 22. Verify the agent output contains the project name
 GEN_CONTENT=$(printf '%s\n' "$GEN_RESP" | jq -r '.output.content')
@@ -3340,6 +3359,10 @@ AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$A
 if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
   echo "ERROR: Agent SSE stream missing 'data: [DONE]'" >&2
   echo "$AGENT_STREAM_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "event: citations"; then
+  echo "ERROR: a citing agent's SSE stream has no 'event: citations' frame" >&2
   exit 1
 fi
 echo "Agent SSE stream OK."

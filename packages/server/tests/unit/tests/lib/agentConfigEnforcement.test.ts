@@ -183,6 +183,11 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
     enforces:
       'Marks the cache breakpoint on the assembled history, at the end of the static prefix.',
   },
+  citationConfig: {
+    modules: ['agentGenerationContext.ts'],
+    enforces:
+      'Labels the injected knowledge and records whether the turn cites, which every completion verifies against.',
+  },
   maxOutputTokens: {
     modules: ['agentModelSettings.ts'],
     enforces: 'Sent to the provider as the response token cap on every step.',

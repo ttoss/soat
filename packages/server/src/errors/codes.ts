@@ -899,7 +899,7 @@ export const ERROR_CODES = {
   PLAYBOOK_INPUT_INVALID: {
     httpStatus: 400,
     description:
-      "An input write names a node or input the case's playbook version does not declare, an input that reads another node, or a value its input's schema refuses.",
+      "An input write names a node or input the case's playbook version does not declare, an input that reads another node, or a value its input's schema refuses. As a case's `upgrade_error`, `meta.inputs` names each stored manual input the new version's schema refuses.",
   },
   PLAYBOOK_INPUT_CONFLICT: {
     httpStatus: 409,

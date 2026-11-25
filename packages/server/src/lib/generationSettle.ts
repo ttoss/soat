@@ -11,6 +11,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { toCitationPointers, type TurnCitations } from './citations';
 import { noteChainMemberSettled } from './generationChains';
 import { suppressContentWrites } from './generationContentSuppression';
 import {
@@ -33,6 +34,8 @@ export type SettleOutcome =
       stopReason: string | null;
       /** The final text, announced with `generations.completed`. */
       assistantContent: string;
+      /** What a citing turn's answer cited; null for a turn that does not. */
+      citations: TurnCitations | null;
     }
   | { status: 'failed'; error: Record<string, unknown> }
   | {
@@ -74,7 +77,13 @@ const outcomeColumns = (outcome: SettleOutcome): Record<string, unknown> => {
       error: outcome.error,
     };
   }
-  return { completedAt: new Date(), stopReason: outcome.stopReason };
+  return {
+    completedAt: new Date(),
+    stopReason: outcome.stopReason,
+    ...(outcome.citations
+      ? { citations: toCitationPointers(outcome.citations.citations) }
+      : {}),
+  };
 };
 
 const emitSettled = (args: {

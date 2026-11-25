@@ -208,8 +208,13 @@ describe('the agent turn gate', () => {
 
       const result = await callAs({ token, agentId, name: pipeline.name });
 
-      expect(result).toContain(`Pipeline step 'one' failed: Forbidden: user`);
-      expect(result).toContain(`deny tools:CallTool on ${toolSrn(step.id)}`);
+      // A thrown tool error reaches the model as `{ "error": <message> }`.
+      expect(result.error).toContain(
+        `Pipeline step 'one' failed: Forbidden: user`
+      );
+      expect(result.error).toContain(
+        `deny tools:CallTool on ${toolSrn(step.id)}`
+      );
       expect(turn.target.requestsAt(`/${step.name}`)).toHaveLength(0);
     });
   });

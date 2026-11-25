@@ -8,17 +8,32 @@ import { buildResourceTagContext } from 'src/lib/tags';
 import { requireAuth } from './helpers';
 import {
   makeItemRouteAuthorizer,
+  readRefusal,
   type ResourceAccess,
   resourceRefusal,
 } from './resourceAccess';
 
 export type ItemAccess = 'read' | 'write';
 
+/** The reads that list or get an item; each shows the caller that item. */
+const ITEM_READS = [
+  'collections:ListCollectionItems',
+  'collections:GetCollectionItem',
+] as const;
+
+/** The reads that show a caller a collection, each checked on its SRN. */
+const COLLECTION_READS = [
+  'collections:ListCollections',
+  'collections:GetCollection',
+  ...ITEM_READS,
+] as const;
+
 export const collectionAccess = makeItemRouteAuthorizer({
   findScope: collections.findScope,
   resourceType: 'collection',
   param: 'collection_id',
   label: 'Collection',
+  shownBy: COLLECTION_READS,
 });
 
 /**
@@ -67,17 +82,28 @@ export const assertItemAllowed = async (args: {
     resourceId: args.key,
   });
   for (const tags of bags) {
+    const context = buildResourceTagContext({
+      resourceType: 'collection_item',
+      tags,
+    });
     const allowed = await args.ctx.authUser.isAllowed({
       projectPublicId: args.projectPublicId,
       action: args.action,
       resource,
-      context: buildResourceTagContext({
-        resourceType: 'collection_item',
-        tags,
-      }),
+      context,
     });
     if (allowed) continue;
-    if (args.access === 'read') throw notFound;
+    if (args.access === 'read') {
+      throw await readRefusal({
+        ctx: args.ctx,
+        projectPublicId: args.projectPublicId,
+        notFound,
+        action: args.action,
+        resource,
+        context,
+        shownBy: ITEM_READS,
+      });
+    }
     throw await resourceRefusal({
       ctx: args.ctx,
       projectPublicId: args.projectPublicId,
