@@ -37,6 +37,9 @@ export const evalTaskLeaseTtlMs = (): number => {
 
 export type EvalRunTaskInstance = InstanceType<typeof db.EvalRunTask>;
 
+/** The `available_at` of a task held until its run's probes hold. */
+const HELD_UNTIL = new Date('9999-12-31T00:00:00.000Z');
+
 /**
  * Enqueues one task per item for a run. Idempotent on the unique
  * `(eval_run_id, dataset_item_id)` index — `ignoreDuplicates` makes a retried
@@ -46,26 +49,52 @@ export type EvalRunTaskInstance = InstanceType<typeof db.EvalRunTask>;
 export const enqueueEvalItemTasks = async (args: {
   evalRunId: number;
   datasetItemIds: number[];
+  /**
+   * `held`: only the first task is due, and the rest wait for
+   * {@link releaseHeldEvalItemTasks} — a run with probes grades them on its
+   * first task before any other item may start. `due`: every task is due.
+   */
+  start: 'held' | 'due';
 }): Promise<void> => {
   log(
-    'enqueueEvalItemTasks: evalRunId=%d items=%d',
+    'enqueueEvalItemTasks: evalRunId=%d items=%d start=%s',
     args.evalRunId,
-    args.datasetItemIds.length
+    args.datasetItemIds.length,
+    args.start
   );
+  const now = new Date();
 
   await db.EvalRunTask.bulkCreate(
-    args.datasetItemIds.map((datasetItemId) => {
+    args.datasetItemIds.map((datasetItemId, index) => {
       return {
         // `bulkCreate` skips the per-instance `beforeValidate` hook, so the
         // public id has to be supplied here.
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.evalRunTask),
         evalRunId: args.evalRunId,
         datasetItemId,
-        availableAt: new Date(),
+        availableAt: args.start === 'held' && index > 0 ? HELD_UNTIL : now,
         attempts: 0,
       };
     }),
     { ignoreDuplicates: true }
+  );
+};
+
+/**
+ * Makes a run's held tasks due, once its probes held. A held task counts as
+ * pending, so the run cannot settle while they wait.
+ */
+export const releaseHeldEvalItemTasks = async (args: {
+  evalRunId: number;
+}): Promise<void> => {
+  const [released] = await db.EvalRunTask.update(
+    { availableAt: new Date() },
+    { where: { evalRunId: args.evalRunId, availableAt: HELD_UNTIL } }
+  );
+  log(
+    'releaseHeldEvalItemTasks: evalRunId=%d released=%d',
+    args.evalRunId,
+    released
   );
 };
 

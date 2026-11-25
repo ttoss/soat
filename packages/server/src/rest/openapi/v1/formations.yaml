@@ -1495,6 +1495,10 @@ components:
           description: What a run of the eval tests; each run copies it.
           allOf:
             - $ref: './evaluations.yaml#/components/schemas/Claim'
+        criteria:
+          description: The properties the claim is made of; every scorer sits in exactly one.
+          allOf:
+            - $ref: './evaluations.yaml#/components/schemas/Criteria'
 
     DocumentResourceProperties:
       description: >-

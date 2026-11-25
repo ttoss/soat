@@ -11,11 +11,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import {
-  evalStarts,
-  validateScorerReferences,
-} from './evaluationScorerReferences';
-import { validateScorers } from './evaluationScorers';
+import { validateCriteria } from './evaluationCriteria';
+import { evalStarts } from './evaluationScorerReferences';
 import { namedScorers } from './evaluationScorerValidation';
 import {
   assertValid,
@@ -26,9 +23,9 @@ import {
   validateGroupBy,
   validatePassThreshold,
 } from './evaluationValidation';
+import { applyCriteriaUpdate, assertScorers } from './evaluationWriteChecks';
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
-import { isPlainObject } from './plainObject';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
@@ -59,6 +56,7 @@ export const mapEval = (evaluation: EvalRow) => {
     policy_ids: evaluation.policyIds ?? [],
     evidence: evaluation.evidence ?? null,
     claim: evaluation.claim ?? null,
+    criteria: evaluation.criteria ?? null,
     created_at: evaluation.createdAt,
     updated_at: evaluation.updatedAt,
   };
@@ -142,30 +140,6 @@ const requireReferenceId = (value: unknown, field: string): string => {
   return value;
 };
 
-/**
- * The scorers an Eval write leaves, validated: the ones written, each named,
- * or, when the write names none, the ones stored, re-checked against a new
- * agent. Returns the scorers that stand.
- */
-const assertScorers = async (args: {
-  written: unknown;
-  stored?: unknown;
-  agentOutputSchema: unknown;
-  projectId: number;
-}): Promise<unknown> => {
-  const scorers = args.written === undefined ? args.stored : args.written;
-  assertValid(
-    validateScorers({
-      scorers,
-      agentHasOutputSchema: isPlainObject(args.agentOutputSchema),
-      // expand-contract: an agent swap re-checks scorers stored unnamed
-      names: args.written === undefined ? 'stored' : 'required',
-    })
-  );
-  await validateScorerReferences({ scorers, projectId: args.projectId });
-  return scorers;
-};
-
 export const createEval = async (args: {
   projectId: number;
   name: unknown;
@@ -177,6 +151,7 @@ export const createEval = async (args: {
   policyIds: string[] | null | undefined;
   evidence?: unknown;
   claim?: unknown;
+  criteria?: unknown;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   const name = requireName(args.name);
@@ -203,6 +178,9 @@ export const createEval = async (args: {
     agentOutputSchema: agent.outputSchema,
     projectId: args.projectId,
   });
+  assertValid(
+    validateCriteria({ criteria: args.criteria, scorers: args.scorers })
+  );
   await assertWriterHolds({
     carrier: 'evals',
     writer: args.writer,
@@ -237,6 +215,7 @@ export const createEval = async (args: {
       policyIds: args.policyIds,
       evidence: args.evidence ?? null,
       claim: requireClaim(args.claim) ?? null,
+      criteria: args.criteria ?? null,
     });
   } catch (error) {
     throw rethrowAsConflict(
@@ -390,6 +369,7 @@ export const updateEval = async (args: {
   policyIds?: string[] | null;
   evidence?: unknown;
   claim?: unknown;
+  criteria?: unknown;
   writer: Writer;
 }): Promise<ReturnType<typeof mapEval>> => {
   log('updateEval: id=%s', args.id);
@@ -441,6 +421,7 @@ export const updateEval = async (args: {
     groupBy: args.groupBy,
   });
   Object.assign(updates, claimUpdate(args.claim));
+  applyCriteriaUpdate({ evaluation, updates, criteria: args.criteria });
 
   try {
     await evaluation.update(updates);

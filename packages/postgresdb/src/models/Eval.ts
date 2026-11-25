@@ -129,6 +129,14 @@ export class Eval extends Model {
   @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
   declare claim: Record<string, unknown> | null;
 
+  /**
+   * The properties the claim is made of, in the wire shape (`[{ name,
+   * description, scorers, probes }]`): every scorer sits in exactly one.
+   * Null declares none.
+   */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare criteria: unknown[] | null;
+
   // Public ids of the policies its work runs under; queried by policy.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare policyIds: string[] | null;

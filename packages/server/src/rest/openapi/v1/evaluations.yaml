@@ -994,6 +994,8 @@ paths:
                   $ref: '#/components/schemas/Evidence'
                 claim:
                   $ref: '#/components/schemas/Claim'
+                criteria:
+                  $ref: '#/components/schemas/Criteria'
       responses:
         '201':
           description: Eval created successfully
@@ -1174,6 +1176,10 @@ paths:
                   description: Replaces the stored claim as a whole; null clears it, omitting it leaves it unchanged.
                   allOf:
                     - $ref: '#/components/schemas/Claim'
+                criteria:
+                  description: Replaces the stored criteria as a whole; null clears them, omitting them leaves them unchanged.
+                  allOf:
+                    - $ref: '#/components/schemas/Criteria'
       responses:
         '200':
           description: Eval updated successfully
@@ -1425,6 +1431,7 @@ paths:
         - PIPELINE_DEPTH_EXCEEDED
         - PIPELINE_INVALID_STEP
         - PIPELINE_STEP_FAILED
+        - PROBE_FAILED
         - PROJECT_PAUSED
         - QUERY_TIMEOUT
         - QUOTA_EXCEEDED
@@ -1556,7 +1563,14 @@ paths:
           description: >-
             Bad request (non-boolean wait, dataset empty or over the synchronous
             cap, unknown agent_version, invalid baseline, scorers no longer valid
-            against the agent, a `tool_context` key that cannot become a header)
+            against the agent, a `tool_context` key that cannot become a header),
+            or, on a synchronous run, `PROBE_FAILED`: a probe of the eval's
+            `criteria` did not hold, so the run is settled `failed` before its
+            first item and `error.meta` names it (`eval_run_id`, `failed`). A
+            scorer that cannot grade a probe fails the run with its own error
+            instead. A queued run grades its probes in the worker before any
+            item and settles `failed` (`eval_runs.failed`) when one does not
+            hold
           content:
             application/json:
               schema:
@@ -1588,6 +1602,147 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/evals/{eval_id}/probes:
+    post:
+      tags:
+        - Evaluations
+      summary: Check an eval's probes
+      description: >-
+        Grades every probe of the eval's `criteria` with the criterion's
+        scorers, as a run does before its first item, and reports each one
+        without creating a run. A probe holds when the criterion's verdict on
+        it (every scorer it binds passed) is the `passed` it declares; the
+        report passes when every probe holds. The scorers run under the
+        authority a run of the eval holds and are metered as a run's. An eval
+        without `criteria` reports no probes.
+      operationId: checkEvalProbes
+      x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSATION_POSITION_CONFLICT
+        - CONVERSION_TIMEOUT
+        - DECIDER_AGENT_NOT_TOOL_LESS
+        - DECIDER_TOOL_NOT_CALLABLE
+        - DECISION_ANSWER_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EVAL_SCORING_FAILED
+        - EXPRESSION_FAILED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FORBIDDEN
+        - GENERATION_ALREADY_IN_PROGRESS
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_FOUND
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_CLOSED
+        - SESSION_EXPIRED
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
+      x-iam-action: evaluations:RunEval
+      x-iam-resource-type: eval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The probes' report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbeReport'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Eval not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            PROJECT_PAUSED — the project is paused, so nothing new starts in it; `error.meta` carries `paused_at` and `pause_reason`.
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -2496,12 +2651,133 @@ components:
           $ref: '#/components/schemas/Evidence'
         claim:
           $ref: '#/components/schemas/Claim'
+        criteria:
+          $ref: '#/components/schemas/Criteria'
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    Criteria:
+      type: array
+      nullable: true
+      minItems: 1
+      description: >-
+        The properties the claim is made of. Every scorer sits in exactly one
+        criterion, so a scorer in none, a criterion naming none or an unknown
+        one is `400 VALIDATION_FAILED`. An item passes a criterion when every
+        scorer it binds passed it; a run judges each criterion on its own
+        interval against `pass_threshold`. Null declares none.
+      items:
+        $ref: '#/components/schemas/Criterion'
+    Criterion:
+      type: object
+      additionalProperties: false
+      required: [name, description, scorers, probes]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Unique within the eval; names the criterion's reasons and rollup
+          example: identifies
+        description:
+          type: string
+          minLength: 1
+          description: The property, in a sentence a reviewer reads
+          example: Finds the order by the id the customer gave, never an invented one
+        scorers:
+          type: array
+          minItems: 1
+          description: The `name` of each scorer that measures the property
+          items:
+            type: string
+          example: [toxicity]
+        probes:
+          type: array
+          description: >-
+            Fixed outputs with the verdict the criterion's scorers must give:
+            at least one that passes and one that fails.
+          items:
+            $ref: '#/components/schemas/CriterionProbe'
+    CriterionProbe:
+      type: object
+      additionalProperties: false
+      required: [output, passed]
+      properties:
+        output:
+          type: string
+          description: The output the scorers grade
+          example: Found order 48213, shipped on Monday.
+        object:
+          description: >-
+            The structured output the scorers grade, as a generation's
+            `output.object`: what `output_schema` validates and `json_logic`
+            reads as `object`. Any JSON value; absent grades text alone.
+        metadata:
+          description: The item metadata the scorers see, as `item.metadata` in `json_logic`
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/MetadataBag'
+        passed:
+          type: boolean
+          description: The verdict every scorer of the criterion must give
+          example: true
+        note:
+          type: string
+          description: Why the probe passes or fails
+          example: names the order the customer gave
+        input:
+          description: The input the scorers see; any JSON value
+        expected_output:
+          type: string
+          nullable: true
+          description: The reference answer the scorers see
+          example: Order 48213 shipped.
+    ProbeReport:
+      type: object
+      additionalProperties: false
+      required: [passed, probes]
+      properties:
+        passed:
+          type: boolean
+          description: Every probe held
+          example: true
+        probes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProbeResult'
+    ProbeResult:
+      type: object
+      additionalProperties: false
+      required: [criterion, index, expected, passed, held, scores]
+      properties:
+        criterion:
+          type: string
+          example: identifies
+        index:
+          type: integer
+          description: The probe's position in its criterion's `probes`
+          example: 0
+        expected:
+          type: boolean
+          description: The verdict the probe declares
+          example: true
+        passed:
+          type: boolean
+          description: The criterion's verdict on it — every scorer it binds passed
+          example: true
+        held:
+          type: boolean
+          description: Whether `passed` is the declared verdict
+          example: true
+        scores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScorerResult'
+        error:
+          description: Why the scorers could not grade it; such a probe does not hold
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
     Claim:
       type: object
       nullable: true
@@ -2667,16 +2943,17 @@ components:
           properties:
             kind:
               type: string
-              enum: [run, group, live, age, calibration]
+              enum: [run, group, criterion, live, age, calibration]
               description: >-
-                `run` and `group` judge the run's items; `live` (a production
+                `run`, `group` and `criterion` judge the run's items; `live` (a production
                 rule), `age` and `calibration` (a scorer's agreement with human
                 labels) judge a claim and appear only on a claim's reasons.
             name:
               type: string
               description: >-
-                The group on a `group` scope; the rule on a `live` scope; the
-                scorer on a `calibration` scope
+                The group on a `group` scope; the criterion on a `criterion`
+                scope; the rule on a `live` scope; the scorer on a
+                `calibration` scope
               example: boleto
         verdict:
           type: string
@@ -2711,6 +2988,26 @@ components:
           $ref: '#/components/schemas/BaselineComparison'
         grouping:
           $ref: '#/components/schemas/RunGrouping'
+        criteria:
+          type: object
+          description: >-
+            Each criterion's figures over the scored items, by name; absent
+            when the run's definition records no criteria.
+          additionalProperties:
+            $ref: '#/components/schemas/CriterionRollup'
+    CriterionRollup:
+      type: object
+      properties:
+        pass_rate:
+          type: number
+          nullable: true
+          description: Scored items every scorer of the criterion passed, over scored items; null with none scored
+          example: 0.9
+        pass_rate_interval:
+          $ref: '#/components/schemas/PassRateInterval'
+        scored_item_count:
+          type: integer
+          example: 20
     ScoreRollup:
       type: object
       description: One group's figures, computed as the run-level ones are
@@ -2995,7 +3292,7 @@ components:
       type: object
       nullable: true
       description: >-
-        The eval's scorers, pass threshold, grouping key and evidence as they
+        The eval's scorers, pass threshold, grouping key, evidence and criteria as they
         were when the run was created. Every item is scored and the run settled by
         these; a later edit to the eval reaches only runs created after it.
         Null when the run recorded none.
@@ -3013,6 +3310,8 @@ components:
           example: kind
         evidence:
           $ref: '#/components/schemas/Evidence'
+        criteria:
+          $ref: '#/components/schemas/Criteria'
     EvalRunCalibration:
       type: object
       additionalProperties: false

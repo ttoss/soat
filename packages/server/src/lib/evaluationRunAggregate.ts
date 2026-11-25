@@ -8,6 +8,7 @@
  * themselves are the pure functions this module feeds.
  */
 import { db } from '../db';
+import { criterionRollups } from './evaluationCriteria';
 import {
   type ComparableResult,
   computeBaselineComparison,
@@ -17,6 +18,7 @@ import {
   compareGroups,
   groupLabel,
 } from './evaluationGrouping';
+import type { EvalRunDefinition } from './evaluationRunDefinition';
 import {
   type AggregateScores,
   aggregateScores,
@@ -96,20 +98,21 @@ const loadGroupLabels = async (args: {
 /** The run's aggregate, with its baseline comparison and grouping attached. */
 export const buildRunAggregate = async (args: {
   run: EvalRunRowInstance;
-  groupBy: string | null;
+  settlement: Pick<EvalRunDefinition, 'groupBy' | 'criteria'>;
   results: ResultRow[];
 }): Promise<AggregateScores> => {
+  const { groupBy } = args.settlement;
   const current = args.results.map(toComparable);
   const baseline = await loadBaseline({
     baselineRunDbId: args.run.baselineRunId,
   });
   const grouping =
-    args.groupBy === null
+    groupBy === null
       ? null
       : {
-          groupBy: args.groupBy,
+          groupBy,
           labels: await loadGroupLabels({
-            groupBy: args.groupBy,
+            groupBy,
             results: [...current, ...(baseline?.results ?? [])],
           }),
         };
@@ -118,6 +121,11 @@ export const buildRunAggregate = async (args: {
   if (grouping) {
     aggregate.grouping = aggregateGroups({ ...grouping, results: current });
   }
+  const criteria = criterionRollups({
+    criteria: args.settlement.criteria,
+    results: current,
+  });
+  if (criteria) aggregate.criteria = criteria;
   if (baseline) {
     const comparison = computeBaselineComparison({
       baselineRunPublicId: baseline.publicId,

@@ -14,6 +14,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { openRunProbeGate } from './evaluationProbeRuns';
 import {
   ackEvalItemTask,
   claimEvalItemTasks,
@@ -30,6 +31,7 @@ import {
   executeAndRecordItem,
   failEvalRun,
   finalizeIfUnclaimed,
+  isLiveRunStatus,
   recountEvalRunProgress,
 } from './evaluationRunExecution';
 import { runAsJob } from './requestCorrelation';
@@ -66,11 +68,6 @@ const abandonedAfterMs = (): number => {
   return Number.isFinite(configured) && configured > 0
     ? configured
     : DEFAULT_ABANDONED_AFTER_MS;
-};
-
-/** A run that still has work ahead of it, as opposed to one already settled. */
-const isLive = (status: string): boolean => {
-  return status === 'queued' || status === 'running';
 };
 
 type LoadedRun = {
@@ -148,7 +145,7 @@ const settleIfDrained = async (args: { evalRunId: number }): Promise<void> => {
   // a redelivered task arrived after it had already completed, or its first
   // item failed it for having no definition.
   const { definition } = context;
-  if (!isLive(context.run.status) || !definition) return;
+  if (!isLiveRunStatus(context.run.status) || !definition) return;
 
   await finalizeIfUnclaimed({ ...context, settlement: definition });
 };
@@ -187,6 +184,26 @@ const loadRunnable = async (args: {
 };
 
 /**
+ * First item of a queued run: the run is now genuinely under way. Conditional
+ * on `queued`, since a sibling item may have settled the run since our read.
+ * A run with probes is stamped started once they hold (`openRunProbeGate`).
+ * Returns whether the run is still live.
+ */
+const markRunUnderWay = async (args: {
+  context: LoadedRun;
+}): Promise<boolean> => {
+  const { run, definition } = args.context;
+  if (run.status !== 'queued') return true;
+  const probed = Array.isArray(definition?.criteria);
+  await db.EvalRun.update(
+    { status: 'running', startedAt: probed ? null : new Date() },
+    { where: { id: run.id as number, status: 'queued' } }
+  );
+  await run.reload();
+  return isLiveRunStatus(run.status);
+};
+
+/**
  * Executes one claimed item task.
  *
  * A run that is no longer live (cancelled between the claim and here) drops the
@@ -205,7 +222,7 @@ const handleEvalItemTask = async (args: {
   if (!context) return;
 
   const { run } = context;
-  if (!isLive(run.status)) {
+  if (!isLiveRunStatus(run.status)) {
     log(
       'handleEvalItemTask: run=%s is %s, dropping task %s',
       run.publicId,
@@ -215,20 +232,20 @@ const handleEvalItemTask = async (args: {
     return;
   }
 
-  // First item of a queued run: the run is now genuinely under way. Conditional
-  // on `queued`, since a sibling item may have settled the run since our read.
-  if (run.status === 'queued') {
-    await db.EvalRun.update(
-      { status: 'running', startedAt: run.startedAt ?? new Date() },
-      { where: { id: run.id as number, status: 'queued' } }
-    );
-    await run.reload();
-    if (!isLive(run.status)) return;
-  }
+  if (!(await markRunUnderWay({ context }))) return;
 
   const runnable = await loadRunnable({ context });
   if (!runnable) return;
   const { definition, agent } = runnable;
+  const gateOpen = await openRunProbeGate({
+    run,
+    evalPublicId: context.evalPublicId,
+    projectId: context.projectId,
+    definition,
+    agentOutputSchema: agent.outputSchema,
+    deciderVersions: run.deciderVersions,
+  });
+  if (!gateOpen) return;
   const item = await db.DatasetItem.findByPk(args.task.datasetItemId as number);
   /* istanbul ignore next -- deleting a dataset item cascades its task away
      before it can be claimed. */
@@ -264,7 +281,7 @@ const handleEvalItemTask = async (args: {
   // run publishes no `aggregate_scores`, so these counters are its only record
   // of the work that was really paid for.
   await run.reload();
-  if (!isLive(run.status)) {
+  if (!isLiveRunStatus(run.status)) {
     await recountEvalRunProgress({ run });
   }
 };

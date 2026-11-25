@@ -108,7 +108,12 @@ const notCompleted = (generation: GenerationResult): StoredError => {
 };
 
 /** The scorer's own failure, named as one: the generation itself succeeded. */
-const scoringFailure = (error: unknown): StoredError => {
+/** An eval run that still has work ahead of it, as opposed to one settled. */
+export const isLiveRunStatus = (status: unknown): boolean => {
+  return status === 'queued' || status === 'running';
+};
+
+export const scoringFailure = (error: unknown): StoredError => {
   const failure = toStoredErrorKeepingMessage({
     error,
     code: 'EVAL_SCORING_FAILED',
@@ -121,10 +126,11 @@ const scoringFailure = (error: unknown): StoredError => {
  * completions and tool scorer calls. Injected into `scoreOutput` so the kernel
  * itself stays pure.
  */
-const buildScorerRunners = (args: {
+export const buildScorerRunners = (args: {
   projectId: number;
   deciderScoring: DeciderScoring;
-  datasetItemId: string;
+  /** The item graded, or null for a probe, which grades no item. */
+  datasetItemId: string | null;
   authority: WorkAuthority | null;
 }) => {
   return {
@@ -374,7 +380,7 @@ export const recountEvalRunProgress = async (args: {
 /** What finalize reads off the run's definition: the gate, grouping and evidence. */
 export type EvalSettlement = Pick<
   EvalRunDefinition,
-  'passThreshold' | 'groupBy' | 'evidence'
+  'passThreshold' | 'groupBy' | 'evidence' | 'criteria'
 >;
 
 /**
@@ -396,7 +402,7 @@ export const finalizeEvalRun = async (args: {
 
   const aggregate = await buildRunAggregate({
     run: args.run,
-    groupBy: args.settlement.groupBy,
+    settlement: args.settlement,
     results,
   });
 

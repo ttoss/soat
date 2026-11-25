@@ -83,6 +83,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `policy_ids` | string[] | Required on create. The policies every run acts under; see [Run authority](#run-authority) |
 | `evidence` | object \| null | The rules beyond the threshold, read by the run's verdict or its claim's; see [Evidence](#evidence) |
 | `claim` | object \| null | `{ statement, population, limits }`, what a run of the eval tests; see [The claim](#the-claim) |
+| `criteria` | array \| null | `[{ name, description, scorers, probes }]`, the properties the claim is made of; every scorer sits in exactly one. See [Criteria](#criteria) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 An `agent_id` or `dataset_id` naming a resource in another project is rejected with `400`.
@@ -95,7 +96,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `eval_id` | string | ID of the eval this run belongs to |
 | `agent_id` | string \| null | The agent every item ran against, resolved when the run was created; kept after that agent is deleted. `null` on a run that recorded none; see [Version pinning](#version-pinning) |
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
-| `definition` | object \| null | The eval's `scorers`, `pass_threshold`, `group_by` and `evidence` as they were when the run was created, which every item is scored and the run settled by; see [Version pinning](#version-pinning). `null` on a run that recorded none |
+| `definition` | object \| null | The eval's `scorers`, `pass_threshold`, `group_by`, `evidence` and `criteria` as they were when the run was created, which every item is scored and the run settled by; see [Version pinning](#version-pinning). `null` on a run that recorded none |
 | `claim` | object \| null | The eval's `claim` as it was when the run was created: what this run tested; see [The claim](#the-claim). `null` when the eval stated none |
 | `decider_versions` | object \| null | Scorer name → the decider version each [`decider` scorer](#decider-scorers-decider) grades under, resolved when the run started; `null` when the eval has none |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `cancelled` |
@@ -103,7 +104,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate` and its [`pass_rate_interval`](#uncertainty), `scored_item_count`, a `grouping` per value of the eval's [`group_by`](#grouped-aggregates) key, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a cancelled run |
 | `verdict` | string \| null | `supported` \| `refuted` \| `insufficient`; see [Pass semantics](#pass-semantics). `null` when the run has no threshold, until it completes, and on a cancelled or failed run |
-| `verdict_reasons` | array \| null | `[{ scope, verdict, reason }]`, one per judged scope, the run first; `scope` is `{ kind: "run" }` or `{ kind: "group", name }` (a claim's reasons add `live` and `age` scopes, see [Evidence](#evidence)). `null` when `verdict` is |
+| `verdict_reasons` | array \| null | `[{ scope, verdict, reason }]`, one per judged scope, the run first; `scope` is `{ kind: "run" }`, `{ kind: "group", name }` or `{ kind: "criterion", name }` (a claim's reasons add `live` and `age` scopes, see [Evidence](#evidence)). `null` when `verdict` is |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [cancelled](#canceling-a-run) run the last two count what actually ran |
 | `metadata` | object | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
@@ -654,6 +655,60 @@ anything else is `400 VALIDATION_FAILED`.
 ```json
 { "evidence": { "min_calibration": { "labeled": 30, "agreement": 0.9 } } }
 ```
+
+### Criteria
+
+`criteria` on the eval names the properties its claim is made of, and binds each scorer
+to the one it measures:
+
+```json
+{
+  "criteria": [
+    {
+      "name": "explains_refund",
+      "description": "Names the refund and the policy behind it",
+      "scorers": ["mentions_refund", "mentions_policy"],
+      "probes": [
+        { "output": "Your refund policy applies.", "passed": true },
+        { "output": "Hello.", "passed": false, "note": "says nothing" }
+      ]
+    }
+  ]
+}
+```
+
+| Rule | Refusal |
+| --- | --- |
+| Every scorer sits in exactly one criterion | a scorer in none or in two, or an unknown scorer name: `400 VALIDATION_FAILED` |
+| `name` is unique within the eval; `description` is a sentence a reviewer reads | `400 VALIDATION_FAILED` |
+| `probes` holds at least one probe that passes and one that fails; each is `{ output, passed, object?, metadata?, note?, input?, expected_output? }` | `400 VALIDATION_FAILED` |
+
+An item passes a criterion when every scorer the criterion binds passed it. A run copies
+`criteria` into its `definition`, reports each criterion in `aggregate_scores.criteria`
+(`pass_rate`, [`pass_rate_interval`](#uncertainty), `scored_item_count`, over the scored
+items) and judges each on its own interval against `pass_threshold`, as a
+`{ kind: "criterion", name }` reason. A criterion is never worse than the run on the same
+items, so its reason says which property lost the items rather than adding a gate. On
+update, `criteria` replaces the stored ones whole, `null` clears them and omitting them
+keeps them; a scorer edit that leaves a criterion naming a missing scorer is refused. An
+eval without `criteria` reports none.
+
+A probe holds when its criterion's verdict on it (every scorer the criterion binds passed)
+is the `passed` it declares. The scorers grade `output` as the text, `object` as the
+structured output (`output_schema`, and `object` in `json_logic`) and `metadata` as
+`item.metadata`. Every run grades its probes before its first item:
+
+| Run | Probe that does not hold | Scorer that cannot grade a probe |
+| --- | --- | --- |
+| `wait: true` | the run settles `failed`; `400 PROBE_FAILED`, `meta` naming the run (`eval_run_id`) and each probe in `failed` (`criterion`, `index`, `expected`, `passed`) | the run settles `failed`; the scorer's own error |
+| `wait: false` | answers `201 queued`; its first task grades the probes in the worker while the other items wait, then the run settles `failed` (`eval_runs.failed`) | the run settles `failed` (`eval_runs.failed`) |
+
+[`POST /api/v1/evals/{eval_id}/probes`](/docs/api/evaluations/check-eval-probes)
+(`evaluations:RunEval`) grades them the same way and returns the report,
+`{ passed, probes: [{ criterion, index, expected, passed, held, scores, error? }] }`, without
+creating a run; there a scorer that cannot grade a probe is reported as its `error`. Probes
+run under the authority a run of the eval holds and are metered as its scorers are; an
+eval write never runs them.
 
 ### The claim
 

@@ -2824,7 +2824,12 @@ describe('Evaluations', () => {
         evalPublicId: evalId,
         projectId: (await db.Eval.findOne({ where: { publicId: evalId } }))!
           .projectId as number,
-        settlement: { passThreshold: null, groupBy: null, evidence: null },
+        settlement: {
+          passThreshold: null,
+          groupBy: null,
+          evidence: null,
+          criteria: null,
+        },
       };
 
       // The drain already settled it, so this stands in for the losing worker.

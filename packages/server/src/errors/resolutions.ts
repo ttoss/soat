@@ -158,6 +158,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Check that the converter calls back to the document's callback URL, then ingest the document again. Raise `CONVERSION_STALL_TIMEOUT_MS` for a converter that legitimately takes longer.",
   EVAL_SCORING_FAILED:
     "Read the message for the scorer's failure, fix the scorer's configuration, and run the eval again.",
+  PROBE_FAILED:
+    'Read `meta.failed` for each probe that did not hold, fix the scorer or the probe, check it with {{POST /evals/{eval_id}/probes}}, then start the run again.',
   TOOL_CALL_FAILED:
     'Read `meta` for what the tool raised. The turn went on with the failure as the call result, so fix the tool or its target for the next turn.',
   INTERNAL_ERROR:

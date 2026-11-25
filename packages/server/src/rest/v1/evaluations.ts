@@ -13,6 +13,7 @@ import {
   updateDataset,
   updateDatasetItem,
 } from 'src/lib/evaluationDatasets';
+import { dryRunProbes } from 'src/lib/evaluationProbeDryRun';
 import {
   getEvalRun,
   listEvalResults,
@@ -367,6 +368,7 @@ evaluationsRouter.post('/evals', async (ctx: Context) => {
     policyIds: body.policy_ids as string[] | undefined,
     evidence: body.evidence,
     claim: body.claim,
+    criteria: body.criteria,
     writer: ctx.authUser,
   });
 });
@@ -428,6 +430,7 @@ evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
     policyIds: body.policy_ids as string[] | undefined,
     evidence: body.evidence,
     claim: body.claim,
+    criteria: body.criteria,
     writer: ctx.authUser,
   });
 });
@@ -460,6 +463,24 @@ evaluationsRouter.delete('/evals/:eval_id', async (ctx: Context) => {
 });
 
 // ── Eval runs ──────────────────────────────────────────────────────────────
+
+/**
+ * @openapi
+ * /api/v1/evals/{eval_id}/probes:
+ *   post:
+ *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1probes/post'
+ */
+evaluationsRouter.post('/evals/:eval_id/probes', async (ctx: Context) => {
+  const { projectIds, projectPublicId } = await evalAccess.authorizeWrite({
+    ctx,
+    action: 'evaluations:RunEval',
+  });
+  ctx.body = await dryRunProbes({
+    authority: captureAuthority({ authUser: ctx.authUser, projectPublicId }),
+    projectIds,
+    evalId: ctx.params.eval_id,
+  });
+});
 
 /**
  * @openapi

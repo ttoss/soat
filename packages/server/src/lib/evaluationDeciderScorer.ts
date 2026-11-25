@@ -24,7 +24,8 @@ export type DeciderScoring = {
   /** Scorer name → pinned decider version; null when the eval has none. */
   versions: Record<string, number> | null;
   evalId: string;
-  runId: string;
+  /** The run graded under, or null for the probes dry run, which makes none. */
+  runId: string | null;
 };
 
 const deciderScorersOf = (scorers: unknown): Record<string, unknown>[] => {
@@ -92,7 +93,7 @@ export const runDeciderScorerCall = async (args: {
   scorer: Record<string, unknown>;
   input: unknown;
   scoring: DeciderScoring;
-  datasetItemId: string;
+  datasetItemId: string | null;
   authority: WorkAuthority | null;
 }): Promise<DeciderScorerDecision> => {
   const name = String(args.scorer.name);

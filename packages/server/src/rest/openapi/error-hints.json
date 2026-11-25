@@ -922,6 +922,16 @@
       "hint": "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
       "routes": []
     },
+    "PROBE_FAILED": {
+      "http_status": 400,
+      "hint": "Read `meta.failed` for each probe that did not hold, fix the scorer or the probe, check it with POST /api/v1/evals/{eval_id}/probes, then start the run again.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/evals/{eval_id}/probes"
+        }
+      ]
+    },
     "PROJECT_DEFAULT_ROUTE_INHERITED": {
       "http_status": 409,
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
