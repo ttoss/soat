@@ -416,6 +416,7 @@ A denial's status code depends on what the route does, not on which policy faile
 | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | **List** ([`GET /agents`](/docs/api/agents/list-agents))                                                  | `200` with an empty list — the caller may read zero projects, so nothing matches       |
 | **Read one** ([`GET /agents/{id}`](/docs/api/agents/get-agent))                                           | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
+| **Read one the caller already sees through another read** ([collections](./collections.md#access-rules))  | `403 FORBIDDEN` — a `404` would contradict that read                                   |
 | **Write / act on one** ([`PATCH /agents/{id}`](/docs/api/agents/patch-agent), `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
 | **Write / act on one, in a project none of the caller's policies name**                                   | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either       |
 | **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                              | `403 FORBIDDEN`                                                                        |

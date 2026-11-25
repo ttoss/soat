@@ -28,6 +28,8 @@ describe('Collections', () => {
   let userToken: string;
   let noPermToken: string;
   let readerToken: string;
+  let listerToken: string;
+  let creatorToken: string;
   let projectId: string;
   let seq = 0;
 
@@ -52,6 +54,20 @@ describe('Collections', () => {
         'collections:ListCollectionItems',
         'collections:GetCollectionItem',
       ],
+    });
+
+    listerToken = await createScopedPrincipal({
+      adminToken,
+      projectId,
+      username: 'collectionslister',
+      actions: ['collections:ListCollectionItems'],
+    });
+
+    creatorToken = await createScopedPrincipal({
+      adminToken,
+      projectId,
+      username: 'collectionscreator',
+      actions: ['collections:CreateCollection'],
     });
   }, 60_000);
 
@@ -563,6 +579,37 @@ describe('Collections', () => {
       const { id } = await createCollection();
       const response = await testClient.get(itemPath(id, 'k'));
       expect(response.status).toBe(401);
+    });
+
+    test('returns 403 naming the action to a caller who can list the items', async () => {
+      const { id } = await createCollection();
+      await putItem({ collectionId: id, key: 'k', body: { data: {} } });
+      const listed = await authenticatedTestClient(listerToken).get(
+        `/api/v1/collections/${id}/items`
+      );
+      expect(listed.status).toBe(200);
+
+      const response = await authenticatedTestClient(listerToken).get(
+        itemPath(id, 'k')
+      );
+      expect(response.status).toBe(403);
+      expect(response.body.error).toMatchObject({
+        code: 'FORBIDDEN',
+        meta: {
+          action: 'collections:GetCollectionItem',
+          resource: `srn:${projectId}:collection:${id}`,
+          denied_by: { type: 'user' },
+        },
+      });
+    });
+
+    test('returns 404 to a caller who sees nothing of the collection', async () => {
+      const { id } = await createCollection();
+      await putItem({ collectionId: id, key: 'k', body: { data: {} } });
+      const response = await authenticatedTestClient(creatorToken).get(
+        itemPath(id, 'k')
+      );
+      expect(response.status).toBe(404);
     });
   });
 

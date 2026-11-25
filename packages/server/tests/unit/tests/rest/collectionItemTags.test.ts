@@ -12,6 +12,8 @@ describe('Collection item tags', () => {
   let projectId: string;
   let collectionId: string;
   let actorToken: string;
+  let listerToken: string;
+  let listerUserId: string;
 
   const itemPath = (key: string) => {
     return `/api/v1/collections/${collectionId}/items/${key}`;
@@ -72,7 +74,56 @@ describe('Collection item tags', () => {
       .put(`/api/v1/users/${actorUser.body.id}/policies`)
       .send({ policy_ids: [policy.body.id] });
     actorToken = await loginAs('collitemactor', 'collitemactorpass');
+
+    // Every collection action on the collection; items it may list, not get.
+    const listerUser = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'collitemlister', password: 'collitemlisterpass' });
+    const listerPolicy = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['collections:*'],
+              resource: [`srn:${projectId}:collection:*`],
+            },
+            {
+              effect: 'Allow',
+              action: ['collections:ListCollectionItems'],
+              resource: [`srn:${projectId}:collection_item:*`],
+            },
+          ],
+        },
+      });
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${listerUser.body.id}/policies`)
+      .send({ policy_ids: [listerPolicy.body.id] });
+    listerUserId = listerUser.body.id;
+    listerToken = await loginAs('collitemlister', 'collitemlisterpass');
   }, 60_000);
+
+  test('refuses an item it lists but may not get with 403', async () => {
+    const listed = await authenticatedTestClient(listerToken).get(
+      `/api/v1/collections/${collectionId}/items`
+    );
+    expect(listed.status).toBe(200);
+    expect(listed.body.data.length).toBeGreaterThan(0);
+
+    const response = await authenticatedTestClient(listerToken).get(
+      itemPath('a1')
+    );
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatchObject({
+      code: 'FORBIDDEN',
+      meta: {
+        action: 'collections:GetCollectionItem',
+        resource: `srn:${projectId}:collection_item:a1`,
+        denied_by: { type: 'user', id: listerUserId },
+      },
+    });
+  });
 
   describe('GET /api/v1/collections/:collection_id/items/:key/tags', () => {
     test('returns the bag', async () => {
