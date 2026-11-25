@@ -4,6 +4,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { resolveProjectPublicId } from './eventBus';
 import { assertCallerPath } from './filePaths';
 import { buildPath } from './files';
 import { getUploadMaxBytes } from './requestBounds';
@@ -51,7 +52,6 @@ const assertMaxBytes = (args: { maxBytes: number; ceiling: number }) => {
  */
 export const createPresignedUrl = async (args: {
   projectId: number;
-  projectPublicId: string;
   prefix?: string;
   filename?: string;
   contentType?: string;
@@ -90,7 +90,9 @@ export const createPresignedUrl = async (args: {
   return {
     upload_token: token.publicId,
     upload_url: buildUploadUrl({
-      projectPublicId: args.projectPublicId,
+      projectPublicId: await resolveProjectPublicId({
+        projectId: args.projectId,
+      }),
       token: token.publicId,
     }),
     max_bytes: maxBytes,

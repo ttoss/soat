@@ -348,6 +348,7 @@ paths:
         multipart or base64 with `POST /api/v1/files/upload/{token}`.
       operationId: createPresignedUrl
       x-raises:
+        - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
         - RESERVED_PATH
         - UNAUTHORIZED
@@ -1106,14 +1107,14 @@ components:
           $ref: './metadata.yaml#/components/schemas/MetadataBag'
     PresignedUrlRequest:
       type: object
-      required:
-        - project_id
       additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
           type: string
-          description: Public ID of the project
+          description: >-
+            Public ID of the project. Required for a credential that spans
+            projects; a project-scoped key uses its own project.
           example: 'proj_V1StGXR8Z5jdHi6B'
         prefix:
           type: string
