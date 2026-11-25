@@ -63,7 +63,7 @@ describe('Tools', () => {
     clientToolId = clientToolRes.body.id;
   });
 
-  // Creates a project-scoped API key whose policy excludes `excludedAction`,
+  // Creates a project-scoped API key whose policy excludes `excludedActions`,
   // used to exercise the `projectIds === null` (403) branch on routes that
   // don't take a `project_id` param (unlike `noPermToken`, which resolves to
   // an empty project list and 404s instead).
