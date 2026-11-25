@@ -417,14 +417,25 @@ describe('Streamed agent generations', () => {
     test("a step rule's tool_choice and active tools apply to a streamed step", async () => {
       const agentId = await createAgent({
         step_rules: [
-          { step: 1, tool_choice: 'none', active_tool_ids: [newsToolId] },
+          { step: 1, tool_choice: 'auto', active_tool_ids: [newsToolId] },
         ],
       });
 
       await stream(agentId);
 
-      expect(requestBodies[0].tool_choice).toBe('none');
+      expect(requestBodies[0].tool_choice).toBe('auto');
       expect(offeredToolNames(requestBodies[0])).toEqual([NEWS_TOOL]);
+    });
+
+    test("a step rule's tool_choice none offers no tool", async () => {
+      const agentId = await createAgent({
+        step_rules: [{ step: 1, tool_choice: 'none' }],
+      });
+
+      await stream(agentId);
+
+      expect(requestBodies[0].tool_choice).toBeUndefined();
+      expect(offeredToolNames(requestBodies[0])).toEqual([]);
     });
 
     test('a status write that fails after the stream does not break it', async () => {

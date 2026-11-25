@@ -250,8 +250,7 @@ export const buildPrepareStep = (args: {
       rule
     );
 
-    // The tool block stays offered on the answer step: a history holding tool
-    // calls needs it, and it keeps the cached prefix.
+    // The answer step leaves with no tool at all (`toolFreeCall.ts`).
     const result =
       oneIndexedStep === args.answerStep
         ? { toolChoice: 'none' as const }

@@ -16,6 +16,7 @@ import {
   missingModalities,
   registerInputGate,
 } from './inputModalityGate';
+import { toToolFreeCall } from './toolFreeCall';
 import { toolOutputParts } from './toolResultFiles';
 
 const log = createDebug('soat:model-input');
@@ -194,8 +195,9 @@ const withFileReferenceUrls = (urls: SupportedUrls): SupportedUrls => {
 /**
  * Every model a provider row serves crosses this boundary
  * (`modelPricingGate.ts`): a call carrying input the model declares it cannot
- * read, or over a limit it declares, is refused before it leaves, and a file
- * reference becomes its bytes.
+ * read, or over a limit it declares, is refused before it leaves, a file
+ * reference becomes its bytes, and a `tool_choice: "none"` call names no tool
+ * (`toolFreeCall.ts`).
  */
 export const withInputBoundary = (args: {
   model: LanguageModel;
@@ -211,10 +213,14 @@ export const withInputBoundary = (args: {
       return withFileReferenceUrls(await model.supportedUrls);
     },
     transformParams: async ({ params }) => {
-      const prompt = await resolveToolResultFiles({
-        prompt: params.prompt,
-        projectId: args.projectId,
+      const sent = toToolFreeCall({
+        ...params,
+        prompt: await resolveToolResultFiles({
+          prompt: params.prompt,
+          projectId: args.projectId,
+        }),
       });
+      const { prompt } = sent;
       const missing = missingModalities({
         accepted: args.accepted,
         required: readInputModalities(prompt),
@@ -234,7 +240,7 @@ export const withInputBoundary = (args: {
           return fileIdAt({ prompt, position });
         },
       });
-      return { ...params, prompt: resolved };
+      return { ...sent, prompt: resolved };
     },
   };
   const wrapped = wrapLanguageModel({ model: args.model, middleware });
