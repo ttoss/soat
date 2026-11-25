@@ -84,34 +84,32 @@ export const restoreTemplateSecrets = (args: {
   return { ...args.template, resources };
 };
 
-/**
- * The template a create, update or plan deploys: parsed, its placeholders
- * restored from `stored` (the formation it redeploys), and valid, or
- * `400 VALIDATION_FAILED`; `parameters` give every parameter it reads a value
- * of its type, or `400 FORMATION_MISSING_PARAMETERS` /
- * `FORMATION_INVALID_PARAMETERS`. A plan previews only what its deploy accepts.
- */
-export const deployableTemplate = async (args: {
+type StoredFormation = { formationId: string | undefined; projectId?: number };
+
+const findStoredFormation = (stored: StoredFormation | undefined) => {
+  if (!stored?.formationId) return Promise.resolve(null);
+  return db.Formation.findOne({
+    where: {
+      publicId: stored.formationId,
+      status: { [Op.ne]: 'deleted' },
+      ...(stored.projectId === undefined
+        ? {}
+        : { projectId: stored.projectId }),
+    },
+  });
+};
+
+const validTemplate = async (args: {
   input: unknown;
-  parameters: Record<string, string> | undefined;
   projectPublicId: string;
-  stored?: { formationId: string | undefined; projectId?: number };
+  stored?: StoredFormation;
 }): Promise<FormationTemplate> => {
   const parsed = parseFormationTemplateInput(args.input);
-  const formation =
-    holdsPlaceholder(parsed) && args.stored?.formationId
-      ? await db.Formation.findOne({
-          where: {
-            publicId: args.stored.formationId,
-            status: { [Op.ne]: 'deleted' },
-            ...(args.stored.projectId === undefined
-              ? {}
-              : { projectId: args.stored.projectId }),
-          },
-        })
-      : null;
   const template = holdsPlaceholder(parsed)
-    ? restoreTemplateSecrets({ template: parsed, stored: formation?.template })
+    ? restoreTemplateSecrets({
+        template: parsed,
+        stored: (await findStoredFormation(args.stored))?.template,
+      })
     : parsed;
   const validation = await validateFormationTemplateAsync({
     template,
@@ -122,7 +120,42 @@ export const deployableTemplate = async (args: {
       details: validation.errors,
     });
   }
-  const deployable = template as FormationTemplate;
+  return template as FormationTemplate;
+};
+
+// The stored template was accepted when stored; it is not re-validated, so a
+// template stored before a rule existed still redeploys.
+const storedTemplate = async (
+  stored: StoredFormation
+): Promise<FormationTemplate> => {
+  const formation = await findStoredFormation(stored);
+  if (!formation) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Formation '${stored.formationId}' not found.`
+    );
+  }
+  return formation.template as FormationTemplate;
+};
+
+/**
+ * The template a create, update or plan deploys: parsed, its placeholders
+ * restored from `stored` (the formation it redeploys), and valid, or
+ * `400 VALIDATION_FAILED`; with no `input`, the template `stored` holds.
+ * `parameters` give every parameter it reads a value of its type, or
+ * `400 FORMATION_MISSING_PARAMETERS` / `FORMATION_INVALID_PARAMETERS`. A plan
+ * previews only what its deploy accepts.
+ */
+export const deployableTemplate = async (args: {
+  input: unknown;
+  parameters: Record<string, string> | undefined;
+  projectPublicId: string;
+  stored?: StoredFormation;
+}): Promise<FormationTemplate> => {
+  const deployable =
+    args.input === undefined && args.stored?.formationId !== undefined
+      ? await storedTemplate(args.stored)
+      : await validTemplate(args);
   const missing = missingParameterErrors({
     template: deployable,
     provided: args.parameters,

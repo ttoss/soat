@@ -241,6 +241,7 @@ Pass values in the `parameters` field of the validate, plan, create, or update r
 - Values override any `default`; parameters with a `default` are optional.
 - A parameter with no `default` and no value fails with `400 Missing required parameters`, unless declared `use_previous_value: true` (see [Reusing Previously Stored Values](#reusing-previously-stored-values)).
 - Values are **never stored**: supply them on every plan, create and update, except `use_previous_value` parameters on update and on a plan with `formation_id`. A plan answers `400 FORMATION_MISSING_PARAMETERS` where its deploy would.
+- An update without `template` redeploys the stored template under the same checks: a missing or unparseable value is `400` before anything deploys.
 - On `validate-formation`, `parameters` is optional: omitted, only the template's structure is checked; provided (even as `{}`), each missing required parameter is an entry in `errors`.
 
 #### Providing Parameter Values via the CLI

@@ -288,17 +288,13 @@ export const getFormation = async (args: {
 
 export const updateFormation = async (args: {
   id: string;
-  template?: FormationTemplate;
+  template: FormationTemplate;
   metadata?: Record<string, unknown> | null;
   parameters?: Record<string, string>;
   authorize: FormationAuthorizer;
   actor: FormationActor;
 }): Promise<MappedFormation> => {
-  log(
-    'updateFormation: formationId=%s updateTemplate=%s',
-    args.id,
-    !!args.template
-  );
+  log('updateFormation: formationId=%s', args.id);
   const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
   });
@@ -310,9 +306,6 @@ export const updateFormation = async (args: {
     );
   }
 
-  const newTemplate =
-    args.template ?? (formation.template as FormationTemplate);
-
   const existingResources = await db.FormationResource.findAll({
     where: { formationId: formation.id as number },
   });
@@ -322,7 +315,7 @@ export const updateFormation = async (args: {
   await assertResourceActionsAuthorized({
     authorize: args.authorize,
     requests: collectApplyAuthorizationRequests({
-      template: newTemplate,
+      template: args.template,
       existingResources,
     }),
   });
@@ -345,7 +338,7 @@ export const updateFormation = async (args: {
 
   await applyFormationTemplate({
     formation,
-    template: newTemplate,
+    template: args.template,
     existingResources,
     projectId: formation.projectId,
     actor: args.actor,

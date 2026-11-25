@@ -334,15 +334,12 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   const metadata = readNullableMetadataBag(body.metadata);
   assertStaticMetadata(metadata);
 
-  let parsedTemplate: FormationTemplate | undefined = undefined;
-  if (body.template !== undefined) {
-    parsedTemplate = await deployableTemplate({
-      input: body.template,
-      parameters: body.parameters,
-      projectPublicId: formation.project_id,
-      stored: { formationId: formation.id },
-    });
-  }
+  const parsedTemplate = await deployableTemplate({
+    input: body.template,
+    parameters: body.parameters,
+    projectPublicId: formation.project_id,
+    stored: { formationId: formation.id },
+  });
 
   const updated = await updateFormation({
     id: ctx.params.formation_id,
