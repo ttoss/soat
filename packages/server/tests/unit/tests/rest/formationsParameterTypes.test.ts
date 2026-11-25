@@ -174,6 +174,56 @@ describe('Formation parameter types', () => {
     expect(res.body.error.code).toBe('FORMATION_INVALID_PARAMETERS');
   });
 
+  describe('PUT /api/v1/formations/:formation_id without a template', () => {
+    const requiredLabel = {
+      ...template,
+      parameters: { ...parameters, Label: { type: 'string' } },
+    };
+
+    const redeploy = async (values: Record<string, string>) => {
+      const created = await create({
+        template: requiredLabel,
+        parameters: { Label: 'first' },
+      });
+      expect(created.status).toBe(201);
+      return authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${created.body.id}`)
+        .send({ parameters: values });
+    };
+
+    test('redeploys the stored template with the new values', async () => {
+      const res = await redeploy({ Label: 'second', LimitN: '4' });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resolved_parameters).toEqual(
+        expect.objectContaining({ Label: 'second', LimitN: '4' })
+      );
+    });
+
+    test('refuses a missing required parameter with 400', async () => {
+      const res = await redeploy({ LimitN: '4' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
+      expect(JSON.stringify(res.body)).toContain('parameters.Label');
+    });
+
+    test('refuses an unparseable value with 400', async () => {
+      const res = await redeploy({ Label: 'second', LimitN: 'many' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORMATION_INVALID_PARAMETERS');
+    });
+
+    test('plan still requires a template', async () => {
+      const created = await create({});
+      expect(created.status).toBe(201);
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({ project_id: projectId, formation_id: created.body.id });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('POST /api/v1/formations/validate', () => {
     const validate = (body: Record<string, unknown>) => {
       return authenticatedTestClient(userToken)
