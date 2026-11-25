@@ -49,12 +49,16 @@ type SupportedUrls = Awaited<
   ReturnType<NonNullable<LanguageModelMiddleware['overrideSupportedUrls']>>
 >;
 
+/** The file a `soat-file:` reference names; null for any other value. */
+export const fileIdOfReference = (reference: string): string | null => {
+  return reference.startsWith(FILE_REFERENCE_SCHEME)
+    ? reference.slice(FILE_REFERENCE_SCHEME.length)
+    : null;
+};
+
 const referencedFileId = (part: UserPart): string | null => {
   if (part.type !== 'file' || part.data.type !== 'url') return null;
-  const url = String(part.data.url);
-  return url.startsWith(FILE_REFERENCE_SCHEME)
-    ? url.slice(FILE_REFERENCE_SCHEME.length)
-    : null;
+  return fileIdOfReference(String(part.data.url));
 };
 
 /** Held to the turn's project, where the message naming it was resolved. */

@@ -191,6 +191,7 @@ const resolveContextAndRecord = async (
     toolSurface: ctx.toolSurface,
     retrieval: ctx.retrieval,
     citesSources: ctx.citesSources,
+    attachedSources: ctx.attachedSources,
     provenance: provenanceForNewRow(ctx.provenance),
     idempotency: args.idempotency,
     parentCall: parentCallOf(args.authUser),

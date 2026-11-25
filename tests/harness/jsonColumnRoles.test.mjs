@@ -87,6 +87,7 @@ const ROLES = {
     'FormationOperation.plan',
     'FormationResource.lastAppliedProperties',
     'FormationResource.pendingCleanupPhysicalResourceIds',
+    'Generation.attachedSources',
     'Generation.authority',
     'Generation.citations',
     'Generation.error',
