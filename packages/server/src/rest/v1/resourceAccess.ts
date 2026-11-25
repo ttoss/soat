@@ -38,11 +38,8 @@
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
 import { callerDenied, requestRefusal } from 'src/lib/authorizationDenial';
-import {
-  buildSrn,
-  evaluatePolicies,
-  policySetsConcernProject,
-} from 'src/lib/iam';
+import { buildSrn, policySetsConcernProject } from 'src/lib/iam';
+import { policyGroupsAllow } from 'src/lib/permissions';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { findSharedUse } from 'src/lib/resourceReferences';
 import { findGranteeScope } from 'src/lib/shares';
@@ -207,8 +204,8 @@ const refusedWithDenial = (args: {
 
 /**
  * Whether a read in `shownBy` the caller holds on `resource` already shows
- * it to them. Evaluated over the policy sets rather than `isAllowed`, so the
- * probe is neither audited nor admitted as a check of its own.
+ * it to them. Asked through `policyGroupsAllow` rather than `isAllowed`, so
+ * the probe is neither audited nor admitted as a check of its own.
  */
 const shownToCaller = async (args: {
   ctx: AuthenticatedContext;
@@ -218,15 +215,13 @@ const shownToCaller = async (args: {
   shownBy: readonly string[];
 }): Promise<boolean> => {
   if (args.shownBy.length === 0) return false;
-  const sets = await args.ctx.authUser.getPolicies(args.projectPublicId);
+  const groups = await args.ctx.authUser.getLabeledPolicies(
+    args.projectPublicId
+  );
   return args.shownBy.some((action) => {
-    return sets.every((policies) => {
-      return evaluatePolicies({
-        policies,
-        action,
-        resource: args.resource,
-        context: args.context,
-      }).allowed;
+    return policyGroupsAllow({
+      groups,
+      check: { action, resource: args.resource, context: args.context },
     });
   });
 };

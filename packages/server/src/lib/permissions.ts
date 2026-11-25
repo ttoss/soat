@@ -104,10 +104,10 @@ type PolicySetsCheck = {
  * decided it. A group holding no set allows nothing, as one holding an empty
  * set.
  */
-const findRefusal = async (args: {
+const findRefusal = (args: {
   groups: LabeledPolicySets;
-  check: PolicySetsCheck;
-}): Promise<Refusal | undefined> => {
+  check: Omit<PolicySetsCheck, 'projectPublicId'>;
+}): Refusal | undefined => {
   for (const { principal, sets } of args.groups) {
     if (sets.length === 0) return { principal, denial: null };
     for (const policies of sets) {
@@ -116,6 +116,18 @@ const findRefusal = async (args: {
     }
   }
   return undefined;
+};
+
+/**
+ * Whether `groups` allow `check`, as the request evaluator decides it, but
+ * neither recorded as a refusal nor audited: for asking what else a caller may
+ * do once a check is already refused.
+ */
+export const policyGroupsAllow = (args: {
+  groups: LabeledPolicySets;
+  check: Omit<PolicySetsCheck, 'projectPublicId'>;
+}): boolean => {
+  return findRefusal(args) === undefined;
 };
 
 /**
@@ -150,7 +162,7 @@ export const createPolicySetsIsAllowed = (args: {
       return false;
     }
 
-    const refusal = await findRefusal({
+    const refusal = findRefusal({
       groups: await args.getSets(),
       check: reqArgs,
     });
