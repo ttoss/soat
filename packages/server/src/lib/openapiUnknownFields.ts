@@ -20,17 +20,15 @@
  */
 
 import { hasOnlyPresenceUnions } from './openapiPresenceUnions';
-import type { SchemaWithProperties } from './openapiSchemaFields';
+import type {
+  SchemaRefResolver,
+  SchemaWithProperties,
+} from './openapiSchemaFields';
 import {
   deriveSchemaFields,
   hasProperties,
   isObjectRecord,
 } from './openapiSchemaFields';
-
-/** Follows a `$ref`, or returns an inline schema unchanged. */
-export type SchemaRefResolver = (
-  schema: unknown
-) => Record<string, unknown> | null;
 
 /**
  * Resolver for a schema document that declares no components to point at — an
@@ -214,7 +212,10 @@ const readFrame = (frame: WalkFrame, options: WalkOptions): FrameReading => {
   if (isOpenOrAmbiguous(schema) || !hasProperties(schema)) return nothing;
 
   const level: Level = { schema, value: frame.value, path: frame.path };
-  const { allowedFields } = deriveSchemaFields({ schema });
+  const { allowedFields } = deriveSchemaFields({
+    schema,
+    resolveRef: options.resolveRef,
+  });
   return {
     unknown: unknownKeysIn({
       value: level.value,
@@ -317,7 +318,10 @@ export const collectMissingRequiredFields = (
 ): MissingRequiredField[] => {
   return readAllFrames(args, options).flatMap(({ level }) => {
     if (!level) return [];
-    const { requiredFields } = deriveSchemaFields({ schema: level.schema });
+    const { requiredFields } = deriveSchemaFields({
+      schema: level.schema,
+      resolveRef: options.resolveRef,
+    });
     return [...requiredFields].flatMap((field) => {
       if (level.value[field] !== undefined) return [];
       return [

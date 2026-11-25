@@ -1057,29 +1057,9 @@ components:
           nullable: true
           description: JSON Schema describing the structured object the model must return. Non-streaming generations are constrained to this schema; the parsed value is returned as `output.object`.
         prompt_caching:
-          type: object
-          nullable: true
-          description: >-
-            Prompt caching for this agent's turns. `{"enabled": true}` marks a
-            cache breakpoint at the end of the system block and on the last
-            message of each step. Null or omitted is off.
-          additionalProperties: false
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the breakpoint is marked. Defaults to false.
+          $ref: './agents.yaml#/components/schemas/PromptCaching'
         citation_config:
-          type: object
-          nullable: true
-          description: >-
-            Structured citations for this agent's turns. `{"enabled": true}`
-            asks the model to cite the injected knowledge it uses; each
-            citation is verified before it is returned. Null or omitted is off.
-          additionalProperties: false
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the turn asks for and returns citations. Defaults to false.
+          $ref: './agents.yaml#/components/schemas/CitationConfig'
 
     ActorResourceProperties:
       description: >-

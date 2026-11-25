@@ -9,6 +9,7 @@ import type { ValidationError } from '../formationsTypes';
 import type {
   FieldSpec,
   SchemaFields,
+  SchemaRefResolver,
   SchemaWithProperties,
 } from '../openapiSchemaFields';
 import {
@@ -18,7 +19,6 @@ import {
   isObjectRecord,
 } from '../openapiSchemaFields';
 import { resolveSchemaRef } from '../openapiSpec';
-import type { SchemaRefResolver } from '../openapiUnknownFields';
 import {
   collectEnumViolations,
   collectMissingRequiredFields,
@@ -118,6 +118,7 @@ export const loadModuleSpec = (args: {
   // property names verbatim.
   const result = deriveSchemaFields({
     schema: loadModuleSchema({ schemaName: args.schemaName }),
+    resolveRef: resolveSchemaRef,
   });
 
   specCache[args.schemaName] = result;

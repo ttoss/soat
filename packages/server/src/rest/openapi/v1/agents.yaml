@@ -1782,42 +1782,9 @@ components:
           nullable: true
           description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
         prompt_caching:
-          type: object
-          nullable: true
-          description: >-
-            Prompt caching for this agent's turns. `{"enabled": true}` marks two
-            cache breakpoints: the end of the system block, which covers the tool
-            definitions and the instructions, and the last message of each step,
-            which covers the conversation so far. A provider that caches by
-            explicit breakpoint then reads, on every later step and every later
-            turn of the session, the whole prefix the previous one sent, and
-            writes only what was appended. Null or omitted is off: a cache write
-            costs more than an uncached token, so an agent whose prefix is never
-            re-read would pay for the privilege. A prefix below the model's
-            minimum cacheable length is not cached. Cache reads are reported as
-            `cached_tokens` and cache writes as `cache_write_tokens` on usage;
-            a write with no `cache_write_tokens` price bills at the input rate.
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the breakpoint is marked. Defaults to false.
+          $ref: '#/components/schemas/PromptCaching'
         citation_config:
-          type: object
-          nullable: true
-          description: >-
-            Structured citations for this agent's turns. `{"enabled": true}`
-            labels each `knowledge_config` result the turn injects, and each
-            page of a PDF or text file its messages attach (sent as its
-            extracted text; a page with no text is sent as the file,
-            unlabelled), and asks the model to cite the passages it uses. Every citation is checked
-            before it is returned: its source was injected into this turn and
-            its quoted text is in that source. One that fails lands in
-            `output.rejected_citations` with its reason, never in
-            `output.citations`. Null or omitted is off.
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the turn asks for and returns citations. Defaults to false.
+          $ref: '#/components/schemas/CitationConfig'
         max_context_messages:
           type: integer
           nullable: true
@@ -2127,6 +2094,47 @@ components:
           format: date-time
           nullable: true
 
+    PromptCaching:
+      type: object
+      nullable: true
+      description: >-
+        Prompt caching for this agent's turns. `{"enabled": true}` marks two
+        cache breakpoints: the end of the system block, which covers the tool
+        definitions and the instructions, and the last message of each step,
+        which covers the conversation so far. A provider that caches by
+        explicit breakpoint then reads, on every later step and every later
+        turn of the session, the whole prefix the previous one sent, and
+        writes only what was appended. Null or omitted is off: a cache write
+        costs more than an uncached token, so an agent whose prefix is never
+        re-read would pay for the privilege. A prefix below the model's
+        minimum cacheable length is not cached. Cache reads are reported as
+        `cached_tokens` and cache writes as `cache_write_tokens` on usage;
+        a write with no `cache_write_tokens` price bills at the input rate.
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the breakpoint is marked. Defaults to false.
+
+    CitationConfig:
+      type: object
+      nullable: true
+      description: >-
+        Structured citations for this agent's turns. `{"enabled": true}`
+        labels each `knowledge_config` result the turn injects, and each
+        page of a PDF or text file its messages attach (sent as its
+        extracted text; a page with no text is sent as the file,
+        unlabelled), and asks the model to cite the passages it uses. Every
+        citation is checked before it is returned: its source was injected
+        into this turn and its quoted text is in that source. One that fails lands in
+        `output.rejected_citations` with its reason, never in
+        `output.citations`. Null or omitted is off.
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the turn asks for and returns citations. Defaults to false.
+
     ToolBinding:
       type: object
       additionalProperties: false
@@ -2364,44 +2372,9 @@ components:
           nullable: true
           description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
         prompt_caching:
-          type: object
-          nullable: true
-          description: >-
-            Prompt caching for this agent's turns. `{"enabled": true}` marks two
-            cache breakpoints: the end of the system block, which covers the tool
-            definitions and the instructions, and the last message of each step,
-            which covers the conversation so far. A provider that caches by
-            explicit breakpoint then reads, on every later step and every later
-            turn of the session, the whole prefix the previous one sent, and
-            writes only what was appended. Null or omitted is off: a cache write
-            costs more than an uncached token, so an agent whose prefix is never
-            re-read would pay for the privilege. A prefix below the model's
-            minimum cacheable length is not cached. Cache reads are reported as
-            `cached_tokens` and cache writes as `cache_write_tokens` on usage;
-            a write with no `cache_write_tokens` price bills at the input rate.
-          additionalProperties: false
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the breakpoint is marked. Defaults to false.
+          $ref: '#/components/schemas/PromptCaching'
         citation_config:
-          type: object
-          nullable: true
-          description: >-
-            Structured citations for this agent's turns. `{"enabled": true}`
-            labels each `knowledge_config` result the turn injects, and each
-            page of a PDF or text file its messages attach (sent as its
-            extracted text; a page with no text is sent as the file,
-            unlabelled), and asks the model to cite the passages it uses. Every citation is checked
-            before it is returned: its source was injected into this turn and
-            its quoted text is in that source. One that fails lands in
-            `output.rejected_citations` with its reason, never in
-            `output.citations`. Null or omitted is off.
-          additionalProperties: false
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the turn asks for and returns citations. Defaults to false.
+          $ref: '#/components/schemas/CitationConfig'
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -2678,44 +2651,9 @@ components:
           nullable: true
           description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
         prompt_caching:
-          type: object
-          nullable: true
-          description: >-
-            Prompt caching for this agent's turns. `{"enabled": true}` marks two
-            cache breakpoints: the end of the system block, which covers the tool
-            definitions and the instructions, and the last message of each step,
-            which covers the conversation so far. A provider that caches by
-            explicit breakpoint then reads, on every later step and every later
-            turn of the session, the whole prefix the previous one sent, and
-            writes only what was appended. Null or omitted is off: a cache write
-            costs more than an uncached token, so an agent whose prefix is never
-            re-read would pay for the privilege. A prefix below the model's
-            minimum cacheable length is not cached. Cache reads are reported as
-            `cached_tokens` and cache writes as `cache_write_tokens` on usage;
-            a write with no `cache_write_tokens` price bills at the input rate.
-          additionalProperties: false
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the breakpoint is marked. Defaults to false.
+          $ref: '#/components/schemas/PromptCaching'
         citation_config:
-          type: object
-          nullable: true
-          description: >-
-            Structured citations for this agent's turns. `{"enabled": true}`
-            labels each `knowledge_config` result the turn injects, and each
-            page of a PDF or text file its messages attach (sent as its
-            extracted text; a page with no text is sent as the file,
-            unlabelled), and asks the model to cite the passages it uses. Every citation is checked
-            before it is returned: its source was injected into this turn and
-            its quoted text is in that source. One that fails lands in
-            `output.rejected_citations` with its reason, never in
-            `output.citations`. Null or omitted is off.
-          additionalProperties: false
-          properties:
-            enabled:
-              type: boolean
-              description: Whether the turn asks for and returns citations. Defaults to false.
+          $ref: '#/components/schemas/CitationConfig'
         max_context_messages:
           type: integer
           nullable: true

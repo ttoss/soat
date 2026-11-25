@@ -5,8 +5,8 @@
  */
 
 import { holdsFormationExpression } from './formation-modules/formationSpecLoader';
+import type { SchemaRefResolver } from './openapiSchemaFields';
 import { isObjectRecord } from './openapiSchemaFields';
-import type { SchemaRefResolver } from './openapiUnknownFields';
 
 type Fill = (
   rawSchema: unknown,
