@@ -225,6 +225,25 @@ describe('Playbook auto_upgrade', () => {
       });
     });
 
+    test('a case the new version needs an upstream bound for stays and says why', async () => {
+      const upstream = await newPlaybook();
+      const playbook = await newPlaybook({ auto_upgrade: true });
+      const caseId = await newCase({ playbookId: playbook.id, amount: 5 });
+
+      await redefine(playbook.id, {
+        ...V1,
+        upstreams: [{ name: 'intake', playbook_id: upstream.id }],
+      });
+
+      expect(await readCase(caseId)).toMatchObject({
+        playbook_version: 1,
+        upgrade_error: {
+          code: 'PLAYBOOK_CASE_UPSTREAM_INVALID',
+          meta: { upstream: 'intake' },
+        },
+      });
+    });
+
     test('an upgrade of a held-back case clears its upgrade_error', async () => {
       const playbook = await newPlaybook({ auto_upgrade: true });
       const caseId = await newCase({ playbookId: playbook.id, amount: 5 });

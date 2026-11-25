@@ -151,9 +151,11 @@ const assertInputsConform = async (args: {
 export const moveCaseToVersion = async (args: {
   row: PlaybookCaseRow;
   target: number;
-  upstreams?: unknown;
-  /** Whether the caller may read a case it binds as an upstream. */
-  canReadCase: (casePublicId: string) => Promise<boolean>;
+  /** The upstreams a caller names; `null` when no caller names any. */
+  upstreams: {
+    raw: unknown;
+    canRead: (casePublicId: string) => Promise<boolean>;
+  } | null;
   /** Refuse the move when the target's schemas refuse a stored manual input. */
   refuseNonconformingInputs: boolean;
   createdBy: RequestPrincipal | null;
@@ -177,8 +179,7 @@ export const moveCaseToVersion = async (args: {
       const rebound = await rebindCaseUpstreams({
         caseRow: locked,
         definition: to,
-        raw: args.upstreams,
-        canRead: args.canReadCase,
+        request: args.upstreams,
         transaction,
       });
       if (from === target) return rebound;
@@ -242,8 +243,7 @@ export const upgradePlaybookCase = async (args: {
       current: row.playbook.version,
       version: args.version,
     }),
-    upstreams: args.upstreams,
-    canReadCase: args.canReadCase,
+    upstreams: { raw: args.upstreams, canRead: args.canReadCase },
     refuseNonconformingInputs: false,
     createdBy: args.createdBy,
     onBehalfOf: args.onBehalfOf,

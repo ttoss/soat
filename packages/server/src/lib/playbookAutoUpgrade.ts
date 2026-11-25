@@ -13,9 +13,10 @@ const log = createDebug('soat:playbookAutoUpgrade');
 /**
  * When a write moved a playbook whose `auto_upgrade` is on past
  * `previousVersion`, moves every case behind its version to it, as an upgrade
- * would, except that a stored manual input the version's
- * schema refuses holds the case back. A case left behind records why in its
- * `upgradeError`; the others cascade on the new version.
+ * would, except that a stored manual input the version's schema refuses, or
+ * an upstream it declares and the case does not bind, holds the case back. A
+ * case left behind records why in its `upgradeError`; the others cascade on
+ * the new version.
  */
 export const autoUpgradePlaybookCases = async (args: {
   playbook: { id?: unknown; version: number; autoUpgrade: boolean };
@@ -47,10 +48,7 @@ export const autoUpgradePlaybookCases = async (args: {
       await moveCaseToVersion({
         row,
         target: playbook.version,
-        // No caller names an upstream case here, so none is read on its behalf.
-        canReadCase: async () => {
-          return false;
-        },
+        upstreams: null,
         refuseNonconformingInputs: true,
         createdBy: args.createdBy,
         onBehalfOf: null,
