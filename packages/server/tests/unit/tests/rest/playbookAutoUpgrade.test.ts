@@ -26,6 +26,7 @@ const V1 = definitionWith({ title: 'Revenue' });
 
 describe('Playbook auto_upgrade', () => {
   let adminToken: string;
+  let userToken: string;
   let noPermToken: string;
   let projectId: string;
   let seq = 0;
@@ -94,9 +95,10 @@ describe('Playbook auto_upgrade', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'playbookautoupgrade',
-      policyActions: ['playbooks:UpdatePlaybook'],
+      policyActions: ['playbooks:GetPlaybook'],
     });
     adminToken = setup.adminToken;
+    userToken = setup.userToken;
     noPermToken = setup.noPermToken!;
     projectId = setup.projectId;
   });
@@ -155,11 +157,21 @@ describe('Playbook auto_upgrade', () => {
     test('returns 403 without playbooks:UpdatePlaybook', async () => {
       const playbook = await newPlaybook();
 
-      const res = await authenticatedTestClient(noPermToken)
+      const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/playbooks/${playbook.id}`)
         .send({ auto_upgrade: true });
 
       expect(res.status).toBe(403);
+    });
+
+    test('returns 404 to a caller whose policies name no project', async () => {
+      const playbook = await newPlaybook();
+
+      const res = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/playbooks/${playbook.id}`)
+        .send({ auto_upgrade: true });
+
+      expect(res.status).toBe(404);
     });
 
     test('a new version moves every compatible case to it', async () => {

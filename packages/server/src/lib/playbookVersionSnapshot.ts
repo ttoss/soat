@@ -13,9 +13,9 @@ import {
  */
 
 /**
- * Everything on a playbook response but its definition: the version number is
- * what a case cites to say which definition it is evaluated against, and a
- * rename changes none.
+ * Everything on a playbook response but its definition and grant: the version
+ * number is what a case cites to say which definition it is evaluated against,
+ * and a rename or an `auto_upgrade` switch changes none.
  */
 const NON_CONFIG_PLAYBOOK_FIELDS: ReadonlySet<string> = new Set([
   'id',
@@ -23,6 +23,7 @@ const NON_CONFIG_PLAYBOOK_FIELDS: ReadonlySet<string> = new Set([
   'name',
   'description',
   'version',
+  'auto_upgrade',
   'created_at',
   'updated_at',
 ]);
