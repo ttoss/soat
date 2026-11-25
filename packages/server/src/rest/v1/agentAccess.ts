@@ -6,12 +6,14 @@
  * scope comes from, the SRN's type, and the noun a `404` names.
  */
 import { agents } from 'src/lib/agentAccessor';
+import { readsShowing } from 'src/lib/permissionCatalog';
 
 import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const agentAccess = makeItemRouteAuthorizer({
   findScope: agents.findScope,
   resourceType: 'agent',
+  shownBy: readsShowing({ module: 'agents', noun: 'Agent' }),
   param: 'agent_id',
   label: 'Agent',
 });

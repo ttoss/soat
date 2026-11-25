@@ -16,6 +16,7 @@ import {
   restoreGuardrailVersion,
 } from 'src/lib/guardrailVersions';
 import { buildSrn } from 'src/lib/iam';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { captureAuthority } from 'src/lib/workAuthority';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -40,6 +41,7 @@ export const guardrailsRouter = new Router<Context>();
 const guardrailAccess = makeItemRouteAuthorizer({
   findScope: guardrails.findScope,
   resourceType: 'guardrail',
+  shownBy: readsShowing({ module: 'guardrails', noun: 'Guardrail' }),
   param: 'guardrail_id',
   label: 'Guardrail',
 });

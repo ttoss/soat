@@ -10,6 +10,7 @@ import {
   metadataSchemas,
   updateMetadataSchema,
 } from 'src/lib/metadataSchemas';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -31,6 +32,7 @@ const metadataSchemasRouter = new Router<Context>();
 const metadataSchemaAccess = makeItemRouteAuthorizer({
   findScope: metadataSchemas.findScope,
   resourceType: 'metadata_schema',
+  shownBy: readsShowing({ module: 'metadata-schemas', noun: 'MetadataSchema' }),
   param: 'metadata_schema_id',
   label: 'Metadata schema',
 });

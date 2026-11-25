@@ -11,6 +11,7 @@
  * so any other share reads as absent rather than as forbidden.
  */
 import type { Context } from 'src/Context';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { findGranteeScope, shares } from 'src/lib/shares';
 
 import { requireAuth } from './helpers';
@@ -24,6 +25,7 @@ export type ShareParty =
 export const publisherShareAccess = makeItemRouteAuthorizer({
   findScope: shares.findScope,
   resourceType: 'share',
+  shownBy: readsShowing({ module: 'shares', noun: 'Share' }),
   param: 'share_id',
   label: 'Share',
 });
@@ -49,6 +51,7 @@ export const authorizeShareParty = async (args: {
       ctx,
       scope,
       resourceType: 'share',
+      shownBy: readsShowing({ module: 'shares', noun: 'Share' }),
       resourceId: shareId,
       action: args.action,
       onDenied: args.onDenied,

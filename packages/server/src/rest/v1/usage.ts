@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildSrn } from 'src/lib/iam';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
 import type { UsageNarrowings } from 'src/lib/usage';
 import {
@@ -38,6 +39,7 @@ export const usageRouter = new Router<Context>();
 const thresholdAccess = makeItemRouteAuthorizer({
   findScope: thresholds.findScope,
   resourceType: 'usage',
+  shownBy: readsShowing({ module: 'usage', noun: 'Threshold' }),
   param: 'threshold_id',
   label: 'Usage threshold',
 });

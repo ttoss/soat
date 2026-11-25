@@ -1208,9 +1208,8 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(keyRes.body.key as string).get(
         `/api/v1/ingestion-rules/${ruleId}`
       );
-      // A read the caller may not perform is indistinguishable from absence:
-      // the route authorizes against the rule's own SRN.
-      expect(res.status).toBe(404);
+      // The key lists rules, so the refused read is stated.
+      expect(res.status).toBe(403);
     });
 
     test('get is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {

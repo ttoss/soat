@@ -6,6 +6,7 @@ import {
   getChain,
   listChains,
 } from 'src/lib/generationChains';
+import { readsShowing } from 'src/lib/permissionCatalog';
 
 import { parseEnumListQuery, parsePagination, requireAuth } from './helpers';
 import { resolveListScope } from './listScope';
@@ -20,6 +21,7 @@ const chainsRouter = new Router<Context>();
 const chainAccess = makeItemRouteAuthorizer({
   findScope: chains.findScope,
   resourceType: 'chain',
+  shownBy: readsShowing({ module: 'chains', noun: 'Chain' }),
   param: 'chain_id',
   label: 'Chain',
   errorCode: 'CHAIN_NOT_FOUND',

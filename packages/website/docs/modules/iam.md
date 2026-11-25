@@ -412,16 +412,16 @@ A key with policies, or an OAuth token with a consented scope, **never exceeds i
 
 A denial's status code depends on what the route does, not on which policy failed:
 
-| Route shape                                                                                               | Denied response                                                                        |
-| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **List** ([`GET /agents`](/docs/api/agents/list-agents))                                                  | `200` with an empty list — the caller may read zero projects, so nothing matches       |
-| **Read one** ([`GET /agents/{id}`](/docs/api/agents/get-agent))                                           | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
-| **Read one the caller already sees through another read** ([collections](./collections.md#access-rules))  | `403 FORBIDDEN` — a `404` would contradict that read                                   |
-| **Write / act on one** ([`PATCH /agents/{id}`](/docs/api/agents/patch-agent), `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
-| **Write / act on one, in a project none of the caller's policies name**                                   | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either       |
-| **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                              | `403 FORBIDDEN`                                                                        |
-| Scoped credential naming another project (`project_id`)                                                   | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                      |
-| Scoped credential addressing, by id, a resource in another project                                        | `404` — the module's not-found, as for an id that names nothing                        |
+| Route shape                                                                                                                                                                                       | Denied response                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **List** ([`GET /agents`](/docs/api/agents/list-agents))                                                                                                                                          | `200` with an empty list — the caller may read zero projects, so nothing matches       |
+| **Read one** ([`GET /agents/{id}`](/docs/api/agents/get-agent))                                                                                                                                   | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
+| **Read one the caller already sees through another read** (a `Get<Resource>…` or `List<Resources>…` they hold on it, such as `tools:ListTools` for [`GET /tools/{id}`](/docs/api/tools/get-tool)) | `403 FORBIDDEN` — a `404` would contradict that read                                   |
+| **Write / act on one** ([`PATCH /agents/{id}`](/docs/api/agents/patch-agent), `POST .../release/promote`)                                                                                         | `403 FORBIDDEN`                                                                        |
+| **Write / act on one, in a project none of the caller's policies name**                                                                                                                           | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either       |
+| **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                                                                                                                      | `403 FORBIDDEN`                                                                        |
+| Scoped credential naming another project (`project_id`)                                                                                                                                           | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                      |
+| Scoped credential addressing, by id, a resource in another project                                                                                                                                | `404` — the module's not-found, as for an id that names nothing                        |
 
 A list without `project_id` spans every project the caller may read, which for an unrestricted admin is every project; `project_id` narrows it to one. An export reads one project, so without `project_id` it is `400 VALIDATION_FAILED`.
 

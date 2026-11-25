@@ -707,17 +707,16 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(404);
     });
 
-    // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the orchestration's own SRN.
-    test('project-scoped API key without GetOrchestration permission returns 404', async () => {
+    // The key still lists orchestrations, so the refused read is stated.
+    test('project-scoped API key without GetOrchestration permission returns 403', async () => {
       const rawKey = await createRestrictedApiKey(
         'orchestrations:GetOrchestration'
       );
       const response = await authenticatedTestClient(rawKey).get(
         `/api/v1/orchestrations/${orchestrationId}`
       );
-      expect(response.status).toBe(404);
-      expect(response.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('FORBIDDEN');
     });
   });
 
@@ -3094,14 +3093,14 @@ describe('Orchestrations', () => {
         expect(response.status).toBe(404);
       });
 
-      // As above: `GetRun` is a read, so a refusal hides the run.
-      test('project-scoped API key without GetRun permission returns 404', async () => {
+      // The key still lists runs, so the refused read is stated.
+      test('project-scoped API key without GetRun permission returns 403', async () => {
         const rawKey = await createRestrictedApiKey('orchestrations:GetRun');
         const response = await authenticatedTestClient(rawKey).get(
           `/api/v1/orchestration-runs/${orchestrationRunId}`
         );
-        expect(response.status).toBe(404);
-        expect(response.body.error.code).toBe('ORCHESTRATION_RUN_NOT_FOUND');
+        expect(response.status).toBe(403);
+        expect(response.body.error.code).toBe('FORBIDDEN');
       });
 
       test('admin can get a run without project scoping', async () => {

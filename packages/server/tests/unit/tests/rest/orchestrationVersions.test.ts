@@ -548,29 +548,27 @@ describe('Orchestration versions', () => {
       ).id;
     });
 
-    // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the orchestration's own SRN;
-    // `restore` below is a write and keeps `403`.
-    test('without ListOrchestrationVersions returns 404', async () => {
+    // The key still reads the orchestration, so the refused read is stated.
+    test('without ListOrchestrationVersions returns 403', async () => {
       const rawKey = await createRestrictedApiKey(
         'orchestrations:ListOrchestrationVersions'
       );
       const res = await authenticatedTestClient(rawKey).get(
         `/api/v1/orchestrations/${restrictedOrchId}/versions`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
-    test('without GetOrchestrationVersion returns 404', async () => {
+    test('without GetOrchestrationVersion returns 403', async () => {
       const rawKey = await createRestrictedApiKey(
         'orchestrations:GetOrchestrationVersion'
       );
       const res = await authenticatedTestClient(rawKey).get(
         `/api/v1/orchestrations/${restrictedOrchId}/versions/1`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
     test('without RestoreOrchestrationVersion returns 403', async () => {

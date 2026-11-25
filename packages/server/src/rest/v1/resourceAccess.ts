@@ -283,8 +283,12 @@ export const authorizeResource = async (args: {
   scope: ResourceScope | null;
   /** The type the SRN names, which for a nested resource is the parent's. */
   resourceType: string;
-  /** See {@link readRefusal}; read only when `onDenied` is `hide`. */
-  shownBy?: readonly string[];
+  /**
+   * The reads that show the caller what it asked for, from `readsShowing`
+   * (a run's, not its orchestration's); see {@link readRefusal}. Read only
+   * when `onDenied` is `hide`.
+   */
+  shownBy: readonly string[];
   /** The id the SRN names, likewise the parent's where the scope is. */
   resourceId: string;
   action: string;
@@ -369,7 +373,7 @@ export const authorizeResource = async (args: {
         action: args.action,
         resource,
         context,
-        shownBy: args.shownBy ?? [],
+        shownBy: args.shownBy,
       });
     }
     throw await resourceRefusal({
@@ -393,7 +397,7 @@ type ItemRouteArgs = { ctx: Context; action: string };
 /**
  * The binding of {@link authorizeResource} to one module: where the scope comes
  * from, what the SRN calls the resource, which path parameter names it, and the
- * noun a `404` uses. Twelve modules need exactly that and nothing else, so the
+ * noun a `404` uses. Most modules need exactly that and nothing else, so the
  * repetition lives here instead of once per module.
  *
  * A **nested** route binds its **parent**: `/evals/:eval_id/runs/:eval_run_id`
@@ -410,8 +414,8 @@ export const makeItemRouteAuthorizer = (config: {
   label: string;
   /** See {@link authorizeResource}'s `errorCode`. */
   errorCode?: ErrorCode;
-  /** See {@link readRefusal}. */
-  shownBy?: readonly string[];
+  /** See {@link authorizeResource}'s `shownBy`. */
+  shownBy: readonly string[];
 }) => {
   const authorize = async (
     args: ItemRouteArgs & { onDenied: 'hide' | 'refuse' }

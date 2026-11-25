@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { buildSrn } from 'src/lib/iam';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import {
   createQuota,
   deleteQuota,
@@ -24,6 +25,7 @@ const quotasRouter = new Router<Context>();
 const quotaAccess = makeItemRouteAuthorizer({
   findScope: quotas.findScope,
   resourceType: 'quota',
+  shownBy: readsShowing({ module: 'quotas', noun: 'Quota' }),
   param: 'quota_id',
   label: 'Quota',
 });

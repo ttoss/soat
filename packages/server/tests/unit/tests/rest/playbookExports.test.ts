@@ -711,12 +711,12 @@ describe('Playbook exports', () => {
       expect(res.status).toBe(401);
     });
 
-    test('returns 404 to a member without the action', async () => {
+    test('returns 403 to a member without the action', async () => {
       const caseId = await newCase({});
       const res = await authenticatedTestClient(readerToken).get(
         `/api/v1/playbook-cases/${caseId}/exports/pbk_exp_missing`
       );
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
     });
   });
 

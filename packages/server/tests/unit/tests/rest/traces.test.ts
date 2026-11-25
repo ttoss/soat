@@ -347,10 +347,8 @@ describe('Traces REST API', () => {
       expect(res.body.root_trace_id).toBe(traceId);
     });
 
-    // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the trace's own SRN; purging
-    // content is a write and keeps `403`.
-    test('project-scoped API key without GetTrace permission returns 404', async () => {
+    // The key still lists traces, so the refused read is stated.
+    test('project-scoped API key without GetTrace permission returns 403', async () => {
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
@@ -370,8 +368,8 @@ describe('Traces REST API', () => {
       const res = await authenticatedTestClient(keyRes.body.key as string).get(
         `/api/v1/traces/${traceId}`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
   });
 
@@ -408,7 +406,7 @@ describe('Traces REST API', () => {
       expect(res.body.children).toHaveLength(1);
     });
 
-    test('project-scoped API key without GetTraceTree permission returns 404', async () => {
+    test('project-scoped API key without GetTraceTree permission returns 403', async () => {
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
@@ -428,8 +426,8 @@ describe('Traces REST API', () => {
       const res = await authenticatedTestClient(keyRes.body.key as string).get(
         `/api/v1/traces/${traceId}/tree`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
   });
 

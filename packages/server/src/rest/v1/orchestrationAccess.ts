@@ -19,6 +19,7 @@ import {
   findRunOrchestrationId,
   orchestrations,
 } from 'src/lib/orchestrationAccessor';
+import { readsShowing } from 'src/lib/permissionCatalog';
 
 import {
   authorizeResource,
@@ -29,6 +30,7 @@ import {
 const orchestrationAccess = makeItemRouteAuthorizer({
   findScope: orchestrations.findScope,
   resourceType: 'orchestration',
+  shownBy: readsShowing({ module: 'orchestrations', noun: 'Orchestration' }),
   param: 'orchestration_id',
   label: 'Orchestration',
   errorCode: 'ORCHESTRATION_NOT_FOUND',
@@ -54,6 +56,7 @@ const authorizeRun = async (args: {
       ? await orchestrations.findScope({ id: orchestrationId })
       : null,
     resourceType: 'orchestration',
+    shownBy: readsShowing({ module: 'orchestrations', noun: 'Run' }),
     resourceId: orchestrationId ?? runId,
     // The caller asked for a run, so that is the id an absence names — the
     // orchestration behind it is an implementation detail of the check.

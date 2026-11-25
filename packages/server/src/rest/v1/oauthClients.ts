@@ -9,6 +9,7 @@ import {
   oauthClients,
   updateOauthClient,
 } from 'src/lib/oauthClients';
+import { readsShowing } from 'src/lib/permissionCatalog';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
 import { resolveListScope } from './listScope';
@@ -19,6 +20,7 @@ const oauthClientsRouter = new Router<Context>();
 const oauthClientAccess = makeItemRouteAuthorizer({
   findScope: oauthClients.findScope,
   resourceType: 'oauth_client',
+  shownBy: readsShowing({ module: 'oauth-clients', noun: 'OauthClient' }),
   param: 'oauth_client_id',
   label: 'OAuth client',
 });

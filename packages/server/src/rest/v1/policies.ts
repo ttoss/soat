@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import type { PolicyDocument } from 'src/lib/iam';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import {
   createPolicy,
   deletePolicy,
@@ -67,6 +68,7 @@ const authorizePolicy = async (args: {
     ctx,
     scope: found.scope,
     resourceType: 'policy',
+    shownBy: readsShowing({ module: 'policies', noun: 'Policy' }),
     resourceId: policyId,
     action: args.action,
     onDenied: args.onDenied,

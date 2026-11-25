@@ -7,6 +7,7 @@ import {
   type GenerationEvent,
 } from 'src/lib/generationEventFeed';
 import { getGenerationTraceId } from 'src/lib/generations';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { serveSse, type SseFrame } from 'src/lib/sse';
 import { traceRows } from 'src/lib/traces';
 
@@ -51,6 +52,7 @@ export const authorizeGenerationContent = async (args: {
       ctx: args.ctx,
       scope: await traceRows.findScope({ id: traceId }),
       resourceType: 'trace',
+      shownBy: readsShowing({ module: 'traces', noun: 'Trace' }),
       resourceId: traceId,
       label: 'Trace',
       action: 'traces:GetTrace',

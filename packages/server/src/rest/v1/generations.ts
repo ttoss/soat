@@ -13,6 +13,7 @@ import {
 } from 'src/lib/generations';
 import { getGenerationTranscript } from 'src/lib/generationTranscript';
 import { validateMetadataBag } from 'src/lib/metadataBag';
+import { readsShowing } from 'src/lib/permissionCatalog';
 
 import {
   authorizeGenerationContent,
@@ -38,6 +39,7 @@ export const generationsRouter = new Router<Context>();
 const generationAccess = makeItemRouteAuthorizer({
   findScope: generations.findScope,
   resourceType: 'generation',
+  shownBy: readsShowing({ module: 'generations', noun: 'Generation' }),
   param: 'generation_id',
   label: 'Generation',
 });
@@ -55,6 +57,7 @@ export const authorizeGenerationResume = async (args: {
     ctx: args.ctx,
     scope: await generations.findScope({ id: args.generationId }),
     resourceType: 'generation',
+    shownBy: readsShowing({ module: 'generations', noun: 'Generation' }),
     resourceId: args.generationId,
     label: 'Generation',
     errorCode: 'GENERATION_NOT_FOUND',

@@ -11,6 +11,7 @@ import {
   updateIngestionRule,
 } from 'src/lib/ingestionRules';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
@@ -28,6 +29,7 @@ const ingestionRuleAccess = makeItemRouteAuthorizer({
   // camelCase, unlike every other SRN type — renaming it is a public-contract
   // change of its own.
   resourceType: 'ingestionRule',
+  shownBy: readsShowing({ module: 'ingestion-rules', noun: 'IngestionRule' }),
   param: 'ingestion_rule_id',
   label: 'Ingestion rule',
 });

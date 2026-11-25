@@ -1002,7 +1002,7 @@ describe('Decisions', () => {
       expect(res.body.decider_id).toBe(decider);
     });
 
-    test('project-scoped key without GetDecision returns 404', async () => {
+    test('project-scoped key without GetDecision returns 403', async () => {
       const made = await decide({});
       const key = await createRestrictedApiKey('deciders:GetDecision');
 
@@ -1010,7 +1010,7 @@ describe('Decisions', () => {
         `/api/v1/decisions/${made.body.id}`
       );
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
     });
 
     test('unknown decision returns 404', async () => {

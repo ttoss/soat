@@ -184,3 +184,40 @@ export const listModuleNames = (): Set<string> => {
     })
   );
 };
+
+/**
+ * The reads of `module` that show the caller a `noun` (`Tool`): each
+ * `Get<Noun>…` and `List<Nouns>…`, so a read of what the resource holds
+ * (`ListCollectionItems`) counts too. Throws when none match, so a misspelled
+ * noun fails at load instead of hiding every refusal as a `404`.
+ */
+const readsByNoun = new Map<string, string[]>();
+
+export const readsShowing = (args: {
+  module: string;
+  noun: string;
+}): string[] => {
+  const { noun } = args;
+  const key = `${args.module}:${noun}`;
+  const cachedReads = readsByNoun.get(key);
+  if (cachedReads) return cachedReads;
+  const forms = [noun, `${noun}s`, `${noun}es`];
+  if (noun.endsWith('y')) forms.push(`${noun.slice(0, -1)}ies`);
+  const pattern = new RegExp(`^(Get|List)(${forms.join('|')})([A-Z]\\w*)?$`);
+  const found = getPermissionCatalog().modules.find((m) => {
+    return m.module === args.module;
+  });
+  const reads = (found?.actions ?? [])
+    .map((a) => {
+      return a.action;
+    })
+    .filter((action) => {
+      return pattern.test(action.slice(args.module.length + 1));
+    })
+    .sort();
+  if (reads.length === 0) {
+    throw new Error(`No read of '${args.module}' shows a '${noun}'.`);
+  }
+  readsByNoun.set(key, reads);
+  return reads;
+};

@@ -303,16 +303,14 @@ describe('Guardrails', () => {
       expect(response.status).toBe(404);
     });
 
-    // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the guardrail's own SRN. The
-    // write routes below keep `403`.
-    test('project-scoped API key without GetGuardrail returns 404', async () => {
+    // The key still lists guardrails, so the refused read is stated.
+    test('project-scoped API key without GetGuardrail returns 403', async () => {
       const rawKey = await createRestrictedApiKey('guardrails:GetGuardrail');
       const response = await authenticatedTestClient(rawKey).get(
         `/api/v1/guardrails/${guardrailId}`
       );
-      expect(response.status).toBe(404);
-      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('FORBIDDEN');
     });
   });
 

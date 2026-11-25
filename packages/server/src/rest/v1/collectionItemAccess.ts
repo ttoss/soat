@@ -3,6 +3,7 @@ import { DomainError } from 'src/errors';
 import { findCollectionItem } from 'src/lib/collectionItems';
 import { type CollectionRow, collections } from 'src/lib/collections';
 import { buildSrn } from 'src/lib/iam';
+import { readsShowing } from 'src/lib/permissionCatalog';
 import { buildResourceTagContext } from 'src/lib/tags';
 
 import { requireAuth } from './helpers';
@@ -15,25 +16,17 @@ import {
 
 export type ItemAccess = 'read' | 'write';
 
-/** The reads that list or get an item; each shows the caller that item. */
-const ITEM_READS = [
-  'collections:ListCollectionItems',
-  'collections:GetCollectionItem',
-] as const;
-
-/** The reads that show a caller a collection, each checked on its SRN. */
-const COLLECTION_READS = [
-  'collections:ListCollections',
-  'collections:GetCollection',
-  ...ITEM_READS,
-] as const;
+const ITEM_READS = readsShowing({
+  module: 'collections',
+  noun: 'CollectionItem',
+});
 
 export const collectionAccess = makeItemRouteAuthorizer({
   findScope: collections.findScope,
   resourceType: 'collection',
   param: 'collection_id',
   label: 'Collection',
-  shownBy: COLLECTION_READS,
+  shownBy: readsShowing({ module: 'collections', noun: 'Collection' }),
 });
 
 /**
