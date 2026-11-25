@@ -102,6 +102,10 @@ paths:
                               description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
                               allOf:
                                 - $ref: '#/components/schemas/ModelInputModalities'
+                            model_input_limits:
+                              description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked.'
+                              allOf:
+                                - $ref: '#/components/schemas/ModelInputLimits'
                             require_priced_model:
                               type: boolean
                               description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -237,6 +241,10 @@ paths:
                   description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
                   allOf:
                     - $ref: '#/components/schemas/ModelInputModalities'
+                model_input_limits:
+                  description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked.'
+                  allOf:
+                    - $ref: '#/components/schemas/ModelInputLimits'
                 require_priced_model:
                   type: boolean
                   default: false
@@ -269,6 +277,10 @@ paths:
                     description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
                     allOf:
                       - $ref: '#/components/schemas/ModelInputModalities'
+                  model_input_limits:
+                    description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked.'
+                    allOf:
+                      - $ref: '#/components/schemas/ModelInputLimits'
                   require_priced_model:
                     type: boolean
                     description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -321,8 +333,8 @@ paths:
       description: >
         Returns a specific AI provider configuration. A credential scoped to a
         project the provider is shared with, through an accepted share, reads
-        its `id`, `name`, `provider`, `default_model` and `model_alias_names`
-        only.
+        its `id`, `name`, `provider`, `default_model`, `model_alias_names`,
+        `model_input_modalities` and `model_input_limits` only.
       operationId: getAiProvider
       x-raises:
         - AGENT_NOT_FOUND
@@ -386,6 +398,10 @@ paths:
                     description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part.'
                     allOf:
                       - $ref: '#/components/schemas/ModelInputModalities'
+                  model_input_limits:
+                    description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked.'
+                    allOf:
+                      - $ref: '#/components/schemas/ModelInputLimits'
                   require_priced_model:
                     type: boolean
                     description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -499,6 +515,11 @@ paths:
                   description: 'Model name (or alias) → the input modalities it accepts. A message part of a modality its model lacks is refused with `INPUT_MODALITY_UNSUPPORTED` (400) before the provider is called; a model absent from the map is sent every part. Replaces the whole map; `null` clears it.'
                   allOf:
                     - $ref: '#/components/schemas/ModelInputModalities'
+                model_input_limits:
+                  nullable: true
+                  description: 'Model name (or alias) → the input limits it declares, each a positive integer: `max_bytes` per file part of a modality, `max_pages` per PDF, `max_parts` file parts per request. A request over one is refused with `INPUT_LIMIT_EXCEEDED` (400) before the provider is called; a model absent from the map, or a limit it omits, is not checked. Replaces the whole map; `null` clears it.'
+                  allOf:
+                    - $ref: '#/components/schemas/ModelInputLimits'
                 require_priced_model:
                   type: boolean
                   description: "When `true`, a generation on this provider whose model no price-book row covers is refused with `MODEL_NOT_PRICED` (409) before the provider is called, as the project's `require_priced_model` does for every provider of the project."
@@ -916,6 +937,52 @@ components:
           - text
           - image
           - file
+    InputLimits:
+      type: object
+      description: >
+        What one model reads per request. A limit it omits is not checked.
+      additionalProperties: false
+      properties:
+        max_bytes:
+          type: object
+          description: Bytes per file part, by the part's modality
+          additionalProperties: false
+          properties:
+            image:
+              type: integer
+              minimum: 1
+            file:
+              type: integer
+              minimum: 1
+            audio:
+              type: integer
+              minimum: 1
+            video:
+              type: integer
+              minimum: 1
+        max_pages:
+          type: integer
+          minimum: 1
+          description: Pages per PDF file part
+        max_parts:
+          type: integer
+          minimum: 1
+          description: File parts per request, across every message
+      example:
+        max_bytes:
+          image: 5242880
+          file: 33554432
+        max_pages: 100
+        max_parts: 20
+    ModelInputLimits:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/InputLimits'
+      example:
+        claude-sonnet:
+          max_bytes:
+            image: 5242880
+          max_pages: 100
     ModelAliasTarget:
       description: >
         The model id sent to the vendor, or another provider of the same
@@ -1088,7 +1155,13 @@ components:
                     example:
                       - on_demand
                       - inference_profile
-
+                  input_limits:
+                    description: >
+                      What the model reads per request, as the provider record
+                      declares it in `model_input_limits`; absent when it
+                      declares none
+                    allOf:
+                      - $ref: '#/components/schemas/InputLimits'
   securitySchemes:
     bearerAuth:
       type: http

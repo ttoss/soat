@@ -35,6 +35,7 @@ const ROLES = {
     'AgentVersion.releasedClaims',
     'AiProvider.config',
     'AiProvider.modelAliases',
+    'AiProvider.modelInputLimits',
     'AiProvider.modelInputModalities',
     'ApprovalItem.editedArguments',
     'ApprovalItem.evidence',

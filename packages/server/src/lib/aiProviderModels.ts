@@ -27,6 +27,7 @@ import type {
   BedrockModelSummary,
 } from './bedrockModelCatalog';
 import { defaultListFoundationModels } from './bedrockModelCatalog';
+import type { InputLimits } from './inputLimits';
 import { resolveBedrockCredentials } from './linkedProviderSecret';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
@@ -49,6 +50,8 @@ export type ProviderModel = {
   streaming?: boolean;
   lifecycle?: 'active' | 'legacy' | 'deprecated';
   inference_types?: string[];
+  /** The limits the provider record declares for the model (`model_input_limits`). */
+  input_limits?: InputLimits;
 };
 
 // Re-exported so a caller enumerating models needs only this module, while the

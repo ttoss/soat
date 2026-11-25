@@ -12,6 +12,7 @@ import {
   updateAiProvider,
 } from '../aiProviders';
 import { lookupSecretInternalId } from '../formationLookups';
+import type { ModelInputLimits } from '../inputLimits';
 import type { ModelInputModalities } from '../inputModalityGate';
 import {
   toNullableObject,
@@ -84,6 +85,9 @@ export const aiProvidersFormationModule = defineFormationModule({
         (toNullableObject(
           properties.model_input_modalities
         ) as ModelInputModalities) ?? undefined,
+      modelInputLimits:
+        (toNullableObject(properties.model_input_limits) as ModelInputLimits) ??
+        undefined,
       requirePricedModel: toOptionalBoolean(properties.require_priced_model),
       isAllowed: actor.isAllowed,
     });
@@ -117,6 +121,8 @@ export const aiProvidersFormationModule = defineFormationModule({
       modelInputModalities: toNullableObject(
         properties.model_input_modalities
       ) as ModelInputModalities | null | undefined,
+      modelInputLimits: toNullableObject(properties.model_input_limits) as
+        ModelInputLimits | null | undefined,
       requirePricedModel: toOptionalBoolean(properties.require_priced_model),
       isAllowed: actor.isAllowed,
     });

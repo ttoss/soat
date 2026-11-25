@@ -18,6 +18,11 @@ import {
 } from './aiProviderModelAliases';
 import { assertAiProviderCarriesCredential } from './ambientCredentials';
 import {
+  assertModelInputLimits,
+  type ModelInputLimits,
+  readModelInputLimits,
+} from './inputLimits';
+import {
   assertModelInputModalities,
   type ModelInputModalities,
   readModelInputModalities,
@@ -62,6 +67,7 @@ const mapAiProvider = (instance: AiProviderRow) => {
     model_aliases: instance.modelAliases ?? {},
     model_aliases_only: instance.modelAliasesOnly,
     model_input_modalities: instance.modelInputModalities ?? {},
+    model_input_limits: instance.modelInputLimits ?? {},
     require_priced_model: instance.requirePricedModel,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
@@ -158,6 +164,24 @@ const assertEndpointSecretUse = async (args: {
   });
 };
 
+type ModelDeclarations = {
+  modelInputModalities?: ModelInputModalities | null;
+  modelInputLimits?: ModelInputLimits | null;
+};
+
+// What each model reads, declared by the record and enforced by the boundary.
+const assertModelDeclarations = (args: ModelDeclarations): void => {
+  assertModelInputModalities(args.modelInputModalities);
+  assertModelInputLimits(args.modelInputLimits);
+};
+
+const storedModelDeclarations = (args: ModelDeclarations) => {
+  return {
+    modelInputModalities: args.modelInputModalities ?? null,
+    modelInputLimits: args.modelInputLimits ?? null,
+  };
+};
+
 export const createAiProvider = async (args: {
   projectId: number;
   secretId?: number;
@@ -169,12 +193,13 @@ export const createAiProvider = async (args: {
   modelAliases?: ModelAliases;
   modelAliasesOnly?: boolean;
   modelInputModalities?: ModelInputModalities;
+  modelInputLimits?: ModelInputLimits;
   requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   await assertEndpointSecretUse(args);
   assertModelAliases(args.modelAliases);
-  assertModelInputModalities(args.modelInputModalities);
+  assertModelDeclarations(args);
   const aliasing = {
     modelAliases: args.modelAliases ?? null,
     modelAliasesOnly: args.modelAliasesOnly ?? false,
@@ -206,7 +231,7 @@ export const createAiProvider = async (args: {
     config: args.config ?? null,
     modelAliases: args.modelAliases ?? null,
     modelAliasesOnly: args.modelAliasesOnly ?? false,
-    modelInputModalities: args.modelInputModalities ?? null,
+    ...storedModelDeclarations(args),
     requirePricedModel: args.requirePricedModel ?? false,
   });
   return mapAiProvider(await aiProviders.reload(instance));
@@ -222,6 +247,7 @@ type AiProviderFieldUpdates = {
   modelAliases?: ModelAliases | null;
   modelAliasesOnly?: boolean;
   modelInputModalities?: ModelInputModalities | null;
+  modelInputLimits?: ModelInputLimits | null;
   requirePricedModel?: boolean;
 };
 
@@ -239,6 +265,8 @@ const applyModelFields = (args: {
     instance.modelAliasesOnly = fields.modelAliasesOnly;
   if (fields.modelInputModalities !== undefined)
     instance.modelInputModalities = fields.modelInputModalities;
+  if (fields.modelInputLimits !== undefined)
+    instance.modelInputLimits = fields.modelInputLimits;
   if (fields.requirePricedModel !== undefined)
     instance.requirePricedModel = fields.requirePricedModel;
 };
@@ -269,13 +297,14 @@ export const updateAiProvider = async (args: {
   modelAliases?: ModelAliases | null;
   modelAliasesOnly?: boolean;
   modelInputModalities?: ModelInputModalities | null;
+  modelInputLimits?: ModelInputLimits | null;
   requirePricedModel?: boolean;
   isAllowed: IsAllowedFn;
 }) => {
   const instance = await aiProviders.findByPublicId({ id: args.id });
   if (!instance) return null;
   assertModelAliases(args.modelAliases);
-  assertModelInputModalities(args.modelInputModalities);
+  assertModelDeclarations(args);
 
   applyAiProviderFields({ instance, fields: args });
   assertModelOffered({ aiProvider: instance, model: instance.defaultModel });
@@ -399,6 +428,7 @@ export const resolveAiProviderSecret = async (args: {
     modelInputModalities: readModelInputModalities(
       instance.modelInputModalities
     ),
+    modelInputLimits: readModelInputLimits(instance.modelInputLimits),
     requirePricedModel: instance.requirePricedModel,
     secretValue: decryptedValue,
     aliasTargets,
