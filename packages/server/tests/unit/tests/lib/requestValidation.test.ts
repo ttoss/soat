@@ -229,7 +229,29 @@ describe('validateRequestBody', () => {
         });
       });
       expect(error.code).toBe('VALIDATION_FAILED');
-      expect(error.message).toBe('`nodes.0.type` is required');
+      expect(error.meta).toEqual({ missing_fields: ['nodes.0.type'] });
+    });
+
+    test('names a nested required field the body leaves out, by dotted path', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { ai_provider_id: 'aip_1', reasoning: {} },
+        });
+      });
+      expect(error.meta).toEqual({ missing_fields: ['reasoning.effort'] });
+      expect(error.message).toBe('Missing required field(s): reasoning.effort');
+    });
+
+    test('accepts null for a nullable object whose fields are required', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { ai_provider_id: 'aip_1', reasoning: null },
+        });
+      }).not.toThrow();
     });
 
     test('does not throw for a route with no required fields and an empty body', () => {
@@ -374,7 +396,7 @@ describe('validateRequestBody', () => {
         });
       });
       expect(error.meta).toEqual({
-        invalid_fields: ['tool_bindings.0.tool.name'],
+        missing_fields: ['tool_bindings.0.tool.name'],
       });
     });
 

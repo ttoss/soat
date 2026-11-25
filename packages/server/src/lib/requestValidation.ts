@@ -14,10 +14,12 @@ import {
   resolveSchemaRef,
 } from './openapiSpec';
 import {
+  collectMissingRequiredFields,
   collectUnknownFields,
   isOpenOrAmbiguous,
 } from './openapiUnknownFields';
 import { collectSchemaViolations } from './requestSchemaViolations';
+import { isRouteOwnedField } from './routeOwnedBodyFields';
 
 const log = createDebug('soat:requestValidation');
 
@@ -40,6 +42,34 @@ const isMissing = (
  * guardrail `document`, a scalar `document_paths`).
  */
 const SCALAR_TYPES = new Set(['string', 'number', 'integer', 'boolean']);
+
+/**
+ * The required fields the body does not carry below the top level, by dotted
+ * path, from the walk that finds unknown keys. Fields the route answers itself
+ * (`ROUTE_OWNED_BODY_FIELDS`) are left to it.
+ */
+const nestedMissingFields = (args: {
+  schema: Record<string, unknown>;
+  body: Record<string, unknown>;
+  operation: string;
+}): string[] => {
+  return collectMissingRequiredFields(
+    { schema: args.schema, value: args.body },
+    { resolveRef: resolveSchemaRef }
+  )
+    .filter((field) => {
+      return (
+        !field.topLevel &&
+        !isRouteOwnedField({
+          operation: args.operation,
+          path: field.path.split('.'),
+        })
+      );
+    })
+    .map((field) => {
+      return field.path;
+    });
+};
 
 /**
  * The top-level required fields the body does not carry, and the present ones
@@ -82,8 +112,9 @@ const topLevelFieldErrors = (args: {
  * - **Unknown fields** are rejected at every nesting level (objects, arrays of
  *   objects, `$ref`s) with dotted paths; open levels are skipped, and a union
  *   of closed objects is judged against the union of their fields.
- * - **Required fields and scalar types** at the top level are named field by
- *   field (`missing_fields`, `invalid_fields`).
+ * - **Required fields** at every level the unknown-field walk reads are named
+ *   field by field (`missing_fields`), nested ones by dotted path; **scalar
+ *   types** at the top level (`invalid_fields`).
  * - **The full schema** is checked once those pass: a value of any depth that
  *   breaks its type, union, enum, bound or required list is in
  *   `invalid_fields`, except fields `ROUTE_OWNED_BODY_FIELDS` leaves to the
@@ -117,15 +148,23 @@ export const validateRequestBody = (args: {
     return field.path;
   });
 
+  const template = normalizeRoutePath(args.path);
   const fieldErrors = topLevelFieldErrors({ schema, body });
-  const { missingFields } = fieldErrors;
+  const missingFields = [
+    ...fieldErrors.missingFields,
+    ...nestedMissingFields({
+      schema,
+      body,
+      operation: `${args.method.toUpperCase()} ${template}`,
+    }),
+  ];
   const typeErrors =
     unknownFields.length > 0 ||
     missingFields.length > 0 ||
     fieldErrors.typeErrors.length > 0
       ? fieldErrors.typeErrors
       : collectSchemaViolations({
-          template: normalizeRoutePath(args.path),
+          template,
           method: args.method,
           body,
         });
