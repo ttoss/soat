@@ -1,5 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { AttachedSource } from './attachedFileCitations';
+import { citationColumns } from './citations';
 import type { Transaction } from './dbTransaction';
 import {
   attributionColumns,
@@ -151,7 +153,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         inputModalities: args.inputModalities,
         // Pointers, not text — see the column.
         retrieval: args.retrieval ?? null,
-        citations: args.citesSources ? [] : null,
+        ...citationColumns(args),
         // Counts, not content — see the columns.
         ...provenanceColumns(args.provenance ?? NO_PROVENANCE),
         idempotencyKey: args.idempotency?.key ?? null,
@@ -202,6 +204,8 @@ type NewGenerationRecord = GenerationAttribution &
     retrieval?: KnowledgeRetrieval;
     // Whether the turn cites: `citations` starts empty, else null.
     citesSources?: boolean;
+    // Ids only — see the column.
+    attachedSources?: AttachedSource[];
     // A unique violation on it is the caller's retry losing the race.
     idempotency?: GenerationIdempotency;
     // What the turn's context already holds when it starts: its chain's

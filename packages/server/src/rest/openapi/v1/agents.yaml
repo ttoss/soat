@@ -1802,8 +1802,10 @@ components:
           nullable: true
           description: >-
             Structured citations for this agent's turns. `{"enabled": true}`
-            labels each `knowledge_config` result the turn injects and asks the
-            model to cite the passages it uses. Every citation is checked
+            labels each `knowledge_config` result the turn injects, and each
+            page of a PDF or text file its messages attach (sent as its
+            extracted text; a page with no text is sent as the file,
+            unlabelled), and asks the model to cite the passages it uses. Every citation is checked
             before it is returned: its source was injected into this turn and
             its quoted text is in that source. One that fails lands in
             `output.rejected_citations` with its reason, never in
@@ -2376,8 +2378,10 @@ components:
           nullable: true
           description: >-
             Structured citations for this agent's turns. `{"enabled": true}`
-            labels each `knowledge_config` result the turn injects and asks the
-            model to cite the passages it uses. Every citation is checked
+            labels each `knowledge_config` result the turn injects, and each
+            page of a PDF or text file its messages attach (sent as its
+            extracted text; a page with no text is sent as the file,
+            unlabelled), and asks the model to cite the passages it uses. Every citation is checked
             before it is returned: its source was injected into this turn and
             its quoted text is in that source. One that fails lands in
             `output.rejected_citations` with its reason, never in
@@ -2680,8 +2684,10 @@ components:
           nullable: true
           description: >-
             Structured citations for this agent's turns. `{"enabled": true}`
-            labels each `knowledge_config` result the turn injects and asks the
-            model to cite the passages it uses. Every citation is checked
+            labels each `knowledge_config` result the turn injects, and each
+            page of a PDF or text file its messages attach (sent as its
+            extracted text; a page with no text is sent as the file,
+            unlabelled), and asks the model to cite the passages it uses. Every citation is checked
             before it is returned: its source was injected into this turn and
             its quoted text is in that source. One that fails lands in
             `output.rejected_citations` with its reason, never in

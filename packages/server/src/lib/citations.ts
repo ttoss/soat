@@ -5,6 +5,10 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import {
+  type AttachedSource,
+  loadAttachedSources,
+} from './attachedFileCitations';
 import { parseCitationMarkup } from './citationMarkup';
 import {
   type Citation,
@@ -40,9 +44,23 @@ export const citationRef = (index: number): string => {
 export const CITATION_INSTRUCTION =
   'Cite the reference material you rely on. Wrap each statement it supports ' +
   'in <cite ref="LABEL" quote="EXACT TEXT">statement</cite>, where LABEL is ' +
-  'the c-number in the bracketed header of the passage you used and EXACT ' +
-  'TEXT is copied verbatim from that passage (write " as &quot;). Cite only ' +
-  'passages that carry a c-number.';
+  'the label (c1, a1, …) that ends the bracketed header of the passage you ' +
+  'used and EXACT TEXT is copied verbatim from that passage (write " as ' +
+  '&quot;). Cite only passages whose header carries a label.';
+
+/**
+ * A citing turn's system instructions: the agent's, then how to cite. Sent
+ * whatever the turn was given, so a label in any passage is citable.
+ */
+export const withCitationInstruction = (args: {
+  instructions: string | null;
+  citesSources: boolean;
+}): string | null => {
+  if (!args.citesSources) return args.instructions;
+  return args.instructions
+    ? `${args.instructions}\n\n${CITATION_INSTRUCTION}`
+    : CITATION_INSTRUCTION;
+};
 
 export type TurnCitations = {
   citations: Citation[];
@@ -99,6 +117,7 @@ const loadCitationSources = async (args: {
       documentId: entry.document_id,
       documentVersion: entry.document_version,
       chunkId: entry.chunk_id,
+      fileId: null,
       page: entry.page,
       text,
     };
@@ -108,6 +127,20 @@ const loadCitationSources = async (args: {
       return [ref, toSource(entry)];
     })
   );
+};
+
+/**
+ * A new generation's citation columns: `citations` starts empty for a turn
+ * that cites (null otherwise), and the attached labels it gave, if any.
+ */
+export const citationColumns = (args: {
+  citesSources?: boolean;
+  attachedSources?: AttachedSource[];
+}) => {
+  return {
+    citations: args.citesSources ? [] : null,
+    attachedSources: args.attachedSources?.length ? args.attachedSources : null,
+  };
 };
 
 /**
@@ -122,16 +155,23 @@ export const resolveTurnCitations = async (args: {
 }): Promise<{ content: string; turn: TurnCitations | null }> => {
   const gen = await db.Generation.findOne({
     where: { publicId: args.generationId },
-    attributes: ['citations', 'retrieval'],
+    attributes: ['citations', 'retrieval', 'attachedSources', 'projectId'],
   });
   if (!gen || gen.citations === null) {
     return { content: args.text, turn: null };
   }
   const parsed = parseCitationMarkup({ text: args.text });
   // Written only by `toKnowledgeRetrieval`, so the stored shape is the type.
-  const sources = await loadCitationSources({
-    retrieval: gen.retrieval as KnowledgeRetrieval,
-  });
+  const sources = {
+    ...(await loadCitationSources({
+      retrieval: gen.retrieval as KnowledgeRetrieval,
+    })),
+    // Written only by `labelAttachedFiles`, so the stored shape is the type.
+    ...(await loadAttachedSources({
+      sources: (gen.attachedSources ?? []) as AttachedSource[],
+      projectId: gen.projectId,
+    })),
+  };
   const turn = verifyCitations({
     marks: parsed.marks,
     malformed: parsed.malformed,

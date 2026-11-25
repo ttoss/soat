@@ -24,3 +24,19 @@ export const extractPdfPages = async (args: {
     );
   }
 };
+
+/** The text of each page, or null when the bytes are not a readable PDF. */
+export const readPdfPages = async (args: {
+  buffer: Buffer;
+}): Promise<string[] | null> => {
+  log('readPdfPages: parsing PDF buffer size=%d', args.buffer.length);
+  try {
+    const { text: pages } = await extractText(new Uint8Array(args.buffer), {
+      mergePages: false,
+    });
+    return pages;
+  } catch (error) {
+    log('readPdfPages: unreadable %o', error);
+    return null;
+  }
+};

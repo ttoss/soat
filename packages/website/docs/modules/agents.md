@@ -654,13 +654,21 @@ curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
 </TabItem>
 </Tabs>
 
-Each injected document chunk's tag carries a label (`[Document: /protocols/x.pdf (page 12) c1]`), and the knowledge message asks the model to wrap each statement it supports in `<cite ref="c1" quote="exact text">statement</cite>`. Memory results carry no label and are not citable.
+The turn labels two kinds of source, and its system instructions ask the model to wrap each statement it supports in `<cite ref="c1" quote="exact text">statement</cite>`:
+
+| Source                                                                               | Label                                       | Sent to the model as                                                      |
+| ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------- |
+| A [knowledge](#knowledge-config) document chunk                                      | `[Document: /protocols/x.pdf (page 12) c1]` | the chunk, inside `<knowledge>`                                           |
+| A page of a PDF or text file a message attaches (`{ "type": "file", "file_id": … }`) | `[File: laudo.pdf (page 2) a1]`             | the page's extracted text, inside `<attached-file>`, in place of the file |
+
+- A PDF page with no extractable text (a scan) gets no label: the file stays in the message, so the model still reads it, and nothing on that page is citable.
+- Memory results and other attached file types carry no label and are not citable.
 
 After the model answers, the server:
 
 1. removes the markup from `output.content`;
-2. resolves each `ref` to a chunk this turn injected (recorded in [`retrieval`](./generations.md#what-retrieval-served));
-3. looks for `quote` in that chunk's text, matching exactly after Unicode NFC and with each whitespace run read as one space;
+2. resolves each `ref` to a chunk this turn injected (recorded in [`retrieval`](./generations.md#what-retrieval-served)) or to a page of a file it attached;
+3. looks for `quote` in that chunk's or page's text, matching exactly after Unicode NFC and with each whitespace run read as one space;
 4. returns what passed in `output.citations` and what failed in `output.rejected_citations`.
 
 ```json
@@ -684,18 +692,36 @@ After the model answers, the server:
 ]
 ```
 
-| Field              | Meaning                                                                                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `quoted_text`      | The chunk's own text at `source_span`, never the model's quote                                                                                 |
-| `source_span`      | Code points into the chunk's text (its NFC form)                                                                                               |
-| `answer_span`      | Code points into `output.content`: the statement the citation wraps                                                                            |
-| `page`, `page_end` | The chunk's page; `null` for a source with no pages. A `chunk_strategy: "page"` chunk is one page, so `source_span` is a position on that page |
+A citation of an attached file has `origin: "attached_file"`, the file in `file_id`, and `null` document fields:
+
+```json
+{
+  "origin": "attached_file",
+  "document_id": null,
+  "document_version": null,
+  "chunk_id": null,
+  "file_id": "file_V1StGXR8Z5jdHi6B",
+  "page": 2,
+  "page_end": 2,
+  "quoted_text": "solicito hemograma completo",
+  "source_span": { "start": 9, "end": 36 },
+  "answer_span": { "start": 0, "end": 15 },
+  "verification": "runtime"
+}
+```
+
+| Field              | Meaning                                                                                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quoted_text`      | The chunk's or page's own text at `source_span`, never the model's quote                                                                                          |
+| `source_span`      | Code points into the chunk's text, or the page's extracted text (its NFC form)                                                                                    |
+| `answer_span`      | Code points into `output.content`: the statement the citation wraps                                                                                               |
+| `page`, `page_end` | The chunk's or attached file's page; `null` for a source with no pages. A `chunk_strategy: "page"` chunk is one page, so `source_span` is a position on that page |
 
 | `reason`             | When                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------ |
-| `UNKNOWN_REF`        | `ref` names no chunk this turn injected                                              |
-| `SOURCE_UNAVAILABLE` | The chunk no longer exists                                                           |
-| `QUOTE_NOT_FOUND`    | The quote is not in the chunk                                                        |
+| `UNKNOWN_REF`        | `ref` names no chunk or page this turn labelled                                      |
+| `SOURCE_UNAVAILABLE` | The chunk no longer exists, or the attached file no longer reads                     |
+| `QUOTE_NOT_FOUND`    | The quote is not in the chunk or page                                                |
 | `MALFORMED_CITE`     | A tag lacks `ref` or a non-blank `quote`, is unclosed, or a `</cite>` closes nothing |
 
 - Both arrays are present only when the turn cites. Whether the model cites, and whether a quote supports its statement, are the model's: a verified citation proves the quote is in the source, not that it backs the claim.

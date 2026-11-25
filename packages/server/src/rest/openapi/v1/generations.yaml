@@ -1124,10 +1124,16 @@ components:
           type: string
           enum:
             - retrieval
-          description: The cited passage was injected by `knowledge_config` retrieval.
+            - attached_file
+          description: >-
+            `retrieval`: a chunk `knowledge_config` retrieval injected.
+            `attached_file`: a page of a PDF or text file the turn's messages
+            attached, read as its extracted text.
         document_id:
           x-soat-ref: documents
           type: string
+          nullable: true
+          description: Null for an `attached_file` citation.
           example: 'doc_V1StGXR8Z5jdHi6B'
         document_version:
           type: integer
@@ -1136,26 +1142,30 @@ components:
           example: 3
         chunk_id:
           type: string
-          description: Public ID of the cited chunk.
+          nullable: true
+          description: Public ID of the cited chunk. Null for an `attached_file` citation.
           example: 'dchunk_V1StGXR8Z5jdHi6B'
         file_id:
+          x-soat-ref: files
           type: string
           nullable: true
-          description: Null for a `retrieval` citation.
+          description: The attached file. Null for a `retrieval` citation.
         page:
           type: integer
           nullable: true
-          description: Page of the cited chunk (1-indexed). Null for plain text.
+          description: >-
+            Page of the cited chunk or attached file (1-indexed). Null for plain
+            text.
           example: 12
         page_end:
           type: integer
           nullable: true
-          description: Last page of the cited passage; equal to `page` for a chunk.
+          description: Last page of the cited passage; equal to `page`.
           example: 12
         source_span:
           description: >-
-            Where `quoted_text` sits in the cited chunk's text, in code points
-            of its NFC form.
+            Where `quoted_text` sits in the cited chunk's text, or the attached
+            page's extracted text, in code points of its NFC form.
           allOf:
             - $ref: '#/components/schemas/CitationSpan'
         answer_span:
@@ -1179,8 +1189,8 @@ components:
             quoted_text:
               type: string
               description: >-
-                The source's own text at `source_span` — copied from the chunk,
-                never from the model.
+                The source's own text at `source_span` — copied from the chunk
+                or page, never from the model.
               example: 'dose máxima de 40 mg/dia'
     RejectedCitation:
       type: object
@@ -1207,7 +1217,8 @@ components:
             - MALFORMED_CITE
           description: >-
             `UNKNOWN_REF`: the label names no source this turn injected.
-            `SOURCE_UNAVAILABLE`: the cited chunk no longer exists.
+            `SOURCE_UNAVAILABLE`: the cited chunk or attached file no longer
+            reads.
             `QUOTE_NOT_FOUND`: the quote is not in the source.
             `MALFORMED_CITE`: the citation markup is incomplete.
     GenerationRetrievedDocument:

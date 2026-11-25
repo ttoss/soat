@@ -5,26 +5,28 @@
  */
 import type { CiteMark, MalformedCite, Span } from './citationMarkup';
 
+/** A knowledge chunk the turn injected, or a page of a file it was sent. */
 export type CitationSource = {
-  origin: 'retrieval';
-  documentId: string;
+  origin: 'retrieval' | 'attached_file';
+  documentId: string | null;
   documentVersion: number | null;
-  chunkId: string;
+  chunkId: string | null;
+  fileId: string | null;
   page: number | null;
   text: string;
 };
 
 export type Citation = {
-  origin: 'retrieval';
-  document_id: string;
+  origin: CitationSource['origin'];
+  document_id: string | null;
   document_version: number | null;
-  chunk_id: string;
+  chunk_id: string | null;
   file_id: string | null;
   page: number | null;
   page_end: number | null;
   /** The source's own text at `source_span`, not the model's quote. */
   quoted_text: string;
-  /** Code points into the cited chunk's text. */
+  /** Code points into the cited chunk's, or page's, text. */
   source_span: Span;
   /** Code points into the answer's `content`. */
   answer_span: Span;
@@ -107,7 +109,7 @@ const verifyMark = (args: {
     document_id: source.documentId,
     document_version: source.documentVersion,
     chunk_id: source.chunkId,
-    file_id: null,
+    file_id: source.fileId,
     page: source.page,
     page_end: source.page,
     quoted_text: located.quotedText,

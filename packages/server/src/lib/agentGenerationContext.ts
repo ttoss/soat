@@ -21,7 +21,11 @@ import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { withUnavailableToolsNote } from './agentToolUnavailable';
-import { resolveCitationsEnabled } from './citations';
+import {
+  type AttachedSource,
+  labelAttachedFiles,
+} from './attachedFileCitations';
+import { resolveCitationsEnabled, withCitationInstruction } from './citations';
 import {
   type GenerationConversation,
   resolveServerToolContextIdentity,
@@ -76,6 +80,8 @@ export type GenerationContext = {
    * the citations its answer makes (`citations.ts`).
    */
   citesSources: boolean;
+  /** The attached-file pages the turn labelled for citation. */
+  attachedSources: AttachedSource[];
   /**
    * The caller's messages after content resolution, without the agent's
    * instructions or its knowledge injections — the replayable half of
@@ -158,6 +164,7 @@ const assembleContextMessages = async (args: {
 }): Promise<{
   allMessages: Array<{ role: string; content: unknown }>;
   retrieval: KnowledgeRetrieval;
+  attachedSources: AttachedSource[];
 }> => {
   const { typedAgent } = args;
   // The agent's own project (its owner's when shared), never the caller's
@@ -198,6 +205,13 @@ const assembleContextMessages = async (args: {
     args.resolvedMessages.length
   );
 
+  const attached = args.citesSources
+    ? await labelAttachedFiles({
+        messages: args.resolvedMessages,
+        projectId: typedAgent.project.id,
+      })
+    : { messages: args.resolvedMessages, sources: [] };
+
   // The breakpoint is applied here, on the assembled history, rather than at
   // either provider call: this array is what a paused turn persists, so a
   // generation that resumes after an approval replays the same marked prefix
@@ -207,17 +221,24 @@ const assembleContextMessages = async (args: {
     // The note goes in before the breakpoint is placed: the mark belongs at the
     // end of the system block, and the note is part of it.
     messages: withUnavailableToolsNote({
-      messages: buildAllMessages(args.typedAgent.instructions, [
-        ...knowledge.messages,
-        ...args.resolvedMessages,
-      ]),
+      messages: buildAllMessages(
+        withCitationInstruction({
+          instructions: args.typedAgent.instructions,
+          citesSources: args.citesSources,
+        }),
+        [...knowledge.messages, ...attached.messages]
+      ),
       unavailableToolNames: args.unavailableToolNames,
     }),
   });
 
   log('assembleContextMessages: allMessages=%o', allMessages);
 
-  return { allMessages, retrieval: knowledge.retrieval };
+  return {
+    allMessages,
+    retrieval: knowledge.retrieval,
+    attachedSources: attached.sources,
+  };
 };
 
 // The identity chokepoint: every fresh generation builds its context
@@ -419,18 +440,19 @@ export const buildGenerationContext = async (
     stored: typedAgent.citationConfig,
     requested: args.citationConfig,
   });
-  const { allMessages, retrieval } = await assembleContextMessages({
-    agentId: args.agentId,
-    generationId,
-    typedAgent,
-    resolvedMessages,
-    knowledgeConfig: args.knowledgeConfig,
-    citesSources,
-    authority: args.authority,
-    agentAuthority,
-    unavailableToolNames: toolSurface.unavailableToolNames,
-    actorId: toolContext?.actor_id,
-  });
+  const { allMessages, retrieval, attachedSources } =
+    await assembleContextMessages({
+      agentId: args.agentId,
+      generationId,
+      typedAgent,
+      resolvedMessages,
+      knowledgeConfig: args.knowledgeConfig,
+      citesSources,
+      authority: args.authority,
+      agentAuthority,
+      unavailableToolNames: toolSurface.unavailableToolNames,
+      actorId: toolContext?.actor_id,
+    });
   provenance.record(countOf('knowledge_results', retrieval?.length ?? 0));
   trackGenerationProvenance({ generationId, provenance });
 
@@ -444,6 +466,7 @@ export const buildGenerationContext = async (
     allMessages,
     retrieval,
     citesSources,
+    attachedSources,
     inputMessages: resolvedMessages,
     generationId,
     toolContext: toolContext ?? null,

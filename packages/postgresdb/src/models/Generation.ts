@@ -344,6 +344,11 @@ export class Generation extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare citations: Array<Record<string, unknown>> | null;
 
+  // Which file and page each attached-file label of a citing turn names
+  // (`attachedFileCitations.ts`): ids, never text. Null when none was labelled.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare attachedSources: Array<Record<string, unknown>> | null;
+
   // How many results from untrusted tools, and from knowledge, had entered the
   // turn's context, its continuation chain included. Counts, not content, so a
   // purge keeps them; only `generationProvenance.ts` computes their writes.

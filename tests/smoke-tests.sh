@@ -3367,6 +3367,17 @@ if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "event: citations"; then
 fi
 echo "Agent SSE stream OK."
 
+# 22b1. A citing turn reads an attached text file as labelled text.
+echo "--- Running a citing generation with an attached file ---"
+FILE_CITE_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
+  --messages "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Summarize the attached notes.\"},{\"type\":\"file\",\"file_id\":\"$MD_FILE_ID\"}]}]" | sanitize_json)
+if ! printf '%s\n' "$FILE_CITE_RESP" | jq -e '.status == "completed" and (.output.citations | type) == "array" and (.output.rejected_citations | type) == "array"' >/dev/null 2>&1; then
+  echo "ERROR: a citing generation with an attached file did not complete with citations arrays" >&2
+  printf '%s\n' "$FILE_CITE_RESP" >&2
+  exit 1
+fi
+echo "Attached-file citation turn OK."
+
 # 22b2. Knowledge config: the write grant round-trips, and the retired
 # `extraction` field is rejected rather than accepted and ignored. What a store
 # ingests from a finished turn is a memory rule now, covered above.

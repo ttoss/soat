@@ -1,7 +1,10 @@
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import * as pdfModule from 'src/lib/pdf';
+
 import { testGrant } from '../../fixtures/bootstrap';
+import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -569,6 +572,277 @@ describe('Generation citations', () => {
         quoted_text: 'dose máxima de 40 mg/dia',
       });
       expect(data.rejected_citations).toEqual([]);
+    });
+  });
+
+  describe('POST /api/v1/agents/:agent_id/generate — attached files', () => {
+    let readPdfPagesSpy: jest.SpyInstance;
+
+    // unpdf's ESM dynamic imports do not run in Jest's CJS VM; the pages are
+    // stubbed and everything after extraction runs for real.
+    const PAGES = [
+      'Paciente: M. S., 54 anos.',
+      'Conduta: solicito hemograma completo e creatinina.',
+    ];
+
+    const upload = async (args: {
+      filename: string;
+      contentType: string;
+      buffer?: Buffer;
+    }): Promise<string> => {
+      const res = await asAdmin()
+        .post('/api/v1/files/upload')
+        .attach('file', args.buffer ?? ONE_PAGE_PDF_BUFFER, {
+          filename: args.filename,
+          contentType: args.contentType,
+        })
+        .field('project_id', projectId);
+      expect(res.status).toBe(201);
+      return res.body.id;
+    };
+
+    const askWith = (args: {
+      agentId: string;
+      fileId: string;
+      citationConfig?: unknown;
+    }) => {
+      return generate({
+        agentId: args.agentId,
+        body: {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Quais exames este laudo pede?' },
+                { type: 'file', file_id: args.fileId },
+              ],
+            },
+          ],
+          ...(args.citationConfig === undefined
+            ? {}
+            : { citation_config: args.citationConfig }),
+        },
+      });
+    };
+
+    const createBareAgent = (citationConfig?: unknown) => {
+      return create('/api/v1/agents', {
+        project_id: projectId,
+        ai_provider_id: providerId,
+        name: `cite-file-${Math.random().toString(36).slice(2)}`,
+        ...(citationConfig === undefined
+          ? {}
+          : { citation_config: citationConfig }),
+      });
+    };
+
+    /** The label the turn gave `page` of the attached file named `filename`. */
+    const fileLabel = (args: {
+      messages: StubMessage[];
+      filename: string;
+      page: number | null;
+    }): string => {
+      const page = args.page === null ? '' : ` \\(page ${args.page}\\)`;
+      const match = JSON.stringify(args.messages).match(
+        new RegExp(
+          `\\[File: ${args.filename.replace('.', '\\.')}${page} (a\\d+)\\]`
+        )
+      );
+      return match ? match[1] : 'a0';
+    };
+
+    beforeEach(() => {
+      readPdfPagesSpy = jest
+        .spyOn(pdfModule, 'readPdfPages')
+        .mockResolvedValue(PAGES);
+    });
+
+    afterEach(() => {
+      readPdfPagesSpy.mockRestore();
+    });
+
+    test('a page of an attached PDF is cited by file and page', async () => {
+      const fileId = await upload({
+        filename: 'laudo.pdf',
+        contentType: 'application/pdf',
+      });
+      const agentId = await createBareAgent({ enabled: true });
+      answer = (messages) => {
+        const ref = fileLabel({ messages, filename: 'laudo.pdf', page: 2 });
+        return `<cite ref="${ref}" quote="solicito hemograma completo">Pede hemograma.</cite>`;
+      };
+
+      const body = await askWith({ agentId, fileId });
+      const record = await readGeneration(body.id);
+
+      expect(body.output.content).toBe('Pede hemograma.');
+      expect(body.output.citations).toEqual([
+        {
+          origin: 'attached_file',
+          document_id: null,
+          document_version: null,
+          chunk_id: null,
+          file_id: fileId,
+          page: 2,
+          page_end: 2,
+          quoted_text: 'solicito hemograma completo',
+          source_span: { start: 9, end: 36 },
+          answer_span: { start: 0, end: 15 },
+          verification: 'runtime',
+        },
+      ]);
+      expect(record.citations[0]).toMatchObject({
+        origin: 'attached_file',
+        file_id: fileId,
+        page: 2,
+      });
+      expect(record.citations[0].quoted_text).toBeUndefined();
+    });
+
+    test('a PDF whose pages all read is sent as its text, not the file', async () => {
+      const fileId = await upload({
+        filename: 'texto.pdf',
+        contentType: 'application/pdf',
+      });
+      const agentId = await createBareAgent({ enabled: true });
+      answer = () => {
+        return 'Done.';
+      };
+      const before = received.length;
+
+      await askWith({ agentId, fileId });
+
+      const sent = JSON.stringify(received.slice(before)[0]);
+      expect(sent).toMatch(/\[File: texto\.pdf \(page 1\) a\d+\]/);
+      expect(sent).toMatch(/\[File: texto\.pdf \(page 2\) a\d+\]/);
+      expect(sent).not.toContain('application/pdf');
+    });
+
+    test('a page with no text keeps the file in the message, unlabelled', async () => {
+      readPdfPagesSpy.mockResolvedValue([PAGES[0], '   ']);
+      const fileId = await upload({
+        filename: 'scan.pdf',
+        contentType: 'application/pdf',
+      });
+      const agentId = await createBareAgent({ enabled: true });
+      answer = () => {
+        return 'Done.';
+      };
+      const before = received.length;
+
+      await askWith({ agentId, fileId });
+
+      const sent = JSON.stringify(received.slice(before)[0]);
+      expect(sent).toMatch(/\[File: scan\.pdf \(page 1\) a\d+\]/);
+      expect(sent).not.toMatch(/\[File: scan\.pdf \(page 2\)/);
+      expect(sent).toContain('application/pdf');
+    });
+
+    test('a PDF with no text anywhere is sent as the file, with no labels', async () => {
+      readPdfPagesSpy.mockResolvedValue(['', ' ']);
+      const fileId = await upload({
+        filename: 'allscan.pdf',
+        contentType: 'application/pdf',
+      });
+      const agentId = await createBareAgent({ enabled: true });
+      answer = () => {
+        return 'Done.';
+      };
+      const before = received.length;
+
+      await askWith({ agentId, fileId });
+
+      const sent = JSON.stringify(received.slice(before)[0]);
+      expect(sent).not.toContain('[File: allscan.pdf');
+      expect(sent).toContain('application/pdf');
+    });
+
+    test('an unreadable PDF is sent unchanged, with no labels', async () => {
+      readPdfPagesSpy.mockResolvedValue(null);
+      const fileId = await upload({
+        filename: 'broken.pdf',
+        contentType: 'application/pdf',
+      });
+      const agentId = await createBareAgent({ enabled: true });
+      answer = () => {
+        return '<cite ref="a1" quote="x">y</cite>';
+      };
+      const before = received.length;
+
+      const body = await askWith({ agentId, fileId });
+
+      const sent = JSON.stringify(received.slice(before)[0]);
+      expect(sent).not.toContain('[File: broken.pdf');
+      expect(sent).toContain('application/pdf');
+      expect(body.output.rejected_citations).toEqual([
+        { ref: 'a1', quoted_text: 'x', reason: 'UNKNOWN_REF' },
+      ]);
+    });
+
+    test('a text file is cited with no page', async () => {
+      const fileId = await upload({
+        filename: 'nota.txt',
+        contentType: 'text/plain',
+        buffer: Buffer.from('Retorno em 15 dias.'),
+      });
+      const agentId = await createBareAgent({ enabled: true });
+      answer = (messages) => {
+        const ref = fileLabel({ messages, filename: 'nota.txt', page: null });
+        return `<cite ref="${ref}" quote="15 dias">Volta em 15 dias.</cite>`;
+      };
+
+      const body = await askWith({ agentId, fileId });
+
+      expect(body.output.citations[0]).toMatchObject({
+        origin: 'attached_file',
+        file_id: fileId,
+        page: null,
+        page_end: null,
+        quoted_text: '15 dias',
+      });
+    });
+
+    test('a turn that does not cite sends the file as it is', async () => {
+      const fileId = await upload({
+        filename: 'plain.pdf',
+        contentType: 'application/pdf',
+      });
+      const agentId = await createBareAgent();
+      answer = () => {
+        return 'Done.';
+      };
+      const before = received.length;
+
+      const body = await askWith({ agentId, fileId });
+
+      const sent = JSON.stringify(received.slice(before)[0]);
+      expect(sent).not.toContain('[File: plain.pdf');
+      expect(sent).toContain('application/pdf');
+      expect(body.output.citations).toBeUndefined();
+    });
+
+    test('a file deleted before the answer is verified is SOURCE_UNAVAILABLE', async () => {
+      const fileId = await upload({
+        filename: 'gone.pdf',
+        contentType: 'application/pdf',
+      });
+      const agentId = await createBareAgent({ enabled: true });
+      answer = async (messages) => {
+        const ref = fileLabel({ messages, filename: 'gone.pdf', page: 2 });
+        const removed = await asAdmin().delete(`/api/v1/files/${fileId}`);
+        expect(removed.status).toBe(204);
+        return `<cite ref="${ref}" quote="hemograma">x</cite>`;
+      };
+
+      const body = await askWith({ agentId, fileId });
+
+      expect(body.output.rejected_citations).toEqual([
+        {
+          ref: expect.stringMatching(/^a\d+$/),
+          quoted_text: 'hemograma',
+          reason: 'SOURCE_UNAVAILABLE',
+        },
+      ]);
     });
   });
 });
