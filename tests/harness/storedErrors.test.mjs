@@ -22,6 +22,7 @@ const RECORDERS = [
   'decisionBackends.ts',
   'formationsTypes.ts',
   'orchestrationNodeRecorder.ts',
+  'playbookAutoUpgrade.ts',
   'playbookExecutionSettle.ts',
   'playbookExportRender.ts',
   'triggerDispatch.ts',

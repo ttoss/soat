@@ -15,6 +15,7 @@ import {
   listPlaybookVersions,
   restorePlaybookVersion,
 } from 'src/lib/playbookVersions';
+import { toOptionalBoolean } from 'src/lib/resource-inputs/normalizers';
 import { admitAuthorized } from 'src/middleware/admission';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -125,6 +126,7 @@ playbooksRouter.post('/playbooks', async (ctx: Context) => {
     description: body.description,
     definition: body.definition,
     policyIds: body.policy_ids as string[] | undefined,
+    autoUpgrade: toOptionalBoolean(body.auto_upgrade),
     versionLabel: parseString(body.version_label),
     createdBy: requestPrincipalFromCtx(ctx),
     writer: ctx.authUser,
@@ -184,6 +186,7 @@ playbooksRouter.patch('/playbooks/:playbook_id', async (ctx: Context) => {
     description: body.description,
     definition: body.definition,
     policyIds: body.policy_ids as string[] | undefined,
+    autoUpgrade: toOptionalBoolean(body.auto_upgrade),
     versionLabel: parseString(body.version_label),
     expectedVersion: writePreconditionOf(ctx),
     createdBy: requestPrincipalFromCtx(ctx),

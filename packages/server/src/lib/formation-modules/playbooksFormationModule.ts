@@ -8,6 +8,7 @@ import {
 import {
   toNullableArray,
   toNullableString,
+  toOptionalBoolean,
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
@@ -28,6 +29,7 @@ export const playbooksFormationModule = defineFormationModule({
       description: toNullableString(properties.description),
       definition: properties.definition,
       policyIds: toNullableArray<string>(properties.policy_ids),
+      autoUpgrade: toOptionalBoolean(properties.auto_upgrade),
       createdBy: actor.author,
       writer: actor,
     });
@@ -40,6 +42,7 @@ export const playbooksFormationModule = defineFormationModule({
       description: toNullableString(properties.description),
       definition: properties.definition,
       policyIds: toNullableArray<string>(properties.policy_ids),
+      autoUpgrade: toOptionalBoolean(properties.auto_upgrade),
       createdBy: actor.author,
       writer: actor,
     });

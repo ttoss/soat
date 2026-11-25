@@ -135,6 +135,7 @@ const ROLES = {
     'OrchestrationRun.wakeContext',
     'OrchestrationVersion.config',
     'Playbook.definition',
+    'PlaybookCase.upgradeError',
     'PlaybookEntry.basis',
     'PlaybookEntry.onBehalfOf',
     'PlaybookEntry.value',

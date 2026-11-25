@@ -23,17 +23,18 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 
 ### Playbook
 
-| Field         | Type           | Description                                                                                                     |
-| ------------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `id`          | string         | Public identifier (`pbk_…`)                                                                                     |
-| `project_id`  | string         | Owning project                                                                                                  |
-| `name`        | string         | Human-readable name, unique per project                                                                         |
-| `description` | string \| null | Optional                                                                                                        |
-| `version`     | integer        | The definition's version; see [Versions](#versions)                                                             |
-| `definition`  | object         | `{ upstreams?, nodes }`: up to 20 [upstreams](#upstream) and 1 to 200 [nodes](#node)                            |
-| `policy_ids`  | string[]       | Required on create. The policies every node of a case acts under; see [Who a node runs as](#who-a-node-runs-as) |
-| `created_at`  | string         | ISO 8601 creation timestamp                                                                                     |
-| `updated_at`  | string         | ISO 8601 last-update timestamp                                                                                  |
+| Field          | Type           | Description                                                                                                                         |
+| -------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | string         | Public identifier (`pbk_…`)                                                                                                         |
+| `project_id`   | string         | Owning project                                                                                                                      |
+| `name`         | string         | Human-readable name, unique per project                                                                                             |
+| `description`  | string \| null | Optional                                                                                                                            |
+| `version`      | integer        | The definition's version; see [Versions](#versions)                                                                                 |
+| `definition`   | object         | `{ upstreams?, nodes }`: up to 20 [upstreams](#upstream) and 1 to 200 [nodes](#node)                                                |
+| `policy_ids`   | string[]       | Required on create. The policies every node of a case acts under; see [Who a node runs as](#who-a-node-runs-as)                     |
+| `auto_upgrade` | boolean        | Default `false`. Whether each new version moves the playbook's cases to it; see [Upgrading automatically](#upgrading-automatically) |
+| `created_at`   | string         | ISO 8601 creation timestamp                                                                                                         |
+| `updated_at`   | string         | ISO 8601 last-update timestamp                                                                                                      |
 
 ### Node
 
@@ -80,6 +81,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `revision`           | integer        | The case's counter; every entry takes the next value                                                                                                                                                                                                             |
 | `automation_status`  | string         | `paused` while a [pause](#pausing-a-case) of the case or of its [project](./projects.md) stands, else `running` while an execution is queued or runs its executor, else `waiting` while every execution in flight waits on a task or run it started, else `idle` |
 | `pause_requested_at` | string \| null | When the case was paused                                                                                                                                                                                                                                         |
+| `upgrade_error`      | object \| null | Why the playbook's `auto_upgrade` left the case on its version, `{ code, message, meta? }`; null once the case moves to another version. See [Upgrading automatically](#upgrading-automatically)                                                                 |
 | `nodes`              | array          | On a single-case read: every node's `id`, `state`, `missing`, `blocked_by`, `run`, `inputs` and `output`                                                                                                                                                         |
 
 ### Entry
@@ -354,6 +356,20 @@ The case's [upstream](#upstream-cases) bindings follow the target version:
 | Name the target declares that the case does not bind           | Bound from `upstreams: { <name>: <case_id> }`, checked as at create |
 
 A declared name left unbound, or any other `upstreams` the create rules refuse, is `400 PLAYBOOK_CASE_UPSTREAM_INVALID` and moves nothing.
+
+### Upgrading automatically
+
+A playbook with `auto_upgrade: true` moves its cases itself: the write that creates a new version — a [`PATCH /api/v1/playbooks/{playbook_id}`](/docs/api/playbooks/update-playbook) changing `definition` or `policy_ids`, a restored version, a formation deploy — upgrades every case behind it to it before answering, as [upgrading a case](#upgrading-a-case) without `upstreams` does, recorded as an [upgrade](#upgrade) by the writer. Turning `auto_upgrade` on archives no version and moves no case until the next version.
+
+A case it cannot move stays on its version and says why in its `upgrade_error`:
+
+| Case                                                             | `upgrade_error.code`                                                                                 |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| A stored manual input the new version's schema refuses           | `PLAYBOOK_INPUT_INVALID`, `meta.inputs` naming each `node_id` and `name`, `meta.version` the version |
+| An execution running                                             | `PLAYBOOK_CASE_BUSY`                                                                                 |
+| An upstream the new version declares that the case does not bind | `PLAYBOOK_CASE_UPSTREAM_INVALID`                                                                     |
+
+The write itself succeeds. [Upgrading the case](#upgrading-a-case) by hand moves it whatever its inputs hold — a value its new schema refuses reads as unset — and any move clears `upgrade_error`.
 
 ### Entries
 
