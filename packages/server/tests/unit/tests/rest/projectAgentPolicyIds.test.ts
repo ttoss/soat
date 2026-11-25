@@ -146,6 +146,17 @@ describe("a project's agent_policy_ids", () => {
       expect(res.body.error.code).toBe('POLICY_NOT_FOUND');
     });
 
+    test('an empty entry is 400 VALIDATION_FAILED naming agent_policy_ids', async () => {
+      const res = await turn
+        .api()
+        .patch(`/api/v1/projects/${turn.projectId}`)
+        .send({ agent_policy_ids: [''] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({ field: 'agent_policy_ids' });
+    });
+
     test('a carried policy cannot be deleted', async () => {
       const [policyId] = (await setCap([ALLOW_ALL])) as string[];
 
