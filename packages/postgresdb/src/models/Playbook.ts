@@ -82,6 +82,10 @@ export class Playbook extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare policyIds: string[] | null;
 
+  /** Whether each new version moves the playbook's cases to it. */
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare autoUpgrade: boolean;
+
   @HasMany(() => {
     return PlaybookVersion;
   })

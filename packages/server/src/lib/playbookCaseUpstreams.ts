@@ -161,14 +161,18 @@ export const writeCaseBindings = async (args: {
 /**
  * Fits a case's bindings to the version it moves to: a binding whose name
  * that version declares on the same playbook is kept, every other one is
- * dropped, and each declared name left unbound is bound from `raw` by the
- * rules of create. Answers whether a binding changed.
+ * dropped, and each declared name left unbound is bound from the caller's
+ * `request` by the rules of create; with no `request`, a declared name left
+ * unbound refuses the move. Answers whether a binding changed.
  */
 export const rebindCaseUpstreams = async (args: {
   caseRow: { id?: unknown; projectId: number; actorId: number | null };
   definition: PlaybookDefinition;
-  raw: unknown;
-  canRead: (casePublicId: string) => Promise<boolean>;
+  /** The upstreams a caller names and whether it may read them. */
+  request: {
+    raw: unknown;
+    canRead: (casePublicId: string) => Promise<boolean>;
+  } | null;
   transaction: Transaction;
 }): Promise<boolean> => {
   const caseDbId = args.caseRow.id as number;
@@ -195,16 +199,22 @@ export const rebindCaseUpstreams = async (args: {
       );
     });
   });
-  const bindings = await readCaseBindings({
-    definition: args.definition,
-    raw: args.raw,
-    bound: kept.map((row) => {
-      return row.name;
-    }),
-    projectId: args.caseRow.projectId,
-    actorDbId: args.caseRow.actorId,
-    canRead: args.canRead,
+  const bound = kept.map((row) => {
+    return row.name;
   });
+  let bindings: PlaybookCaseBinding[] = [];
+  if (args.request === null) {
+    boundIds({ definition: args.definition, raw: undefined, bound });
+  } else {
+    bindings = await readCaseBindings({
+      definition: args.definition,
+      raw: args.request.raw,
+      bound,
+      projectId: args.caseRow.projectId,
+      actorDbId: args.caseRow.actorId,
+      canRead: args.request.canRead,
+    });
+  }
   const dropped = existing.filter((row) => {
     return !kept.includes(row);
   });

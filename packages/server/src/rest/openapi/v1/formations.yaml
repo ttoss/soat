@@ -2708,6 +2708,11 @@ components:
             "LogicalId" } for a policy in the template. The deploying caller
             must hold every grant they carry inside the project, else the
             resource fails with `POLICY_GRANT_NOT_HELD`.
+        auto_upgrade:
+          type: boolean
+          description: >-
+            Whether each new version moves the playbook's cases to it.
+            Defaults to `false`.
 
     ResourceDeclaration:
       type: object
