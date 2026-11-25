@@ -257,8 +257,9 @@ describe('Agent version claims', () => {
       expect((await authenticatedTestClient(reader).get(path)).status).toBe(
         200
       );
+      // GetAgent shows the agent the claims hang off, so a 404 would contradict it.
       const refused = await authenticatedTestClient(other).get(path);
-      expect(refused.status).toBe(404);
+      expect(refused.status).toBe(403);
       expect(refused.body.data).toBeUndefined();
     });
   });
