@@ -114,6 +114,17 @@ describe('Agent policy_ids', () => {
       expect(res.body.error.code).toBe('POLICY_NOT_FOUND');
     });
 
+    test('an empty entry is 400 VALIDATION_FAILED naming policy_ids', async () => {
+      const res = await createAgent({
+        token: adminToken,
+        body: { policy_ids: [''] },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta).toEqual({ field: 'policy_ids' });
+    });
+
     test('an inline boundary_policy is an unknown field', async () => {
       const res = await createAgent({
         token: adminToken,
@@ -183,6 +194,26 @@ describe('Agent policy_ids', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.policy_ids).toEqual([heldPolicyId]);
+    });
+
+    test('an empty entry is 400 VALIDATION_FAILED and leaves the agent', async () => {
+      const agentId = (
+        await createAgent({
+          token: adminToken,
+          body: { policy_ids: [heldPolicyId] },
+        })
+      ).body.id;
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ policy_ids: [heldPolicyId, ''] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      const read = await authenticatedTestClient(adminToken).get(
+        `/api/v1/agents/${agentId}`
+      );
+      expect(read.body.policy_ids).toEqual([heldPolicyId]);
     });
 
     test('null detaches every policy', async () => {
@@ -274,6 +305,13 @@ describe('Agent policy_ids', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('active');
+    });
+
+    test('fails an agent with an empty policy id', async () => {
+      const res = await deployAgent({ name: 'apol-fempty', policyId: '' });
+
+      expect(res.body.status).not.toBe('active');
+      expect(JSON.stringify(res.body)).toContain('VALIDATION_FAILED');
     });
 
     test('fails an agent with a policy granting what the deployer lacks', async () => {

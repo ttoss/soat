@@ -126,7 +126,7 @@ curl -X PATCH https://api.example.com/api/v1/projects/proj_… \
 - **Shared agents** are bounded by their owner project's cap, wherever they run.
 - **Read live.** Each turn, approval and continuation reads the cap as it stands, and durable work an agent starts under `run_as: agent` stores it as a cap read at every later check, so tightening it reaches work already pending.
 - **Refusals name the project**: `meta.denied_by` is `{ "type": "project", "id": "proj_…" }`, on a tool server's [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) callback too.
-- **Writes** need `projects:UpdateProject`, and follow the agent `policy_ids` rules: the caller must hold every grant the policies carry (`403 POLICY_GRANT_NOT_HELD`), an unknown id is `400 POLICY_NOT_FOUND`, a policy named here cannot be deleted (`409 POLICY_HAS_DEPENDENTS`), and one that no longer resolves allows nothing.
+- **Writes** need `projects:UpdateProject`, and follow the agent `policy_ids` rules: the caller must hold every grant the policies carry (`403 POLICY_GRANT_NOT_HELD`), an empty entry is `400 VALIDATION_FAILED`, an unknown id is `400 POLICY_NOT_FOUND`, a policy named here cannot be deleted (`409 POLICY_HAS_DEPENDENTS`), and one that no longer resolves allows nothing.
 
 ### Default Model Route
 
