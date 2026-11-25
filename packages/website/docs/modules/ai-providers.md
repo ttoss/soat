@@ -36,6 +36,7 @@ An AI provider is a named configuration that tells the system how to reach a spe
 | `model_aliases` | object           | Alias → model id sent to the vendor, or `{ ai_provider_id, model }` another provider of the project serves; `{}` when none (see [Model aliases](#model-aliases)) |
 | `model_aliases_only` | boolean     | Refuse a model that is not one of `model_aliases` |
 | `model_input_modalities` | object  | Model name (or alias) → the input modalities it accepts; `{}` when none (see [Input modalities](#input-modalities)) |
+| `model_input_limits` | object  | Model name (or alias) → the input limits it declares; `{}` when none (see [Input limits](#input-limits)) |
 | `require_priced_model` | boolean   | Refuse a model call on this provider whose model no price row covers. `false` by default. See [Priced models](./projects.md#priced-models) |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
@@ -185,7 +186,7 @@ These are the deployment's credentials, so the mode is available only where the 
 
 [`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that record's configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. A provider with `model_aliases_only: true` answers its [aliases](#model-aliases) instead, without asking the vendor. Reachable models are a property of the **credential**, not the slug.
 
-Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
+Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`, plus `input_limits` when the provider record [declares them](#input-limits) for that id. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
 
 The response is the [list envelope](../api/index.md#pagination). `?q=` keeps models whose `id` or `display_name` contains the text, ignoring case (`?q=sonnet`), and `limit` (default 50, max 100) / `cursor` page the matches. Both apply to the catalogue the provider returned in one call. A request without `limit` gets the first 50 models.
 
@@ -319,6 +320,31 @@ An alias may map to `{ ai_provider_id, model }`: another provider of the same pr
 - A model absent from the map is sent every part; the provider answers for what it cannot read.
 - An unknown modality is `400 VALIDATION_FAILED` on the write. `PATCH` replaces the whole map; `null` clears it.
 - A [model route](./model-routes.md#input-modalities) sends a call only to targets that read its input.
+- A [shared](#sharing-a-provider) provider shows its grantee the map.
+
+### Input limits
+
+`model_input_limits` declares what each model reads per request: a map from a model name, or an alias, to positive integers.
+
+| Limit | Holds |
+| --- | --- |
+| `max_bytes` | Bytes per file part, by modality: `image`, `file`, `audio`, `video` |
+| `max_pages` | Pages per PDF file part |
+| `max_parts` | File parts per request, across every message and tool result |
+
+```json
+{
+  "model_input_limits": {
+    "claude-sonnet": { "max_bytes": { "image": 5242880 }, "max_pages": 100 }
+  }
+}
+```
+
+- A request over a limit is refused with `400 INPUT_LIMIT_EXCEEDED` before the provider is called. `meta` names the `model`, the `limit`, the part's `modality`, the declared `max`, the request's `value`, and the `part` (`message_index`, `part_index`, `content_index` inside a tool result, `file_id` for a stored file).
+- A limit a model omits is not checked, nor is a part sent by URL, whose bytes the runtime never holds.
+- The model listing serves each model's declaration as `input_limits`, so a catalog reads the limits the gate enforces.
+- An unknown limit or modality, or a value that is not a positive integer, is `400 VALIDATION_FAILED` on the write. `PATCH` replaces the whole map; `null` clears it.
+- A [model route](./model-routes.md) target over its limit refuses the call; targets are not filtered by limits.
 - A [shared](#sharing-a-provider) provider shows its grantee the map.
 
 ### Requiring a priced model

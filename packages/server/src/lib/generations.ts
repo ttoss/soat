@@ -1,5 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { AttachedSource } from './attachedFileCitations';
+import { citationColumns } from './citations';
 import type { Transaction } from './dbTransaction';
 import {
   attributionColumns,
@@ -36,6 +38,7 @@ import {
 } from './generationSegment';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { readInputModalities } from './inputModalities';
+import type { GenerationClock } from './instructionTemplates';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
 import { emptyPage, paginatedList } from './pagination';
 import { type StartedWork, startedWorkColumns } from './principals';
@@ -98,6 +101,13 @@ const traceOfNewGeneration = async (helperArgs: {
   });
 };
 
+const clockColumns = (clock: GenerationClock | null) => {
+  return {
+    startedAt: clock?.now ?? new Date(),
+    timezone: clock?.timezone ?? null,
+  };
+};
+
 const commitGenerationWithTrace = async (helperArgs: {
   args: NewGenerationRecord & { inputModalities: string[] };
   agentDbId: number;
@@ -141,7 +151,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         // Created running is a claim: the creating process holds the lease.
         status: 'running',
         ...lease,
-        startedAt: new Date(),
+        ...clockColumns(args.clock),
         // Zero, not null: its steps are step objects, never the legacy object.
         stepCount: 0,
         // Not a content column: three integers describing the request, which a
@@ -151,7 +161,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         inputModalities: args.inputModalities,
         // Pointers, not text — see the column.
         retrieval: args.retrieval ?? null,
-        citations: args.citesSources ? [] : null,
+        ...citationColumns(args),
         // Counts, not content — see the columns.
         ...provenanceColumns(args.provenance ?? NO_PROVENANCE),
         idempotencyKey: args.idempotency?.key ?? null,
@@ -202,12 +212,17 @@ type NewGenerationRecord = GenerationAttribution &
     retrieval?: KnowledgeRetrieval;
     // Whether the turn cites: `citations` starts empty, else null.
     citesSources?: boolean;
+    // Ids only — see the column.
+    attachedSources?: AttachedSource[];
     // A unique violation on it is the caller's retry losing the race.
     idempotency?: GenerationIdempotency;
     // What the turn's context already holds when it starts: its chain's
     // counts, its input and its knowledge injection.
     provenance?: ProvenanceCounts;
     parentCall?: ParentToolCall | null;
+    // The clock the turn's instructions rendered from: its instant is the
+    // record's `startedAt`. Null for a turn refused before its context.
+    clock: GenerationClock | null;
   };
 
 const insertGenerationRecord = async (args: NewGenerationRecord) => {

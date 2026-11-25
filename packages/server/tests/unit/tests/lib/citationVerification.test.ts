@@ -8,6 +8,7 @@ const page12: CitationSource = {
   documentId: 'doc_A',
   documentVersion: 3,
   chunkId: 'dchunk_K9',
+  fileId: null,
   page: 12,
   text: 'Posologia.\nA dose  máxima de 40 mg/dia\nnão deve ser excedida.',
 };
@@ -134,5 +135,36 @@ describe('verifyCitations', () => {
       sources: { c1: { ...page12, text: '😀😀 alvo' } },
     });
     expect(citations[0].source_span).toEqual({ start: 3, end: 7 });
+  });
+
+  test('an attached file page cites by file and page, with no document', () => {
+    const { citations } = verify({
+      quote: 'hemograma completo',
+      sources: {
+        a1: {
+          origin: 'attached_file',
+          documentId: null,
+          documentVersion: null,
+          chunkId: null,
+          fileId: 'file_L4',
+          page: 2,
+          text: 'Conduta: solicito hemograma completo e creatinina.',
+        },
+      },
+      ref: 'a1',
+    });
+    expect(citations[0]).toEqual({
+      origin: 'attached_file',
+      document_id: null,
+      document_version: null,
+      chunk_id: null,
+      file_id: 'file_L4',
+      page: 2,
+      page_end: 2,
+      quoted_text: 'hemograma completo',
+      source_span: { start: 18, end: 36 },
+      answer_span: { start: 0, end: 10 },
+      verification: 'runtime',
+    });
   });
 });

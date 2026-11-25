@@ -2144,6 +2144,7 @@ describe('MCP tools - happy path', () => {
       await createGenerationRecord({
         authority: null,
         actsAsAgent: null,
+        clock: null,
         publicId: mcpGenerationId,
         projectId: internalProjectId,
         agentId: genAgentId,
@@ -2858,6 +2859,7 @@ describe('MCP tools - happy path', () => {
       await createGenerationRecord({
         authority: null,
         actsAsAgent: null,
+        clock: null,
         publicId: purgeGenerationId,
         projectId: tracesProjectDbId,
         agentId: tracesAgentId,
@@ -3366,6 +3368,7 @@ describe('MCP tools - happy path', () => {
       await createGenerationRecord({
         authority: null,
         actsAsAgent: null,
+        clock: null,
         publicId: generationPublicId,
         projectId: project!.id,
         agentId: evalAgentId,

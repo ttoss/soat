@@ -52,6 +52,7 @@ describe('recoverPendingFromDb', () => {
     await createGenerationRecord({
       authority: null,
       actsAsAgent: null,
+      clock: null,
       publicId: 'gen_scope_miss',
       projectId: projectDbId,
       agentId,

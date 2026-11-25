@@ -254,19 +254,14 @@ const loadGenerationContext = async (args: {
   };
 };
 
-const buildPersonaSystem = (agent: {
-  instructions?: string | null;
-  name?: string | null;
-}) => {
-  const lines = agent.instructions ? [agent.instructions] : [];
-  // Other turns arrive labelled `[<speaker>]: …` (`buildMessageEntry`), and a
-  // model left alone answers in the same shape.
-  lines.push(
-    `You are ${
-      agent.name ?? 'Assistant'
-    }. Reply as this participant only — do not speak for any other actor. Do not prefix your reply with a \`[name]:\` speaker label.`
-  );
-  return lines.join('\n\n');
+// The agent's own instructions are the system prompt every generation builds
+// (`agentGenerationContext.ts`); this adds only the participant framing.
+// Other turns arrive labelled `[<speaker>]: …` (`buildMessageEntry`), and a
+// model left alone answers in the same shape.
+const buildPersonaSystem = (agent: { name?: string | null }) => {
+  return `You are ${
+    agent.name ?? 'Assistant'
+  }. Reply as this participant only — do not speak for any other actor. Do not prefix your reply with a \`[name]:\` speaker label.`;
 };
 
 export type GenerateConversationMessageResult =

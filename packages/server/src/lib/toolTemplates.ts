@@ -31,7 +31,9 @@ const log = createDebug('soat:toolTemplates');
 
 // The inner alternation lets a `${...}` placeholder's own closing brace pass
 // through: a plain `[^}]*` body stops at it, leaving a one-brace-short capture.
-const DOUBLE_CURLY_RE = /\{\{((?:[^{}]|\$\{[^}]*\})*)\}\}/g;
+// Shared with `instructionTemplates.ts`: one grammar for every `{{kind:arg}}`
+// token, whichever field it may appear in.
+export const TEMPLATE_TOKEN_RE = /\{\{((?:[^{}]|\$\{[^}]*\})*)\}\}/g;
 
 // An unresolved `secret:${...}` placeholder is as valid as a resolved
 // `secret:sec_...`: a formation template is statically validated before `${...}`
@@ -72,7 +74,7 @@ export const collectTemplateTokens = (
   value: unknown
 ): Array<{ token: string; kind: TokenKind }> => {
   if (typeof value === 'string') {
-    return [...value.matchAll(DOUBLE_CURLY_RE)].map((match) => {
+    return [...value.matchAll(TEMPLATE_TOKEN_RE)].map((match) => {
       return { token: match[0], kind: classifyToken(match[0]) };
     });
   }

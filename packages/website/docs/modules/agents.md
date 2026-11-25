@@ -59,6 +59,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `single_session_per_actor` | boolean          | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)                                                       |
 | `trace_content_mode`       | string \| null   | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written             |
 | `on_approval_expiry`       | string \| null   | What happens when a held tool call expires un-approved — `null`/`terminate` (default) ends the chain, `react` reports it to the agent. See [Approval Expiry](#approval-expiry) |
+| `timezone`                 | string           | IANA timezone the [instruction tokens](#instruction-tokens) render in (default: `UTC`)                                                                                         |
 | `version`                  | number           | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                                                                  |
 | `active_release`           | object/null      | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                                                              |
 | `created_at`               | string           | ISO 8601 creation timestamp                                                                                                                                                    |
@@ -107,7 +108,8 @@ One agent execution; its steps are on its [trace](./traces.md).
 | `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                                                                                       |
 | `initiator_generation_id`   | string/null | Generation that started this one — see [Generations](./generations.md#initiated-generations)                                          |
 | `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status)                                                                 |
-| `started_at`                | string      | ISO 8601 timestamp when execution began                                                                                               |
+| `started_at`                | string      | ISO 8601 timestamp when execution began; the instant `{{generation:now}}` rendered                                                    |
+| `timezone`                  | string/null | Timezone the turn's [instruction tokens](#instruction-tokens) rendered in                                                             |
 | `completed_at`              | string/null | ISO 8601 timestamp when execution finished                                                                                            |
 | `last_activity_at`          | string/null | ISO 8601 timestamp of last step activity                                                                                              |
 | `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)                                                                            |
@@ -203,6 +205,66 @@ The note is derived per segment, so a generation that parks for a [client tool](
 `instructions` is the only system prompt. A `role: "system"` entry in `messages` is refused with `400 VALIDATION_FAILED`, the request schema allowing `user` and `assistant` only.
 
 Caller-supplied system content could replace the operator's prompt (the AI SDK's `allowSystemInMessages` stays `false`; [retrieved knowledge](#knowledge-config) is never injected as `system` either). Instructions reach the provider as its `instructions` argument, never a message; `update-agent --instructions` archives a new [version](#agent-version). [Chats](./chats.md#system-instructions) take per-call system content through `instructions`, never `messages`.
+
+#### Instruction tokens
+
+`instructions` may hold `{{generation:...}}` tokens, resolved on every generation path ([`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), conversations, sessions, orchestrations, triggers):
+
+| Token                         | Renders                                                     | Example                     |
+| ----------------------------- | ----------------------------------------------------------- | --------------------------- |
+| `{{generation:now}}`          | The generation's start, ISO 8601 with the timezone's offset | `2026-11-25T09:54:17-03:00` |
+| `{{generation:now:<format>}}` | The same instant through a pattern of the fields below      | `Wednesday 25 November`     |
+| `{{generation:timezone}}`     | The timezone's IANA name                                    | `America/Sao_Paulo`         |
+
+| Field                       | Renders                          | Field       | Renders                   |
+| --------------------------- | -------------------------------- | ----------- | ------------------------- |
+| `yyyy` / `yy`               | `2026` / `26`                    | `HH` / `H`  | hour `00`–`23` / `0`–`23` |
+| `MMMM` / `MMM` / `MM` / `M` | `November` / `Nov` / `11` / `11` | `hh` / `h`  | hour `01`–`12` / `1`–`12` |
+| `dd` / `d`                  | `05` / `5`                       | `a`         | `AM` / `PM`               |
+| `EEEE` / `EEE`              | `Wednesday` / `Wed`              | `mm` / `ss` | minute / second           |
+| `Z`                         | offset, `-03:00`                 | `'text'`    | literal text              |
+
+- **One instant per generation.** `now` is the generation's `started_at`, the same for every step and every resume of the turn.
+- **Timezone.** The agent's `timezone` (IANA name, default `UTC`); a `timezone` on the generate request overrides it for that turn. The generation records the one it rendered in as `timezone`. An unknown name is `400 VALIDATION_FAILED`.
+- **Refused at write.** An unknown `generation:` token, an argument it does not take, or a format with a letter outside the table is `400 VALIDATION_FAILED` on create, update and formation validate/deploy, naming the token and the valid ones. Other `{{...}}` text is sent as written.
+- **Reads are unresolved.** `GET` returns the instructions as written; only the system prompt sent to the model is resolved. Instructions without a token are sent byte-identical.
+- **Keep the prompt cache.** A rendered value changes the instructions, so use the coarsest format the agent needs (`{{generation:now:EEEE yyyy-MM-dd}}` changes once a day, `{{generation:now}}` every turn) and put the token at the end of `instructions`, so the text before it stays a stable prefix. See [Prompt Caching](#prompt-caching).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat patch-agent --agent-id agent_xyz --timezone America/Sao_Paulo \
+  --instructions 'You book appointments. Today is {{generation:now:EEEE yyyy-MM-dd}} ({{generation:timezone}}).'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.patchAgent({
+  path: { agent_id: 'agent_xyz' },
+  body: {
+    timezone: 'America/Sao_Paulo',
+    instructions:
+      'You book appointments. Today is {{generation:now:EEEE yyyy-MM-dd}} ({{generation:timezone}}).',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "timezone": "America/Sao_Paulo", "instructions": "You book appointments. Today is {{generation:now:EEEE yyyy-MM-dd}} ({{generation:timezone}})." }'
+```
+
+</TabItem>
+</Tabs>
 
 ### AI Provider Resolution
 
@@ -402,6 +464,7 @@ A `file` part sends a stored [file](./files.md) to the model in its own media ty
 - A `file` part is accepted only in a `user` message; elsewhere it is `400 VALIDATION_FAILED`.
 - The generation stores the reference, not the bytes: the file is read from storage each time the turn calls the model, so deleting the file fails a turn that still names it.
 - A model whose AI provider [declares its input modalities](./ai-providers.md#input-modalities) and lacks the part's (`image`, `audio`, `video`, or `file` for any other type) refuses it with `400 INPUT_MODALITY_UNSUPPORTED` before the provider is called; `meta.model` and `meta.modalities` name what was refused. A model that declares nothing is sent the part, and a provider that cannot read it answers with its own error.
+- A part over a limit its model [declares](./ai-providers.md#input-limits) (bytes, PDF pages, file parts per request) is refused with `400 INPUT_LIMIT_EXCEEDED` before the provider is called; `meta` names the limit, the value and the part.
 - To have the model read a file as text, [ingest](./documents.md) it and send a `document` part.
 
 #### Tool results that return files
@@ -523,6 +586,8 @@ Consequences worth knowing before turning it on:
 - **What you get back.** Cache reads are metered as `cached_tokens` and cache writes as `cache_write_tokens` — separate components, because they are separately priced. See [Usage — Token Components](./usage.md#token-components).
 - **Price the write.** Every step writes what it appended, so writes are routine. A `cache_write_tokens` component with no price row of its own bills at the `input_tokens` rate, which understates a provider that charges a premium for writes; add the row before enabling caching on a priced deployment. See [Usage — Pricing](./usage.md#pricing).
 - **`active_tool_ids` on a step rule breaks the prefix.** The tool block is inside the cached prefix, so a [step rule](#step-rules) that changes the active set makes that step write a new cache entry, and the step after it — back to the full set — write another: the prefix is bought twice to save it once. Narrowing by `active_tool_ids` is a capability restriction and is honored anyway; a rule that only forces a tool by name does not narrow on a caching agent, because `tool_choice` already obliges the call.
+
+- **An [instruction token](#instruction-tokens) that renders a new value writes a new system entry.** Every step of a turn renders the same instant, so steps still read it; across turns, a coarse format and a token at the end of `instructions` keep the entry stable.
 
 Nothing else about the turn changes: the same messages, tools and instructions are sent, and the model sees an identical prompt.
 
@@ -657,13 +722,21 @@ curl -X PATCH https://api.example.com/api/v1/agents/agent_xyz \
 </TabItem>
 </Tabs>
 
-Each injected document chunk's tag carries a label (`[Document: /protocols/x.pdf (page 12) c1]`), and the knowledge message asks the model to wrap each statement it supports in `<cite ref="c1" quote="exact text">statement</cite>`. Memory results carry no label and are not citable.
+The turn labels two kinds of source, and its system instructions ask the model to wrap each statement it supports in `<cite ref="c1" quote="exact text">statement</cite>`:
+
+| Source                                                                               | Label                                       | Sent to the model as                                                      |
+| ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------- |
+| A [knowledge](#knowledge-config) document chunk                                      | `[Document: /protocols/x.pdf (page 12) c1]` | the chunk, inside `<knowledge>`                                           |
+| A page of a PDF or text file a message attaches (`{ "type": "file", "file_id": … }`) | `[File: laudo.pdf (page 2) a1]`             | the page's extracted text, inside `<attached-file>`, in place of the file |
+
+- A PDF page with no extractable text (a scan) gets no label: the file stays in the message, so the model still reads it, and nothing on that page is citable.
+- Memory results and other attached file types carry no label and are not citable.
 
 After the model answers, the server:
 
 1. removes the markup from `output.content`;
-2. resolves each `ref` to a chunk this turn injected (recorded in [`retrieval`](./generations.md#what-retrieval-served));
-3. looks for `quote` in that chunk's text, matching exactly after Unicode NFC and with each whitespace run read as one space;
+2. resolves each `ref` to a chunk this turn injected (recorded in [`retrieval`](./generations.md#what-retrieval-served)) or to a page of a file it attached;
+3. looks for `quote` in that chunk's or page's text, matching exactly after Unicode NFC and with each whitespace run read as one space;
 4. returns what passed in `output.citations` and what failed in `output.rejected_citations`.
 
 ```json
@@ -687,18 +760,36 @@ After the model answers, the server:
 ]
 ```
 
-| Field              | Meaning                                                                                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `quoted_text`      | The chunk's own text at `source_span`, never the model's quote                                                                                 |
-| `source_span`      | Code points into the chunk's text (its NFC form)                                                                                               |
-| `answer_span`      | Code points into `output.content`: the statement the citation wraps                                                                            |
-| `page`, `page_end` | The chunk's page; `null` for a source with no pages. A `chunk_strategy: "page"` chunk is one page, so `source_span` is a position on that page |
+A citation of an attached file has `origin: "attached_file"`, the file in `file_id`, and `null` document fields:
+
+```json
+{
+  "origin": "attached_file",
+  "document_id": null,
+  "document_version": null,
+  "chunk_id": null,
+  "file_id": "file_V1StGXR8Z5jdHi6B",
+  "page": 2,
+  "page_end": 2,
+  "quoted_text": "solicito hemograma completo",
+  "source_span": { "start": 9, "end": 36 },
+  "answer_span": { "start": 0, "end": 15 },
+  "verification": "runtime"
+}
+```
+
+| Field              | Meaning                                                                                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quoted_text`      | The chunk's or page's own text at `source_span`, never the model's quote                                                                                          |
+| `source_span`      | Code points into the chunk's text, or the page's extracted text (its NFC form)                                                                                    |
+| `answer_span`      | Code points into `output.content`: the statement the citation wraps                                                                                               |
+| `page`, `page_end` | The chunk's or attached file's page; `null` for a source with no pages. A `chunk_strategy: "page"` chunk is one page, so `source_span` is a position on that page |
 
 | `reason`             | When                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------ |
-| `UNKNOWN_REF`        | `ref` names no chunk this turn injected                                              |
-| `SOURCE_UNAVAILABLE` | The chunk no longer exists                                                           |
-| `QUOTE_NOT_FOUND`    | The quote is not in the chunk                                                        |
+| `UNKNOWN_REF`        | `ref` names no chunk or page this turn labelled                                      |
+| `SOURCE_UNAVAILABLE` | The chunk no longer exists, or the attached file no longer reads                     |
+| `QUOTE_NOT_FOUND`    | The quote is not in the chunk or page                                                |
 | `MALFORMED_CITE`     | A tag lacks `ref` or a non-blank `quote`, is unclosed, or a `</cite>` closes nothing |
 
 - Both arrays are present only when the turn cites. Whether the model cites, and whether a quote supports its statement, are the model's: a verified citation proves the quote is in the source, not that it backs the claim.
@@ -961,7 +1052,7 @@ curl -X PUT https://api.example.com/api/v1/agents/agent_V1StGXR8Z5jdHi6B \
 
 #### What a version captures
 
-`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `citation_config`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
+`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `policy_ids`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `citation_config`, `max_context_messages`, `max_output_tokens`, `reasoning`, `single_session_per_actor`, `trace_content_mode`, `timezone`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
 
 Runtime-injected context is not snapshotted: a version records the `knowledge_config`, not the documents or memories it resolves at generation time.
 

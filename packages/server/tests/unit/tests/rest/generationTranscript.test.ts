@@ -461,6 +461,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     await createGenerationRecord({
       authority: null,
       actsAsAgent: null,
+      clock: null,
       publicId: inProgressId,
       projectId: project?.id as number,
       agentId,

@@ -1274,6 +1274,7 @@ describe('Agents', () => {
       await createGenerationRecord({
         authority: null,
         actsAsAgent: null,
+        clock: null,
         publicId: generationId,
         projectId: project!.id as number,
         agentId: forceAgentId,

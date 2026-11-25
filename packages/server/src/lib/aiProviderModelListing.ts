@@ -8,6 +8,7 @@ import {
   type ProviderModel,
 } from './aiProviderModels';
 import { resolveAiProviderSecret } from './aiProviders';
+import { type ModelInputLimits, readModelInputLimits } from './inputLimits';
 import { type Page, pageOf } from './pagination';
 
 const log = createDebug('soat:provider-model-listing');
@@ -26,19 +27,34 @@ const filterModels = (args: {
   });
 };
 
+// The record, not the vendor, declares what a model reads per request, so a
+// model is served with the limits the gate holds it to.
+const withDeclaredLimits = (args: {
+  models: ProviderModel[];
+  limits: ModelInputLimits;
+}): ProviderModel[] => {
+  return args.models.map((model) => {
+    const limits = args.limits[model.id];
+    return limits ? { ...model, input_limits: limits } : model;
+  });
+};
+
 /**
  * The models a provider record runs: a closed catalog's aliases, else what the
  * vendor answers through the record's own credentials and configuration.
  */
-const providerCatalogue = async (args: {
-  aiProviderId: string;
-}): Promise<ProviderModel[]> => {
+const vendorCatalogue = async (args: { aiProviderId: string }) => {
   // The provider is this route's subject rather than something another
   // project's record points at, and the caller was authorized against the
   // provider's own project — so that project is the scope.
   const owner = await db.AiProvider.findOne({
     where: { publicId: args.aiProviderId },
-    attributes: ['projectId', 'modelAliases', 'modelAliasesOnly'],
+    attributes: [
+      'projectId',
+      'modelAliases',
+      'modelAliasesOnly',
+      'modelInputLimits',
+    ],
   });
   if (!owner) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
@@ -49,9 +65,12 @@ const providerCatalogue = async (args: {
   const aliases = offeredAliases(owner);
   if (aliases) {
     log('providerCatalogue: %s answers its aliases', args.aiProviderId);
-    return aliases.map((id) => {
-      return { id };
-    });
+    return {
+      owner,
+      models: aliases.map((id) => {
+        return { id };
+      }),
+    };
   }
 
   const resolved = await resolveAiProviderSecret({
@@ -65,12 +84,23 @@ const providerCatalogue = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
 
-  return enumerateProviderModels({
+  const models = await enumerateProviderModels({
     project: resolved.projectPublicId,
     provider: resolved.provider,
     baseUrl: resolved.baseUrl,
     config: resolved.config,
     secretValue: resolved.secretValue,
+  });
+  return { owner, models };
+};
+
+const providerCatalogue = async (args: {
+  aiProviderId: string;
+}): Promise<ProviderModel[]> => {
+  const { owner, models } = await vendorCatalogue(args);
+  return withDeclaredLimits({
+    models,
+    limits: readModelInputLimits(owner.modelInputLimits),
   });
 };
 

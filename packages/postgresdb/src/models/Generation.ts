@@ -307,6 +307,11 @@ export class Generation extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare agentVersion: number | null;
 
+  // The timezone the turn's instruction tokens rendered in; `startedAt` is
+  // the instant they rendered. Null on a turn refused before its context.
+  @Column({ type: DataType.STRING(64), allowNull: true })
+  declare timezone: string | null;
+
   // The model route's own record of which target served the generation and
   // every attempt it burned getting there. Written by modelRouteMetadata.ts.
   @Column({ type: DataType.JSON, allowNull: true })
@@ -343,6 +348,11 @@ export class Generation extends Model {
   // did not ask for citations; empty from creation until a citing turn settles.
   @Column({ type: DataType.JSON, allowNull: true })
   declare citations: Array<Record<string, unknown>> | null;
+
+  // Which file and page each attached-file label of a citing turn names
+  // (`attachedFileCitations.ts`): ids, never text. Null when none was labelled.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare attachedSources: Array<Record<string, unknown>> | null;
 
   // How many results from untrusted tools, and from knowledge, had entered the
   // turn's context, its continuation chain included. Counts, not content, so a
