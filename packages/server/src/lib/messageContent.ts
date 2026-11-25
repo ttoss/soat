@@ -9,6 +9,7 @@ import {
 } from './generationProvenance';
 import { buildSrn } from './iam';
 import { buildResourceTagContext } from './tags';
+import { type ToolOutputPart, toolOutputParts } from './toolResultFiles';
 import { callTool, tools } from './tools';
 import { assertAllowedUnder, callerNamedAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
@@ -191,7 +192,11 @@ const resolveToolOutputContent = async (args: {
   allowedToolIds?: string[];
   agentAuthority?: AgentAuthority;
   toolContext?: Record<string, string>;
-}): Promise<{ content: string; provenance: ProvenanceMetric | null }> => {
+}): Promise<{
+  content: string;
+  parts: ToolOutputPart[] | null;
+  provenance: ProvenanceMetric | null;
+}> => {
   assertToolAllowedForAgent({
     allowedToolIds: args.allowedToolIds,
     agentId: args.agentAuthority?.agentId ?? null,
@@ -238,6 +243,7 @@ const resolveToolOutputContent = async (args: {
 
   return {
     content: stringifyToolOutput(resolvedContent),
+    parts: toolOutputParts(resolvedContent),
     provenance: resultProvenance({
       toolType: toolRow.type,
       action: args.content.action,
@@ -259,6 +265,8 @@ export const resolveMessageContent = async (args: {
 }): Promise<{
   content: string;
   documentId?: string;
+  /** A `tool_output` block's result as parts, when its tool returns files. */
+  parts?: ToolOutputPart[] | null;
   /** The counter the content feeds as it enters a generation's context. */
   provenance?: ProvenanceMetric | null;
 }> => {

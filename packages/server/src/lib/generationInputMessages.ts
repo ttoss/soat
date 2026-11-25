@@ -9,6 +9,7 @@ import {
   resolveMessageContent,
 } from './messageContent';
 import {
+  type FileMessageContentPart,
   isFileMessageContentPart,
   resolveFileContentPart,
 } from './messageFileParts';
@@ -63,9 +64,26 @@ type ResolveArgs = {
   provenance: GenerationProvenance;
 };
 
+/** A file part, which a model reads only in a `user` message. */
+const resolveFilePart = (
+  args: ResolveArgs & { part: FileMessageContentPart; role: string }
+) => {
+  if (args.role !== 'user') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'A `file` part is accepted only in a `user` message.'
+    );
+  }
+  return resolveFileContentPart(args);
+};
+
+/**
+ * A `document` or `tool_output` block as text, or as parts when its tool
+ * returns files, each read like a `file` part the caller names.
+ */
 const resolveContent = async (
-  args: ResolveArgs & { content: ResolvableMessageContent }
-): Promise<string> => {
+  args: ResolveArgs & { content: ResolvableMessageContent; role: string }
+): Promise<string | unknown[]> => {
   const resolved = await resolveMessageContent({
     content: args.content,
     turnProjectId: args.turnProjectId,
@@ -77,34 +95,33 @@ const resolveContent = async (
     toolContext: args.toolContext,
   });
   args.provenance.record(countOf(resolved.provenance ?? null));
-  return resolved.content;
+  if (!resolved.parts) return resolved.content;
+  return Promise.all(
+    resolved.parts.map((part) => {
+      return part.type === 'file' ? resolveFilePart({ ...args, part }) : part;
+    })
+  );
 };
 
 /**
- * A part the caller names (`file`, `document`, `tool_output`) becomes what the
- * model reads; any other part is already in AI SDK form (a tool call, a tool
- * result, a text part) and passes through.
+ * A part the caller names (`file`, `document`, `tool_output`) becomes the
+ * parts the model reads; any other part is already in AI SDK form (a tool
+ * call, a tool result, a text part) and passes through.
  */
 const resolvePart = async (
   args: ResolveArgs & { part: unknown; role: string }
-): Promise<unknown> => {
+): Promise<unknown[]> => {
   const { part } = args;
   if (isFileMessageContentPart(part)) {
-    if (args.role !== 'user') {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'A `file` part is accepted only in a `user` message.'
-      );
-    }
-    return resolveFileContentPart({ ...args, part });
+    return [await resolveFilePart({ ...args, part })];
   }
   if (isDocumentMessageContent(part) || isToolOutputMessageContent(part)) {
-    return {
-      type: 'text',
-      text: await resolveContent({ ...args, content: part }),
-    };
+    const content = await resolveContent({ ...args, content: part });
+    return typeof content === 'string'
+      ? [{ type: 'text', text: content }]
+      : content;
   }
-  return part;
+  return [part];
 };
 
 export const resolveGenerationInputMessages = async (
@@ -116,11 +133,13 @@ export const resolveGenerationInputMessages = async (
         const parts: unknown[] = message.content;
         return {
           role: message.role,
-          content: await Promise.all(
-            parts.map((part) => {
-              return resolvePart({ ...args, part, role: message.role });
-            })
-          ),
+          content: (
+            await Promise.all(
+              parts.map((part) => {
+                return resolvePart({ ...args, part, role: message.role });
+              })
+            )
+          ).flat(),
         };
       }
       return {
@@ -128,6 +147,7 @@ export const resolveGenerationInputMessages = async (
         content: await resolveContent({
           ...args,
           content: message.content as ResolvableMessageContent,
+          role: message.role,
         }),
       };
     })
