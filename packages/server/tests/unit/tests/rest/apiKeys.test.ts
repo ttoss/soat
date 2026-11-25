@@ -101,6 +101,15 @@ describe('API Keys', () => {
       expect(response.status).toBe(400);
     });
 
+    test('an empty policy id is 400 VALIDATION_FAILED', async () => {
+      const response = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Test', project_id: projectId, policy_ids: [''] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('user can create an API key with project and policy', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')

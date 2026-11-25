@@ -72,7 +72,7 @@ Format and evaluation: [IAM — Policy Documents](./iam.md#policy-documents). Ex
 - An `Allow` on `*`, `srn:*:…`, a project glob, or another project's SRN is refused (`400 VALIDATION_FAILED`, `meta.details`). Each refusal names the form an `Allow` resource takes: `srn:<project_id>:<type>:<id>`, or no `resource` for every resource of the project. A `Deny` may name anything.
 - Listing returns only the projects' policies the caller may list; the unrestricted admin also sees global ones.
 - A project policy read outside the caller's reach is `404`, and so is a `GET`, `PUT` or `DELETE` of an id that names no policy; a global policy is `403` to anyone but the unrestricted admin.
-- `policy_ids` naming another project's policy is `400 POLICY_OUTSIDE_PROJECT` (`meta.policy_id`). Attaching or editing an attached policy still needs a writer who holds its grants (`403 POLICY_GRANT_NOT_HELD`).
+- Every resource carrying `policy_ids` (or a project's `agent_policy_ids`) checks it the same way on create, update and formation apply: a value that is not a list of non-empty ids is `400 VALIDATION_FAILED` (`meta.field` names the field), an id that names no policy is `400 POLICY_NOT_FOUND`, and one naming another project's policy is `400 POLICY_OUTSIDE_PROJECT` (`meta.policy_id`). Attaching or editing an attached policy still needs a writer who holds its grants (`403 POLICY_GRANT_NOT_HELD`).
 
 ### Attaching Policies to Users
 

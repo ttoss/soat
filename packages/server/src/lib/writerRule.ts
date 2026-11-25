@@ -5,7 +5,12 @@ import { DomainError } from '../errors';
 import type { IsAllowedFn } from '../middleware/authProjectResolvers';
 import { actionNotHeld } from './authorizationDenial';
 import { buildSrn } from './iam';
-import { EVERY_PROJECT, type PolicyCarrierName } from './policyCarriers';
+import {
+  EVERY_PROJECT,
+  POLICY_CARRIERS,
+  type PolicyCarrier,
+  type PolicyCarrierName,
+} from './policyCarriers';
 import {
   assertWriterMayAttach,
   type GetWriterPolicies,
@@ -138,7 +143,7 @@ const resolvePolicies = async (args: {
       return row.publicId === id;
     });
   });
-  if (missing) {
+  if (missing !== undefined) {
     throw new DomainError('POLICY_NOT_FOUND', `Policy '${missing}' not found.`);
   }
   const foreign = rows.find((row) => {
@@ -158,17 +163,31 @@ const resolvePolicies = async (args: {
   return rows;
 };
 
+/**
+ * The carrier's list as written: absent or `null` is none; anything else is
+ * a list of non-empty ids, refused naming the carrier's field.
+ */
 const readPolicyIds = (args: {
   carrier: WriterRuleCarrier;
-  policyIds: string[] | null | undefined;
+  policyIds: unknown;
 }): string[] => {
   const ids = args.policyIds ?? [];
+  const carrier: PolicyCarrier | undefined =
+    args.carrier.policies && POLICY_CARRIERS[args.carrier.policies];
+  const field = carrier?.dependents?.name ?? 'policy_ids';
   const valid =
     Array.isArray(ids) &&
     ids.every((id) => {
-      return typeof id === 'string';
+      return typeof id === 'string' && id.length > 0;
     });
-  if (args.carrier.policiesRequired && (!valid || ids.length === 0)) {
+  if (!valid) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `${field} must be a list of policy ids, each naming a policy.`,
+      { field }
+    );
+  }
+  if (args.carrier.policiesRequired && ids.length === 0) {
     throw new DomainError('VALIDATION_FAILED', args.carrier.policiesRequired);
   }
   return ids;
