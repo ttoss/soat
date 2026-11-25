@@ -395,13 +395,14 @@ paths:
           $ref: './errors.yaml#/components/responses/InternalError'
     patch:
       description: >-
-        Updates a task's payload, title, or assignee. `state` is never directly
+        Updates a task's payload, title, assignee or metadata. `state` is never directly
         writable — move it with a transition; sending a `state` field is rejected
         as an unknown field (`VALIDATION_FAILED`). `payload` is shallow-merged over
         the existing payload (PATCH semantics): keys the request omits are
         preserved. The payload is caller-owned; the automation result lives in the
         read-only `last_result` field, which no patch can reach. The merged
         payload is validated against the workflow's `payload_schema`.
+        `metadata`, unlike `payload`, replaces the stored bag whole.
       tags:
         - Tasks
       summary: Update a task
@@ -1570,8 +1571,8 @@ components:
             workflow's declared `payload_writes`.
         metadata:
           description: >-
-            The caller-owned key/value metadata supplied when the task was
-            created, returned verbatim. Absent when the task was created without
+            The caller-owned key/value metadata, as created or last replaced
+            by an update, returned verbatim. Absent when the task was created without
             any. Unlike `payload` it is invisible to guards and to
             `payload_writes`, so it is the place for an attribution label rather
             than task data.
@@ -1795,7 +1796,7 @@ components:
           type: boolean
           description: Whether an open dependency holds it (`readiness.blocked`).
         metadata:
-          description: The caller-owned metadata the task was created with.
+          description: The caller-owned metadata the task carries.
           allOf:
             - $ref: './metadata.yaml#/components/schemas/MetadataBag'
     TaskReadiness:
@@ -1987,7 +1988,7 @@ components:
             ticket that raised it, the import batch that created it.
             Round-trips verbatim on every read of the task, the list included,
             and survives every transition (a transition supplies no metadata of
-            its own).
+            its own). `PATCH /tasks/{task_id}` replaces it.
 
 
             The bag is caller-owned and no key is reserved: everything the
@@ -2022,6 +2023,15 @@ components:
         assignee:
           type: string
           nullable: true
+        metadata:
+          description: >-
+            Caller-owned key/value metadata, replacing the stored bag; `null`
+            clears it, and omitting it keeps it. Writable at any state,
+            terminal included, because the bag is invisible to guards and to
+            `payload_writes`. A non-object is `400 VALIDATION_FAILED` and the
+            stored bag is kept.
+          allOf:
+            - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
     SetTaskPriorityRequest:
       type: object
       required:

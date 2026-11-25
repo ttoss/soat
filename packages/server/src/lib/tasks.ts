@@ -482,6 +482,8 @@ export const updateTask = async (args: {
   title?: string;
   payload?: Record<string, unknown>;
   assignee?: string | null;
+  /** Replaces the stored bag; `null` clears it. */
+  metadata?: Record<string, unknown> | null;
 }) => {
   log('updateTask: id=%s', args.id);
 
@@ -503,6 +505,7 @@ export const updateTask = async (args: {
   }
   if (args.title !== undefined) task.title = args.title;
   if (args.assignee !== undefined) task.assignee = args.assignee;
+  if (args.metadata !== undefined) task.metadata = args.metadata;
 
   await task.save();
 
