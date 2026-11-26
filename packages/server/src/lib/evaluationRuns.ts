@@ -12,6 +12,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { datasetItemOrder } from './evaluationDatasets';
 import { pinDeciderVersions } from './evaluationDeciderScorer';
 import { assertRunProbesHold } from './evaluationProbeRuns';
 import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
@@ -247,11 +248,7 @@ const planRun = async (args: {
 
   const items = await db.DatasetItem.findAll({
     where: { datasetId: dataset.id as number },
-    // `id` breaks a `created_at` tie, so items run in insertion order.
-    order: [
-      ['createdAt', 'ASC'],
-      ['id', 'ASC'],
-    ],
+    order: datasetItemOrder,
   });
   assertRunnableItemCount({
     count: items.length,
