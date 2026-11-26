@@ -253,7 +253,12 @@ type WriteMemoryAsAgentArgs = {
  * `markExecuted` is the native-tool meter's: a refused write is not counted.
  */
 const writeMemoryAsAgent = async (
-  args: WriteMemoryAsAgentArgs & { content: string; markExecuted: () => void }
+  args: WriteMemoryAsAgentArgs & {
+    content: string;
+    markExecuted: () => void;
+    /** Checked before the write starts; a started write runs to its end. */
+    abortSignal?: AbortSignal;
+  }
 ): Promise<Record<string, unknown>> => {
   // The store is resolved before the check because the check needs its SRN
   // and tags. It leaks nothing: the id comes from the agent's own
@@ -296,6 +301,7 @@ const writeMemoryAsAgent = async (
     projectId: args.projectId,
     projectLabel: "the agent's project",
   });
+  args.abortSignal?.throwIfAborted();
   args.markExecuted();
   const result = await writeMemory({
     memoryStoreId: memoryStore.id,
@@ -330,7 +336,10 @@ const buildWriteMemoryTool = (
     description:
       'Write a fact to memory. The system automatically deduplicates: creates a new memory, supersedes an existing one the fact has changed, or skips a duplicate.',
     inputSchema: jsonSchema<{ content: string }>(WRITE_MEMORY_PARAMETERS),
-    execute: async ({ content }: { content: string }) => {
+    execute: async (
+      { content }: { content: string },
+      options?: { abortSignal?: AbortSignal }
+    ) => {
       return meterNativeToolExecution({
         meter: {
           projectId: args.projectId,
@@ -338,7 +347,12 @@ const buildWriteMemoryTool = (
           attribution,
         },
         run: (markExecuted) => {
-          return writeMemoryAsAgent({ ...writeArgs, content, markExecuted });
+          return writeMemoryAsAgent({
+            ...writeArgs,
+            content,
+            markExecuted,
+            abortSignal: options?.abortSignal,
+          });
         },
       });
     },

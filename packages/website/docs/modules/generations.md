@@ -122,7 +122,7 @@ A generation starts as `running`. It transitions to:
 
 A generation settles once. The process running it holds a lease that it renews while it works; a write of `completed`, `failed` or `requires_action` lands only while that lease is still its own, and a writer that lost it changes nothing.
 
-- **Deadline.** A running segment (from the start, or from a resume with tool outputs) that runs past `GENERATION_DEADLINE_MS` is cancelled: the model call and every tool call it waits on stop, whatever the tool's type. It fails with `GENERATION_DEADLINE_EXCEEDED`.
+- **Deadline.** A running segment (from the start, or from a resume with tool outputs) that runs past `GENERATION_DEADLINE_MS` is cancelled: the model call and every tool call it waits on stop, whatever the tool's type. An `http` or `mcp` request is aborted, a pipeline starts no further step, and a `builtin` action or `write_memory` write not yet started never starts; one already started runs to its end. It fails with `GENERATION_DEADLINE_EXCEEDED`.
 - **Model call timeout.** One model call longer than `GENERATION_MODEL_CALL_TIMEOUT_MS` is aborted and fails the generation.
 - **A process that stopped.** When the process running a generation stops renewing its lease, a sweep fails it with `GENERATION_INTERRUPTED` once the lease lapses. Like any other settle, this frees the session and tells a parent waiting on a [nested generation](./agents.md#a-nested-generation-that-outlives-the-call).
 - **Refused turns.** A turn refused by the call depth or chain limit is recorded as a generation that completes at once, with `stop_reason` `depth_guard` or `chain_limit`.

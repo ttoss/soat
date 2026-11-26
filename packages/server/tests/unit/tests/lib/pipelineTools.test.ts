@@ -263,6 +263,28 @@ describe('runPipeline', () => {
     expect(result).toEqual({ done: true });
   });
 
+  test('starts no step once its abort signal aborts', async () => {
+    const controller = new AbortController();
+    const called: Array<string | undefined> = [];
+    const run = runPipeline({
+      pipeline: {
+        steps: [
+          { id: 'a', toolId: 'tool_a', input: {} },
+          { id: 'b', toolId: 'tool_b', input: {} },
+        ],
+      },
+      abortSignal: controller.signal,
+      callStep: async (call) => {
+        called.push(call.toolId);
+        controller.abort(new Error('deadline'));
+        return {};
+      },
+    });
+
+    await expect(run).rejects.toThrow('deadline');
+    expect(called).toEqual(['tool_a']);
+  });
+
   test('resolves vars nested inside a plain object in step input', async () => {
     const calls: Array<{
       toolId: string | undefined;

@@ -1052,7 +1052,10 @@ const resolvePipelineTool = (
     inputSchema: jsonSchema(
       modelVisibleSchema(parameters, typedTool.presetParameters)
     ),
-    execute: async (toolArgs: unknown) => {
+    execute: async (
+      toolArgs: unknown,
+      options?: { abortSignal?: AbortSignal }
+    ) => {
       // The presets themselves are merged one layer down, by `callTool` — the
       // same path `POST /tools/{id}/call` takes — so they are applied exactly
       // once, whichever way the pipeline is reached.
@@ -1072,6 +1075,7 @@ const resolvePipelineTool = (
         remainingDepth: args.remainingDepth,
         attribution: args.attribution,
         agentAuthority: args.agentAuthority,
+        abortSignal: options?.abortSignal,
       });
     },
   });

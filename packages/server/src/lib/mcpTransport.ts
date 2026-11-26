@@ -152,6 +152,8 @@ export const postMcp = (args: {
   transport: McpTransport;
   body: string;
   onRequest?: () => void;
+  /** The calling work's own cancellation, on top of the call timeout. */
+  signal?: AbortSignal;
 }): Promise<Response> => {
   const { transport } = args;
   const assertion = transport.identity
@@ -171,7 +173,12 @@ export const postMcp = (args: {
     {
       method: 'POST',
       headers,
-      signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
+      signal: args.signal
+        ? AbortSignal.any([
+            args.signal,
+            AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
+          ])
+        : AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
       body: args.body,
     },
     // The assertion's `aud` is this URL, so another origin could replay it here.

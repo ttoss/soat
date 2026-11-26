@@ -228,6 +228,8 @@ export type RecordedRequest = {
   /** The JSON body, or `{}` when the body is empty or not JSON. */
   body: Record<string, unknown>;
   raw: string;
+  /** Whether the client closed the connection before the reply was sent. */
+  abandoned: boolean;
 };
 
 type TargetReply = {
@@ -285,14 +287,18 @@ export const startToolTarget = async (): Promise<ToolTarget> => {
     const url = req.url ?? '/';
     const path = url.split('?')[0];
     const body = parseObject(raw);
-    const request = {
+    const request: RecordedRequest = {
       path,
       url,
       method: req.method ?? '',
       headers: req.headers,
       body,
       raw,
+      abandoned: false,
     };
+    res.on('close', () => {
+      if (!res.writableEnded) request.abandoned = true;
+    });
     requests.push(request);
     const configured = replies.get(path) ?? {};
     const reply =
