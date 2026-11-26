@@ -83,6 +83,19 @@ describe('tool input validation', () => {
       expect(turn.target.bodiesAt(`/${tool.name}`)).toEqual([{ amount: 10 }]);
     });
 
+    test('a body field the request schema does not declare is refused, before dispatch', async () => {
+      const tool = await turn.createTool();
+
+      const res = await authenticatedTestClient(turn.adminToken)
+        .post(`/api/v1/tools/${tool.id}/call`)
+        .send({ operation_id: 'list-tools', input: { amount: 10 } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('operation_id');
+      expect(turn.target.requestsAt(`/${tool.name}`)).toHaveLength(0);
+    });
+
     test('a preset fills a required parameter the caller leaves out', async () => {
       const tool = await turn.createTool({
         parameters: {
