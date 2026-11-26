@@ -158,6 +158,35 @@ describe('validateRequestBody', () => {
       expect(error.meta).toEqual({ unknown_fields: ['scorers.0.bogus'] });
     });
 
+    // `tool_id` is a field of the tool branch, so only the full schema's
+    // closed decider branch refuses it.
+    test('names a key the branch its value is of does not declare as unknown', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/evals',
+          body: {
+            name: 'eval',
+            dataset_id: 'dst_1',
+            agent_id: 'agent_1',
+            policy_ids: ['pol_1'],
+            scorers: [
+              {
+                type: 'decider',
+                name: 'review',
+                decider_id: 'dcd_1',
+                score: { approve: 1 },
+                pass_threshold: 0.5,
+                tool_id: 'tool_x',
+              },
+            ],
+          },
+        });
+      });
+      expect(error.meta).toEqual({ unknown_fields: ['scorers.0.tool_id'] });
+      expect(error.message).toBe('Unknown field(s): scorers.0.tool_id');
+    });
+
     test('accepts a policy statement condition (open object) after the spec fix', () => {
       expect(() => {
         return validateRequestBody({

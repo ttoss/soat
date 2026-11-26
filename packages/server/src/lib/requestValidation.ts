@@ -112,7 +112,7 @@ const topLevelFieldErrors = (args: {
  * - **The full schema** is checked once those pass: a value of any depth that
  *   breaks its type, union, enum, bound or required list is in
  *   `invalid_fields`; a union names what breaks the one branch its value is
- *   of.
+ *   of, and a key that closed branch does not declare is in `unknown_fields`.
  *
  * `path` is the route as registered (`/agents/:agent_id`), normalized to the
  * OpenAPI path key internally. Field names are compared against the spec's own
@@ -135,7 +135,7 @@ export const validateRequestBody = (args: {
 
   const body = isObjectRecord(args.body) ? args.body : {};
 
-  const unknownFields = collectUnknownFields(
+  const walkedUnknownFields = collectUnknownFields(
     { schema, value: body },
     { resolveRef: resolveSchemaRef }
   ).map((field) => {
@@ -148,16 +148,28 @@ export const validateRequestBody = (args: {
     ...fieldErrors.missingFields,
     ...nestedMissingFields({ schema, body }),
   ];
-  const typeErrors =
-    unknownFields.length > 0 ||
+  const violations =
+    walkedUnknownFields.length > 0 ||
     missingFields.length > 0 ||
     fieldErrors.typeErrors.length > 0
-      ? fieldErrors.typeErrors
+      ? []
       : collectSchemaViolations({
           template,
           method: args.method,
           body,
         });
+  const unknownFields = [
+    ...walkedUnknownFields,
+    ...violations.flatMap((violation) => {
+      return violation.kind === 'unknown' ? [violation.field] : [];
+    }),
+  ];
+  const typeErrors = [
+    ...fieldErrors.typeErrors,
+    ...violations.flatMap((violation) => {
+      return violation.kind === 'invalid' ? [violation] : [];
+    }),
+  ];
   const invalidFields = typeErrors.map((typeError) => {
     return typeError.field;
   });

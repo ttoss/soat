@@ -6,18 +6,32 @@ import {
 } from './openapiJsonSchema';
 import { isObjectRecord } from './openapiSchemaFields';
 
-export type SchemaViolation = { field: string; message: string };
+/**
+ * `unknown` is a key a closed level the value is of does not declare: the
+ * same answer the unknown-field walk gives, for the levels a union hides
+ * from it.
+ */
+export type SchemaViolation =
+  | { kind: 'unknown'; field: string }
+  | { kind: 'invalid'; field: string; message: string };
 
 const UNION_KEYWORDS = new Set(['oneOf', 'anyOf']);
 const TAG_KEYWORDS = new Set(['enum', 'const']);
 
-/** The error's value path as segments, a missing property included. */
+/** The error's value path as segments, a missing or unknown key included. */
 const pathOf = (error: ErrorObject): string[] => {
   const segments = error.instancePath.split('/').slice(1);
-  const missing = error.params.missingProperty;
-  return error.keyword === 'required' && typeof missing === 'string'
-    ? [...segments, missing]
-    : segments;
+  const { missingProperty, additionalProperty } = error.params;
+  if (error.keyword === 'required' && typeof missingProperty === 'string') {
+    return [...segments, missingProperty];
+  }
+  if (
+    error.keyword === 'additionalProperties' &&
+    typeof additionalProperty === 'string'
+  ) {
+    return [...segments, additionalProperty];
+  }
+  return segments;
 };
 
 const isAtOrUnder = (path: string, base: string): boolean => {
@@ -171,13 +185,19 @@ export const collectSchemaViolations = (args: {
 
   const seen = new Set<string>();
   return explained([...(validate.errors ?? [])])
-    .map((error) => {
+    .map((error): SchemaViolation => {
       const field = pathOf(error).join('.') || '(body)';
-      return { field, message: messageOf({ error, field }) };
+      return error.keyword === 'additionalProperties'
+        ? { kind: 'unknown', field }
+        : { kind: 'invalid', field, message: messageOf({ error, field }) };
     })
     .filter((violation) => {
-      if (seen.has(violation.message)) return false;
-      seen.add(violation.message);
+      const key =
+        violation.kind === 'unknown'
+          ? `unknown:${violation.field}`
+          : violation.message;
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
 };
