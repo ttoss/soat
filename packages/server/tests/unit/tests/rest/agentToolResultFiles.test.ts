@@ -191,6 +191,39 @@ describe('tool results that return files', () => {
       expect(sent).not.toContain('soat-file:');
     });
 
+    test('a file uploaded with no type reaches the model in the type its bytes carry', async () => {
+      const agentId = await createAgent({
+        name: 'server untyped',
+        toolId: scanToolId,
+        modalities: ['text', 'image'],
+      });
+      const pngBase64 = Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        IMAGE_BYTES,
+      ]).toString('base64');
+      const untyped = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload/base64')
+        .send({
+          project_id: projectId,
+          filename: 'untyped-scan',
+          content: pngBase64,
+        });
+      expect(untyped.status).toBe(201);
+      scanReply = { type: 'file', file_id: untyped.body.id };
+      stub.reply(
+        toolCallCompletion([{ id: 'call_scan', name: 'scan' }]),
+        textCompletion('A scan.')
+      );
+      stub.completions.length = 0;
+
+      const res = await generate({ token: adminToken, agentId });
+
+      expect(res.status).toBe(200);
+      const sent = toolMessage(stub.completions[1]);
+      expect(sent).toContain(pngBase64);
+      expect(sent).toContain('image/png');
+    });
+
     test('a single-use file it returns is claimed by the turn and deleted when it settles', async () => {
       const agentId = await createAgent({
         name: 'server single-use',

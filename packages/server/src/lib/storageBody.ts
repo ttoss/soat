@@ -48,3 +48,36 @@ export const requestBody = (args: {
 }): StorageBody => {
   return brand(args);
 };
+
+/**
+ * The first `length` bytes of `body` (fewer when it is shorter), and a body
+ * that still yields every byte: the head is read once and replayed.
+ */
+export const peekBody = async (args: {
+  body: StorageBody;
+  length: number;
+}): Promise<{ head: Buffer; body: StorageBody }> => {
+  const iterator: AsyncIterator<Buffer> =
+    args.body.stream[Symbol.asyncIterator]();
+  const chunks: Buffer[] = [];
+  let read = 0;
+  while (read < args.length) {
+    const next = await iterator.next();
+    if (next.done) break;
+    const chunk = Buffer.from(next.value);
+    chunks.push(chunk);
+    read += chunk.length;
+  }
+  const replay = async function* () {
+    yield* chunks;
+    for (;;) {
+      const next = await iterator.next();
+      if (next.done) return;
+      yield next.value;
+    }
+  };
+  return {
+    head: Buffer.concat(chunks).subarray(0, args.length),
+    body: brand({ stream: Readable.from(replay()), size: args.body.size }),
+  };
+};
