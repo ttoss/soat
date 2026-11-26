@@ -1141,8 +1141,23 @@ describe('Evaluations', () => {
           expected_output: 'Paris',
         }),
       ];
-      itemIds = items.map((item) => {
-        return item.id as string;
+      // Items added in one millisecond tie on `created_at`, so a run replays
+      // them in listed order, not insertion order. Tie them on purpose and key
+      // `itemIds` by the listing, so queued mocks line up with replayed items.
+      await db.sequelize.query(
+        `UPDATE dataset_items SET created_at = :at WHERE public_id IN (:ids)`,
+        {
+          replacements: {
+            at: new Date('2026-01-01T00:00:00.000Z'),
+            ids: items.map((item) => {
+              return item.id as string;
+            }),
+          },
+        }
+      );
+      const listed = await asUser().get(`/api/v1/datasets/${datasetId}/items`);
+      itemIds = listed.body.data.map((item: { id: string }) => {
+        return item.id;
       });
 
       evalId = (
