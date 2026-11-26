@@ -140,7 +140,7 @@ const routeOnComplete = async (args: {
         transition: matched.transition,
         // No principal moved the task: `generationId` / `orchestrationRunId`
         // below carry the cause, so the id is not duplicated here.
-        principal: { kind: 'automation', id: null },
+        principal: { kind: 'automation', id: null, actsFor: null },
         generationId: args.generationId,
         orchestrationRunId: args.orchestrationRunId,
         toolId: args.toolId,
@@ -200,7 +200,7 @@ export const routeSettledDispatch = async (args: {
     await transitionTask({
       id: taskPublicId,
       transition: args.onEnter.onFailure,
-      principal: { kind: 'automation', id: null },
+      principal: { kind: 'automation', id: null, actsFor: null },
       generationId: null,
       orchestrationRunId: args.orchestrationRunId,
     });
@@ -259,7 +259,7 @@ const handleFailure = async (args: {
     await transitionTask({
       id: args.taskPublicId,
       transition: args.onEnter.onFailure,
-      principal: { kind: 'automation', id: null },
+      principal: { kind: 'automation', id: null, actsFor: null },
       generationId,
       orchestrationRunId,
       toolId: args.toolId,

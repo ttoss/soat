@@ -1,20 +1,24 @@
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import type { ActsFor } from './actsFor';
 import type { Transaction } from './dbTransaction';
 import { paginatedList } from './pagination';
 
-type TaskHistoryRow = NonNullable<
-  Parameters<typeof db.TaskTransition.create>[0]
+type TaskHistoryRow = Omit<
+  NonNullable<Parameters<typeof db.TaskTransition.create>[0]>,
+  'actsForType' | 'actsForId'
 > & { taskId: number };
 
 /**
  * The one writer of a task's history. History lists by `createdAt`, so each row
  * is stamped strictly after the task's latest one: two rows in one millisecond
- * would otherwise list in public-id order, which is random.
+ * would otherwise list in public-id order, which is random. `actsFor` is
+ * required so every writer states whom the move was made for.
  */
 export const appendTaskHistory = async (args: {
   row: TaskHistoryRow;
+  actsFor: ActsFor | null;
   transaction?: Transaction;
 }): Promise<void> => {
   const latest = await db.TaskTransition.findOne({
@@ -27,7 +31,12 @@ export const appendTaskHistory = async (args: {
   const floor = latest ? latest.createdAt.getTime() + 1 : now;
   const createdAt = new Date(Math.max(now, floor));
   await db.TaskTransition.create(
-    { ...args.row, createdAt },
+    {
+      ...args.row,
+      actsForType: args.actsFor?.type ?? null,
+      actsForId: args.actsFor?.id ?? null,
+      createdAt,
+    },
     { transaction: args.transaction }
   );
 };
@@ -59,6 +68,10 @@ export const getTaskHistory = async (args: {
         transition: row.transition,
         principal_type: row.principalType,
         principal_id: row.principalId,
+        acts_for:
+          row.actsForType !== null && row.actsForId !== null
+            ? { type: row.actsForType, id: row.actsForId }
+            : null,
         generation_id: row.generationId,
         orchestration_run_id: row.orchestrationRunId,
         tool_id: row.toolId,

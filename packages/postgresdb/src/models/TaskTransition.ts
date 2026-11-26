@@ -83,6 +83,14 @@ export class TaskTransition extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare principalId: string | null;
 
+  // The opaque principal an IAM token or `On-Behalf-Of` assertion named:
+  // whom the principal above moved the task for.
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare actsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare actsForId: string | null;
+
   // Dispatch that caused the move.
   @Column({ type: DataType.STRING, allowNull: true })
   declare generationId: string | null;

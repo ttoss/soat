@@ -1,6 +1,7 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { actsForOf } from './actsFor';
 import {
   type DeniedPrincipal,
   readDeniedPrincipal,
@@ -343,8 +344,7 @@ const requestChain = (authUser: AuthUser): Omit<Chain, 'project'> => {
   return {
     trigger: authUser.work?.trigger ?? null,
     work: authUser.work?.work ?? null,
-    actsFor:
-      authUser.iamToken?.principal ?? authUser.onBehalfOfPrincipal ?? null,
+    actsFor: actsForOf(authUser),
     toolContext: authUser.toolContextLayer ?? null,
   };
 };

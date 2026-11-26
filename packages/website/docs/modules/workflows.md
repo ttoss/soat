@@ -131,6 +131,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 | `transition`    | string \| null  | Transition name fired (`null` for the initial placement)          |
 | `principal_type`| string          | `user` \| `api_key` \| `automation` \| `approval`                 |
 | `principal_id`  | string \| null  | The principal that made the move. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted. `null` for `automation`, which has no principal — read `generation_id` / `orchestration_run_id` / `tool_id` for the cause |
+| `acts_for`      | object \| null | `{ type, id }`, the opaque principal the mover acted for: the `principal` of the [IAM token](./iam.md) that made the move, or of the one whose call a `builtin` tool's `transition-task` runs. `principal_id` names the key that minted the token. `null` when none was named, and on `automation` and `approval` rows |
 | `generation_id` | string \| null  | The agent generation that caused the move (set for both `on_complete` routing and `on_failure`, linking the failed generation) |
 | `orchestration_run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
 | `tool_id`       | string \| null  | The tool a `tool` dispatch called, when that dispatch caused the move. A tool call produces no record of its own, so the tool is the cause |

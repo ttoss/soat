@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
+import { actsForOf } from './actsFor';
 import type { AgentAuthority } from './agentAuthority';
 import type { AssertionAuthority, AssertionCap } from './assertionAuthority';
 import type { DeniedPrincipal } from './authorizationDenial';
@@ -81,8 +82,7 @@ const credentialOf = async (
 const chainOf = (
   credential: SenderCredential | undefined
 ): Pick<AssertionAuthority, 'principal' | 'toolContext'> => {
-  const principal =
-    credential?.iamToken?.principal ?? credential?.onBehalfOfPrincipal;
+  const principal = credential ? actsForOf(credential) : null;
   const toolContext = credential?.toolContextLayer;
   return {
     ...(principal ? { principal } : {}),

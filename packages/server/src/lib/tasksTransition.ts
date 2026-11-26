@@ -252,6 +252,7 @@ const recordMove = async (args: {
       idempotencyKey: a.idempotency?.key ?? null,
       idempotencyDigest: a.idempotency?.digest ?? null,
     },
+    actsFor: a.principal.actsFor,
     transaction: args.transaction,
   });
   return args.closed
