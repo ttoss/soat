@@ -399,6 +399,7 @@ components:
   schemas:
     PolicyStatement:
       type: object
+      additionalProperties: false
       required:
         - effect
         - action
@@ -464,6 +465,7 @@ components:
           example: { feature: guardrails }
     PolicyDocument:
       type: object
+      additionalProperties: false
       required:
         - statement
       properties:

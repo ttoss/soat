@@ -2303,6 +2303,7 @@ components:
           - $ref: '#/components/schemas/DeciderScorer'
     ExactMatchScorer:
       type: object
+      additionalProperties: false
       required:
         - type
         - name
@@ -2314,6 +2315,7 @@ components:
           $ref: '#/components/schemas/ScorerName'
     ContainsScorer:
       type: object
+      additionalProperties: false
       required:
         - type
         - name
@@ -2332,6 +2334,7 @@ components:
           default: false
     JsonLogicScorer:
       type: object
+      additionalProperties: false
       required:
         - type
         - name
@@ -2348,6 +2351,7 @@ components:
           description: A JSON Logic expression; a truthy result scores 1
     OutputSchemaScorer:
       type: object
+      additionalProperties: false
       required:
         - type
         - name
@@ -2366,6 +2370,7 @@ components:
             `output_schema` when omitted.
     EmbeddingSimilarityScorer:
       type: object
+      additionalProperties: false
       required:
         - type
         - name
@@ -2387,6 +2392,7 @@ components:
           example: 0.85
     LlmJudgeScorer:
       type: object
+      additionalProperties: false
       required:
         - type
         - name
@@ -2436,6 +2442,7 @@ components:
           example: gpt-4o-mini
     ToolScorer:
       type: object
+      additionalProperties: false
       description: >-
         A custom scoring algorithm — a server-callable project tool the engine
         invokes once per item. The tool receives the same variables a
@@ -2494,6 +2501,7 @@ components:
           example: 0.5
     DeciderScorer:
       type: object
+      additionalProperties: false
       description: >-
         Grades each item with a decision of a project decider, under the
         decider version pinned when the run started (`decider_versions` on

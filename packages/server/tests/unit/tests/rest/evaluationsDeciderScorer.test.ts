@@ -326,7 +326,11 @@ describe('Evaluations — decider scorers', () => {
       ['a pass_threshold above 1', { pass_threshold: 2 }, 'pass_threshold'],
       ['a missing decider_id', { decider_id: undefined }, 'decider_id'],
       ['a missing name', { name: undefined }, 'scorers.0.name'],
-      ['an unknown field', { tool_id: 'tool_x' }, 'unknown field'],
+      [
+        'an unknown field',
+        { tool_id: 'tool_x' },
+        'Unknown field(s): scorers.0.tool_id',
+      ],
     ])('refuses %s', async (_label, extra, message) => {
       const res = await postEval([deciderScorer(extra)]);
       expect(res.status).toBe(400);
