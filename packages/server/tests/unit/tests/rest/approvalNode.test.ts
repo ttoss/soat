@@ -2,6 +2,7 @@ import { db } from 'src/db';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 // A run parks on the node, the platform files an ApprovalItem, and resolving it
@@ -86,20 +87,18 @@ describe('Approval node (orchestration producer)', () => {
     return res.body;
   };
 
-  // The expiry sweeper dispatches its handler (which resumes the run) detached,
-  // so poll the observable side effect — the run reaching a terminal state — with
-  // a bounded loop rather than reading once and racing the resume (which
-  // transitions through a transient `running` state before it settles).
+  // The expiry sweeper resumes the run detached, through a transient `running`
+  // state, so poll for a terminal one.
   const TERMINAL = ['completed', 'failed', 'cancelled', 'expired'];
-  const waitForRunSettled = async (orchestrationRunId: string) => {
-    for (let i = 0; i < 100; i += 1) {
-      const run = await getRun(orchestrationRunId);
-      if (TERMINAL.includes(run.status)) return run;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 20);
-      });
-    }
-    throw new Error(`run ${orchestrationRunId} did not settle`);
+  const waitForRunSettled = (orchestrationRunId: string) => {
+    return pollUntil({
+      read: () => {
+        return getRun(orchestrationRunId);
+      },
+      done: (run) => {
+        return TERMINAL.includes(run.status);
+      },
+    });
   };
 
   beforeAll(async () => {

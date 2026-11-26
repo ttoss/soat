@@ -6,6 +6,7 @@ import { droppedEventCount } from 'src/lib/eventBus';
 import * as generationsModule from 'src/lib/generations';
 
 import { testGrant } from '../../fixtures/bootstrap';
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -239,15 +240,15 @@ describe('Memory rule dispatch', () => {
   };
 
   /** The summary is the dispatcher's last write, so it marks the firing done. */
-  const waitForSummary = async (generationId: string): Promise<Summary> => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const { extraction } = await getGeneration(generationId);
-      if (extraction) return extraction;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`generation ${generationId} never got a summary`);
+  const waitForSummary = (generationId: string): Promise<Summary> => {
+    return pollFor({
+      read: () => {
+        return getGeneration(generationId);
+      },
+      pick: ({ extraction }) => {
+        return extraction ?? undefined;
+      },
+    });
   };
 
   const listMemories = async (storeId: string): Promise<Memory[]> => {
@@ -258,15 +259,15 @@ describe('Memory rule dispatch', () => {
     return res.body.data;
   };
 
-  const waitForMemories = async (storeId: string): Promise<Memory[]> => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const memories = await listMemories(storeId);
-      if (memories.length > 0) return memories;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`store ${storeId} never got a memory`);
+  const waitForMemories = (storeId: string): Promise<Memory[]> => {
+    return pollUntil({
+      read: () => {
+        return listMemories(storeId);
+      },
+      done: (memories) => {
+        return memories.length > 0;
+      },
+    });
   };
 
   beforeAll(async () => {
@@ -918,19 +919,15 @@ describe('Memory rule dispatch', () => {
 
       await turn({ agentId, message: 'The lock combination is 12-4-31.' });
 
-      for (
-        let attempt = 0;
-        attempt < 400 &&
-        droppedEventCount({ stage: 'memory_rule_dispatch' }) === before;
-        attempt += 1
-      ) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
-      expect(droppedEventCount({ stage: 'memory_rule_dispatch' })).toBe(
-        before + 1
-      );
+      const dropped = await pollUntil({
+        read: () => {
+          return droppedEventCount({ stage: 'memory_rule_dispatch' });
+        },
+        done: (count) => {
+          return count !== before;
+        },
+      });
+      expect(dropped).toBe(before + 1);
       expect(await listMemories(storeId)).toHaveLength(1);
     });
   });

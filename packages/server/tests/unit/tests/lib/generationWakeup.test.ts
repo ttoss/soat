@@ -5,6 +5,8 @@ import {
   subscribeGenerationProgress,
 } from 'src/lib/generationWakeup';
 
+import { pollUntil } from '../../fixtures/poll';
+
 const CHANNEL = 'soat_generation_progress';
 
 const notify = async (generationDbId: number) => {
@@ -17,25 +19,26 @@ const notify = async (generationDbId: number) => {
 const wokenBy = async (args: {
   generationDbId: number;
   wake: jest.Mock;
-}): Promise<boolean> => {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    await notify(args.generationDbId);
-    await new Promise((resolve) => {
-      setTimeout(resolve, 25);
-    });
-    if (args.wake.mock.calls.length > 0) return true;
-  }
-  return false;
+}): Promise<void> => {
+  await pollUntil({
+    read: async () => {
+      await notify(args.generationDbId);
+      return args.wake.mock.calls.length;
+    },
+    done: (calls) => {
+      return calls > 0;
+    },
+  });
 };
 
 /** Waits on a bounded predicate over a side effect. */
-const until = async (done: () => boolean): Promise<boolean> => {
-  for (let attempt = 0; attempt < 80 && !done(); attempt += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 25);
-    });
-  }
-  return done();
+const until = async (done: () => boolean): Promise<void> => {
+  await pollUntil({
+    read: done,
+    done: (holds) => {
+      return holds;
+    },
+  });
 };
 
 /** The listener's client, captured as it connects. */
@@ -77,7 +80,7 @@ describe('generationWakeup', () => {
       wake: other,
     });
 
-    expect(await wokenBy({ generationDbId: 101, wake })).toBe(true);
+    await wokenBy({ generationDbId: 101, wake });
     expect(other).not.toHaveBeenCalled();
     unsubscribe();
     unsubscribeOther();
@@ -90,16 +93,14 @@ describe('generationWakeup', () => {
       generationDbId: 201,
       wake: first,
     });
-    expect(await wokenBy({ generationDbId: 201, wake: first })).toBe(true);
+    await wokenBy({ generationDbId: 201, wake: first });
     const end = failNextEnd();
 
     captured.client()?.emit('error', new Error('connection lost'));
 
-    expect(
-      await until(() => {
-        return end.mock.calls.length === 1;
-      })
-    ).toBe(true);
+    await until(() => {
+      return end.mock.calls.length === 1;
+    });
     expect(captured.client()?.listenerCount('notification')).toBe(0);
 
     const second = jest.fn();
@@ -107,7 +108,7 @@ describe('generationWakeup', () => {
       generationDbId: 202,
       wake: second,
     });
-    expect(await wokenBy({ generationDbId: 202, wake: second })).toBe(true);
+    await wokenBy({ generationDbId: 202, wake: second });
     unsubscribeFirst();
     unsubscribeSecond();
   });
@@ -125,11 +126,9 @@ describe('generationWakeup', () => {
       wake,
     });
 
-    expect(
-      await until(() => {
-        return end.mock.calls.length === 1;
-      })
-    ).toBe(true);
+    await until(() => {
+      return end.mock.calls.length === 1;
+    });
     expect(connect).toHaveBeenCalledTimes(1);
 
     const retry = jest.fn();
@@ -137,7 +136,7 @@ describe('generationWakeup', () => {
       generationDbId: 302,
       wake: retry,
     });
-    expect(await wokenBy({ generationDbId: 302, wake: retry })).toBe(true);
+    await wokenBy({ generationDbId: 302, wake: retry });
     unsubscribe();
     unsubscribeRetry();
   });
@@ -148,7 +147,7 @@ describe('generationWakeup', () => {
       generationDbId: 401,
       wake,
     });
-    expect(await wokenBy({ generationDbId: 401, wake })).toBe(true);
+    await wokenBy({ generationDbId: 401, wake });
     unsubscribe();
     const end = failNextEnd();
 

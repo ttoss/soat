@@ -10,6 +10,7 @@ import { saveTrace } from 'src/lib/traces';
 import { createAllowAllPolicy, testGrant } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { createPlaybookCaseOverMcp } from '../../fixtures/playbookCase';
+import { pollUntil } from '../../fixtures/poll';
 import { settleTestGeneration } from '../../fixtures/settledGeneration';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -1373,20 +1374,16 @@ describe('MCP tools - happy path', () => {
 
         // Ingestion is async — poll until ready
         const docId = result.id;
-        let doc = result;
-        const deadline = Date.now() + 5000;
-        while (
-          (doc.status === 'pending' || doc.status === 'processing') &&
-          Date.now() < deadline
-        ) {
-          await new Promise((r) => {
-            return setTimeout(r, 50);
-          });
-          const pollRes = await mcpCall('get-document', {
-            document_id: docId,
-          });
-          doc = parseResult(pollRes);
-        }
+        const doc = await pollUntil({
+          read: async () => {
+            return parseResult(
+              await mcpCall('get-document', { document_id: docId })
+            );
+          },
+          done: (read) => {
+            return read.status !== 'pending' && read.status !== 'processing';
+          },
+        });
         expect(doc.status).toBe('ready');
 
         const statusRes = await mcpCall('get-document-status', {

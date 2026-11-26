@@ -6,6 +6,7 @@ import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import * as generationSettleModule from 'src/lib/generationSettle';
 import * as tracesModule from 'src/lib/traces';
 
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -157,19 +158,21 @@ describe('Streamed agent generations', () => {
   };
 
   /** The agent's one generation, once its terminal status has been written. */
-  const settledGenerationOf = async (agentId: string): Promise<Generation> => {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const res = await authenticatedTestClient(adminToken)
-        .get('/api/v1/generations')
-        .query({ agent_id: agentId });
-      expect(res.status).toBe(200);
-      const [generation] = res.body.data as Generation[];
-      if (generation && generation.status !== 'running') return generation;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`no settled generation for ${agentId}`);
+  const settledGenerationOf = (agentId: string): Promise<Generation> => {
+    return pollFor({
+      read: async () => {
+        const res = await authenticatedTestClient(adminToken)
+          .get('/api/v1/generations')
+          .query({ agent_id: agentId });
+        expect(res.status).toBe(200);
+        return res.body.data as Generation[];
+      },
+      pick: ([generation]) => {
+        return generation && generation.status !== 'running'
+          ? generation
+          : undefined;
+      },
+    });
   };
 
   /**
@@ -186,16 +189,16 @@ describe('Streamed agent generations', () => {
     try {
       await stream(agentId);
       const generation = await settledGenerationOf(agentId);
-      const settled = () => {
-        return events.some((event) => {
-          return event.resourceId === generation.id;
-        });
-      };
-      for (let tick = 0; tick < 200 && !settled(); tick += 1) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 10);
-        });
-      }
+      await pollUntil({
+        read: () => {
+          return events.some((event) => {
+            return event.resourceId === generation.id;
+          });
+        },
+        done: (arrived) => {
+          return arrived;
+        },
+      });
       return {
         generation,
         events: events.filter((event) => {
@@ -313,19 +316,21 @@ describe('Streamed agent generations', () => {
       await stream(agentId);
       const generation = await settledGenerationOf(agentId);
 
-      let events: Array<{ model: string | null; cost_usd: number | null }> = [];
-      for (let attempt = 0; attempt < 200 && events.length === 0; attempt++) {
-        const res = await authenticatedTestClient(adminToken)
-          .get('/api/v1/usage/events')
-          .query({ generation_id: generation.id, meter_type: 'llm_tokens' });
-        expect(res.status).toBe(200);
-        events = res.body.data;
-        if (events.length === 0) {
-          await new Promise((resolve) => {
-            return setTimeout(resolve, 25);
-          });
-        }
-      }
+      const events = await pollUntil({
+        read: async () => {
+          const res = await authenticatedTestClient(adminToken)
+            .get('/api/v1/usage/events')
+            .query({ generation_id: generation.id, meter_type: 'llm_tokens' });
+          expect(res.status).toBe(200);
+          return res.body.data as Array<{
+            model: string | null;
+            cost_usd: number | null;
+          }>;
+        },
+        done: (found) => {
+          return found.length > 0;
+        },
+      });
       expect(events).toHaveLength(1);
       expect(events[0].model).toBe('stub-model');
       expect(events[0].cost_usd).not.toBeNull();
@@ -383,17 +388,16 @@ describe('Streamed agent generations', () => {
       });
 
       // The trace's error lands after the generation settles, both fire-and-forget.
-      let trace = await authenticatedTestClient(adminToken).get(
-        `/api/v1/traces/${generation.trace_id}`
-      );
-      for (let attempt = 0; attempt < 200 && !trace.body.error; attempt += 1) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-        trace = await authenticatedTestClient(adminToken).get(
-          `/api/v1/traces/${generation.trace_id}`
-        );
-      }
+      const trace = await pollUntil({
+        read: () => {
+          return authenticatedTestClient(adminToken).get(
+            `/api/v1/traces/${generation.trace_id}`
+          );
+        },
+        done: (res) => {
+          return Boolean(res.body.error);
+        },
+      });
       expect(trace.status).toBe(200);
       expect(trace.body.error).toMatchObject({
         code: 'TEXT_ENCODED_TOOL_CALL',

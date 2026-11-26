@@ -6,6 +6,7 @@ import {
   type StubReply,
   textCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /** A chat-completions SSE answer streaming `content`. */
@@ -108,20 +109,21 @@ describe('AI provider model_aliases forwarding to another provider', () => {
       .send({ messages: [{ role: 'user', content: 'hello' }] });
   };
 
-  const usageEvents = async (generationId: string) => {
-    let events: Array<{ model: string; ai_provider_id: string }> = [];
-    for (let attempt = 0; attempt < 200 && events.length === 0; attempt++) {
-      const usage = await asAdmin()
-        .get('/api/v1/usage/events')
-        .query({ generation_id: generationId, meter_type: 'llm_tokens' });
-      events = usage.body.data;
-      if (events.length === 0) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
-    }
-    return events;
+  const usageEvents = (generationId: string) => {
+    return pollUntil({
+      read: async () => {
+        const usage = await asAdmin()
+          .get('/api/v1/usage/events')
+          .query({ generation_id: generationId, meter_type: 'llm_tokens' });
+        return usage.body.data as Array<{
+          model: string;
+          ai_provider_id: string;
+        }>;
+      },
+      done: (events) => {
+        return events.length > 0;
+      },
+    });
   };
 
   beforeAll(async () => {

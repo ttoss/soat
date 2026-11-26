@@ -6,6 +6,7 @@ import { db } from 'src/db';
 import { emitApproval } from 'src/lib/approvals';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -49,17 +50,17 @@ describe("an approved builtin action is held to the agent's boundary", () => {
       .join('\n');
   };
 
-  const continuationMessageFor = async (approvalId: string) => {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const text = modelRequests.map(userTextOf).find((candidate) => {
-        return candidate.includes(`Approval ${approvalId} `);
-      });
-      if (text) return text;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`no continuation for ${approvalId}`);
+  const continuationMessageFor = (approvalId: string) => {
+    return pollFor({
+      read: () => {
+        return modelRequests.map(userTextOf);
+      },
+      pick: (texts) => {
+        return texts.find((candidate) => {
+          return candidate.includes(`Approval ${approvalId} `);
+        });
+      },
+    });
   };
 
   const createPolicy = async (document: object): Promise<string> => {

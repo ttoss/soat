@@ -5,6 +5,7 @@ import * as clientToolGuardrail from 'src/lib/agentClientToolGuardrail';
 import * as usageTokenEvent from 'src/lib/usageTokenEvent';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { stubCompletion } from '../../fixtures/stubChatProvider';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -104,38 +105,37 @@ describe('Usage — provider calls a failed turn completed', () => {
   };
 
   const meteredTokens = async (generationId: string) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const res = await authenticatedTestClient(adminToken)
-        .get('/api/v1/usage/events')
-        .query({ generation_id: generationId, meter_type: 'llm_tokens' });
-      expect(res.status).toBe(200);
-      const events = res.body.data as Array<{
-        components: Array<{ component: string; quantity: number }>;
-      }>;
-      if (events.length > 0) {
-        const sum = (name: string) => {
-          return events
-            .flatMap((event) => {
-              return event.components;
-            })
-            .filter((component) => {
-              return component.component === name;
-            })
-            .reduce((total, component) => {
-              return total + Number(component.quantity);
-            }, 0);
-        };
-        return {
-          events: events.length,
-          input: sum('input_tokens'),
-          output: sum('output_tokens'),
-        };
-      }
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 20);
-      });
-    }
-    return { events: 0, input: 0, output: 0 };
+    const events = await pollUntil({
+      read: async () => {
+        const res = await authenticatedTestClient(adminToken)
+          .get('/api/v1/usage/events')
+          .query({ generation_id: generationId, meter_type: 'llm_tokens' });
+        expect(res.status).toBe(200);
+        return res.body.data as Array<{
+          components: Array<{ component: string; quantity: number }>;
+        }>;
+      },
+      done: (found) => {
+        return found.length > 0;
+      },
+    });
+    const sum = (name: string) => {
+      return events
+        .flatMap((event) => {
+          return event.components;
+        })
+        .filter((component) => {
+          return component.component === name;
+        })
+        .reduce((total, component) => {
+          return total + Number(component.quantity);
+        }, 0);
+    };
+    return {
+      events: events.length,
+      input: sum('input_tokens'),
+      output: sum('output_tokens'),
+    };
   };
 
   const generate = () => {

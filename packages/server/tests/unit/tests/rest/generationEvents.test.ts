@@ -9,6 +9,7 @@ import {
   textCompletion,
   toolCallCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -88,12 +89,13 @@ describe('generation lifecycle events', () => {
           return event.data.id === generationId;
         });
       };
-      for (let tick = 0; tick < 200 && mine().length === 0; tick += 1) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 10);
-        });
-      }
-      return { generationId, events: mine() };
+      const events = await pollUntil({
+        read: mine,
+        done: (found) => {
+          return found.length > 0;
+        },
+      });
+      return { generationId, events };
     } finally {
       eventBus.off('soat:event', handler);
     }

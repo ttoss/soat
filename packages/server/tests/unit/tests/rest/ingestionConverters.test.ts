@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { db } from 'src/db';
 
 import { testGrant } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -114,16 +115,14 @@ describe('Converter ingestion', () => {
     expect(ingest.status).toBe(202);
     const documentId = ingest.body.id as string;
 
-    const deadline = Date.now() + 5000;
-    while (Date.now() < deadline) {
-      const row = await db.Document.findOne({
-        where: { publicId: documentId },
-      });
-      if (row?.conversionAttemptId) break;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
-    }
+    await pollFor({
+      read: () => {
+        return db.Document.findOne({ where: { publicId: documentId } });
+      },
+      pick: (row) => {
+        return row?.conversionAttemptId ?? undefined;
+      },
+    });
 
     const request = received.find((entry) => {
       return entry.body.callback?.url.includes(`/documents/${documentId}/`);

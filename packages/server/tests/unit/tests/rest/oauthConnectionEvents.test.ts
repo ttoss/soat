@@ -3,6 +3,7 @@ import type { SoatEvent } from 'src/lib/eventBus';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { captureEvents } from '../../fixtures/eventCapture';
 import { startFakeOauthProvider } from '../../fixtures/fakeOauthProvider';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 type Provider = Awaited<ReturnType<typeof startFakeOauthProvider>>;
@@ -256,17 +257,16 @@ describe('OAuth connection events', () => {
       oauthClientId: otherClientId,
     });
 
-    let firings: Awaited<ReturnType<typeof listFirings>> = [];
-    for (let attempt = 0; attempt < 400 && firings.length === 0; attempt += 1) {
-      firings = (await listFirings(matching)).filter((firing) => {
-        return firing.status === 'completed' || firing.status === 'failed';
-      });
-      if (firings.length === 0) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
+    const firings = await pollUntil({
+      read: async () => {
+        return (await listFirings(matching)).filter((firing) => {
+          return firing.status === 'completed' || firing.status === 'failed';
         });
-      }
-    }
+      },
+      done: (settled) => {
+        return settled.length > 0;
+      },
+    });
     expect(firings).toHaveLength(1);
     expect(firings[0].input).toMatchObject({
       event: 'oauth_connections.connected',

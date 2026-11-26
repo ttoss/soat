@@ -7,6 +7,7 @@ import { fireDueTriggers } from 'src/lib/triggerScheduler';
 
 import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 // No public create endpoint — entries are platform-written by producers. Shape
@@ -30,18 +31,17 @@ describe('Activity', () => {
 
   // Producers write fire-and-forget off an event or a direct call, so poll the
   // observable side effect rather than racing it (mirrors exceptions.test.ts).
-  const waitForActivity = async (
+  const waitForActivity = (
     predicate: (e: { kind: string; ref_id: string | null }) => boolean
   ) => {
-    for (let i = 0; i < 100; i += 1) {
-      const res = await listActivity('');
-      const match = res.body.data.find(predicate);
-      if (match) return match;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 20);
-      });
-    }
-    return null;
+    return pollFor({
+      read: () => {
+        return listActivity('');
+      },
+      pick: (res) => {
+        return res.body.data.find(predicate);
+      },
+    });
   };
 
   beforeAll(async () => {

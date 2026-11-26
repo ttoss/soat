@@ -11,6 +11,7 @@ import * as toolsModule from 'src/lib/tools';
 
 import { testGrant } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
+import { pollFor, pollGet } from '../../fixtures/poll';
 import { storageDir } from '../../setupTests';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -903,40 +904,30 @@ describe('IngestionRules', () => {
     });
 
     describe('async conversion via ingestion-callback (Phase 5)', () => {
-      const waitForConversionAttempt = async (
-        docId: string,
-        timeout = 5000
-      ): Promise<string> => {
-        const deadline = Date.now() + timeout;
-        while (Date.now() < deadline) {
-          const row = await db.Document.findOne({ where: { publicId: docId } });
-          if (row?.conversionAttemptId) return row.conversionAttemptId;
-          await new Promise((r) => {
-            return setTimeout(r, 20);
-          });
-        }
-        throw new Error(
-          `Timed out waiting for document ${docId} to record a conversion attempt`
-        );
+      const waitForConversionAttempt = (docId: string): Promise<string> => {
+        return pollFor({
+          read: () => {
+            return db.Document.findOne({ where: { publicId: docId } });
+          },
+          pick: (row) => {
+            return row?.conversionAttemptId ?? undefined;
+          },
+        });
       };
 
-      const waitForTerminalStatus = async (
-        docId: string,
-        timeout = 5000
+      const waitForTerminalStatus = (
+        docId: string
       ): Promise<Record<string, unknown>> => {
-        const deadline = Date.now() + timeout;
-        while (Date.now() < deadline) {
-          const res = await authenticatedTestClient(adminToken).get(
-            `/api/v1/documents/${docId}/status`
-          );
-          if (res.body.status === 'ready' || res.body.status === 'failed') {
-            return res.body as Record<string, unknown>;
-          }
-          await new Promise((r) => {
-            return setTimeout(r, 20);
-          });
-        }
-        throw new Error(`Timed out waiting for document ${docId} to finish`);
+        return pollGet({
+          token: adminToken,
+          path: `/api/v1/documents/${docId}/status`,
+          select: (body) => {
+            return body;
+          },
+          predicate: (body) => {
+            return body.status === 'ready' || body.status === 'failed';
+          },
+        });
       };
 
       const ingestPendingAudio = async (filename: string) => {

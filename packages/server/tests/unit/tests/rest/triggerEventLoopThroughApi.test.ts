@@ -2,6 +2,7 @@ import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import type { RecordedRequest } from '../../fixtures/scriptedModel';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -63,53 +64,46 @@ describe('an event trigger loop through a tool that writes via the API', () => {
   };
 
   /** The settled firings, once `settled` have settled and, if set, one refused. */
-  const firingsOf = async (args: {
+  const firingsOf = (args: {
     triggerId: string;
     settled: number;
     refused?: boolean;
   }): Promise<Firing[]> => {
-    const { triggerId } = args;
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const res = await authenticatedTestClient(turn.adminToken).get(
-        `/api/v1/trigger-firings?trigger_id=${triggerId}&limit=100`
-      );
-      expect(res.status).toBe(200);
-      const settled = [...(res.body.data as Firing[])]
-        .reverse()
-        .filter((firing) => {
+    return pollUntil({
+      read: async () => {
+        const res = await authenticatedTestClient(turn.adminToken).get(
+          `/api/v1/trigger-firings?trigger_id=${args.triggerId}&limit=100`
+        );
+        expect(res.status).toBe(200);
+        return [...(res.body.data as Firing[])].reverse().filter((firing) => {
           return firing.status === 'completed' || firing.status === 'failed';
         });
-      // A refusal settles while the firing that caused it still runs.
-      const refused = settled.some((firing) => {
-        return firing.status === 'failed';
-      });
-      if (settled.length >= args.settled && (refused || !args.refused)) {
-        return settled;
-      }
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`trigger ${triggerId} never settled ${args.settled}`);
+      },
+      done: (settled) => {
+        // A refusal settles while the firing that caused it still runs.
+        const refused = settled.some((firing) => {
+          return firing.status === 'failed';
+        });
+        return settled.length >= args.settled && (refused || !args.refused);
+      },
+    });
   };
 
-  const loopExceptionFor = async (triggerId: string) => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const res = await authenticatedTestClient(turn.adminToken).get(
-        `/api/v1/exceptions?project_id=${turn.projectId}&kind=event_trigger_loop&limit=100`
-      );
-      expect(res.status).toBe(200);
-      const match = (
-        res.body.data as Array<{ detail: Record<string, unknown> }>
-      ).find((exception) => {
-        return exception.detail.trigger_id === triggerId;
-      });
-      if (match) return match;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`no event_trigger_loop exception for ${triggerId}`);
+  const loopExceptionFor = (triggerId: string) => {
+    return pollFor({
+      read: async () => {
+        const res = await authenticatedTestClient(turn.adminToken).get(
+          `/api/v1/exceptions?project_id=${turn.projectId}&kind=event_trigger_loop&limit=100`
+        );
+        expect(res.status).toBe(200);
+        return res.body.data as Array<{ detail: Record<string, unknown> }>;
+      },
+      pick: (exceptions) => {
+        return exceptions.find((exception) => {
+          return exception.detail.trigger_id === triggerId;
+        });
+      },
+    });
   };
 
   beforeAll(async () => {

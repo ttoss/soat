@@ -19,61 +19,6 @@ const HELPER = 'fixtures/poll.ts';
 /** The suites and their fixtures; the database lifecycle beside them retries on errors, it does not poll. */
 const SUITE_DIRS = /^(tests|fixtures)\//;
 
-/**
- * Files that still poll in a loop of their own. **Remove a file once it uses
- * the helper; never add one.**
- */
-const LOCAL_POLL_EXEMPT = new Set([
-  'tests/jobs/admissionScheduledFiring.test.ts',
-  'tests/jobs/generationSweep.test.ts',
-  'tests/jobs/triggerEventFirings.test.ts',
-  'tests/jobs/triggerSchedule.test.ts',
-  'tests/lib/firstWriteRaces.test.ts',
-  'tests/lib/generationWakeup.test.ts',
-  'tests/lib/memoryAssertionAtomicity.test.ts',
-  'tests/rest/activity.test.ts',
-  'tests/rest/agentGeneration.test.ts',
-  'tests/rest/agentStreamGeneration.test.ts',
-  'tests/rest/aiProviderModelAliases.test.ts',
-  'tests/rest/aiProviderModelForwarding.test.ts',
-  'tests/rest/approvalAgentPolicy.test.ts',
-  'tests/rest/approvalNode.test.ts',
-  'tests/rest/approvalSessionContinuation.test.ts',
-  'tests/rest/approvalsToolContext.test.ts',
-  'tests/rest/decisions.test.ts',
-  'tests/rest/decisionsInline.test.ts',
-  'tests/rest/decisionsToolBackend.test.ts',
-  'tests/rest/documents.test.ts',
-  'tests/rest/evaluations.test.ts',
-  'tests/rest/evaluationsClaim.test.ts',
-  'tests/rest/evaluationsRunDefinition.test.ts',
-  'tests/rest/evaluationsVerdict.test.ts',
-  'tests/rest/exceptions.test.ts',
-  'tests/rest/generationEvents.test.ts',
-  'tests/rest/generationFailure.test.ts',
-  'tests/rest/ingestionConverters.test.ts',
-  'tests/rest/ingestionRules.test.ts',
-  'tests/rest/inlineToolSecretEcho.test.ts',
-  'tests/rest/mcp.test.ts',
-  'tests/rest/memoryExtraction.test.ts',
-  'tests/rest/memoryRetraction.test.ts',
-  'tests/rest/memoryRuleDispatch.test.ts',
-  'tests/rest/oauthConnectionEvents.test.ts',
-  'tests/rest/orchestrations.test.ts',
-  'tests/rest/projectPauseDrivers.test.ts',
-  'tests/rest/sessions.test.ts',
-  'tests/rest/soatSelfCall.test.ts',
-  'tests/rest/subAgentHandoff.test.ts',
-  'tests/rest/triggerEventDispatch.test.ts',
-  'tests/rest/triggerEventLoopThroughApi.test.ts',
-  'tests/rest/triggers.test.ts',
-  'tests/rest/usageFailedTurns.test.ts',
-  'tests/rest/usageServedModel.test.ts',
-  'tests/rest/webhookDelivery.test.ts',
-  'tests/rest/workAuthority.test.ts',
-  'tests/rest/workflowMigrations.test.ts',
-]);
-
 const LOOPS = new Set([
   ts.SyntaxKind.ForStatement,
   ts.SyntaxKind.ForOfStatement,
@@ -228,7 +173,7 @@ describe('one poll helper for the server test suites', () => {
   test('no test file polls in a loop of its own', () => {
     const offenders = testSources()
       .filter((file) => {
-        return file !== HELPER && !LOCAL_POLL_EXEMPT.has(file);
+        return file !== HELPER;
       })
       .flatMap(offendingSites);
     assert.deepEqual(
@@ -236,15 +181,5 @@ describe('one poll helper for the server test suites', () => {
       [],
       `poll through \`${HELPER}\` instead of a local loop`
     );
-  });
-
-  test('every exempt file still holds a local loop', () => {
-    const stale = [...LOCAL_POLL_EXEMPT].filter((file) => {
-      const full = path.join(unitDir, file);
-      if (!fs.existsSync(full)) return true;
-      const source = fs.readFileSync(full, 'utf-8');
-      return localPollLoops({ file, source }).length === 0;
-    });
-    assert.deepEqual(stale, [], 'drop these from LOCAL_POLL_EXEMPT');
   });
 });

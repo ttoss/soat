@@ -2,6 +2,7 @@ import { drainEvalQueueOnce } from 'src/lib/evaluationWorker';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -453,11 +454,16 @@ describe('Evaluations — verdict', () => {
     let run: RunBody;
     try {
       run = await runSync({ evalId });
-      for (let tick = 0; tick < 100 && captured.length === 0; tick += 1) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 10);
-        });
-      }
+      await pollUntil({
+        read: () => {
+          return captured;
+        },
+        done: (events) => {
+          return events.some((event) => {
+            return event.resourceId === run.id;
+          });
+        },
+      });
     } finally {
       eventBus.off('soat:event', handler);
     }

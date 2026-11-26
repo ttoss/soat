@@ -9,6 +9,7 @@ import {
   type AgentToolTurn,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { pollFor } from '../../fixtures/poll';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -21,20 +22,21 @@ describe('admission — a scheduled firing', () => {
   let service: AdmissionService;
   let turn: AgentToolTurn;
 
-  const settledFiring = async (triggerId: string) => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const res = await turn
-        .api()
-        .get(`/api/v1/trigger-firings?trigger_id=${triggerId}`);
-      const [firing] = res.body.data;
-      if (firing && ['completed', 'failed'].includes(firing.status)) {
-        return firing;
-      }
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`trigger ${triggerId} never fired`);
+  const settledFiring = (triggerId: string) => {
+    return pollFor({
+      read: async () => {
+        const res = await turn
+          .api()
+          .get(`/api/v1/trigger-firings?trigger_id=${triggerId}`);
+        return res.body;
+      },
+      pick: (body) => {
+        const [firing] = body.data;
+        return firing && ['completed', 'failed'].includes(firing.status)
+          ? firing
+          : undefined;
+      },
+    });
   };
 
   beforeAll(async () => {

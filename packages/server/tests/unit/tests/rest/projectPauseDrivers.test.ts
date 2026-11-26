@@ -12,6 +12,7 @@ import {
   setupProjectWithUsers,
   testGrant,
 } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient } from '../../testClient';
 
@@ -94,17 +95,15 @@ describe('Project pause — work in motion', () => {
       return (await asAdmin().get(`/api/v1/orchestration-runs/${id}`)).body;
     };
 
-    const pollRun = async (args: { runId: string; status: string }) => {
-      for (let i = 0; i < 200; i += 1) {
-        const run = await getRun(args.runId);
-        if (run.status === args.status) return run;
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      }
-      throw new Error(
-        `run ${args.runId} never reached ${args.status}: ${JSON.stringify(await getRun(args.runId))}`
-      );
+    const pollRun = (args: { runId: string; status: string }) => {
+      return pollUntil({
+        read: () => {
+          return getRun(args.runId);
+        },
+        done: (run) => {
+          return run.status === args.status;
+        },
+      });
     };
 
     const startSleepingRun = async (): Promise<string> => {

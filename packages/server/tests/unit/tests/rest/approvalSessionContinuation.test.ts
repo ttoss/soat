@@ -4,6 +4,7 @@ import {
   textCompletion,
   toolCallCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -145,14 +146,12 @@ describe('POST /api/v1/approvals/:approval_id/reject on a session-backed tool ca
 
     // The continuation is fired after the response, so the thread is read
     // once the continuation's own answer has landed in it.
-    let texts: string[] = [];
-    for (let attempt = 0; attempt < 80; attempt += 1) {
-      texts = await conversationTexts();
-      if (texts.includes('The refund was declined.')) break;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
+    const texts = await pollUntil({
+      read: conversationTexts,
+      done: (found) => {
+        return found.includes('The refund was declined.');
+      },
+    });
 
     const decision = texts.find((text) => {
       return text.startsWith(`Approval ${approval.id} `);

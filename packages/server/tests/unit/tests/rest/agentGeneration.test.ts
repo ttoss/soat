@@ -10,6 +10,7 @@ import type { PendingGeneration } from 'src/lib/agentGenerationTypes';
 import { createGenerationProvenance } from 'src/lib/generationProvenance';
 import { createGenerationRecord } from 'src/lib/generations';
 
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import { settleTestGeneration } from '../../fixtures/settledGeneration';
 import { buildUnaliasedModel } from '../../fixtures/unaliasedModel';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -19,12 +20,6 @@ import {
   testClient,
   workAuthorityOfToken,
 } from '../../testClient';
-
-const sleep = (ms: number) => {
-  return new Promise((resolve) => {
-    return setTimeout(resolve, ms);
-  });
-};
 
 describe('Agent Generation Routes', () => {
   afterEach(() => {
@@ -1061,23 +1056,18 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('completed');
 
-      // The tool-outputs continuation completes via a fire-and-forget side
-      // effect (`fireCompletionSideEffects`, not awaited by the response), so
-      // the usage event lands asynchronously — poll for it within a bound
-      // instead of asserting immediately after the response returns.
-      let metersRes = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/events?generation_id=gen_usage_metered'
-      );
-      const startedAt = Date.now();
-      while (
-        metersRes.body.data.length === 0 &&
-        Date.now() - startedAt < 5000
-      ) {
-        await sleep(50);
-        metersRes = await authenticatedTestClient(userToken).get(
-          '/api/v1/usage/events?generation_id=gen_usage_metered'
-        );
-      }
+      // The usage event lands from a fire-and-forget side effect the response
+      // does not await.
+      const metersRes = await pollUntil({
+        read: () => {
+          return authenticatedTestClient(userToken).get(
+            '/api/v1/usage/events?generation_id=gen_usage_metered'
+          );
+        },
+        done: (res) => {
+          return res.status === 200 && res.body.data.length > 0;
+        },
+      });
       expect(metersRes.status).toBe(200);
       expect(metersRes.body.data).toHaveLength(1);
       const components: Array<{ component: string; quantity: number }> =
@@ -1540,14 +1530,14 @@ describe('Agent Generation Routes', () => {
 
       // The terminal record write is fire-and-forget, so poll for it rather
       // than racing the response.
-      let stopReason: string | null = null;
-      for (let attempt = 0; attempt < 20 && stopReason === null; attempt += 1) {
-        const row = await db.Generation.findOne({
-          where: { publicId: generationId },
-        });
-        stopReason = row?.stopReason ?? null;
-        if (stopReason === null) await sleep(50);
-      }
+      const stopReason = await pollFor({
+        read: () => {
+          return db.Generation.findOne({ where: { publicId: generationId } });
+        },
+        pick: (row) => {
+          return row?.stopReason ?? undefined;
+        },
+      });
       expect(stopReason).toBe('max_steps');
 
       // The submit that ended the turn called no model, so it meters nothing —

@@ -2,6 +2,7 @@ import { db } from 'src/db';
 import * as eventBusModule from 'src/lib/eventBus';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const MEMORY_ACTIONS = [
@@ -286,16 +287,16 @@ describe('Memory retraction', () => {
         // The envelope resolves the project's public id with a real read, so
         // the event can land a tick or two after the request returned — and
         // after events this test's own setup emitted, so wait for this one.
-        const retracted = () => {
-          return events.some((event) => {
-            return event.type === 'memories.retracted';
-          });
-        };
-        for (let i = 0; i < 100 && !retracted(); i += 1) {
-          await new Promise((resolve) => {
-            return setTimeout(resolve, 20);
-          });
-        }
+        await pollUntil({
+          read: () => {
+            return events;
+          },
+          done: (seen) => {
+            return seen.some((event) => {
+              return event.type === 'memories.retracted';
+            });
+          },
+        });
       } finally {
         eventBusModule.eventBus.off('soat:event', listener);
       }
