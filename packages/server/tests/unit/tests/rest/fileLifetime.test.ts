@@ -519,6 +519,21 @@ describe('file lifetime', () => {
       expect(ids).not.toContain(fileId);
     });
 
+    test('frees its path for a new file before any sweep runs', async () => {
+      const first = await uploadBase64({
+        filename: 'reused-name.pdf',
+        expires_in: 3600,
+      });
+      await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/files/${first.body.id}/metadata`)
+        .send({ expires_at: new Date(Date.now() - 1000).toISOString() });
+
+      const second = await uploadBase64({ filename: 'reused-name.pdf' });
+
+      expect(second.status).toBe(201);
+      expect(second.body.id).not.toBe(first.body.id);
+    });
+
     test('does not keep its project from being deleted', async () => {
       const project = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')

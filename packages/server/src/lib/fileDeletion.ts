@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { INCLUDING_EXPIRED_FILES } from './expiredFiles';
-import { removeFile } from './files';
+import { removeFile } from './fileRemoval';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:file-deletion');
