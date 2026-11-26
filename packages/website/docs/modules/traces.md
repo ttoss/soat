@@ -217,7 +217,7 @@ What is **not written** is exactly the field set a [content purge](#content-purg
 | Record | Not written |
 | --- | --- |
 | Trace | the step files (no `File` row, no bytes), `error` |
-| Generation | `metadata`, `error`, `extraction`, `pending_state` |
+| Generation | `metadata`, `error`, `extraction`, `pending_state`, `input_messages` |
 
 The skeleton is still written: ids, timestamps, `status`, `stop_reason`, `step_count`, and every usage-attribution column, so metering, cost, quotas and audit are unchanged. Rows carry `content_redacted_at` with `content_redacted_by_principal_id: "zero_retention"`.
 
