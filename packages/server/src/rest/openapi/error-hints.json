@@ -66,6 +66,11 @@
       "hint": "The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.",
       "routes": []
     },
+    "AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED": {
+      "http_status": 400,
+      "hint": "Do not retry the same request. Send the input in a form the provider takes (`meta.functionality` names what it refused), send it to an agent on another AI provider, or declare the model's `model_input_modalities` so a part it cannot read is refused by name.",
+      "routes": []
+    },
     "AI_PROVIDER_HAS_DEPENDENTS": {
       "http_status": 409,
       "hint": "Delete or repoint the agents, chats, model routes and forwarding AI providers that reference the provider, then delete it; `force` does not override them. Price overrides, usage records and accepted shares (`meta.forcible`) block only until `force=true`, which drops the overrides, unlinks usage history and revokes the shares.",
