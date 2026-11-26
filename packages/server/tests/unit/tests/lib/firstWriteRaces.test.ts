@@ -4,6 +4,8 @@ import { findOrCreateChain } from 'src/lib/generationChains';
 import { findOrCreateTrace } from 'src/lib/generationTrace';
 import { saveTrace } from 'src/lib/traces';
 
+import { pollUntil } from '../../fixtures/poll';
+
 /**
  * Two writers creating the same row at once: two hops of one chain both finding
  * no chain row, or a trace save racing the generation record that creates its
@@ -23,17 +25,18 @@ describe('first-write races', () => {
 
   /** Resolves once another session is blocked waiting on a row lock. */
   const lockWaiterAppears = async (): Promise<void> => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const [rows] = await db.sequelize.query(
-        "SELECT count(*)::int AS waiting FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()"
-      );
-      const [row] = rows as Array<{ waiting: number }>;
-      if (row.waiting > 0) return;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 10);
-      });
-    }
-    throw new Error('no session ever blocked on the held insert');
+    await pollUntil({
+      read: async () => {
+        const [rows] = await db.sequelize.query(
+          "SELECT count(*)::int AS waiting FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()"
+        );
+        const [row] = rows as Array<{ waiting: number }>;
+        return row.waiting;
+      },
+      done: (waiting) => {
+        return waiting > 0;
+      },
+    });
   };
 
   beforeAll(async () => {

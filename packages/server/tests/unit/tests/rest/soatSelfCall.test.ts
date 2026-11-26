@@ -8,6 +8,7 @@ import { drainQueueOnce } from 'src/lib/orchestrationWorker';
 import { flushTaskAutomations } from 'src/lib/tasks';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -1153,14 +1154,12 @@ describe('SOAT self-call', () => {
       );
       expect(res.status).toBe(200);
 
-      for (let i = 0; i < 80; i += 1) {
-        const result = toolResultFromFollowUp(completionBodies);
-        if (result !== undefined) return result;
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
-      return undefined;
+      return pollFor({
+        read: () => {
+          return completionBodies;
+        },
+        pick: toolResultFromFollowUp,
+      });
     };
 
     test('a continuation authenticates its builtin tool as the principal that started the chain', async () => {

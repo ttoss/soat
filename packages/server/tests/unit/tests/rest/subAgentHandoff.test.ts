@@ -8,6 +8,7 @@ import {
   textCompletion,
   toolCallCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -103,16 +104,15 @@ describe('a sub-agent generation that outlives its builtin call', () => {
     }) as string[];
   };
 
-  const waitForText = async (conversationId: string, text: string) => {
-    let texts: string[] = [];
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      texts = await conversationTexts(conversationId);
-      if (texts.includes(text)) break;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
-    return texts;
+  const waitForText = (conversationId: string, text: string) => {
+    return pollUntil({
+      read: () => {
+        return conversationTexts(conversationId);
+      },
+      done: (texts) => {
+        return texts.includes(text);
+      },
+    });
   };
 
   /** The call's result as the parent's model received it. */

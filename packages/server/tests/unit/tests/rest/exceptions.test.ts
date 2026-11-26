@@ -11,6 +11,7 @@ import {
 
 import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 // No public create endpoint — items are auto-filed by producers or filed
@@ -32,21 +33,17 @@ describe('Exceptions', () => {
 
   // Producers file exceptions fire-and-forget off an event, so poll the
   // observable side effect rather than racing it.
-  const waitForException = async (
-    predicate: (e: {
-      kind: string;
-      orchestration_run_id: string | null;
-    }) => boolean
-  ) => {
-    for (let i = 0; i < 100; i += 1) {
-      const res = await listExceptions('');
-      const match = res.body.data.find(predicate);
-      if (match) return match;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 20);
-      });
-    }
-    return null;
+  const waitForException = (
+    predicate: (e: Record<string, unknown>) => boolean
+  ): Promise<Record<string, unknown>> => {
+    return pollFor({
+      read: () => {
+        return listExceptions('');
+      },
+      pick: (res) => {
+        return (res.body.data as Record<string, unknown>[]).find(predicate);
+      },
+    });
   };
 
   beforeAll(async () => {
@@ -626,22 +623,6 @@ describe('Exceptions', () => {
   // flaky enough to intermittently fail the coverage gate. Emitting directly
   // and polling the filed row makes every branch deterministic.
   describe('producer branch coverage (deterministic)', () => {
-    const pollException = async (
-      predicate: (e: Record<string, unknown>) => boolean
-    ): Promise<Record<string, unknown> | null> => {
-      for (let i = 0; i < 100; i += 1) {
-        const res = await listExceptions('');
-        const match = (res.body.data as Record<string, unknown>[]).find(
-          predicate
-        );
-        if (match) return match;
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 20);
-        });
-      }
-      return null;
-    };
-
     const emit = (
       type: SoatEventName,
       resourceType: SoatResourceType,
@@ -667,7 +648,7 @@ describe('Exceptions', () => {
         orchestration_run_id: 'run_exp_1',
         agent_id: 'agent_exp_1',
       });
-      const match = await pollException((e) => {
+      const match = await waitForException((e) => {
         return (
           e.kind === 'approval_expired' &&
           e.orchestration_run_id === 'run_exp_1'
@@ -682,7 +663,7 @@ describe('Exceptions', () => {
       emit('orchestration_runs.failed', 'orchestration_run', 'run_noerr_1', {
         id: 'run_noerr_1',
       });
-      const match = await pollException((e) => {
+      const match = await waitForException((e) => {
         return (
           e.kind === 'run_failed' && e.orchestration_run_id === 'run_noerr_1'
         );
@@ -699,7 +680,7 @@ describe('Exceptions', () => {
         generation_id: 'gen_trip_1',
         agent_id: 'agent_trip_1',
       });
-      const match = await pollException((e) => {
+      const match = await waitForException((e) => {
         return (
           e.kind === 'guardrail_tripwire' &&
           typeof e.title === 'string' &&
@@ -721,7 +702,7 @@ describe('Exceptions', () => {
         generation_id: 'gen_loop_1',
         agent_id: 'agent_loop_1',
       });
-      const first = await pollException((e) => {
+      const first = await waitForException((e) => {
         return (
           e.kind === 'guardrail_tripwire' &&
           e.agent_id === 'agent_loop_1' &&
@@ -741,7 +722,7 @@ describe('Exceptions', () => {
         generation_id: 'gen_loop_2',
         agent_id: 'agent_loop_1',
       });
-      const folded = await pollException((e) => {
+      const folded = await waitForException((e) => {
         return e.id === first!.id && e.occurrence_count === 2;
       });
       expect(folded).not.toBeNull();

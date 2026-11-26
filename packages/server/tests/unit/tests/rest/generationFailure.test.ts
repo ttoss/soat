@@ -11,6 +11,7 @@ import {
   startChatCompletionsStub,
   textCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
@@ -172,13 +173,15 @@ describe('POST /api/v1/agents/:agent_id/generate — failures', () => {
         const { generation_id: generationId, trace_id: traceId } =
           res.body.error.meta;
 
-        for (let tick = 0; tick < 100 && captured.length === 0; tick += 1) {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 10);
-          });
-        }
-        const mine = captured.filter((event) => {
-          return event.resourceId === generationId;
+        const mine = await pollUntil({
+          read: () => {
+            return captured.filter((event) => {
+              return event.resourceId === generationId;
+            });
+          },
+          done: (found) => {
+            return found.length > 0;
+          },
         });
         expect(mine).toHaveLength(1);
         expect(mine[0].projectPublicId).toBe(projectId);

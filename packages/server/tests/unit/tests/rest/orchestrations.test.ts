@@ -13,6 +13,7 @@ import {
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
 import { nodeExecutionsOf } from '../../fixtures/nodeExecutions';
+import { pollFor, pollGet, pollUntil } from '../../fixtures/poll';
 import { readRequestBody } from '../../fixtures/requestBody';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -1684,23 +1685,22 @@ describe('Orchestrations', () => {
       // Polls a background-driven run until it settles, bounded so a wiring
       // break fails with a message instead of hanging the suite.
       const waitForSucceeded = async (runId: string): Promise<void> => {
-        for (let i = 0; i < 100; i += 1) {
-          const res = await authenticatedTestClient(userToken).get(
-            `/api/v1/orchestration-runs/${runId}`
-          );
-          if (res.body.status === 'completed') return;
-          if (['failed', 'cancelled', 'expired'].includes(res.body.status)) {
-            throw new Error(
-              `run ${runId} settled as ${res.body.status}: ${JSON.stringify(
-                res.body.error
-              )}`
+        await pollFor({
+          read: async () => {
+            const res = await authenticatedTestClient(userToken).get(
+              `/api/v1/orchestration-runs/${runId}`
             );
-          }
-          await new Promise<void>((resolve) => {
-            return setTimeout(resolve, 20);
-          });
-        }
-        throw new Error(`run ${runId} never succeeded`);
+            return res.body;
+          },
+          pick: (run) => {
+            if (['failed', 'cancelled', 'expired'].includes(run.status)) {
+              throw new Error(
+                `run ${runId} settled as ${run.status}: ${JSON.stringify(run.error)}`
+              );
+            }
+            return run.status === 'completed' ? run : undefined;
+          },
+        });
       };
 
       const stubGeneration = () => {
@@ -3828,20 +3828,17 @@ describe('Orchestrations', () => {
         });
 
         // Delivery is fire-and-forget; poll until the subscription is called.
-        const deadline = Date.now() + 5000;
-        const callTo = () => {
-          return fetchSpy.mock.calls.find(([u]) => {
-            return u === hookUrl;
-          });
-        };
-        while (!callTo() && Date.now() < deadline) {
-          await new Promise((r) => {
-            return setTimeout(r, 25);
-          });
-        }
-        const call = callTo();
-        expect(call).toBeDefined();
-        const init = call![1] as {
+        const call = await pollFor({
+          read: () => {
+            return fetchSpy.mock.calls;
+          },
+          pick: (calls) => {
+            return calls.find(([u]) => {
+              return u === hookUrl;
+            });
+          },
+        });
+        const init = call[1] as {
           headers: HeadersInit;
           body: string;
         };
@@ -4877,19 +4874,17 @@ describe('Orchestrations', () => {
         expect(startRes.status).toBe(201);
         runId = startRes.body.id as string;
 
-        const parked = await (async () => {
-          for (let i = 0; i < 200; i += 1) {
-            const res = await getRun(runId!);
-            if (res.body.status === 'awaiting_input') return res.body;
-            if (['completed', 'failed'].includes(res.body.status as string)) {
-              throw new Error(`run settled as ${res.body.status}`);
+        const parked = await pollFor({
+          read: async () => {
+            return (await getRun(runId!)).body;
+          },
+          pick: (run) => {
+            if (['completed', 'failed'].includes(run.status as string)) {
+              throw new Error(`run settled as ${run.status}`);
             }
-            await new Promise((r) => {
-              return setTimeout(r, 20);
-            });
-          }
-          throw new Error('run never parked');
-        })();
+            return run.status === 'awaiting_input' ? run : undefined;
+          },
+        });
 
         expect(parked.required_action.type).toBe('paused');
         expect(parked.required_action.reason).toBe('balance went negative');
@@ -4938,14 +4933,16 @@ describe('Orchestrations', () => {
       expect(startRes.status).toBe(201);
       const runId = startRes.body.id as string;
 
-      for (let i = 0; i < 200; i += 1) {
-        const res = await getRun(runId);
-        if (res.body.status === 'sleeping') break;
-        await new Promise((r) => {
-          return setTimeout(r, 20);
-        });
-      }
-      expect((await getRun(runId)).body.status).toBe('sleeping');
+      await pollGet({
+        token: userToken,
+        path: `/api/v1/orchestration-runs/${runId}`,
+        select: (body) => {
+          return body.status;
+        },
+        predicate: (status) => {
+          return status === 'sleeping';
+        },
+      });
 
       const paused = await pause(runId);
       expect(paused.status).toBe(200);
@@ -4967,16 +4964,17 @@ describe('Orchestrations', () => {
         await wakeDueRuns({ now: new Date(Date.now() + 5000) })
       ).toBeGreaterThanOrEqual(1);
 
-      for (let i = 0; i < 200; i += 1) {
-        const res = await getRun(runId);
-        if (res.body.status === 'completed') break;
-        await new Promise((r) => {
-          return setTimeout(r, 20);
-        });
-      }
-      const settled = await getRun(runId);
-      expect(settled.body.status).toBe('completed');
-      expect(settled.body.state.after).toBe('done');
+      const settled = await pollGet({
+        token: userToken,
+        path: `/api/v1/orchestration-runs/${runId}`,
+        select: (body) => {
+          return body as { status: string; state: Record<string, unknown> };
+        },
+        predicate: (run) => {
+          return run.status === 'completed';
+        },
+      });
+      expect(settled.state.after).toBe('done');
     });
 
     test('a run parked on a human node keeps that action, and human input is refused until it is resumed', async () => {
@@ -5137,27 +5135,21 @@ describe('Orchestrations', () => {
       );
     };
 
-    const sleep = (ms: number) => {
-      return new Promise<void>((resolve) => {
-        return setTimeout(resolve, ms);
-      });
-    };
-
     // Polls the run until one of `statuses` is observed, or fails after a bound.
-    const waitForStatus = async (
+    const waitForStatus = (
       orchestrationRunId: string,
       statuses: string[]
     ): Promise<Record<string, unknown>> => {
-      for (let i = 0; i < 100; i += 1) {
-        const res = await getRun(orchestrationRunId);
-        if (statuses.includes(res.body.status as string)) {
-          return res.body as Record<string, unknown>;
-        }
-        await sleep(20);
-      }
-      throw new Error(
-        `run ${orchestrationRunId} never reached ${statuses.join('/')}`
-      );
+      return pollGet({
+        token: userToken,
+        path: `/api/v1/orchestration-runs/${orchestrationRunId}`,
+        select: (body) => {
+          return body;
+        },
+        predicate: (body) => {
+          return statuses.includes(body.status as string);
+        },
+      });
     };
 
     // Polls the run until it is parked on the given node. A timer wait parks the
@@ -5167,23 +5159,24 @@ describe('Orchestrations', () => {
       orchestrationRunId: string,
       nodeId: string
     ): Promise<void> => {
-      for (let i = 0; i < 100; i += 1) {
-        const res = await getRun(orchestrationRunId);
-        const active = (res.body.active_nodes ?? []) as string[];
-        if (
-          ['running', 'sleeping', 'awaiting_input'].includes(res.body.status) &&
-          active.includes(nodeId)
-        ) {
-          return;
-        }
-        if (['completed', 'failed', 'cancelled'].includes(res.body.status)) {
-          throw new Error(
-            `run ${orchestrationRunId} settled as ${res.body.status} before waiting on ${nodeId}`
-          );
-        }
-        await sleep(20);
-      }
-      throw new Error(`run ${orchestrationRunId} never waited on ${nodeId}`);
+      await pollFor({
+        read: async () => {
+          return (await getRun(orchestrationRunId)).body;
+        },
+        pick: (run) => {
+          if (['completed', 'failed', 'cancelled'].includes(run.status)) {
+            throw new Error(
+              `run ${orchestrationRunId} settled as ${run.status} before waiting on ${nodeId}`
+            );
+          }
+          const active = (run.active_nodes ?? []) as string[];
+          return ['running', 'sleeping', 'awaiting_input'].includes(
+            run.status
+          ) && active.includes(nodeId)
+            ? run
+            : undefined;
+        },
+      });
     };
 
     const createOrchestration = async (body: Record<string, unknown>) => {
@@ -5342,32 +5335,24 @@ describe('Orchestrations', () => {
 
         await waitForStatus(orchestrationRunId, ['completed']);
 
-        // Events resolve the project public ID asynchronously, so give them a
-        // moment to flush.
-        for (let i = 0; i < 50; i += 1) {
-          const types = captured
-            .filter((e) => {
-              return e.resourceId === orchestrationRunId;
-            })
-            .map((e) => {
-              return e.type;
-            });
-          if (
-            types.includes('orchestration_runs.started') &&
-            types.includes('orchestration_runs.completed')
-          ) {
-            break;
-          }
-          await sleep(20);
-        }
-
-        const types = captured
-          .filter((e) => {
-            return e.resourceId === orchestrationRunId;
-          })
-          .map((e) => {
-            return e.type;
-          });
+        // Events resolve the project public ID asynchronously.
+        const types = await pollUntil({
+          read: () => {
+            return captured
+              .filter((e) => {
+                return e.resourceId === orchestrationRunId;
+              })
+              .map((e) => {
+                return e.type;
+              });
+          },
+          done: (seen) => {
+            return (
+              seen.includes('orchestration_runs.started') &&
+              seen.includes('orchestration_runs.completed')
+            );
+          },
+        });
         expect(types).toContain('orchestration_runs.started');
         expect(types).toContain('orchestration_runs.completed');
       } finally {

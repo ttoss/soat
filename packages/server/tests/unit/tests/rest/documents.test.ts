@@ -7,6 +7,7 @@ import { signToken } from 'src/lib/signedTokens';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER, THREE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
+import { pollGet, pollUntil } from '../../fixtures/poll';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -16,6 +17,23 @@ describe('Documents', () => {
   let projectId: string;
   let noPermToken: string;
   let policyId: string;
+
+  /** The document once it reaches `targetStatus`, or `failed`. */
+  const waitForDocumentStatus = (
+    docId: string,
+    targetStatus: string
+  ): Promise<Record<string, unknown>> => {
+    return pollGet({
+      token: userToken,
+      path: `/api/v1/documents/${docId}`,
+      select: (body) => {
+        return body;
+      },
+      predicate: (body) => {
+        return body.status === targetStatus || body.status === 'failed';
+      },
+    });
+  };
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -877,28 +895,6 @@ describe('Documents', () => {
       return res.body.id as string;
     };
 
-    const waitForDocumentStatus = async (
-      docId: string,
-      targetStatus: string,
-      timeout = 5000
-    ): Promise<Record<string, unknown>> => {
-      const deadline = Date.now() + timeout;
-      while (Date.now() < deadline) {
-        const res = await authenticatedTestClient(userToken).get(
-          `/api/v1/documents/${docId}`
-        );
-        if (res.body.status === targetStatus || res.body.status === 'failed') {
-          return res.body as Record<string, unknown>;
-        }
-        await new Promise((r) => {
-          return setTimeout(r, 50);
-        });
-      }
-      throw new Error(
-        `Timed out waiting for document ${docId} to reach status ${targetStatus}`
-      );
-    };
-
     const getDocumentStatus = async (docId: string) => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/documents/${docId}/status`
@@ -1501,14 +1497,14 @@ describe('Documents', () => {
       eventBusModule.eventBus.on('soat:event', listener);
       try {
         await act();
-        // The envelope's project lookup is a real DB read, so an event can land
-        // a tick or two after the call that produced it returned.
-        for (let i = 0; i < 100 && events.length === 0; i += 1) {
-          await new Promise((r) => {
-            return setTimeout(r, 20);
-          });
-        }
-        return events;
+        return await pollUntil({
+          read: () => {
+            return events;
+          },
+          done: (seen) => {
+            return seen.length > 0;
+          },
+        });
       } finally {
         eventBusModule.eventBus.off('soat:event', listener);
       }
@@ -1927,26 +1923,6 @@ describe('Documents', () => {
         .field('project_id', projectId);
       expect(res.status).toBe(201);
       return res.body.id as string;
-    };
-
-    const waitForDocumentStatus = async (
-      docId: string,
-      targetStatus: string,
-      timeout = 5000
-    ): Promise<Record<string, unknown>> => {
-      const deadline = Date.now() + timeout;
-      while (Date.now() < deadline) {
-        const res = await authenticatedTestClient(userToken).get(
-          `/api/v1/documents/${docId}`
-        );
-        if (res.body.status === targetStatus || res.body.status === 'failed') {
-          return res.body as Record<string, unknown>;
-        }
-        await new Promise((r) => {
-          return setTimeout(r, 50);
-        });
-      }
-      throw new Error(`Timed out waiting for ${docId} -> ${targetStatus}`);
     };
 
     const getDocumentStatus = async (docId: string) => {

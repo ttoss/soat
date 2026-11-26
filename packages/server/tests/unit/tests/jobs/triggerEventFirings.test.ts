@@ -13,6 +13,7 @@ import { triggerAuthorityIn } from 'src/lib/triggerFirings';
 import { storedAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 const EVENT_NAME = 'durable.tick';
@@ -110,17 +111,15 @@ describe('Durable event firings', () => {
   };
 
   /** The sweep dispatches detached, so poll the firing. */
-  const waitForTerminal = async (firingId: string): Promise<Firing> => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const firing = await getFiring(firingId);
-      if (firing.status === 'completed' || firing.status === 'failed') {
-        return firing;
-      }
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`firing ${firingId} never settled`);
+  const waitForTerminal = (firingId: string): Promise<Firing> => {
+    return pollUntil({
+      read: () => {
+        return getFiring(firingId);
+      },
+      done: (firing) => {
+        return firing.status === 'completed' || firing.status === 'failed';
+      },
+    });
   };
 
   beforeAll(async () => {
@@ -178,16 +177,16 @@ describe('Durable event firings', () => {
         return res.body.data as Array<{ status: string }>;
       };
       const waitForSettled = async (count: number) => {
-        for (let attempt = 0; attempt < 400; attempt += 1) {
-          const settled = (await listFirings()).filter((firing) => {
-            return firing.status === 'completed';
-          });
-          if (settled.length >= count) return;
-          await new Promise((resolve) => {
-            return setTimeout(resolve, 25);
-          });
-        }
-        throw new Error(`never saw ${count} settled firings`);
+        await pollUntil({
+          read: listFirings,
+          done: (firings) => {
+            return (
+              firings.filter((firing) => {
+                return firing.status === 'completed';
+              }).length >= count
+            );
+          },
+        });
       };
 
       const redelivered = randomUUID();

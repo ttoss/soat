@@ -4,6 +4,7 @@ import {
   type ChatRequest,
   startChatCompletionStub,
 } from '../../fixtures/chatCompletionStub';
+import { pollGet } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -115,19 +116,16 @@ describe('Memory rules — the built-in extractor', () => {
     expect(res.status).toBe(200);
     const generationId = res.body.id as string;
 
-    let summaries: Record<string, Summary> | undefined;
-    for (let attempt = 0; attempt < 200 && !summaries; attempt += 1) {
-      const generation = await asAdmin().get(
-        `/api/v1/generations/${generationId}`
-      );
-      summaries = generation.body.extraction ?? undefined;
-      if (!summaries) {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      }
-    }
-    expect(summaries).toBeDefined();
+    const summaries = await pollGet({
+      token: adminToken,
+      path: `/api/v1/generations/${generationId}`,
+      select: (body) => {
+        return body.extraction as Record<string, Summary> | null | undefined;
+      },
+      predicate: (extraction) => {
+        return Boolean(extraction);
+      },
+    });
 
     return {
       generationId,
@@ -325,22 +323,16 @@ describe('Memory rules — the built-in extractor', () => {
       await runTurn({ agentId });
 
       // The metering write does not hold up the firing, so poll the meter.
-      let events: Array<Record<string, unknown>> = [];
-      for (
-        let attempt = 0;
-        attempt < 200 && events.length === 0;
-        attempt += 1
-      ) {
-        const res = await asAdmin().get(
-          `/api/v1/usage/events?agent_id=${agentId}&source=memory_extraction`
-        );
-        events = res.body.data;
-        if (events.length === 0) {
-          await new Promise((resolve) => {
-            setTimeout(resolve, 20);
-          });
-        }
-      }
+      const events = await pollGet({
+        token: adminToken,
+        path: `/api/v1/usage/events?agent_id=${agentId}&source=memory_extraction`,
+        select: (body) => {
+          return body.data as Array<Record<string, unknown>>;
+        },
+        predicate: (found) => {
+          return found.length > 0;
+        },
+      });
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
         meter_type: 'llm_tokens',

@@ -9,6 +9,7 @@ import {
   setupProjectWithUsers,
   testGrant,
 } from '../../fixtures/bootstrap';
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import {
   createQuotaRow,
   freshProjectAndAgent,
@@ -621,16 +622,14 @@ describe('Decisions — tool backend', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('queued');
-      for (let attempt = 0; attempt < 200; attempt += 1) {
-        const row = await db.Decision.findOne({
-          where: { publicId: res.body.id },
-        });
-        if (row?.status === 'completed') return;
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 25);
-        });
-      }
-      throw new Error('The decision never settled.');
+      await pollUntil({
+        read: () => {
+          return db.Decision.findOne({ where: { publicId: res.body.id } });
+        },
+        done: (row) => {
+          return row?.status === 'completed';
+        },
+      });
     });
 
     test.each([
@@ -951,20 +950,20 @@ describe('Decisions — tool backend', () => {
       });
 
       expect(res.status).toBe(201);
-      for (let attempt = 0; attempt < 200; attempt += 1) {
-        const row = await db.Decision.findOne({
-          where: { publicId: res.body.id },
-        });
-        if (row && row.status !== 'queued' && row.status !== 'running') {
-          expect(row.error).toBeNull();
-          expect(row.status).toBe('completed');
-          return;
-        }
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 25);
-        });
-      }
-      throw new Error('The decision never settled.');
+      const row = await pollFor({
+        read: () => {
+          return db.Decision.findOne({ where: { publicId: res.body.id } });
+        },
+        pick: (found) => {
+          return found &&
+            found.status !== 'queued' &&
+            found.status !== 'running'
+            ? found
+            : undefined;
+        },
+      });
+      expect(row.error).toBeNull();
+      expect(row.status).toBe('completed');
     });
 
     test('a requester who may not read what the step reads gets a failed decision', async () => {

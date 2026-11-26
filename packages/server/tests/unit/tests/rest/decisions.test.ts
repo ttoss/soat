@@ -10,6 +10,7 @@ import {
   setupProjectWithUsers,
   testGrant,
 } from '../../fixtures/bootstrap';
+import { holdsThroughout, pollUntil } from '../../fixtures/poll';
 import {
   createQuotaRow,
   freshProjectAndAgent,
@@ -181,19 +182,17 @@ describe('Decisions', () => {
   };
 
   /** Reads the decision until it settles, within a bound. */
-  const waitForSettled = async (decisionId: string) => {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/decisions/${decisionId}`
-      );
-      if (res.body.status === 'completed' || res.body.status === 'failed') {
-        return res;
-      }
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`Decision ${decisionId} never settled.`);
+  const waitForSettled = (decisionId: string) => {
+    return pollUntil({
+      read: () => {
+        return authenticatedTestClient(userToken).get(
+          `/api/v1/decisions/${decisionId}`
+        );
+      },
+      done: (res) => {
+        return res.body.status === 'completed' || res.body.status === 'failed';
+      },
+    });
   };
 
   const createRestrictedApiKey = async (
@@ -655,11 +654,14 @@ describe('Decisions', () => {
       eventBus.on('soat:event', handler);
       try {
         const res = await decide({});
-        for (let tick = 0; tick < 100 && captured.length === 0; tick += 1) {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 10);
-          });
-        }
+        await pollUntil({
+          read: () => {
+            return captured.length;
+          },
+          done: (count) => {
+            return count > 0;
+          },
+        });
         const mine = captured.filter((event) => {
           return event.resourceId === res.body.id;
         });
@@ -837,17 +839,15 @@ describe('Decisions', () => {
       try {
         const res = await decide({ body: { wait: false } });
         expect(res.body.status).toBe('queued');
-        for (
-          let tick = 0;
-          tick < 40 && update.mock.calls.length === 0;
-          tick += 1
-        ) {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 25);
-          });
-        }
+        await pollUntil({
+          read: () => {
+            return update.mock.calls.length;
+          },
+          done: (calls) => {
+            return calls > 0;
+          },
+        });
 
-        expect(update).toHaveBeenCalled();
         const after = await authenticatedTestClient(userToken).get(
           `/api/v1/decisions/${res.body.id}`
         );
@@ -879,16 +879,17 @@ describe('Decisions', () => {
 
       release();
       // The held generation now completes; its answer must not land.
-      for (let tick = 0; tick < 40; tick += 1) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 25);
-        });
-      }
-      const after = await authenticatedTestClient(userToken).get(
-        `/api/v1/decisions/${res.body.id}`
-      );
-      expect(after.body.status).toBe('failed');
-      expect(after.body.answers).toBeNull();
+      await holdsThroughout({
+        read: () => {
+          return authenticatedTestClient(userToken).get(
+            `/api/v1/decisions/${res.body.id}`
+          );
+        },
+        check: (after) => {
+          expect(after.body.status).toBe('failed');
+          expect(after.body.answers).toBeNull();
+        },
+      });
     });
 
     test('a decision still inside its lease is left alone', async () => {

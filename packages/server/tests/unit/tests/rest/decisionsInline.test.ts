@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { db } from 'src/db';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollGet } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const ACTIONS = [
@@ -297,19 +298,19 @@ describe('Decisions — inline questions', () => {
       expect(res.body.status).toBe('queued');
       expect(res.body.answers).toBeNull();
       expect(res.body.questions).toEqual(QUESTIONS);
-      for (let attempt = 0; attempt < 200; attempt += 1) {
-        const read = await authenticatedTestClient(userToken).get(
-          `/api/v1/decisions/${res.body.id}`
-        );
-        if (read.body.status === 'completed') {
-          expect(read.body.answers_by_name.route.choice).toBe('technical');
-          return;
-        }
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 25);
-        });
-      }
-      throw new Error('The decision never settled.');
+      const settled = await pollGet({
+        token: userToken,
+        path: `/api/v1/decisions/${res.body.id}`,
+        select: (body) => {
+          return body;
+        },
+        predicate: (body) => {
+          return body.status === 'completed';
+        },
+      });
+      expect(settled).toMatchObject({
+        answers_by_name: { route: { choice: 'technical' } },
+      });
     });
 
     test('naming both an agent and a tool is refused with 400', async () => {

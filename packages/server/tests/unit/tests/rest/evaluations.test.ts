@@ -16,6 +16,7 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { holdsThroughout, pollUntil } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -2226,8 +2227,8 @@ describe('Evaluations', () => {
     const withCapture = async (args: {
       action: () => Promise<void>;
       /**
-       * Stops the window as soon as this holds. Omit to wait the whole bound
-       * out, which is what makes "no event fired" a real assertion.
+       * Stops the window as soon as this holds. Omit to watch the whole window
+       * for no event at all.
        */
       until?: (events: SoatEvent[]) => boolean;
     }): Promise<SoatEvent[]> => {
@@ -2238,10 +2239,17 @@ describe('Evaluations', () => {
       eventBus.on('soat:event', handler);
       try {
         await args.action();
-        for (let tick = 0; tick < 100; tick += 1) {
-          if (args.until?.(captured)) break;
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 10);
+        const read = () => {
+          return captured;
+        };
+        if (args.until) {
+          await pollUntil({ read, done: args.until });
+        } else {
+          await holdsThroughout({
+            read,
+            check: (events) => {
+              expect(events).toEqual([]);
+            },
           });
         }
       } finally {
@@ -2939,12 +2947,14 @@ describe('Evaluations', () => {
       try {
         kickEvalWorker();
         // The kick is fire-and-forget, so poll the observable side effect.
-        for (let tick = 0; tick < 100; tick += 1) {
-          if (mockCreateGeneration.mock.calls.length > 0) break;
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 10);
-          });
-        }
+        await pollUntil({
+          read: () => {
+            return mockCreateGeneration.mock.calls.length;
+          },
+          done: (calls) => {
+            return calls > 0;
+          },
+        });
       } finally {
         process.env.EVAL_WORKER_DISABLED = 'true';
       }

@@ -4,6 +4,7 @@ import {
   createAllowAllPolicy,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -351,22 +352,23 @@ describe('a literal credential in a tool definition', () => {
         .patch(`/api/v1/agents/${agentId}`)
         .send({ instructions: `itse-${Date.now()}` });
 
-      let deliveries: Array<{ payload: unknown }> = [];
-      for (let attempt = 0; attempt < 100; attempt += 1) {
-        const res = await client().get(
-          `/api/v1/webhook-deliveries?webhook_id=${webhookId}&limit=100`
-        );
-        deliveries = res.body.data ?? [];
-        const sent = fetchSpy.mock.calls.filter(([url]) => {
-          return String(url) === HOOK_URL;
-        });
-        if (deliveries.length > 0 && sent.length > 0) break;
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
+      const deliveries = await pollUntil({
+        read: async () => {
+          const res = await client().get(
+            `/api/v1/webhook-deliveries?webhook_id=${webhookId}&limit=100`
+          );
+          return (res.body.data ?? []) as Array<{ payload: unknown }>;
+        },
+        done: (found) => {
+          return (
+            found.length > 0 &&
+            fetchSpy.mock.calls.some(([url]) => {
+              return String(url) === HOOK_URL;
+            })
+          );
+        },
+      });
 
-      expect(deliveries.length).toBeGreaterThan(0);
       expect(JSON.stringify(deliveries)).not.toContain(LITERAL);
 
       const sentBodies = fetchSpy.mock.calls

@@ -2,6 +2,7 @@ import { drainEvalQueueOnce } from 'src/lib/evaluationWorker';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -338,18 +339,16 @@ describe('Evaluations — the claim', () => {
       let runId = '';
       try {
         runId = (await startRun(evalId, true)).id as string;
-        for (let tick = 0; tick < 100; tick += 1) {
-          if (
-            captured.some((event) => {
+        await pollUntil({
+          read: () => {
+            return captured;
+          },
+          done: (events) => {
+            return events.some((event) => {
               return event.resourceId === runId;
-            })
-          ) {
-            break;
-          }
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 10);
-          });
-        }
+            });
+          },
+        });
       } finally {
         eventBus.off('soat:event', handler);
       }

@@ -8,6 +8,7 @@ import { emitApproval } from 'src/lib/approvals';
 import { createGenerationRecord } from 'src/lib/generations';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, workAuthorityOf } from '../../testClient';
 
 /**
@@ -237,13 +238,15 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
    * continuation's), and waiting for both keeps one test's late call out of
    * the next.
    */
-  const waitForToolRequests = async (count: number) => {
-    for (let i = 0; i < 120 && toolRequests.length < count; i += 1) {
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    return toolRequests;
+  const waitForToolRequests = (count: number) => {
+    return pollUntil({
+      read: () => {
+        return toolRequests;
+      },
+      done: (requests) => {
+        return requests.length >= count;
+      },
+    });
   };
 
   test('the approved action and the continuation turn carry the bag', async () => {
@@ -362,13 +365,15 @@ describe('POST /api/v1/approvals/:approval_id/approve — tool_context', () => {
       });
     };
 
-    const waitForCharge = async () => {
-      for (let i = 0; i < 120 && accountBodies.length < 1; i += 1) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
-      return accountBodies[0];
+    const waitForCharge = () => {
+      return pollFor({
+        read: () => {
+          return accountBodies;
+        },
+        pick: ([charge]) => {
+          return charge;
+        },
+      });
     };
 
     test("keeps its value under the approver's bag", async () => {

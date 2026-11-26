@@ -8,6 +8,7 @@ import { callTool } from 'src/lib/tools';
 import { parseWorkAuthority, type WorkAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import {
   authenticatedTestClient,
   testClient,
@@ -44,17 +45,18 @@ describe('stored work authority', () => {
     return res.body.id as string;
   };
 
-  const pollFiring = async (firingId: string) => {
-    for (let i = 0; i < 40; i++) {
-      const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/trigger-firings/${firingId}`
-      );
-      if (['completed', 'failed'].includes(res.body.status)) return res.body;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 50);
-      });
-    }
-    throw new Error('firing did not settle');
+  const pollFiring = (firingId: string) => {
+    return pollFor({
+      read: async () => {
+        const res = await authenticatedTestClient(adminToken).get(
+          `/api/v1/trigger-firings/${firingId}`
+        );
+        return res.body;
+      },
+      pick: (body) => {
+        return ['completed', 'failed'].includes(body.status) ? body : undefined;
+      },
+    });
   };
 
   beforeAll(async () => {

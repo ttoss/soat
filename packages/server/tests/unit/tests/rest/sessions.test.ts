@@ -1,5 +1,6 @@
 import { db } from '../../../../src/db';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollGet } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -2810,22 +2811,17 @@ describe('Sessions', () => {
       // awaiting only the mock invocation leaves it in flight. Polling both
       // asserts the session is not stuck and stops that clear leaking into the
       // next test, which would see a stale value and skip its own generation.
-      const waitForGeneratingAtCleared = async (timeoutMs = 5000) => {
-        const startedAt = Date.now();
-        let generatingAt: unknown;
-        do {
-          const res = await authenticatedTestClient(userToken).get(
-            `/api/v1/sessions/${delaySessionId}`
-          );
-          generatingAt = res.body.generating_at;
-          if (!generatingAt) return;
-          await new Promise((resolve) => {
-            return setTimeout(resolve, 25);
-          });
-        } while (Date.now() - startedAt < timeoutMs);
-        throw new Error(
-          `session ${delaySessionId} still generating after ${timeoutMs}ms`
-        );
+      const waitForGeneratingAtCleared = async () => {
+        await pollGet({
+          token: userToken,
+          path: `/api/v1/sessions/${delaySessionId}`,
+          select: (body) => {
+            return body.generating_at;
+          },
+          predicate: (generatingAt) => {
+            return !generatingAt;
+          },
+        });
       };
 
       beforeAll(async () => {

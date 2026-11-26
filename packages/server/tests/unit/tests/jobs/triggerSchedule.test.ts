@@ -1,6 +1,7 @@
 import { fireDueTriggers } from 'src/lib/triggerScheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -68,17 +69,17 @@ describe('Schedule trigger tick', () => {
   };
 
   /** The tick fires detached, so poll for the settled firing. */
-  const waitForSettledFiring = async (triggerId: string) => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const [firing] = await listFirings(triggerId);
-      if (firing && ['completed', 'failed'].includes(firing.status)) {
-        return firing;
-      }
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`trigger ${triggerId} never fired`);
+  const waitForSettledFiring = (triggerId: string) => {
+    return pollFor({
+      read: () => {
+        return listFirings(triggerId);
+      },
+      pick: ([firing]) => {
+        return firing && ['completed', 'failed'].includes(firing.status)
+          ? firing
+          : undefined;
+      },
+    });
   };
 
   beforeAll(async () => {

@@ -4,6 +4,7 @@ import {
   startChatCompletionsStub,
   textCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const ALIASES = { fast: 'vendor-fast-2026', smart: 'vendor-smart-2026' };
@@ -187,18 +188,17 @@ describe('AI provider model_aliases', () => {
       const read = await asAdmin().get(`/api/v1/agents/${agent.body.id}`);
       expect(read.body.model).toBe('smart');
 
-      let events: Array<{ model: string }> = [];
-      for (let attempt = 0; attempt < 200 && events.length === 0; attempt++) {
-        const usage = await asAdmin()
-          .get('/api/v1/usage/events')
-          .query({ generation_id: res.body.id, meter_type: 'llm_tokens' });
-        events = usage.body.data;
-        if (events.length === 0) {
-          await new Promise((resolve) => {
-            return setTimeout(resolve, 25);
-          });
-        }
-      }
+      const events = await pollUntil({
+        read: async () => {
+          const usage = await asAdmin()
+            .get('/api/v1/usage/events')
+            .query({ generation_id: res.body.id, meter_type: 'llm_tokens' });
+          return usage.body.data as Array<{ model: string }>;
+        },
+        done: (found) => {
+          return found.length > 0;
+        },
+      });
       expect(events).toHaveLength(1);
       expect(events[0].model).toBe('smart');
     });

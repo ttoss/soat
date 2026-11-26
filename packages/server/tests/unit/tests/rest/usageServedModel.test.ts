@@ -7,6 +7,7 @@ import {
   type StubReply,
   type StubResponder,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -182,23 +183,21 @@ describe('Usage — the served model is what an event records', () => {
 
   // Metering a streamed turn is a side effect of the stream's end, so the
   // listing is polled until the event lands.
-  const eventsWhere = async (
+  const eventsWhere = (
     query: Record<string, string>
   ): Promise<UsageEvent[]> => {
-    let events: UsageEvent[] = [];
-    for (let attempt = 0; attempt < 200 && events.length === 0; attempt++) {
-      const res = await authenticatedTestClient(adminToken)
-        .get('/api/v1/usage/events')
-        .query({ ...query, meter_type: 'llm_tokens' });
-      expect(res.status).toBe(200);
-      events = res.body.data;
-      if (events.length === 0) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
-    }
-    return events;
+    return pollUntil({
+      read: async () => {
+        const res = await authenticatedTestClient(adminToken)
+          .get('/api/v1/usage/events')
+          .query({ ...query, meter_type: 'llm_tokens' });
+        expect(res.status).toBe(200);
+        return res.body.data as UsageEvent[];
+      },
+      done: (events) => {
+        return events.length > 0;
+      },
+    });
   };
 
   const latestGenerationOf = async (agentId: string): Promise<string> => {

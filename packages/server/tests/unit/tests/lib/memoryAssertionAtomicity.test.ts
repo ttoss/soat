@@ -7,6 +7,7 @@ import {
   SEED_ASSERTION,
   setMemorySimilarity,
 } from '../../fixtures/memoryWrites';
+import { pollUntil } from '../../fixtures/poll';
 
 /**
  * A race HTTP cannot order: a reader between a memory's write and its
@@ -51,14 +52,12 @@ const readWhileAssertionHeld = async (args: {
     // Settled early only when the write fails before its assertion.
     pending.catch(() => {});
 
-    const deadline = Date.now() + 10_000;
-    while (!(await assertionInsertWaiting())) {
-      if (Date.now() > deadline)
-        throw new Error('write never reached its assertion');
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
-    }
+    await pollUntil({
+      read: assertionInsertWaiting,
+      done: (waiting) => {
+        return waiting;
+      },
+    });
 
     return await storeRows(args.memoryStoreId);
   } finally {

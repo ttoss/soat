@@ -2,6 +2,7 @@ import { MAX_EVENT_CAUSATION_DEPTH } from 'src/lib/eventCausation';
 import * as quotaEnforcement from 'src/lib/quotaEnforcement';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -136,53 +137,51 @@ describe('Event trigger dispatch', () => {
   };
 
   /** Dispatch is fire-and-forget off the bus, so poll the firings. */
-  const waitForFirings = async (args: {
+  const waitForFirings = (args: {
     triggerId: string;
     count: number;
     token?: string;
   }): Promise<Firing[]> => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const settled = (await listFirings(args)).filter((firing) => {
-        return firing.status === 'completed' || firing.status === 'failed';
-      });
-      if (settled.length >= args.count) return settled;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`trigger ${args.triggerId} never settled ${args.count}`);
+    return pollUntil({
+      read: async () => {
+        return (await listFirings(args)).filter((firing) => {
+          return firing.status === 'completed' || firing.status === 'failed';
+        });
+      },
+      done: (settled) => {
+        return settled.length >= args.count;
+      },
+    });
   };
 
   /**
    * The refused firing is written before its exception is filed, so the
    * exception is polled rather than read once.
    */
-  const waitForLoopException = async (args: {
+  const waitForLoopException = (args: {
     triggerId: string;
     reason: string;
   }) => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const res = await asUser().get(
-        `/api/v1/exceptions?project_id=${projectId}&kind=event_trigger_loop&limit=100`
-      );
-      expect(res.status).toBe(200);
-      const match = (
-        res.body.data as Array<{
+    return pollFor({
+      read: async () => {
+        const res = await asUser().get(
+          `/api/v1/exceptions?project_id=${projectId}&kind=event_trigger_loop&limit=100`
+        );
+        expect(res.status).toBe(200);
+        return res.body.data as Array<{
           severity: string;
           detail: Record<string, unknown>;
-        }>
-      ).find((exception) => {
-        return (
-          exception.detail.trigger_id === args.triggerId &&
-          exception.detail.reason === args.reason
-        );
-      });
-      if (match) return match;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`no ${args.reason} exception for ${args.triggerId}`);
+        }>;
+      },
+      pick: (exceptions) => {
+        return exceptions.find((exception) => {
+          return (
+            exception.detail.trigger_id === args.triggerId &&
+            exception.detail.reason === args.reason
+          );
+        });
+      },
+    });
   };
 
   beforeAll(async () => {

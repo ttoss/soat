@@ -11,6 +11,7 @@ import {
   setupProjectWithUsers,
   testGrant,
 } from '../../fixtures/bootstrap';
+import { pollGet } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import {
   authenticatedTestClient,
@@ -2554,22 +2555,17 @@ describe('Triggers', () => {
       return `t=${t},v1=${v1}`;
     };
 
-    const pollFiring = async (firingId: string) => {
-      for (let i = 0; i < 20; i++) {
-        const res = await authenticatedTestClient(userToken).get(
-          `/api/v1/trigger-firings/${firingId}`
-        );
-        if (
-          res.status === 200 &&
-          ['completed', 'failed'].includes(res.body.status)
-        ) {
-          return res.body;
-        }
-        await new Promise((r) => {
-          setTimeout(r, 50);
-        });
-      }
-      throw new Error('firing did not reach a terminal state');
+    const pollFiring = (firingId: string) => {
+      return pollGet({
+        token: userToken,
+        path: `/api/v1/trigger-firings/${firingId}`,
+        select: (body) => {
+          return body;
+        },
+        predicate: (body) => {
+          return ['completed', 'failed'].includes(body.status as string);
+        },
+      });
     };
 
     beforeAll(async () => {

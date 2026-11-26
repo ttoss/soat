@@ -9,6 +9,7 @@ import {
   textCompletion,
   toolCallCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -84,14 +85,16 @@ describe('generation sweep', () => {
     });
   };
 
-  /** Polls until a child model call is held, answering the running ids. */
+  /** Polls until a child model call is held. */
   const untilChildHeld = async (count: number): Promise<void> => {
-    for (let attempt = 0; attempt < 200 && held.length < count; attempt += 1) {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
-    expect(held.length).toBeGreaterThanOrEqual(count);
+    await pollUntil({
+      read: () => {
+        return held.length;
+      },
+      done: (length) => {
+        return length >= count;
+      },
+    });
   };
 
   const conversationTexts = async (conversationId: string) => {
@@ -104,16 +107,15 @@ describe('generation sweep', () => {
     }) as string[];
   };
 
-  const waitForText = async (conversationId: string, text: string) => {
-    let texts: string[] = [];
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      texts = await conversationTexts(conversationId);
-      if (texts.includes(text)) break;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
-    return texts;
+  const waitForText = (conversationId: string, text: string) => {
+    return pollUntil({
+      read: () => {
+        return conversationTexts(conversationId);
+      },
+      done: (texts) => {
+        return texts.includes(text);
+      },
+    });
   };
 
   beforeAll(async () => {

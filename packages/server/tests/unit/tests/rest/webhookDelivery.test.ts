@@ -6,6 +6,7 @@ import { EVENT_READ_ACTIONS } from 'src/lib/eventReadActions';
 import { sweepDueWebhookDeliveries } from 'src/lib/webhookDispatcher';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor, pollGet, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -89,19 +90,19 @@ describe('Webhook delivery', () => {
   };
 
   /** Polls the delivery through the API until `done` holds. */
-  const waitForDelivery = async (args: {
+  const waitForDelivery = (args: {
     webhookId: string;
     fileId: string;
     done: (delivery: Delivery) => boolean;
   }): Promise<Delivery> => {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const delivery = await deliveryFor(args);
-      if (delivery && args.done(delivery)) return delivery;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`delivery for ${args.fileId} never settled`);
+    return pollFor({
+      read: () => {
+        return deliveryFor(args);
+      },
+      pick: (delivery) => {
+        return delivery && args.done(delivery) ? delivery : undefined;
+      },
+    });
   };
 
   const callsTo = (url: string): FetchInit[] => {
@@ -112,6 +113,18 @@ describe('Webhook delivery', () => {
       .map(([, init]) => {
         return init as FetchInit;
       });
+  };
+
+  /** Polls until `url` has been called `count` times. */
+  const waitForCalls = async (url: string, count: number) => {
+    await pollUntil({
+      read: () => {
+        return callsTo(url).length;
+      },
+      done: (calls) => {
+        return calls >= count;
+      },
+    });
   };
 
   const header = (init: FetchInit, name: string) => {
@@ -659,21 +672,17 @@ describe('Webhook delivery', () => {
       expect(
         await sweepDueWebhookDeliveries({ now: new Date() })
       ).toBeGreaterThanOrEqual(1);
-      for (let i = 0; i < 200; i += 1) {
-        const copy = await asUser().get(
-          `/api/v1/webhook-deliveries/${redeliver.body.id}`
-        );
-        expect(copy.status).toBe(200);
-        if (copy.body.status === 'completed') break;
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
-      const copy = await asUser().get(
-        `/api/v1/webhook-deliveries/${redeliver.body.id}`
-      );
-      expect(copy.body.status).toBe('completed');
-      expect(copy.body.attempts).toBe(1);
+      const copy = await pollGet({
+        token: userToken,
+        path: `/api/v1/webhook-deliveries/${redeliver.body.id}`,
+        select: (body) => {
+          return body;
+        },
+        predicate: (body) => {
+          return body.status === 'completed';
+        },
+      });
+      expect(copy.attempts).toBe(1);
       expect(callsTo(url)).toHaveLength(2);
     });
 
@@ -694,11 +703,7 @@ describe('Webhook delivery', () => {
       );
       expect(redeliver.status).toBe(202);
       await sweepDueWebhookDeliveries({ now: new Date() });
-      for (let i = 0; i < 200 && callsTo(url).length < 2; i += 1) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
+      await waitForCalls(url, 2);
 
       const [first, second] = callsTo(url);
       const eventId = JSON.parse(first.body as string).id;
@@ -723,7 +728,7 @@ describe('Webhook delivery', () => {
           return d.status === 'completed';
         },
       });
-      // A row whose payload predates the envelope carrying `id`.
+      // A stored payload whose envelope carries no `id`.
       const { id: _eventId, ...withoutId } = original.payload;
       await db.WebhookDelivery.update(
         { payload: withoutId },
@@ -735,11 +740,7 @@ describe('Webhook delivery', () => {
       );
       expect(redeliver.status).toBe(202);
       await sweepDueWebhookDeliveries({ now: new Date() });
-      for (let i = 0; i < 200 && callsTo(url).length < 2; i += 1) {
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
+      await waitForCalls(url, 2);
 
       const [, second] = callsTo(url);
       expect(JSON.parse(second.body as string)).toEqual(withoutId);

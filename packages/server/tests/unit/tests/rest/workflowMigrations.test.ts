@@ -4,6 +4,7 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
@@ -130,21 +131,19 @@ const workflowWithTasks = async () => {
   return { workflow, triage, review, parked, closed };
 };
 
-const pollMigration = async (args: {
-  workflowId: string;
-  migrationId: string;
-}) => {
-  for (let i = 0; i < 100; i += 1) {
-    const res = await authenticatedTestClient(userToken).get(
-      `/api/v1/workflows/${args.workflowId}/migrations/${args.migrationId}`
-    );
-    expect(res.status).toBe(200);
-    if (res.body.status === 'completed') return res.body;
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
-  }
-  throw new Error(`pollMigration: ${args.migrationId} never completed`);
+const pollMigration = (args: { workflowId: string; migrationId: string }) => {
+  return pollFor({
+    read: async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/workflows/${args.workflowId}/migrations/${args.migrationId}`
+      );
+      expect(res.status).toBe(200);
+      return res.body;
+    },
+    pick: (body) => {
+      return body.status === 'completed' ? body : undefined;
+    },
+  });
 };
 
 beforeAll(async () => {
