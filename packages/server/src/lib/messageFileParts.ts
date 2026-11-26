@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { AgentAuthority } from './agentAuthority';
 import { fileAccessCheck } from './fileAuthorization';
+import { assertNotSingleUse } from './fileLifetime';
 import { fileReferenceUrl } from './modelInputBoundary';
 import { assertAllowedUnder, callerNamedAuthority } from './turnAuthority';
 import type { WorkAuthority } from './workAuthority';
@@ -23,26 +24,18 @@ export const isFileMessageContentPart = (
   );
 };
 
-/**
- * A stored file as a message part the model reads natively, in its own media
- * type. The caller names it, so it is read as the caller
- * (`callerNamedAuthority`), held to the turn's project. The part carries a
- * reference, never the bytes (`modelInputBoundary.ts`).
- */
-export const resolveFileContentPart = async (args: {
+type FilePartArgs = {
   part: FileMessageContentPart;
   turnProjectId: number;
   authority: WorkAuthority | null;
   authUser?: AuthUser;
   agentAuthority?: AgentAuthority;
-}): Promise<{
-  type: 'file';
-  data: string;
-  mediaType: string;
-  filename?: string;
-}> => {
+};
+
+/** The file a part names, in the turn's project, read as the caller. */
+const readableFile = async (args: FilePartArgs) => {
   log(
-    'resolveFileContentPart: fileId=%s projectId=%d',
+    'readableFile: fileId=%s projectId=%d',
     args.part.file_id,
     args.turnProjectId
   );
@@ -73,6 +66,24 @@ export const resolveFileContentPart = async (args: {
     ],
   });
 
+  return file;
+};
+
+/**
+ * A stored file as a message part the model reads natively, in its own media
+ * type. The caller names it, so it is read as the caller
+ * (`callerNamedAuthority`), held to the turn's project. The part carries a
+ * reference, never the bytes (`modelInputBoundary.ts`).
+ */
+export const resolveFileContentPart = async (
+  args: FilePartArgs
+): Promise<{
+  type: 'file';
+  data: string;
+  mediaType: string;
+  filename?: string;
+}> => {
+  const file = await readableFile(args);
   return {
     type: 'file',
     data: fileReferenceUrl(file.publicId),
@@ -101,9 +112,8 @@ export const assertMessageFilesReadable = async (args: {
     );
   }
   for (const fileId of args.fileIds) {
-    await resolveFileContentPart({
-      ...args,
-      part: { type: 'file', file_id: fileId },
-    });
+    assertNotSingleUse(
+      await readableFile({ ...args, part: { type: 'file', file_id: fileId } })
+    );
   }
 };

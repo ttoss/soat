@@ -227,12 +227,16 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
       metadata?: unknown;
       prefix?: string;
       filename?: string;
+      expires_at?: unknown;
+      delete_after?: unknown;
     };
     ctx.body = await updateFileMetadata({
       id: ctx.params.file_id,
       metadata: readNullableMetadataBag(body.metadata),
       prefix: body.prefix,
       filename: body.filename,
+      expiresAt: body.expires_at,
+      deleteAfter: body.delete_after,
     });
   });
 

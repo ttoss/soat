@@ -265,6 +265,9 @@ paths:
         (e.g. with a different `chunk_strategy`), use
         `POST /documents/{document_id}/ingest`; to ingest the same source under a
         different path, upload a new copy of the file first.
+
+        A file with a lifetime (`expires_at` or `delete_after`) is never
+        ingested: `409 FILE_NOT_INGESTIBLE`.
       operationId: ingestDocument
       x-raises:
         - API_KEY_PROJECT_SCOPE

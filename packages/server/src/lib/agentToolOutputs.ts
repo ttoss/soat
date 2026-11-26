@@ -203,6 +203,7 @@ export const submitToolOutputs = async (args: {
     await assertToolOutputFilesReadable({
       output: part.output.value,
       turnProjectId: pending.projectId,
+      generationId: args.generationId,
       authority,
     });
   }

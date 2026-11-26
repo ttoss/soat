@@ -5,6 +5,7 @@ import type { MulterFile } from '@ttoss/http-server';
 import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { readFileLifetime } from 'src/lib/fileLifetime';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
@@ -90,12 +91,27 @@ filesRouter.get('/files', async (ctx: Context) => {
   });
 });
 
+/** The lifetime fields every create route reads, as sent. */
+type LifetimeFields = {
+  expires_in?: unknown;
+  expires_at?: unknown;
+  delete_after?: unknown;
+};
+
+const lifetimeOf = (body: LifetimeFields) => {
+  return readFileLifetime({
+    expiresIn: body.expires_in,
+    expiresAt: body.expires_at,
+    deleteAfter: body.delete_after,
+  });
+};
+
 filesRouter.post('/files', async (ctx: Context) => {
   requireAuth(ctx);
   // POST /files is deliberately lenient — it accepts and ignores client-supplied
   // storage fields — so it is excluded from strict field validation.
 
-  const body = ctx.request.body as {
+  const body = ctx.request.body as LifetimeFields & {
     project_id?: string;
     prefix?: string;
     filename?: string;
@@ -120,6 +136,7 @@ filesRouter.post('/files', async (ctx: Context) => {
     contentType: body.content_type,
     size: body.size,
     metadata: parseMetadataBag(body.metadata),
+    lifetime: lifetimeOf(body),
   });
   ctx.status = 201;
   ctx.body = file;
@@ -131,7 +148,7 @@ filesRouter.post(
   uploadSingleFile,
   async (ctx: Context) => {
     requireAuth(ctx);
-    const body = ctx.request.body as {
+    const body = ctx.request.body as LifetimeFields & {
       project_id?: string;
       metadata?: unknown;
       prefix?: string;
@@ -160,6 +177,7 @@ filesRouter.post(
       filename: body.filename ?? file.originalname,
       contentType: file.mimetype,
       metadata: parseMetadataBagField(body.metadata),
+      lifetime: lifetimeOf(body),
     });
 
     ctx.status = 201;
@@ -169,7 +187,7 @@ filesRouter.post(
 
 filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   requireAuth(ctx);
-  const body = ctx.request.body as {
+  const body = ctx.request.body as LifetimeFields & {
     project_id?: string;
     content: string;
     prefix?: string;
@@ -191,6 +209,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     filename: body.filename,
     contentType: body.content_type,
     metadata: parseMetadataBag(body.metadata),
+    lifetime: lifetimeOf(body),
   });
 
   ctx.status = 201;
@@ -200,7 +219,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
 filesRouter.post('/files/presigned-url', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const body = ctx.request.body as {
+  const body = ctx.request.body as LifetimeFields & {
     project_id?: string;
     prefix?: string;
     filename?: string;
@@ -221,6 +240,11 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     filename: body.filename,
     contentType: body.content_type,
     maxBytes: body.max_bytes,
+    fileLifetime: {
+      expiresIn: body.expires_in,
+      expiresAt: body.expires_at,
+      deleteAfter: body.delete_after,
+    },
   });
 
   ctx.status = 201;
@@ -284,6 +308,7 @@ filesRouter.post(
       filename: tokenData.filename ?? upload.filename,
       contentType: tokenData.contentType,
       metadata: parseMetadataBagField(upload.metadata),
+      lifetime: tokenData.lifetime,
     });
 
     ctx.status = 201;
@@ -319,6 +344,7 @@ filesRouter.put('/files/upload/:token', async (ctx: Context) => {
     path: tokenData.path,
     filename: tokenData.filename,
     contentType: tokenData.contentType,
+    lifetime: tokenData.lifetime,
   });
 
   ctx.status = 201;

@@ -396,7 +396,7 @@ A content type with no built-in extractor and no matching [Ingestion Rule](./ing
 
 Ingestion produces text for retrieval. For a model to read the original file (an image as an image, audio as audio), send it as a [`file` part](./agents.md#file-parts) of a generation instead.
 
-`file_id` is unique across documents; ingesting an already-ingested file returns `409 FILE_ALREADY_INGESTED`. Use [Re-ingesting a Document](#re-ingesting-a-document) to re-chunk or recover it; upload a new copy to ingest the same source under another path.
+`file_id` is unique across documents; ingesting an already-ingested file returns `409 FILE_ALREADY_INGESTED`. A file with a [lifetime](./files.md#lifetime) is never ingested: `409 FILE_NOT_INGESTIBLE`. Use [Re-ingesting a Document](#re-ingesting-a-document) to re-chunk or recover it; upload a new copy to ingest the same source under another path.
 
 Extracted text is split by `chunk_strategy`:
 

@@ -11,6 +11,7 @@ import { loadBootConfigOrExit } from './lib/bootConfig';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
 import { startDecisionsScheduler } from './lib/decisionsScheduler';
 import { startEvalWorker } from './lib/evaluationWorker';
+import { startFileExpiryScheduler } from './lib/fileDeletion';
 import { startGenerationSweepScheduler } from './lib/generationSweep';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
@@ -86,6 +87,8 @@ const startServer = async () => {
     // trace_content_retention_days is purged on a daily tick. Projects that
     // leave the window null are skipped — retention is opt-in.
     startContentRetentionScheduler();
+    // Deletes files past their `expires_at`; reads already treat them as gone.
+    startFileExpiryScheduler();
     // Start the daily storage-metering snapshot (one `storage` usage event per
     // project per UTC day) and the API-request counter flush (aggregated
     // `api_request` events per window).

@@ -465,6 +465,7 @@ A `file` part sends a stored [file](./files.md) to the model in its own media ty
 - The generation stores the reference, not the bytes: the file is read from storage each time the turn calls the model, so deleting the file fails a turn that still names it.
 - A model whose AI provider [declares its input modalities](./ai-providers.md#input-modalities) and lacks the part's (`image`, `audio`, `video`, or `file` for any other type) refuses it with `400 INPUT_MODALITY_UNSUPPORTED` before the provider is called; `meta.model` and `meta.modalities` name what was refused. A model that declares nothing is sent the part, and a provider that cannot read it answers with its own error.
 - A part over a limit its model [declares](./ai-providers.md#input-limits) (bytes, audio or video duration, PDF pages, file parts per request) is refused with `400 INPUT_LIMIT_EXCEEDED` before the provider is called; `meta` names the limit, the value and the part.
+- A [single-use file](./files.md#single-use-files) (`delete_after: "generation"`) is claimed by the generation that reads it, refused to any other with `409 FILE_CONSUMED`, and deleted when that generation completes or fails.
 - To have the model read a file as text, [ingest](./documents.md) it and send a `document` part.
 
 #### Tool results that return files

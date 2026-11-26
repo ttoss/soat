@@ -626,6 +626,16 @@ export const ERROR_CODES = {
     description:
       'The file is too large to ingest synchronously. Retry without `?wait=true` to run ingestion in the background and poll the document status.',
   },
+  FILE_NOT_INGESTIBLE: {
+    httpStatus: 409,
+    description:
+      'The file has a lifetime (`expires_at` or `delete_after`), and a file with a lifetime is never made into a document.',
+  },
+  FILE_CONSUMED: {
+    httpStatus: 409,
+    description:
+      'The file is single use (`delete_after: "generation"`) and another generation already claimed it (`meta.generation_id`). It is deleted when that generation settles.',
+  },
   FILE_ALREADY_INGESTED: {
     httpStatus: 409,
     description:

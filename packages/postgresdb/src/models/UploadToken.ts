@@ -70,6 +70,16 @@ export class UploadToken extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare usedAt: Date | null;
 
+  /** The uploaded file's lifetime, resolved when the upload lands. */
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare fileExpiresIn: number | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare fileExpiresAt: Date | null;
+
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare fileDeleteAfter: 'generation' | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

@@ -284,6 +284,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Delete the deciders that name the agent (`meta.decider_count`), or point them at another agent with `{{PATCH /deciders/{decider_id}}}`; they block deletion even under `force=true`. Generations, traces, accepted shares and ingestion rules block only until `force=true`.',
   AI_PROVIDER_HAS_DEPENDENTS:
     'Delete or repoint the agents, chats, model routes and forwarding AI providers that reference the provider, then delete it; `force` does not override them. Price overrides, usage records and accepted shares (`meta.forcible`) block only until `force=true`, which drops the overrides, unlinks usage history and revokes the shares.',
+  FILE_NOT_INGESTIBLE:
+    'Upload a copy of the file without `expires_in`, `expires_at` or `delete_after` to ingest it.',
+  FILE_CONSUMED:
+    'Upload the file again for this generation: a single-use file is read by one generation only.',
   FILE_ALREADY_INGESTED:
     'Re-process the existing document with `{{POST /documents/{document_id}/ingest}}` (`meta.document_id`), or upload a new copy of the file to ingest it separately.',
   CONVERTER_FAILED:
