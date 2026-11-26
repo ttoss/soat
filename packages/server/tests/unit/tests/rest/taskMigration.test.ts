@@ -2,6 +2,7 @@ import { flushTaskAutomations } from 'src/lib/tasks';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { asWire, captureEvents } from '../../fixtures/eventCapture';
+import { pollGet } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -95,22 +96,6 @@ const reviewTaskWithV2 = async () => {
     ],
   });
   return { workflow, task };
-};
-
-const pollTask = async (args: {
-  taskId: string;
-  predicate: (task: Record<string, unknown>) => boolean;
-}): Promise<Record<string, unknown>> => {
-  for (let i = 0; i < 100; i += 1) {
-    const res = await authenticatedTestClient(userToken).get(
-      `/api/v1/tasks/${args.taskId}`
-    );
-    if (res.status === 200 && args.predicate(res.body)) return res.body;
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
-  }
-  throw new Error(`pollTask: predicate never held for ${args.taskId}`);
 };
 
 beforeAll(async () => {
@@ -378,10 +363,14 @@ describe('POST /api/v1/tasks/:task_id/migrate', () => {
       transitions: [{ name: 'finish', from: ['writing'], to: 'done' }],
     });
     const task = await createTask(workflow.id);
-    await pollTask({
-      taskId: task.id,
-      predicate: (t) => {
-        return t.automation_status === 'running';
+    await pollGet({
+      token: userToken,
+      path: `/api/v1/tasks/${task.id}`,
+      select: (body) => {
+        return body.automation_status;
+      },
+      predicate: (status) => {
+        return status === 'running';
       },
     });
     await updateWorkflow(workflow.id, {

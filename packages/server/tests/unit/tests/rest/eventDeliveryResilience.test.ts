@@ -4,6 +4,7 @@ import { droppedEventCount, type EventDropStage } from 'src/lib/eventBus';
 import { sweepDueWebhookDeliveries } from 'src/lib/webhookDispatcher';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
@@ -26,28 +27,26 @@ type Delivery = {
   payload: { resource_id?: string; project_id?: string };
 };
 
-const until = async (predicate: () => Promise<boolean> | boolean) => {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    if (await predicate()) return;
-    await new Promise((resolve) => {
-      return setTimeout(resolve, 25);
-    });
-  }
-  throw new Error('condition never held');
-};
-
 /**
- * The line `recordDroppedEvent` prints for one lost event: what an operator
- * reads. The error stream is already silenced by a spy in
+ * Waits for the line `recordDroppedEvent` prints for one lost event: what an
+ * operator reads. The error stream is already silenced by a spy in
  * `setupTestsAfterEnv.ts`, which `spyOn` hands back rather than replacing.
  */
 const printedDrop = (args: { stage: EventDropStage; text: string }) => {
-  return jest.spyOn(console, 'error').mock.calls.some(([line]) => {
-    return (
-      typeof line === 'string' &&
-      line.startsWith(`event dropped at ${args.stage}: `) &&
-      line.includes(args.text)
-    );
+  const prefix = `event dropped at ${args.stage}: `;
+  return pollUntil({
+    read: () => {
+      return jest.spyOn(console, 'error').mock.calls.flatMap(([line]) => {
+        return typeof line === 'string' && line.startsWith(prefix)
+          ? [line]
+          : [];
+      });
+    },
+    done: (lines) => {
+      return lines.some((line) => {
+        return line.includes(args.text);
+      });
+    },
   });
 };
 
@@ -82,12 +81,14 @@ describe('Event delivery resilience', () => {
   };
 
   const settledDelivery = async (fileId: string): Promise<Delivery> => {
-    let found: Delivery | undefined;
-    await until(async () => {
-      [found] = await deliveriesFor(fileId);
-      return found?.status === 'completed';
+    return pollFor({
+      read: () => {
+        return deliveriesFor(fileId);
+      },
+      pick: ([delivery]) => {
+        return delivery?.status === 'completed' ? delivery : undefined;
+      },
     });
-    return found as Delivery;
   };
 
   beforeAll(async () => {
@@ -162,11 +163,9 @@ describe('Event delivery resilience', () => {
         .mockRejectedValue(new Error('database is down'));
 
       const fileId = await createFile();
-      await until(() => {
-        return printedDrop({
-          stage: 'project_lookup',
-          text: `files.created (${fileId})`,
-        });
+      await printedDrop({
+        stage: 'project_lookup',
+        text: `files.created (${fileId})`,
       });
       down.mockRestore();
 
@@ -196,11 +195,9 @@ describe('Event delivery resilience', () => {
         `/api/v1/conversations/${conversationId}`
       );
       expect(removed.status).toBe(204);
-      await until(() => {
-        return printedDrop({
-          stage: 'project_lookup',
-          text: `conversations.deleted (${conversationId})`,
-        });
+      await printedDrop({
+        stage: 'project_lookup',
+        text: `conversations.deleted (${conversationId})`,
       });
       down.mockRestore();
 
@@ -220,8 +217,13 @@ describe('Event delivery resilience', () => {
       const fileId = await createFile();
       // `Webhook.findOne` runs through `findAll`, so the deliveries read below
       // would take the rejection if it ran before the event pipeline's lookup.
-      await until(() => {
-        return blip.mock.calls.length > 0;
+      await pollUntil({
+        read: () => {
+          return blip.mock.calls.length;
+        },
+        done: (calls) => {
+          return calls > 0;
+        },
       });
       await settledDelivery(fileId);
 
@@ -236,11 +238,9 @@ describe('Event delivery resilience', () => {
         .mockRejectedValue(new Error('database is down'));
 
       const fileId = await createFile();
-      await until(() => {
-        return printedDrop({
-          stage: 'webhook_lookup',
-          text: `files.created (${fileId})`,
-        });
+      await printedDrop({
+        stage: 'webhook_lookup',
+        text: `files.created (${fileId})`,
       });
       down.mockRestore();
 
@@ -259,8 +259,13 @@ describe('Event delivery resilience', () => {
         .mockRejectedValueOnce(new Error('connection terminated'));
 
       const fileId = await createFile();
-      await until(() => {
-        return blip.mock.calls.length > 0;
+      await pollUntil({
+        read: () => {
+          return blip.mock.calls.length;
+        },
+        done: (calls) => {
+          return calls > 0;
+        },
       });
       await settledDelivery(fileId);
 
@@ -275,11 +280,9 @@ describe('Event delivery resilience', () => {
         .mockRejectedValue(new Error('database is down'));
 
       const fileId = await createFile();
-      await until(() => {
-        return printedDrop({
-          stage: 'policy_lookup',
-          text: `files.created (${fileId})`,
-        });
+      await printedDrop({
+        stage: 'policy_lookup',
+        text: `files.created (${fileId})`,
       });
       down.mockRestore();
 
@@ -310,11 +313,9 @@ describe('Event delivery resilience', () => {
         .mockRejectedValue(new Error('database is down'));
 
       const fileId = await createFile();
-      await until(() => {
-        return printedDrop({
-          stage: 'delivery_write',
-          text: `files.created (${fileId})`,
-        });
+      await printedDrop({
+        stage: 'delivery_write',
+        text: `files.created (${fileId})`,
       });
       down.mockRestore();
 
@@ -333,8 +334,13 @@ describe('Event delivery resilience', () => {
         .mockRejectedValueOnce(new Error('connection terminated'));
 
       const fileId = await createFile();
-      await until(async () => {
-        return (await deliveriesFor(fileId)).length === 1;
+      await pollUntil({
+        read: () => {
+          return deliveriesFor(fileId);
+        },
+        done: (deliveries) => {
+          return deliveries.length === 1;
+        },
       });
 
       // On disk, so not counted as dropped: a failed attempt and a failed row
@@ -413,8 +419,13 @@ describe('Event delivery resilience', () => {
 
       const runId = await runFailingOrchestration();
 
-      await until(async () => {
-        return (await runFailedException(runId)) !== undefined;
+      await pollFor({
+        read: () => {
+          return runFailedException(runId);
+        },
+        pick: (exception) => {
+          return exception;
+        },
       });
     });
 
@@ -425,11 +436,9 @@ describe('Event delivery resilience', () => {
         .mockRejectedValue(new Error('database is down'));
 
       const runId = await runFailingOrchestration();
-      await until(() => {
-        return printedDrop({
-          stage: 'exception_file',
-          text: `orchestration_runs.failed (${runId})`,
-        });
+      await printedDrop({
+        stage: 'exception_file',
+        text: `orchestration_runs.failed (${runId})`,
       });
       down.mockRestore();
 

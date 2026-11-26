@@ -1,4 +1,3 @@
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   type ChatRequest,
   createTurnScript,
@@ -6,6 +5,7 @@ import {
   startChatCompletionStub,
   toolResultsOf,
 } from '../../fixtures/chatCompletionStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**

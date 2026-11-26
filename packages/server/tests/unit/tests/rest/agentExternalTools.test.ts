@@ -1,9 +1,9 @@
 import { agentRefusal } from '../../fixtures/agentRefusal';
 import {
   type AgentToolTurn,
-  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { pollUntil } from '../../fixtures/poll';
 import { offeredSchema, offeredToolNames } from '../../fixtures/scriptedModel';
 
 // An agent's `mcp` and `builtin` bindings expand into one model-visible tool

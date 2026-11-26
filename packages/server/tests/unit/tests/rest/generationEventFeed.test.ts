@@ -5,10 +5,10 @@ import { app } from 'src/app';
 
 import {
   type AgentToolTurn,
-  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { createScopedPrincipal } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { proposeCalls } from '../../fixtures/scriptedModel';
 import { authenticatedTestClient, testClient } from '../../testClient';
 

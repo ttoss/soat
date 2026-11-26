@@ -1,8 +1,8 @@
 import { db } from 'src/db';
 import { resumeWorkflowMigrations } from 'src/lib/workflowMigrations';
 
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**

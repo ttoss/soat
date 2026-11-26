@@ -2,7 +2,6 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   createProjectPolicy,
   createScopedPrincipal,
@@ -14,6 +13,7 @@ import {
   startChatCompletionsStub,
 } from '../../fixtures/chatCompletionsStub';
 import { createPlaybookCase } from '../../fixtures/playbookCase';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const PDF = Buffer.from('%PDF-1.4 proposal');

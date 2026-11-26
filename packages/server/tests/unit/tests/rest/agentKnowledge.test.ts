@@ -2,7 +2,6 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { agentRefusal } from '../../fixtures/agentRefusal';
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import { testGrant } from '../../fixtures/bootstrap';
 import {
   type ChatRequest,
@@ -11,6 +10,7 @@ import {
   startChatCompletionStub,
   toolResultsOf,
 } from '../../fixtures/chatCompletionStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**

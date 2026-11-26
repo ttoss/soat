@@ -17,6 +17,7 @@ import {
 import { expectAdminListSpansProjects } from '../../fixtures/adminUnscopedList';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { asWire, captureEvents } from '../../fixtures/eventCapture';
+import { pollGet, pollUntil } from '../../fixtures/poll';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import {
   authenticatedTestClient,
@@ -42,34 +43,6 @@ const TRANSITIONS = [
     guard: { '==': [{ var: 'task.payload.approved' }, true] },
   },
 ];
-
-/**
- * GETs `path` until `predicate` holds over the selected value, within a bounded
- * budget. Exhaustion reports the last response, so a failure names the state
- * the work stopped in, not only that it stopped.
- */
-const pollGet = async <T>(args: {
-  token: string;
-  path: string;
-  select: (body: Record<string, unknown>) => T;
-  predicate: (value: T) => boolean;
-}): Promise<T> => {
-  const startedAt = Date.now();
-  let last: { status: number; body: unknown } | undefined;
-  for (let i = 0; i < 100; i += 1) {
-    const res = await authenticatedTestClient(args.token).get(args.path);
-    last = { status: res.status, body: res.body };
-    if (res.status === 200 && args.predicate(args.select(res.body))) {
-      return args.select(res.body);
-    }
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
-  }
-  throw new Error(
-    `predicate never held for GET ${args.path} after 100 polls (${Date.now() - startedAt} ms); last ${last?.status}: ${JSON.stringify(last?.body)}`
-  );
-};
 
 const pollTask = (args: {
   token: string;
@@ -2258,15 +2231,14 @@ describe('Tasks', () => {
       const taskId = await startTask(wf, {});
 
       // Wait for the first attempt to fail, then move the card by hand.
-      for (
-        let i = 0;
-        i < 100 && mockCreateGeneration.mock.calls.length < 1;
-        i += 1
-      ) {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      }
+      await pollUntil({
+        read: () => {
+          return mockCreateGeneration.mock.calls.length;
+        },
+        done: (calls) => {
+          return calls >= 1;
+        },
+      });
       expect((await transition(taskId, 'to_done')).body.state).toBe('done');
 
       await flushTaskAutomations();
@@ -2666,16 +2638,16 @@ describe('Tasks', () => {
       // held open by an in-process timer. A `wait: true` that slept through the
       // whole delay would never reach this state, so the wake sweep would never
       // see it.
-      let parked: InstanceType<typeof db.OrchestrationRun> | null = null;
-      for (let i = 0; i < 100; i += 1) {
-        parked = await db.OrchestrationRun.findOne({
-          where: { publicId: orchestrationRunId },
-        });
-        if (parked?.status === 'sleeping') break;
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      }
+      const parked = await pollUntil({
+        read: () => {
+          return db.OrchestrationRun.findOne({
+            where: { publicId: orchestrationRunId },
+          });
+        },
+        done: (row) => {
+          return row?.status === 'sleeping';
+        },
+      });
       expect(parked?.status).toBe('sleeping');
 
       // Nothing wakes it until the scheduler's sweep picks up the due run.
@@ -2956,16 +2928,16 @@ describe('Tasks', () => {
       // Background mode: a run is created and returns its handle immediately.
       expect(run.status).toBe(201);
 
-      let parked: InstanceType<typeof db.OrchestrationRun> | null = null;
-      for (let i = 0; i < 100; i += 1) {
-        parked = await db.OrchestrationRun.findOne({
-          where: { publicId: run.body.id },
-        });
-        if (parked?.status === 'sleeping') break;
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      }
+      const parked = await pollUntil({
+        read: () => {
+          return db.OrchestrationRun.findOne({
+            where: { publicId: run.body.id },
+          });
+        },
+        done: (row) => {
+          return row?.status === 'sleeping';
+        },
+      });
       expect(parked?.status).toBe('sleeping');
 
       // Aged well past the grace window — the only thing keeping this task from
@@ -4114,16 +4086,16 @@ describe('Tasks', () => {
       taskId: string;
       count: number;
     }): Promise<SoatEvent[]> => {
-      for (let i = 0; i < 100; i += 1) {
-        const mine = args.events.filter((e) => {
-          return e.resourceId === args.taskId;
-        });
-        if (mine.length >= args.count) return mine;
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      }
-      throw new Error(`waitForStallEvents: never reached ${args.count}`);
+      return pollUntil({
+        read: () => {
+          return args.events.filter((e) => {
+            return e.resourceId === args.taskId;
+          });
+        },
+        done: (mine) => {
+          return mine.length >= args.count;
+        },
+      });
     };
 
     test('emits tasks.stalled once per episode and re-arms on the next transition', async () => {

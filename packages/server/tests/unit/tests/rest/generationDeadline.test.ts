@@ -1,8 +1,8 @@
 import {
   type AgentToolTurn,
-  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { pollUntil } from '../../fixtures/poll';
 import { proposeCalls, type ScriptedCall } from '../../fixtures/scriptedModel';
 
 /**

@@ -3,11 +3,11 @@ import { db } from 'src/db';
 import {
   type AgentToolTurn,
   AMOUNT_SCHEMA,
-  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { asWire, captureEvents } from '../../fixtures/eventCapture';
 import { assertGuardrailEvaluationDetail } from '../../fixtures/guardrailEvaluationDetail';
+import { pollUntil } from '../../fixtures/poll';
 import { offeredProperties } from '../../fixtures/scriptedModel';
 
 // An agent turn's tool calls run through the guardrail gate the resolver wraps

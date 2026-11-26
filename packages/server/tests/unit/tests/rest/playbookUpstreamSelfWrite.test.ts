@@ -1,8 +1,8 @@
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { createPlaybookCase } from '../../fixtures/playbookCase';
+import { pollUntil } from '../../fixtures/poll';
 import {
   authenticatedTestClient,
   clientFor,

@@ -6,9 +6,9 @@ import {
 } from 'src/lib/playbookCascade';
 import { recoverPlaybookExports } from 'src/lib/playbookExportRender';
 
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import { setupProjectWithUsers, testGrant } from '../../fixtures/bootstrap';
 import { createPlaybookCase } from '../../fixtures/playbookCase';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
