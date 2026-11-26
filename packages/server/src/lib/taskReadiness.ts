@@ -4,11 +4,25 @@ import type { Transaction } from './dbTransaction';
 
 export const BLOCKED_BY_LIMIT = 20;
 
+export type TaskBlocker =
+  | { kind: 'scheduled'; until: Date; reason: string | null }
+  | { kind: 'task'; task_id: string; title: string; state: string };
+
 export type TaskReadiness = {
   blocked: boolean;
-  blocked_by: { task_id: string; title: string; state: string }[];
+  blocked_by: TaskBlocker[];
   blocked_by_count: number;
   unblocks: number;
+};
+
+type HoldRow = { id: number; hold_until: Date; hold_reason: string | null };
+
+/**
+ * A hold blocks while its date is ahead of the database clock. `COALESCE`, so
+ * a task holding nothing is `FALSE`, never `NULL`, under a `NOT`.
+ */
+const HOLD_ACTIVE_SQL = (alias: string) => {
+  return `COALESCE(${alias}.hold_until > NOW(), FALSE)`;
 };
 
 type BlockerRow = {
@@ -21,8 +35,9 @@ type BlockerRow = {
 type CountRow = { id: number; count: string };
 
 /**
- * Readiness of each task in `taskIds`, from its edges as they stand now: only
- * an open dependency blocks, and only an open dependent counts as held.
+ * Readiness of each task in `taskIds` as it stands now: a hold whose date is
+ * ahead blocks, listed first, as does each open dependency; only an open
+ * dependent counts as held.
  */
 export const readinessOf = async (args: {
   taskIds: number[];
@@ -39,6 +54,22 @@ export const readinessOf = async (args: {
   }
   if (args.taskIds.length === 0) return result;
 
+  const [holds] = await db.sequelize.query(
+    `SELECT t.id, t.hold_until, t.hold_reason FROM tasks t
+      WHERE t.id IN (:ids) AND ${HOLD_ACTIVE_SQL('t')}`,
+    { replacements: { ids: args.taskIds }, transaction: args.transaction }
+  );
+  for (const row of holds as HoldRow[]) {
+    const readiness = result.get(row.id)!;
+    readiness.blocked = true;
+    readiness.blocked_by_count += 1;
+    readiness.blocked_by.push({
+      kind: 'scheduled',
+      until: new Date(row.hold_until),
+      reason: row.hold_reason,
+    });
+  }
+
   const [blockers] = await db.sequelize.query(
     `SELECT d.task_id, b.public_id, b.title, b.state
        FROM task_dependencies d
@@ -53,6 +84,7 @@ export const readinessOf = async (args: {
     readiness.blocked_by_count += 1;
     if (readiness.blocked_by.length < BLOCKED_BY_LIMIT) {
       readiness.blocked_by.push({
+        kind: 'task',
         task_id: row.public_id,
         title: row.title,
         state: row.state,
@@ -87,10 +119,10 @@ export const readinessOfTask = async (args: {
 
 /** The `listTasks` `blocked` filter's SQL, over the list's `Task` alias. */
 export const blockedWhereSql = (blocked: boolean): string => {
-  return `${blocked ? '' : 'NOT '}EXISTS (
+  return `${blocked ? '' : 'NOT '}(${HOLD_ACTIVE_SQL('"Task"')} OR EXISTS (
     SELECT 1 FROM task_dependencies d
       JOIN tasks b ON b.id = d.depends_on_task_id
-     WHERE d.task_id = "Task"."id" AND b.status = 'open')`;
+     WHERE d.task_id = "Task"."id" AND b.status = 'open'))`;
 };
 
 /**

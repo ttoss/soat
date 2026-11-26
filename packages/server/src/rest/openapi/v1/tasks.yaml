@@ -836,6 +836,78 @@ paths:
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
+  /api/v1/tasks/{task_id}/hold:
+    put:
+      description: >-
+        Holds a task until a future date, or clears its hold with `null`.
+        While the date is ahead the task is blocked (`readiness.blocked`,
+        a `scheduled` entry in `readiness.blocked_by`); once it passes the
+        task is ready with no write, and `tasks.hold_cleared` fires. An
+        action of its own, `tasks:SetTaskHold`; create-task and update-task
+        do not accept `hold_until`.
+      tags:
+        - Tasks
+      summary: Hold a task until a date
+      operationId: setTaskHold
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: tasks:SetTaskHold
+      x-iam-resource-type: task
+      parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
+        - name: task_id
+          in: path
+          required: true
+          description: The task's ID.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetTaskHoldRequest'
+      responses:
+        '200':
+          description: The task with its new hold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+
   /api/v1/tasks/{task_id}/pause:
     post:
       description: >-
@@ -1510,8 +1582,8 @@ components:
       in: query
       required: false
       description: >-
-        `true` lists only the tasks with an open dependency
-        (`readiness.blocked`), `false` only the rest.
+        `true` lists only the blocked tasks (`readiness.blocked`: a hold whose
+        date is ahead or an open dependency), `false` only the rest.
       schema:
         type: string
         enum: ['true', 'false']
@@ -1613,6 +1685,18 @@ components:
             A person's assertion of how much the task matters, never derived.
             `null` until someone sets it. Set and cleared only with
             set-task-priority; readable by guards as `task.priority`.
+        hold_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            The date the task is held until; blocked while it is ahead. Set
+            and cleared only with set-task-hold; the scheduler clears a passed
+            one and emits `tasks.hold_cleared`.
+        hold_reason:
+          type: string
+          nullable: true
+          description: Why the task is held; `null` without a hold.
         active_dispatch:
           type: object
           nullable: true
@@ -1808,9 +1892,9 @@ components:
     TaskReadiness:
       type: object
       description: >-
-        Computed on every read. Only an open dependency blocks; any close,
-        `cancelled` included, frees what the task held. Guards read it as
-        `task.readiness`.
+        Computed on every read. A hold whose date is ahead and each open
+        dependency block; any close, `cancelled` included, frees what the task
+        held. Guards read it as `task.readiness`.
       required:
         - blocked
         - blocked_by
@@ -1819,29 +1903,66 @@ components:
       properties:
         blocked:
           type: boolean
-          description: Whether any dependency is still open.
+          description: Whether a hold or any dependency still blocks the task.
         blocked_by:
           type: array
-          description: The open dependencies, oldest first, at most 20.
+          description: >-
+            What blocks the task: its hold first, then the open dependencies,
+            oldest first, at most 20.
           items:
-            type: object
-            required:
-              - task_id
-              - title
-              - state
-            properties:
-              task_id:
-                type: string
-              title:
-                type: string
-              state:
-                type: string
+            oneOf:
+              - $ref: '#/components/schemas/TaskScheduledBlocker'
+              - $ref: '#/components/schemas/TaskDependencyBlocker'
+            discriminator:
+              propertyName: kind
+              mapping:
+                scheduled: '#/components/schemas/TaskScheduledBlocker'
+                task: '#/components/schemas/TaskDependencyBlocker'
         blocked_by_count:
           type: integer
-          description: How many dependencies are open, including any beyond the 20 listed.
+          description: >-
+            How many blockers there are, the hold included, counting any
+            dependency beyond the 20 listed.
         unblocks:
           type: integer
           description: How many open tasks depend on this one.
+    TaskScheduledBlocker:
+      type: object
+      description: The task's hold, while its date is ahead.
+      required:
+        - kind
+        - until
+        - reason
+      properties:
+        kind:
+          type: string
+          enum:
+            - scheduled
+        until:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          nullable: true
+    TaskDependencyBlocker:
+      type: object
+      description: An open dependency.
+      required:
+        - kind
+        - task_id
+        - title
+        - state
+      properties:
+        kind:
+          type: string
+          enum:
+            - task
+        task_id:
+          type: string
+        title:
+          type: string
+        state:
+          type: string
     TaskDependencyEnd:
       type: object
       required:
@@ -2057,6 +2178,26 @@ components:
           description: >-
             The priority to set; `null` clears it. A value outside the enum is
             `400 VALIDATION_FAILED`.
+    SetTaskHoldRequest:
+      type: object
+      required:
+        - hold_until
+      additionalProperties: false
+      properties:
+        hold_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            The date to hold the task until, in the future; `null` clears the
+            hold. A past date is `400 VALIDATION_FAILED`.
+        hold_reason:
+          type: string
+          nullable: true
+          maxLength: 256
+          description: >-
+            Why the task is held, surfaced on `hold_reason` and in its
+            `blocked_by` entry. Only with a `hold_until`.
     PauseTaskRequest:
       type: object
       properties:

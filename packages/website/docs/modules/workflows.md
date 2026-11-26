@@ -85,6 +85,8 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `priority`          | string \| null   | `very_high` \| `high` \| `medium` \| `low` \| `very_low`, or `null` when nobody prioritised the task. A person's assertion, never derived; guards read it as `task.priority` (see [Task priority](#task-priority)) |
+| `hold_until`        | string \| null   | ISO 8601 instant the task is held until; it is blocked while the instant is ahead (see [Holding a task until a date](#holding-a-task-until-a-date)) |
+| `hold_reason`       | string \| null   | Why the task is held; `null` without a hold |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect. `kind` is `generation`, `orchestration_run` or `tool_call`; a `tool_call` always carries a null `id`, since a direct tool call leaves no addressable record |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch, or `paused` when an operator pause suppressed it before it ran (see [Pausing a task](#pausing-a-task)) |
 | `pause_requested_at` | string \| null  | ISO 8601 instant an operator paused this task's automation, or `null` when no pause is in force (see [Pausing a task](#pausing-a-task)) |
@@ -146,7 +148,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 
 ### Pinning a call to a workflow
 
-`workflow_id` in the query string, the filter of [`GET /api/v1/tasks`](/docs/api/tasks/list-tasks), also pins every `/tasks/{task_id}` route: get, history, update, delete, transitions, migrate, priority, pause, resume and dependencies. A task of another workflow is `404 TASK_NOT_FOUND`, as if it did not exist; adding or removing a dependency holds both ends to the pin. A [builtin tool](./tools.md#builtin) presetting `workflow_id` therefore confines every task action it binds to that workflow, so one project can serve one workflow per team or end user.
+`workflow_id` in the query string, the filter of [`GET /api/v1/tasks`](/docs/api/tasks/list-tasks), also pins every `/tasks/{task_id}` route: get, history, update, delete, transitions, migrate, priority, hold, pause, resume and dependencies. A task of another workflow is `404 TASK_NOT_FOUND`, as if it did not exist; adding or removing a dependency holds both ends to the pin. A [builtin tool](./tools.md#builtin) presetting `workflow_id` therefore confines every task action it binds to that workflow, so one project can serve one workflow per team or end user.
 
 ### Listing a task's transitions
 
@@ -324,6 +326,47 @@ curl -s "$SOAT_URL/api/v1/tasks?workflow_id=$WORKFLOW_ID&priority=high&priority=
 </TabItem>
 </Tabs>
 
+### Holding a task until a date
+
+A task can wait until a date: a follow-up, a snooze, a check owed later. [`PUT /tasks/{task_id}/hold`](/docs/api/tasks/set-task-hold) `{ hold_until, hold_reason? }` holds it until a future instant, and `{ "hold_until": null }` clears the hold. The route has its own action, `tasks:SetTaskHold`; [`POST /tasks`](/docs/api/tasks/create-task) and [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) refuse `hold_until` as an unknown field. A date not in the future, or a `hold_reason` without a `hold_until`, is `400 VALIDATION_FAILED`.
+
+- While the date is ahead the task is blocked: `readiness.blocked` is `true` and `readiness.blocked_by` lists `{ kind: "scheduled", until, reason }` before its dependencies. Pulling with `blocked=false` skips it, and a guard on `task.readiness.blocked` refuses its transition.
+- Readiness reads the date against the clock, so once it passes the task is ready with no write.
+- The tasks scheduler then clears `hold_until` and `hold_reason` and emits `tasks.hold_cleared` once, carrying `cleared_hold: { until, reason }`, so an automation can react.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat set-task-hold --task-id "$TASK_ID" \
+  --hold-until 2026-12-01T09:00:00Z --hold-reason "rerun on Dec 1st"
+
+soat set-task-hold --task-id "$TASK_ID" --hold-until null
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: task, error } = await soat.tasks.setTaskHold({
+  path: { task_id: TASK_ID },
+  body: { hold_until: '2026-12-01T09:00:00Z', hold_reason: 'rerun on Dec 1st' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X PUT "$SOAT_URL/api/v1/tasks/$TASK_ID/hold" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"hold_until":"2026-12-01T09:00:00Z","hold_reason":"rerun on Dec 1st"}'
+```
+
+</TabItem>
+</Tabs>
+
 ### Task dependencies
 
 A task can depend on other tasks in its project: it is **blocked** while any of them is open. Needs `tasks:UpdateTaskDependencies` to add or remove, `tasks:GetTask` to list.
@@ -333,7 +376,7 @@ The pair of tasks is a dependency's identity; it has no id of its own. Edges cro
 - [`POST /tasks/{task_id}/dependencies`](/docs/api/tasks/add-task-dependency) `{ depends_on_task_id, note? }` makes the path's task wait on the body's: `201`, or `200` with the existing dependency when the pair already holds. An edge that would close a cycle is `409 TASK_DEPENDENCY_CYCLE` with `meta.path`, the task ids around it; the task itself is `400 TASK_DEPENDENCY_SELF`; a body task that is missing or in another project is `400 TASK_DEPENDENCY_TARGET_NOT_FOUND`; a closed path task is `409 TASK_DEPENDENCY_CLOSED`. A closed task may be depended on; that edge blocks nothing.
 - [`GET /tasks/{task_id}/dependencies`](/docs/api/tasks/list-task-dependencies) lists what it waits on, [`GET /tasks/{task_id}/dependents`](/docs/api/tasks/list-task-dependents) what it holds, open and closed alike. Each row is `{ task, depends_on_task, note, created_by_principal_type, created_by_principal_id, created_at }`, both ends as `{ id, title, state, status }`.
 - [`DELETE /tasks/{task_id}/dependencies/{depends_on_task_id}`](/docs/api/tasks/remove-task-dependency) removes one; `204` also when it is already gone.
-- Every task read carries `readiness`: `blocked`, `blocked_by` (the open dependencies, oldest first, at most 20, each `{ task_id, title, state }`), `blocked_by_count` (all of them) and `unblocks` (open dependents). A list page computes it in a fixed number of queries, whatever its size.
+- Every task read carries `readiness`: `blocked`, `blocked_by` (a [hold](#holding-a-task-until-a-date) whose date is ahead as `{ kind: "scheduled", until, reason }`, then the open dependencies, oldest first, at most 20, each `{ kind: "task", task_id, title, state }`), `blocked_by_count` (all of them) and `unblocks` (open dependents). A list page computes it in a fixed number of queries, whatever its size.
 - Any close frees what the task held, `cancelled` included; deleting a task removes its edges and frees its dependents.
 - `tasks.unblocked` fires once, when a task's last open dependency closes, is removed or is deleted.
 - History records state moves only; the [audit log](./audit-log.md) records each add and remove.
@@ -674,6 +717,7 @@ Every event's `data` is the task as [`GET /api/v1/tasks/{task_id}`](/docs/api/ta
 | `tasks.transitioned`         | A task moves between states                              | `transition`, `from_state` |
 | `tasks.closed`               | A task enters a terminal state                           | |
 | `tasks.unblocked`            | A task's last open [dependency](#task-dependencies) closes, is removed or is deleted | `unblocked_by: { task_id, state }` |
+| `tasks.hold_cleared`         | An open task's [hold](#holding-a-task-until-a-date) date passed (once per hold) | `cleared_hold: { until, reason }` |
 | `tasks.migrated`             | A task moves onto a newer workflow version               | `from_state`, `from_workflow_version` |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   | `result` |
 | `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) | `result`, `transition`, `error_code` |

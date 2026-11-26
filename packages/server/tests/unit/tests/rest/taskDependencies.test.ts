@@ -17,7 +17,12 @@ let otherWorkflowId: string;
 
 type Readiness = {
   blocked: boolean;
-  blocked_by: { task_id: string; title: string; state: string }[];
+  blocked_by: {
+    kind: 'task';
+    task_id: string;
+    title: string;
+    state: string;
+  }[];
   blocked_by_count: number;
   unblocks: number;
 };
@@ -158,7 +163,9 @@ describe('POST /api/v1/tasks/:task_id/dependencies', () => {
 
     expect((await readTask(task.id)).readiness).toEqual({
       blocked: true,
-      blocked_by: [{ task_id: blocker.id, title: 'blocker', state: 'todo' }],
+      blocked_by: [
+        { kind: 'task', task_id: blocker.id, title: 'blocker', state: 'todo' },
+      ],
       blocked_by_count: 1,
       unblocks: 0,
     });

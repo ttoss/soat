@@ -42,6 +42,11 @@ import { Workflow } from './Workflow';
       name: 'tasks_status_stall_deadline_at_idx',
       fields: ['status', 'stall_deadline_at'],
     },
+    // The hold sweeper's due-set query.
+    {
+      name: 'tasks_status_hold_until_idx',
+      fields: ['status', 'hold_until'],
+    },
     // A create's deduplication key is unique within its project; null for a
     // create that sent none, which Postgres never counts as a duplicate.
     {
@@ -158,6 +163,15 @@ export class Task extends Model {
   // A person's assertion, never derived; `TASK_PRIORITIES` (server) is the set.
   @Column({ type: DataType.STRING(16), allowNull: true })
   declare priority: string | null;
+
+  // Blocks the task while in the future, read against the clock, so it frees
+  // with no write. The tasks sweep nulls a passed one and emits
+  // `tasks.hold_cleared` once.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare holdUntil: Date | null;
+
+  @Column({ type: DataType.STRING(256), allowNull: true })
+  declare holdReason: string | null;
 
   // Provenance of the current state's automation: { kind, id, status }.
   @Column({ type: DataType.JSON, allowNull: true })

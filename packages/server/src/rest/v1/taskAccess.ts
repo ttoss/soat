@@ -23,6 +23,7 @@ type TaskAction =
   | 'tasks:PauseTask'
   | 'tasks:ResumeTask'
   | 'tasks:SetTaskPriority'
+  | 'tasks:SetTaskHold'
   | 'tasks:UpdateTaskDependencies';
 
 const taskNotFound = (id: string) => {
