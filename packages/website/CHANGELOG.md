@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.132.0](https://github.com/ttoss/soat/compare/v0.131.0...v0.132.0) (2026-11-26)
+
+### Features
+
+* **conversations:** an assistant message carries its turn's citations ([#2188](https://github.com/ttoss/soat/issues/2188)) ([604d962](https://github.com/ttoss/soat/commit/604d9622b410ec050bae0bb98ea7d5b746353661))
+* **server:** max_duration_seconds input limit for audio and video parts ([#2187](https://github.com/ttoss/soat/issues/2187)) ([65818a9](https://github.com/ttoss/soat/commit/65818a95049aef9fef370cb7c5f056299a42150a))
+
 # [0.131.0](https://github.com/ttoss/soat/compare/v0.130.0...v0.131.0) (2026-11-25)
 
 ### Bug Fixes
