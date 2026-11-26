@@ -1,5 +1,6 @@
 import {
   type AgentToolTurn,
+  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
 import { proposeCalls, type ScriptedCall } from '../../fixtures/scriptedModel';
@@ -37,13 +38,27 @@ describe('POST /api/v1/agents/{agent_id}/generate past the deadline', () => {
     return path;
   };
 
-  const hangingHttpTool = () => {
+  const httpToolAt = (path: string) => {
     return turn.createTool({
-      execute: {
-        url: `${turn.target.baseUrl}${hangingPath()}`,
-        method: 'POST',
-      },
+      execute: { url: `${turn.target.baseUrl}${path}`, method: 'POST' },
     });
+  };
+
+  const hangingHttpTool = () => {
+    return httpToolAt(hangingPath());
+  };
+
+  /** Whether the call the turn abandoned at `path` was itself cancelled. */
+  const expectAbandoned = async (path: string) => {
+    const abandoned = await pollUntil({
+      read: async () => {
+        return turn.target.requestsAt(path).some((request) => {
+          return request.abandoned;
+        });
+      },
+      done: Boolean,
+    });
+    expect(abandoned).toBe(true);
   };
 
   const expectCancelled = async (args: {
@@ -144,5 +159,51 @@ describe('POST /api/v1/agents/{agent_id}/generate past the deadline', () => {
         },
       },
     });
+  });
+
+  test('stops an mcp call it abandons', async () => {
+    const path = hangingPath({ mcp: true });
+    const tool = await turn.createTool({
+      type: 'mcp',
+      execute: undefined,
+      parameters: undefined,
+      mcp: { url: `${turn.target.baseUrl}${path}` },
+    });
+
+    await expectCancelled({
+      toolId: tool.id,
+      call: { name: 'slow', args: {} },
+    });
+
+    await expectAbandoned(path);
+  });
+
+  test('stops a pipeline it abandons before its next step', async () => {
+    const hangPath = hangingPath();
+    const nextPath = `/${turn.unique('next')}`;
+    const [first, second] = await Promise.all([
+      httpToolAt(hangPath),
+      httpToolAt(nextPath),
+    ]);
+    const pipeline = await turn.createTool({
+      type: 'pipeline',
+      execute: undefined,
+      parameters: { type: 'object', properties: {} },
+      pipeline: {
+        steps: [
+          { id: 'one', tool_id: first.id, input: { amount: 1 } },
+          { id: 'two', tool_id: second.id, input: { amount: 2 } },
+        ],
+      },
+    });
+
+    await expectCancelled({
+      toolId: pipeline.id,
+      call: { name: pipeline.name, args: {} },
+    });
+    for (const release of releases.splice(0)) release();
+
+    await expectAbandoned(hangPath);
+    expect(turn.target.requestsAt(nextPath)).toHaveLength(0);
   });
 });

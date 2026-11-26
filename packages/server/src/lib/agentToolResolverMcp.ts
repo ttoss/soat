@@ -77,6 +77,48 @@ const proxyCallRefusal = (args: {
   return inner === undefined ? null : (args.refuseInner?.(inner) ?? null);
 };
 
+/** One `tools/call`, metered as the action it reaches. */
+const sendMcpCall = (args: {
+  transport: McpTransport;
+  mcpToolName: string;
+  meter: ToolExecutionMeter;
+  viaCall?: string;
+  proxyCall?: boolean;
+  callArgs: unknown;
+  inner?: string;
+  signal?: AbortSignal;
+}) => {
+  return meterToolExecution({
+    meter: args.meter,
+    send: async (markSent) => {
+      const callResponse = await postMcp({
+        transport: args.transport,
+        body: toolsCallBody({
+          viaCall: args.viaCall,
+          toolName: args.mcpToolName,
+          callArgs: args.callArgs,
+        }),
+        signal: args.signal,
+        onRequest: () => {
+          markSent({
+            input: args.callArgs,
+            action: args.proxyCall ? args.inner : args.mcpToolName,
+          });
+        },
+      });
+      return readMcpCallResult({
+        body: await parseJsonRpcBody({
+          response: callResponse,
+          url: args.transport.url,
+        }),
+        toolName: args.mcpToolName,
+        url: args.transport.url,
+        trust: args.transport.trust,
+      });
+    },
+  });
+};
+
 export const buildMcpToolExecute = (args: {
   transport: McpTransport;
   mcpToolName: string;
@@ -102,38 +144,7 @@ export const buildMcpToolExecute = (args: {
   /** On a deferred server's own `describe`: the result as the model gets it. */
   reviewResult?: McpDefinitionGate['reviewDescribed'];
 }) => {
-  const send = (sendArgs: { callArgs: unknown; inner?: string }) => {
-    return meterToolExecution({
-      meter: args.meter,
-      send: async (markSent) => {
-        const callResponse = await postMcp({
-          transport: args.transport,
-          body: toolsCallBody({
-            viaCall: args.viaCall,
-            toolName: args.mcpToolName,
-            callArgs: sendArgs.callArgs,
-          }),
-          onRequest: () => {
-            markSent({
-              input: sendArgs.callArgs,
-              action: args.proxyCall ? sendArgs.inner : args.mcpToolName,
-            });
-          },
-        });
-        return readMcpCallResult({
-          body: await parseJsonRpcBody({
-            response: callResponse,
-            url: args.transport.url,
-          }),
-          toolName: args.mcpToolName,
-          url: args.transport.url,
-          trust: args.transport.trust,
-        });
-      },
-    });
-  };
-
-  return async (toolArgs: unknown) => {
+  return async (toolArgs: unknown, options?: { abortSignal?: AbortSignal }) => {
     const presetParameters = resolvePresetParametersForCall({
       presetParameters: args.presetParameters,
       toolContext: args.toolContext,
@@ -146,7 +157,12 @@ export const buildMcpToolExecute = (args: {
     const refusal = proxyCallRefusal({ ...args, callArgs });
     if (refusal !== null) return refusal;
     try {
-      const result = await send({ callArgs, inner: innerToolName(callArgs) });
+      const result = await sendMcpCall({
+        ...args,
+        callArgs,
+        inner: innerToolName(callArgs),
+        signal: options?.abortSignal,
+      });
       return args.reviewResult ? await args.reviewResult(result) : result;
     } catch (error) {
       args.logToolCallingError({

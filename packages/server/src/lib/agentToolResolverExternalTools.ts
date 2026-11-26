@@ -58,17 +58,7 @@ const unansweredActionError = (args: {
   );
 };
 
-/**
- * Invokes a SOAT platform action on behalf of a `builtin` tool.
- *
- * Served in-process via `dispatchApiRequest` rather than over loopback:
- * the app's real middleware chain still runs, so permission checks, validation,
- * audit, metering and the response contract are unchanged — only the socket is
- * gone. The turn's authority (`turnAuthority`) travels as a value, never a
- * token, so the route's own check is the agent's gate; a call without one is
- * refused, since sharing a process never implies sharing authority.
- */
-export const executeSoatTool = async (args: {
+type SoatToolCall = {
   toolName: string;
   def: ToolDefinition;
   rawArgs: Record<string, unknown>;
@@ -82,12 +72,27 @@ export const executeSoatTool = async (args: {
   remainingDepth?: number;
   /** The tool call this is, within its generation; absent outside a turn. */
   call?: HandoffCall | null;
+  abortSignal?: AbortSignal;
   buildContextHeaders: (args: {
     toolContext?: Record<string, string>;
     contextKeys?: string[] | null;
   }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
-}) => {
+};
+
+/**
+ * Invokes a SOAT platform action on behalf of a `builtin` tool.
+ *
+ * Served in-process via `dispatchApiRequest` rather than over loopback:
+ * the app's real middleware chain still runs, so permission checks, validation,
+ * audit, metering and the response contract are unchanged — only the socket is
+ * gone. The turn's authority (`turnAuthority`) travels as a value, never a
+ * token, so the route's own check is the agent's gate; a call without one is
+ * refused, since sharing a process never implies sharing authority.
+ * `abortSignal` is checked before dispatch; a dispatched action runs to its end.
+ */
+export const executeSoatTool = async (args: SoatToolCall) => {
+  args.abortSignal?.throwIfAborted();
   const handoff = handoffFor(args);
   // The template until the target is built: building refuses a call missing a
   // path argument, and that refusal is logged like any other failed call.
@@ -204,7 +209,10 @@ const buildSoatActionTool = (args: {
   const built = tool({
     description: args.toolDescription ?? args.def.description,
     inputSchema: jsonSchema(effectiveInputSchema),
-    execute: async (toolArgs: unknown, options: { toolCallId: string }) => {
+    execute: async (
+      toolArgs: unknown,
+      options: { toolCallId: string; abortSignal?: AbortSignal }
+    ) => {
       const generationId = args.meter.attribution.generationId;
       const rawArgs = mergePresetParameters({
         presetParameters: {
@@ -233,6 +241,7 @@ const buildSoatActionTool = (args: {
         call: generationId
           ? { generationId, toolCallId: options.toolCallId }
           : null,
+        abortSignal: options.abortSignal,
         buildContextHeaders: args.buildContextHeaders,
         logToolCallingError: args.logToolCallingError,
       });

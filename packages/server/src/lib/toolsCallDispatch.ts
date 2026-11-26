@@ -48,6 +48,7 @@ export const callHttpTool = (
     toolContext?: Record<string, string>;
     authority: WorkAuthority | null;
     agentAuthority?: AgentAuthority;
+    abortSignal?: AbortSignal;
   }
 ): Promise<unknown> => {
   const { idempotencyKey, toolContext } = call;
@@ -80,7 +81,7 @@ export const callHttpTool = (
     toolContext
     // Presets were already merged into `mergedInput` by `callResolvedTool`, so
     // none are passed here — passing them again would resolve and merge twice.
-  )(mergedInput).catch((error: unknown) => {
+  )(mergedInput, { abortSignal: call.abortSignal }).catch((error: unknown) => {
     throw toHttpToolDomainError(error) ?? error;
   });
 };
@@ -111,6 +112,7 @@ export const callSoatTool = async (
     authority: WorkAuthority | null;
     toolContext?: Record<string, string>;
     agentAuthority?: AgentAuthority;
+    abortSignal?: AbortSignal;
   }
 ): Promise<unknown> => {
   const { authority } = args;
@@ -149,6 +151,7 @@ export const callSoatTool = async (
       toolContext: args.toolContext,
       contextKeys: tool.contextKeys,
       logToolCallingError: noopLogToolCallingError,
+      abortSignal: args.abortSignal,
     });
   }
   const { def } = found;
@@ -163,6 +166,7 @@ export const callSoatTool = async (
     contextKeys: tool.contextKeys,
     buildContextHeaders,
     logToolCallingError: noopLogToolCallingError,
+    abortSignal: args.abortSignal,
   }).catch((error: unknown) => {
     throw toHttpToolDomainError(error) ?? error;
   });
@@ -294,6 +298,7 @@ export const callMcpTool = async (args: {
   prepared: PreparedMcpCall;
   mergedInput: Record<string, unknown>;
   meter: ToolExecutionMeter;
+  abortSignal?: AbortSignal;
 }): Promise<unknown> => {
   const { prepared } = args;
   return buildMcpToolExecute({
@@ -303,7 +308,7 @@ export const callMcpTool = async (args: {
     meter: args.meter,
     // Presets are merged by `callResolvedTool` on this path, already resolved.
     logToolCallingError: noopLogToolCallingError,
-  })(args.mergedInput);
+  })(args.mergedInput, { abortSignal: args.abortSignal });
 };
 
 export type ServerSideToolProblem = 'runs_on_client' | 'action_required';
@@ -348,6 +353,7 @@ export const dispatchDirectTool = async (args: {
   idempotencyKey?: string;
   toolContext?: Record<string, string>;
   agentAuthority?: AgentAuthority;
+  abortSignal?: AbortSignal;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(args.tool, args.mergedInput, args.meter, {
@@ -355,6 +361,7 @@ export const dispatchDirectTool = async (args: {
       toolContext: args.toolContext,
       authority: args.authority,
       agentAuthority: args.agentAuthority,
+      abortSignal: args.abortSignal,
     });
   }
   if (args.type === 'builtin') {
@@ -365,6 +372,7 @@ export const dispatchDirectTool = async (args: {
       authority: args.authority,
       toolContext: args.toolContext,
       agentAuthority: args.agentAuthority,
+      abortSignal: args.abortSignal,
     });
   }
   throw new DomainError(

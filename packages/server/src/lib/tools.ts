@@ -385,6 +385,8 @@ export const callTool = async (args: {
   agentAuthority?: AgentAuthority;
   /** The request's resolved credential, when the call is made in one. */
   caller?: SenderCredential;
+  /** The calling work's cancellation; the call stops when it aborts. */
+  abortSignal?: AbortSignal;
 }): Promise<unknown> => {
   const referenced = await toolReferences.find({
     id: args.id,
@@ -412,6 +414,7 @@ export const callTool = async (args: {
     signedOff: args.signedOff,
     agentAuthority: args.agentAuthority,
     caller: args.caller,
+    abortSignal: args.abortSignal,
   });
 };
 

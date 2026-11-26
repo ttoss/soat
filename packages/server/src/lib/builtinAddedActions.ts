@@ -91,6 +91,7 @@ export const callAddedBuiltinAction = async (
     action: string;
     input: Record<string, unknown>;
     logToolCallingError: LogToolCallingError;
+    abortSignal?: AbortSignal;
   }
 ): Promise<unknown> => {
   log('callAddedBuiltinAction: url=%s action=%s', args.url, args.action);
@@ -99,5 +100,5 @@ export const callAddedBuiltinAction = async (
     mcpToolName: args.action,
     meter: args.meter,
     logToolCallingError: args.logToolCallingError,
-  })(args.input);
+  })(args.input, { abortSignal: args.abortSignal });
 };

@@ -398,6 +398,8 @@ export const runPipeline = async (args: {
   callStep: PipelineStepCaller;
   /** Called once the pipeline is past every refusal and starts running. */
   onStart?: () => void;
+  /** No step starts once it aborts. */
+  abortSignal?: AbortSignal;
 }): Promise<unknown> => {
   const config = validatePipelineConfig(args.pipeline);
   const remainingDepth = args.remainingDepth ?? DEFAULT_PIPELINE_DEPTH;
@@ -420,6 +422,7 @@ export const runPipeline = async (args: {
 
   let lastOutput: unknown;
   for (const step of config.steps) {
+    args.abortSignal?.throwIfAborted();
     lastOutput = await executeStep({
       step,
       context,

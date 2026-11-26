@@ -249,6 +249,8 @@ type CallResolvedToolArgs = {
   agentAuthority?: AgentAuthority;
   /** The request's resolved credential, when the call is made in one. */
   caller?: SenderCredential;
+  /** The calling work's cancellation; the call stops when it aborts. */
+  abortSignal?: AbortSignal;
 };
 
 /**
@@ -274,6 +276,7 @@ const callPipelineStep = (args: {
     toolContext: pipeline.toolContext,
     agentAuthority: pipeline.agentAuthority,
     caller: pipeline.caller,
+    abortSignal: pipeline.abortSignal,
     attribution,
   };
   if (step.tool) {
@@ -432,6 +435,7 @@ const runResolvedTool = async (
           presetParameters,
           input,
           remainingDepth: args.remainingDepth,
+          abortSignal: args.abortSignal,
           callStep: (step: Parameters<PipelineStepCaller>[0]) => {
             return callPipelineStep({
               step,
@@ -456,6 +460,7 @@ const runResolvedTool = async (
         prepared: mcp,
         mergedInput,
         meter: { ...meter, attribution },
+        abortSignal: args.abortSignal,
       })
     : await dispatchDirectTool({
         ...args,
