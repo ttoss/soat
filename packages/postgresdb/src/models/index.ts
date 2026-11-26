@@ -76,6 +76,7 @@ export { ShareAcceptance } from './ShareAcceptance';
 export { ShareCapCounter } from './ShareCapCounter';
 export { Task } from './Task';
 export { TaskDependency } from './TaskDependency';
+export { TaskLink } from './TaskLink';
 export { TaskTransition } from './TaskTransition';
 export { Tool } from './Tool';
 export { Trace } from './Trace';

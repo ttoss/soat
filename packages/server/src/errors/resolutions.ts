@@ -207,6 +207,9 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Name a task of the same project in `depends_on_task_id`.',
   TASK_DEPENDENCY_CLOSED:
     'Add the dependency to an open task; a closed task waits on nothing.',
+  TASK_LINK_SELF: 'Name a different task in `to_task_id`.',
+  TASK_LINK_TARGET_NOT_FOUND:
+    'Name a task of the same project in `to_task_id`.',
   TASK_GRAPH_TOO_LARGE:
     'Narrow the graph with `upstream_of`, `status=open`, `workflow_id` or `metadata`, or page through {{GET /tasks}} with the same filters.',
   TASK_MIGRATION_CONFLICT:

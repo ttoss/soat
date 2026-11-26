@@ -94,6 +94,9 @@ const listFiltersQuery = async (ctx: Context) => {
     assignee: ctx.query.assignee as string | undefined,
     blocked: blockedQuery(ctx),
     upstreamOf: ctx.query.upstream_of as string | undefined,
+    linkedFrom: ctx.query.linked_from as string | undefined,
+    linkedTo: ctx.query.linked_to as string | undefined,
+    linkKind: ctx.query.link_kind as string | undefined,
     metadata,
   };
 };

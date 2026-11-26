@@ -1224,6 +1224,16 @@
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
+    "TASK_LINK_SELF": {
+      "http_status": 400,
+      "hint": "Name a different task in `to_task_id`.",
+      "routes": []
+    },
+    "TASK_LINK_TARGET_NOT_FOUND": {
+      "http_status": 400,
+      "hint": "Name a task of the same project in `to_task_id`.",
+      "routes": []
+    },
     "TASK_MIGRATION_CONFLICT": {
       "http_status": 409,
       "hint": "Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.",

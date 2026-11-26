@@ -1036,6 +1036,15 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description: 'A closed task cannot gain a dependency.',
   },
+  TASK_LINK_SELF: {
+    httpStatus: 400,
+    description: 'A task cannot link to itself.',
+  },
+  TASK_LINK_TARGET_NOT_FOUND: {
+    httpStatus: 400,
+    description:
+      'The task named by `to_task_id` does not exist in the project of the task the link starts from.',
+  },
   TASK_GRAPH_TOO_LARGE: {
     httpStatus: 422,
     description:

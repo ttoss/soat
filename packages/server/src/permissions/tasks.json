@@ -87,6 +87,21 @@
       "description": "Remove one of a task's dependencies"
     },
     {
+      "operationId": "addTaskLink",
+      "action": "tasks:UpdateTaskLinks",
+      "description": "Link a task to another task in its project"
+    },
+    {
+      "operationId": "listTaskLinks",
+      "action": "tasks:GetTask",
+      "description": "List the links from and to a task"
+    },
+    {
+      "operationId": "removeTaskLink",
+      "action": "tasks:UpdateTaskLinks",
+      "description": "Remove one of a task's links"
+    },
+    {
       "operationId": "deleteTask",
       "action": "tasks:DeleteTask",
       "description": "Delete a task"

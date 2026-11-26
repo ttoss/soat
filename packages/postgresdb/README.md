@@ -133,6 +133,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-24-eval-criteria` | `evals.criteria` (`json`), the properties an eval's claim is made of, each binding scorers and defined by probes; nothing filled |
 | `2026-11-26-task-transition-acts-for` | `task_transitions.acts_for_type` and `acts_for_id`, whom the move was made for; nothing filled |
 | `2026-11-26-lexical-gin-indexes` | a partial GIN index over `to_tsvector('simple', content)` on `document_chunks` and `memory_contents` (`lexicalContentIndex`), for the lexical half of knowledge search; a text past 512 KB is left out |
+| `2026-11-26-task-transition-link` | `task_transitions.link`, the task link a history row records as added or removed; nothing filled |
 
 Run them from the server package, which owns the entrypoint:
 

@@ -85,6 +85,10 @@ const SAMPLE_STRINGS: Record<string, string> = {
   uri: 'https://example.com',
 };
 
+const SAMPLE_PATTERNS: Record<string, string> = {
+  '^[a-z_]{1,32}$': 'derived_from',
+};
+
 /** The most alternatives any `oneOf` / `anyOf` in the schema offers. */
 const alternativesIn = (schema: Schema | undefined): number => {
   if (!schema) return 0;
@@ -116,7 +120,11 @@ const scalarSample = (schema: Schema, type: string | undefined): unknown => {
   if (type === 'integer' || type === 'number') return schema.minimum ?? 1;
   if (type === 'boolean') return true;
   if (schema.pattern) {
-    throw new Error(`No sample for pattern ${schema.pattern}`);
+    const sample = SAMPLE_PATTERNS[schema.pattern];
+    if (sample === undefined) {
+      throw new Error(`No sample for pattern ${schema.pattern}`);
+    }
+    return sample;
   }
   return (
     (schema.format && SAMPLE_STRINGS[schema.format]) ??

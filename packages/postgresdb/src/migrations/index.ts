@@ -81,6 +81,7 @@ import { scorerNamesRequired } from './2026-11-25-scorerNamesRequired';
 import { lexicalGinIndexes } from './2026-11-26-lexicalGinIndexes';
 import { recordActsFor } from './2026-11-26-recordActsFor';
 import { taskTransitionActsFor } from './2026-11-26-taskTransitionActsFor';
+import { taskTransitionLink } from './2026-11-26-taskTransitionLink';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -183,4 +184,5 @@ export const MIGRATIONS: Migration[] = [
   taskTransitionActsFor,
   lexicalGinIndexes,
   recordActsFor,
+  taskTransitionLink,
 ];

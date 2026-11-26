@@ -381,8 +381,20 @@ The pair of tasks is a dependency's identity; it has no id of its own. Edges cro
 - Every task read carries `readiness`: `blocked`, `blocked_by` (a [hold](#holding-a-task-until-a-date) whose date is ahead as `{ kind: "scheduled", until, reason }`, then the open dependencies, oldest first, at most 20, each `{ kind: "task", task_id, title, state }`), `blocked_by_count` (all of them) and `unblocks` (open dependents). A list page computes it in a fixed number of queries, whatever its size.
 - Any close frees what the task held, `cancelled` included; deleting a task removes its edges and frees its dependents.
 - `tasks.unblocked` fires once, when a task's last open dependency closes, is removed or is deleted.
-- History records state moves only; the [audit log](./audit-log.md) records each add and remove.
+- History records no dependency; the [audit log](./audit-log.md) records each add and remove.
 - Readiness gates nothing on its own. A guard reads it as `task.readiness`, so `{ "!": { "var": "task.readiness.blocked" } }` holds a transition until the task is free; [`GET /tasks?blocked=true`](/docs/api/tasks/list-tasks) (or `false`) filters a board by it.
+
+### Task links
+
+A link records how two tasks of a project relate without gating either: a task split from another, a decision that replaces another. It never changes `readiness`. Needs `tasks:UpdateTaskLinks` to add or remove, `tasks:GetTask` to list.
+
+`kind` is the caller's name for the relation, matching `^[a-z_]{1,32}$` (`derived_from`, `supersedes`, `duplicates`). A link points from one task to another; `(from_task, to_task, kind)` is its identity, so two tasks may carry links of several kinds. Either end may be closed.
+
+- [`POST /tasks/{task_id}/links`](/docs/api/tasks/add-task-link) `{ to_task_id, kind, note? }` links the path's task to the body's: `201`, or `200` with the existing link. The task itself is `400 TASK_LINK_SELF`; a body task that is missing or in another project is `400 TASK_LINK_TARGET_NOT_FOUND`.
+- [`GET /tasks/{task_id}/links`](/docs/api/tasks/list-task-links) lists the links it starts and those pointing at it, oldest first; `direction=out` or `in` keeps one side, `kind=` one kind. Each row is `{ kind, from_task, to_task, note, created_by_principal_type, created_by_principal_id, created_at }`, both ends as `{ id, title, state, status }`.
+- [`DELETE /tasks/{task_id}/links/{kind}/{to_task_id}`](/docs/api/tasks/remove-task-link) removes one; `204` also when it is already gone. Deleting a task removes its links.
+- Both tasks' [history](/docs/api/tasks/get-task-history) record each add and remove as a row whose `link` is `{ action, kind, from_task_id, to_task_id }` and whose `from_state` equals `to_state`.
+- [`GET /tasks`](/docs/api/tasks/list-tasks) and [`GET /tasks/graph`](/docs/api/tasks/get-task-graph) filter by link: `linked_from={task_id}` keeps the tasks it links to, `linked_to={task_id}` those linking to it; `any` or `none` in place of an id keeps the tasks some or no task links to (`linked_from`) or that link to some or none (`linked_to`). `link_kind` narrows both to one kind, so `linked_from=none&link_kind=supersedes` lists what nothing supersedes.
 
 ### Pulling the next task
 
@@ -707,6 +719,8 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | `TASK_DEPENDENCY_SELF`     | 400    | A task cannot depend on itself |
 | `TASK_DEPENDENCY_TARGET_NOT_FOUND` | 400 | `depends_on_task_id` names no task in the project of the task it would block |
 | `TASK_DEPENDENCY_CLOSED`   | 409    | A closed task cannot gain a dependency |
+| `TASK_LINK_SELF`           | 400    | A task cannot link to itself. See [Task links](#task-links) |
+| `TASK_LINK_TARGET_NOT_FOUND` | 400  | `to_task_id` names no task in the project of the task the link starts from |
 | `TASK_NOT_PAUSED`          | 409    | The task carries no operator pause to lift; advance an idle task by firing a transition instead. See [Pausing a task](#pausing-a-task) |
 
 ## Webhook events
@@ -926,6 +940,51 @@ curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/dependencies" \
   -d "{\"depends_on_task_id\":\"$BLOCKER_ID\"}"
 
 curl -s "$SOAT_URL/api/v1/tasks/$TASK_ID" -H "Authorization: Bearer $TOKEN"
+```
+
+</TabItem>
+</Tabs>
+
+### Link a task to the one it came from
+
+See [Task links](#task-links).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat add-task-link --task-id "$SPLIT_ID" --to-task-id "$SOURCE_ID" --kind derived_from
+
+# Both ends read the link; neither task's readiness changes.
+soat list-task-links --task-id "$SOURCE_ID" --direction in
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: link, error } = await soat.tasks.addTaskLink({
+  path: { task_id: SPLIT_ID },
+  body: { to_task_id: SOURCE_ID, kind: 'derived_from' },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+const { data: links } = await soat.tasks.listTaskLinks({
+  path: { task_id: SOURCE_ID },
+  query: { direction: 'in' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/tasks/$SPLIT_ID/links" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"to_task_id\":\"$SOURCE_ID\",\"kind\":\"derived_from\"}"
+
+curl -s "$SOAT_URL/api/v1/tasks/$SOURCE_ID/links?direction=in" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 </TabItem>

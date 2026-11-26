@@ -74,6 +74,7 @@ export const getTaskHistory = async (args: {
         note: row.note,
         from_workflow_version: row.fromWorkflowVersion ?? null,
         to_workflow_version: row.toWorkflowVersion ?? null,
+        link: row.link ?? null,
         created_at: row.createdAt,
       };
     },

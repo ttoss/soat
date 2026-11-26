@@ -169,6 +169,7 @@ const ROLES = {
     'Task.payload',
     'Task.authority',
     'Task.toolContext',
+    'TaskTransition.link',
     'Tool.actions',
     'Tool.contextKeys',
     'Tool.deniedActions',
