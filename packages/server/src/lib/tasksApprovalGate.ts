@@ -245,6 +245,7 @@ const appendResolutionNote = async (args: {
       orchestrationRunId: null,
       note,
     },
+    actsFor: null,
   });
 };
 
@@ -278,7 +279,11 @@ const applyApprovedTransition = async (args: {
     await transitionTask({
       id: item.task_id,
       transition: item.task_transition,
-      principal: { kind: 'approval', id: decision.resolvedByPrincipalId },
+      principal: {
+        kind: 'approval',
+        id: decision.resolvedByPrincipalId,
+        actsFor: null,
+      },
       note: `Approved via approval ${item.id}.`,
       payload,
     });

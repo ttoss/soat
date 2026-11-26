@@ -131,6 +131,7 @@ contract one release apart: `.claude/rules/postgresdb.md`, first section.
 | `2026-11-22-eval-result-human-label` | `eval_results.human_passed`, `label_note`, `labeled_by_principal_type`, `labeled_by_principal_id`, `labeled_at`, the label a user or API key gave a result; nothing filled |
 | `2026-11-24-pinned-versions-required` | `orchestration_runs.orchestration_version` and `tasks.workflow_version` `NOT NULL`; a row without one takes its live row's version |
 | `2026-11-24-eval-criteria` | `evals.criteria` (`json`), the properties an eval's claim is made of, each binding scorers and defined by probes; nothing filled |
+| `2026-11-26-task-transition-acts-for` | `task_transitions.acts_for_type` and `acts_for_id`, whom the move was made for; nothing filled |
 
 Run them from the server package, which owns the entrypoint:
 

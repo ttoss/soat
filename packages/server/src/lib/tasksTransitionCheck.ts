@@ -33,7 +33,7 @@ const guardRejection = (args: {
         readiness: args.readiness,
       }),
       transition: { name: args.transition.name },
-      principal: args.principal,
+      principal: { kind: args.principal.kind, id: args.principal.id },
     })
   );
   if (ok) return null;
