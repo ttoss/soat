@@ -623,7 +623,7 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 
 ### Calling a Tool Directly
 
-[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) invokes a tool without an agent. Body: `action` (required for `builtin` and `mcp`; ignored for `pipeline`), `input` (the pipeline input for `pipeline`), `tool_context`. With an `output_mapping` the response is its result ([Output Mapping](#output-mapping)).
+[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) invokes a tool without an agent. Body: `action` (required for `builtin` and `mcp`; ignored for `pipeline`), `input` (the pipeline input for `pipeline`), `tool_context`, `actor_id`; any other body field is `400 VALIDATION_FAILED`. With an `output_mapping` the response is its result ([Output Mapping](#output-mapping)).
 
 On a `builtin` tool without a body `action`, an `action` in `input` or `preset_parameters` selects the action and is not sent to it. With a body `action`, an input `action` reaches only an action that declares one: a tool binding `call-tool` takes `{ "action": "call-tool", "input": { "action": "list-agents" } }` and runs its target's `list-agents`.
 

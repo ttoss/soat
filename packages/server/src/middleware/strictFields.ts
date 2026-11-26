@@ -28,7 +28,6 @@ export const STRICT_FIELDS_OPT_OUT: ReadonlySet<string> = new Set([
   'POST /api/v1/chat/completions',
   // Open / passthrough input.
   'POST /api/v1/embeddings',
-  'POST /api/v1/tools/{tool_id}/call',
   // POST /files accepts-and-ignores client storage fields as a documented
   // robustness behavior. The multipart upload routes carry no JSON schema, so
   // the resolver skips them on its own.

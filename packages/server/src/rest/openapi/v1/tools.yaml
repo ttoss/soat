@@ -1430,6 +1430,7 @@ components:
                 $ref: '#/components/schemas/ToolAction'
     CallToolRequest:
       type: object
+      additionalProperties: false
       properties:
         action:
           type: string
