@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.133.0](https://github.com/ttoss/soat/compare/v0.132.0...v0.133.0) (2026-11-26)
+
+### Features
+
+* **evaluations:** a failed eval run records why in its error ([#2194](https://github.com/ttoss/soat/issues/2194)) ([e7693ec](https://github.com/ttoss/soat/commit/e7693ec5d984ec0fcd4ff012c396e01d0bfab530))
+* **files:** file expiry and single-use files deleted when their generation settles ([#2192](https://github.com/ttoss/soat/issues/2192)) ([f3caf23](https://github.com/ttoss/soat/commit/f3caf2306e2640b89c7663d471514ec2dc0a0b79))
+* **tasks:** a task holds until a date, counted in its readiness ([#2191](https://github.com/ttoss/soat/issues/2191)) ([3bfbb1d](https://github.com/ttoss/soat/commit/3bfbb1d59f7813d405cd5237ab98e40fa07ca85e))
+* **tasks:** record acts_for, the principal an IAM token acts for, on task history ([#2193](https://github.com/ttoss/soat/issues/2193)) ([40fd728](https://github.com/ttoss/soat/commit/40fd7284057c40d38e8c3cee342d28dd851497c3))
+
+### Performance Improvements
+
+* **knowledge:** index the lexical channel with a partial gin expression index ([#2195](https://github.com/ttoss/soat/issues/2195)) ([2eb6c29](https://github.com/ttoss/soat/commit/2eb6c29247837259b41c54ccdc1674ca840b38e0))
+
 # [0.132.0](https://github.com/ttoss/soat/compare/v0.131.0...v0.132.0) (2026-11-26)
 
 ### Features
