@@ -200,13 +200,10 @@ const refName = (schema: unknown): string | null => {
 
 /**
  * Template fields that copy the create route's component. `tool_bindings`
- * refuses the inline `tool` entry the route accepts; the rest await a `$ref`.
+ * refuses the inline `tool` entry the route accepts.
  */
 const COPIED_FIELDS: Record<string, string[]> = {
   agent: ['tool_bindings'],
-  model_route: ['targets'],
-  orchestration: ['nodes', 'edges'],
-  workflow: ['states', 'transitions'],
 };
 
 // A field the create route defines by `$ref` has one definition; a template

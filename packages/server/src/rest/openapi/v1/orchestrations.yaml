@@ -1475,6 +1475,7 @@ components:
           example: 1
     OrchestrationNode:
       type: object
+      additionalProperties: false
       description: A single execution unit in the orchestration graph.
       required:
         - id
@@ -1724,6 +1725,7 @@ components:
 
     OrchestrationEdge:
       type: object
+      additionalProperties: false
       description: A directed connection between two nodes.
       required:
         - from
