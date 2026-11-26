@@ -111,15 +111,22 @@ export const limitsFor = (args: {
   return args.modelInputLimits?.[args.model] ?? null;
 };
 
-/** Where a file part sits in the prompt, as a refusal names it. */
+/**
+ * Where a file part sits, as a refusal names it: `message_index` counts the
+ * conversation's messages, never the system prompt the runtime prepends.
+ */
 export type PartPosition = {
   message_index: number;
   part_index: number;
   content_index?: number;
 };
 
+/** A part's message as indexed in the prompt the provider is sent. */
+export type PromptPosition = { promptIndex: number; partIndex: number };
+
 type FilePart = {
   position: PartPosition;
+  at: PromptPosition;
   mediaType: string;
   /** `null` for a part sent by URL, whose bytes the runtime never holds. */
   bytes: Uint8Array | null;
@@ -138,11 +145,16 @@ const bytesOf = (part: unknown): Uint8Array | null => {
   return typeof value === 'string' ? Buffer.from(value, 'base64') : null;
 };
 
-const filePart = (part: unknown, position: PartPosition): FilePart[] => {
+const filePart = (
+  part: unknown,
+  position: PartPosition,
+  at: PromptPosition
+): FilePart[] => {
   if (field(part, 'type') !== 'file') return [];
   return [
     {
       position,
+      at,
       mediaType: String(field(part, 'mediaType')),
       bytes: bytesOf(part),
     },
@@ -154,21 +166,31 @@ const contentOf = (value: unknown): unknown[] => {
 };
 
 // A tool result read natively carries its files under `output.value`.
-const toolResultFiles = (part: unknown, base: PartPosition): FilePart[] => {
+const toolResultFiles = (
+  part: unknown,
+  base: PartPosition,
+  at: PromptPosition
+): FilePart[] => {
   const output = field(part, 'output');
   if (field(output, 'type') !== 'content') return [];
   return contentOf(field(output, 'value')).flatMap((content, index) => {
-    return filePart(content, { ...base, content_index: index });
+    return filePart(content, { ...base, content_index: index }, at);
   });
 };
 
 const fileParts = (prompt: readonly unknown[]): FilePart[] => {
-  return prompt.flatMap((message, messageIndex) => {
+  const conversation = prompt.flatMap((message, promptIndex) => {
+    return field(message, 'role') === 'system'
+      ? []
+      : [{ message, promptIndex }];
+  });
+  return conversation.flatMap(({ message, promptIndex }, messageIndex) => {
     return contentOf(field(message, 'content')).flatMap((part, partIndex) => {
       const position = { message_index: messageIndex, part_index: partIndex };
+      const at = { promptIndex, partIndex };
       return field(part, 'type') === 'tool-result'
-        ? toolResultFiles(part, position)
-        : filePart(part, position);
+        ? toolResultFiles(part, position, at)
+        : filePart(part, position, at);
     });
   });
 };
@@ -269,7 +291,7 @@ export const assertWithinInputLimits = async (args: {
   model: string;
   limits: InputLimits | null;
   prompt: readonly unknown[];
-  fileIdAt: (position: PartPosition) => string | null;
+  fileIdAt: (at: PromptPosition) => string | null;
 }): Promise<void> => {
   if (!args.limits) return;
   const exceeded = await firstExceeded({
@@ -282,7 +304,7 @@ export const assertWithinInputLimits = async (args: {
     args.model,
     exceeded.limit
   );
-  const fileId = args.fileIdAt(exceeded.part.position);
+  const fileId = args.fileIdAt(exceeded.part.at);
   const part = {
     ...exceeded.part.position,
     ...(fileId ? { file_id: fileId } : {}),

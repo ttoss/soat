@@ -343,6 +343,7 @@ An alias may map to `{ ai_provider_id, model }`: another provider of the same pr
 ```
 
 - A request over a limit is refused with `400 INPUT_LIMIT_EXCEEDED` before the provider is called. `meta` names the `model`, the `limit`, the part's `modality`, the declared `max`, the request's `value`, and the `part` (`message_index`, `part_index`, `content_index` inside a tool result, `file_id` for a stored file).
+- `message_index` counts the conversation's messages the model is sent: the request's (or the stored history), then the turn's assistant and tool messages. An agent's `instructions` and other system content are never counted.
 - A limit a model omits is not checked, nor is a part sent by URL, whose bytes the runtime never holds.
 - `max_duration_seconds` is read from the part's container headers: WAV, MP3, AAC (ADTS), FLAC, Ogg Opus or Vorbis, MP4/MOV/M4A and Matroska/WebM. A part whose duration cannot be read is refused with `400 MEDIA_PARSE_FAILED` before the provider is called; `meta` names the `model`, the `limit`, the `modality` and the `part`.
 - The model listing serves each model's declaration as `input_limits`, so a catalog reads the limits the gate enforces.

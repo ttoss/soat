@@ -8,7 +8,7 @@ import { readFileBuffer } from './fileStorage';
 import {
   assertWithinInputLimits,
   type InputLimits,
-  type PartPosition,
+  type PromptPosition,
 } from './inputLimits';
 import { type InputModality, readInputModalities } from './inputModalities';
 import {
@@ -180,11 +180,11 @@ const resolveToolResultFiles = (args: {
 // prompt names the same part in the prompt as sent.
 const fileIdAt = (args: {
   prompt: CallParams['prompt'];
-  position: PartPosition;
+  at: PromptPosition;
 }): string | null => {
-  const message = args.prompt[args.position.message_index];
+  const message = args.prompt[args.at.promptIndex];
   if (message?.role !== 'user') return null;
-  const part = message.content[args.position.part_index];
+  const part = message.content[args.at.partIndex];
   return part ? referencedFileId(part) : null;
 };
 
@@ -236,8 +236,8 @@ export const withInputBoundary = (args: {
         model: args.modelName,
         limits: args.limits,
         prompt: resolved,
-        fileIdAt: (position) => {
-          return fileIdAt({ prompt, position });
+        fileIdAt: (at) => {
+          return fileIdAt({ prompt, at });
         },
       });
       return { ...sent, prompt: resolved };
