@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.134.0](https://github.com/ttoss/soat/compare/v0.133.0...v0.134.0) (2026-11-26)
+
+### Features
+
+* **principals:** every record naming who acted serves acts_for ([#2208](https://github.com/ttoss/soat/issues/2208)) ([5342313](https://github.com/ttoss/soat/commit/5342313feda267a7b3de092807286c62494088e2))
+
+### BREAKING CHANGES
+
+* **principals:** an audit entry serves the principal an IAM token or
+  On-Behalf-Of assertion acted for as acts_for, not detail.on_behalf_of_principal.
+
 # [0.133.0](https://github.com/ttoss/soat/compare/v0.132.0...v0.133.0) (2026-11-26)
 
 ### Features
