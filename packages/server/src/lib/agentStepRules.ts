@@ -13,6 +13,7 @@
 import type { ModelMessage, Tool, ToolChoice } from 'ai';
 import createDebug from 'debug';
 
+import { DomainError } from '../errors';
 import { ownerProjectId, type TypedAgent } from './agentGenerationTypes';
 import { resolveToolIdsToNames } from './agentToolSelection';
 import type { GenerationProvenance } from './generationProvenance';
@@ -47,6 +48,40 @@ export const normalizeToolChoice = (value: unknown): TurnToolChoice => {
     }
   }
   return undefined;
+};
+
+/**
+ * Refuses a `tool_choice`, on the agent or any `step_rules` entry, that
+ * {@link normalizeToolChoice} does not recognise: generation would read it as
+ * no choice, so a forcing intent would pass the stop-condition gate unseen.
+ */
+export const assertValidToolChoices = (args: {
+  toolChoice?: unknown;
+  stepRules?: unknown;
+}): void => {
+  const choices: Array<{ field: string; value: unknown }> = [
+    { field: 'tool_choice', value: args.toolChoice },
+  ];
+  const stepRules: unknown[] = Array.isArray(args.stepRules)
+    ? args.stepRules
+    : [];
+  for (const [index, rule] of stepRules.entries()) {
+    if (rule && typeof rule === 'object' && 'tool_choice' in rule) {
+      choices.push({
+        field: `step_rules.${index}.tool_choice`,
+        value: rule.tool_choice,
+      });
+    }
+  }
+  for (const { field, value } of choices) {
+    if (value === undefined || value === null) continue;
+    if (normalizeToolChoice(value) !== undefined) continue;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `${field} must be "auto", "required", "none" or { "type": "tool", "tool_name": "<name>" }.`,
+      { [field]: value }
+    );
+  }
 };
 
 /**

@@ -872,7 +872,7 @@ components:
           nullable: true
           description: Maximum number of agentic steps per generation
         tool_choice:
-          description: 'Controls how the model selects tools. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`).'
+          description: 'Controls how the model selects tools. Accepts `"auto"`, `"required"`, `"none"` or an object (`{ "type": "tool", "tool_name": "my_tool" }`); any other value is refused with `VALIDATION_FAILED`.'
         stop_conditions:
           type: array
           nullable: true

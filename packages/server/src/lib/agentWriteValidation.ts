@@ -19,7 +19,10 @@ import {
   assertNamedToolsOffered,
   knownOfferedToolNames,
 } from './agentNamedTools';
-import { collectStepRuleActiveToolIds } from './agentStepRules';
+import {
+  assertValidToolChoices,
+  collectStepRuleActiveToolIds,
+} from './agentStepRules';
 import { assertValidStopConditions } from './agentStopConditions';
 import {
   type AgentToolBinding,
@@ -54,8 +57,11 @@ export const assertValidAgentSettings = (args: {
   citationConfig?: unknown;
   maxOutputTokens?: unknown;
   reasoning?: unknown;
+  toolChoice?: unknown;
+  stepRules?: unknown;
 }): void => {
   validateOutputSchema(args.outputSchema);
+  assertValidToolChoices(args);
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
   assertValidStopConditions(args.stopConditions);
   assertValidPromptCaching(args.promptCaching);

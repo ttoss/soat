@@ -283,6 +283,8 @@ With a model route the model resolves through the route's ordered provider+model
 | `{ type: "tool", tool_name: "<name>" }` | The model must call the specified tool                   |
 | `"none"`                                | The step offers no tool; it answers in text              |
 
+Any other value, here or in a [step rule](#step-rules), is `400 VALIDATION_FAILED`.
+
 **A `"none"` step names no tool at all.** It is sent with no tool definitions, and the turn's earlier tool calls and results reach it as text (a file a tool returned as a file part), so no model can call a tool on it, whatever its provider makes of `"none"`. Under [`prompt_caching`](#prompt-caching) such a step does not reuse the cached prefix.
 
 `"required"` plus a tool without `execute` (a "done" tool) forces tool use every step; the loop stops when that tool is called.
