@@ -99,6 +99,13 @@ export class ConversationMessage extends Model {
   @Column({ type: DataType.JSON, allowNull: true })
   declare fileIds: string[] | null;
 
+  /**
+   * The verified citations of the turn that produced an assistant message;
+   * null on every message no citing turn produced.
+   */
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare citations: unknown[] | null;
+
   @Column({ type: DataType.STRING, allowNull: true, field: 'idempotency_key' })
   declare idempotencyKey: string | null;
 

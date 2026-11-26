@@ -575,6 +575,93 @@ describe('Generation citations', () => {
     });
   });
 
+  describe('conversation and session turns', () => {
+    const CITED = {
+      origin: 'retrieval',
+      page: 12,
+      quoted_text: 'dose máxima de 40 mg/dia',
+      answer_span: { start: 10, end: 31 },
+    };
+
+    const conversationTurn = async (agentId: string) => {
+      const conversation = await create('/api/v1/conversations', {
+        project_id: projectId,
+      });
+      await asAdmin()
+        .post(`/api/v1/conversations/${conversation}/messages`)
+        .send({ role: 'user', message: 'Qual a dose máxima?' });
+      const res = await asAdmin()
+        .post(`/api/v1/conversations/${conversation}/generate?wait=true`)
+        .send({ agent_id: agentId });
+      expect(res.status).toBe(200);
+      const listed = await asAdmin().get(
+        `/api/v1/conversations/${conversation}/messages`
+      );
+      expect(listed.status).toBe(200);
+      return { generated: res.body, listed: listed.body.data };
+    };
+
+    test('the assistant message carries the turn citations, served on the transcript', async () => {
+      const agentId = await createAgent({ citationConfig: { enabled: true } });
+      answer = citePage12({
+        quote: 'dose máxima de 40 mg/dia',
+        claim: 'O máximo é 40 mg/dia.',
+      });
+
+      const { generated, listed } = await conversationTurn(agentId);
+
+      expect(generated.message.content).toBe('Resposta: O máximo é 40 mg/dia.');
+      expect(generated.message.citations).toEqual([
+        expect.objectContaining({ ...CITED, document_id: documentId }),
+      ]);
+      expect(listed[0].citations).toBeNull();
+      expect(listed[1].citations).toEqual(generated.message.citations);
+    });
+
+    test('a turn that does not cite stores null', async () => {
+      const agentId = await createAgent();
+      answer = () => {
+        return 'Sem citações.';
+      };
+
+      const { generated, listed } = await conversationTurn(agentId);
+
+      expect(generated.message.citations).toBeNull();
+      expect(listed[1].citations).toBeNull();
+    });
+
+    test('a session turn returns them and a fork keeps them', async () => {
+      const agentId = await createAgent({ citationConfig: { enabled: true } });
+      answer = citePage12({
+        quote: 'dose máxima de 40 mg/dia',
+        claim: 'O máximo é 40 mg/dia.',
+      });
+      const sessionId = await create('/api/v1/sessions', {
+        agent_id: agentId,
+        auto_generate: true,
+      });
+
+      const added = await asAdmin()
+        .post(`/api/v1/sessions/${sessionId}/messages`)
+        .send({ message: 'Qual a dose máxima?' });
+      expect(added.status).toBe(201);
+      expect(added.body.message.citations).toEqual([
+        expect.objectContaining(CITED),
+      ]);
+
+      const fork = await asAdmin()
+        .post(`/api/v1/sessions/${sessionId}/fork`)
+        .send({ fork_at_position: 1 });
+      expect(fork.status).toBe(201);
+      const listed = await asAdmin().get(
+        `/api/v1/conversations/${fork.body.conversation_id}/messages`
+      );
+      expect(listed.body.data[1].citations).toEqual(
+        added.body.message.citations
+      );
+    });
+  });
+
   describe('POST /api/v1/agents/:agent_id/generate — attached files', () => {
     let readPdfPagesSpy: jest.SpyInstance;
 

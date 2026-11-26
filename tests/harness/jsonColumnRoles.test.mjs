@@ -45,6 +45,7 @@ const ROLES = {
     'AuditEntry.detail',
     'AuditEntry.onBehalfOf',
     'Collection.schema',
+    'ConversationMessage.citations',
     'ConversationMessage.fileIds',
     'ConversationMessage.metadata',
     'ConversationMessage.responseMessages',
