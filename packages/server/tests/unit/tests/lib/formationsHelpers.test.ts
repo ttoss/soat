@@ -604,7 +604,7 @@ describe('formationsHelpers', () => {
   describe('buildAuditableParameters', () => {
     test('returns null when the template declares no parameters', () => {
       const template: FormationTemplate = { resources: {} };
-      expect(buildAuditableParameters(template)).toBeNull();
+      expect(buildAuditableParameters({ template, previous: null })).toBeNull();
     });
 
     test('records provided and default values used at deploy', () => {
@@ -612,10 +612,13 @@ describe('formationsHelpers', () => {
         resources: {},
         parameters: { a: {}, b: { default: 'def' } },
       };
-      expect(buildAuditableParameters(template, { a: 'given' })).toEqual({
-        a: 'given',
-        b: 'def',
-      });
+      expect(
+        buildAuditableParameters({
+          template,
+          provided: { a: 'given' },
+          previous: null,
+        })
+      ).toEqual({ a: 'given', b: 'def' });
     });
 
     test('masks no_echo parameters', () => {
@@ -624,16 +627,45 @@ describe('formationsHelpers', () => {
         parameters: { secret: { no_echo: true }, plain: {} },
       };
       expect(
-        buildAuditableParameters(template, { secret: 's3cr3t', plain: 'ok' })
+        buildAuditableParameters({
+          template,
+          provided: { secret: 's3cr3t', plain: 'ok' },
+          previous: null,
+        })
       ).toEqual({ secret: '***', plain: 'ok' });
     });
 
-    test('excludes an unresolved use_previous_value parameter', () => {
+    test('records an omitted use_previous_value parameter as its previous value', () => {
       const template: FormationTemplate = {
         resources: {},
         parameters: { keep: { use_previous_value: true }, a: { default: 'x' } },
       };
-      expect(buildAuditableParameters(template)).toEqual({ a: 'x' });
+      expect(
+        buildAuditableParameters({
+          template,
+          previous: { keep: 'kept', a: 'old' },
+        })
+      ).toEqual({ keep: 'kept', a: 'x' });
+    });
+
+    test('excludes an omitted use_previous_value parameter with no previous value', () => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: { keep: { use_previous_value: true }, a: { default: 'x' } },
+      };
+      expect(buildAuditableParameters({ template, previous: null })).toEqual({
+        a: 'x',
+      });
+    });
+
+    test('never carries over a parameter not declared use_previous_value', () => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: { other: {}, a: { default: 'x' } },
+      };
+      expect(
+        buildAuditableParameters({ template, previous: { other: 'old' } })
+      ).toEqual({ a: 'x' });
     });
   });
 

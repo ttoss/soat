@@ -2619,6 +2619,7 @@ resources:
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('active');
+      expect(res.body.resolved_parameters).toEqual({ XaiApiKey: '***' });
 
       // The secret resource must be a no-op (its value was not re-applied),
       // while the memory store resource is updated.
@@ -2768,6 +2769,12 @@ resources:
         .send({ template: template('memories:UpdateMemory') });
       expect(updated.status).toBe(200);
       expect(updated.body.status).toBe('active');
+      const kept = { Action: 'memories:CreateMemory' };
+      expect(updated.body.resolved_parameters).toEqual(kept);
+      const read = await authenticatedTestClient(adminToken).get(
+        `/api/v1/formations/${formationId}`
+      );
+      expect(read.body.resolved_parameters).toEqual(kept);
 
       expect(await readPolicyDocument()).toEqual({
         statement: [

@@ -233,23 +233,28 @@ export const resolveParamExpressions = (
 const MASKED_PARAMETER_VALUE = '***';
 
 /**
- * Builds the auditable record of parameter values applied at a deploy: declared
- * parameters resolved to their provided-or-default value, with `no_echo`
- * parameters masked. Parameters left unresolved (e.g. an omitted
- * `use_previous_value` parameter) are excluded. Returns null when there are no
- * recordable parameters.
+ * The parameter values applied at a deploy, `no_echo` ones masked; null when
+ * there are none. An omitted `use_previous_value` parameter keeps the value
+ * `previous` (the last successful deploy's record) holds for it.
  */
-export const buildAuditableParameters = (
-  template: FormationTemplate,
-  provided?: Record<string, string>
-): Record<string, string> | null => {
+export const buildAuditableParameters = (args: {
+  template: FormationTemplate;
+  provided?: Record<string, string>;
+  previous: Record<string, string> | null;
+}): Record<string, string> | null => {
+  const { template, provided, previous } = args;
   if (!template.parameters) return null;
   const resolved = resolveParameterValues(template, provided);
   const result: Record<string, string> = {};
   for (const [name, decl] of Object.entries(template.parameters)) {
     const value = resolved.get(name);
-    if (value === undefined) continue;
-    result[name] = decl.no_echo ? MASKED_PARAMETER_VALUE : parameterText(value);
+    if (value !== undefined) {
+      result[name] = decl.no_echo
+        ? MASKED_PARAMETER_VALUE
+        : parameterText(value);
+    } else if (decl.use_previous_value && previous?.[name] !== undefined) {
+      result[name] = previous[name];
+    }
   }
   return Object.keys(result).length > 0 ? result : null;
 };

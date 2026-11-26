@@ -33,7 +33,7 @@ export type PropertyComparison = {
 export type DeployedResource = {
   declaration: ResourceDeclaration;
   template: FormationTemplate;
-  /** The deploy's `resolved_parameters`: `no_echo` values masked, kept ones absent. */
+  /** The deploy's `resolved_parameters`: `no_echo` values masked. */
   parameters: Record<string, string> | null;
   /** The physical id each resource held when that deploy ended. */
   physicalIds: ReadonlyMap<string, string>;
