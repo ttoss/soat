@@ -292,6 +292,7 @@ Rules:
 - A supplied value **always overrides** it, so rotation works by passing the parameter.
 - It satisfies the required-parameter check **on update only**; on create an omitted parameter still returns `400 Missing required parameters`, as does a parameter **without** `use_previous_value` that is neither supplied nor defaulted.
 - The value is reused only where the resource retains it: a `secret` resource's encrypted value is preserved untouched (its plaintext is never stored); other resources reuse the **last-applied** value of the field; never-stored fields are dropped.
+- `resolved_parameters` keeps the value the last deploy recorded for it (`***` when `no_echo`).
 
 ### Resource Declaration
 

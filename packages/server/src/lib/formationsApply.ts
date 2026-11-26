@@ -346,7 +346,11 @@ const finalizeSucceededFormation = async (args: {
       workingTemplate,
       args.resolvedIds
     ),
-    resolvedParameters: buildAuditableParameters(template, parameters),
+    resolvedParameters: buildAuditableParameters({
+      template,
+      provided: parameters,
+      previous: formation.resolvedParameters,
+    }),
   });
 };
 
