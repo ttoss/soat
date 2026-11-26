@@ -8,6 +8,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { getEmbeddingDimensions } from '../utils/embedding';
+import { lexicalContentIndex } from '../utils/lexicalIndex';
 import { MemoryStore } from './MemoryStore';
 
 /**
@@ -41,14 +42,14 @@ import { MemoryStore } from './MemoryStore';
       fields: ['memory_store_id', 'normalized_hash'],
     },
     {
-      // Moved here from `memories` with the vector itself: the read pattern is
-      // still `ORDER BY embedding <=> $query LIMIT n`, now reached
+      // The read pattern is `ORDER BY embedding <=> $query LIMIT n`, reached
       // through the memory's `content_id` so the validity filter stays on the
       // memory row.
       name: 'memory_contents_embedding_hnsw_idx',
       using: 'hnsw',
       fields: [{ name: 'embedding', operator: 'vector_cosine_ops' }],
     },
+    lexicalContentIndex({ table: 'memory_contents' }),
   ],
 })
 export class MemoryContent extends Model {

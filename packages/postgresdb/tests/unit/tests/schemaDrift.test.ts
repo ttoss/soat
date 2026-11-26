@@ -157,10 +157,12 @@ describe('schema drift after sync({ alter: true })', () => {
           continue;
         }
 
+        // An expression key is declared as a literal and read back from the
+        // catalog through `pg_get_indexdef`, which spells it the same way.
         const fields = (index.fields ?? []).map((field: unknown) => {
-          return typeof field === 'string'
-            ? field
-            : ((field as { name?: string }).name ?? '');
+          if (typeof field === 'string') return field;
+          const { name, val } = field as { name?: string; val?: unknown };
+          return name ?? (typeof val === 'string' ? val : '');
         });
 
         declaredColumns.set(index.name, fields.join(','));
@@ -169,9 +171,14 @@ describe('schema drift after sync({ alter: true })', () => {
 
     const actual = await selectRows(`
       SELECT idx.relname AS name,
-             (SELECT string_agg(att.attname, ',' ORDER BY key.ord)
+             (SELECT string_agg(
+                       COALESCE(
+                         att.attname::text,
+                         pg_get_indexdef(i.indexrelid, key.ord::int, false)
+                       ),
+                       ',' ORDER BY key.ord)
                 FROM unnest(i.indkey) WITH ORDINALITY AS key(attnum, ord)
-                JOIN pg_attribute att
+                LEFT JOIN pg_attribute att
                   ON att.attrelid = i.indrelid AND att.attnum = key.attnum
              ) AS columns
         FROM pg_index i

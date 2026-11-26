@@ -344,7 +344,7 @@ Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of
 | ---------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
 | `KNOWLEDGE_RRF_K`                  | `60`     | The `k` in the reciprocal rank fusion term `1 / (k + rank)`; smaller weights the top of each ranked list more heavily |
 | `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` | `0`      | Half-life in days of a recency decay applied to **memory** results after fusion. `0` disables the blend               |
-| `KNOWLEDGE_TEXT_SEARCH_CONFIG`     | `simple` | PostgreSQL text search configuration backing the lexical channel (e.g. `english`, `portuguese`)                       |
+| `KNOWLEDGE_TEXT_SEARCH_CONFIG`     | `simple` | PostgreSQL text search configuration backing the lexical channel (e.g. `english`, `portuguese`); only `simple` is indexed |
 
 `KNOWLEDGE_QUERY_TIMEOUT_MS` (default `30000`) is the statement timeout of each knowledge and memory search query, in milliseconds, and has no per-request field; a query past it is `422 QUERY_TIMEOUT`.
 
