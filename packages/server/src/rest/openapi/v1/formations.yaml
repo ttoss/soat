@@ -1501,30 +1501,7 @@ components:
             provider must belong to this project, and the total attempt budget
             (sum of `1 + max_retries`) is capped at 10.
           items:
-            type: object
-            additionalProperties: false
-            required:
-              - ai_provider_id
-              - model
-            properties:
-              ai_provider_id:
-                x-soat-ref: ai-providers
-                type: string
-                description: AI provider in the route's project.
-              model:
-                type: string
-                description: Model name to call on that provider.
-              timeout_seconds:
-                type: integer
-                nullable: true
-                description: >-
-                  Per-attempt deadline. Omitted means no per-target deadline.
-              max_retries:
-                type: integer
-                nullable: true
-                description: >-
-                  Retries on this target before falling through to the next
-                  one.
+            $ref: './model-routes.yaml#/components/schemas/ModelRouteTarget'
         retry_on:
           type: array
           description: >-
@@ -2122,14 +2099,12 @@ components:
             (`agent_id`, `tool_id`, `memory_store_id`, `orchestration_id`) may use
             `{ "ref": "LogicalId" }` to bind to other resources in the template.
           items:
-            type: object
-            additionalProperties: true
+            $ref: './orchestrations.yaml#/components/schemas/OrchestrationNode'
         edges:
           type: array
           description: Directed connections between nodes
           items:
-            type: object
-            additionalProperties: true
+            $ref: './orchestrations.yaml#/components/schemas/OrchestrationEdge'
         state_schema:
           type: object
           nullable: true
@@ -2175,8 +2150,7 @@ components:
             transition fires; an `on_enter` block dispatches one agent generation
             or orchestration run on entry.
           items:
-            type: object
-            additionalProperties: true
+            $ref: './workflows.yaml#/components/schemas/WorkflowState'
         transitions:
           type: array
           description: >-
@@ -2184,8 +2158,7 @@ components:
             states) and `to` (one target), an optional JSON Logic `guard`, and an
             optional `requires_approval` gate.
           items:
-            type: object
-            additionalProperties: true
+            $ref: './workflows.yaml#/components/schemas/WorkflowTransition'
         payload_schema:
           type: object
           nullable: true

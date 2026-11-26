@@ -427,6 +427,7 @@ components:
   schemas:
     ModelRouteTarget:
       type: object
+      additionalProperties: false
       required:
         - ai_provider_id
         - model

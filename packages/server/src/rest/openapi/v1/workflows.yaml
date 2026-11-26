@@ -728,6 +728,7 @@ components:
   schemas:
     WorkflowState:
       type: object
+      additionalProperties: false
       description: >-
         A named state. Exactly one state must be `initial: true`; any number may
         be `terminal: true`. A `kind: human` state never dispatches — the task
@@ -768,12 +769,14 @@ components:
         on_enter:
           type: object
           nullable: true
+          additionalProperties: false
           description: >-
             What entering the state dispatches, and how the result routes.
             Omitted or null on a state that only parks.
           properties:
             dispatch:
               type: object
+              additionalProperties: false
               description: >-
                 The one thing entering the state runs. `kind` picks it and
                 names the id it needs: `agent` → `agent_id`,
@@ -830,6 +833,7 @@ components:
             retry:
               type: object
               nullable: true
+              additionalProperties: false
               description: >-
                 Re-runs the dispatch's execution failures before `on_failure`
                 applies. Omitted means a single attempt.
@@ -855,6 +859,7 @@ components:
                 whose `when` is truthy fires its transition.
               items:
                 type: object
+                additionalProperties: false
                 properties:
                   when:
                     description: >-
@@ -871,6 +876,7 @@ components:
                 `automation_status: failed`.
     WorkflowTransition:
       type: object
+      additionalProperties: false
       description: >-
         A named, directional move. `from` is a list of source states; `to` is
         one target state. `guard` is a JSON Logic expression over
