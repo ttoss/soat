@@ -1182,109 +1182,9 @@ components:
           nullable: true
           description: JSON Schema describing the tool's input parameters (free-form, user-defined). On `http` and `pipeline` tools a call whose input does not satisfy it is refused with `VALIDATION_FAILED`.
         execute:
-          type: object
-          nullable: true
-          description: HTTP execution configuration. Required for `http` tools.
-          additionalProperties: false
-          properties:
-            url:
-              type: string
-              description: 'Endpoint URL. Supports `{param}` placeholders resolved from tool arguments.'
-            method:
-              type: string
-              nullable: true
-              description: 'HTTP method (default: `POST`)'
-            headers:
-              type: object
-              nullable: true
-              description: Static headers included in every request
-            body_mode:
-              type: string
-              nullable: true
-              enum: [json, multipart, null]
-              description: >-
-                Request body encoding for `POST`/`PUT`/`PATCH`: `json`
-                (default) or `multipart`. Incompatible with
-                `auth.type: aws_sigv4`.
-            response_mode:
-              type: string
-              nullable: true
-              enum: [json, base64, null]
-              description: >-
-                How a 2xx response body is returned: `json` (default) or
-                `base64`, which returns `{ content_type, filename,
-                data_base64 }` for binary targets.
-            auth:
-              type: object
-              nullable: true
-              additionalProperties: false
-              description: >-
-                Computed request credential. `type` is `aws_sigv4` (with
-                `region`, `service`, `access_key_id`, `secret_access_key` and
-                optional `session_token`), `gcp_service_account` (with
-                `credentials` and `scopes`) or `oauth_connection` (with
-                `oauth_client_id`). Credential fields accept
-                `{{secret:...}}` references.
-              properties:
-                type:
-                  type: string
-                  enum: [aws_sigv4, gcp_service_account, oauth_connection]
-                  description: Which credential is computed.
-                region:
-                  type: string
-                  nullable: true
-                  description: '`aws_sigv4`: the signing region'
-                service:
-                  type: string
-                  nullable: true
-                  description: '`aws_sigv4`: the signing service'
-                access_key_id:
-                  type: string
-                  nullable: true
-                  description: '`aws_sigv4`: the access key id'
-                secret_access_key:
-                  type: string
-                  nullable: true
-                  description: '`aws_sigv4`: the secret access key'
-                session_token:
-                  type: string
-                  nullable: true
-                  description: "`aws_sigv4`: the temporary credential's session token"
-                credentials:
-                  type: string
-                  nullable: true
-                  description: >-
-                    `gcp_service_account`: the service account key file JSON,
-                    as a string
-                scopes:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
-                  description: '`gcp_service_account`: the scopes to mint for'
-                oauth_client_id:
-                  type: string
-                  nullable: true
-                  description: >-
-                    `oauth_connection`: the OAuth client whose connection the
-                    turn's actor holds; `{ "ref": "<LogicalId>" }` for a
-                    template `oauth_client`
+          $ref: './tools.yaml#/components/schemas/ToolExecuteConfig'
         mcp:
-          type: object
-          nullable: true
-          description: MCP server connection configuration. Required for `mcp` tools.
-          additionalProperties: false
-          properties:
-            url:
-              type: string
-              description: MCP server URL
-            headers:
-              type: object
-              nullable: true
-              description: Headers included in every MCP request
-            pin_definitions:
-              type: boolean
-              description: Pin each action's definition on the first listing and withhold an action whose definition drifts. Re-applying an unchanged `mcp` keeps the pins; a new `url` clears them.
+          $ref: './tools.yaml#/components/schemas/ToolMcpConfig'
         actions:
           type: array
           nullable: true
@@ -1411,10 +1311,7 @@ components:
           type: string
           description: Public ID of the parent dataset (or ref expression)
         input:
-          type: array
-          items:
-            type: object
-          description: The messages sent to the agent, as `{role, content}` objects
+          $ref: './evaluations.yaml#/components/schemas/DatasetItemInput'
         expected_output:
           type: string
           nullable: true
@@ -1441,15 +1338,13 @@ components:
         - policy_ids
       properties:
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies every run of the eval acts under. Use { "ref": "LogicalId" } for a policy in the
             template. The deploying caller must hold every grant they carry
             inside the project, else the resource fails with
             `POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         name:
           type: string
           description: Eval name, unique within the project
@@ -1462,14 +1357,7 @@ components:
           type: string
           description: Public ID of the dataset to run against (or ref expression)
         scorers:
-          type: array
-          items:
-            type: object
-          description: >-
-            Scorer configs — `exact_match`, `contains`, `json_logic`,
-            `output_schema`, `embedding_similarity`, `llm_judge`, `tool`, or
-            `decider`.
-            Same shape as the evals REST contract.
+          $ref: './evaluations.yaml#/components/schemas/Scorers'
         pass_threshold:
           type: number
           nullable: true
@@ -1528,8 +1416,7 @@ components:
           allOf:
             - $ref: './metadata.yaml#/components/schemas/NullableMetadataBag'
         tags:
-          type: object
-          description: Tag key-value pairs for filtering
+          $ref: './tags.yaml#/components/schemas/TagBag'
         chunk_strategy:
           type: string
           enum: [page, whole, size]
@@ -1706,34 +1593,30 @@ components:
           type: string
           description: HTTPS endpoint that receives event payloads
         events:
-          type: array
-          items:
-            type: string
           description: >-
             Event type patterns (`*`, `prefix.*`, or an exact event name)
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
         event_resources:
-          type: array
           nullable: true
-          items:
-            type: string
           description: >-
             SRN patterns the event's resource must match. Omitted matches any
             resource in the project
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
         event_data:
           nullable: true
           description: A filter the event's `data` must match
           allOf:
-            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies whose read grant decides which events the webhook
             receives. Use { "ref": "LogicalId" } for a policy in the template.
             The deploying caller must hold every grant they carry inside the
             project, else the resource fails with `POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
 
     TriggerResourceProperties:
       description: >-
@@ -1804,43 +1687,39 @@ components:
           nullable: true
           description: 5-field cron expression (UTC). Required when type is schedule
         events:
-          type: array
           nullable: true
-          items:
-            type: string
           description: >-
             Event type patterns (`*`, `prefix.*`, or an exact event name).
             Required when type is event, rejected otherwise
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventTypePatterns'
         event_pattern:
           type: string
           nullable: true
           description: One event type pattern, the same as `events` of one item
         event_resources:
-          type: array
           nullable: true
-          items:
-            type: string
           description: >-
             Event triggers only: SRN patterns the event's resource must match.
             Omitted matches any resource in the project
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventResourcePatterns'
         event_data:
           nullable: true
           description: Event triggers only. A filter the event's `data` must match
           allOf:
-            - $ref: './structured-filters.yaml#/components/schemas/StructuredFilter'
+            - $ref: './event-subscriptions.yaml#/components/schemas/EventDataFilter'
         active:
           type: boolean
           description: Whether the trigger fires (default true)
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies every firing acts under. Use { "ref": "LogicalId" }
             for a policy in the template. The deploying caller must hold every
             grant they carry inside the project, else the resource fails with
             `POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
 
     ApiKeyResourceProperties:
       description: >-
@@ -1954,63 +1833,7 @@ components:
           type: string
           description: Description of what the policy grants
         document:
-          type: object
-          additionalProperties: false
-          description: Policy document containing an array of statements
-          properties:
-            statement:
-              type: array
-              description: IAM policy statements.
-              items:
-                type: object
-                additionalProperties: false
-                required:
-                  - effect
-                  - action
-                properties:
-                  effect:
-                    type: string
-                    enum: [Allow, Deny]
-                  action:
-                    type: array
-                    items:
-                      type: string
-                    description: IAM action strings, e.g. `memories:*`.
-                  resource:
-                    type: array
-                    nullable: true
-                    items:
-                      type: string
-                    description: >-
-                      Resource SRN patterns. Omitted, an `Allow` matches every
-                      resource of the formation's project
-                      (`srn:<project_id>:*:*`); a `Deny` matches every resource.
-                  condition:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                    description: >-
-                      Condition block: keys are condition operators mapping to
-                      context-key/value maps.
-                  denial:
-                    type: object
-                    nullable: true
-                    additionalProperties: false
-                    required:
-                      - code
-                      - message
-                    description: >-
-                      On a `Deny` only: the declared `code`, `message` and
-                      `meta` a request it denies answers. Only an unrestricted
-                      admin deploys one.
-                    properties:
-                      code:
-                        type: string
-                      message:
-                        type: string
-                      meta:
-                        type: object
-                        additionalProperties: true
+          $ref: './policies.yaml#/components/schemas/PolicyDocument'
 
     SecretResourceProperties:
       description: >-
@@ -2046,50 +1869,31 @@ components:
           type: string
           description: Display name
         authorize_url:
-          type: string
-          description: The provider's authorization endpoint
+          $ref: './oauth-clients.yaml#/components/schemas/AuthorizeUrl'
         token_url:
-          type: string
-          description: The provider's token endpoint
+          $ref: './oauth-clients.yaml#/components/schemas/TokenUrl'
         revocation_url:
-          type: string
-          nullable: true
-          description: The provider's RFC 7009 revocation endpoint
+          $ref: './oauth-clients.yaml#/components/schemas/RevocationUrl'
         client_id:
-          type: string
-          description: Your app's client ID at the provider
+          $ref: './oauth-clients.yaml#/components/schemas/ClientId'
         client_secret:
-          type: string
           nullable: true
           description: >-
             A `{{secret:sec_...}}` reference to the client secret, never the
             value; for a template secret, `{ "sub": "{{secret:${MySecret}}}" }`.
             Omit for a public client, which relies on PKCE.
+          allOf:
+            - $ref: './oauth-clients.yaml#/components/schemas/ClientSecret'
         scopes:
-          type: array
-          items:
-            type: string
-          description: The scopes requested at authorization
+          $ref: './oauth-clients.yaml#/components/schemas/Scopes'
         pkce:
-          type: boolean
-          description: Whether the authorization uses PKCE (`S256`); default `true`
+          $ref: './oauth-clients.yaml#/components/schemas/Pkce'
         token_endpoint_auth_method:
-          type: string
-          enum: [client_secret_basic, client_secret_post]
-          description: How the client authenticates at the token endpoint
+          $ref: './oauth-clients.yaml#/components/schemas/TokenEndpointAuthMethod'
         redirect_uri:
-          type: string
-          nullable: true
-          description: >-
-            The callback registered with the provider. Omitted or `null`, the
-            deployment's `OAUTH_DEFAULT_REDIRECT_URI` when set, else the
-            server's own `/api/v1/oauth-connections/callback`.
+          $ref: './oauth-clients.yaml#/components/schemas/RedirectUri'
         authorize_params:
-          type: object
-          nullable: true
-          additionalProperties:
-            type: string
-          description: Extra query parameters for the authorize URL
+          $ref: './oauth-clients.yaml#/components/schemas/AuthorizeParams'
 
     ProjectPriceResourceProperties:
       description: >-
@@ -2192,15 +1996,13 @@ components:
         - policy_ids
       properties:
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies every conversion the rule starts acts under. Use { "ref": "LogicalId" } for a policy in the
             template. The deploying caller must hold every grant they carry
             inside the project, else the resource fails with
             `POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         content_type_glob:
           type: string
           description: MIME type glob matched against a file's content_type (e.g. image/*, audio/mpeg, application/pdf)
@@ -2265,27 +2067,19 @@ components:
         - policy_ids
       properties:
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies every handler the rule starts acts under. Use { "ref": "LogicalId" } for a policy in the
             template. The deploying caller must hold every grant they carry
             inside the project, else the resource fails with
             `POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         memory_store_id:
           x-soat-ref: memory-stores
           type: string
           description: Public ID of the destination memory store
         'on':
-          type: string
-          enum: [generations.completed, conversation_messages.generated]
-          description: >-
-            `generations.completed` (once per completed turn, and the only
-            event the built-in extractor may bind to) or
-            `conversation_messages.generated` (per persisted assistant reply,
-            custom handlers only).
+          $ref: './memory-rules.yaml#/components/schemas/MemoryRuleEvent'
         source_agent_ids:
           x-soat-ref: agents
           type: array
@@ -2377,13 +2171,7 @@ components:
           additionalProperties: true
           description: Optional JSON Schema describing the run input
         output_mapping:
-          type: object
-          nullable: true
-          additionalProperties: true
-          description: >-
-            Optional shape of a completed run's `output`: each key an output
-            field, each value JSON Logic over `{ "state": <final run state> }`.
-            Omitted keys `output` by terminal node id.
+          $ref: './orchestrations.yaml#/components/schemas/OrchestrationOutputMapping'
 
     WorkflowResourceProperties:
       description: >-
@@ -2447,10 +2235,7 @@ components:
           type: string
           description: Unique within the project.
         schema:
-          type: object
-          nullable: true
-          description: >-
-            A JSON Schema every item's `data` must satisfy, stored as written.
+          $ref: './collections.yaml#/components/schemas/CollectionSchema'
 
     MetadataSchemaResourceProperties:
       description: >-
@@ -2622,15 +2407,13 @@ components:
         - policy_ids
       properties:
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies every decision's backend acts under. Use { "ref": "LogicalId" } for a policy in the
             template. The deploying caller must hold every grant they carry
             inside the project, else the resource fails with
             `POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         name:
           type: string
           description: Human-readable name, unique per project
@@ -2649,14 +2432,7 @@ components:
           nullable: true
           description: The tool that answers, run with no action
         questions:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-          description: >-
-            The questions (`type`, `name`, `instructions`, `choices` or
-            `levels`), 1 to 20 of them, validated as the deciders REST contract
-            validates them.
+          $ref: './deciders.yaml#/components/schemas/DeciderQuestions'
 
     PlaybookResourceProperties:
       description: >-
@@ -2688,15 +2464,13 @@ components:
           allOf:
             - $ref: './playbooks.yaml#/components/schemas/PlaybookDefinition'
         policy_ids:
-          type: array
-          items:
-            x-soat-ref: policies
-            type: string
           description: >-
             The policies every execution of the version runs under. Use { "ref":
             "LogicalId" } for a policy in the template. The deploying caller
             must hold every grant they carry inside the project, else the
             resource fails with `POLICY_GRANT_NOT_HELD`.
+          allOf:
+            - $ref: './event-subscriptions.yaml#/components/schemas/AttachedPolicyIds'
         auto_upgrade:
           type: boolean
           description: >-

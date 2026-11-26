@@ -193,38 +193,6 @@ const refName = (schema: unknown): string | null => {
   return schema.$ref.split('/').pop() ?? null;
 };
 
-/**
- * Template fields still written out where the create route `$ref`s a
- * component. Only shrinks: consolidate a field and delete its entry.
- */
-const TEMPLATE_COPIES: Record<string, string[]> = {
-  collection: ['schema'],
-  dataset_item: ['input'],
-  decider: ['policy_ids', 'questions'],
-  document: ['tags'],
-  eval: ['policy_ids', 'scorers'],
-  ingestion_rule: ['policy_ids'],
-  memory_rule: ['on', 'policy_ids'],
-  oauth_client: [
-    'authorize_params',
-    'authorize_url',
-    'client_id',
-    'client_secret',
-    'pkce',
-    'redirect_uri',
-    'revocation_url',
-    'scopes',
-    'token_endpoint_auth_method',
-    'token_url',
-  ],
-  orchestration: ['output_mapping'],
-  playbook: ['policy_ids'],
-  policy: ['document'],
-  tool: ['execute', 'mcp'],
-  trigger: ['event_data', 'event_resources', 'events', 'policy_ids'],
-  webhook: ['event_data', 'event_resources', 'events', 'policy_ids'],
-};
-
 // A field the create route defines by `$ref` has one definition; a template
 // copy of it drifts from the route's shape and description. A template may
 // take the component's `Nullable` variant, which an update clears with.
@@ -252,7 +220,7 @@ describe('formation properties share the create route definitions', () => {
         }
       );
 
-      expect(copied.sort()).toEqual(TEMPLATE_COPIES[resourceType] ?? []);
+      expect(copied).toEqual([]);
     }
   );
 });
