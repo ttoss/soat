@@ -9,6 +9,7 @@ import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { storedAuthority } from 'src/lib/workAuthority';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { pollFor } from '../../fixtures/poll';
 import { authenticatedTestClient, workAuthorityOf } from '../../testClient';
 
 /**
@@ -75,20 +76,6 @@ describe('Tool-call approval continuation', () => {
         resolve(raw ? JSON.parse(raw) : {});
       });
     });
-  };
-
-  const waitFor = async <T>(args: {
-    probe: () => Promise<T | undefined> | T | undefined;
-    describe: string;
-  }): Promise<T> => {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const value = await args.probe();
-      if (value !== undefined) return value;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`timed out waiting for ${args.describe}`);
   };
 
   type ChatMessage = {
@@ -167,24 +154,28 @@ describe('Tool-call approval continuation', () => {
 
   /** The continuation turn's opening message, once the provider receives it. */
   const continuationMessageFor = (approvalId: string): Promise<string> => {
-    return waitFor({
-      probe: () => {
-        return modelRequests.map(userTextOf).find((text) => {
+    return pollFor({
+      read: () => {
+        return modelRequests.map(userTextOf);
+      },
+      pick: (texts) => {
+        return texts.find((text) => {
           return text.includes(`Approval ${approvalId} `);
         });
       },
-      describe: `the continuation message for ${approvalId}`,
     });
   };
 
   const toolRequestWith = (amount: number) => {
-    return waitFor({
-      probe: () => {
-        return toolRequests.find((body) => {
+    return pollFor({
+      read: () => {
+        return toolRequests;
+      },
+      pick: (bodies) => {
+        return bodies.find((body) => {
           return body.amount === amount;
         });
       },
-      describe: `a tool request with amount ${amount}`,
     });
   };
 
@@ -210,11 +201,13 @@ describe('Tool-call approval continuation', () => {
   const firstContinuationOf = (
     generationId: string
   ): Promise<ListedGeneration> => {
-    return waitFor({
-      probe: async () => {
-        return (await continuationsOf(generationId))[0];
+    return pollFor({
+      read: () => {
+        return continuationsOf(generationId);
       },
-      describe: `a continuation of ${generationId}`,
+      pick: ([first]) => {
+        return first;
+      },
     });
   };
 
@@ -720,11 +713,13 @@ describe('Tool-call approval continuation', () => {
         const res = await approve(args.approvalId, args.body);
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('approved');
-        return await waitFor({
-          probe: () => {
-            return released[0];
+        return await pollFor({
+          read: () => {
+            return released;
           },
-          describe: `the client call released by ${args.approvalId}`,
+          pick: ([first]) => {
+            return first;
+          },
         });
       } finally {
         eventBus.off('soat:event', handler);

@@ -2,9 +2,9 @@ import { db } from 'src/db';
 
 import {
   type AgentToolTurn,
-  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { pollUntil } from '../../fixtures/poll';
 import type { ScriptedCall } from '../../fixtures/scriptedModel';
 
 // A session turn starts `runtime.generations.*` from the messages it is sent:

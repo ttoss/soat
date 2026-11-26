@@ -209,18 +209,3 @@ export const startAgentToolTurn = async (args: { prefix: string }) => {
 };
 
 export type AgentToolTurn = Awaited<ReturnType<typeof startAgentToolTurn>>;
-
-/** Polls a fire-and-forget side effect until `done` holds, or gives up. */
-export const pollUntil = async <T>(args: {
-  read: () => Promise<T>;
-  done: (value: T) => boolean;
-}): Promise<T> => {
-  let value = await args.read();
-  for (let attempt = 0; attempt < 80 && !args.done(value); attempt += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 25);
-    });
-    value = await args.read();
-  }
-  return value;
-};

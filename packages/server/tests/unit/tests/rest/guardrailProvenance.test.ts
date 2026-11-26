@@ -4,9 +4,9 @@ import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import {
   type AgentToolTurn,
   type GenerationBody,
-  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { pollUntil } from '../../fixtures/poll';
 import { proposeSteps, type ScriptedCall } from '../../fixtures/scriptedModel';
 
 // `runtime.generations.*` counts the results that entered a turn's context. The

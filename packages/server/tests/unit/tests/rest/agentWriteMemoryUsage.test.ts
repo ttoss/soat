@@ -1,11 +1,11 @@
 import { agentRefusal } from '../../fixtures/agentRefusal';
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   createTurnScript,
   requestsOfTurn,
   startChatCompletionStub,
   toolResultsOf,
 } from '../../fixtures/chatCompletionStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**

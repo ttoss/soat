@@ -7,9 +7,9 @@ import {
 import {
   type AgentToolTurn,
   AMOUNT_SCHEMA,
-  pollUntil,
   startAgentToolTurn,
 } from '../../fixtures/agentToolTurn';
+import { pollUntil } from '../../fixtures/poll';
 import { proposeCalls, proposeSteps } from '../../fixtures/scriptedModel';
 
 /**

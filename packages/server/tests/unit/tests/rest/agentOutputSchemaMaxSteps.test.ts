@@ -1,4 +1,3 @@
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   type ChatCompletionsStub,
   type RecordedRequest,
@@ -7,6 +6,7 @@ import {
   textCompletion,
   toolCallCompletion,
 } from '../../fixtures/chatCompletionsStub';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**

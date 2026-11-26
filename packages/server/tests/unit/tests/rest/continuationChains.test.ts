@@ -6,6 +6,7 @@ import { db } from 'src/db';
 import { emitApproval } from 'src/lib/approvals';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 
+import { holdsThroughout, pollFor, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -39,20 +40,6 @@ describe('Continuation chains', () => {
     projectInternalId: number;
     aiProviderId: string;
     agentId: string;
-  };
-
-  const waitFor = async <T>(args: {
-    probe: () => Promise<T | undefined>;
-    describe: string;
-  }): Promise<T> => {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const value = await args.probe();
-      if (value !== undefined) return value;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`timed out waiting for ${args.describe}`);
   };
 
   /** A fresh project and agent, so a stored ceiling never leaks across tests. */
@@ -212,19 +199,20 @@ describe('Continuation chains', () => {
    * hop is done once the chain counts every member it lists and has concluded.
    */
   const chainSettles = (chainId: string): Promise<Chain> => {
-    return waitFor({
-      probe: async () => {
+    return pollFor({
+      read: async () => {
         const members = await authenticatedTestClient(adminToken)
           .get('/api/v1/generations')
           .query({ chain_id: chainId });
         expect(members.status).toBe(200);
-        const chain = await getChain(chainId);
+        return { chain: await getChain(chainId), listed: members.body.data };
+      },
+      pick: ({ chain, listed }) => {
         return chain.status === 'concluded' &&
-          chain.generation_count === members.body.data.length
+          chain.generation_count === listed.length
           ? chain
           : undefined;
       },
-      describe: `chain ${chainId} to count its members and conclude`,
     });
   };
 
@@ -234,11 +222,13 @@ describe('Continuation chains', () => {
     generationId: string;
   }): Promise<string> => {
     await resumeFrom(args);
-    const continuation = await waitFor({
-      probe: async () => {
-        return (await continuationsOf(args.generationId))[0];
+    const continuation = await pollFor({
+      read: () => {
+        return continuationsOf(args.generationId);
       },
-      describe: `a continuation of ${args.generationId}`,
+      pick: ([first]) => {
+        return first;
+      },
     });
     if (!continuation.chain_id) {
       throw new Error(`${continuation.id} names no chain`);
@@ -251,12 +241,13 @@ describe('Continuation chains', () => {
     chainId: string;
     status: string;
   }): Promise<Chain> => {
-    return waitFor({
-      probe: async () => {
-        const chain = await getChain(args.chainId);
-        return chain.status === args.status ? chain : undefined;
+    return pollUntil({
+      read: () => {
+        return getChain(args.chainId);
       },
-      describe: `chain ${args.chainId} to reach ${args.status}`,
+      done: (chain) => {
+        return chain.status === args.status;
+      },
     });
   };
 
@@ -286,14 +277,15 @@ describe('Continuation chains', () => {
     rootGenerationId: string;
     occurrences?: number;
   }): Promise<Exception> => {
-    return waitFor({
-      probe: async () => {
-        const [match] = await chainLimitExceptions(args);
+    return pollFor({
+      read: () => {
+        return chainLimitExceptions(args);
+      },
+      pick: ([match]) => {
         return match && match.occurrence_count >= (args.occurrences ?? 1)
           ? match
           : undefined;
       },
-      describe: `a chain_limit exception for ${args.rootGenerationId}`,
     });
   };
 
@@ -580,11 +572,13 @@ describe('Continuation chains', () => {
       const [, first] = await growChain({ fixture, hops: 1 });
       const chainId = await chainIdOf(first);
       await resumeFrom({ fixture, generationId: first, reason: HOLD_REASON });
-      await waitFor({
-        probe: async () => {
-          return heldResponses.length > 0 ? true : undefined;
+      await pollUntil({
+        read: () => {
+          return heldResponses.length;
         },
-        describe: 'the held member to reach the provider',
+        done: (held) => {
+          return held > 0;
+        },
       });
       const [running] = await continuationsOf(first);
 
@@ -592,21 +586,24 @@ describe('Continuation chains', () => {
       for (const respond of heldResponses) respond();
       heldResponses = [];
 
-      await waitFor({
-        probe: async () => {
-          const member = await getGeneration(running.id);
-          return member.status === 'completed' ? member : undefined;
+      await pollUntil({
+        read: () => {
+          return getGeneration(running.id);
         },
-        describe: `${running.id} to complete`,
+        done: (member) => {
+          return member.status === 'completed';
+        },
       });
       // A settled member concludes only an `active` chain; the write is
       // fire-and-forget, so the assertion is that the refusal holds throughout.
-      for (let tick = 0; tick < 20; tick += 1) {
-        expect((await getChain(chainId)).status).toBe('budget_exhausted');
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
+      await holdsThroughout({
+        read: () => {
+          return getChain(chainId);
+        },
+        check: (chain) => {
+          expect(chain.status).toBe('budget_exhausted');
+        },
+      });
     });
 
     test('repeated refusals of one chain fold into one chain_limit exception', async () => {
@@ -736,12 +733,14 @@ describe('Continuation chains', () => {
       expect(approval.body.status).toBe('expired');
       // The resume is fire-and-forget and writes nothing on this path, so the
       // assertion is that the status holds for the whole window.
-      for (let tick = 0; tick < 20; tick += 1) {
-        expect((await getChain(chainId)).status).toBe('budget_exhausted');
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
+      await holdsThroughout({
+        read: () => {
+          return getChain(chainId);
+        },
+        check: (chain) => {
+          expect(chain.status).toBe('budget_exhausted');
+        },
+      });
     });
   });
 });

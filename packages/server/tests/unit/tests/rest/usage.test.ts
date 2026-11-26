@@ -28,6 +28,7 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { pollUntil } from '../../fixtures/poll';
 import { userAuthority } from '../../fixtures/workAuthority';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -2307,20 +2308,6 @@ describe('Usage', () => {
   });
 
   describe('usage thresholds and alerts', () => {
-    // Bounded poll on a predicate — no fixed settle sleep. Metering (and the
-    // threshold evaluation it drives) runs fire-and-forget after the generation
-    // response, so tests wait for the observable `usage_thresholds.crossed`
-    // emission rather than a timer.
-    const pollUntil = async (predicate: () => boolean): Promise<void> => {
-      for (let attempt = 0; attempt < 100; attempt++) {
-        if (predicate()) return;
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 50);
-        });
-      }
-      throw new Error('pollUntil: predicate never became true');
-    };
-
     // Runs `action` with a live listener collecting `usage_thresholds.crossed`
     // events, then tears it down so it never leaks into later tests.
     const withCapture = async (
@@ -2355,10 +2342,17 @@ describe('Usage', () => {
     }): Promise<SoatEvent[]> => {
       return withCapture(async (captured) => {
         await generate(args.content);
-        await pollUntil(() => {
-          return captured.some((e) => {
-            return e.resourceId === args.resourceId;
-          });
+        // Metering, and the threshold evaluation it drives, runs after the
+        // generation answers.
+        await pollUntil({
+          read: () => {
+            return captured.map((e) => {
+              return e.resourceId;
+            });
+          },
+          done: (resourceIds) => {
+            return resourceIds.includes(args.resourceId);
+          },
         });
       });
     };

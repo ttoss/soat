@@ -1,6 +1,5 @@
 import { flushPlaybookExecutions } from 'src/lib/playbookCascade';
 
-import { pollUntil } from '../../fixtures/agentToolTurn';
 import {
   createProjectPolicy,
   createScopedPrincipal,
@@ -14,6 +13,7 @@ import {
   toolCallCompletion,
 } from '../../fixtures/chatCompletionsStub';
 import { createPlaybookCase } from '../../fixtures/playbookCase';
+import { pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const CASE_ACTIONS = [

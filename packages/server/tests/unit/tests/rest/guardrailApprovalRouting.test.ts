@@ -6,6 +6,7 @@ import { db } from 'src/db';
 import { DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS } from 'src/lib/agentToolApproval';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 
+import { holdsThroughout, pollFor, pollUntil } from '../../fixtures/poll';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -108,20 +109,6 @@ describe('Guardrail-routed tool approvals', () => {
         return resolve();
       });
     });
-  };
-
-  const waitFor = async <T>(args: {
-    probe: () => Promise<T | undefined>;
-    describe: string;
-  }): Promise<T> => {
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const value = await args.probe();
-      if (value !== undefined) return value;
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 25);
-      });
-    }
-    throw new Error(`timed out waiting for ${args.describe}`);
   };
 
   type Fixture = {
@@ -321,16 +308,16 @@ describe('Guardrail-routed tool approvals', () => {
     generationId: string;
     count: number;
   }): Promise<ListedGeneration[]> => {
-    return waitFor({
-      probe: async () => {
-        const settled = (await continuationsOf(args.generationId)).filter(
-          (generation) => {
-            return generation.status === 'completed';
-          }
-        );
+    return pollFor({
+      read: () => {
+        return continuationsOf(args.generationId);
+      },
+      pick: (continuations) => {
+        const settled = continuations.filter((generation) => {
+          return generation.status === 'completed';
+        });
         return settled.length >= args.count ? settled : undefined;
       },
-      describe: `${args.count} settled continuations of ${args.generationId}`,
     });
   };
 
@@ -453,12 +440,13 @@ describe('Guardrail-routed tool approvals', () => {
           approval_id: expect.stringMatching(/^apr_/),
         }),
       ]);
-      const settled = await waitFor({
-        probe: async () => {
-          const row = await getGeneration(String(result.id));
-          return row.stop_reason === 'max_steps' ? row : undefined;
+      const settled = await pollUntil({
+        read: () => {
+          return getGeneration(String(result.id));
         },
-        describe: `generation ${String(result.id)} to record max_steps`,
+        done: (row) => {
+          return row.stop_reason === 'max_steps';
+        },
       });
       expect(settled.status).toBe('completed');
     });
@@ -654,25 +642,29 @@ describe('Guardrail-routed tool approvals', () => {
           return item.status;
         })
       ).toEqual(Array(MAX_STEPS).fill('expired'));
-      const exception = await waitFor({
-        probe: async () => {
+      const exception = await pollFor({
+        read: async () => {
           const res = await authenticatedTestClient(adminToken)
             .get('/api/v1/exceptions')
             .query({ project_id: fixture.projectId, kind: 'approval_expired' });
           expect(res.status).toBe(200);
-          return res.body.data[0] as Record<string, unknown> | undefined;
+          return res.body.data as Record<string, unknown>[];
         },
-        describe: 'an approval_expired exception',
+        pick: ([first]) => {
+          return first;
+        },
       });
       expect(exception.kind).toBe('approval_expired');
       // The resume is fire-and-forget and spawns nothing on this path, so the
       // assertion is that nothing appears for the whole window.
-      for (let tick = 0; tick < 20; tick += 1) {
-        expect(await continuationsOf(String(seed.id))).toHaveLength(0);
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 25);
-        });
-      }
+      await holdsThroughout({
+        read: () => {
+          return continuationsOf(String(seed.id));
+        },
+        check: (continuations) => {
+          expect(continuations).toHaveLength(0);
+        },
+      });
       expect(modelRequests).toHaveLength(0);
     });
 
