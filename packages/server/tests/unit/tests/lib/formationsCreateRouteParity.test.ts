@@ -181,16 +181,32 @@ describe('formation enums match the create route', () => {
 });
 
 /**
- * The component a property schema names through `$ref`, directly or as the one
- * member of an `allOf` that carries the property's own wording, or null.
+ * The component a property schema names through `$ref`, directly, as the one
+ * member of an `allOf` that carries the property's own wording, or as the
+ * items of an array (`Foo[]`), or null.
  */
 const refName = (schema: unknown): string | null => {
   if (!isObjectRecord(schema)) return null;
   if (Array.isArray(schema.allOf) && schema.allOf.length === 1) {
     return refName(schema.allOf[0]);
   }
+  if (schema.type === 'array') {
+    const items = refName(schema.items);
+    return items === null ? null : `${items}[]`;
+  }
   if (typeof schema.$ref !== 'string') return null;
   return schema.$ref.split('/').pop() ?? null;
+};
+
+/**
+ * Template fields that copy the create route's component. `tool_bindings`
+ * refuses the inline `tool` entry the route accepts; the rest await a `$ref`.
+ */
+const COPIED_FIELDS: Record<string, string[]> = {
+  agent: ['tool_bindings'],
+  model_route: ['targets'],
+  orchestration: ['nodes', 'edges'],
+  workflow: ['states', 'transitions'],
 };
 
 // A field the create route defines by `$ref` has one definition; a template
@@ -220,7 +236,7 @@ describe('formation properties share the create route definitions', () => {
         }
       );
 
-      expect(copied).toEqual([]);
+      expect(copied).toEqual(COPIED_FIELDS[resourceType] ?? []);
     }
   );
 });

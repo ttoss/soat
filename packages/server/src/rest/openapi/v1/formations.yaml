@@ -878,21 +878,7 @@ components:
           nullable: true
           description: Conditions that stop the agent's work early — turn-scoped (`has_tool_call`) or chain-scoped (`max_chain_generations`).
           items:
-            type: object
-            additionalProperties: false
-            properties:
-              type:
-                type: string
-                enum: [has_tool_call, max_chain_generations]
-                description: Condition type.
-              tool_name:
-                type: string
-                nullable: true
-                description: Tool name to match when type is `has_tool_call`
-              max_generations:
-                type: integer
-                nullable: true
-                description: Generations the continuation chain may reach when type is `max_chain_generations`
+            $ref: './agents.yaml#/components/schemas/AgentStopCondition'
         active_tool_ids:
           x-soat-ref: tools
           type: array
@@ -912,23 +898,7 @@ components:
           nullable: true
           description: Per-step overrides applied during multi-step generation. Steps not covered by a rule use the agent defaults.
           items:
-            type: object
-            additionalProperties: false
-            properties:
-              step:
-                type: integer
-                description: 1-indexed step number this rule applies to
-              tool_choice:
-                type: object
-                nullable: true
-                description: 'Tool choice override for this step, e.g. `auto`, `required`, or `{ type: tool, tool_name: search }`'
-              active_tool_ids:
-                x-soat-ref: tools
-                type: array
-                nullable: true
-                items:
-                  type: string
-                description: Tool IDs active on this step
+            $ref: './agents.yaml#/components/schemas/AgentStepRule'
         policy_ids:
           x-soat-ref: policies
           type: array
