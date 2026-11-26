@@ -42,6 +42,7 @@ import { assertProjectAcceptsWork } from './projectPause';
 import { parseActiveRelease } from './releaseAssignment';
 import { resourceWorkAuthority } from './resourceWork';
 import { gateStart } from './startGate';
+import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import { storedAuthority, type WorkAuthority } from './workAuthority';
 
@@ -324,7 +325,11 @@ const executeSyncRun = async (args: {
     await failEvalRun({
       run,
       projectId,
-      reason: error instanceof Error ? error.message : String(error),
+      error: toStoredError({
+        error,
+        opaque: INTERNAL_FAILURE,
+        label: 'executeSyncRun',
+      }),
     });
     throw error;
   }

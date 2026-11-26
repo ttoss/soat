@@ -220,6 +220,26 @@
       "hint": "Knowledge search needs an embedding model. Configure one on the project or the AI provider before ingesting or searching.",
       "routes": []
     },
+    "EVAL_RUN_ABANDONED": {
+      "http_status": 500,
+      "hint": "Start the run again with POST /api/v1/evals/{eval_id}/runs. A synchronous run whose client disconnected is abandoned; start a long run with `wait: false` and poll it instead.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/evals/{eval_id}/runs"
+        }
+      ]
+    },
+    "EVAL_RUN_DEFINITION_MISSING": {
+      "http_status": 500,
+      "hint": "The run cannot be scored. Start a new run of the eval with POST /api/v1/evals/{eval_id}/runs; it records the definition it is scored by.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/evals/{eval_id}/runs"
+        }
+      ]
+    },
     "EVAL_SCORING_FAILED": {
       "http_status": 500,
       "hint": "Read the message for the scorer's failure, fix the scorer's configuration, and run the eval again.",

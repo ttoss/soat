@@ -2108,6 +2108,10 @@ describe('Evaluations', () => {
       await abandoned.reload();
       expect(abandoned.status).toBe('failed');
       expect(abandoned.finishedAt).not.toBeNull();
+      expect(abandoned.error).toMatchObject({
+        code: 'EVAL_RUN_ABANDONED',
+        meta: { result_count: 0, item_count: 2 },
+      });
     });
 
     // The opposite treatment: every measurement is present, so the run is
@@ -2331,6 +2335,7 @@ describe('Evaluations', () => {
         status: 'failed',
         verdict: null,
         aggregate_scores: null,
+        error: { code: 'EVAL_RUN_ABANDONED' },
       });
     });
 

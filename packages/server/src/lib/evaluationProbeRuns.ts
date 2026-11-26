@@ -17,8 +17,14 @@ import {
   claimRunFinalization,
   failEvalRun,
   isLiveRunStatus,
+  scoringFailure,
 } from './evaluationRunExecution';
 import type { ScorerModels } from './evaluationScorerModels';
+import {
+  INTERNAL_FAILURE,
+  type StoredError,
+  toStoredError,
+} from './storedError';
 import { parseWorkAuthority, type WorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
@@ -65,7 +71,7 @@ const gradeRunProbes = (args: RunProbeContext): Promise<ProbeReport> => {
 const failUnlessSettled = async (args: {
   run: EvalRunRow;
   projectId: number;
-  reason: string;
+  error: StoredError;
 }): Promise<void> => {
   await discardEvalItemTasks({ evalRunId: args.run.id as number });
   if (!(await claimRunFinalization({ runDbId: args.run.id as number }))) {
@@ -97,19 +103,25 @@ const probeRefusal = (args: {
  */
 const settleOnProbes = async (args: RunProbeContext): Promise<unknown> => {
   let refusal: unknown = null;
+  let error: StoredError | null = null;
   try {
     const report = await gradeRunProbes(args);
-    if (!report.passed) refusal = probeRefusal({ run: args.run, report });
-  } catch (error) {
-    refusal = error;
+    if (!report.passed) {
+      const probeFailure = probeRefusal({ run: args.run, report });
+      refusal = probeFailure;
+      error = toStoredError({
+        error: probeFailure,
+        opaque: INTERNAL_FAILURE,
+        label: 'settleOnProbes',
+      });
+    }
+  } catch (scorerError) {
+    refusal = scorerError;
+    error = scoringFailure(scorerError);
   }
-  if (refusal === null) return null;
+  if (error === null) return null;
   log('settleOnProbes: run=%s refused', args.run.publicId);
-  await failUnlessSettled({
-    run: args.run,
-    projectId: args.projectId,
-    reason: refusal instanceof Error ? refusal.message : String(refusal),
-  });
+  await failUnlessSettled({ run: args.run, projectId: args.projectId, error });
   return refusal;
 };
 

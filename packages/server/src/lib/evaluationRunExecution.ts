@@ -114,12 +114,12 @@ const notCompleted = (generation: GenerationResult): StoredError => {
   };
 };
 
-/** The scorer's own failure, named as one: the generation itself succeeded. */
 /** An eval run that still has work ahead of it, as opposed to one settled. */
 export const isLiveRunStatus = (status: unknown): boolean => {
   return status === 'queued' || status === 'running';
 };
 
+/** The scorer's own failure, named as one: the generation itself succeeded. */
 export const scoringFailure = (error: unknown): StoredError => {
   const failure = toStoredErrorKeepingMessage({
     error,
@@ -463,8 +463,8 @@ export const finalizeEvalRun = async (args: {
 
 /**
  * Settles a run that could not be executed at all (an infrastructure failure,
- * not an item's generation failing — that is caught per item) and fires
- * `eval_runs.failed`.
+ * not an item's generation failing — that is caught per item), records `error`
+ * as why, and fires `eval_runs.failed`.
  *
  * A gate consumer must hear about this: a run that silently stayed `running`
  * forever is a promotion that never resolves either way.
@@ -472,12 +472,13 @@ export const finalizeEvalRun = async (args: {
 export const failEvalRun = async (args: {
   run: EvalRunRowInstance;
   projectId: number;
-  reason: string;
+  error: StoredError;
 }): Promise<void> => {
-  log('failEvalRun: run=%s reason=%s', args.run.publicId, args.reason);
+  log('failEvalRun: run=%s code=%s', args.run.publicId, args.error.code);
 
   await args.run.update({
     status: 'failed',
+    error: args.error,
     finishedAt: new Date(),
     toolContext: null,
   });

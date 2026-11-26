@@ -162,6 +162,10 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     "Check that the converter calls back to the document's callback URL, then ingest the document again. Raise `CONVERSION_STALL_TIMEOUT_MS` for a converter that legitimately takes longer.",
   EVAL_SCORING_FAILED:
     "Read the message for the scorer's failure, fix the scorer's configuration, and run the eval again.",
+  EVAL_RUN_DEFINITION_MISSING:
+    'The run cannot be scored. Start a new run of the eval with {{POST /evals/{eval_id}/runs}}; it records the definition it is scored by.',
+  EVAL_RUN_ABANDONED:
+    'Start the run again with {{POST /evals/{eval_id}/runs}}. A synchronous run whose client disconnected is abandoned; start a long run with `wait: false` and poll it instead.',
   PROBE_FAILED:
     'Read `meta.failed` for each probe that did not hold, fix the scorer or the probe, check it with {{POST /evals/{eval_id}/probes}}, then start the run again.',
   TOOL_CALL_FAILED:

@@ -38,6 +38,7 @@ import { readScorerModels } from './evaluationScorerModels';
 import { runAsJob } from './requestCorrelation';
 import { agentReferences } from './resourceReferences';
 import { createScheduler } from './scheduler';
+import type { OwnStoredError } from './storedError';
 import { parseWorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
@@ -114,16 +115,19 @@ const loadRunContext = async (args: {
  */
 const failUnrunnable = async (args: {
   context: LoadedRun;
-  reason: string;
+  error: OwnStoredError;
 }): Promise<void> => {
   const { run, projectId } = args.context;
   await discardEvalItemTasks({ evalRunId: run.id as number });
   if (!(await claimRunFinalization({ runDbId: run.id as number }))) return;
-  log('failUnrunnable: run=%s %s', run.publicId, args.reason);
-  await failEvalRun({ run, projectId, reason: args.reason });
+  log('failUnrunnable: run=%s %s', run.publicId, args.error.message);
+  await failEvalRun({ run, projectId, error: args.error });
 };
 
-const NO_DEFINITION = 'The run recorded no definition to score it by.';
+const NO_DEFINITION: OwnStoredError = {
+  code: 'EVAL_RUN_DEFINITION_MISSING',
+  message: 'The run recorded no definition to score it by.',
+};
 
 /**
  * Settles a run whose queue has drained.
@@ -164,7 +168,7 @@ const loadRunnable = async (args: {
   const { context } = args;
   const { definition, run } = context;
   if (!definition) {
-    await failUnrunnable({ context, reason: NO_DEFINITION });
+    await failUnrunnable({ context, error: NO_DEFINITION });
     return null;
   }
   const agent = run.agentPublicId
@@ -177,7 +181,11 @@ const loadRunnable = async (args: {
   if (!agent) {
     await failUnrunnable({
       context,
-      reason: `The run's agent '${run.agentPublicId ?? ''}' no longer exists.`,
+      error: {
+        code: 'AGENT_NOT_FOUND',
+        message: `The run's agent '${run.agentPublicId ?? ''}' does not exist.`,
+        meta: { agent_id: run.agentPublicId },
+      },
     });
     return null;
   }
@@ -378,7 +386,11 @@ const reapRun = async (args: {
   await failEvalRun({
     run: context.run,
     projectId: context.projectId,
-    reason: `Abandoned with ${resultCount} of ${String(run.itemCount)} items scored.`,
+    error: {
+      code: 'EVAL_RUN_ABANDONED',
+      message: `Abandoned with ${resultCount} of ${String(run.itemCount)} items recorded.`,
+      meta: { result_count: resultCount, item_count: run.itemCount },
+    },
   });
   return true;
 };

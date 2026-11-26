@@ -107,6 +107,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `verdict` | string \| null | `supported` \| `refuted` \| `insufficient`; see [Pass semantics](#pass-semantics). `null` when the run has no threshold, until it completes, and on a cancelled or failed run |
 | `verdict_reasons` | array \| null | `[{ scope, verdict, reason }]`, one per judged scope, the run first; `scope` is `{ kind: "run" }`, `{ kind: "group", name }` or `{ kind: "criterion", name }` (a claim's reasons add `live` and `age` scopes, see [Evidence](#evidence)). `null` when `verdict` is |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [cancelled](#canceling-a-run) run the last two count what actually ran |
+| `error` | object \| null | Why a `failed` run failed, as a [recorded failure](/docs/api#recorded-failures): `PROBE_FAILED` or a scorer's own code (see [Criteria](#criteria)), `AGENT_NOT_FOUND` (`meta.agent_id`) for a queued run whose agent was deleted, `EVAL_RUN_DEFINITION_MISSING` for a run that recorded no definition, `EVAL_RUN_ABANDONED` (`meta.result_count`, `meta.item_count`) for a run the reaper settled, or the code of the failure that stopped a synchronous run. `null` on any other status |
 | `metadata` | object | Caller-owned annotations supplied when the run was started (see [Run metadata](#run-metadata) and [Tags and metadata](iam.md#tags-and-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
 | `created_at` | string | ISO 8601 creation timestamp |
@@ -543,7 +544,7 @@ queued run.
 
 `definition.pass_threshold: null` means the run reports without gating; `definition: null`
 means the run recorded no definition. A queued run whose agent is deleted before its items
-run settles `failed` rather than running the eval's current agent.
+run settles `failed`, its `error` `AGENT_NOT_FOUND`, rather than running the eval's current agent.
 
 An [eval-gated promotion](./agents.md#eval-gated-promotion) matches on the pin: a release
 naming this eval as its `promotion_gate` reads the newest `completed` run recorded against
@@ -711,7 +712,7 @@ structured output (`output_schema`, and `object` in `json_logic`) and `metadata`
 | Run | Probe that does not hold | Scorer that cannot grade a probe |
 | --- | --- | --- |
 | `wait: true` | the run settles `failed`; `400 PROBE_FAILED`, `meta` naming the run (`eval_run_id`) and each probe in `failed` (`criterion`, `index`, `expected`, `passed`) | the run settles `failed`; the scorer's own error |
-| `wait: false` | answers `201 queued`; its first task grades the probes in the worker while the other items wait, then the run settles `failed` (`eval_runs.failed`) | the run settles `failed` (`eval_runs.failed`) |
+| `wait: false` | answers `201 queued`; its first task grades the probes in the worker while the other items wait, then the run settles `failed` (`eval_runs.failed`), its `error` the `PROBE_FAILED` a synchronous run answers | the run settles `failed` (`eval_runs.failed`), its `error` the scorer's own |
 
 [`POST /api/v1/evals/{eval_id}/probes`](/docs/api/evaluations/check-eval-probes)
 (`evaluations:RunEval`) grades them the same way and returns the report,
@@ -776,7 +777,8 @@ claim, so the completion event fires exactly once.
 
 A background reaper settles non-terminal runs that have gone quiet past a grace period
 (30 minutes by default): a run whose items all have results is finalized; a run with items
-missing and no outstanding work is settled `failed` and `eval_runs.failed` fires. A run
+missing and no outstanding work is settled `failed` with `error.code` `EVAL_RUN_ABANDONED`
+and `eval_runs.failed` fires. A run
 that still has queued tasks is left alone.
 
 ### Run metadata
@@ -1099,9 +1101,9 @@ Two [webhook](./webhooks.md) events carry a run's outcome:
 | Event | Fires when |
 | --- | --- |
 | `eval_runs.completed` | A run reached a terminal status with its items scored |
-| `eval_runs.failed` | A run could not be executed to completion |
+| `eval_runs.failed` | A run could not be executed to completion; its `error` says why |
 
-Both carry the [eval run](#eval-run) in `data`, `claim`, `verdict`, `verdict_reasons` and `aggregate_scores` included,
+Both carry the [eval run](#eval-run) in `data`, `claim`, `verdict`, `verdict_reasons`, `aggregate_scores` and `error` included,
 so a promotion gate needs no second call. Exactly one event fires per terminal run.
 
 ### Eval spend is separable from production spend
