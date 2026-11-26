@@ -439,6 +439,43 @@ describe('validateFormationTemplate', () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  test('accepts every step rule tool_choice the agent create route accepts', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            ai_provider_id: 'aip_1',
+            step_rules: [
+              { step: 1, tool_choice: 'required' },
+              { step: 2, tool_choice: { type: 'tool', tool_name: 'search' } },
+              { step: 3, tool_choice: null },
+            ],
+            stop_conditions: [{ type: 'has_tool_call', tool_name: 'search' }],
+          },
+        },
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+
+  test('returns invalid when a step rule omits its step', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            ai_provider_id: 'aip_1',
+            step_rules: [{ tool_choice: 'auto' }],
+          },
+        },
+      },
+    });
+
+    expect(result.valid).toBe(false);
+  });
+
   // ── declared enums ─────────────────────────────────────────────────────
 
   test('returns invalid when a provider slug is not a real one', () => {
