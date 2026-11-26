@@ -43,22 +43,47 @@ const TRANSITIONS = [
   },
 ];
 
-/** Polls a task until `predicate` holds or the bounded budget is exhausted. */
-const pollTask = async (args: {
+/**
+ * GETs `path` until `predicate` holds over the selected value, within a bounded
+ * budget. Exhaustion reports the last response, so a failure names the state
+ * the work stopped in, not only that it stopped.
+ */
+const pollGet = async <T>(args: {
   token: string;
-  taskId: string;
-  predicate: (task: Record<string, unknown>) => boolean;
-}): Promise<Record<string, unknown>> => {
+  path: string;
+  select: (body: Record<string, unknown>) => T;
+  predicate: (value: T) => boolean;
+}): Promise<T> => {
+  const startedAt = Date.now();
+  let last: { status: number; body: unknown } | undefined;
   for (let i = 0; i < 100; i += 1) {
-    const res = await authenticatedTestClient(args.token).get(
-      `/api/v1/tasks/${args.taskId}`
-    );
-    if (res.status === 200 && args.predicate(res.body)) return res.body;
+    const res = await authenticatedTestClient(args.token).get(args.path);
+    last = { status: res.status, body: res.body };
+    if (res.status === 200 && args.predicate(args.select(res.body))) {
+      return args.select(res.body);
+    }
     await new Promise((resolve) => {
       setTimeout(resolve, 20);
     });
   }
-  throw new Error(`pollTask: predicate never held for ${args.taskId}`);
+  throw new Error(
+    `predicate never held for GET ${args.path} after 100 polls (${Date.now() - startedAt} ms); last ${last?.status}: ${JSON.stringify(last?.body)}`
+  );
+};
+
+const pollTask = (args: {
+  token: string;
+  taskId: string;
+  predicate: (task: Record<string, unknown>) => boolean;
+}): Promise<Record<string, unknown>> => {
+  return pollGet({
+    token: args.token,
+    path: `/api/v1/tasks/${args.taskId}`,
+    select: (body) => {
+      return body;
+    },
+    predicate: args.predicate,
+  });
 };
 
 type HistoryRow = {
@@ -67,24 +92,19 @@ type HistoryRow = {
   note: string | null;
 };
 
-/** Polls a task's history until `predicate` holds or the budget is exhausted. */
-const pollHistory = async (args: {
+const pollHistory = (args: {
   token: string;
   taskId: string;
   predicate: (rows: HistoryRow[]) => boolean;
 }): Promise<HistoryRow[]> => {
-  for (let i = 0; i < 100; i += 1) {
-    const res = await authenticatedTestClient(args.token).get(
-      `/api/v1/tasks/${args.taskId}/history`
-    );
-    if (res.status === 200 && args.predicate(res.body.data)) {
-      return res.body.data;
-    }
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
-  }
-  throw new Error(`pollHistory: predicate never held for ${args.taskId}`);
+  return pollGet({
+    token: args.token,
+    path: `/api/v1/tasks/${args.taskId}/history`,
+    select: (body) => {
+      return body.data as HistoryRow[];
+    },
+    predicate: args.predicate,
+  });
 };
 
 describe('Tasks', () => {
