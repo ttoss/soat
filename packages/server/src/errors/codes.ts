@@ -214,6 +214,11 @@ export const ERROR_CODES = {
     description:
       'The secret is referenced by one or more AI providers and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED: {
+    httpStatus: 400,
+    description:
+      "The AI provider's adapter cannot express the request for its API — for example a `file` part of a media type the API does not take — and refused it before the provider was called. `meta.functionality` names what it cannot send. The same request fails the same way on every retry.",
+  },
   AI_PROVIDER_MISCONFIGURED: {
     httpStatus: 400,
     description:

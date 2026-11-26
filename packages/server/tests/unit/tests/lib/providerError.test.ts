@@ -3,6 +3,7 @@ import {
   RetryError,
   StreamProviderError,
   ToolChoiceViolationError,
+  UnsupportedFunctionalityError,
 } from 'ai';
 import { DomainError } from 'src/errors';
 import { toProviderDomainError } from 'src/lib/providerError';
@@ -128,6 +129,23 @@ describe('toProviderDomainError', () => {
     expect(error?.code).toBe('AI_PROVIDER_ERROR');
     expect(error?.httpStatus).toBe(502);
     expect(error?.message).toContain('beta_tool');
+  });
+
+  // Raised by the adapter before any vendor call: no retry can answer it.
+  test('maps an adapter refusal to a 400 naming the functionality', () => {
+    const error = toProviderDomainError(
+      new UnsupportedFunctionalityError({
+        functionality: 'file part media type audio/wav',
+      })
+    );
+
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error?.code).toBe('AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED');
+    expect(error?.httpStatus).toBe(400);
+    expect(error?.message).toContain('file part media type audio/wav');
+    expect(error?.meta).toEqual({
+      functionality: 'file part media type audio/wav',
+    });
   });
 
   test('returns null for non-provider errors', () => {

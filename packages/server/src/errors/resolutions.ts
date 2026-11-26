@@ -136,6 +136,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The model answered and the answer does not satisfy `output_schema` — the violated field is named in the message. Retrying the same request bills a second call to reach the same answer; loosen the schema, or make the instructions name the shape the model keeps missing.',
   MAX_STEPS_REACHED:
     'Raise `max_steps` with `{{PATCH /agents/{agent_id}}}`, or make the instructions reach the answer in fewer tool calls. An agent whose `tool_choice` forces a tool cannot answer on its last step: use `"auto"` and force specific steps with `step_rules`.',
+  AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED:
+    "Do not retry the same request. Send the input in a form the provider takes (`meta.functionality` names what it refused), send it to an agent on another AI provider, or declare the model's `model_input_modalities` so a part it cannot read is refused by name.",
   AI_PROVIDER_MISCONFIGURED:
     "The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment's own, which only an operator may allow. Update the AI provider and retry.",
   INPUT_MODALITY_UNSUPPORTED:

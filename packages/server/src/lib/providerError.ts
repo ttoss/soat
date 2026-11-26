@@ -5,6 +5,7 @@ import {
   RetryError,
   StreamProviderError,
   ToolChoiceViolationError,
+  UnsupportedFunctionalityError,
 } from 'ai';
 
 import { DomainError } from '../errors';
@@ -172,7 +173,8 @@ export const usageFromFailure = (
  * Maps an upstream AI provider failure — an `APICallError` thrown by the AI
  * SDK (possibly wrapped in a `RetryError`), a network fault, or an error frame
  * a provider streamed mid-run — to a `AI_PROVIDER_ERROR` `DomainError`
- * (HTTP 502). Returns `null` for errors that did not originate from the
+ * (HTTP 502), and a request the provider adapter cannot send to
+ * `AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED` (HTTP 400). Returns `null` for errors that did not originate from the
  * provider call, so callers can rethrow them unchanged.
  */
 export const toProviderDomainError = (error: unknown): DomainError | null => {
@@ -199,6 +201,16 @@ export const toProviderDomainError = (error: unknown): DomainError | null => {
 
   if (APICallError.isInstance(unwrapped)) {
     return apiCallDomainError(unwrapped);
+  }
+
+  // Raised by the provider adapter while building the request: nothing was
+  // sent, and the same request fails the same way on every retry.
+  if (UnsupportedFunctionalityError.isInstance(unwrapped)) {
+    return new DomainError(
+      'AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED',
+      unwrapped.message,
+      { functionality: unwrapped.functionality }
+    );
   }
 
   const modelFault = modelFaultDomainError(unwrapped);

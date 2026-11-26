@@ -308,6 +308,38 @@ describe('file message parts', () => {
       expect(stub.bodies().length).toBe(before);
     });
 
+    test('refuses a part the provider adapter cannot send, before calling it', async () => {
+      const upload = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('a,b\n1,2\n'), {
+          filename: 'table.csv',
+          contentType: 'text/csv',
+        })
+        .field('project_id', projectId);
+      expect(upload.status).toBe(201);
+      const agentId = await createAgent({
+        name: 'adapter-limited reader',
+        aiProviderId: await createProvider({
+          name: 'adapter-limited provider',
+          model: 'adapter-limited-model',
+        }),
+      });
+      const before = stub.bodies().length;
+
+      const res = await generate({
+        token: adminToken,
+        agentId,
+        messages: askAbout(upload.body.id),
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED');
+      expect(res.body.error.meta.functionality).toBe(
+        'file part media type text/csv'
+      );
+      expect(stub.bodies().length).toBe(before);
+    });
+
     test('a file in another project is not found', async () => {
       const agentId = await createAgent({
         name: 'cross-project reader',
