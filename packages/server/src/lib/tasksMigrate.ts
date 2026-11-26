@@ -13,6 +13,7 @@ import {
   type TaskInstance,
   type TaskPrincipal,
 } from './tasks';
+import { assertStateHasRoom } from './tasksStateCapacity';
 import {
   findArchivedDefinition,
   type WorkflowDefinition,
@@ -213,6 +214,14 @@ const performMigrationTxn = async (args: {
     const fromVersion = task.workflowVersion;
     task.workflowVersion = a.toVersion;
     if (target.name !== fromState) {
+      // A task kept in its state already holds its slot, even where the
+      // target version lowers the limit below what the state holds.
+      await assertStateHasRoom({
+        workflowDbId: task.workflowId as number,
+        state: target,
+        taskId: task.id as number,
+        transaction: t,
+      });
       task.state = target.name;
       task.enteredStateAt = new Date();
       // A settled dispatch's provenance belongs to the state being left.

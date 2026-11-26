@@ -56,6 +56,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `kind`          | string \| null  | `human` marks a parking state that never dispatches                 |
 | `on_enter`      | object \| null  | Automation fired when a task enters this state (see below)          |
 | `stalled_after` | integer \| null | Seconds a task may sit in this state before a `tasks.stalled` event fires (positive integer, or null to never stall). See [Stall detection](#stall-detection). |
+| `max_tasks`     | integer \| null | Most open tasks the state holds (positive integer; refused on a terminal state), or null for no limit. See [State capacity](#state-capacity). |
 
 #### Transition
 
@@ -154,7 +155,7 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 
 ### Listing a task's transitions
 
-[`GET /tasks/{task_id}/transitions`](/docs/api/tasks/list-task-transitions) lists every transition of the task's pinned version with `name`, `to`, `requires_approval`, `allowed`, and `error_code`: the code firing it now as the caller would answer (`TASK_TRANSITION_CONFLICT` for a closed task, a pending gate or a state outside `from`; `TASK_GUARD_REJECTED` for a failing guard), `null` when allowed. The guard runs with the caller as `principal`. A `requires_approval` transition is allowed before its guard passes, since the guard runs when the approval resolves. One check decides both this list and the fire, so it is the dry run; it is advisory, and firing re-validates under the lock. Needs `tasks:GetTask`.
+[`GET /tasks/{task_id}/transitions`](/docs/api/tasks/list-task-transitions) lists every transition of the task's pinned version with `name`, `to`, `requires_approval`, `allowed`, and `error_code`: the code firing it now as the caller would answer (`TASK_TRANSITION_CONFLICT` for a closed task, a pending gate or a state outside `from`; `TASK_GUARD_REJECTED` for a failing guard; `TASK_STATE_FULL` for a target at its [`max_tasks`](#state-capacity)), `null` when allowed. The guard runs with the caller as `principal`. A `requires_approval` transition is allowed before its guard passes, since the guard runs when the approval resolves. One check decides both this list and the fire, so it is the dry run; it is advisory, and firing re-validates under the lock. Needs `tasks:GetTask`.
 
 ### Writing the payload with a move
 
@@ -535,6 +536,7 @@ Archive nothing: a metadata-only edit (`name`, `description`); re-writing the de
 | A mapped state is terminal | `VALIDATION_FAILED` (400) |
 | The payload fails the target schema | `TASK_PAYLOAD_INVALID` (400) |
 | The task is closed, has a transition pending approval, or a dispatch in flight | `TASK_MIGRATION_CONFLICT` (409) |
+| The mapped state already holds its [`max_tasks`](#state-capacity) | `TASK_STATE_FULL` (409) |
 
 ### Migrating every open task
 
@@ -669,6 +671,21 @@ Reserved identity keys are stripped and re-derived server-side; an invalid key i
 
 A state may declare `stalled_after` (seconds). A sweeper emits a `tasks.stalled` webhook event when an **open** task has sat in the state longer. An **event, not a transition**: the task does not move; route on it via a webhook or trigger. Fires once per stall episode, re-armed by the next transition.
 
+### State capacity
+
+A state may declare `max_tasks`, a positive integer: the most open tasks of the workflow it holds, counted across every version. An entry into a state already holding that many is refused with `TASK_STATE_FULL` (409, `meta.state`, `meta.max_tasks`) and the task stays where it was:
+
+| Entry | Refused |
+| --- | --- |
+| [`POST /tasks`](/docs/api/tasks/create-task) into its initial or alternate state | the create; no task is made |
+| A transition, by any principal | the move; an `on_complete` route emits `tasks.automation_rejected`, an approved gate emits `tasks.approval_failed` |
+| A migration mapping the task to another state | that task; a task kept in its state keeps its slot |
+
+- A task leaving the state (any transition, a close included) frees a slot; a transition from the state back to itself takes none.
+- The limit applied is the one the entering task's version declares. A version that lowers it below what the state holds refuses entries until the state drains; no task is moved out.
+- Entries racing for the last slot are serialized per workflow: one is accepted.
+- [Listing a task's transitions](#listing-a-tasks-transitions) answers `TASK_STATE_FULL` for a transition into a full state.
+
 ### The automation chain budget
 
 A cycle turning on its own (dispatch, outcome routes back, dispatch again) is bounded by `automation_chain_depth`; each transition increments or resets it:
@@ -709,6 +726,7 @@ When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the tr
 | `TASK_TRANSITION_NOT_FOUND`| 400    | The named transition does not exist in the workflow            |
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |
+| `TASK_STATE_FULL`          | 409    | The state a create, transition or migration would enter already holds its `max_tasks` open tasks; `meta.state`, `meta.max_tasks`. See [State capacity](#state-capacity) |
 | `TASK_AUTOMATION_PROVENANCE_MISSING` | 500 | An `automation` transition would be persisted with `principal_id`, `generation_id`, `orchestration_run_id`, and `tool_id` all null — rejected as a writer bug rather than silently recorded |
 | `TOOL_DISPATCH_FAILED` | 422 | A `tool` dispatch's call was settled before it ran — blocked by a guardrail, or routed to human approval, which a task dispatch cannot park on |
 | `INVALID_TOOL_CONTEXT_KEY`  | 400    | A `tool_context` key on `create-task` / `transition-task` is not a valid header name, or two keys collide on one header. See [Dispatch tool context](#dispatch-tool-context) |
@@ -736,10 +754,10 @@ Every event's `data` is the task as [`GET /api/v1/tasks/{task_id}`](/docs/api/ta
 | `tasks.hold_cleared`         | An open task's [hold](#holding-a-task-until-a-date) date passed (once per hold) | `cleared_hold: { until, reason }` |
 | `tasks.migrated`             | A task moves onto a newer workflow version               | `from_state`, `from_workflow_version` |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   | `result` |
-| `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) | `result`, `transition`, `error_code` |
+| `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard, full state or conflict) | `result`, `transition`, `error_code` |
 | `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains | `attempt`, `max_attempts`, `error` (`{ code, message, meta? }`), `generation_id`, `orchestration_run_id` |
 | `tasks.stalled`              | An open task sat in a state past its `stalled_after` (once per episode) | |
-| `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard or conflict) | `transition`, `error_code` |
+| `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard, full state or conflict) | `transition`, `error_code` |
 | `tasks.paused`               | An operator paused a task's automation                   | |
 | `tasks.resumed`              | An operator lifted a task's pause                        | |
 

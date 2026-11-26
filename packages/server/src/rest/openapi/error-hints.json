@@ -1264,6 +1264,20 @@
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
       "routes": []
     },
+    "TASK_STATE_FULL": {
+      "http_status": 409,
+      "hint": "Move a task out of the state `meta.state` names, then retry; or raise its `max_tasks` with PATCH /api/v1/workflows/{workflow_id} and move the task onto that version with POST /api/v1/tasks/{task_id}/migrate.",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "/workflows/{workflow_id}"
+        },
+        {
+          "method": "POST",
+          "path": "/tasks/{task_id}/migrate"
+        }
+      ]
+    },
     "TASK_STATE_NOT_FOUND": {
       "http_status": 400,
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",

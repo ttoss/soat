@@ -17,7 +17,7 @@ import {
   type TaskCreateIdempotency,
   taskIdempotencyColumns,
 } from './tasksCreateIdempotency';
-import { resolveTaskDefinition } from './taskWorkflowDefinition';
+import { assertStateHasRoom } from './tasksStateCapacity';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import { storedAuthority, type WorkAuthority } from './workAuthority';
 import {
@@ -31,6 +31,7 @@ export { deleteTask } from './tasksDelete';
 export { migrateTask } from './tasksMigrate';
 export { transitionTask } from './tasksTransition';
 export { listTaskTransitions } from './tasksTransitionCheck';
+export { mergeTaskPayload, updateTask } from './tasksUpdate';
 
 const log = createDebug('soat:tasks');
 
@@ -358,6 +359,29 @@ const startableWorkflow = async (args: CreateTaskArgs) => {
   return workflow;
 };
 
+const appendCreationHistory = (args: {
+  taskId: number;
+  entryState: WorkflowState;
+  principal: TaskPrincipal;
+  transaction: Transaction;
+}) => {
+  return appendTaskHistory({
+    row: {
+      taskId: args.taskId,
+      fromState: null,
+      toState: args.entryState.name,
+      transition: null,
+      principalType: args.principal.kind,
+      principalId: args.principal.id,
+      generationId: null,
+      orchestrationRunId: null,
+      note: null,
+    },
+    actsFor: args.principal.actsFor,
+    transaction: args.transaction,
+  });
+};
+
 const insertTask = async (args: CreateTaskArgs) => {
   log(
     'createTask: projectId=%d workflowId=%s title=%s state=%s',
@@ -387,56 +411,61 @@ const insertTask = async (args: CreateTaskArgs) => {
   const closed = entryState.terminal === true;
   const enteredStateAt = new Date();
 
-  const task = await db.Task.create({
-    projectId: args.projectId,
-    workflowId: workflow.id as number,
-    // The pin: the task runs on this version of the state machine, however
-    // long the workflow is edited around it, until a migration moves it.
-    workflowVersion: workflow.version,
-    title: args.title,
-    state: entryState.name,
-    status: closed ? 'closed' : 'open',
-    payload,
-    metadata: args.metadata ?? null,
-    assignee: args.assignee ?? null,
-    ...taskIdempotencyColumns(args.idempotency),
-    // A task created straight into a terminal state dispatches nothing and can
-    // never be moved again, so it never holds a credential at rest.
-    toolContext: closed ? null : toolContext,
-    authority: closed
-      ? null
-      : await storedAuthority({
-          authority: args.authority,
-          projectId: args.projectId,
-        }),
-    activeDispatch: null,
-    automationStatus: null,
-    pendingTransition: null,
-    pendingApprovalId: null,
-    enteredStateAt,
-    // A terminal entry state never stalls; otherwise arm the sweeper.
-    stallDeadlineAt: closed
-      ? null
-      : computeStallDeadline({ state: entryState, enteredStateAt }),
-  });
+  const authority = closed
+    ? null
+    : await storedAuthority({
+        authority: args.authority,
+        projectId: args.projectId,
+      });
 
-  await appendTaskHistory({
-    row: {
+  const taskPublicId = await db.sequelize.transaction(async (t) => {
+    await assertStateHasRoom({
+      workflowDbId: workflow.id as number,
+      state: entryState,
+      transaction: t,
+    });
+    const task = await db.Task.create(
+      {
+        projectId: args.projectId,
+        workflowId: workflow.id as number,
+        // The pin: the task runs on this version of the state machine, however
+        // long the workflow is edited around it, until a migration moves it.
+        workflowVersion: workflow.version,
+        title: args.title,
+        state: entryState.name,
+        status: closed ? 'closed' : 'open',
+        payload,
+        metadata: args.metadata ?? null,
+        assignee: args.assignee ?? null,
+        ...taskIdempotencyColumns(args.idempotency),
+        // A task created straight into a terminal state dispatches nothing and can
+        // never be moved again, so it never holds a credential at rest.
+        toolContext: closed ? null : toolContext,
+        authority,
+        activeDispatch: null,
+        automationStatus: null,
+        pendingTransition: null,
+        pendingApprovalId: null,
+        enteredStateAt,
+        // A terminal entry state never stalls; otherwise arm the sweeper.
+        stallDeadlineAt: closed
+          ? null
+          : computeStallDeadline({ state: entryState, enteredStateAt }),
+      },
+      { transaction: t }
+    );
+
+    await appendCreationHistory({
       taskId: task.id as number,
-      fromState: null,
-      toState: entryState.name,
-      transition: null,
-      principalType: args.principal.kind,
-      principalId: args.principal.id,
-      generationId: null,
-      orchestrationRunId: null,
-      note: null,
-    },
-    actsFor: args.principal.actsFor,
+      entryState,
+      principal: args.principal,
+      transaction: t,
+    });
+    return task.publicId;
   });
 
   return finalizeCreatedTask({
-    taskPublicId: task.publicId,
+    taskPublicId,
     projectId: args.projectId,
     entryState,
     closed,
@@ -470,62 +499,4 @@ export const createTask = async (
     },
   });
   return 'created' in claimed ? claimed.created : claimed.replayed;
-};
-
-// ── Update (payload / title / assignee — never state) ─────────────────────────
-
-/**
- * The payload a write leaves: shallow-merged over the stored one, so a caller
- * setting one key keeps the others, `payload_writes` included, and validated
- * against the schema the task entered on, so a schema tightened later never
- * makes an in-flight task unwritable. The one rule for `PATCH` and a
- * transition's `payload`.
- */
-export const mergeTaskPayload = (args: {
-  stored: Record<string, unknown> | null;
-  patch: Record<string, unknown>;
-  payloadSchema: unknown;
-}): Record<string, unknown> => {
-  const merged = {
-    ...(args.stored ?? {}),
-    ...args.patch,
-  };
-  validatePayload({ payloadSchema: args.payloadSchema, payload: merged });
-  return merged;
-};
-
-export const updateTask = async (args: {
-  id: string;
-  title?: string;
-  payload?: Record<string, unknown>;
-  assignee?: string | null;
-  /** Replaces the stored bag; `null` clears it. */
-  metadata?: Record<string, unknown> | null;
-}) => {
-  log('updateTask: id=%s', args.id);
-
-  const task = await findTaskInstance({ id: args.id });
-  if (!task) {
-    throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
-  }
-
-  if (args.payload !== undefined) {
-    const { payloadSchema } = await resolveTaskDefinition({
-      task,
-      workflow: task.workflow!,
-    });
-    task.payload = mergeTaskPayload({
-      stored: task.payload as Record<string, unknown> | null,
-      patch: args.payload,
-      payloadSchema,
-    });
-  }
-  if (args.title !== undefined) task.title = args.title;
-  if (args.assignee !== undefined) task.assignee = args.assignee;
-  if (args.metadata !== undefined) task.metadata = args.metadata;
-
-  await task.save();
-
-  const updated = await findTaskInstance({ id: args.id });
-  return presentTask({ task: updated! });
 };

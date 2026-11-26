@@ -50,11 +50,12 @@ const setDispatchState = async (args: {
   await args.task.save();
 };
 
-// The matched rule could not be applied — guard-rejected, or invalidated by a
-// concurrent move. Surfaced rather than swallowed, so the task is never left
-// silently parked as `completed`.
+// The matched rule could not be applied — guard-rejected, its target state
+// full, or invalidated by a concurrent move. Surfaced rather than swallowed, so
+// the task is never left silently parked as `completed`.
 const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
+  'TASK_STATE_FULL',
   'TASK_TRANSITION_CONFLICT',
   // Routed here to make the bound visible: otherwise it reaches the
   // fire-and-forget `.catch` in `dispatchOnEnter` and the cycle stops silently,

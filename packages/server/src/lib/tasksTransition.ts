@@ -181,6 +181,7 @@ const resolveLockedTransition = async (args: {
   task: TaskInstance;
   transitionArgs: TransitionArgs;
   transitions: WorkflowTransition[];
+  states: WorkflowState[];
   payloadSchema: unknown;
   transaction: Transaction;
 }): Promise<WorkflowTransition> => {
@@ -200,6 +201,7 @@ const resolveLockedTransition = async (args: {
     transaction: args.transaction,
     transition,
     transitions,
+    states: args.states,
     principal: a.principal,
   });
   return transition;
@@ -286,7 +288,7 @@ const performTransitionTxn = async (args: {
       freed: number[];
     }
 > => {
-  const { transitionArgs: a, transitions, states } = args;
+  const { transitionArgs: a, states } = args;
   return db.sequelize.transaction(async (t) => {
     const task = (await db.Task.findOne({
       where: { publicId: a.id },
@@ -299,10 +301,8 @@ const performTransitionTxn = async (args: {
     }
 
     const transition = await resolveLockedTransition({
+      ...args,
       task,
-      transitionArgs: a,
-      transitions,
-      payloadSchema: args.payloadSchema,
       transaction: t,
     });
 
@@ -401,6 +401,7 @@ const applyTransition = async (input: {
       // The gate re-checks validity against the same pinned machine this
       // transition was resolved from, never the live workflow row.
       transitions,
+      states,
       principal: args.principal,
       note: args.note ?? null,
       // A pause, not a cancellation: the requester's context is persisted so

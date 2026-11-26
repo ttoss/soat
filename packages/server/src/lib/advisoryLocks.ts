@@ -17,6 +17,7 @@ const ADVISORY_LOCK_NAMESPACES = {
   oauthConnectionRefresh: 0x50a7_c003,
   taskDependencyGraph: 0x50a7_c004,
   generationProgress: 0x50a7_c005,
+  workflowStateCapacity: 0x50a7_c006,
 } as const;
 
 /**

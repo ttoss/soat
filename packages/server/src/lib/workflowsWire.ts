@@ -50,6 +50,7 @@ const ON_ENTER_KEYS: KeyRename[] = [
 // are disjoint and keyed by presence.
 const ITEM_KEYS: KeyRename[] = [
   ['stalled_after', 'stalledAfter'],
+  ['max_tasks', 'maxTasks'],
   ['on_enter', 'onEnter'],
   ['requires_approval', 'requiresApproval'],
 ];
