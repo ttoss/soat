@@ -11,7 +11,6 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { getEvalRow } from './evaluations';
-import { namedScorers } from './evaluationScorerValidation';
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -36,19 +35,13 @@ export type EvalResultRow = InstanceType<(typeof db)['EvalResult']> & {
   generation?: InstanceType<(typeof db)['Generation']> | null;
 };
 
-const wireDefinition = (definition: EvalRunRow['definition']) => {
-  return definition === null
-    ? null
-    : { ...definition, scorers: namedScorers(definition.scorers) };
-};
-
 export const mapEvalRun = (run: EvalRunRow) => {
   return {
     id: run.publicId,
     eval_id: run.eval?.publicId,
     agent_id: run.agentPublicId ?? null,
     agent_version: run.agentVersion,
-    definition: wireDefinition(run.definition),
+    definition: run.definition,
     claim: run.claim ?? null,
     decider_versions: run.deciderVersions ?? null,
     scorer_models: run.scorerModels ?? null,

@@ -77,6 +77,7 @@ import { formationParameterTypes } from './2026-11-23-formationParameterTypes';
 import { evalCriteria } from './2026-11-24-evalCriteria';
 import { pinnedVersionsRequired } from './2026-11-24-pinnedVersionsRequired';
 import { evalRunScorerModels } from './2026-11-25-evalRunScorerModels';
+import { scorerNamesRequired } from './2026-11-25-scorerNamesRequired';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -175,4 +176,5 @@ export const MIGRATIONS: Migration[] = [
   pinnedVersionsRequired,
   evalCriteria,
   evalRunScorerModels,
+  scorerNamesRequired,
 ];

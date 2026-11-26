@@ -14,6 +14,7 @@ import {
 
 const JUDGE = {
   type: 'llm_judge',
+  name: 'llm_judge',
   prompt: 'Rate {{output}}',
   pass_threshold: 0.8,
 };
@@ -33,6 +34,7 @@ describe('evaluationCalibration', () => {
             nested: { a: 2, b: 1 },
             pass_threshold: 0.8,
             prompt: 'Rate {{output}}',
+            name: 'llm_judge',
             type: 'llm_judge',
           },
           { decider_id: 'dcd_1', name: 'review', type: 'decider' },
@@ -44,20 +46,29 @@ describe('evaluationCalibration', () => {
       expect(a).toMatch(/^sha256:[0-9a-f]{64}$/);
     });
 
-    test('a scorer named after its type keeps the fingerprint it had unnamed', () => {
+    test('keys a scorer by its name, outside its configuration', () => {
+      // Pinned: the `name := type` backfill must leave the digest, and so
+      // the labels counting against it, in place.
       expect(
-        scorerFingerprint({
-          scorers: [{ ...JUDGE, name: 'llm_judge' }],
-          deciderVersions: null,
-          scorerModels: null,
-        })
-      ).toBe(
         scorerFingerprint({
           scorers: [JUDGE],
           deciderVersions: null,
           scorerModels: null,
         })
+      ).toBe(
+        'sha256:44098a7f1eaabe9d65653d0798b4d30c1af54035ace5cb47d6dc95d01a91c5ec'
       );
+    });
+
+    test('refuses a scorer without a name', () => {
+      const { name: _name, ...unnamed } = JUDGE;
+      expect(() => {
+        return scorerFingerprint({
+          scorers: [unnamed],
+          deciderVersions: null,
+          scorerModels: null,
+        });
+      }).toThrow('scorer has no name');
     });
 
     test('swapping the names of two scorers moves it', () => {

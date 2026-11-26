@@ -12,9 +12,9 @@ import { isPlainObject } from './plainObject';
 type StoredEval = { scorers: unknown; criteria: unknown };
 
 /**
- * The scorers an Eval write leaves, validated: the ones written, each named,
- * or, when the write names none, the ones stored, re-checked against a new
- * agent. Returns the scorers that stand.
+ * The scorers an Eval write leaves, validated: the ones written or, when the
+ * write names none, the ones stored, re-checked against a new agent. Returns
+ * the scorers that stand.
  */
 export const assertScorers = async (args: {
   written: unknown;
@@ -27,8 +27,6 @@ export const assertScorers = async (args: {
     validateScorers({
       scorers,
       agentHasOutputSchema: isPlainObject(args.agentOutputSchema),
-      // expand-contract: an agent swap re-checks scorers stored unnamed
-      names: args.written === undefined ? 'stored' : 'required',
     })
   );
   await validateScorerReferences({ scorers, projectId: args.projectId });

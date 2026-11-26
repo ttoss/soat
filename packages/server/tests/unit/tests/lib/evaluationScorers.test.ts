@@ -42,7 +42,7 @@ describe('evaluation scorers', () => {
     runEmbeddings?: EmbeddingScorerRunner;
   }): Promise<ScorerOutcome> => {
     const outcomes = await scoreOutput({
-      scorers: [args.scorer],
+      scorers: [{ name: String(args.scorer.type), ...args.scorer }],
       input: [{ role: 'user', content: 'hi' }],
       output: output(args.content, args.object),
       expectedOutput: args.expectedOutput ?? null,
@@ -62,7 +62,6 @@ describe('evaluation scorers', () => {
       return validateScorers({
         scorers,
         agentHasOutputSchema,
-        names: 'required',
       });
     };
 
@@ -1006,7 +1005,6 @@ describe('evaluation scorers', () => {
         return validateScorers({
           scorers: [config],
           agentHasOutputSchema: false,
-          names: 'required',
         });
       };
 

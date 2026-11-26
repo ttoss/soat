@@ -13,7 +13,6 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { validateCriteria } from './evaluationCriteria';
 import { evalStarts } from './evaluationScorerReferences';
-import { namedScorers } from './evaluationScorerValidation';
 import {
   assertValid,
   claimUpdate,
@@ -47,7 +46,7 @@ export const mapEval = (evaluation: EvalRow) => {
     name: evaluation.name,
     agent_id: evaluation.agent?.publicId,
     dataset_id: evaluation.dataset?.publicId,
-    scorers: namedScorers(evaluation.scorers),
+    scorers: evaluation.scorers,
     pass_threshold:
       evaluation.passThreshold === null
         ? null

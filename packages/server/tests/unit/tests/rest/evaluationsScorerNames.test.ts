@@ -192,8 +192,7 @@ describe('Evaluations — scorer names', () => {
     });
   });
 
-  // expand-contract: scorers stored before names were required
-  test('a stored scorer without a name still runs, keyed by its type', async () => {
+  test('a stored scorer without a name is refused at run start', async () => {
     const created = await createEval([
       { type: 'contains', name: 'mentions', value: 'refund' },
     ]);
@@ -202,10 +201,12 @@ describe('Evaluations — scorer names', () => {
       { where: { publicId: created.body.id } }
     );
 
-    const { results } = await run(created.body.id);
+    const res = await asUser()
+      .post(`/api/v1/evals/${created.body.id}/runs`)
+      .send({ wait: true });
 
-    expect(results[0]!.scores).toEqual([
-      expect.objectContaining({ scorer: 'contains', passed: true }),
-    ]);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    expect(res.body.error.message).toContain('scorers.0.name is required');
   });
 });
