@@ -75,7 +75,7 @@ export const SOAT_EVENTS = {
     'eval_runs.completed':
       'An eval run reached a terminal status with its items scored; the payload is the run, carrying the pass/fail verdict consumed by eval-gated promotion.',
     'eval_runs.failed':
-      'An eval run could not be executed to completion (infrastructure failure).',
+      'An eval run could not be executed to completion; the payload is the run, carrying the `error` that says why (e.g. `PROBE_FAILED`, `EVAL_RUN_ABANDONED`).',
   },
   exception: {
     'exceptions.created': 'An exception was filed.',
