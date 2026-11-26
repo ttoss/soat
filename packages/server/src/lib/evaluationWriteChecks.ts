@@ -13,7 +13,8 @@ type StoredEval = { scorers: unknown; criteria: unknown };
 
 /**
  * The scorers an Eval write leaves, validated: the ones written or, when the
- * write names none, the ones stored, re-checked against a new agent. Returns the scorers that stand.
+ * write names none, the ones stored, re-checked against a new agent. Returns
+ * the scorers that stand.
  */
 export const assertScorers = async (args: {
   written: unknown;

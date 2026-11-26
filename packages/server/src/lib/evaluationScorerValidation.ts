@@ -56,7 +56,10 @@ const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
  * The key a scorer's outcomes, aggregates and calibration go under: its name.
  */
 export const scorerOutcomeKey = (scorer: Record<string, unknown>): string => {
-  return String(scorer.name);
+  if (typeof scorer.name !== 'string') {
+    throw new Error('A scorer has no name to key its outcomes under.');
+  }
+  return scorer.name;
 };
 
 /**
