@@ -1289,7 +1289,9 @@ components:
         content_type:
           type: string
           nullable: true
-          description: MIME type of the file
+          description: >-
+            MIME type of the file: the declared one, else the one its bytes
+            show (PNG, JPEG, GIF, WebP, PDF); null when neither names one.
           example: 'application/pdf'
         size:
           type: integer

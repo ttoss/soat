@@ -6,6 +6,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { releaseContentBoundTagsOfMovedFile } from './contentBoundTags';
 import { resolveProjectPublicId } from './eventBus';
+import { resolveContentType } from './fileContentType';
 import { emitFileEvent, mapFile } from './fileEvents';
 import {
   type FileLifetime,
@@ -162,6 +163,10 @@ export const uploadFile = async (args: {
   const category = categoryFromPath(normalizedPath);
 
   await freeExpiredPath({ projectId: args.projectId, path: normalizedPath });
+  const { body, contentType } = await resolveContentType({
+    body: args.body,
+    contentType: args.contentType,
+  });
   // Create DB record first to get publicId for the storage location.
   let file;
   try {
@@ -169,8 +174,8 @@ export const uploadFile = async (args: {
       projectId: args.projectId,
       path: normalizedPath,
       filename,
-      contentType: args.contentType,
-      size: args.body.size,
+      contentType,
+      size: body.size,
       storageType: provider.storageType,
       storagePath: '', // filled in below after we know the publicId
       metadata: args.metadata,
@@ -186,8 +191,8 @@ export const uploadFile = async (args: {
     row: 'new',
     projectPublicId,
     category,
-    body: args.body,
-    contentType: args.contentType,
+    body,
+    contentType,
   });
 
   const mapped = mapFile(file);

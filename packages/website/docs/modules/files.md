@@ -29,7 +29,7 @@ Files belong to a project and are persisted through the configured backend (loca
 | `prefix`                    | string         | Directory within the project (e.g. `/assets`). Optional on write; defaults to `/` (root). Read-only on the record (derived from `path`).                                 |
 | `filename`                  | string         | Original / download name and the key's leaf segment (e.g. `logo.png`). Optional on write; defaults to the uploaded file's name.                                          |
 | `path`                      | string \| null | **Read-only.** Full key = `prefix` + `/` + `filename` (e.g. `/assets/logo.png`). Unique per project; the file's identity and the resource ID segment in path-based SRNs. |
-| `content_type`              | string         | MIME type                                                                                                                                                                |
+| `content_type`              | string \| null | MIME type: the declared one, else the one the bytes show (see [Content type](#content-type)); `null` when neither names one                                              |
 | `size`                      | number         | File size in bytes                                                                                                                                                       |
 | `metadata`                  | object         | Caller-owned annotations, stored as the object they were written as — see [Tags and metadata](iam.md#tags-and-metadata)                                                  |
 | `expires_at`                | string \| null | When the file is deleted; `null` never. See [Lifetime](#lifetime)                                                                                                        |
@@ -82,6 +82,10 @@ A file written with `expires_in` (seconds) or `expires_at` (a future instant, no
 - `PATCH` may set `delete_after`, never clear it.
 
 The file is never a document, so nothing it holds reaches [knowledge search](./knowledge.md). For the generation to keep no copy of its content, run it on an agent with [`trace_content_mode: none`](./traces.md#zero-retention-mode).
+
+### Content type
+
+An upload that declares no `content_type`, or declares `application/octet-stream`, is stored with the type its first bytes show when they are a PNG, JPEG, GIF or WebP image or a PDF, so a model the file reaches (a message part or a tool output) reads it natively. Bytes of any other type keep what was declared, `null` when nothing was. A declared type is always kept.
 
 ### Storage Backends
 
