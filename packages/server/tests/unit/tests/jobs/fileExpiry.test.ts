@@ -1,4 +1,5 @@
 import { sweepExpiredFiles } from 'src/lib/fileDeletion';
+import * as fileRemoval from 'src/lib/fileRemoval';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { captureEvents } from '../../fixtures/eventCapture';
@@ -57,6 +58,42 @@ describe('expired file sweep', () => {
     });
 
     expect(deleted).toContain(fileId);
+  });
+
+  test('without a clock, deletes what has expired by now', async () => {
+    const fileId = await upload({ filename: 'now.txt', expires_in: 3600 });
+    await authenticatedTestClient(adminToken)
+      .patch(`/api/v1/files/${fileId}/metadata`)
+      .send({ expires_at: new Date(Date.now() - 1000).toISOString() });
+
+    const deleted = await deletedIds(() => {
+      return sweepExpiredFiles();
+    });
+
+    expect(deleted).toContain(fileId);
+  });
+
+  test('a file whose deletion fails is left for the next sweep', async () => {
+    const fileId = await upload({ filename: 'retry.txt', expires_in: 60 });
+    const later = new Date(Date.now() + 120 * 1000);
+    // Drives the per-file failure branch; the rest of the sweep runs for real.
+    const removal = jest
+      .spyOn(fileRemoval, 'removeFile')
+      .mockRejectedValueOnce(new Error('storage unavailable'));
+    try {
+      const first = await deletedIds(() => {
+        return sweepExpiredFiles({ now: later });
+      });
+      expect(first).not.toContain(fileId);
+    } finally {
+      removal.mockRestore();
+    }
+
+    const second = await deletedIds(() => {
+      return sweepExpiredFiles({ now: later });
+    });
+
+    expect(second).toContain(fileId);
   });
 
   test('leaves a file whose expires_at is still ahead', async () => {

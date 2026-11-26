@@ -12,16 +12,23 @@ type FileRow = InstanceType<(typeof db)['File']>;
 
 /** Each deletion stands alone: one that fails is retried by the expiry sweep. */
 const removeEach = async (files: FileRow[]): Promise<number> => {
-  let removed = 0;
-  for (const file of files) {
-    try {
-      await removeFile({ file });
-      removed += 1;
-    } catch (error) {
-      log('removeEach: fileId=%s failed %o', file.publicId, error);
+  const results = await Promise.allSettled(
+    files.map((file) => {
+      return removeFile({ file });
+    })
+  );
+  for (const [index, result] of results.entries()) {
+    if (result.status === 'rejected') {
+      log(
+        'removeEach: fileId=%s failed %o',
+        files[index].publicId,
+        result.reason
+      );
     }
   }
-  return removed;
+  return results.filter((result) => {
+    return result.status === 'fulfilled';
+  }).length;
 };
 
 /**
@@ -44,28 +51,21 @@ export const deleteConsumedFiles = async (args: {
   return removeEach(files);
 };
 
-const SWEEP_BATCH = 100;
+/** Files one tick deletes; a larger backlog drains over the next ticks. */
+const SWEEP_BATCH = 500;
 
-/** Deletes every file whose `expires_at` has passed by `now`. */
+/** Deletes the files whose `expires_at` has passed by `now`, oldest first. */
 export const sweepExpiredFiles = async (args?: {
   now?: Date;
 }): Promise<number> => {
-  const now = args?.now ?? new Date();
-  let removed = 0;
-  for (;;) {
-    const due = await db.File.findAll({
-      where: { expiresAt: { [Op.lte]: now } },
-      order: [['expiresAt', 'ASC']],
-      limit: SWEEP_BATCH,
-      ...INCLUDING_EXPIRED_FILES,
-    });
-    if (due.length === 0) break;
-    const batch = await removeEach(due);
-    removed += batch;
-    // A batch that removed nothing would be read again unchanged.
-    if (batch === 0) break;
-  }
-  log('sweepExpiredFiles: removed=%d', removed);
+  const due = await db.File.findAll({
+    where: { expiresAt: { [Op.lte]: args?.now ?? new Date() } },
+    order: [['expiresAt', 'ASC']],
+    limit: SWEEP_BATCH,
+    ...INCLUDING_EXPIRED_FILES,
+  });
+  const removed = await removeEach(due);
+  log('sweepExpiredFiles: due=%d removed=%d', due.length, removed);
   return removed;
 };
 
