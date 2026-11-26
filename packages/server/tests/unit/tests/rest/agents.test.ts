@@ -2419,6 +2419,42 @@ describe('Agents', () => {
       expect(res.status).toBe(200);
       expect(res.body.tool_choice).toBeNull();
     });
+
+    // Generation reads an unrecognised value as no choice at all, so storing
+    // one would also hide a forcing intent from the stop-condition gate.
+    test.each([
+      ['a quoted string', '"required"'],
+      ['an unknown string', 'any'],
+      ['a number', 1],
+      ['an object naming no tool', { type: 'tool' }],
+      ['an object of an unknown type', { type: 'auto' }],
+    ])('rejects %s as tool_choice', async (_label, tool_choice) => {
+      const res = await createAgentWith({ tool_choice });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects an unrecognised tool_choice on update', async () => {
+      const created = await createAgentWith({});
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ tool_choice: '"required"' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects an unrecognised step rule tool_choice', async () => {
+      const res = await createAgentWith({
+        step_rules: [{ step: 1, tool_choice: '"required"' }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   describe('on_approval_expiry', () => {

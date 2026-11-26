@@ -1661,7 +1661,7 @@ components:
             is left of it, so a turn that arrives with nothing left completes
             with `stop_reason: "max_steps"` instead of calling the model again.
         tool_choice:
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`. A named tool must be one the agent offers under that resolved name, or the write (or, for names only a tool server lists, the generation) is refused with `AGENT_TOOL_NOT_OFFERED`.'
+          description: 'Tool choice strategy. Accepts `"auto"`, `"required"`, `"none"` or an object (`{ "type": "tool", "tool_name": "my_tool" }`); any other value is refused with `VALIDATION_FAILED`. A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`. A named tool must be one the agent offers under that resolved name, or the write (or, for names only a tool server lists, the generation) is refused with `AGENT_TOOL_NOT_OFFERED`.'
         stop_conditions:
           type: array
           nullable: true
@@ -2231,7 +2231,7 @@ components:
             Maximum agent loop steps per turn (default `20`).
           type: integer
         tool_choice:
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`. A named tool must be one the agent offers under that resolved name, or the write (or, for names only a tool server lists, the generation) is refused with `AGENT_TOOL_NOT_OFFERED`.'
+          description: 'Tool choice strategy. Accepts `"auto"`, `"required"`, `"none"` or an object (`{ "type": "tool", "tool_name": "my_tool" }`); any other value is refused with `VALIDATION_FAILED`. A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`. A named tool must be one the agent offers under that resolved name, or the write (or, for names only a tool server lists, the generation) is refused with `AGENT_TOOL_NOT_OFFERED`.'
         stop_conditions:
           type: array
           items:
@@ -2506,7 +2506,7 @@ components:
           type: integer
           nullable: true
         tool_choice:
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`. A named tool must be one the agent offers under that resolved name, or the write (or, for names only a tool server lists, the generation) is refused with `AGENT_TOOL_NOT_OFFERED`.'
+          description: 'Tool choice strategy. Accepts `"auto"`, `"required"`, `"none"` or an object (`{ "type": "tool", "tool_name": "my_tool" }`); any other value is refused with `VALIDATION_FAILED`. A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`. A named tool must be one the agent offers under that resolved name, or the write (or, for names only a tool server lists, the generation) is refused with `AGENT_TOOL_NOT_OFFERED`.'
         stop_conditions:
           type: array
           nullable: true
@@ -3239,8 +3239,9 @@ components:
             spans a `requires_action` pause.
         tool_choice:
           description: >-
-            Tool choice for this step — `auto`, `required`, `null`, or
-            `{ "type": "tool", "tool_name": "search" }`. Stored verbatim.
+            Tool choice for this step — `auto`, `required`, `none`, `null`, or
+            `{ "type": "tool", "tool_name": "search" }`. Any other value is
+            refused with `VALIDATION_FAILED`.
         active_tool_ids:
           x-soat-ref: tools
           type: array
