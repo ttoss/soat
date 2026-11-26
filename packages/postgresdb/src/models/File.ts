@@ -4,11 +4,25 @@ import {
   DataType,
   ForeignKey,
   Model,
+  Op,
+  Sequelize,
   Table,
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
+
+/**
+ * A file past its `expires_at` is gone to every read before the sweep deletes
+ * it. A find hook rather than a default scope: a scope's `where` would turn
+ * every `include` of a file into an inner join. Only the sweep and project
+ * teardown read expired rows, with `hooks: false`.
+ */
+const UNEXPIRED_FILE_WHERE = {
+  expiresAt: {
+    [Op.or]: [{ [Op.is]: null }, { [Op.gt]: Sequelize.literal('NOW()') }],
+  },
+};
 
 @Table({
   tableName: 'files',
@@ -28,6 +42,14 @@ import { Project } from './Project';
       fields: [{ name: 'tags', operator: 'jsonb_path_ops' }],
     },
     {
+      name: 'files_expires_at_idx',
+      fields: ['expires_at'],
+    },
+    {
+      name: 'files_consumed_by_generation_id_idx',
+      fields: ['consumed_by_generation_id'],
+    },
+    {
       name: 'files_project_id_path_unique',
       unique: true,
       fields: ['project_id', 'path'],
@@ -38,6 +60,11 @@ import { Project } from './Project';
       if (!instance.publicId) {
         instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.file);
       }
+    },
+    beforeFind: (options: { where?: unknown }) => {
+      options.where = options.where
+        ? { [Op.and]: [options.where, UNEXPIRED_FILE_WHERE] }
+        : UNEXPIRED_FILE_WHERE;
     },
   },
 })
@@ -89,6 +116,18 @@ export class File extends Model {
     defaultValue: {},
   })
   declare tags: Record<string, string> | null;
+
+  /** When the file is deleted; null never. */
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare expiresAt: Date | null;
+
+  /** `generation`: deleted when the generation that claims it settles. */
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare deleteAfter: 'generation' | null;
+
+  /** Public id of the generation that claimed a `deleteAfter` file. */
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare consumedByGenerationId: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

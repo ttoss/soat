@@ -884,6 +884,29 @@ echo "Token correctly rejected on reuse (409)."
 
 $SOAT_CLI delete-file --file-id "$TOKEN_FILE_ID"
 
+# 7c. A single-use file: it always expires, is never ingested, and is gone
+# from every read once its expires_at passes.
+echo "--- Single-use file ---"
+SINGLE_USE_RESP=$($SOAT_CLI upload-file-base64 \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --filename single-use.txt \
+  --content "$SMOKE_FILE_B64" \
+  --content_type text/plain \
+  --delete_after generation)
+SINGLE_USE_ID=$(printf '%s\n' "$SINGLE_USE_RESP" | jq -r '.id')
+SINGLE_USE_EXPIRES=$(printf '%s\n' "$SINGLE_USE_RESP" | jq -r '.expires_at')
+if [ "$SINGLE_USE_EXPIRES" = "null" ]; then
+  echo "ERROR: a single-use file was written without expires_at" >&2
+  exit 1
+fi
+expect_cli_error_status 409 ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$SINGLE_USE_ID"
+$SOAT_CLI update-file-metadata --file-id "$SINGLE_USE_ID" \
+  --expires_at 2000-01-01T00:00:00Z > /dev/null
+expect_cli_error_status 404 get-file --file-id "$SINGLE_USE_ID"
+echo "Single-use file refused ingestion and expired on request."
+
 # 8. Delete file
 echo "--- Deleting file ---"
 $SOAT_CLI delete-file --file-id "$FILE_ID"

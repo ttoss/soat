@@ -57,6 +57,13 @@ const messageParts = (message: unknown): unknown[] => {
     : [content].flat().flatMap(withToolResultParts);
 };
 
+/** Every part `messages` carry, a native tool result's parts included. */
+export const readInputParts = (
+  messages: readonly unknown[] | null | undefined
+): unknown[] => {
+  return (messages ?? []).flatMap(messageParts);
+};
+
 /**
  * The sorted set of part types `messages` carry: a string content is `text`,
  * and a `file` part is `image`, `audio`, `video` or `file` by its media type.
@@ -64,8 +71,7 @@ const messageParts = (message: unknown): unknown[] => {
 export const readInputModalities = (
   messages: readonly unknown[] | null | undefined
 ): InputModality[] => {
-  const modalities = (messages ?? [])
-    .flatMap(messageParts)
+  const modalities = readInputParts(messages)
     .map(partModality)
     .filter((modality): modality is InputModality => {
       return modality !== undefined;

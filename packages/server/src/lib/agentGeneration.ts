@@ -14,6 +14,7 @@ import { runStreamGeneration } from './agentStreamGeneration';
 import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
 import { SCORER_USAGE_SOURCE } from './evaluationToolScorer';
+import { isFileClaimRefusal } from './fileLifetime';
 import { type GenerationConversation } from './generationAttribution';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import {
@@ -196,9 +197,10 @@ const resolveContextAndRecord = async (
     idempotency: args.idempotency,
     parentCall: parentCallOf(args.authUser),
   }).catch((error) => {
-    // The one write failure that must not be swallowed: a claimed key means
-    // another request already owns this generation.
+    // Write failures that must not be swallowed: a claimed key or a claimed
+    // single-use file means another generation already owns it.
     if (args.idempotency && isUniqueViolation(error)) throw error;
+    if (isFileClaimRefusal(error)) throw error;
     log(
       'resolveContextAndRecord: failed to create generation record generationId=%s error=%s',
       ctx.generationId,

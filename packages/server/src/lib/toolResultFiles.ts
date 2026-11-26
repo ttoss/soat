@@ -1,7 +1,9 @@
 import type { JSONValue, Tool } from 'ai';
 
 import type { AuthUser } from '../Context';
+import { db } from '../db';
 import type { AgentAuthority } from './agentAuthority';
+import { claimSingleUseFiles } from './fileLifetime';
 import {
   type FileMessageContentPart,
   resolveFileContentPart,
@@ -52,19 +54,33 @@ export const toolOutputParts = (output: unknown): ToolOutputPart[] | null => {
 
 /**
  * Refuses a file a tool output returns that `authority` may not download, as
- * the result enters the turn; the input boundary sends what passes as a
- * native file part (`modelInputBoundary.ts`).
+ * the result enters the turn, and claims a single-use one for `generationId`;
+ * the input boundary sends what passes as a native file part
+ * (`modelInputBoundary.ts`).
  */
 export const assertToolOutputFilesReadable = async (args: {
   output: unknown;
   turnProjectId: number;
+  generationId: string;
   authority: WorkAuthority | null;
   authUser?: AuthUser;
   agentAuthority?: AgentAuthority;
 }): Promise<void> => {
+  const fileIds: string[] = [];
   for (const part of toolOutputParts(args.output) ?? []) {
-    if (part.type === 'file') await resolveFileContentPart({ ...args, part });
+    if (part.type !== 'file') continue;
+    await resolveFileContentPart({ ...args, part });
+    fileIds.push(part.file_id);
   }
+  if (fileIds.length === 0) return;
+  await db.sequelize.transaction((transaction) => {
+    return claimSingleUseFiles({
+      fileIds,
+      projectId: args.turnProjectId,
+      generationId: args.generationId,
+      transaction,
+    });
+  });
 };
 
 /** A client-submitted output as a tool result: a file output stays JSON. */
@@ -81,6 +97,7 @@ export const clientToolResultOutput = (
 export const withReadableFileOutputs = (args: {
   tools: Record<string, Tool>;
   turnProjectId: number;
+  generationId: string;
   authority: WorkAuthority | null;
 }): Record<string, Tool> => {
   return Object.fromEntries(
@@ -96,6 +113,7 @@ export const withReadableFileOutputs = (args: {
             await assertToolOutputFilesReadable({
               output,
               turnProjectId: args.turnProjectId,
+              generationId: args.generationId,
               authority: args.authority,
             });
             return output;

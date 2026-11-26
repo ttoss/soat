@@ -12,6 +12,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { toCitationPointers, type TurnCitations } from './citations';
+import { deleteConsumedFiles } from './fileDeletion';
 import { noteChainMemberSettled } from './generationChains';
 import { suppressContentWrites } from './generationContentSuppression';
 import {
@@ -247,6 +248,10 @@ export const settleGeneration = async (args: {
   });
   await Promise.allSettled([
     releaseSession({ sessionDbId: gen.sessionId, createdAt: gen.createdAt }),
+    // A pause keeps the files its turn reads again when it resumes.
+    ...(outcome.status === 'requires_action'
+      ? []
+      : [deleteConsumedFiles({ generationId })]),
     ...(args.effects?.() ?? []),
   ]);
   await emitSettled({ outcome, projectId: gen.projectId, generationId });

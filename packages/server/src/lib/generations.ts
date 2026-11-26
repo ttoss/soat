@@ -3,6 +3,7 @@ import { DomainError } from '../errors';
 import type { AttachedSource } from './attachedFileCitations';
 import { citationColumns } from './citations';
 import type { Transaction } from './dbTransaction';
+import { claimTurnFiles } from './fileLifetime';
 import {
   attributionColumns,
   conversationColumns,
@@ -171,6 +172,7 @@ const commitGenerationWithTrace = async (helperArgs: {
       },
       { transaction }
     );
+    await claimTurnFiles({ generation: args, transaction });
     await appendGenerationStarted({
       generationDbId: created.id as number,
       generationId: args.publicId,

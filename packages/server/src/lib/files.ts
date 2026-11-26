@@ -5,7 +5,13 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { releaseContentBoundTagsOfMovedFile } from './contentBoundTags';
-import { resolveProjectPublicId, type SoatEventTypeFor } from './eventBus';
+import { resolveProjectPublicId } from './eventBus';
+import { emitFileEvent, mapFile } from './fileEvents';
+import {
+  type FileLifetime,
+  NO_LIFETIME,
+  readStoredFileLifetimeUpdate,
+} from './fileLifetime';
 import { rethrowAsPathConflict } from './filePathConflict';
 import {
   assertCallerPath,
@@ -17,6 +23,7 @@ import {
   rebuildKey,
   type SystemPath,
 } from './filePaths';
+import { freeExpiredPath, removeFile } from './fileRemoval';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { categoryFromPath, persistFileBytes } from './fileStorageLayout';
 import { emptyPage, paginatedList } from './pagination';
@@ -28,7 +35,6 @@ import {
 import { hasPolicyConstraints } from './policyWhere';
 import { projectScopeWhere } from './projectScope';
 import { assertStorageQuota } from './quotaStorage';
-import { emitLoadedRecordEvent } from './recordEvents';
 import { bufferBody, type StorageBody } from './storageBody';
 import { nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, mergeTags } from './tags';
@@ -44,47 +50,6 @@ registerResourceFieldMap({
   pathColumn: { column: 'path' },
   tagsColumn: { column: 'tags' },
 });
-
-const mapFile = (file: InstanceType<(typeof db)['File']>) => {
-  return {
-    id: file.publicId,
-    // `path` is the full key (read-only): `prefix` + `/` + `filename`.
-    // `prefix` is its directory, `filename` its leaf / download name.
-    // storageType / storagePath are system-managed internals, not exposed.
-    prefix: prefixFromPath(file.path),
-    filename: file.filename ?? filenameFromPath(file.path),
-    path: file.path ?? undefined,
-    content_type: file.contentType,
-    size: file.size,
-    metadata: file.metadata ?? undefined,
-    tags: file.tags ?? undefined,
-    created_at: file.createdAt,
-    updated_at: file.updatedAt,
-  };
-};
-
-/**
- * Emits a file event whose `data` is the file as `GET` answers it, which names
- * its project where `mapFile` alone does not. Mapped from the instance in hand,
- * so a deleted file is announced as it stood.
- */
-const emitFileEvent = (args: {
-  type: SoatEventTypeFor<'file'>;
-  file: InstanceType<(typeof db)['File']>;
-  projectPublicId?: string;
-}): Promise<void> => {
-  const { file } = args;
-  return emitLoadedRecordEvent({
-    type: args.type,
-    projectId: file.projectId,
-    projectPublicId: args.projectPublicId,
-    resourceType: 'file',
-    resourceId: file.publicId,
-    load: ({ projectPublicId }) => {
-      return { ...mapFile(file), project_id: projectPublicId };
-    },
-  });
-};
 
 export const listFiles = async (args: {
   projectIds?: number[];
@@ -173,6 +138,7 @@ export const uploadFile = async (args: {
   path?: string;
   contentType?: string;
   metadata?: Record<string, unknown>;
+  lifetime?: FileLifetime;
 }) => {
   await assertStorageQuota({
     projectId: args.projectId,
@@ -195,6 +161,7 @@ export const uploadFile = async (args: {
 
   const category = categoryFromPath(normalizedPath);
 
+  await freeExpiredPath({ projectId: args.projectId, path: normalizedPath });
   // Create DB record first to get publicId for the storage location.
   let file;
   try {
@@ -207,6 +174,7 @@ export const uploadFile = async (args: {
       storageType: provider.storageType,
       storagePath: '', // filled in below after we know the publicId
       metadata: args.metadata,
+      ...(args.lifetime ?? NO_LIFETIME),
     });
   } catch (error) {
     throw rethrowAsPathConflict(error);
@@ -327,6 +295,9 @@ export const updateFileMetadata = async (args: {
   prefix?: string;
   /** New filename — renames the key's leaf and the download name. */
   filename?: string;
+  /** Raw `expires_at` / `delete_after`; `undefined` leaves each. */
+  expiresAt?: unknown;
+  deleteAfter?: unknown;
 }) => {
   const file = await db.File.findOne({ where: { publicId: args.id } });
 
@@ -336,7 +307,9 @@ export const updateFileMetadata = async (args: {
 
   assertCallerPath(file.path);
 
-  const updates: Record<string, unknown> = {};
+  const updates: Record<string, unknown> = {
+    ...(await readStoredFileLifetimeUpdate({ file, ...args })),
+  };
   if (args.metadata !== undefined) {
     updates.metadata = args.metadata;
   }
@@ -376,6 +349,7 @@ export const createFile = async (args: {
   contentType?: string;
   size?: number;
   metadata?: Record<string, unknown>;
+  lifetime?: FileLifetime;
 }) => {
   // Metadata-only, but the declared `size` is what the storage meter sums for
   // this row, so the cap has to see it like any other byte.
@@ -390,6 +364,7 @@ export const createFile = async (args: {
     buildPath({ prefix: args.prefix, filename: args.filename })
   );
   const provider = getActiveStorageProvider();
+  await freeExpiredPath({ projectId: args.projectId, path: normalizedPath });
   let file;
   try {
     file = await db.File.create({
@@ -399,6 +374,7 @@ export const createFile = async (args: {
       contentType: args.contentType,
       size: args.size,
       metadata: args.metadata,
+      ...(args.lifetime ?? NO_LIFETIME),
       storageType: provider.storageType,
       storagePath: '',
     });
@@ -431,14 +407,7 @@ export const deleteFile = async (args: { id: string }) => {
     );
   }
 
-  if (file.storagePath) {
-    const provider = getStorageProvider({ storageType: file.storageType });
-    await provider.delete({ storagePath: file.storagePath });
-  }
-
-  await file.destroy();
-
-  void emitFileEvent({ type: 'files.deleted', file });
+  await removeFile({ file });
 
   return true;
 };

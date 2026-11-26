@@ -138,6 +138,12 @@ paths:
                   example: 1024
                 metadata:
                   $ref: './metadata.yaml#/components/schemas/MetadataBag'
+                expires_in:
+                  $ref: '#/components/schemas/FileExpiresIn'
+                expires_at:
+                  $ref: '#/components/schemas/FileExpiresAt'
+                delete_after:
+                  $ref: '#/components/schemas/FileDeleteAfter'
       responses:
         '201':
           description: File created successfully
@@ -224,6 +230,17 @@ paths:
                   example: 'logo.png'
                 metadata:
                   $ref: './metadata.yaml#/components/schemas/MetadataBagText'
+                expires_in:
+                  type: string
+                  pattern: '^[0-9]+$'
+                  description: >-
+                    Seconds until the file is deleted, as the form field's
+                    text. Not with `expires_at`.
+                  example: '3600'
+                expires_at:
+                  $ref: '#/components/schemas/FileExpiresAt'
+                delete_after:
+                  $ref: '#/components/schemas/FileDeleteAfter'
       responses:
         '201':
           description: File uploaded successfully
@@ -784,6 +801,7 @@ paths:
       description: Updates the metadata field of a file
       operationId: updateFileMetadata
       x-raises:
+        - FILE_HAS_DEPENDENTS
         - FORBIDDEN
         - NAME_CONFLICT
         - RESERVED_PATH
@@ -820,6 +838,21 @@ paths:
                   type: string
                   description: New filename — renames the key's leaf and the download name.
                   example: 'renamed-file.txt'
+                expires_at:
+                  type: string
+                  format: date-time
+                  description: >-
+                    Moves the deletion earlier, or sets one on a file that has
+                    none; a past instant deletes the file at once. Never later,
+                    never cleared. Refused with `409 FILE_HAS_DEPENDENTS` on a
+                    file a document is made from.
+                  example: '2026-12-01T12:00:00Z'
+                delete_after:
+                  description: >-
+                    Makes the file single use. Never cleared. A file with no
+                    `expires_at` gets the deployment's single-use lifetime.
+                  allOf:
+                    - $ref: '#/components/schemas/FileDeleteAfter'
       responses:
         '200':
           description: Metadata updated successfully
@@ -1076,6 +1109,29 @@ components:
       scheme: bearer
       description: JWT token or sk_ api key
   schemas:
+    FileExpiresIn:
+      type: integer
+      minimum: 1
+      description: >-
+        Seconds until the file is deleted. Not with `expires_at`.
+      example: 3600
+    FileExpiresAt:
+      type: string
+      format: date-time
+      description: >-
+        When the file is deleted; in the future. Not with `expires_in`.
+      example: '2026-12-01T12:00:00Z'
+    FileDeleteAfter:
+      type: string
+      enum:
+        - generation
+      description: >-
+        `generation`: the file is single use. The first generation that reads
+        it claims it, another is refused with `409 FILE_CONSUMED`, and it is
+        deleted when that generation completes or fails. It is never ingested
+        and never a conversation turn's file. Without `expires_in` or
+        `expires_at` it gets the deployment's single-use lifetime.
+      example: 'generation'
     UploadFileBase64Request:
       type: object
       required:
@@ -1105,6 +1161,12 @@ components:
           example: 'text/plain'
         metadata:
           $ref: './metadata.yaml#/components/schemas/MetadataBag'
+        expires_in:
+          $ref: '#/components/schemas/FileExpiresIn'
+        expires_at:
+          $ref: '#/components/schemas/FileExpiresAt'
+        delete_after:
+          $ref: '#/components/schemas/FileDeleteAfter'
     PresignedUrlRequest:
       type: object
       additionalProperties: false
@@ -1139,6 +1201,16 @@ components:
             not exceed, the deployment's upload ceiling
             (`FILE_UPLOAD_MAX_BYTES`).
           example: 104857600
+        expires_in:
+          description: >-
+            Seconds the uploaded file lives, counted from the upload. Not with
+            `expires_at`.
+          allOf:
+            - $ref: '#/components/schemas/FileExpiresIn'
+        expires_at:
+          $ref: '#/components/schemas/FileExpiresAt'
+        delete_after:
+          $ref: '#/components/schemas/FileDeleteAfter'
     PresignedUrlResponse:
       type: object
       properties:
@@ -1228,6 +1300,31 @@ components:
           $ref: './metadata.yaml#/components/schemas/MetadataBag'
         tags:
           $ref: './tags.yaml#/components/schemas/TagBag'
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When the file is deleted; `null` never. Past it, every read
+            answers `404`.
+          example: '2026-12-01T12:00:00Z'
+        delete_after:
+          type: string
+          nullable: true
+          enum:
+            - generation
+            - null
+          description: >-
+            `generation`: single use, deleted when the generation that reads
+            it settles. `null` otherwise.
+          example: 'generation'
+        consumed_by_generation_id:
+          x-soat-ref: generations
+          type: string
+          nullable: true
+          readOnly: true
+          description: The generation that claimed a single-use file; `null` until one does.
+          example: 'gen_V1StGXR8Z5jdHi6B'
         created_at:
           type: string
           format: date-time

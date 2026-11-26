@@ -5,6 +5,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveProjectPublicId } from './eventBus';
+import { readFileLifetime } from './fileLifetime';
 import { assertCallerPath } from './filePaths';
 import { buildPath } from './files';
 import { getUploadMaxBytes } from './requestBounds';
@@ -57,6 +58,12 @@ export const createPresignedUrl = async (args: {
   contentType?: string;
   maxBytes?: number;
   ttlMs?: number;
+  /** Raw `expires_in` / `expires_at` / `delete_after` of the file to upload. */
+  fileLifetime?: {
+    expiresIn?: unknown;
+    expiresAt?: unknown;
+    deleteAfter?: unknown;
+  };
 }) => {
   log(
     'createPresignedUrl: projectId=%d prefix=%s filename=%s maxBytes=%s',
@@ -69,6 +76,9 @@ export const createPresignedUrl = async (args: {
   const ceiling = getUploadMaxBytes();
   const maxBytes = args.maxBytes ?? ceiling;
   assertMaxBytes({ maxBytes, ceiling });
+  const lifetime = args.fileLifetime ?? {};
+  // Refused now, when the issuer can correct it, not when the upload lands.
+  const issued = readFileLifetime(lifetime);
 
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? UPLOAD_TOKEN_TTL_MS));
 
@@ -83,6 +93,13 @@ export const createPresignedUrl = async (args: {
       buildPath({ prefix: args.prefix, filename: args.filename })
     ),
     expiresAt,
+    fileExpiresIn:
+      lifetime.expiresIn === undefined ? null : Number(lifetime.expiresIn),
+    fileExpiresAt:
+      lifetime.expiresAt === undefined || lifetime.expiresAt === null
+        ? null
+        : issued.expiresAt,
+    fileDeleteAfter: issued.deleteAfter,
   });
 
   log('createPresignedUrl: created token=%s', fingerprintToken(token.publicId));
@@ -181,6 +198,12 @@ export const consumeUploadToken = async (args: {
     })
   );
   assertUploadFits({ token, size: args.size, contentType: args.contentType });
+  // Counted from the upload, not from when the token was issued.
+  const lifetime = readFileLifetime({
+    expiresIn: token.fileExpiresIn ?? undefined,
+    expiresAt: token.fileExpiresAt?.toISOString(),
+    deleteAfter: token.fileDeleteAfter,
+  });
 
   const [marked] = await db.UploadToken.update(
     { usedAt: new Date() },
@@ -204,5 +227,6 @@ export const consumeUploadToken = async (args: {
     filename: token.filename,
     contentType: token.contentType ?? args.contentType,
     path: token.path ?? undefined,
+    lifetime,
   };
 };

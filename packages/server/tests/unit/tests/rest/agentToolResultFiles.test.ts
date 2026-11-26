@@ -1,3 +1,4 @@
+import { pollUntil } from '../../fixtures/agentToolTurn';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import {
   type ChatCompletionsStub,
@@ -188,6 +189,40 @@ describe('tool results that return files', () => {
       expect(sent).toContain(IMAGE_BASE64);
       expect(sent).toContain('image/png');
       expect(sent).not.toContain('soat-file:');
+    });
+
+    test('a single-use file it returns is claimed by the turn and deleted when it settles', async () => {
+      const agentId = await createAgent({
+        name: 'server single-use',
+        toolId: scanToolId,
+        modalities: ['text', 'image'],
+      });
+      const singleUse = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload/base64')
+        .send({
+          project_id: projectId,
+          filename: 'single-use-scan.png',
+          content: IMAGE_BASE64,
+          content_type: 'image/png',
+          delete_after: 'generation',
+        });
+      expect(singleUse.status).toBe(201);
+      scanReply = { type: 'file', file_id: singleUse.body.id };
+      stub.reply(
+        toolCallCompletion([{ id: 'call_scan', name: 'scan' }]),
+        textCompletion('A scan.')
+      );
+      stub.completions.length = 0;
+
+      const res = await generate({ token: adminToken, agentId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      expect(toolMessage(stub.completions[1])).toContain(IMAGE_BASE64);
+      const read = await authenticatedTestClient(adminToken).get(
+        `/api/v1/files/${singleUse.body.id}`
+      );
+      expect(read.status).toBe(404);
     });
 
     test('a model that cannot read the file is refused before it is called', async () => {
@@ -494,6 +529,77 @@ describe('tool results that return files', () => {
       const sent = toolMessage(stub.completions[0]);
       expect(sent).toContain(IMAGE_BASE64);
       expect(sent).toContain('Page one:');
+    });
+
+    test('a pause keeps a single-use file, and the settle deletes every one the turn claimed', async () => {
+      const agentId = await createAgent({
+        name: 'client single-use',
+        toolId: photographToolId,
+      });
+      const uploadSingleUse = async (filename: string): Promise<string> => {
+        const res = await authenticatedTestClient(adminToken)
+          .post('/api/v1/files/upload/base64')
+          .send({
+            project_id: projectId,
+            filename,
+            content: IMAGE_BASE64,
+            content_type: 'image/png',
+            delete_after: 'generation',
+          });
+        expect(res.status).toBe(201);
+        return res.body.id;
+      };
+      const asked = await uploadSingleUse('asked.png');
+      const returned = await uploadSingleUse('returned.png');
+      stub.reply(
+        toolCallCompletion([{ id: 'call_scan', name: 'photograph' }]),
+        textCompletion('A scan.')
+      );
+      const paused = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+        .send({
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Compare.' },
+                { type: 'file', file_id: asked },
+              ],
+            },
+          ],
+        });
+      expect(paused.body.status).toBe('requires_action');
+      const fileOf = (fileId: string) => {
+        return authenticatedTestClient(adminToken).get(
+          `/api/v1/files/${fileId}`
+        );
+      };
+      const held = await fileOf(asked);
+      expect(held.status).toBe(200);
+      expect(held.body.consumed_by_generation_id).toBe(paused.body.id);
+
+      const res = await submit({
+        token: adminToken,
+        agentId,
+        generationId: paused.body.id,
+        output: { type: 'file', file_id: returned },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      // A resumed turn settles after it answers.
+      const gone = (fileId: string) => {
+        return pollUntil({
+          read: async () => {
+            return (await fileOf(fileId)).status;
+          },
+          done: (status) => {
+            return status === 404;
+          },
+        });
+      };
+      expect(await gone(asked)).toBe(404);
+      expect(await gone(returned)).toBe(404);
     });
 
     test('a file in another project is not found', async () => {

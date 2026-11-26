@@ -14,6 +14,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { type Transaction } from './dbTransaction';
+import { INCLUDING_EXPIRED_FILES } from './expiredFiles';
 import { deleteStorageObjects } from './fileStorage';
 
 const log = createDebug('soat:projects');
@@ -296,9 +297,11 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
       }),
       db.Generation.findAll({ where: { projectId }, attributes: ['id'] }),
       db.Trace.findAll({ where: { projectId }, attributes: ['id'] }),
+      // An expired file the sweep has not reached is still a row.
       db.File.findAll({
         where: { projectId },
         attributes: ['id', 'storagePath', 'storageType'],
+        ...INCLUDING_EXPIRED_FILES,
       }),
       db.Agent.findAll({ where: { projectId }, attributes: ['id'] }),
     ]);

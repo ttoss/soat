@@ -84,6 +84,7 @@ A `user` message added with `file_ids` sends each [file](./files.md) to the mode
 
 - Each file must be in the conversation's project (another project's answers `404 RESOURCE_NOT_FOUND`), and the writer needs `files:DownloadFile` on it.
 - `file_ids` on an `assistant` message is `400 VALIDATION_FAILED`.
+- A [single-use file](./files.md#single-use-files) is `400 VALIDATION_FAILED`: every later turn would send it again.
 - The message stores the ids, not the bytes. A generation reads each file as its caller, and a model whose provider [declares](./ai-providers.md#input-modalities) it cannot read one refuses the turn with `400 INPUT_MODALITY_UNSUPPORTED`.
 
 ### Retrieval

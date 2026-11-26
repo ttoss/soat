@@ -18,6 +18,7 @@ import {
 } from './documentIngestionCore';
 import { countIndexedChunks } from './documentLoaders';
 import { mapDocument } from './documentMapper';
+import { assertIngestible } from './fileLifetime';
 import { assertFilePathFree } from './filePathConflict';
 import { normalizeCallerPath } from './filePaths';
 import {
@@ -98,6 +99,7 @@ const loadIngestibleFile = async (fileId: string) => {
   if (!file) {
     throw new DomainError('FILE_NOT_FOUND', `File '${fileId}' not found.`);
   }
+  assertIngestible(file);
 
   await assertFileTypeIngestible({
     fileId,

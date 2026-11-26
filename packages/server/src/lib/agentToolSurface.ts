@@ -96,12 +96,14 @@ const relayErrorsAsResults = (args: {
 const servedTools = (args: {
   merge: Parameters<typeof gateAndMergeBindings>[0];
   turnProjectId: number;
+  generationId: string;
   authority: WorkAuthority | null;
 }): Record<string, Tool> => {
   return relayErrorsAsResults({
     tools: withReadableFileOutputs({
       tools: gateAndMergeBindings(args.merge),
       turnProjectId: args.turnProjectId,
+      generationId: args.generationId,
       authority: args.authority,
     }),
   });
@@ -212,6 +214,7 @@ export const resolveAgentToolSurface = async (args: {
     tools: servedTools({
       merge: { bindings: [...bindings, ...knowledgeBindings], guardrail },
       turnProjectId: projectId,
+      generationId: args.generationId,
       authority: turnAuthority(args),
     }),
     unavailableToolNames: unavailable.names,

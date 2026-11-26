@@ -255,6 +255,11 @@
         }
       ]
     },
+    "FILE_CONSUMED": {
+      "http_status": 409,
+      "hint": "Upload the file again for this generation: a single-use file is read by one generation only.",
+      "routes": []
+    },
     "FILE_DOWNLOAD_URL_NOT_CONFIGURED": {
       "http_status": 500,
       "hint": "Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.",
@@ -268,6 +273,11 @@
     "FILE_NOT_FOUND": {
       "http_status": 400,
       "hint": "Fix the request and retry — the payload, parameters, or referenced ids are invalid. Compare the request against the operation in `/api/v1/openapi.json`.",
+      "routes": []
+    },
+    "FILE_NOT_INGESTIBLE": {
+      "http_status": 409,
+      "hint": "Upload a copy of the file without `expires_in`, `expires_at` or `delete_after` to ingest it.",
       "routes": []
     },
     "FILE_PARSE_FAILED": {
