@@ -24,7 +24,8 @@ type TaskAction =
   | 'tasks:ResumeTask'
   | 'tasks:SetTaskPriority'
   | 'tasks:SetTaskHold'
-  | 'tasks:UpdateTaskDependencies';
+  | 'tasks:UpdateTaskDependencies'
+  | 'tasks:UpdateTaskLinks';
 
 const taskNotFound = (id: string) => {
   return () => {

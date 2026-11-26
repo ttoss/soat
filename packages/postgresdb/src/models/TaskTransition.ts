@@ -10,6 +10,13 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Task } from './Task';
 
+export type TaskTransitionLink = {
+  action: 'added' | 'removed';
+  kind: string;
+  from_task_id: string;
+  to_task_id: string;
+};
+
 /**
  * Append-only history of a task's state changes. Every move — human, API,
  * automation outcome, approval resolution — writes exactly one row through
@@ -113,6 +120,11 @@ export class TaskTransition extends Model {
 
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare toWorkflowVersion: number | null;
+
+  // Set only on a link row, which records a link added or removed and leaves
+  // the state as it was.
+  @Column({ type: DataType.JSON, allowNull: true })
+  declare link: TaskTransitionLink | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

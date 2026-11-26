@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 
+import { DomainError } from '../errors';
 import { nullableInWhere } from './nullableFilter';
 import { firstPageOnly, paginatedList } from './pagination';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
@@ -9,6 +10,7 @@ import {
   compileStructuredWhere,
   type StructuredFilter,
 } from './structuredFilter';
+import { linkWhereSql } from './taskLinks';
 import {
   blockedWhereSql,
   readinessOf,
@@ -44,14 +46,43 @@ export type TaskListFilters = {
   blocked?: boolean;
   /** Only the transitive dependencies of this task, not the task itself. */
   upstreamOf?: string;
+  /**
+   * Only the tasks this task links to; `any` / `none`: those some task links
+   * to, or none does. `linkKind` narrows both link filters to one kind.
+   */
+  linkedFrom?: string;
+  /** Only the tasks linking to this task; `any` / `none` as `linkedFrom`. */
+  linkedTo?: string;
+  linkKind?: string;
   /** Structured question about the bag; see {@link compileStructuredWhere}. */
   metadata?: StructuredFilter;
 };
 
 type TaskOrder = NonNullable<Parameters<typeof db.Task.findAll>[0]>['order'];
 
+type ResolvedIds = {
+  upstreamOfId?: number;
+  linkedFromId?: number;
+  linkedToId?: number;
+};
+
+const linkFragments = (args: TaskListFilters & ResolvedIds) => {
+  const ends = [
+    { side: 'from' as const, end: args.linkedFrom, endId: args.linkedFromId },
+    { side: 'to' as const, end: args.linkedTo, endId: args.linkedToId },
+  ];
+  return ends.flatMap(({ side, end, endId }) => {
+    if (end === undefined) return [];
+    return [
+      db.sequelize.literal(
+        linkWhereSql({ side, end, endId, kind: args.linkKind })
+      ),
+    ];
+  });
+};
+
 const listWhere = (
-  args: TaskListFilters & { upstreamOfId?: number }
+  args: TaskListFilters & ResolvedIds
 ): Record<string, unknown> => {
   const where: Record<string, unknown> = projectScopeWhere({
     projectIds: args.projectIds,
@@ -82,6 +113,7 @@ const listWhere = (
       ...(args.upstreamOfId === undefined
         ? []
         : [db.sequelize.literal(upstreamWhereSql(args.upstreamOfId))]),
+      ...linkFragments(args),
     ],
   });
   return where;
@@ -96,15 +128,32 @@ const byPublicId = (publicId: string) => {
   return { where: { publicId }, attributes: ['id'] };
 };
 
+const taskIdOf = async (publicId: string | undefined) => {
+  if (publicId === undefined) return undefined;
+  return internalIdOf(await db.Task.findOne(byPublicId(publicId)));
+};
+
+/** A link end's internal id; `any` and `none` name no task. */
+const linkEndId = (end: string | undefined) => {
+  return end === 'any' || end === 'none' ? undefined : taskIdOf(end);
+};
+
 /** The `where` every task-list read applies, over the `Task` alias. */
 export const taskListWhere = async (
   args: TaskListFilters
 ): Promise<Record<string, unknown>> => {
+  if (args.linkKind !== undefined && !args.linkedFrom && !args.linkedTo) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      '`link_kind` narrows `linked_from` or `linked_to`, and neither was given.',
+      { parameter: 'link_kind' }
+    );
+  }
   const where = listWhere({
     ...args,
-    upstreamOfId: args.upstreamOf
-      ? internalIdOf(await db.Task.findOne(byPublicId(args.upstreamOf)))
-      : undefined,
+    upstreamOfId: await taskIdOf(args.upstreamOf),
+    linkedFromId: await linkEndId(args.linkedFrom),
+    linkedToId: await linkEndId(args.linkedTo),
   });
   if (args.workflowId) {
     where.workflowId = internalIdOf(
@@ -187,6 +236,9 @@ export const listTasks = async (
       assignee: args.assignee,
       blocked: args.blocked,
       upstreamOf: args.upstreamOf,
+      linkedFrom: args.linkedFrom,
+      linkedTo: args.linkedTo,
+      linkKind: args.linkKind,
       metadata: args.metadata,
     },
     where,

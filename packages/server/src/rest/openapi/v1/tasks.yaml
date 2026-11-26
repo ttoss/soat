@@ -26,7 +26,8 @@ paths:
     get:
       description: >-
         Lists tasks (the board query). Filter by workflow, state, status,
-        automation status, priority, assignee, `upstream_of` or `metadata` —
+        automation status, priority, assignee, `upstream_of`, links or
+        `metadata` —
         `GET /tasks?workflow_id=...&state=...` is one board column.
       tags:
         - Tasks
@@ -61,6 +62,9 @@ paths:
         - $ref: '#/components/parameters/TaskAssigneeFilter'
         - $ref: '#/components/parameters/TaskBlockedFilter'
         - $ref: '#/components/parameters/TaskUpstreamOf'
+        - $ref: '#/components/parameters/TaskLinkedFrom'
+        - $ref: '#/components/parameters/TaskLinkedTo'
+        - $ref: '#/components/parameters/TaskLinkKind'
         - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
         - name: order
           in: query
@@ -314,6 +318,9 @@ paths:
         - $ref: '#/components/parameters/TaskAssigneeFilter'
         - $ref: '#/components/parameters/TaskBlockedFilter'
         - $ref: '#/components/parameters/TaskUpstreamOf'
+        - $ref: '#/components/parameters/TaskLinkedFrom'
+        - $ref: '#/components/parameters/TaskLinkedTo'
+        - $ref: '#/components/parameters/TaskLinkKind'
         - $ref: './structured-filters.yaml#/components/parameters/MetadataQuery'
       responses:
         '200':
@@ -1430,9 +1437,244 @@ paths:
         '502':
           $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
 
+  /api/v1/tasks/{task_id}/links:
+    post:
+      description: >-
+        Links the task to `to_task_id`, a task in the same project, under a
+        `kind` the caller names. A link never affects either task's
+        readiness, and either may be closed. Adding the same link again
+        answers `200` with the existing one. Both tasks' history records it.
+      tags:
+        - Tasks
+      summary: Add a task link
+      operationId: addTaskLink
+      x-raises:
+        - FORBIDDEN
+        - TASK_LINK_SELF
+        - TASK_LINK_TARGET_NOT_FOUND
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: tasks:UpdateTaskLinks
+      x-iam-resource-type: task
+      parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
+        - name: task_id
+          in: path
+          required: true
+          description: The task the link starts from.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTaskLinkRequest'
+      responses:
+        '200':
+          description: The link already held; it is returned unchanged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLink'
+        '201':
+          description: The link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLink'
+        '400':
+          description: >-
+            The task names itself (`TASK_LINK_SELF`), `to_task_id` is missing
+            or in another project (`TASK_LINK_TARGET_NOT_FOUND`), or the body
+            is invalid
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: The task does not exist
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+    get:
+      description: >-
+        Lists the task's links in both directions, oldest first: `from_task`
+        is this task on a link it starts, `to_task` on one pointing at it.
+      tags:
+        - Tasks
+      summary: List a task's links
+      operationId: listTaskLinks
+      x-raises:
+        - FORBIDDEN
+        - INVALID_CURSOR
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: tasks:GetTask
+      x-iam-resource-type: task
+      parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
+        - name: task_id
+          in: path
+          required: true
+          description: The task whose links are listed.
+          schema:
+            type: string
+        - name: direction
+          in: query
+          required: false
+          description: >-
+            `out`: only the links this task starts; `in`: only those pointing
+            at it. Omitted, both.
+          schema:
+            type: string
+            enum: [out, in]
+        - name: kind
+          in: query
+          required: false
+          description: Only the links of this kind.
+          schema:
+            type: string
+            pattern: '^[a-z_]{1,32}$'
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The task's links
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TaskLink'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+
+  /api/v1/tasks/{task_id}/links/{kind}/{to_task_id}:
+    delete:
+      description: >-
+        Removes the task's `kind` link to `to_task_id`; answers `204` also
+        when there is none. Both tasks' history records the removal.
+      tags:
+        - Tasks
+      summary: Remove a task link
+      operationId: removeTaskLink
+      x-raises:
+        - FORBIDDEN
+        - TASK_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: tasks:UpdateTaskLinks
+      x-iam-resource-type: task
+      parameters:
+        - $ref: '#/components/parameters/WorkflowPin'
+        - name: task_id
+          in: path
+          required: true
+          description: The task the link starts from.
+          schema:
+            type: string
+        - name: kind
+          in: path
+          required: true
+          description: The link's kind.
+          schema:
+            type: string
+            pattern: '^[a-z_]{1,32}$'
+        - name: to_task_id
+          in: path
+          required: true
+          description: The task the link points to.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Link removed
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: The task does not exist
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+
   /api/v1/tasks/{task_id}/history:
     get:
-      description: Returns the append-only transition history of a task.
+      description: >-
+        Returns the append-only history of a task: its transitions, and the
+        links added to or removed from it.
       tags:
         - Tasks
       summary: Get task history
@@ -1602,6 +1844,38 @@ components:
       schema:
         type: string
         example: task_V1StGXR8Z5jdHi6B
+    TaskLinkedFrom:
+      name: linked_from
+      in: query
+      required: false
+      description: >-
+        Only the tasks this task links to. `any`: the tasks some task links
+        to; `none`: the tasks no task links to. An unknown id selects nothing.
+      schema:
+        type: string
+        example: task_V1StGXR8Z5jdHi6B
+    TaskLinkedTo:
+      name: linked_to
+      in: query
+      required: false
+      description: >-
+        Only the tasks linking to this task. `any`: the tasks that link to
+        some task; `none`: the tasks that link to none. An unknown id selects
+        nothing.
+      schema:
+        type: string
+        example: task_V1StGXR8Z5jdHi6B
+    TaskLinkKind:
+      name: link_kind
+      in: query
+      required: false
+      description: >-
+        Narrows `linked_from` and `linked_to` to links of this kind:
+        `linked_from=none&link_kind=supersedes` lists the tasks nothing
+        supersedes. Without either, a `400`.
+      schema:
+        type: string
+        pattern: '^[a-z_]{1,32}$'
     WorkflowPin:
       name: workflow_id
       in: query
@@ -1838,9 +2112,30 @@ components:
           type: integer
           nullable: true
           description: Set on a migration row only, the version the task moved onto.
+        link:
+          nullable: true
+          description: >-
+            Set on a link row only, which records a link added or removed on
+            either end and leaves the state as it was (`from_state` equals
+            `to_state`).
+          allOf:
+            - $ref: '#/components/schemas/TaskTransitionLink'
         created_at:
           type: string
           format: date-time
+    TaskTransitionLink:
+      type: object
+      required: [action, kind, from_task_id, to_task_id]
+      properties:
+        action:
+          type: string
+          enum: [added, removed]
+        kind:
+          type: string
+        from_task_id:
+          type: string
+        to_task_id:
+          type: string
     TaskGraph:
       type: object
       required: [data]
@@ -2038,6 +2333,56 @@ components:
           type: string
           nullable: true
           description: Why the task waits, returned as written.
+    TaskLink:
+      type: object
+      description: >-
+        A typed relation from `from_task` to `to_task` that never affects
+        either task's readiness. `(from_task, to_task, kind)` is its identity.
+      properties:
+        kind:
+          type: string
+        from_task:
+          $ref: '#/components/schemas/TaskDependencyEnd'
+        to_task:
+          $ref: '#/components/schemas/TaskDependencyEnd'
+        note:
+          type: string
+          nullable: true
+        created_by_principal_type:
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/PrincipalType'
+          description: Who added the link.
+        created_by_principal_id:
+          type: string
+          nullable: true
+        created_by_acts_for:
+          nullable: true
+          description: Whom `created_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
+        created_at:
+          type: string
+          format: date-time
+    AddTaskLinkRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - to_task_id
+        - kind
+      properties:
+        to_task_id:
+          type: string
+          description: The task the link points to, in the same project.
+        kind:
+          type: string
+          pattern: '^[a-z_]{1,32}$'
+          description: >-
+            The caller's name for the relation, such as `derived_from` or
+            `supersedes`.
+        note:
+          type: string
+          nullable: true
+          description: Returned as written.
     TaskTransitionOption:
       type: object
       required:
