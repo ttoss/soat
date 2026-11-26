@@ -153,6 +153,10 @@ export class EvalRun extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare erroredCount: number;
 
+  /** Why a `failed` run failed, `{ code, message, meta? }`; null otherwise. */
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: null })
+  declare error: Record<string, unknown> | null;
+
   /**
    * Public id of the trigger that started this run, when a trigger did
    * (the evaluations module doc — a nightly schedule pointed at an Eval).

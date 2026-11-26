@@ -54,6 +54,7 @@ export const mapEvalRun = (run: EvalRunRow) => {
     item_count: run.itemCount,
     completed_count: run.completedCount,
     errored_count: run.erroredCount,
+    error: run.error,
     metadata: run.metadata ?? undefined,
     started_at: run.startedAt,
     finished_at: run.finishedAt,

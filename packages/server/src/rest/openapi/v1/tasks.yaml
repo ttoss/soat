@@ -1798,6 +1798,24 @@ components:
             principal: the cause is carried by `generation_id` /
             `orchestration_run_id` / `tool_id`, one per dispatch kind — exactly
             one of which is set on an automation move.
+        acts_for:
+          type: object
+          nullable: true
+          description: >-
+            The opaque principal the mover acted for: the `principal` of the
+            IAM token that made the move, or the one an `On-Behalf-Of`
+            assertion carried, as when a `builtin` tool's `transition-task`
+            runs for a token's call. `principal_id` names the key that minted
+            the token. Null when the mover named none, and on `automation` and
+            `approval` moves.
+          required: [type, id]
+          properties:
+            type:
+              type: string
+              example: channel
+            id:
+              type: string
+              example: discord-dm-42
         generation_id:
           type: string
           nullable: true

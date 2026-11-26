@@ -12,6 +12,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { datasetItemOrder } from './evaluationDatasets';
 import { pinDeciderVersions } from './evaluationDeciderScorer';
 import { assertRunProbesHold } from './evaluationProbeRuns';
 import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
@@ -42,6 +43,7 @@ import { assertProjectAcceptsWork } from './projectPause';
 import { parseActiveRelease } from './releaseAssignment';
 import { resourceWorkAuthority } from './resourceWork';
 import { gateStart } from './startGate';
+import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { acceptStoredToolContext } from './toolContextCarrier';
 import { storedAuthority, type WorkAuthority } from './workAuthority';
 
@@ -247,11 +249,7 @@ const planRun = async (args: {
 
   const items = await db.DatasetItem.findAll({
     where: { datasetId: dataset.id as number },
-    // `id` breaks a `created_at` tie, so items run in insertion order.
-    order: [
-      ['createdAt', 'ASC'],
-      ['id', 'ASC'],
-    ],
+    order: datasetItemOrder,
   });
   assertRunnableItemCount({
     count: items.length,
@@ -324,7 +322,11 @@ const executeSyncRun = async (args: {
     await failEvalRun({
       run,
       projectId,
-      reason: error instanceof Error ? error.message : String(error),
+      error: toStoredError({
+        error,
+        opaque: INTERNAL_FAILURE,
+        label: 'executeSyncRun',
+      }),
     });
     throw error;
   }

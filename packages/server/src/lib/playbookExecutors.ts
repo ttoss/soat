@@ -148,6 +148,7 @@ const startWorkflow = async (args: StartArgs): Promise<ExecutorOutcome> => {
     principal: {
       kind: args.runAs.authority.principal.type,
       id: args.runAs.authority.principal.id,
+      actsFor: args.runAs.authority.actsFor,
     },
     authority: args.runAs.authority,
   });

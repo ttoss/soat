@@ -102,7 +102,10 @@ describe('Evaluations — probes', () => {
   const runOf = async (evalId: string, runId: string) => {
     const res = await asUser().get(`/api/v1/evals/${evalId}/runs/${runId}`);
     expect(res.status).toBe(200);
-    return res.body as { status: string };
+    return res.body as {
+      status: string;
+      error: { code: string; message: string; meta?: unknown } | null;
+    };
   };
 
   const runCount = async (evalId: string) => {
@@ -369,7 +372,13 @@ describe('Evaluations — probes', () => {
         ],
       });
       const runId = res.body.error.meta.eval_run_id as string;
-      expect((await runOf(evalId, runId)).status).toBe('failed');
+      const run = await runOf(evalId, runId);
+      expect(run.status).toBe('failed');
+      expect(run.error).toEqual({
+        code: 'PROBE_FAILED',
+        message: res.body.error.message,
+        meta: res.body.error.meta,
+      });
       expect(mockCreateGeneration).not.toHaveBeenCalled();
     });
 
@@ -384,7 +393,20 @@ describe('Evaluations — probes', () => {
 
       await drain();
 
-      expect((await runOf(evalId, res.body.id)).status).toBe('failed');
+      const run = await runOf(evalId, res.body.id);
+      expect(run.status).toBe('failed');
+      expect(run.error).toMatchObject({
+        code: 'PROBE_FAILED',
+        meta: {
+          eval_run_id: res.body.id,
+          failed: [
+            expect.objectContaining({
+              criterion: 'offers_cancellation',
+              index: 0,
+            }),
+          ],
+        },
+      });
       expect(mockCreateGeneration).not.toHaveBeenCalled();
     });
 
@@ -481,6 +503,11 @@ describe('Evaluations — probes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+      const runs = await asUser().get(`/api/v1/evals/${evalId}/runs`);
+      expect(runs.body.data[0]).toMatchObject({
+        status: 'failed',
+        error: { code: 'AI_PROVIDER_NOT_FOUND' },
+      });
       expect(mockCreateGeneration).not.toHaveBeenCalled();
     });
 

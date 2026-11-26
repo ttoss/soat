@@ -412,8 +412,14 @@ describe('Evaluations', () => {
 
     test('lists items oldest first', async () => {
       const listDataset = (await createDataset('ordered-items-suite')).id;
-      await addItem(listDataset, { input: [{ role: 'user', content: 'one' }] });
       await addItem(listDataset, { input: [{ role: 'user', content: 'two' }] });
+      const older = await addItem(listDataset, {
+        input: [{ role: 'user', content: 'one' }],
+      });
+      await db.sequelize.query(
+        `UPDATE dataset_items SET created_at = :at WHERE public_id = :id`,
+        { replacements: { at: new Date('2026-01-01T00:00:00Z'), id: older.id } }
+      );
 
       const res = await asUser().get(`/api/v1/datasets/${listDataset}/items`);
 
@@ -1456,7 +1462,7 @@ describe('Evaluations', () => {
       );
     });
 
-    test('items tied on created_at run in insertion order', async () => {
+    test('items tied on created_at run in the order the dataset lists them', async () => {
       const dataset = await createDataset('tied-items-suite');
       const tied = [
         await addItem(dataset.id, { input: [{ role: 'user', content: 't1' }] }),
@@ -1496,7 +1502,12 @@ describe('Evaluations', () => {
         return (call[0] as { messages: Array<{ content: string }> })
           .messages[0]!.content;
       });
-      expect(prompts).toEqual(['t1', 't2', 't3']);
+      const listed = await asUser().get(`/api/v1/datasets/${dataset.id}/items`);
+      expect(prompts).toEqual(
+        listed.body.data.map((item: { input: Array<{ content: string }> }) => {
+          return item.input[0]!.content;
+        })
+      );
     });
 
     test('runs tied on created_at page each row once, in one order', async () => {
@@ -2108,6 +2119,10 @@ describe('Evaluations', () => {
       await abandoned.reload();
       expect(abandoned.status).toBe('failed');
       expect(abandoned.finishedAt).not.toBeNull();
+      expect(abandoned.error).toMatchObject({
+        code: 'EVAL_RUN_ABANDONED',
+        meta: { result_count: 0, item_count: 2 },
+      });
     });
 
     // The opposite treatment: every measurement is present, so the run is
@@ -2331,6 +2346,7 @@ describe('Evaluations', () => {
         status: 'failed',
         verdict: null,
         aggregate_scores: null,
+        error: { code: 'EVAL_RUN_ABANDONED' },
       });
     });
 

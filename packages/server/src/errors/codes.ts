@@ -109,6 +109,16 @@ export const ERROR_CODES = {
     description:
       "Recorded on an eval result, never returned by a request: a scorer could not grade the item's output for a reason no more specific code names. The item is excluded from the aggregates rather than scored 0.",
   },
+  EVAL_RUN_DEFINITION_MISSING: {
+    httpStatus: 500,
+    description:
+      "Recorded as a failed eval run's `error`, never returned by a request: the run recorded no definition to score its items by, so it settled `failed` rather than read the eval's current scorers.",
+  },
+  EVAL_RUN_ABANDONED: {
+    httpStatus: 500,
+    description:
+      "Recorded as a failed eval run's `error`, never returned by a request: the run went quiet past the reaper's grace period with items missing and no outstanding work, so nothing would complete it. `meta.result_count` is how many items have a result and `meta.item_count` how many the run has.",
+  },
   PROBE_FAILED: {
     httpStatus: 400,
     description:

@@ -10,6 +10,13 @@ import { lexicalContentIndex } from '../utils/lexicalIndex';
  */
 const LEXICALLY_SEARCHED_TABLES = ['document_chunks', 'memory_contents'];
 
+/**
+ * Tables an earlier migration creates without the index. The runner probes
+ * every pending migration before running any, so one of these missing now
+ * still needs this migration once that one has run.
+ */
+const CREATED_BY_EARLIER_MIGRATION = new Set(['memory_contents']);
+
 type Context = {
   columnExists: (args: { table: string; column: string }) => Promise<boolean>;
 };
@@ -34,7 +41,10 @@ export const lexicalGinIndexes = defineMigration({
       })
     );
     for (const table of LEXICALLY_SEARCHED_TABLES) {
-      if (!(await indexable({ context, table }))) continue;
+      if (!(await indexable({ context, table }))) {
+        if (CREATED_BY_EARLIER_MIGRATION.has(table)) return false;
+        continue;
+      }
       if (!names.has(lexicalContentIndex({ table }).name)) return false;
     }
     return true;

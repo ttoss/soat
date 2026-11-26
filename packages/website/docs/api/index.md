@@ -113,9 +113,10 @@ Work that fails after its request has answered records the error body without
 `hint` and `docs_url` — `{ code, message, meta? }` — in its `error` field: a
 generation and its trace, a transcript's tool result, an orchestration run or
 node, a trigger firing, a decision, a playbook execution or export, a document's
-ingestion, an eval result, and a formation, its operations and their events. The
-events that report a failure (`generations.failed`,
-`documents.ingest_failed`, `tasks.automation_retrying`) carry the same object.
+ingestion, an eval run or result, and a formation, its operations and their
+events. The events that report a failure (`generations.failed`,
+`documents.ingest_failed`, `eval_runs.failed`, `tasks.automation_retrying`)
+carry the same object.
 `code` is always a key of the catalog, so `error.code` reads the same way
 everywhere.
 
@@ -123,7 +124,7 @@ A failure the platform names keeps its code, message and `meta`. Any other
 records `INTERNAL_ERROR` with the constant message, its detail in the server log
 only — except where the failure's own words are what the record is read for:
 a generation (`GENERATION_FAILED`), a document's ingestion (`INGESTION_FAILED`),
-an eval item (`GENERATION_FAILED`, or `EVAL_SCORING_FAILED` for a scorer) and a
+an eval item (`GENERATION_FAILED`, or `EVAL_SCORING_FAILED` for a scorer, on an item or a probe) and a
 transcript's tool result (`TOOL_CALL_FAILED`) keep the thrown message under
 their own code.
 

@@ -79,6 +79,7 @@ import { pinnedVersionsRequired } from './2026-11-24-pinnedVersionsRequired';
 import { evalRunScorerModels } from './2026-11-25-evalRunScorerModels';
 import { scorerNamesRequired } from './2026-11-25-scorerNamesRequired';
 import { lexicalGinIndexes } from './2026-11-26-lexicalGinIndexes';
+import { taskTransitionActsFor } from './2026-11-26-taskTransitionActsFor';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -178,5 +179,6 @@ export const MIGRATIONS: Migration[] = [
   evalCriteria,
   evalRunScorerModels,
   scorerNamesRequired,
+  taskTransitionActsFor,
   lexicalGinIndexes,
 ];

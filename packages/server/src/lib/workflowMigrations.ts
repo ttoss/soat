@@ -123,6 +123,7 @@ const settleItem = async (args: {
       principal: {
         kind: row.createdByPrincipalType as TaskPrincipalKind,
         id: row.createdByPrincipalId,
+        actsFor: null,
       },
     });
     return { ...item, status: 'migrated', error: null };
@@ -218,7 +219,7 @@ export const startWorkflowMigration = async (args: {
   toVersion: number;
   stateMap?: Record<string, string>;
   wait: boolean;
-  principal: TaskPrincipal;
+  principal: Pick<TaskPrincipal, 'kind' | 'id'>;
   /** Whether the caller may migrate this task; one it may not is refused. */
   mayMigrate: MayMigrate;
 }) => {

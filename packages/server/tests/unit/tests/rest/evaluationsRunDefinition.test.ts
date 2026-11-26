@@ -246,6 +246,7 @@ describe('Evaluations — a run records its agent and definition', () => {
       evidence: { required_groups: ['refusal'] },
     });
     const expected = {
+      error: null,
       agent_id: firstAgentId,
       definition: {
         scorers: [{ type: 'contains', name: 'contains', value: 'refund' }],
@@ -376,6 +377,10 @@ describe('Evaluations — a run records its agent and definition', () => {
     const run = await readRun(evalId, runId);
     expect(run.status).toBe('failed');
     expect(run.agent_id).toBe(doomedAgentId);
+    expect(run.error).toMatchObject({
+      code: 'AGENT_NOT_FOUND',
+      meta: { agent_id: doomedAgentId },
+    });
   });
 
   test('a live run with no recorded definition fails rather than read its Eval', async () => {
@@ -389,7 +394,9 @@ describe('Evaluations — a run records its agent and definition', () => {
     await drainEvalQueueOnce();
 
     expect(mockCreateGeneration).not.toHaveBeenCalled();
-    expect((await readRun(evalId, runId)).status).toBe('failed');
+    const run = await readRun(evalId, runId);
+    expect(run.status).toBe('failed');
+    expect(run.error.code).toBe('EVAL_RUN_DEFINITION_MISSING');
   });
 
   test('an item never moves back to running a run a sibling item settled', async () => {

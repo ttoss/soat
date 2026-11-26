@@ -1399,6 +1399,7 @@ paths:
         - DECIDER_TOOL_NOT_CALLABLE
         - DECISION_ANSWER_INVALID
         - EMBEDDING_NOT_CONFIGURED
+        - EVAL_RUN_DEFINITION_MISSING
         - EVAL_SCORING_FAILED
         - EXPRESSION_FAILED
         - FILE_CONSUMED
@@ -3295,6 +3296,17 @@ components:
           type: integer
         errored_count:
           type: integer
+        error:
+          allOf:
+            - $ref: './errors.yaml#/components/schemas/StoredError'
+          nullable: true
+          description: >-
+            Why a `failed` run failed: `PROBE_FAILED` (`meta` naming each probe
+            in `failed`), a scorer's own code when it cannot grade a probe,
+            `AGENT_NOT_FOUND` when the run's agent was deleted,
+            `EVAL_RUN_DEFINITION_MISSING`, `EVAL_RUN_ABANDONED`, or the code of
+            the failure that stopped a synchronous run. Null on any other
+            status.
         metadata:
           description: >-
             The caller-owned key/value metadata supplied when the run was

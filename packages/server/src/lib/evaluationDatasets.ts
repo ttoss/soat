@@ -21,7 +21,12 @@ import {
 } from './evaluationValidation';
 import { getGenerationTurn } from './generationTurn';
 import type { ResourceIncludes } from './modelIncludes';
-import { type Page, paginatedList } from './pagination';
+import {
+  type ListOrder,
+  type Page,
+  paginatedList,
+  totalListOrder,
+} from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { assertStorageQuota, contentBytes, jsonBytes } from './quotaStorage';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -412,6 +417,11 @@ export const createDatasetItemFromGeneration = async (args: {
   );
 };
 
+const DATASET_ITEM_ORDER: ListOrder = [['createdAt', 'ASC']];
+
+/** The order a dataset's items are listed in, and a run replays them in. */
+export const datasetItemOrder = totalListOrder({ order: DATASET_ITEM_ORDER });
+
 export const listDatasetItems = async (args: {
   projectIds?: number[];
   datasetId: string;
@@ -433,7 +443,7 @@ export const listDatasetItems = async (args: {
       datasetId: args.datasetId,
     },
     where: { datasetId: dataset.id as number },
-    order: [['createdAt', 'ASC']],
+    order: DATASET_ITEM_ORDER,
     query: ({ where: pageWhere, limit, order }) => {
       return db.DatasetItem.findAll({
         where: pageWhere,

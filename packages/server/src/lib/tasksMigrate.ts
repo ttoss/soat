@@ -239,6 +239,7 @@ const performMigrationTxn = async (args: {
         fromWorkflowVersion: fromVersion,
         toWorkflowVersion: a.toVersion,
       },
+      actsFor: a.principal.actsFor,
       transaction: t,
     });
     return { fromState, fromVersion };

@@ -2,6 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import type { ActsFor } from './actsFor';
 import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
@@ -49,6 +50,8 @@ export type TaskPrincipal = {
    * `generationId` / `orchestrationRunId`.
    */
   id: string | null;
+  /** Whom the principal moved the task for: `actsForOf` its request. */
+  actsFor: ActsFor | null;
 };
 
 export type ActiveDispatch = {
@@ -418,6 +421,7 @@ const insertTask = async (args: CreateTaskArgs) => {
       orchestrationRunId: null,
       note: null,
     },
+    actsFor: args.principal.actsFor,
   });
 
   return finalizeCreatedTask({
