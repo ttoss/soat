@@ -119,6 +119,7 @@ describe('model input limits', () => {
     name: string;
     model: string;
     modelInputLimits?: unknown;
+    instructions?: string;
   }): Promise<string> => {
     const provider = await createProvider(args);
     expect(provider.status).toBe(201);
@@ -128,6 +129,7 @@ describe('model input limits', () => {
         project_id: projectId,
         name: args.name,
         ai_provider_id: provider.body.id,
+        ...(args.instructions ? { instructions: args.instructions } : {}),
       });
     expect(res.status).toBe(201);
     return res.body.id;
@@ -307,6 +309,29 @@ describe('model input limits', () => {
         part: { message_index: 0, part_index: 1, file_id: imageFileId },
       });
       expect(stub.calls()).toBe(before);
+    });
+
+    test('indexes the part among the messages, not the instructions', async () => {
+      const agentId = await agentOn({
+        name: 'instructed image reader',
+        model: 'instructed-image-model',
+        modelInputLimits: {
+          'instructed-image-model': {
+            max_bytes: { image: IMAGE_BYTES.length - 1 },
+          },
+        },
+        instructions: 'Describe images.',
+      });
+
+      const res = await generate({ agentId, fileIds: [imageFileId] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INPUT_LIMIT_EXCEEDED');
+      expect(res.body.error.meta.part).toEqual({
+        message_index: 0,
+        part_index: 1,
+        file_id: imageFileId,
+      });
     });
 
     test('sends a file within its limits', async () => {
