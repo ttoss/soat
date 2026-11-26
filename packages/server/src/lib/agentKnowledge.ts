@@ -323,6 +323,7 @@ const writeMemoryAsAgent = async (
       // question from who claimed the fact.
       principalType: 'agent',
       principalId: args.agentId,
+      actsFor: args.authority?.actsFor ?? null,
     },
   });
   return { action: result.action, memoryId: result.entry.id };

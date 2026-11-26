@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import { principalColumns } from './principals';
 import {
   GENERATION_CONTENT_FIELDS,
   resolveAgentTraceContentMode,
@@ -45,11 +46,13 @@ export const suppressContentWrites = async (args: {
   // Stamped once. A row already marked keeps its original timestamp, matching
   // the idempotence a purge guarantees.
   if (args.alreadyRedacted) return;
-  args.updates.contentRedactedAt = new Date();
-  args.updates.contentRedactedByPrincipalType =
-    ZERO_RETENTION_PRINCIPAL.principalType;
-  args.updates.contentRedactedByPrincipalId =
-    ZERO_RETENTION_PRINCIPAL.principalId;
+  Object.assign(args.updates, {
+    contentRedactedAt: new Date(),
+    ...principalColumns({
+      prefix: 'contentRedactedBy',
+      principal: ZERO_RETENTION_PRINCIPAL,
+    }),
+  });
 };
 
 /**

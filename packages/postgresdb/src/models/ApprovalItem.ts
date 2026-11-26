@@ -183,6 +183,13 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare resolvedByPrincipalId: string | null;
 
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare resolvedByActsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare resolvedByActsForId: string | null;
+
   @Column({ type: DataType.TEXT, allowNull: true })
   declare resolutionReason: string | null;
 

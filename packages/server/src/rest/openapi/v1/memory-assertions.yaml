@@ -95,6 +95,11 @@ components:
         principal_id:
           type: string
           example: agent_V1StGXR8Z5jdHi6B
+        acts_for:
+          nullable: true
+          description: Whom the principal acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         outcome:
           type: string
           enum: [created, superseded, skipped, retracted]

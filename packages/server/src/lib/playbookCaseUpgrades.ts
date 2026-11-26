@@ -20,7 +20,11 @@ import type { PlaybookDefinition } from './playbookDefinition';
 import { assertNotOwnWork } from './playbookSelfWrite';
 import type { PlaybookCaseSnapshot } from './playbookState';
 import { playbookUpgradeDiff } from './playbookUpgrade';
-import { createdByColumns, type RequestPrincipal } from './principals';
+import {
+  createdByColumns,
+  type RequestPrincipal,
+  servedPrincipal,
+} from './principals';
 
 const log = createDebug('soat:playbookCases');
 
@@ -37,8 +41,11 @@ const mapPlaybookUpgrade = (args: {
     from_version: row.fromVersion,
     to_version: row.toVersion,
     diff: row.diff,
-    created_by_principal_type: row.createdByPrincipalType,
-    created_by_principal_id: row.createdByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'createdBy',
+      wire: 'created_by_',
+    }),
     on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };

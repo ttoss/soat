@@ -2081,6 +2081,7 @@ describe('Triggers', () => {
       expect(res.body.acted_as).toEqual({
         principal_type: 'user',
         principal_id: expect.stringMatching(/^user_/),
+        acts_for: null,
       });
     });
 
@@ -2120,6 +2121,7 @@ describe('Triggers', () => {
       expect(fired.body.acted_as).toEqual({
         principal_type: 'api_key',
         principal_id: fullKey.id,
+        acts_for: null,
       });
     });
 
@@ -2651,6 +2653,7 @@ describe('Triggers', () => {
       expect(firing.acted_as).toEqual({
         principal_type: 'trigger',
         principal_id: trigger.body.id,
+        acts_for: null,
       });
     });
 

@@ -56,7 +56,8 @@ workflowMigrationsRouter.post(
       state_map?: Record<string, string>;
       wait?: boolean;
     };
-    const { principalType, principalId } = requestPrincipalFromCtx(ctx);
+    const { principalType, principalId, actsFor } =
+      requestPrincipalFromCtx(ctx);
 
     ctx.status = 201;
     ctx.body = await startWorkflowMigration({
@@ -64,7 +65,7 @@ workflowMigrationsRouter.post(
       toVersion: body.to_version,
       stateMap: body.state_map,
       wait: body.wait === true,
-      principal: { kind: principalType, id: principalId },
+      principal: { kind: principalType, id: principalId, actsFor },
       mayMigrate: async (task) => {
         const check = {
           action: 'tasks:MigrateTask',

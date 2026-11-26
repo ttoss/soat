@@ -204,6 +204,7 @@ describe('Playbook case upgrades', () => {
           diff: { added: ['contact'], removed: [], changed: [] },
           created_by_principal_type: 'user',
           created_by_principal_id: expect.stringMatching(/^user_/),
+          created_by_acts_for: null,
           on_behalf_of: null,
           created_at: expect.any(String),
         },

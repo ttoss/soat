@@ -2,11 +2,12 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type { ActsFor } from './actsFor';
 import { redactEvalResultOutputs } from './evaluationPurge';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
-import type { ActingPrincipalType } from './principals';
+import { type ActingPrincipalType, principalColumns } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import type { SoatEventTypeFor, SoatResourceType } from './soatEvents';
@@ -40,12 +41,12 @@ const traces = makeResourceAccessor<InstanceType<(typeof db)['Trace']>>({
 
 /**
  * The principal that performed a purge, resolved from the request's auth
- * context by the route handler — never read off a request body. Mirrors the
- * shape `Generation.startedByPrincipal*` already uses.
+ * context by the route handler — never read off a request body.
  */
 export type RedactionPrincipal = {
   principalType: ActingPrincipalType | 'system';
   principalId: string;
+  actsFor: ActsFor | null;
 };
 
 const redactionColumns = (args: {
@@ -54,8 +55,10 @@ const redactionColumns = (args: {
 }) => {
   return {
     contentRedactedAt: args.redactedAt,
-    contentRedactedByPrincipalType: args.principal.principalType,
-    contentRedactedByPrincipalId: args.principal.principalId,
+    ...principalColumns({
+      prefix: 'contentRedactedBy',
+      principal: args.principal,
+    }),
   };
 };
 

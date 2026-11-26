@@ -19,7 +19,11 @@ import { caseAuthority, executeClaimed } from './playbookExecutionWork';
 import { executorInput } from './playbookExecutors';
 import { nodesByKey } from './playbookGraph';
 import type { PlaybookNodeView } from './playbookState';
-import { createdByColumns, type RequestPrincipal } from './principals';
+import {
+  createdByColumns,
+  type RequestPrincipal,
+  servedPrincipal,
+} from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 import { storedAuthority } from './workAuthority';
 
@@ -47,8 +51,11 @@ export const mapPlaybookExecution = (args: {
     output: row.output ?? null,
     output_revision: row.outputRevision,
     error: row.error,
-    created_by_principal_type: row.createdByPrincipalType,
-    created_by_principal_id: row.createdByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'createdBy',
+      wire: 'created_by_',
+    }),
     on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
     finished_at: row.finishedAt,

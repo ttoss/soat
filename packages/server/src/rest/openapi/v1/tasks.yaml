@@ -1801,7 +1801,6 @@ components:
             `orchestration_run_id` / `tool_id`, one per dispatch kind — exactly
             one of which is set on an automation move.
         acts_for:
-          type: object
           nullable: true
           description: >-
             The opaque principal the mover acted for: the `principal` of the
@@ -1810,14 +1809,8 @@ components:
             runs for a token's call. `principal_id` names the key that minted
             the token. Null when the mover named none, and on `automation` and
             `approval` moves.
-          required: [type, id]
-          properties:
-            type:
-              type: string
-              example: channel
-            id:
-              type: string
-              example: discord-dm-42
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         generation_id:
           type: string
           nullable: true
@@ -2024,6 +2017,11 @@ components:
         created_by_principal_id:
           type: string
           nullable: true
+        created_by_acts_for:
+          nullable: true
+          description: Whom `created_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         created_at:
           type: string
           format: date-time

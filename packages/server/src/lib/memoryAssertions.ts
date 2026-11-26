@@ -6,6 +6,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { ownerActorWhere } from 'src/lib/actorOwnership';
+import { type ActsFor, actsForColumns, servedActsFor } from 'src/lib/actsFor';
 import type { Transaction } from 'src/lib/dbTransaction';
 import {
   emptyPage,
@@ -36,6 +37,8 @@ export type MemoryAssertionSource = {
   generationId?: string | null;
   principalType: ActingPrincipalType | 'agent';
   principalId: string;
+  /** Whom the asserter acted for: its request's or its turn's. */
+  actsFor: ActsFor | null;
 };
 
 type AssertionRow = InstanceType<(typeof db)['MemoryAssertion']> & {
@@ -120,6 +123,10 @@ const mapAssertion = (
     generation_id: linkedPublicId(instance.generation),
     principal_type: instance.principalType,
     principal_id: instance.principalId,
+    acts_for: servedActsFor({
+      type: instance.actsForType,
+      id: instance.actsForId,
+    }),
     outcome: instance.outcome,
     similarity: instance.similarity ?? null,
     declared: instance.declared,
@@ -251,6 +258,7 @@ export const writeAssertedMemory = async <
         ruleId: assertion.source.ruleId ?? null,
         principalType: assertion.source.principalType,
         principalId: assertion.source.principalId,
+        ...actsForColumns(assertion.source.actsFor),
         outcome: assertion.outcome,
         similarity: assertion.similarity,
         declared: assertion.declared ?? false,

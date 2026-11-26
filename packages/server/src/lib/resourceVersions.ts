@@ -2,7 +2,7 @@ import type { Model } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { type Page, paginatedList } from './pagination';
-import type { RequestPrincipal } from './principals';
+import { type RequestPrincipal, servedPrincipal } from './principals';
 import type { VersionStore } from './resourceVersionStore';
 import type { Writer } from './writerRule';
 
@@ -53,6 +53,8 @@ export type ArchivedVersionRow = Model & {
   label: string | null;
   createdByPrincipalType: string | null;
   createdByPrincipalId: string | null;
+  createdByActsForType: string | null;
+  createdByActsForId: string | null;
   createdAt: Date;
 };
 
@@ -157,6 +159,8 @@ export const mapArchivedVersionFields = (row: {
   label: string | null;
   createdByPrincipalType: string | null;
   createdByPrincipalId: string | null;
+  createdByActsForType: string | null;
+  createdByActsForId: string | null;
   createdAt: Date;
 }) => {
   return {
@@ -164,8 +168,11 @@ export const mapArchivedVersionFields = (row: {
     version: row.version,
     config: row.config,
     label: row.label,
-    created_by_principal_type: row.createdByPrincipalType,
-    created_by_principal_id: row.createdByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'createdBy',
+      wire: 'created_by_',
+    }),
     created_at: row.createdAt,
   };
 };

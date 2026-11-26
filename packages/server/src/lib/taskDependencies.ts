@@ -5,11 +5,13 @@ import { DomainError } from '../errors';
 import { lockForTransaction } from './advisoryLocks';
 import type { Transaction } from './dbTransaction';
 import { paginatedList } from './pagination';
+import { createdByColumns, servedPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { freedAmong } from './taskReadiness';
 import {
   findTaskInstance,
   presentTask,
+  recordedTaskPrincipal,
   taskIncludes,
   type TaskInstance,
   type TaskPrincipal,
@@ -37,8 +39,11 @@ const mapDependency = (row: DependencyRow) => {
     task: taskRef(row.task!),
     depends_on_task: taskRef(row.dependsOnTask!),
     note: row.note,
-    created_by_principal_type: row.createdByPrincipalType,
-    created_by_principal_id: row.createdByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'createdBy',
+      wire: 'created_by_',
+    }),
     created_at: row.createdAt,
   };
 };
@@ -194,8 +199,7 @@ export const addTaskDependency = async (args: {
         taskId: task.id as number,
         dependsOnTaskId: dependsOn.id as number,
         note: args.note ?? null,
-        createdByPrincipalType: args.principal.kind,
-        createdByPrincipalId: args.principal.id,
+        ...createdByColumns(recordedTaskPrincipal(args.principal)),
       },
       { transaction: t }
     );

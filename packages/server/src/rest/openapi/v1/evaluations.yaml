@@ -3477,7 +3477,7 @@ components:
             `PUT /api/v1/evals/{eval_id}/runs/{eval_run_id}/results/{eval_result_id}/label`;
             null when nobody labeled it. `passed` stays what the scorers said.
           required:
-            [passed, note, labeled_by_principal_type, labeled_by_principal_id, labeled_at]
+            [passed, note, labeled_by_principal_type, labeled_by_principal_id, labeled_by_acts_for, labeled_at]
           properties:
             passed:
               type: boolean
@@ -3493,6 +3493,11 @@ components:
             labeled_by_principal_id:
               type: string
               example: user_V1StGXR8Z5jdHi6B
+            labeled_by_acts_for:
+              nullable: true
+              description: Whom `labeled_by_principal_*` acted for.
+              allOf:
+                - $ref: './principals.yaml#/components/schemas/ActsFor'
             labeled_at:
               type: string
               format: date-time

@@ -370,6 +370,11 @@ components:
             the record names which key acted. `retention_sweep` or
             `zero_retention` for `system`.
           example: user_V1StGXR8Z5jdHi6B
+        content_redacted_by_acts_for:
+          nullable: true
+          description: Whom `content_redacted_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         created_at:
           type: string
           format: date-time
@@ -435,6 +440,11 @@ components:
             the record names which key acted. `retention_sweep` or
             `zero_retention` for `system`.
           example: user_V1StGXR8Z5jdHi6B
+        content_redacted_by_acts_for:
+          nullable: true
+          description: Whom `content_redacted_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         children:
           type: array
           description: Child traces triggered by sub-agent calls from this trace

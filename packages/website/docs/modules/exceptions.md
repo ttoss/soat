@@ -42,7 +42,9 @@ Exceptions are **auto-filed** (or filed as `manual`); there is no public create 
 | `agent_id` | string \| null | Associated agent |
 | `guardrail_version` | string \| null | `<guardrailId>@<version>` for a `guardrail_tripwire` item |
 | `acknowledged_by_principal_type` / `acknowledged_by_principal_id` | string \| null | Who acknowledged it: `user` (`user_…`) or `api_key` (the key's own `key_…`) |
+| `acknowledged_by_acts_for` | object \| null | `{ type, id }` the acknowledger [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `resolved_by_principal_type` / `resolved_by_principal_id` | string \| null | Who resolved it, in the same shape |
+| `resolved_by_acts_for` | object \| null | `{ type, id }` the resolver [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `resolution_note` | string \| null | Optional note recorded at resolution |
 | `created_at` / `updated_at` | string | Timestamps |
 

@@ -174,6 +174,7 @@ export const seedGoldenCorpus = async (args: {
         mechanism: 'api',
         principalType: 'user',
         principalId: 'user_seed',
+        actsFor: null,
       },
     });
     // `writeMemory` deduplicates against the most similar existing entry

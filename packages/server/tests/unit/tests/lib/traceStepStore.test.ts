@@ -122,7 +122,11 @@ describe('traceStepStore', () => {
 
     await purgeTraceContent({
       traceId,
-      principal: { principalType: 'system', principalId: 'test' },
+      principal: {
+        principalType: 'system',
+        principalId: 'test',
+        actsFor: null,
+      },
     });
     await writeTraceStep({
       target,
@@ -151,7 +155,11 @@ describe('traceStepStore', () => {
       }),
       purgeTraceContent({
         traceId,
-        principal: { principalType: 'system', principalId: 'test' },
+        principal: {
+          principalType: 'system',
+          principalId: 'test',
+          actsFor: null,
+        },
       }),
     ]);
 

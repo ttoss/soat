@@ -94,6 +94,7 @@ describe('GET /api/v1/generations/:generation_id acts_for', () => {
     expect(generation.acted_as).toEqual({
       principal_type: 'api_key',
       principal_id: keyId,
+      acts_for: principal,
     });
     expect(generation.acts_for).toEqual(principal);
   });

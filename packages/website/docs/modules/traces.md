@@ -37,6 +37,7 @@ Every agent generation records a trace: the model's steps, tool invocations, inp
 | `content_redacted_at` | string \| null | When the trace's content was purged; `null` while content is intact                |
 | `content_redacted_by_principal_type` | string \| null | [Principal](./audit-log.md#principals) that purged the content: `user`, `api_key`, or `system` |
 | `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth     |
+| `content_redacted_by_acts_for` | object \| null | `{ type, id }` that principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `created_at`      | string         | ISO 8601 creation timestamp                                                            |
 
 ## Key Concepts

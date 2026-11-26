@@ -1,3 +1,4 @@
+import { type ActsFor, actsForColumns, actsForOf } from './actsFor';
 import {
   type ActingPrincipal,
   storedAuthority,
@@ -37,6 +38,8 @@ export type ActingPrincipalType = ActingPrincipal['type'];
 export type RequestPrincipal = {
   principalType: ActingPrincipal['type'];
   principalId: string;
+  /** Whom the principal acted for: `actsForOf` its request. */
+  actsFor: ActsFor | null;
 };
 
 /**
@@ -44,12 +47,15 @@ export type RequestPrincipal = {
  * principal its terms state. Every record naming who acted derives it here,
  * never from `authUser.id`, which is a key's owner.
  */
-export const principalFromAuthUser = (authUser: {
-  terms: { principal: ActingPrincipal };
-}): RequestPrincipal => {
+export const principalFromAuthUser = (
+  authUser: { terms: { principal: ActingPrincipal } } & Parameters<
+    typeof actsForOf
+  >[0]
+): RequestPrincipal => {
   return {
     principalType: authUser.terms.principal.type,
     principalId: authUser.terms.principal.id,
+    actsFor: actsForOf(authUser),
   };
 };
 
@@ -61,6 +67,7 @@ export const principalOfAuthority = (
     ? {
         principalType: authority.principal.type,
         principalId: authority.principal.id,
+        actsFor: authority.actsFor,
       }
     : null;
 };
@@ -101,17 +108,45 @@ export const actedAsPrincipalColumns = (args: {
   };
 };
 
-/** The `createdByPrincipal*` column pair, the same mapping as `startedBy`. */
-export const createdByColumns = (
-  principal: RequestPrincipal | null
-): {
-  createdByPrincipalType: string | null;
-  createdByPrincipalId: string | null;
-} => {
+/** Any principal a record names, with whom it acted for. */
+export type RecordedPrincipal = {
+  principalType: PrincipalType;
+  principalId: string | null;
+  actsFor: ActsFor | null;
+};
+
+type PrincipalColumns<P extends string> = {
+  [
+    K in
+      | `${P}PrincipalType`
+      | `${P}PrincipalId`
+      | `${P}ActsForType`
+      | `${P}ActsForId`
+  ]: string | null;
+};
+
+/**
+ * The columns naming who did a thing as `prefix` (`createdBy`, `resolvedBy`):
+ * the principal and whom it acted for, written together so no record stores
+ * one without the other. All null when the write records no principal.
+ */
+export const principalColumns = <P extends string>(args: {
+  prefix: P;
+  principal: RecordedPrincipal | null;
+}): PrincipalColumns<P> => {
+  const { prefix, principal } = args;
+  const { actsForType, actsForId } = actsForColumns(principal?.actsFor ?? null);
   return {
-    createdByPrincipalType: principal?.principalType ?? null,
-    createdByPrincipalId: principal?.principalId ?? null,
-  };
+    [`${prefix}PrincipalType`]: principal?.principalType ?? null,
+    [`${prefix}PrincipalId`]: principal?.principalId ?? null,
+    [`${prefix}ActsForType`]: actsForType,
+    [`${prefix}ActsForId`]: actsForId,
+  } as PrincipalColumns<P>;
+};
+
+/** The `createdBy*` columns. */
+export const createdByColumns = (principal: RecordedPrincipal | null) => {
+  return principalColumns({ prefix: 'createdBy', principal });
 };
 
 /** What a turn starts under, and who its tool calls act as. */
@@ -134,4 +169,27 @@ export const startedWorkColumns = async (
     ...actedAsPrincipalColumns({ principal, agentId: args.actsAsAgent }),
     authority: await storedAuthority(args),
   };
+};
+
+type ServedPrincipal<W extends string> = {
+  [K in `${W}principal_type` | `${W}principal_id`]: string | null;
+} & { [K in `${W}acts_for`]: ActsFor | null };
+
+/**
+ * The wire fields of a stored principal (`wire` `created_by_` for `prefix`
+ * `createdBy`): its type, its id and whom it acted for, served together.
+ */
+export const servedPrincipal = <P extends string, W extends string>(args: {
+  row: PrincipalColumns<P>;
+  prefix: P;
+  wire: W;
+}): ServedPrincipal<W> => {
+  const { row, prefix, wire } = args;
+  const type = row[`${prefix}ActsForType`];
+  const id = row[`${prefix}ActsForId`];
+  return {
+    [`${wire}principal_type`]: row[`${prefix}PrincipalType`],
+    [`${wire}principal_id`]: row[`${prefix}PrincipalId`],
+    [`${wire}acts_for`]: type && id ? { type, id } : null,
+  } as ServedPrincipal<W>;
 };

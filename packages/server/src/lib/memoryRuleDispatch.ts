@@ -3,6 +3,7 @@ import { MEMORY_RULE_EVENTS } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type { ActsFor } from './actsFor';
 import { readGeneratedMessageContent } from './conversationMessages';
 import { conversationProvenanceTags } from './conversationSystemTags';
 import type { SoatEvent } from './eventBus';
@@ -18,6 +19,7 @@ import {
 import { findHandlerAgentIds, findMemoryRulesForEvent } from './memoryRules';
 import { isPlainObject } from './plainObject';
 import { stripSystemTagKeys } from './tags';
+import { parseWorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:memoryRules');
 
@@ -135,6 +137,8 @@ const writeCandidates = async (args: {
   turn: HandlerTurn;
   /** The conversation's owner, whose memory each fact is; null for none. */
   ownerActorId: number | null;
+  /** Whom the turn acted for, the agent's assertion's `acts_for`. */
+  actsFor: ActsFor | null;
 }): Promise<RuleFiringSummary> => {
   const summary = emptySummary(args.facts.length);
   const memoryStoreId = args.rule.memoryStoreId;
@@ -165,6 +169,7 @@ const writeCandidates = async (args: {
           // decides what the corpus accepts, the agent is whose turn said it.
           principalType: 'agent',
           principalId: args.turn.agentPublicId,
+          actsFor: args.actsFor,
         },
       });
       summary[result.action] += 1;
@@ -224,6 +229,11 @@ const loadGeneration = async (
   })) as GenerationRow | null;
 };
 
+/** Whom the turn's starter acted for, read off its stored authority. */
+const turnActsFor = (generation: GenerationRow): ActsFor | null => {
+  return parseWorkAuthority(generation.authority)?.actsFor ?? null;
+};
+
 /**
  * Runs every memory rule a completed turn matches. Reached only through the
  * subscription below, whose `types` filter admits nothing but
@@ -281,6 +291,7 @@ const dispatchMemoryRules = async (event: SoatEvent): Promise<void> => {
       facts,
       turn,
       ownerActorId: conversationOwnerOf(generation),
+      actsFor: turnActsFor(generation),
     });
 
     log(

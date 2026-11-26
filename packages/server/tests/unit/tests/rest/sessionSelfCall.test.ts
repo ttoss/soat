@@ -137,6 +137,7 @@ describe('Session self-call', () => {
     expect(generation.body.acted_as).toEqual({
       principal_type: 'user',
       principal_id: userId,
+      acts_for: null,
     });
   };
 

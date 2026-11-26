@@ -1201,13 +1201,18 @@ components:
             (`trigger`, under its `policy_ids`), or the caller of a manual
             fire (under the caller's grant ∩ `policy_ids`). Null for a firing
             refused before it was dispatched.
-          required: [principal_type, principal_id]
+          required: [principal_type, principal_id, acts_for]
           properties:
             principal_type:
               $ref: './principals.yaml#/components/schemas/PrincipalType'
             principal_id:
               type: string
               example: trg_V1StGXR8Z5jdHi6B
+            acts_for:
+              nullable: true
+              description: Whom the principal acted for.
+              allOf:
+                - $ref: './principals.yaml#/components/schemas/ActsFor'
         started_at:
           type: string
           format: date-time

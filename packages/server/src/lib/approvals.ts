@@ -11,7 +11,11 @@ import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import { emptyPage, type Page, pageOf, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
-import type { RequestPrincipal } from './principals';
+import {
+  principalColumns,
+  type RequestPrincipal,
+  servedPrincipal,
+} from './principals';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { toolReferences } from './resourceReferences';
 import type { SoatEventTypeFor } from './soatEvents';
@@ -100,8 +104,11 @@ export const mapApproval = (instance: ApprovalInstance) => {
     task_transition: instance.taskTransition,
     policy_version: instance.policyVersion,
     previous_item_id: instance.previousItemId,
-    resolved_by_principal_type: instance.resolvedByPrincipalType,
-    resolved_by_principal_id: instance.resolvedByPrincipalId,
+    ...servedPrincipal({
+      row: instance,
+      prefix: 'resolvedBy',
+      wire: 'resolved_by_',
+    }),
     resolution_reason: instance.resolutionReason,
     edited_arguments: instance.editedArguments,
     created_at: instance.createdAt,
@@ -742,16 +749,19 @@ const assertEditMatchesToolSchema = async (args: {
 const claimResolution = async (args: {
   item: ApprovalInstance;
   verb: string;
+  resolvedBy: RequestPrincipal;
   fields: {
     status: 'approved' | 'rejected';
-    resolvedByPrincipalType: string;
-    resolvedByPrincipalId: string;
     editedArguments?: object | null;
     resolutionReason?: string;
   };
 }): Promise<void> => {
   const now = new Date();
-  const [claimed] = await db.ApprovalItem.update(args.fields, {
+  const fields = {
+    ...args.fields,
+    ...principalColumns({ prefix: 'resolvedBy', principal: args.resolvedBy }),
+  };
+  const [claimed] = await db.ApprovalItem.update(fields, {
     where: {
       id: args.item.id,
       status: 'pending',
@@ -832,10 +842,9 @@ export const approveApproval = async (args: {
   await claimResolution({
     item,
     verb: 'approved',
+    resolvedBy: args.resolvedBy,
     fields: {
       status: 'approved',
-      resolvedByPrincipalType: args.resolvedBy.principalType,
-      resolvedByPrincipalId: args.resolvedBy.principalId,
       editedArguments: args.editedArguments ?? null,
     },
   });
@@ -872,10 +881,9 @@ export const rejectApproval = async (args: {
   await claimResolution({
     item,
     verb: 'rejected',
+    resolvedBy: args.resolvedBy,
     fields: {
       status: 'rejected',
-      resolvedByPrincipalType: args.resolvedBy.principalType,
-      resolvedByPrincipalId: args.resolvedBy.principalId,
       resolutionReason: args.reason,
     },
   });

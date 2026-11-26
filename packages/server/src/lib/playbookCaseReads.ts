@@ -13,6 +13,7 @@ import {
   type PlaybookMissingInput,
   playbookMissingInputs,
 } from './playbookMissing';
+import { servedPrincipal } from './principals';
 
 const log = createDebug('soat:playbookCases');
 
@@ -119,8 +120,11 @@ const mapEntry = (row: InstanceType<(typeof db)['PlaybookEntry']>) => {
     value: row.value,
     basis: row.basis,
     playbook_version: row.playbookVersion,
-    created_by_principal_type: row.createdByPrincipalType,
-    created_by_principal_id: row.createdByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'createdBy',
+      wire: 'created_by_',
+    }),
     on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
   };

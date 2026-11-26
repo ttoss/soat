@@ -196,6 +196,13 @@ export class MemoryAssertion extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare principalId: string;
 
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare actsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare actsForId: string | null;
+
   @Column({ type: DataType.STRING(16), allowNull: false })
   declare outcome: MemoryAssertionOutcome;
 

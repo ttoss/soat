@@ -62,6 +62,7 @@ An immutable archive of a guardrail's configuration at one version; same shape a
 | `config`       | object  | The versioned surface at that version — today `{ document }` and nothing else |
 | `label`        | string  | Optional human tag, e.g. `tightened`; null when unset                   |
 | `created_by_principal_type` / `created_by_principal_id` | string | Who produced this version: `user` (`user_…`) or `api_key` (the key's own `key_…`); null when there was none |
+| `created_by_acts_for` | object \| null | `{ type, id }` that principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `created_at`   | string  | ISO 8601 timestamp                                                          |
 
 Only the `document` is versioned; name, description and the context binding are metadata. One version number denotes one policy, which is what an [evaluation record](#evaluation-audit-record) cites.

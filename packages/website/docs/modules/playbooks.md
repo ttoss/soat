@@ -97,6 +97,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `basis`                                                 | object \| null | The revision of each input an output, confirmation or rejection was decided on                 |
 | `playbook_version`                                      | integer        | The version the case was on when it was written                                                |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who wrote it: `user` or `api_key` and its id; null for an output the case wrote                |
+| `created_by_acts_for` | object \| null | `{ type, id }` that principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `on_behalf_of`                                          | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 
 ### Execution
@@ -116,6 +117,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `output_revision`                                       | integer \| null | The revision of the output entry it wrote; null when it wrote none                             |
 | `error`                                                 | object \| null  | Why it failed                                                                                  |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null  | Who asked for the run; null when the case started it                                           |
+| `created_by_acts_for` | object \| null | `{ type, id }` that principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `on_behalf_of`                                          | object \| null  | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`                                           | string \| null  | ISO 8601 settle timestamp                                                                      |
 
@@ -136,6 +138,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `file_id`                                               | string \| null | The [file](./files.md); null until it succeeds, and once the file is deleted                   |
 | `error`                                                 | object \| null | Why it failed                                                                                  |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who asked for the export                                                                       |
+| `created_by_acts_for` | object \| null | `{ type, id }` that principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `on_behalf_of`                                          | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `finished_at`                                           | string \| null | ISO 8601 settle timestamp                                                                      |
 
@@ -149,6 +152,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `to_version`                                            | integer        | The version it moved to                                                                                                                                                                                        |
 | `diff`                                                  | object         | `{ added, removed, changed }`: node IDs added and removed, and each node, by `node_id`, whose `executor` or inputs changed, every input with its `change` (`added`, `removed`, `source`, `schema`, `required`) |
 | `created_by_principal_type` / `created_by_principal_id` | string \| null | Who upgraded the case                                                                                                                                                                                          |
+| `created_by_acts_for` | object \| null | `{ type, id }` that principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `on_behalf_of`                                          | object \| null | The tool call it was written for ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call))                                                                                                                 |
 
 ## Key Concepts

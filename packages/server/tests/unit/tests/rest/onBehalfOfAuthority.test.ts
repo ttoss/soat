@@ -268,15 +268,15 @@ describe('On-Behalf-Of authority', () => {
       const entry = (
         entries.body.data as Array<{
           action: string;
-          detail: Record<string, unknown> | null;
+          acts_for: { type: string; id: string } | null;
         }>
       ).find((candidate) => {
         return (
           candidate.action === 'documents:GetDocument' &&
-          candidate.detail?.on_behalf_of_principal !== undefined
+          candidate.acts_for !== null
         );
       });
-      expect(entry?.detail?.on_behalf_of_principal).toEqual(PRINCIPAL);
+      expect(entry?.acts_for).toEqual(PRINCIPAL);
     });
   });
 

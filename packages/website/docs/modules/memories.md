@@ -82,6 +82,7 @@ One row per write attempt, append-only, whatever the write resolved to.
 | `generation_id` | `string \| null` | The turn that asserted the fact; `null` on the `api` and `formation` doors |
 | `principal_type` | `string` | [Principal](./audit-log.md#principals) that claimed it: `user` or `api_key` on the `api` and `formation` doors, `agent` on the agent doors |
 | `principal_id` | `string` | The principal's public ID                             |
+| `acts_for` | object \| null | `{ type, id }` the principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `outcome`    | `string` | `created`, `superseded`, `skipped` or `retracted` (open set) |
 | `similarity` | `number \| null` | The cosine the outcome was decided against — the top match's, or the declared target's when `declared` is true; `null` when there was nothing to compare against, and on a retraction, which compares nothing |
 | `declared`   | `boolean` | Whether the caller named the memory this write replaced (`supersedes`) instead of the thresholds choosing one |

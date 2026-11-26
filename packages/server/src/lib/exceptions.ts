@@ -5,7 +5,11 @@ import { DomainError } from '../errors';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { type Page, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
-import type { RequestPrincipal } from './principals';
+import {
+  principalColumns,
+  type RequestPrincipal,
+  servedPrincipal,
+} from './principals';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -123,10 +127,16 @@ export const mapException = (instance: ExceptionInstance) => {
     node_id: instance.nodeId,
     agent_id: instance.agentId,
     guardrail_version: instance.guardrailVersion,
-    acknowledged_by_principal_type: instance.acknowledgedByPrincipalType,
-    acknowledged_by_principal_id: instance.acknowledgedByPrincipalId,
-    resolved_by_principal_type: instance.resolvedByPrincipalType,
-    resolved_by_principal_id: instance.resolvedByPrincipalId,
+    ...servedPrincipal({
+      row: instance,
+      prefix: 'acknowledgedBy',
+      wire: 'acknowledged_by_',
+    }),
+    ...servedPrincipal({
+      row: instance,
+      prefix: 'resolvedBy',
+      wire: 'resolved_by_',
+    }),
     resolution_note: instance.resolutionNote,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
@@ -378,8 +388,12 @@ export const acknowledgeException = async (args: {
   assertNotResolved(item);
   if (item.status !== 'acknowledged') {
     item.status = 'acknowledged';
-    item.acknowledgedByPrincipalType = args.acknowledgedBy.principalType;
-    item.acknowledgedByPrincipalId = args.acknowledgedBy.principalId;
+    item.set(
+      principalColumns({
+        prefix: 'acknowledgedBy',
+        principal: args.acknowledgedBy,
+      })
+    );
     await item.save();
   }
   return reload(item);
@@ -398,8 +412,9 @@ export const resolveException = async (args: {
   const item = await findExceptionOrThrow(args.id);
   assertNotResolved(item);
   item.status = 'resolved';
-  item.resolvedByPrincipalType = args.resolvedBy.principalType;
-  item.resolvedByPrincipalId = args.resolvedBy.principalId;
+  item.set(
+    principalColumns({ prefix: 'resolvedBy', principal: args.resolvedBy })
+  );
   item.resolutionNote = args.note ?? null;
   await item.save();
   return reload(item);

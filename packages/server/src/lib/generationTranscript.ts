@@ -14,6 +14,7 @@
  */
 import createDebug from 'debug';
 
+import type { ActsFor } from './actsFor';
 import {
   findInFlightToolCalls,
   type InFlightToolCall,
@@ -25,6 +26,7 @@ import {
   readGenerationSteps,
 } from './generationTurn';
 import { isPlainObject } from './plainObject';
+import { servedPrincipal } from './principals';
 import { isErrorCode, type StoredError } from './storedError';
 import type { UsageTotals } from './usageTotals';
 import { readReportedUsage, usageTotalsFromReported } from './usageTotals';
@@ -75,6 +77,7 @@ export type GenerationTranscript = {
   content_redacted_at: Date | null;
   content_redacted_by_principal_type: string | null;
   content_redacted_by_principal_id: string | null;
+  content_redacted_by_acts_for: ActsFor | null;
 };
 
 /**
@@ -369,8 +372,10 @@ export const getGenerationTranscript = async (args: {
     output: OPEN_STATUSES.has(generation.status) ? null : deriveOutput(steps),
     error: generation.error,
     content_redacted_at: generation.contentRedactedAt,
-    content_redacted_by_principal_type:
-      generation.contentRedactedByPrincipalType,
-    content_redacted_by_principal_id: generation.contentRedactedByPrincipalId,
+    ...servedPrincipal({
+      row: generation,
+      prefix: 'contentRedactedBy',
+      wire: 'content_redacted_by_',
+    }),
   };
 };
