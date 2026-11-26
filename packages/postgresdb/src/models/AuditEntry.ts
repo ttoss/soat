@@ -113,6 +113,13 @@ export class AuditEntry extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare principalId: string | null;
 
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare actsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare actsForId: string | null;
+
   /**
    * The tool call the write was made on behalf of (`tool_id`, `agent_id`,
    * `generation_id`, `session_id`, `actor_id`), verified from the request's

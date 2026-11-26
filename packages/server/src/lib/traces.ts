@@ -3,7 +3,9 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { ActsFor } from './actsFor';
 import { emptyPage, type Page, paginatedList } from './pagination';
+import { servedPrincipal } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 
@@ -25,6 +27,7 @@ export type Trace = {
   content_redacted_at: Date | null;
   content_redacted_by_principal_type: string | null;
   content_redacted_by_principal_id: string | null;
+  content_redacted_by_acts_for: ActsFor | null;
   created_at: Date;
 };
 
@@ -71,8 +74,11 @@ export const mapTrace = (row: TraceRow): Trace => {
     // erasure is provable instead of indistinguishable from a resource that
     // never existed.
     content_redacted_at: row.contentRedactedAt,
-    content_redacted_by_principal_type: row.contentRedactedByPrincipalType,
-    content_redacted_by_principal_id: row.contentRedactedByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'contentRedactedBy',
+      wire: 'content_redacted_by_',
+    }),
     created_at: row.createdAt,
   };
 };

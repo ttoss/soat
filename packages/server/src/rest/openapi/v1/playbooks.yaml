@@ -3426,6 +3426,11 @@ components:
             Public id of that principal: the user (`user_…`), or for API key
             auth the key itself (`key_…`), so the record names which key acted.
           example: user_V1StGXR8Z5jdHi6B
+        created_by_acts_for:
+          nullable: true
+          description: Whom `created_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         created_at:
           type: string
           format: date-time
@@ -3773,6 +3778,11 @@ components:
             Public id of that principal: the user (`user_…`), or for API key
             auth the key itself (`key_…`), so the record names which key acted.
           example: user_V1StGXR8Z5jdHi6B
+        created_by_acts_for:
+          nullable: true
+          description: Whom `created_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
@@ -3871,6 +3881,11 @@ components:
             Public id of that principal: the user (`user_…`), or for API key
             auth the key itself (`key_…`), so the record names which key acted.
           example: user_V1StGXR8Z5jdHi6B
+        created_by_acts_for:
+          nullable: true
+          description: Whom `created_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
@@ -3969,6 +3984,11 @@ components:
             Public id of that principal: the user (`user_…`), or for API key
             auth the key itself (`key_…`), so the record names which key acted.
           example: user_V1StGXR8Z5jdHi6B
+        created_by_acts_for:
+          nullable: true
+          description: Whom `created_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:
@@ -4070,6 +4090,11 @@ components:
             Public id of that principal: the user (`user_…`), or for API key
             auth the key itself (`key_…`), so the record names which key acted.
           example: user_V1StGXR8Z5jdHi6B
+        created_by_acts_for:
+          nullable: true
+          description: Whom `created_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         created_at:

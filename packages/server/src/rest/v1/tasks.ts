@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { actsForOf } from 'src/lib/actsFor';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { readStructuredQuery } from 'src/lib/structuredFilter';
 import {
@@ -50,12 +49,8 @@ const tasksRouter = new Router<Context>();
  * audit log.
  */
 const principalFromCtx = (ctx: Context): TaskPrincipal => {
-  const { principalType, principalId } = requestPrincipalFromCtx(ctx);
-  return {
-    kind: principalType,
-    id: principalId,
-    actsFor: actsForOf(ctx.authUser!),
-  };
+  const { principalType, principalId, actsFor } = requestPrincipalFromCtx(ctx);
+  return { kind: principalType, id: principalId, actsFor };
 };
 
 const blockedQuery = (ctx: Context): boolean | undefined => {

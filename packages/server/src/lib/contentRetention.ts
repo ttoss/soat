@@ -24,6 +24,7 @@ const MAX_PER_PROJECT_PER_TICK = 10_000;
 const RETENTION_PRINCIPAL: RedactionPrincipal = {
   principalType: 'system',
   principalId: 'retention_sweep',
+  actsFor: null,
 };
 
 /**

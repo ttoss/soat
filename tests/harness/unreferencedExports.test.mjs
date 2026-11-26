@@ -44,7 +44,6 @@ const TEST_SEAMS = [
   'packages/server/src/lib/orchestrationWorker.ts resetLastSuccessfulDrain',
   'packages/server/src/lib/pagination.ts DEFAULT_LIST_LIMIT',
   'packages/server/src/lib/pagination.ts MAX_LIST_LIMIT',
-  'packages/server/src/lib/principals.ts PrincipalType',
   'packages/server/src/lib/runStatus.ts RUN_STATUSES',
   'packages/server/src/lib/projectDependents.ts PROJECT_PARENT_SCOPED_MODELS',
   'packages/server/src/lib/projectPauseActions.ts flushProjectResumes',

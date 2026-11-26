@@ -321,6 +321,11 @@ components:
           type: string
           nullable: true
           description: Public id of the principal (`user_…` or `key_…`); null for platform-originated entries
+        acts_for:
+          nullable: true
+          description: Whom the principal acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         on_behalf_of:
           $ref: './on-behalf-of.yaml#/components/schemas/OnBehalfOf'
         action:

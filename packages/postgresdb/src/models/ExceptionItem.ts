@@ -146,11 +146,25 @@ export class ExceptionItem extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare acknowledgedByPrincipalId: string | null;
 
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare acknowledgedByActsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare acknowledgedByActsForId: string | null;
+
   @Column({ type: DataType.STRING(16), allowNull: true })
   declare resolvedByPrincipalType: string | null;
 
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare resolvedByPrincipalId: string | null;
+
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare resolvedByActsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare resolvedByActsForId: string | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare resolutionNote: string | null;

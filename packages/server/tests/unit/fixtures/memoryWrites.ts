@@ -17,6 +17,7 @@ export const SEED_ASSERTION: MemoryAssertionSource = {
   mechanism: 'api',
   principalType: 'user',
   principalId: 'user_seed',
+  actsFor: null,
 };
 
 /**

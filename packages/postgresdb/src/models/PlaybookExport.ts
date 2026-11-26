@@ -111,6 +111,13 @@ export class PlaybookExport extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare createdByPrincipalId: string | null;
 
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare createdByActsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare createdByActsForId: string | null;
+
   /**
    * The tool call the write was made on behalf of (`tool_id`, `agent_id`,
    * `generation_id`, `session_id`, `actor_id`), verified from the request's

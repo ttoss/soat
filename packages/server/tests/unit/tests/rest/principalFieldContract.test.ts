@@ -23,6 +23,14 @@ const NOT_A_PRINCIPAL: Record<string, string> = {
   blocked_by: 'the playbook nodes a node waits on',
 };
 
+const ACTS_FOR_REF = './principals.yaml#/components/schemas/ActsFor';
+
+/** A principal whose `acts_for` field drops its prefix, with the reason. */
+const ACTS_FOR_SERVED_AS: Record<string, string> = {
+  // A generation's `acts_for` is its starter's, read off the turn's authority.
+  'generations.yaml: started_by_principal_type': 'acts_for',
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
@@ -36,6 +44,14 @@ const referencesShared = (value: unknown): boolean => {
     allOf.length === 1 &&
     isRecord(allOf[0]) &&
     allOf[0].$ref === SHARED_REF
+  );
+};
+
+const referencesActsFor = (value: unknown): boolean => {
+  if (!isRecord(value) || !Array.isArray(value.allOf)) return false;
+  const [only] = value.allOf;
+  return (
+    value.allOf.length === 1 && isRecord(only) && only.$ref === ACTS_FOR_REF
   );
 };
 
@@ -156,6 +172,28 @@ describe('who did it is one shape', () => {
       });
 
     expect(unpaired.map(located)).toEqual([]);
+  });
+
+  test('every principal a record names serves whom it acted for', () => {
+    const where = new Map(
+      fields.map((field) => {
+        return [`${field.file}: ${field.where}`, field];
+      })
+    );
+    const missing = fields
+      .filter((field) => {
+        return /(^|_)principal_type$/.test(field.name);
+      })
+      .filter((field) => {
+        const prefix = field.name.replace(/principal_type$/, '');
+        const name = ACTS_FOR_SERVED_AS[`${field.file}: ${field.name}`];
+        const sibling = where.get(
+          `${field.file}: ${field.where.replace(/[^.]+$/, name ?? `${prefix}acts_for`)}`
+        );
+        return !sibling || !referencesActsFor(sibling.schema);
+      });
+
+    expect(missing.map(located)).toEqual([]);
   });
 
   test('the shared enum is the vocabulary the server writes', () => {

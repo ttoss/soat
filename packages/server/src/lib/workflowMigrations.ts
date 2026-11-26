@@ -3,9 +3,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { servedActsFor } from './actsFor';
+import { createdByColumns, servedPrincipal } from './principals';
 import { createSweep } from './scheduler';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
-import type { TaskPrincipal, TaskPrincipalKind } from './tasks';
+import {
+  recordedTaskPrincipal,
+  type TaskPrincipal,
+  type TaskPrincipalKind,
+} from './tasks';
 import {
   assertStateMapTargets,
   loadVersionDefinition,
@@ -64,8 +70,11 @@ const mapWorkflowMigration = (args: {
         error: item.error,
       };
     }),
-    created_by_principal_type: row.createdByPrincipalType,
-    created_by_principal_id: row.createdByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'createdBy',
+      wire: 'created_by_',
+    }),
     created_at: row.createdAt,
     finished_at: row.finishedAt,
   };
@@ -123,7 +132,10 @@ const settleItem = async (args: {
       principal: {
         kind: row.createdByPrincipalType as TaskPrincipalKind,
         id: row.createdByPrincipalId,
-        actsFor: null,
+        actsFor: servedActsFor({
+          type: row.createdByActsForType,
+          id: row.createdByActsForId,
+        }),
       },
     });
     return { ...item, status: 'migrated', error: null };
@@ -219,7 +231,7 @@ export const startWorkflowMigration = async (args: {
   toVersion: number;
   stateMap?: Record<string, string>;
   wait: boolean;
-  principal: Pick<TaskPrincipal, 'kind' | 'id'>;
+  principal: TaskPrincipal;
   /** Whether the caller may migrate this task; one it may not is refused. */
   mayMigrate: MayMigrate;
 }) => {
@@ -250,8 +262,7 @@ export const startWorkflowMigration = async (args: {
     stateMap: args.stateMap ?? null,
     status: settled ? 'completed' : 'queued',
     items,
-    createdByPrincipalType: args.principal.kind,
-    createdByPrincipalId: args.principal.id,
+    ...createdByColumns(recordedTaskPrincipal(args.principal)),
     leaseExpiresAt: settled ? null : leaseFromNow(),
     finishedAt: settled ? new Date() : null,
   });

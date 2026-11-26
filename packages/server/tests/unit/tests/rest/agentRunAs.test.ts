@@ -131,6 +131,7 @@ describe('Agent run_as', () => {
       expect(generation.acted_as).toEqual({
         principal_type: 'agent',
         principal_id: agentId,
+        acts_for: null,
       });
     });
 

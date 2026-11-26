@@ -6,7 +6,7 @@ import type { ActsFor } from './actsFor';
 import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
 import type { ResourceIncludes } from './modelIncludes';
-import type { ActingPrincipalType } from './principals';
+import type { ActingPrincipalType, RecordedPrincipal } from './principals';
 import { gateStart } from './startGate';
 import { emitTaskEvent } from './taskEvents';
 import { appendTaskHistory } from './taskHistory';
@@ -52,6 +52,17 @@ export type TaskPrincipal = {
   id: string | null;
   /** Whom the principal moved the task for: `actsForOf` its request. */
   actsFor: ActsFor | null;
+};
+
+/** A task principal as a record names it, for `principalColumns`. */
+export const recordedTaskPrincipal = (
+  principal: TaskPrincipal
+): RecordedPrincipal => {
+  return {
+    principalType: principal.kind,
+    principalId: principal.id,
+    actsFor: principal.actsFor,
+  };
 };
 
 export type ActiveDispatch = {

@@ -341,6 +341,7 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     expect(generation.acted_as).toEqual({
       principal_type: generation.started_by_principal_type,
       principal_id: generation.started_by_principal_id,
+      acts_for: null,
     });
   });
 
@@ -356,6 +357,7 @@ describe('POST /api/v1/agents/:agent_id/generate/:generation_id/tool-outputs cre
     expect(generation.acted_as).toEqual({
       principal_type: 'user',
       principal_id: startedBy,
+      acts_for: null,
     });
   });
 });

@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import { paginatedList } from './pagination';
 import type { StoredError } from './storedError';
 import {
+  parseWorkAuthority,
   storedAuthority,
   triggerAuthority,
   type WorkAuthority,
@@ -34,6 +35,7 @@ export const mapTriggerFiring = (instance: TriggerFiringInstance) => {
         ? {
             principal_type: instance.actedAsPrincipalType,
             principal_id: instance.actedAsPrincipalId,
+            acts_for: parseWorkAuthority(instance.authority)?.actsFor ?? null,
           }
         : null,
     started_at: instance.startedAt,

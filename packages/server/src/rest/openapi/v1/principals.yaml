@@ -7,7 +7,8 @@ info:
     paths: every record that names a principal — a `<verb>_by_principal_type` /
     `<verb>_by_principal_id` pair, or a bare `principal_type` / `principal_id`
     on a record about the principal itself — references the one vocabulary
-    here.
+    here, and serves whom that principal acted for beside it
+    (`<verb>_by_acts_for`, or a bare `acts_for`).
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -59,3 +60,20 @@ components:
         every type a request naming the acting principal can carry (an
         admission question's `principal.type`).
       example: user
+    ActsFor:
+      type: object
+      nullable: true
+      description: >-
+        The opaque principal the named principal acted for: the `principal` of
+        the IAM token that made the request, or the one an `On-Behalf-Of`
+        assertion carried. The principal pair beside it names the key that
+        minted the token. Null when the request named none, and on work no
+        request started.
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          example: channel
+        id:
+          type: string
+          example: discord-dm-42

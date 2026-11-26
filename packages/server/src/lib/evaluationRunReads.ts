@@ -13,6 +13,7 @@ import { DomainError } from '../errors';
 import { getEvalRow } from './evaluations';
 import type { ResourceIncludes } from './modelIncludes';
 import { type Page, paginatedList } from './pagination';
+import { servedPrincipal } from './principals';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:evaluations');
@@ -80,8 +81,11 @@ export const mapEvalResult = (result: EvalResultRow) => {
         : {
             passed: result.humanPassed,
             note: result.labelNote,
-            labeled_by_principal_type: result.labeledByPrincipalType,
-            labeled_by_principal_id: result.labeledByPrincipalId,
+            ...servedPrincipal({
+              row: result,
+              prefix: 'labeledBy',
+              wire: 'labeled_by_',
+            }),
             labeled_at: result.labeledAt,
           },
     created_at: result.createdAt,

@@ -769,15 +769,19 @@ components:
             submitting its tool outputs only narrows what it may do. A tool
             call an approval held runs, once approved, as this principal. Null
             when the segment ran with no principal.
-          required: [principal_type, principal_id]
+          required: [principal_type, principal_id, acts_for]
           properties:
             principal_type:
               $ref: './principals.yaml#/components/schemas/PrincipalType'
             principal_id:
               type: string
               example: user_V1StGXR8Z5jdHi6B
+            acts_for:
+              nullable: true
+              description: Whom the principal acted for.
+              allOf:
+                - $ref: './principals.yaml#/components/schemas/ActsFor'
         acts_for:
-          type: object
           nullable: true
           description: >-
             The opaque principal the starter acted for: the `principal` of the
@@ -785,14 +789,8 @@ components:
             assertion carried. `started_by_principal_*` names the key that
             minted the token. A resume keeps the starter's. Null when the
             starter named none.
-          required: [type, id]
-          properties:
-            type:
-              type: string
-              example: channel
-            id:
-              type: string
-              example: discord-dm-42
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         status:
           type: string
           description: Lifecycle status of the generation
@@ -1098,6 +1096,11 @@ components:
             the record names which key acted. `retention_sweep` or
             `zero_retention` for `system`.
           example: user_V1StGXR8Z5jdHi6B
+        content_redacted_by_acts_for:
+          nullable: true
+          description: Whom `content_redacted_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'
         created_at:
           type: string
           format: date-time
@@ -1675,3 +1678,8 @@ components:
           description: >
             Public id of that principal. `zero_retention` when the content was
             never stored, distinguishing it from content erased later.
+        content_redacted_by_acts_for:
+          nullable: true
+          description: Whom `content_redacted_by_principal_*` acted for.
+          allOf:
+            - $ref: './principals.yaml#/components/schemas/ActsFor'

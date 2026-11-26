@@ -23,7 +23,11 @@ import { readCaseNode } from './playbookExecutions';
 import { resolveRunAs } from './playbookExecutionWork';
 import { type ExportCase, renderPlaybookExport } from './playbookExportRender';
 import type { PlaybookCaseSnapshot, PlaybookNodeView } from './playbookState';
-import { createdByColumns, type RequestPrincipal } from './principals';
+import {
+  createdByColumns,
+  type RequestPrincipal,
+  servedPrincipal,
+} from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 
 const log = createDebug('soat:playbookExports');
@@ -73,8 +77,11 @@ const mapPlaybookExport = (args: {
     stale: args.current.get(row.node) !== row.revision,
     file_id: row.file?.publicId ?? null,
     error: row.error,
-    created_by_principal_type: row.createdByPrincipalType,
-    created_by_principal_id: row.createdByPrincipalId,
+    ...servedPrincipal({
+      row,
+      prefix: 'createdBy',
+      wire: 'created_by_',
+    }),
     on_behalf_of: row.onBehalfOf ?? null,
     created_at: row.createdAt,
     finished_at: row.finishedAt,

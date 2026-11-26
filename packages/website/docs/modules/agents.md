@@ -82,6 +82,7 @@ Immutable archive of one config version, written on create and on every config-c
 | `released_claims`           | string[]/null | Evals whose claims the release gave up when it promoted this version; `null` for a version no promotion made live — see [Claims a version holds](#claims-a-version-holds) |
 | `created_by_principal_type` | string/null   | [Principal](./audit-log.md#principals) that produced this version: `user` or `api_key`                                                                                    |
 | `created_by_principal_id`   | string/null   | Public id of that principal — the key's own `key_…` when a key acted, else `user_…`                                                                                       |
+| `created_by_acts_for` | object \| null | `{ type, id }` that principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `created_at`                | string        | ISO 8601 creation timestamp                                                                                                                                               |
 
 ### Agent Release
@@ -115,7 +116,7 @@ One agent execution; its steps are on its [trace](./traces.md).
 | `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)                                                                            |
 | `started_by_principal_type` | string/null | Type of the principal that triggered the generation                                                                                   |
 | `started_by_principal_id`   | string/null | Public id of that principal                                                                                                           |
-| `acted_as`                  | object/null | `{ principal_type, principal_id }` the latest segment's tool calls ran as — see [Acting principal](./generations.md#acting-principal) |
+| `acted_as`                  | object/null | `{ principal_type, principal_id, acts_for }` the latest segment's tool calls ran as — see [Acting principal](./generations.md#acting-principal) |
 | `acts_for`                  | object/null | `{ type, id }` the starter acted for — see [Starting principal](./generations.md#starting-principal)                                  |
 | `idempotency_key`           | string/null | Key the generation was started under — see [Running a generation at most once](#running-a-generation-at-most-once)                    |
 | `created_at`                | string      | ISO 8601 creation timestamp                                                                                                           |

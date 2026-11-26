@@ -115,6 +115,7 @@ Only defined transitions fire; an any-state transition lists every state in `fro
 | `tasks`                     | array          | `{ task_id, status, error }` per task, `status` one of `pending`, `migrated`, `refused`; `error` is the refusal as a `StoredError` |
 | `created_by_principal_type` | string \| null | Who started it |
 | `created_by_principal_id`   | string \| null | Public id of who started it |
+| `created_by_acts_for` | object \| null | `{ type, id }` who started it [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `created_at`                | string         | ISO 8601 creation timestamp |
 | `finished_at`               | string \| null | When the last task settled |
 

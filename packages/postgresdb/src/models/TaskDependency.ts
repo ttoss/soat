@@ -68,6 +68,13 @@ export class TaskDependency extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare createdByPrincipalId: string | null;
 
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare createdByActsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare createdByActsForId: string | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 }

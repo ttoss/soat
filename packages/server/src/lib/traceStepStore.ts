@@ -15,6 +15,7 @@ import { db } from '../db';
 import { pathPrefixPattern, systemPath } from './filePaths';
 import { upsertFileByPath } from './files';
 import { deleteStorageObjects, readFileBuffer } from './fileStorage';
+import { principalColumns } from './principals';
 import {
   resolveTraceContentModeForAgent,
   ZERO_RETENTION_PRINCIPAL,
@@ -244,8 +245,10 @@ export const stampZeroRetentionTrace = async (where: {
   await db.Trace.update(
     {
       contentRedactedAt: new Date(),
-      contentRedactedByPrincipalType: ZERO_RETENTION_PRINCIPAL.principalType,
-      contentRedactedByPrincipalId: ZERO_RETENTION_PRINCIPAL.principalId,
+      ...principalColumns({
+        prefix: 'contentRedactedBy',
+        principal: ZERO_RETENTION_PRINCIPAL,
+      }),
     },
     { where: { ...where, contentRedactedAt: null } }
   );

@@ -7,6 +7,7 @@ import {
   convertKeys,
 } from 'src/lib/resource-inputs/normalizers';
 
+import { type ActsFor, actsForColumns, servedActsFor } from './actsFor';
 import { emitResourceEvent } from './eventBus';
 import { EXPORT_ORDER, streamNdjson, whereAfterCursor } from './ndjsonExport';
 import type { OnBehalfOf } from './onBehalfOf';
@@ -54,6 +55,10 @@ const mapAuditEntry = (
     project_id: projectPublicId ?? instance.project?.publicId ?? null,
     principal_type: instance.principalType,
     principal_id: instance.principalId,
+    acts_for: servedActsFor({
+      type: instance.actsForType,
+      id: instance.actsForId,
+    }),
     on_behalf_of: instance.onBehalfOf ?? null,
     action: instance.action,
     resource_srn: instance.resourceSrn,
@@ -153,6 +158,7 @@ const toSnakeAuditEntry = (
     project_id: entry.project_id,
     principal_type: entry.principal_type,
     principal_id: entry.principal_id,
+    acts_for: entry.acts_for,
     on_behalf_of: entry.on_behalf_of,
     action: entry.action,
     resource_srn: entry.resource_srn,
@@ -196,6 +202,7 @@ export type WriteAuditEntryArgs = {
   // entry leaves them null and is identified by its `action`.
   principalType?: AuditPrincipalType | null;
   principalId?: string | null;
+  actsFor?: ActsFor | null;
   action: string;
   resourceSrn?: string | null;
   resourcePublicId?: string | null;
@@ -224,6 +231,7 @@ const buildAuditEntryRow = (args: {
     projectId: args.projectId,
     principalType: w.principalType ?? null,
     principalId: w.principalId ?? null,
+    ...actsForColumns(w.actsFor ?? null),
     action: w.action,
     resourceSrn: w.resourceSrn ?? null,
     resourcePublicId: w.resourcePublicId ?? null,

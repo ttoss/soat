@@ -118,6 +118,13 @@ export class PlaybookExecution extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare createdByPrincipalId: string | null;
 
+  /** Whom that principal acted for: an IAM token's or `On-Behalf-Of` principal. */
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare createdByActsForType: string | null;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare createdByActsForId: string | null;
+
   // The authority the work runs under (`lib/workAuthority.ts`); null when it
   // has none, and such work is refused.
   @Column({ type: DataType.JSON, allowNull: true })

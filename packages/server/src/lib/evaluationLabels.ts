@@ -14,7 +14,7 @@ import {
   mapEvalResult,
 } from './evaluationRunReads';
 import { readScorerModels } from './evaluationScorerModels';
-import type { RequestPrincipal } from './principals';
+import { principalColumns, type RequestPrincipal } from './principals';
 
 const log = createDebug('soat:evaluations');
 
@@ -37,8 +37,7 @@ export const labelEvalResult = async (args: {
   await result.update({
     humanPassed: args.passed,
     labelNote: args.note,
-    labeledByPrincipalType: args.labeledBy.principalType,
-    labeledByPrincipalId: args.labeledBy.principalId,
+    ...principalColumns({ prefix: 'labeledBy', principal: args.labeledBy }),
     labeledAt: new Date(),
   });
   return mapEvalResult(result);
@@ -56,8 +55,7 @@ export const clearEvalResultLabel = async (args: {
   await result.update({
     humanPassed: null,
     labelNote: null,
-    labeledByPrincipalType: null,
-    labeledByPrincipalId: null,
+    ...principalColumns({ prefix: 'labeledBy', principal: null }),
     labeledAt: null,
   });
 };

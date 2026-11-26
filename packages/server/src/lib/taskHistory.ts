@@ -1,7 +1,7 @@
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import type { ActsFor } from './actsFor';
+import { type ActsFor, actsForColumns, servedActsFor } from './actsFor';
 import type { Transaction } from './dbTransaction';
 import { paginatedList } from './pagination';
 
@@ -33,8 +33,7 @@ export const appendTaskHistory = async (args: {
   await db.TaskTransition.create(
     {
       ...args.row,
-      actsForType: args.actsFor?.type ?? null,
-      actsForId: args.actsFor?.id ?? null,
+      ...actsForColumns(args.actsFor),
       createdAt,
     },
     { transaction: args.transaction }
@@ -68,10 +67,7 @@ export const getTaskHistory = async (args: {
         transition: row.transition,
         principal_type: row.principalType,
         principal_id: row.principalId,
-        acts_for:
-          row.actsForType !== null && row.actsForId !== null
-            ? { type: row.actsForType, id: row.actsForId }
-            : null,
+        acts_for: servedActsFor({ type: row.actsForType, id: row.actsForId }),
         generation_id: row.generationId,
         orchestration_run_id: row.orchestrationRunId,
         tool_id: row.toolId,

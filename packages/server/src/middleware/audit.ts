@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import type { AuthUser, Context } from '../Context';
 import { DomainError } from '../errors';
+import type { ActsFor } from '../lib/actsFor';
 import type { AuditPrincipalType } from '../lib/auditLog';
 import { peekReadAuditEnabled } from '../lib/auditLog';
 import { enqueueAuditWrite } from '../lib/auditQueue';
@@ -236,19 +237,20 @@ const deriveTargetIdFromParams = (ctx: Context): string | null => {
  */
 const resolvePrincipal = (
   authUser: AuthUser
-): { principalType: AuditPrincipalType; principalId: string } => {
+): {
+  principalType: AuditPrincipalType;
+  principalId: string;
+  actsFor: ActsFor | null;
+} => {
   return principalFromAuthUser(authUser);
 };
 
 const buildDetail = (args: {
   additional: RecordedCheck[];
   iamToken: AuthUser['iamToken'];
-  onBehalfOfPrincipal: AuthUser['onBehalfOfPrincipal'];
 }): Record<string, unknown> | null => {
-  const { additional, iamToken, onBehalfOfPrincipal } = args;
-  if (additional.length === 0 && !iamToken && !onBehalfOfPrincipal) {
-    return null;
-  }
+  const { additional, iamToken } = args;
+  if (additional.length === 0 && !iamToken) return null;
   return {
     ...(additional.length > 0
       ? {
@@ -263,8 +265,6 @@ const buildDetail = (args: {
       : {}),
     // The token's own id, so every request one token made can be found.
     ...(iamToken ? { iamToken } : {}),
-    // Sealed in the assertion, so only the audit log names it.
-    ...(onBehalfOfPrincipal ? { onBehalfOfPrincipal } : {}),
   };
 };
 
@@ -377,7 +377,9 @@ const recordEntry = (
     return i !== primaryIndex;
   });
 
-  const { principalType, principalId } = resolvePrincipal(ctx.authUser!);
+  const { principalType, principalId, actsFor } = resolvePrincipal(
+    ctx.authUser!
+  );
   const { projectPublicId, resourceSrn, resourcePublicIdHint } =
     resolveEntryTarget(ctx, primary);
 
@@ -385,6 +387,7 @@ const recordEntry = (
     projectPublicId,
     principalType,
     principalId,
+    actsFor,
     onBehalfOf: ctx.authUser!.onBehalfOf ?? null,
     action: primary.action,
     resourceSrn,
@@ -402,7 +405,6 @@ const recordEntry = (
     detail: buildDetail({
       additional,
       iamToken: ctx.authUser!.iamToken,
-      onBehalfOfPrincipal: ctx.authUser!.onBehalfOfPrincipal,
     }),
     isRead: !MUTATING_METHODS.has(ctx.method),
   });

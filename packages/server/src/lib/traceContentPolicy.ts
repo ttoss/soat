@@ -164,6 +164,7 @@ export const PURGED_TRACE_CONTENT = {
 export const ZERO_RETENTION_PRINCIPAL = {
   principalType: 'system',
   principalId: 'zero_retention',
+  actsFor: null,
 } as const;
 
 /**

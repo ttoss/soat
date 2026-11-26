@@ -22,7 +22,11 @@ type Firing = {
   error: Record<string, unknown> | null;
   idempotency_key: string | null;
   attempts: number;
-  acted_as: { principal_type: string; principal_id: string } | null;
+  acted_as: {
+    principal_type: string;
+    principal_id: string;
+    acts_for: { type: string; id: string } | null;
+  } | null;
 };
 
 describe('Event trigger dispatch', () => {
@@ -241,6 +245,7 @@ describe('Event trigger dispatch', () => {
       expect(firing.acted_as).toEqual({
         principal_type: 'trigger',
         principal_id: triggerId,
+        acts_for: null,
       });
     }, 60_000);
 

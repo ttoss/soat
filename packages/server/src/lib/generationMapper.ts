@@ -1,6 +1,8 @@
 import type { db } from '../db';
+import type { ActsFor } from './actsFor';
 import type { CitationPointer } from './citations';
 import type { KnowledgeRetrieval } from './knowledgeRetrievalRecord';
+import { servedPrincipal } from './principals';
 import type { UsageTotals } from './usageTotals';
 import { parseWorkAuthority } from './workAuthority';
 
@@ -16,8 +18,12 @@ export type PersistedGeneration = {
   actor_id: string | null;
   started_by_principal_type: string | null;
   started_by_principal_id: string | null;
-  acted_as: { principal_type: string; principal_id: string } | null;
-  acts_for: { type: string; id: string } | null;
+  acted_as: {
+    principal_type: string;
+    principal_id: string;
+    acts_for: ActsFor | null;
+  } | null;
+  acts_for: ActsFor | null;
   status: string;
   started_at: Date;
   completed_at: Date | null;
@@ -55,6 +61,7 @@ export type PersistedGeneration = {
   content_redacted_at: Date | null;
   content_redacted_by_principal_type: string | null;
   content_redacted_by_principal_id: string | null;
+  content_redacted_by_acts_for: ActsFor | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -71,17 +78,6 @@ const linkedPublicId = (
   return linked?.publicId ?? null;
 };
 
-const actedAs = (gen: {
-  actedAsPrincipalType: string | null;
-  actedAsPrincipalId: string | null;
-}): PersistedGeneration['acted_as'] => {
-  if (!gen.actedAsPrincipalType || !gen.actedAsPrincipalId) return null;
-  return {
-    principal_type: gen.actedAsPrincipalType,
-    principal_id: gen.actedAsPrincipalId,
-  };
-};
-
 /**
  * The opaque principal the work acts for, read off its stored authority: a
  * resume narrows that authority but keeps the starter's.
@@ -90,6 +86,19 @@ const actsFor = (gen: {
   authority: object | null;
 }): PersistedGeneration['acts_for'] => {
   return parseWorkAuthority(gen.authority)?.actsFor ?? null;
+};
+
+const actedAs = (gen: {
+  actedAsPrincipalType: string | null;
+  actedAsPrincipalId: string | null;
+  authority: object | null;
+}): PersistedGeneration['acted_as'] => {
+  if (!gen.actedAsPrincipalType || !gen.actedAsPrincipalId) return null;
+  return {
+    principal_type: gen.actedAsPrincipalType,
+    principal_id: gen.actedAsPrincipalId,
+    acts_for: actsFor(gen),
+  };
 };
 
 export const mapGeneration = (
@@ -158,8 +167,11 @@ export const mapGeneration = (
     // Caller-owned bag, verbatim. `pendingState` has no entry here at all.
     metadata: gen.metadata ?? undefined,
     content_redacted_at: gen.contentRedactedAt,
-    content_redacted_by_principal_type: gen.contentRedactedByPrincipalType,
-    content_redacted_by_principal_id: gen.contentRedactedByPrincipalId,
+    ...servedPrincipal({
+      row: gen,
+      prefix: 'contentRedactedBy',
+      wire: 'content_redacted_by_',
+    }),
     created_at: gen.createdAt,
     updated_at: gen.updatedAt,
   };

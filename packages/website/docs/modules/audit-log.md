@@ -32,6 +32,7 @@ The API is read-only; writes go through a fire-and-forget queue, so auditing nev
 | `project_id`         | string  | Owning project; `null` for global actions (e.g. `users:CreateUser`)                               |
 | `principal_type`     | string  | `user` or `api_key`; `null` for platform-originated entries (see [System-originated entries](#system-originated-entries)) |
 | `principal_id`       | string  | Public id of the principal (`user_…` or `key_…`); `null` for platform-originated entries |
+| `acts_for` | object \| null | `{ type, id }` the principal [acts for](./audit-log.md#acting-for-a-principal); `null` when none |
 | `on_behalf_of`       | object  | The tool call the request was made for; `null` for most ([On-behalf-of](./tools.md#writing-on-behalf-of-a-tool-call)) |
 | `action`             | string  | The permission-action string that authorized the request                                         |
 | `resource_srn`       | string  | SRN the action targeted; type-level (`srn:{project}:{type}:*`) on creates                        |
@@ -60,7 +61,7 @@ A route making several checks (e.g. binding a trigger checks `triggers:CreateTri
 - On success, the primary `action` is the first (route-level) check.
 - On a `403`, the primary is the denied check.
 
-Remaining checks are recorded under `detail.additional_checks` (`{ action, resource, allowed }` each). A request on an [IAM token](./iam.md#iam-tokens) records `detail.iam_token`; one carrying [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a call made for an opaque principal records it under `detail.on_behalf_of_principal`.
+Remaining checks are recorded under `detail.additional_checks` (`{ action, resource, allowed }` each). A request on an [IAM token](./iam.md#iam-tokens) records `detail.iam_token`.
 
 ### Principals
 
@@ -73,6 +74,10 @@ Every record that names who acted uses one shape: a `<verb>_by_principal_type` /
 | `agent` | The agent's `agent_…`, writing under its own identity |
 | `automation` | `null` — the task engine acting on a dispatch outcome |
 | `approval` | The resolver's id — an approval resolution moving a task |
+
+### Acting for a principal
+
+Beside every principal it names, a record serves whom that principal acted for: `<verb>_by_acts_for` beside a `<verb>_by_principal_*` pair, a bare `acts_for` beside a bare one (inside `acted_as` too). It is the opaque `{ type, id }` `principal` of the [IAM token](./iam.md#iam-tokens) that made the request, or the one an [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) assertion carried, while the principal pair names the key that minted the token. It is `null` when the request named none, and on work no request started. A [generation](./generations.md#starting-principal) serves its starter's as `acts_for`.
 | `system` | The mechanism: `retention_sweep`, `zero_retention` |
 
 ### System-originated entries
