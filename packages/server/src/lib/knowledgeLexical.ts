@@ -1,3 +1,8 @@
+import {
+  LEXICAL_INDEX_TEXT_SEARCH_CONFIG,
+  LEXICAL_MAX_CONTENT_BYTES,
+} from '@soat/postgresdb';
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -19,14 +24,15 @@ type SequelizeFn = ReturnType<typeof db.sequelize.fn>;
  * the pgvector one, over the same `content` column and under the same scope
  * filters.
  *
- * Both `content` columns are plain `TEXT`, so this needs no schema change and
- * no index — `to_tsvector` is computed per candidate row. Promotion to a stored
- * `tsvector` column with a GIN index is a measured decision, not a default; the
- * condition is written down in `knowledge.md`.
+ * Each searched table carries a GIN index over `to_tsvector('simple', content)`
+ * (`lexicalContentIndex` in `@soat/postgresdb`), which the planner uses only
+ * while the match below is that expression and that predicate verbatim. Under
+ * any other `KNOWLEDGE_TEXT_SEARCH_CONFIG` the match is the same and unindexed:
+ * every search re-tokenizes every row of the table.
  */
 
 /** Text search configuration when the deployment names none. */
-export const DEFAULT_TEXT_SEARCH_CONFIG = 'simple';
+export const DEFAULT_TEXT_SEARCH_CONFIG = LEXICAL_INDEX_TEXT_SEARCH_CONFIG;
 
 /**
  * The `regconfig` both `to_tsvector` and `websearch_to_tsquery` run under.
@@ -66,16 +72,28 @@ const queryTsQuery = (args: { query: string }): SequelizeFn => {
   );
 };
 
-/** Matches rows whose `content` satisfies every term the query produced. */
+/**
+ * Matches rows whose `content` satisfies every term the query produced. A text
+ * past `LEXICAL_MAX_CONTENT_BYTES` is never a lexical candidate: the index
+ * leaves it out, and `to_tsvector` can raise on it.
+ */
 export const lexicalMatchWhere = (args: {
   column: string;
   query: string;
-}): SequelizeWhere => {
-  return db.sequelize.where(
-    contentTsVector({ column: args.column }),
-    '@@',
-    queryTsQuery({ query: args.query })
-  );
+}): { [Op.and]: SequelizeWhere[] } => {
+  return {
+    [Op.and]: [
+      db.sequelize.where(
+        contentTsVector({ column: args.column }),
+        '@@',
+        queryTsQuery({ query: args.query })
+      ),
+      db.sequelize.where(
+        db.sequelize.fn('octet_length', db.sequelize.literal(args.column)),
+        { [Op.lte]: LEXICAL_MAX_CONTENT_BYTES }
+      ),
+    ],
+  };
 };
 
 /**

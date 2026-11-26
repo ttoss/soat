@@ -19,5 +19,6 @@ export { MEMORY_RULE_EVENTS } from './models/MemoryRule';
 export { USAGE_EVENT_DURABLE_IDS } from './models/UsageEvent';
 export { SCHEMA_SYNC_OPTIONS } from './schemaSync';
 export * from './utils/embedding';
+export * from './utils/lexicalIndex';
 export * from './utils/memoryContentHash';
 export * from './utils/publicId';

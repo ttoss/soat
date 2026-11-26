@@ -78,6 +78,7 @@ import { evalCriteria } from './2026-11-24-evalCriteria';
 import { pinnedVersionsRequired } from './2026-11-24-pinnedVersionsRequired';
 import { evalRunScorerModels } from './2026-11-25-evalRunScorerModels';
 import { scorerNamesRequired } from './2026-11-25-scorerNamesRequired';
+import { lexicalGinIndexes } from './2026-11-26-lexicalGinIndexes';
 import { taskTransitionActsFor } from './2026-11-26-taskTransitionActsFor';
 
 /**
@@ -179,4 +180,5 @@ export const MIGRATIONS: Migration[] = [
   evalRunScorerModels,
   scorerNamesRequired,
   taskTransitionActsFor,
+  lexicalGinIndexes,
 ];

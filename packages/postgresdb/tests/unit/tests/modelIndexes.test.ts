@@ -3,7 +3,7 @@ import { Sequelize } from '@ttoss/postgresdb';
 // The built output, not `src`: Babel rejects a decorated `declare` field, and
 // `dist` is what both consumers and `sync` load — so this asserts against the
 // artifact that actually reaches the database. Run `pnpm build` first.
-import { models } from '../../../dist/index.cjs';
+import { lexicalContentIndex, models } from '../../../dist/index.cjs';
 
 /**
  * Every unique constraint in this package must be declared as an explicitly
@@ -473,5 +473,26 @@ describe('containment-matched bags carry a GIN index', () => {
       });
 
     expect(missing).toEqual([]);
+  });
+});
+
+describe('lexically searched text carries the lexical GIN index', () => {
+  // Knowledge search matches these columns with `to_tsvector(...) @@ ...`.
+  // Without the index every search re-tokenizes every row of the table, in
+  // every project, and the planner uses the index only when the declaration
+  // is the one the server's match is built from.
+  const LEXICALLY_SEARCHED_TABLES = ['document_chunks', 'memory_contents'];
+
+  test.each(LEXICALLY_SEARCHED_TABLES)('%s declares it', (table) => {
+    const expected = lexicalContentIndex({ table });
+    const declared = modelEntries
+      .find((entry) => {
+        return entry.table === table;
+      })
+      ?.indexes.find((index) => {
+        return index.name === expected.name;
+      });
+
+    expect(declared).toMatchObject(expected);
   });
 });

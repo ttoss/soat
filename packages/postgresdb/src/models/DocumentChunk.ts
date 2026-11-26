@@ -8,6 +8,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { getEmbeddingDimensions } from '../utils/embedding';
+import { lexicalContentIndex } from '../utils/lexicalIndex';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Document } from './Document';
 
@@ -27,6 +28,7 @@ import { Document } from './Document';
       using: 'hnsw',
       fields: [{ name: 'embedding', operator: 'vector_cosine_ops' }],
     },
+    lexicalContentIndex({ table: 'document_chunks' }),
   ],
   hooks: {
     beforeValidate: (instance: DocumentChunk) => {

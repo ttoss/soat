@@ -184,7 +184,7 @@ If the lexical query fails — a text search configuration that does not exist, 
 
 Every search query runs under a statement timeout (`KNOWLEDGE_QUERY_TIMEOUT_MS`, thirty seconds by default). A vector or unranked query past it ends the search as `422 QUERY_TIMEOUT`; scope the search with `document_paths`, `memory_store_ids` or `tags`, or lower `limit`.
 
-**No full-text index ships with this.** `to_tsvector` is computed per candidate row, which is cheaper than an index to maintain until a corpus is large. Promote to a stored `tsvector` column with a GIN index when either holds: lexical p95 latency exceeds vector p95, or a project passes roughly 100k chunks.
+**The lexical channel is indexed.** Document chunks and memory contents carry a GIN index over `to_tsvector('simple', content)`, so a lexical search is an index lookup, not a scan of every chunk. Two consequences: a chunk or memory longer than 512 KB is never a lexical match (it stays a vector one), and under a `KNOWLEDGE_TEXT_SEARCH_CONFIG` other than `simple` the channel answers the same rows without the index, re-tokenizing the whole table on every search.
 
 ### Relevance scoring
 
