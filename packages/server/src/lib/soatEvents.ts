@@ -145,7 +145,9 @@ export const SOAT_EVENTS = {
       'A task moved onto a newer workflow version; the payload carries the task plus `from_state` and `from_workflow_version`.',
     'tasks.closed': 'A task reached a terminal state.',
     'tasks.unblocked':
-      "A task's last open dependency closed, was removed or was deleted, so nothing holds it; the payload carries the task plus `unblocked_by: { task_id, state }`.",
+      "A task's last open dependency closed, was removed or was deleted, so no dependency holds it; the payload carries the task plus `unblocked_by: { task_id, state }`.",
+    'tasks.hold_cleared':
+      "An open task's hold date passed; the payload carries the task plus `cleared_hold: { until, reason }`.",
     'tasks.stalled': 'A task exceeded its stall threshold without progress.',
     'tasks.paused': "A task's automation was paused by an operator.",
     'tasks.resumed': "A task's automation was resumed.",

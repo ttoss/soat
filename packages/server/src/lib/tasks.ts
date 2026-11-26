@@ -95,6 +95,8 @@ export const mapTask = (args: {
     last_result: instance.lastResult ?? null,
     assignee: instance.assignee,
     priority: instance.priority ?? null,
+    hold_until: instance.holdUntil ?? null,
+    hold_reason: instance.holdReason ?? null,
     active_dispatch: instance.activeDispatch,
     automation_status: instance.automationStatus,
     pause_requested_at: instance.pauseRequestedAt,

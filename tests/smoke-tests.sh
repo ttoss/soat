@@ -6582,6 +6582,18 @@ if [ "$PRIO" != "high" ] || [ "$PRIO_LISTED" != "true" ] || [ "$PRIO_CLEARED" !=
 fi
 echo "Task priority: OK (set, filtered, cleared)"
 
+HOLD_UNTIL=$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ)
+HOLD_RESP=$($SOAT_CLI set-task-hold --task-id "$TASK_ID" --hold-until "$HOLD_UNTIL" --hold-reason smoke)
+HOLD_BLOCKED=$(printf '%s\n' "$HOLD_RESP" | jq -r '.readiness.blocked_by[0].kind')
+HOLD_PULLED=$($SOAT_CLI list-tasks --workflow-id "$WORKFLOW_ID" --blocked false | jq -r --arg id "$TASK_ID" '[.data[].id] | index($id) != null')
+HOLD_CLEARED=$($SOAT_CLI set-task-hold --task-id "$TASK_ID" --hold-until null | jq -r '.readiness.blocked')
+if [ "$HOLD_BLOCKED" != "scheduled" ] || [ "$HOLD_PULLED" != "false" ] || [ "$HOLD_CLEARED" != "false" ]; then
+  echo "ERROR: task hold blocked_by=$HOLD_BLOCKED pulled=$HOLD_PULLED cleared_blocked=$HOLD_CLEARED" >&2
+  printf '%s\n' "$HOLD_RESP"
+  exit 1
+fi
+echo "Task hold: OK (held, skipped by blocked=false, cleared)"
+
 # A create retried under one idempotency key replays the first task; the
 # same key with a different body is refused.
 TASK_IDEM_KEY="smoke-task-create-$(date +%s)"

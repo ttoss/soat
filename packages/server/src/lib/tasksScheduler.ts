@@ -71,6 +71,53 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
 });
 
 /**
+ * Clears each open task's passed hold and emits `tasks.hold_cleared`.
+ * Readiness reads the hold against the clock, so the task is ready before this
+ * runs; the sweep only spends the hold, guarded on it still being the passed
+ * one, so a hold reset meanwhile survives and the event fires once.
+ */
+export const sweepClearedHolds = createSweep<TaskInstance>({
+  log,
+  name: 'sweepClearedHolds',
+  inFlight: new Set<number>(),
+  findDue: ({ now, limit }) => {
+    return db.Task.findAll({
+      where: { status: 'open', holdUntil: { [Op.lte]: now } },
+      order: [['holdUntil', 'ASC']],
+      include: taskIncludes(),
+      limit,
+    }) as Promise<TaskInstance[]>;
+  },
+  idOf: (task) => {
+    return task.id as number;
+  },
+  claim: async ({ row: task }) => {
+    const [claimed] = await db.Task.update(
+      { holdUntil: null, holdReason: null },
+      {
+        where: {
+          id: task.id as number,
+          status: 'open',
+          holdUntil: task.holdUntil as Date,
+        },
+      }
+    );
+    return claimed > 0;
+  },
+  handle: async ({ row: task }) => {
+    const clearedHold = { until: task.holdUntil, reason: task.holdReason };
+    await task.reload({ include: taskIncludes() });
+    await emitTaskEvent({
+      type: 'tasks.hold_cleared',
+      projectId: task.projectId as number,
+      task: await presentTask({ task }),
+      facts: { cleared_hold: clearedHold },
+    });
+    log('sweepClearedHolds: emitted tasks.hold_cleared task=%s', task.publicId);
+  },
+});
+
+/**
  * Recovers tasks whose dispatch outcome nobody was left to hear.
  *
  * A dispatch is awaited in-process while the run it waits on is durable and
@@ -107,14 +154,15 @@ const scheduler = createScheduler({
   envVar: 'TASKS_SCHEDULER_INTERVAL_MS',
   sweeps: [
     sweepStalledTasks,
+    sweepClearedHolds,
     reconcileOrphanedDispatches,
     resumeWorkflowMigrations,
   ],
 });
 
 /**
- * Starts the task sweeper loop — stall deadlines, orphaned dispatches and
- * interrupted workflow migrations.
+ * Starts the task sweeper loop — stall deadlines, passed holds, orphaned
+ * dispatches and interrupted workflow migrations.
  * Called once from `server.ts` at startup; unit tests drive
  * {@link sweepStalledTasks} and {@link reconcileOrphanedDispatches} directly
  * instead. The timer is unref'd and repeated calls are a no-op.

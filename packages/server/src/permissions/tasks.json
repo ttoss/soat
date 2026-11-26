@@ -42,6 +42,11 @@
       "description": "Set or clear a task's priority"
     },
     {
+      "operationId": "setTaskHold",
+      "action": "tasks:SetTaskHold",
+      "description": "Hold a task until a date, or clear its hold"
+    },
+    {
       "operationId": "transitionTask",
       "action": "tasks:TransitionTask",
       "description": "Fire a named transition on a task"
