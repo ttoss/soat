@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.134.0](https://github.com/ttoss/soat/compare/v0.133.0...v0.134.0) (2026-11-26)
+
+### Bug Fixes
+
+* **formations:** $ref AgentStepRule and AgentStopCondition from the agent template ([#2209](https://github.com/ttoss/soat/issues/2209)) ([56ebf1a](https://github.com/ttoss/soat/commit/56ebf1a698ca0423d8b9b2573a4f568310ffb87b))
+* **formations:** $ref the create route's target, node, edge, state and transition components ([#2212](https://github.com/ttoss/soat/issues/2212)) ([3529320](https://github.com/ttoss/soat/commit/352932085de2e43e87a7dae777e820ab6486b4b7))
+
+### Features
+
+* **principals:** every record naming who acted serves acts_for ([#2208](https://github.com/ttoss/soat/issues/2208)) ([5342313](https://github.com/ttoss/soat/commit/5342313feda267a7b3de092807286c62494088e2))
+
+### BREAKING CHANGES
+
+* **principals:** an audit entry serves the principal an IAM token or
+  On-Behalf-Of assertion acted for as acts_for, not detail.on_behalf_of_principal.
+
 # [0.133.0](https://github.com/ttoss/soat/compare/v0.132.0...v0.133.0) (2026-11-26)
 
 ### Bug Fixes
