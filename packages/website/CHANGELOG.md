@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.136.0](https://github.com/ttoss/soat/compare/v0.135.0...v0.136.0) (2026-11-27)
+
+### Bug Fixes
+
+* **server:** debug log lines write an error only through loggableError ([#2225](https://github.com/ttoss/soat/issues/2225)) ([0139de2](https://github.com/ttoss/soat/commit/0139de2bde6b7b6c4be87fdc0f74fb89a90477dd))
+
+### Features
+
+* **tools:** serve a non-2xx JSON body parsed and keep external content out of error logs ([#2224](https://github.com/ttoss/soat/issues/2224)) ([878ad56](https://github.com/ttoss/soat/commit/878ad568c0ce4db672669b15c9b067c76788a7d0))
+
 # [0.135.0](https://github.com/ttoss/soat/compare/v0.134.0...v0.135.0) (2026-11-27)
 
 ### Bug Fixes
