@@ -37,6 +37,7 @@ describe('On-Behalf-Of authority', () => {
   let projectKey: string;
   let projectKeyId: string;
   let toolId: string;
+  let forwardingToolId: string;
   let mcpPath: string;
   let callbackAgent: string;
   let documentId: string;
@@ -137,6 +138,17 @@ describe('On-Behalf-Of authority', () => {
       mcp: { url: `${turn.target.baseUrl}${mcpPath}` },
     });
     toolId = tool.id;
+    forwardingToolId = (
+      await turn.createTool({
+        type: 'mcp',
+        execute: undefined,
+        parameters: undefined,
+        mcp: {
+          url: `${turn.target.baseUrl}${mcpPath}`,
+          forward_principal: true,
+        },
+      })
+    ).id;
 
     const key = await turn
       .api()
@@ -248,6 +260,21 @@ describe('On-Behalf-Of authority', () => {
 
       expect(payload).not.toContain(PRINCIPAL.id);
       expect(payload).not.toContain(PRINCIPAL.type);
+      expect(payload).not.toContain('tools:CallTool');
+      expect(payload).not.toContain('Allow');
+    });
+
+    test('a tool server that opts in reads the principal as acts_for, never the policy', async () => {
+      const res = await authenticatedTestClient(
+        await mintToken(['tools:CallTool', 'agents:*'])
+      )
+        .post(`/api/v1/tools/${forwardingToolId}/call`)
+        .send({ action: 'echo', input: {} });
+      expect(res.status).toBe(200);
+
+      const payload = payloadOf(lastAssertion());
+
+      expect(JSON.parse(payload).acts_for).toEqual(PRINCIPAL);
       expect(payload).not.toContain('tools:CallTool');
       expect(payload).not.toContain('Allow');
     });

@@ -44,7 +44,14 @@ export type McpTransport = {
   trust: ToolTrust;
 };
 
+type McpConfig = {
+  url: string;
+  headers?: Record<string, string> | null;
+  forward_principal?: boolean;
+};
+
 const identityOf = async (args: {
+  mcp: McpConfig;
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
 }): Promise<ToolAssertionIdentity> => {
@@ -65,6 +72,7 @@ const identityOf = async (args: {
       sender: args.meter.sender,
       projectPublicId: project.publicId,
     }),
+    forwardPrincipal: args.mcp.forward_principal === true,
   };
 };
 
@@ -74,7 +82,7 @@ const identityOf = async (args: {
  * references. Throws a missing context key or secret before anything is sent.
  */
 export const openMcpTransport = async (args: {
-  mcp: { url: string; headers?: Record<string, string> | null };
+  mcp: McpConfig;
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;

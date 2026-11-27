@@ -946,7 +946,8 @@ components:
             before the outbound MCP request; `url` accepts `{{secret:...}}` only.
             A literal credential in `headers` or `url` is refused, exactly as in
             `execute`. `pin_definitions: true` pins each action's definition;
-            see `mcp_pins`.
+            see `mcp_pins`. `forward_principal: true` signs the principal the
+            call's chain of work acts for into the tool assertion.
         mcp_pins:
           type: object
           nullable: true
@@ -1663,3 +1664,10 @@ components:
             `annotations` later differ from its pin, or that has none. Each
             drift files one `mcp_definition_drift` exception. Default `false`.
             Only a persisted tool pins.
+        forward_principal:
+          type: boolean
+          description: >-
+            Sign the principal the call's chain of work acts for (an IAM
+            token's `principal`) into each request's tool assertion, as the
+            `acts_for` claim. Default `false`: the server receives no
+            principal. Only a persisted tool forwards it.

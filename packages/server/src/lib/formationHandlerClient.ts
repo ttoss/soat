@@ -197,6 +197,7 @@ const assertionHeaders = (args: {
       toolId: null,
       projectId: args.assertion.projectPublicId,
       authority: args.assertion.authority,
+      forwardPrincipal: false,
     },
     url: args.url,
     body: args.body,

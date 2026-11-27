@@ -119,10 +119,12 @@ export type ToolAssertionIdentity = {
   workId?: string | null;
   context?: Record<string, string>;
   /**
-   * The sender's authority: sealed whole into `ath`, and its `principal`, the
-   * one the call's chain of work acts for, signed in the clear as `acts_for`.
+   * The sender's authority, sealed whole into `ath`. Its `principal`, the one
+   * the call's chain of work acts for, is signed in the clear as `acts_for`
+   * only to a server that opted in (`forwardPrincipal`).
    */
   authority: AssertionAuthority;
+  forwardPrincipal: boolean;
 };
 
 const encode = (value: object): string => {
@@ -179,7 +181,7 @@ export const toolAssertionHeaders = (args: {
       : {}),
     ...(args.identity.workId ? { work_id: args.identity.workId } : {}),
     ...identityClaims(args.identity.context),
-    ...(args.identity.authority.principal
+    ...(args.identity.forwardPrincipal && args.identity.authority.principal
       ? { acts_for: args.identity.authority.principal }
       : {}),
     ath: sealAssertionAuthority({ authority: args.identity.authority }),

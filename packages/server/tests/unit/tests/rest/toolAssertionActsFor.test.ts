@@ -11,10 +11,11 @@ import { proposeCalls } from '../../fixtures/scriptedModel';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * A tool server reads whom the whole chain of work acts for from the signed
- * `acts_for` claim, however the call was reached: agent → `builtin` tool →
- * orchestration run → `pipeline` tool → agent → `mcp` tool, in the request
- * or resumed by a worker from the run's stored authority.
+ * A tool server that opts in (`mcp.forward_principal`) reads whom the whole
+ * chain of work acts for from the signed `acts_for` claim, however the call
+ * was reached: agent → `builtin` tool → orchestration run → `pipeline` tool →
+ * agent → `mcp` tool, in the request or resumed by a worker from the run's
+ * stored authority.
  */
 
 const ACTIONS = ['agents:*', 'tools:*', 'orchestrations:*'];
@@ -33,6 +34,7 @@ describe('the acts_for claim of a tool assertion', () => {
   let startTool: { id: string; name: string };
   let mcpPath: string;
   let mcpToolId: string;
+  let silentToolId: string;
   const saved = {
     key: process.env.TOOL_ASSERTION_PRIVATE_KEY,
     worker: process.env.ORCHESTRATION_WORKER_DISABLED,
@@ -124,14 +126,18 @@ describe('the acts_for claim of a tool assertion', () => {
     projectKey = key.body.key;
 
     mcpPath = `/${turn.unique('mcp')}`;
-    turn.target.reply(mcpPath, (body) => {
-      const result =
-        body.method === 'tools/list'
-          ? { tools: [{ name: 'echo' }] }
-          : { content: [{ type: 'text', text: '{"ok":true}' }] };
-      return { body: { jsonrpc: '2.0', id: body.id, result } };
-    });
     mcpToolId = (
+      await turn.createTool({
+        type: 'mcp',
+        execute: undefined,
+        parameters: undefined,
+        mcp: {
+          url: `${turn.target.baseUrl}${mcpPath}`,
+          forward_principal: true,
+        },
+      })
+    ).id;
+    silentToolId = (
       await turn.createTool({
         type: 'mcp',
         execute: undefined,
@@ -200,8 +206,16 @@ describe('the acts_for claim of a tool assertion', () => {
     });
   });
 
+  // `reset` clears every reply, so the server is re-registered after it.
   beforeEach(() => {
     turn.target.reset();
+    turn.target.reply(mcpPath, (body) => {
+      const result =
+        body.method === 'tools/list'
+          ? { tools: [{ name: 'echo' }] }
+          : { content: [{ type: 'text', text: '{"ok":true}' }] };
+      return { body: { jsonrpc: '2.0', id: body.id, result } };
+    });
   });
 
   afterAll(async () => {
@@ -247,6 +261,46 @@ describe('the acts_for claim of a tool assertion', () => {
 
     const [claims] = callClaims();
     expect(claims.acts_for).toEqual(PRINCIPAL);
+  });
+
+  test('a server that does not opt in reads none', async () => {
+    const res = await authenticatedTestClient(await tokenFor(PRINCIPAL))
+      .post(`/api/v1/tools/${silentToolId}/call`)
+      .send({ action: 'echo', input: {} });
+    expect(res.status).toBe(200);
+
+    const [claims] = callClaims();
+    expect(claims).not.toHaveProperty('acts_for');
+  });
+
+  test('an inline `mcp` tool cannot opt in', async () => {
+    const starter = await turn.api().get(`/api/v1/agents/${starterAgentId}`);
+    expect(starter.status).toBe(200);
+
+    const res = await turn
+      .api()
+      .post('/api/v1/agents')
+      .send({
+        project_id: turn.projectId,
+        ai_provider_id: starter.body.ai_provider_id,
+        name: turn.unique('inline'),
+        tool_bindings: [
+          {
+            tool: {
+              name: 'inline-mcp',
+              type: 'mcp',
+              mcp: {
+                url: `${turn.target.baseUrl}${mcpPath}`,
+                forward_principal: true,
+              },
+            },
+          },
+        ],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    expect(res.body.error.message).toContain('mcp.forward_principal');
   });
 
   test('a run whose principal is revoked fails before the end is called', async () => {

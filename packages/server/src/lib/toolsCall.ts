@@ -102,6 +102,17 @@ export const assertEphemeralTypeSupported = (
       'An inline mcp tool cannot set mcp.pin_definitions; only a persisted tool, referenced by ID, can.'
     );
   }
+  // The principal goes only to a server its project registered, never to a
+  // URL the caller names.
+  if (
+    isPlainObject(definition.mcp) &&
+    definition.mcp.forward_principal === true
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'An inline mcp tool cannot set mcp.forward_principal; only a persisted tool, referenced by ID, can.'
+    );
+  }
 };
 
 // ── Resolved Tool Execution ───────────────────────────────────────────────
