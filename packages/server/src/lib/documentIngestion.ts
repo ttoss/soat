@@ -30,6 +30,7 @@ import {
   type GenerationEndUser,
 } from './generationAttribution';
 import { resolveIngestionRule } from './ingestionRules';
+import { loggableError } from './loggableError';
 import { principalOfAuthority } from './principals';
 import {
   resolveSourcePages,
@@ -257,7 +258,7 @@ const processDocumentIngestion = async (args: {
     log(
       'processDocumentIngestion: failed docId=%d error=%o',
       args.docId,
-      error
+      loggableError(error)
     );
     try {
       const failure = ingestionFailure(error);

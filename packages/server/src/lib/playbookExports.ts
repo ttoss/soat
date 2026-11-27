@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
+import { loggableError } from './loggableError';
 import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList } from './pagination';
 import {
@@ -184,7 +185,11 @@ const renderInBackground = async (
   try {
     await renderPlaybookExport(args);
   } catch (error) {
-    log('renderInBackground: %d did not settle %o', args.exportId, error);
+    log(
+      'renderInBackground: %d did not settle %o',
+      args.exportId,
+      loggableError(error)
+    );
   }
 };
 

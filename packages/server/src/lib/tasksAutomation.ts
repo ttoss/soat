@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
+import { loggableError } from './loggableError';
 import { emitTaskEvent } from './taskEvents';
 import { taskExpressionContext } from './taskExpressionContext';
 import { readinessOfTask } from './taskReadiness';
@@ -237,7 +238,7 @@ const handleFailure = async (args: {
   log(
     'runStateAutomation: dispatch failed task=%s %o',
     args.taskPublicId,
-    args.error
+    loggableError(args.error)
   );
   const { generationId, orchestrationRunId } = failedDispatchIds(args.error);
   const failedId = generationId ?? orchestrationRunId;

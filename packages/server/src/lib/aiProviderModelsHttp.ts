@@ -90,14 +90,13 @@ export const readJson = async (args: {
   if (!response.ok) {
     // The status is carried through; the body is not. `base_url` names the host
     // that wrote this body, so relaying it would answer a caller with whatever
-    // the host they chose said — the read half of an SSRF. It goes to the
-    // server log instead, where an operator debugging a real provider can see
-    // it and a tenant cannot.
+    // the host they chose said — the read half of an SSRF. A log line carries
+    // only what the server wrote, so it names the body's length.
     log(
-      'readJson: %s listing failed status=%d body=%s',
+      'readJson: %s listing failed status=%d bodyLength=%d',
       args.provider,
       response.status,
-      body.slice(0, 500)
+      body.length
     );
     throw new DomainError(
       'MODEL_LISTING_FAILED',

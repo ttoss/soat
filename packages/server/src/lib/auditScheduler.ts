@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { sweepExpiredAuditEntries } from './auditLog';
+import { loggableError } from './loggableError';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:audit');
@@ -18,7 +19,7 @@ export const runRetentionSweep = async (): Promise<number> => {
   try {
     return await sweepExpiredAuditEntries();
   } catch (error) {
-    log('runRetentionSweep: sweep failed %o', error);
+    log('runRetentionSweep: sweep failed %o', loggableError(error));
     return 0;
   }
 };

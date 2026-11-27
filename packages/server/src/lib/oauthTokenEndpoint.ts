@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { readCappedText } from './cappedBody';
+import { loggableError } from './loggableError';
 import type { ResolvedOauthClient } from './oauthClients';
 import { PROTOCOL_ANSWER_MAX_BYTES } from './requestBounds';
 import { fetchWithEgressGuard } from './toolEgress';
@@ -172,6 +173,6 @@ export const revokeToken = async (args: {
     });
     log('revokeToken: status=%d', response.status);
   } catch (error) {
-    log('revokeToken: failed %s', messageOf(error));
+    log('revokeToken: failed %o', loggableError(error));
   }
 };

@@ -5,6 +5,7 @@ import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
 import { workCaller } from '../middleware/auth';
 import type { GenerationInputMessage } from './generationInputMessages';
+import { loggableError } from './loggableError';
 import { principalOfAuthority } from './principals';
 import { assertProjectAcceptsWork } from './projectPause';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
@@ -407,7 +408,11 @@ export const runFiringDispatch = async (
         label: 'trigger firing',
       }),
     });
-    log('runFiringDispatch: firing=%s failed %o', firing.publicId, error);
+    log(
+      'runFiringDispatch: firing=%s failed %o',
+      firing.publicId,
+      loggableError(error)
+    );
   }
 
   try {
@@ -464,7 +469,11 @@ export const runReservedFiring = async (args: {
         label: 'trigger firing',
       }),
     });
-    log('runReservedFiring: firing=%s refused %o', firing.publicId, error);
+    log(
+      'runReservedFiring: firing=%s refused %o',
+      firing.publicId,
+      loggableError(error)
+    );
   }
 };
 

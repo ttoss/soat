@@ -9,6 +9,7 @@ import {
   type GenerationEndUser,
   resolveEndUserAttribution,
 } from './generationAttribution';
+import { loggableError } from './loggableError';
 import {
   buildEmbeddingComponents,
   computeComponentCostUsd,
@@ -249,12 +250,18 @@ export const withGenerationEmbeddingUsage = async <
       { generationPublicId: null },
       { where: pending }
     ).catch((detachError) => {
-      log('withGenerationEmbeddingUsage: detach failed error=%s', detachError);
+      log(
+        'withGenerationEmbeddingUsage: detach failed error=%o',
+        loggableError(detachError)
+      );
     });
     throw error;
   }
   await linkPendingEmbeddings(pending).catch((error) => {
-    log('withGenerationEmbeddingUsage: link failed error=%s', error);
+    log(
+      'withGenerationEmbeddingUsage: link failed error=%o',
+      loggableError(error)
+    );
   });
   return created;
 };

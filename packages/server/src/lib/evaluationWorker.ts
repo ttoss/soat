@@ -36,6 +36,7 @@ import {
   recountEvalRunProgress,
 } from './evaluationRunExecution';
 import { readScorerModels } from './evaluationScorerModels';
+import { loggableError } from './loggableError';
 import { runAsJob } from './requestCorrelation';
 import { agentReferences } from './resourceReferences';
 import { createScheduler } from './scheduler';
@@ -125,7 +126,7 @@ const failUnrunnable = async (args: {
   const { run, projectId } = args.context;
   await discardEvalItemTasks({ evalRunId: run.id as number });
   if (!(await claimRunFinalization({ runDbId: run.id as number }))) return;
-  log('failUnrunnable: run=%s %s', run.publicId, args.error.message);
+  log('failUnrunnable: run=%s %o', run.publicId, loggableError(args.error));
   await failEvalRun({ run, projectId, error: args.error });
 };
 
@@ -346,7 +347,7 @@ export const drainEvalQueueOnce = async (args?: {
   try {
     tasks = await claimEvalItemTasks({ limit, now: args?.now });
   } catch (error) {
-    log('drainEvalQueueOnce: claim failed %o', error);
+    log('drainEvalQueueOnce: claim failed %o', loggableError(error));
     return 0;
   }
 
@@ -366,7 +367,7 @@ export const drainEvalQueueOnce = async (args?: {
         log(
           'drainEvalQueueOnce: handle failed task=%s %o',
           task.publicId,
-          error
+          loggableError(error)
         );
       }
     })
@@ -456,7 +457,7 @@ export const reapAbandonedEvalRuns = async (args?: {
       limit: 20,
     });
   } catch (error) {
-    log('reapAbandonedEvalRuns: query failed %o', error);
+    log('reapAbandonedEvalRuns: query failed %o', loggableError(error));
     return 0;
   }
 

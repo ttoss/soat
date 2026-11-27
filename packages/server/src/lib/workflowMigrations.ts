@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { servedActsFor } from './actsFor';
+import { loggableError } from './loggableError';
 import { createdByColumns, servedPrincipal } from './principals';
 import { createSweep } from './scheduler';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
@@ -140,7 +141,7 @@ const settleItem = async (args: {
     });
     return { ...item, status: 'migrated', error: null };
   } catch (error) {
-    log('settleItem: %s refused %o', item.taskPublicId, error);
+    log('settleItem: %s refused %o', item.taskPublicId, loggableError(error));
     return {
       ...item,
       status: 'refused',
@@ -185,7 +186,7 @@ const runInBackground = async (args: { id: number }): Promise<void> => {
   try {
     await runWorkflowMigration(args);
   } catch (error) {
-    log('runInBackground: %d did not settle %o', args.id, error);
+    log('runInBackground: %d did not settle %o', args.id, loggableError(error));
   }
 };
 

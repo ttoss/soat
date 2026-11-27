@@ -9,6 +9,7 @@ import type {
   GuardrailDecision,
   GuardrailEvaluationResult,
 } from './guardrailEvaluation';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:guardrails');
 
@@ -215,7 +216,7 @@ export const persistGuardrailEvaluations = async (args: {
     log(
       'persistGuardrailEvaluations: failed projectId=%d %o',
       args.projectId,
-      error
+      loggableError(error)
     );
   }
 };

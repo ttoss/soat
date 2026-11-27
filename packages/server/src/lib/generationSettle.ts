@@ -26,6 +26,7 @@ import {
   NO_GENERATION_LEASE,
   segmentLeaseToken,
 } from './generationSegment';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:generation');
 
@@ -184,7 +185,11 @@ const settledColumns = async (args: {
  */
 export const logSettleFailure = (generationId: string) => {
   return (error: unknown): false => {
-    log('settleGeneration: failed generationId=%s %o', generationId, error);
+    log(
+      'settleGeneration: failed generationId=%s %o',
+      generationId,
+      loggableError(error)
+    );
     return false;
   };
 };

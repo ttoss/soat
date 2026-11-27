@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
 import * as extractionCompletion from './memoryExtractionCompletion';
 
 const log = createDebug('soat:memory-extraction');
@@ -127,9 +128,9 @@ export const runBuiltInExtractor = async (args: {
     return parseFactCandidates(text);
   } catch (error) {
     log(
-      'runBuiltInExtractor: completion failed agentId=%s error=%s',
+      'runBuiltInExtractor: completion failed agentId=%s error=%o',
       args.agentId,
-      error instanceof Error ? error.message : String(error)
+      loggableError(error)
     );
     return [];
   }

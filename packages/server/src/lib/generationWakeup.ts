@@ -10,6 +10,7 @@ import { Client } from 'pg';
 
 import { db } from '../db';
 import type { Transaction } from './dbTransaction';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:generation-wakeup');
 
@@ -57,7 +58,7 @@ const openListener = async (): Promise<Client | null> => {
     if (Number.isInteger(generationDbId)) wakeAll(generationDbId);
   });
   client.on('error', (error) => {
-    log('listener: error %o', error);
+    log('listener: error %o', loggableError(error));
     dropListener(client);
   });
   try {
@@ -66,7 +67,7 @@ const openListener = async (): Promise<Client | null> => {
     log('listener: listening');
     return client;
   } catch (error) {
-    log('listener: could not listen, polling only %o', error);
+    log('listener: could not listen, polling only %o', loggableError(error));
     dropListener(client);
     return null;
   }

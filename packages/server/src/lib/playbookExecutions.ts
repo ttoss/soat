@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { onEvent, retryOrRecordDrop, type SoatEvent } from './eventBus';
+import { loggableError } from './loggableError';
 import type { OnBehalfOf } from './onBehalfOf';
 import { paginatedList } from './pagination';
 import {
@@ -146,7 +147,11 @@ const executeInBackground = async (args: {
   try {
     await executeClaimed(args);
   } catch (error) {
-    log('executeInBackground: %d did not settle: %o', args.executionId, error);
+    log(
+      'executeInBackground: %d did not settle: %o',
+      args.executionId,
+      loggableError(error)
+    );
   }
 };
 

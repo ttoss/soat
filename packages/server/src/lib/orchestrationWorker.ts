@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { loggableError } from './loggableError';
 import {
   type ClaimedTask,
   getOrchestrationQueueDriver,
@@ -186,7 +187,7 @@ export const drainQueueOnce = async (args?: {
   try {
     tasks = await driver.claim({ limit, now: args?.now });
   } catch (error) {
-    log('drainQueueOnce: claim failed %o', error);
+    log('drainQueueOnce: claim failed %o', loggableError(error));
     return 0;
   }
 
@@ -212,7 +213,11 @@ export const drainQueueOnce = async (args?: {
         await driver.ack({ task });
       } catch (error) {
         // Leave the task un-acked so its lease expires and it is redelivered.
-        log('drainQueueOnce: handle failed task=%s %o', task.id, error);
+        log(
+          'drainQueueOnce: handle failed task=%s %o',
+          task.id,
+          loggableError(error)
+        );
       } finally {
         inFlight -= 1;
       }

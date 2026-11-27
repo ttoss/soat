@@ -24,6 +24,7 @@ import {
 } from './approvals';
 import { expireChainIfSettled } from './generationChains';
 import { countStoredToolResult } from './generationProvenance';
+import { loggableError } from './loggableError';
 import { isPlainObject } from './plainObject';
 import { agentReferences } from './resourceReferences';
 import { toolCallRunsAs } from './toolCallRunsAs';
@@ -452,7 +453,11 @@ const runToolCallContinuation = async (args: {
         authority,
         toolContext: args.toolContext,
       }).catch((error: unknown) => {
-        log('executeApprovedAction failed id=%s %o', item.id, error);
+        log(
+          'executeApprovedAction failed id=%s %o',
+          item.id,
+          loggableError(error)
+        );
         // An error this API relays or decides keeps the code and meta a model
         // reads elsewhere.
         return toolErrorAnswer(error)?.result ?? { error: errorMessage(error) };
@@ -485,7 +490,11 @@ const runToolCallContinuation = async (args: {
     // The continuation is best-effort: the decision is already persisted and
     // its webhook emitted. A failure here (e.g. the proposing agent was since
     // deleted) is logged, never thrown — the resolve request must not fail.
-    log('runToolCallContinuation failed id=%s %o', item.id, error);
+    log(
+      'runToolCallContinuation failed id=%s %o',
+      item.id,
+      loggableError(error)
+    );
   }
 };
 

@@ -8,6 +8,7 @@ import {
   type UnpricedRow,
 } from './costEnforceability';
 import { resolveGenerationEndUser } from './generationAttribution';
+import { loggableError } from './loggableError';
 import { projectScopeWhere } from './projectScope';
 import { quotaBreachError, type WindowedQuotaBreach } from './quotaBreach';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
@@ -553,7 +554,7 @@ export const checkGenerationQuota = async (args: {
   try {
     return await evaluateGenerationQuotas(args);
   } catch (error) {
-    log('checkGenerationQuota: failing open %O', error);
+    log('checkGenerationQuota: failing open %O', loggableError(error));
     return null;
   }
 };
@@ -569,7 +570,7 @@ export const assertProjectSpendWithinQuota = async (args: {
   try {
     breach = await evaluateProjectSpendQuotas(args);
   } catch (error) {
-    log('assertProjectSpendWithinQuota: failing open %O', error);
+    log('assertProjectSpendWithinQuota: failing open %O', loggableError(error));
   }
   if (breach) throw quotaBreachError(breach);
 };

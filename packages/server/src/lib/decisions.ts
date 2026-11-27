@@ -16,6 +16,7 @@ import {
   failedOutcome,
 } from './decisionBackends';
 import { emitResourceEvent } from './eventBus';
+import { loggableError } from './loggableError';
 import { type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -232,7 +233,7 @@ const recordAndEvaluate = async (args: {
     log(
       'recordAndEvaluate: evaluation failed id=%s %o',
       decision.publicId,
-      error
+      loggableError(error)
     );
   });
   return queued;

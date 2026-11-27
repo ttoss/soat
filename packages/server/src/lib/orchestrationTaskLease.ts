@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { holdLease } from './leases';
+import { loggableError } from './loggableError';
 import {
   type ClaimedTask,
   getOrchestrationQueueDriver,
@@ -46,7 +47,7 @@ export const withTaskLeaseHeld = async <T>(args: {
       log(
         'withTaskLeaseHeld: heartbeat failed task=%s %o',
         args.task.id,
-        error
+        loggableError(error)
       );
     },
   });

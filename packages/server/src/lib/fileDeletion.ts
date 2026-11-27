@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { INCLUDING_EXPIRED_FILES } from './expiredFiles';
 import { removeFile } from './fileRemoval';
+import { loggableError } from './loggableError';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:file-deletion');
@@ -22,7 +23,7 @@ const removeEach = async (files: FileRow[]): Promise<number> => {
       log(
         'removeEach: fileId=%s failed %o',
         files[index].publicId,
-        result.reason
+        loggableError(result.reason)
       );
     }
   }

@@ -1,3 +1,4 @@
+import { loggableError } from './loggableError';
 import { runAsJob } from './requestCorrelation';
 
 const BATCH_LIMIT = 20;
@@ -45,7 +46,7 @@ export const createSweep = <M>(config: SweepConfig<M>): Sweep => {
     try {
       due = await config.findDue({ now, limit });
     } catch (error) {
-      config.log('%s: query failed %o', config.name, error);
+      config.log('%s: query failed %o', config.name, loggableError(error));
       return 0;
     }
 
@@ -63,7 +64,12 @@ export const createSweep = <M>(config: SweepConfig<M>): Sweep => {
         return config.handle({ row });
       })
         .catch((error: unknown) => {
-          config.log('%s: handle failed id=%s %o', config.name, id, error);
+          config.log(
+            '%s: handle failed id=%s %o',
+            config.name,
+            id,
+            loggableError(error)
+          );
         })
         .finally(() => {
           config.inFlight.delete(id);
@@ -107,7 +113,7 @@ export const createScheduler = (
   const runSweeps = (): void => {
     for (const sweep of config.sweeps) {
       void runAsJob(sweep).catch((error: unknown) => {
-        config.log('sweep failed %o', error);
+        config.log('sweep failed %o', loggableError(error));
       });
     }
   };

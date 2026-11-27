@@ -9,6 +9,7 @@ import { emitResourceEvent } from './eventBus';
 import { rethrowAsPathConflict } from './filePathConflict';
 import type { GenerationEndUser } from './generationAttribution';
 import type { MappedIngestionRule } from './ingestionRules';
+import { loggableError } from './loggableError';
 import type { StoredError } from './storedError';
 
 const log = createDebug('soat:documents');
@@ -91,7 +92,11 @@ export const emitIngestFailed = async (args: {
       data: { error: args.error },
     });
   } catch (error) {
-    log('emitIngestFailed: docId=%d error=%o', args.docId, error);
+    log(
+      'emitIngestFailed: docId=%d error=%o',
+      args.docId,
+      loggableError(error)
+    );
   }
 };
 

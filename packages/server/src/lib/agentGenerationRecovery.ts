@@ -26,6 +26,7 @@ import {
 } from './generationProvenance';
 import { createGenerationRecord, generations } from './generations';
 import { settleGeneration } from './generationSettle';
+import { loggableError } from './loggableError';
 import type { ReplayedWindow } from './replayRefusal';
 import { agentReferences } from './resourceReferences';
 import { saveTrace } from './traces';
@@ -128,7 +129,11 @@ const buildGuardResult = async (args: {
       return true;
     },
     (error: unknown) => {
-      log('buildGuardResult: record failed %s %o', args.generationId, error);
+      log(
+        'buildGuardResult: record failed %s %o',
+        args.generationId,
+        loggableError(error)
+      );
       return false;
     }
   );

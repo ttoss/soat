@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import type { EmbeddingBilling } from './embedding';
 import { getEmbedding } from './embedding';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:knowledge');
 
@@ -38,7 +39,7 @@ export const embedQueryOrDegrade = async (args: {
     if (error instanceof DomainError) throw error;
     log(
       'embedQueryOrDegrade: embedding failed, degrading to lexical-only: %o',
-      error
+      loggableError(error)
     );
     return undefined;
   }

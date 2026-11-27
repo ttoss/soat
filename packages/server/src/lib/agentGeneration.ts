@@ -3,12 +3,13 @@ import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
 
 import { actingAgentOf } from './agentAuthority';
+import type { CreateGenerationArgs } from './agentGenerationArgs';
 import {
   buildGenerationContext,
   type GenerationContext,
 } from './agentGenerationContext';
 import { buildDepthGuardIfExhausted } from './agentGenerationRecovery';
-import type { GenerationIds, GenerationResult } from './agentGenerationTypes';
+import type { GenerationResult } from './agentGenerationTypes';
 import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
 import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
@@ -32,6 +33,7 @@ import { recordGenerationFailure } from './generationLifecycle';
 import { provenanceForNewRow } from './generationProvenance';
 import { createGenerationRecord } from './generations';
 import { gateGenerationStart } from './generationStartGate';
+import { loggableError } from './loggableError';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { assertGenerationProjectAcceptsWork } from './projectPause';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
@@ -203,72 +205,16 @@ const resolveContextAndRecord = async (
     if (args.idempotency && isUniqueViolation(error)) throw error;
     if (isFileClaimRefusal(error)) throw error;
     log(
-      'resolveContextAndRecord: failed to create generation record generationId=%s error=%s',
+      'resolveContextAndRecord: failed to create generation record generationId=%s error=%o',
       ctx.generationId,
-      error instanceof Error ? error.message : String(error)
+      loggableError(error)
     );
   });
 
   return ctx;
 };
 
-export type CreateGenerationArgs = {
-  projectIds?: number[];
-  // The project the turn runs and is recorded in, when the caller knows it;
-  // the agent is then that project's own or one shared with it.
-  runProjectId?: number;
-  agentId: string;
-  messages: GenerationInputMessage[];
-  stream?: boolean;
-  traceId?: string;
-  parentTraceId?: string | null;
-  rootTraceId?: string | null;
-  initiatorGenerationId?: string | null;
-  remainingDepth?: number;
-  authority: WorkAuthority | null;
-  authUser?: AuthUser;
-  toolContext?: Record<string, string>;
-  abortSignal?: AbortSignal;
-  knowledgeConfig?: object;
-  citationConfig?: object;
-  actionId?: string;
-  triggerId?: string;
-  orchestrationRunId?: string;
-  nodeId?: string;
-  // The orchestration node's 1-based retry attempt, completing the
-  // run + node + attempt replay identity. Absent outside an orchestration node.
-  nodeAttempt?: number;
-  // End-user attribution: the session this generation runs in, from which the
-  // actor is derived. Set by the session path; absent for direct API
-  // generations, triggers, and orchestration nodes — no end user behind them.
-  sessionId?: string;
-  // An actor with no session, validated by the entry point that names it
-  // (`assertCallerEndUser`); ignored beside a session. Set by ingestion.
-  actorId?: string;
-  // The conversation this turn answers, set by the conversation path only.
-  conversation?: GenerationConversation;
-  metadata?: Record<string, unknown> | null;
-  // Caller-supplied guardrail context (guardrails.md — Guards and Guardrail
-  // Context); the `context.*` namespace guards read at tool-dispatch time.
-  guardrailContext?: Record<string, unknown> | null;
-  // Forces one archived agent version instead of letting release assignment
-  // pick per generation. Set by eval runs, which must measure every item
-  // against the same config (the evaluations module doc — Version pinning).
-  pinnedAgentVersion?: number | null;
-  // Copied onto the usage event at the metering choke point, so verification
-  // spend stays separable from production spend.
-  source?: string | null;
-  // Written only by `claimKeyedGeneration`, which checks the key first.
-  idempotency?: GenerationIdempotency;
-  // The schema a decider's question set compiles to. Internal only: no route
-  // reads a per-call schema, so a call site cannot widen what an agent answers.
-  outputSchemaOverride?: Record<string, unknown>;
-  // Overrides the agent's `timezone` for this turn's instruction tokens.
-  timezone?: unknown;
-  // Called once the record exists and before the provider is, so a caller
-  // blocked on the turn can name it while it runs. Internal only.
-  onRecorded?: (args: GenerationIds) => Promise<void> | void;
-};
+export type { CreateGenerationArgs };
 
 /**
  * Everything that must happen before the provider is called: input validation,

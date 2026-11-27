@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import * as auditLog from './auditLog';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:audit');
 
@@ -27,7 +28,7 @@ const drain = async (): Promise<void> => {
     try {
       await auditLog.writeAuditEntry(job);
     } catch (error) {
-      log('drain: write failed %o', error);
+      log('drain: write failed %o', loggableError(error));
     }
   }
 };

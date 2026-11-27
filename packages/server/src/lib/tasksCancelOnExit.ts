@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
 import type { ActiveDispatch } from './tasks';
 
 const log = createDebug('soat:tasks');
@@ -21,7 +22,7 @@ export const cancelDispatchOnExit = async (args: {
       });
     } catch (error) {
       // A terminal run is not cancellable — nothing to do.
-      log('cancelDispatchOnExit: %o', error);
+      log('cancelDispatchOnExit: %o', loggableError(error));
     }
   }
   // Generation dispatches are detached: their late result is discarded by the

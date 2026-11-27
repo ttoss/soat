@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { createGeneration } from './agentGeneration';
+import { loggableError } from './loggableError';
 import { runBuiltInExtractor } from './memoryExtraction';
 import { isPlainObject } from './plainObject';
 import { resourceWorkAuthority } from './resourceWork';
@@ -256,9 +257,9 @@ export const runRuleHandler = async (args: {
     });
   } catch (error) {
     log(
-      'runRuleHandler: rule=%s handler failed error=%s',
+      'runRuleHandler: rule=%s handler failed error=%o',
       args.turn.ruleId,
-      error instanceof Error ? error.message : String(error)
+      loggableError(error)
     );
     return [];
   }

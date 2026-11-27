@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { loggableError } from './loggableError';
 import { PARKING_EXECUTOR_TYPES } from './playbookCaseAutomation';
 import {
   caseDefinition,
@@ -84,7 +85,7 @@ const drainPendingOnce = async (): Promise<number> => {
       log(
         'drainPendingOnce: %s failed %o',
         claimed[index].publicId,
-        result.reason
+        loggableError(result.reason)
       );
     }
   }

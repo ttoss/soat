@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
+
 const log = createDebug('soat:orchestrations');
 
 const DEFAULT_HEARTBEAT_STALE_MS = 30_000;
@@ -61,7 +63,7 @@ export const writeWorkerHeartbeat = async (args: {
     await fs.writeFile(tempPath, JSON.stringify(payload), 'utf8');
     await fs.rename(tempPath, filePath);
   } catch (error) {
-    log('writeWorkerHeartbeat: failed %o', error);
+    log('writeWorkerHeartbeat: failed %o', loggableError(error));
   }
 };
 

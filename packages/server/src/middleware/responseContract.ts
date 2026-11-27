@@ -185,16 +185,15 @@ export const responseContractMiddleware = async (ctx: Context, next: Next) => {
   const camel = reportDrift({ found, where });
   if (camel.length === 0) return;
 
-  const message =
+  const drift =
     `Response for ${where} contains camelCase key(s): ${keyList(camel)}. The ` +
     `wire contract is snake_case in both directions — the lib mapper for this ` +
     `resource must serialize every field with its spec name. Nothing rewrites ` +
-    `keys at the boundary any more, so an unconverted field reaches the ` +
-    `client as-is.`;
+    `keys at the boundary, so an unconverted field reaches the client as-is.`;
 
-  log(message);
+  log(drift);
 
   if (process.env.NODE_ENV === 'test') {
-    throw new Error(message);
+    throw new Error(drift);
   }
 };

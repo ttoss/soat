@@ -1,5 +1,7 @@
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
+
 const log = createDebug('soat:transientRetry');
 
 /** Attempts in total, not retries after the first. */
@@ -44,7 +46,13 @@ export const retryTransient = async <T>(args: {
       return await args.operation();
     } catch (error) {
       lastError = error;
-      log('%s: attempt %d/%d failed %o', args.label, attempt, attempts, error);
+      log(
+        '%s: attempt %d/%d failed %o',
+        args.label,
+        attempt,
+        attempts,
+        loggableError(error)
+      );
       if (attempt < attempts) await sleep(baseDelayMs * 2 ** (attempt - 1));
     }
   }

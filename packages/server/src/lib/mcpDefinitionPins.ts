@@ -12,6 +12,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { unavailableToolsNote } from './agentToolUnavailable';
 import { fileException } from './exceptions';
+import { loggableError } from './loggableError';
 import type { McpToolListing } from './mcpToolListing';
 import { isPlainObject } from './plainObject';
 import { stableDigest } from './stableDigest';
@@ -118,7 +119,11 @@ const fileDrift = async (args: {
     });
   } catch (error) {
     // Reporting must not take the turn down; the action is withheld regardless.
-    log('fileDrift: failed tool=%s error=%o', args.tool.publicId, error);
+    log(
+      'fileDrift: failed tool=%s error=%o',
+      args.tool.publicId,
+      loggableError(error)
+    );
   }
 };
 

@@ -14,6 +14,7 @@ import { startEvalWorker } from './lib/evaluationWorker';
 import { startFileExpiryScheduler } from './lib/fileDeletion';
 import { startGenerationSweepScheduler } from './lib/generationSweep';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
+import { loggableError } from './lib/loggableError';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startPlaybookScheduler } from './lib/playbookCascade';
@@ -122,7 +123,7 @@ const startServer = async () => {
     } catch (error) {
       log(
         'startServer: failed to create admin user from environment variables error=%o',
-        error
+        loggableError(error)
       );
     }
   }

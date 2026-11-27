@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { AuthUser, Context } from '../Context';
+import { loggableError } from '../lib/loggableError';
 import { wrapIsAllowed } from '../lib/permissions';
 import {
   evaluateRequestQuotas,
@@ -61,7 +62,10 @@ export const attributeRequestToProject = async (args: {
     apiKeyPublicId: args.apiKeyPublicId,
   }).catch((error: unknown) => {
     // Fail open — never let a counter write failure take down live traffic.
-    log('attributeRequestToProject: failing open on counter error %O', error);
+    log(
+      'attributeRequestToProject: failing open on counter error %O',
+      loggableError(error)
+    );
     return null;
   });
 
