@@ -16,6 +16,10 @@ import {
   type PlaybookUpstream,
   type PlaybookUpstreamRef,
 } from './playbookDefinition';
+import {
+  readExecutorKnowledge,
+  readPlaybookKnowledge,
+} from './playbookKnowledge';
 import { readRequired } from './playbookRequired';
 import type { PlaybookDefinitionProblem } from './playbookValidation';
 import { throwValidationProblems } from './validationProblems';
@@ -128,6 +132,21 @@ const readOperationId = (args: {
   return executor.operation_id;
 };
 
+const readExecutorInput = (args: {
+  path: string;
+  executor: Record<string, unknown>;
+}): Record<string, JsonValue> | undefined => {
+  const { input } = args.executor;
+  if (input === undefined) return undefined;
+  if (!isPlainObject(input)) {
+    throw invalid(
+      `${args.path}.input must be an object of JSON Logic expressions.`
+    );
+  }
+  // Read off a JSON body, so already a JSON value.
+  return input as Record<string, JsonValue>;
+};
+
 const readExecutor = (args: {
   path: string;
   executor: unknown;
@@ -144,17 +163,14 @@ const readExecutor = (args: {
     throw invalid(`${path}.id must be a non-empty string.`);
   }
   const operationId = readOperationId({ path, executor });
-  if (executor.input !== undefined && !isPlainObject(executor.input)) {
-    throw invalid(`${path}.input must be an object of JSON Logic expressions.`);
-  }
+  const input = readExecutorInput({ path, executor });
+  const knowledge = readExecutorKnowledge({ path, executor });
   return {
     type: executor.type as PlaybookExecutorType,
     id: executor.id,
     ...(operationId !== undefined && { operation_id: operationId }),
-    ...(executor.input !== undefined && {
-      // Read off a JSON body, so already a JSON value.
-      input: executor.input as Record<string, JsonValue>,
-    }),
+    ...(input && { input }),
+    ...(knowledge && { knowledge }),
   };
 };
 
@@ -320,7 +336,12 @@ export const parsePlaybookDefinition = (args: {
       `definition.nodes must hold between 1 and ${MAX_NODES} nodes.`
     );
   }
+  const knowledge = readPlaybookKnowledge({
+    path: 'definition.knowledge',
+    value: definition.knowledge,
+  });
   return {
+    ...(knowledge && { knowledge }),
     ...readUpstreams(definition.upstreams),
     nodes: definition.nodes.map((node, index) => {
       return readNode({ path: `definition.nodes[${index}]`, node });

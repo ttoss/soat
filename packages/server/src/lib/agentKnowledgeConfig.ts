@@ -151,3 +151,28 @@ export const mergeKnowledgeConfig = (args: {
     tags: mergeRecords(base.tags, override.tags),
   };
 };
+
+/**
+ * The outbound half of {@link readKnowledgeConfig}: the wire casing, field by
+ * field, carrying only the fields that are set.
+ */
+export const writeKnowledgeConfig = (
+  config: KnowledgeConfig
+): Record<string, unknown> => {
+  const wire: Record<string, unknown> = {
+    memory_store_ids: config.memoryStoreIds,
+    document_ids: config.documentIds,
+    document_paths: config.documentPaths,
+    tags: config.tags,
+    min_score: config.minScore,
+    rrf_k: config.rrfK,
+    recency_half_life_days: config.recencyHalfLifeDays,
+    limit: config.limit,
+    write_memory_store_id: config.writeMemoryStoreId,
+  };
+  return Object.fromEntries(
+    Object.entries(wire).filter(([, value]) => {
+      return value !== undefined;
+    })
+  );
+};

@@ -121,6 +121,7 @@ const runAgentDispatch = async (args: {
   inputs: Record<string, unknown>;
   authority: WorkAuthority | null;
   toolContext?: Record<string, string>;
+  knowledgeConfig?: object;
   onDispatchStarted?: DispatchStarted;
 }): Promise<DispatchResult> => {
   const authority = args.authority
@@ -133,6 +134,7 @@ const runAgentDispatch = async (args: {
     messages: buildAgentMessages(args.inputs),
     authority,
     toolContext: args.toolContext,
+    knowledgeConfig: args.knowledgeConfig,
     stream: false,
     onRecorded: args.onDispatchStarted
       ? ({ generationId }) => {
@@ -249,6 +251,11 @@ export const runDispatch = async (args: {
    * run a `loop` or `sub_orchestration` node starts.
    */
   toolContext?: Record<string, string>;
+  /**
+   * An `agent` dispatch's per-call `knowledge_config`, read under `authority`
+   * as any caller-named config is.
+   */
+  knowledgeConfig?: object;
   // Called as soon as a dispatch id is known but before the (blocking) wait
   // completes: at run creation for an orchestration, once its record exists
   // for an agent's generation, so the id can be persisted while it is in flight.
@@ -262,6 +269,7 @@ export const runDispatch = async (args: {
       inputs: args.inputs,
       authority: args.authority,
       toolContext: args.toolContext,
+      knowledgeConfig: args.knowledgeConfig,
       onDispatchStarted: args.onDispatchStarted,
     });
   }

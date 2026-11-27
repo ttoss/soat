@@ -8,7 +8,12 @@ import { applyInputMapping } from './jsonLogicMapping';
 import { startOrchestrationRun } from './orchestrationEngine';
 import type { MappedOrchestrationRun } from './orchestrations';
 import { isPlainObject } from './plainObject';
-import type { JsonValue, PlaybookExecutor } from './playbookDefinition';
+import type {
+  JsonValue,
+  PlaybookExecutor,
+  PlaybookKnowledge,
+} from './playbookDefinition';
+import { nodeKnowledgeConfig } from './playbookKnowledge';
 import { createTask } from './tasks';
 import { NON_SUCCESS_TERMINAL_STATUSES, runDispatch } from './tasksDispatch';
 import type { WorkAuthority } from './workAuthority';
@@ -34,6 +39,8 @@ type StartArgs = {
   values: Record<string, JsonValue>;
   /** The executor's input: its mapping over `values`, or `values` itself. */
   input: Record<string, unknown>;
+  /** The definition's `knowledge`, under an `agent` executor's own. */
+  knowledge?: PlaybookKnowledge;
   projectId: number;
   executionPublicId: string;
   title: string;
@@ -65,6 +72,10 @@ const startAgent = async (args: StartArgs): Promise<ExecutorOutcome> => {
     inputs: args.input,
     taskContext: args.values,
     authority: args.runAs.authority,
+    knowledgeConfig: nodeKnowledgeConfig({
+      playbook: args.knowledge,
+      executor: args.executor.knowledge,
+    }),
     // Named while the turn runs, so a write its tools make back through
     // another credential is still traced to this execution.
     onDispatchStarted: async ({ generationId }) => {

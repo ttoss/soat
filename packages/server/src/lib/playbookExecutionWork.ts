@@ -119,6 +119,7 @@ export const executeClaimed = async (args: {
         executor,
         values: view.values,
         input: execution.input as Record<string, unknown>,
+        knowledge: definition.knowledge,
         projectId: row.projectId,
         executionPublicId: execution.publicId,
         title: `${row.subject} · ${node.title}`,

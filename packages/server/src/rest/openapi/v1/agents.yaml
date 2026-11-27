@@ -2947,57 +2947,7 @@ components:
             so a retry may flip them.
           example: discord-1287654321098765432
         knowledge_config:
-          type: object
-          nullable: true
-          description: Per-generation knowledge retrieval override. Array filters (memory_store_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, rrf_k, recency_half_life_days, limit) use the per-generation value when present.
-          additionalProperties: false
-          properties:
-            memory_store_ids:
-              x-soat-ref: memory-stores
-              type: array
-              items:
-                type: string
-            document_ids:
-              x-soat-ref: documents
-              type: array
-              items:
-                type: string
-            document_paths:
-              type: array
-              items:
-                type: string
-            tags:
-              description: >-
-                Key-value pairs a result's own `tags` must all contain (exact
-                match). Scopes documents and memories alike.
-              allOf:
-                - $ref: './tags.yaml#/components/schemas/TagBag'
-            min_score:
-              type: number
-              description: >
-                Minimum raw cosine similarity (0–1) a vector candidate must
-                reach to be ranked, the floor the search endpoint spells
-                `min_similarity`. No default: omitted means no floor at all,
-                and every one of the `limit` nearest chunks is injected however
-                weak it is.
-            rrf_k:
-              type: integer
-              description: >
-                The `k` in the fusion term `1 / (k + rank)`, the same knob
-                knowledge search takes. Smaller weights the top of each ranking
-                more heavily. Omitted, the deployment's `KNOWLEDGE_RRF_K`
-                applies.
-            recency_half_life_days:
-              type: number
-              description: >
-                Half-life in days of the decay applied to **memory** results
-                after fusion, the same knob knowledge search takes. `0`
-                disables it. Omitted, the deployment's
-                `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` applies.
-            limit:
-              type: integer
-              description: >
-                Maximum number of results to inject. Omitted, 10 are injected.
+          $ref: '#/components/schemas/GenerationKnowledgeConfig'
         citation_config:
           type: object
           additionalProperties: false
@@ -3009,6 +2959,58 @@ components:
               type: boolean
               description: Whether this turn asks for and returns citations.
 
+    GenerationKnowledgeConfig:
+      type: object
+      nullable: true
+      description: Per-generation knowledge retrieval override. Array filters (memory_store_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, rrf_k, recency_half_life_days, limit) use the per-generation value when present.
+      additionalProperties: false
+      properties:
+        memory_store_ids:
+          x-soat-ref: memory-stores
+          type: array
+          items:
+            type: string
+        document_ids:
+          x-soat-ref: documents
+          type: array
+          items:
+            type: string
+        document_paths:
+          type: array
+          items:
+            type: string
+        tags:
+          description: >-
+            Key-value pairs a result's own `tags` must all contain (exact
+            match). Scopes documents and memories alike.
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/TagBag'
+        min_score:
+          type: number
+          description: >
+            Minimum raw cosine similarity (0–1) a vector candidate must
+            reach to be ranked, the floor the search endpoint spells
+            `min_similarity`. No default: omitted means no floor at all,
+            and every one of the `limit` nearest chunks is injected however
+            weak it is.
+        rrf_k:
+          type: integer
+          description: >
+            The `k` in the fusion term `1 / (k + rank)`, the same knob
+            knowledge search takes. Smaller weights the top of each ranking
+            more heavily. Omitted, the deployment's `KNOWLEDGE_RRF_K`
+            applies.
+        recency_half_life_days:
+          type: number
+          description: >
+            Half-life in days of the decay applied to **memory** results
+            after fusion, the same knob knowledge search takes. `0`
+            disables it. Omitted, the deployment's
+            `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` applies.
+        limit:
+          type: integer
+          description: >
+            Maximum number of results to inject. Omitted, 10 are injected.
     MessageContentPart:
       oneOf:
         - $ref: '#/components/schemas/TextMessageContentPart'
