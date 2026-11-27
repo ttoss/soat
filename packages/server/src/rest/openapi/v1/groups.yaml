@@ -1,0 +1,536 @@
+openapi: 3.0.3
+info:
+  title: SOAT Groups API
+  version: 1.0.0
+  description: >-
+    Groups of projects: an authorization scope above the project. A group's
+    attached policies cap every check in it, on its projects and on its own
+    resources, `srn:group:<group_id>:<type>/<id>`.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Groups
+    description: Manage groups of projects
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/groups:
+    get:
+      tags:
+        - Groups
+      summary: List groups
+      description: >-
+        Every group for the unrestricted admin; for anyone else, the groups the
+        caller owns and may read (`groups:GetGroup`).
+      operationId: listGroups
+      x-raises:
+        - INVALID_CURSOR
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: groups:ListGroups
+      x-soat-agent-exclude: true
+      parameters:
+        - $ref: './pagination.yaml#/components/parameters/Limit'
+        - $ref: './pagination.yaml#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Groups returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './pagination.yaml#/components/schemas/Page'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/GroupRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    post:
+      tags:
+        - Groups
+      summary: Create a group
+      description: >-
+        Creates a group owned by `owner_id`. Unrestricted admin only. The
+        writer holds every grant of the policies it attaches.
+      operationId: createGroup
+      x-raises:
+        - ACTION_NOT_HELD
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: groups:CreateGroup
+      x-soat-agent-exclude: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupCreateRequest'
+      responses:
+        '201':
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/groups/{group_id}:
+    get:
+      tags:
+        - Groups
+      summary: Get a group
+      description: >-
+        Needs `groups:GetGroup` on `srn:group:<group_id>:*`; a caller who may
+        not read the group gets `404`.
+      operationId: getGroup
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+      x-iam-action: groups:GetGroup
+      x-soat-agent-exclude: true
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Group public ID (grp_ prefix)
+          schema:
+            type: string
+            example: grp_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Group returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+    patch:
+      tags:
+        - Groups
+      summary: Update a group
+      description: >-
+        Needs `groups:UpdateGroup` on `srn:group:<group_id>:*`.
+        `fixed_policy_ids` is written by the unrestricted admin only, so the
+        owner can neither detach nor edit a fixed policy.
+      operationId: updateGroup
+      x-raises:
+        - ACTION_NOT_HELD
+        - FORBIDDEN
+        - POLICY_GRANT_NOT_HELD
+        - POLICY_NOT_FOUND
+        - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: groups:UpdateGroup
+      x-soat-agent-exclude: true
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Group public ID (grp_ prefix)
+          schema:
+            type: string
+            example: grp_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupUpdateRequest'
+      responses:
+        '200':
+          description: Group updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+    delete:
+      tags:
+        - Groups
+      summary: Delete a group
+      description: >-
+        Deletes a group holding no project, and its group keys. Unrestricted
+        admin only.
+      operationId: deleteGroup
+      x-raises:
+        - FORBIDDEN
+        - GROUP_HAS_PROJECTS
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+      x-iam-action: groups:DeleteGroup
+      x-soat-agent-exclude: true
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Group public ID (grp_ prefix)
+          schema:
+            type: string
+            example: grp_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Group deleted
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '409':
+          description: The group holds projects
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/groups/{group_id}/projects:
+    post:
+      tags:
+        - Groups
+      summary: Create a project in a group
+      description: >-
+        Needs `groups:CreateProject` on `srn:group:<group_id>:project/*`.
+      operationId: createGroupProject
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+        - VALIDATION_FAILED
+      x-iam-action: groups:CreateProject
+      x-soat-agent-exclude: true
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Group public ID (grp_ prefix)
+          schema:
+            type: string
+            example: grp_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The project's name.
+                  example: Support bot
+      responses:
+        '201':
+          description: Project created in the group
+          content:
+            application/json:
+              schema:
+                $ref: './projects.yaml#/components/schemas/ProjectRecord'
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '413':
+          $ref: './errors.yaml#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+  /api/v1/groups/{group_id}/projects/{project_id}:
+    put:
+      tags:
+        - Groups
+      summary: Add a project to a group
+      description: >-
+        Moves the project into the group, out of any other. Unrestricted admin
+        only.
+      operationId: addGroupProject
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+      x-iam-action: groups:AddGroupProject
+      x-soat-agent-exclude: true
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Group public ID (grp_ prefix)
+          schema:
+            type: string
+            example: grp_V1StGXR8Z5jdHi6B
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Project added
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+    delete:
+      tags:
+        - Groups
+      summary: Remove a project from a group
+      description: Takes the project out of the group. Unrestricted admin only.
+      operationId: removeGroupProject
+      x-raises:
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - UNAUTHORIZED
+      x-iam-action: groups:RemoveGroupProject
+      x-soat-agent-exclude: true
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Group public ID (grp_ prefix)
+          schema:
+            type: string
+            example: grp_V1StGXR8Z5jdHi6B
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Project removed
+        '400':
+          $ref: './errors.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './errors.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './errors.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './errors.yaml#/components/responses/NotFound'
+        '429':
+          $ref: './errors.yaml#/components/responses/TooManyRequests'
+        '500':
+          $ref: './errors.yaml#/components/responses/InternalError'
+        '4XX':
+          $ref: './errors.yaml#/components/responses/AdmissionRefused'
+        '502':
+          $ref: './errors.yaml#/components/responses/AdmissionUnavailable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    GroupRecord:
+      type: object
+      required:
+        - id
+        - name
+        - owner_id
+        - policy_ids
+        - fixed_policy_ids
+        - project_ids
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Public group ID (grp_ prefix)
+          example: grp_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: The group's name.
+          example: Acme
+        owner_id:
+          type: string
+          nullable: true
+          description: >-
+            The user holding the group's own resources: every group action on
+            `srn:group:<group_id>:*`, capped by the group's policies.
+          example: user_V1StGXR8Z5jdHi6B
+        policy_ids:
+          type: array
+          x-soat-ref: policies
+          description: >-
+            Policies the owner attached: global ones or policies of a project
+            in the group. With `fixed_policy_ids` they cap every check in the
+            group; none caps nothing.
+          items:
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6B']
+        fixed_policy_ids:
+          type: array
+          x-soat-ref: policies
+          description: >-
+            Global policies the unrestricted admin attached; only it writes
+            them.
+          items:
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6C']
+        project_ids:
+          type: array
+          description: The projects in the group.
+          items:
+            type: string
+          example: ['proj_V1StGXR8Z5jdHi6B']
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+    GroupCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - owner_id
+      properties:
+        name:
+          type: string
+          description: The group's name.
+          example: Acme
+        owner_id:
+          type: string
+          description: The user who owns the group.
+          example: user_V1StGXR8Z5jdHi6B
+        policy_ids:
+          type: array
+          x-soat-ref: policies
+          description: The owner's policies capping the group.
+          items:
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6B']
+        fixed_policy_ids:
+          type: array
+          x-soat-ref: policies
+          description: Global policies capping the group that only the admin writes.
+          items:
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6C']
+    GroupUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: The group's name.
+          example: Acme
+        policy_ids:
+          type: array
+          x-soat-ref: policies
+          description: Replaces the owner's policies.
+          items:
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6B']
+        fixed_policy_ids:
+          type: array
+          x-soat-ref: policies
+          description: Replaces the fixed policies; unrestricted admin only.
+          items:
+            type: string
+          example: ['pol_V1StGXR8Z5jdHi6C']

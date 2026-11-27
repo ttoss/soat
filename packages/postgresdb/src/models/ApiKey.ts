@@ -8,6 +8,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Group } from './Group';
 import { Project } from './Project';
 import { User } from './User';
 
@@ -75,6 +76,24 @@ export class ApiKey extends Model {
     { onDelete: 'CASCADE' }
   )
   declare project: Project;
+
+  /**
+   * The group a group key acts in: its group's own resources and the
+   * projects in it. Set only on a key with no `projectId`.
+   */
+  @ForeignKey(() => {
+    return Group;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare groupId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Group;
+    },
+    { foreignKey: 'groupId', as: 'group', onDelete: 'CASCADE' }
+  )
+  declare group: Group | null;
 
   /** Public ids of the policies capping the owner's grant; empty caps nothing. */
   @Column({

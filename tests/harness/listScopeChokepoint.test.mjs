@@ -17,6 +17,7 @@ const routesDir = fileURLToPath(
  */
 const NOT_PROJECT_SCOPED = {
   'apiKeys.ts /api-keys': 'owner-scoped: a user administers their own keys',
+  'groups.ts /groups': 'the groups the caller owns',
   'memories.ts /memories':
     'scoped by the memory store `?memory_store_id` names',
   'oauth.ts /oauth/consent-info': 'consent screen, not a list',

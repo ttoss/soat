@@ -91,7 +91,9 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   POLICY_OUTSIDE_PROJECT:
     "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
   POLICY_HAS_DEPENDENTS:
-    'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`{{PATCH /triggers/{trigger_id}}}`), the agents `meta.agent_sample` lists (`{{PATCH /agents/{agent_id}}}`) the webhooks `meta.webhook_sample` lists (`{{PUT /webhooks/{webhook_id}}}`), the users `meta.user_sample` lists (`{{PUT /users/{user_id}/policies}}`) and the API keys `meta.api_key_sample` lists (`{{PUT /api-keys/{api_key_id}}}`), or delete them, then delete the policy.',
+    'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`{{PATCH /triggers/{trigger_id}}}`), the agents `meta.agent_sample` lists (`{{PATCH /agents/{agent_id}}}`) the webhooks `meta.webhook_sample` lists (`{{PUT /webhooks/{webhook_id}}}`), the users `meta.user_sample` lists (`{{PUT /users/{user_id}/policies}}`), the groups `meta.group_sample` lists (`{{PATCH /groups/{group_id}}}`) and the API keys `meta.api_key_sample` lists (`{{PUT /api-keys/{api_key_id}}}`), or delete them, then delete the policy.',
+  GROUP_HAS_PROJECTS:
+    'Take each project out of the group (`{{DELETE /groups/{group_id}/projects/{project_id}}}`), then delete the group.',
   SHARE_CAP_EXCEEDED:
     "Wait `retry_after` seconds for the share's window to reset, or ask the publisher to raise its cap.",
   SHARE_IN_USE:

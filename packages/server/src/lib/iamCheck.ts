@@ -3,6 +3,12 @@ import createDebug from 'debug';
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
 import {
+  GROUP_ACTION_RESOURCE_TYPES,
+  isGroupAction,
+  isGroupSrn,
+  parseGroupSrn,
+} from './groupActions';
+import {
   BUILT_IN_ACTION_RESOURCE_TYPES,
   UNTYPED_BUILT_IN_MODULES,
   WHOLE_PROJECT,
@@ -74,19 +80,60 @@ export const assertDeclaredActionsCheckable = (args: {
   }
 };
 
-/**
- * Whether the caller's own policies allow a deployment-registered or built-in
- * action on an SRN, through the same `isAllowed` the
- * runtime's routes call. It evaluates policies only: it neither reads nor
- * asserts that the resource exists.
- */
-export const checkIamPermission = async (args: {
+/** A group action on its group's SRN, through `isAllowedOnGroup`. */
+const checkGroupPermission = async (args: {
+  isAllowedOnGroup: AuthUser['isAllowedOnGroup'];
+  action: string;
+  resource: string;
+  tags: unknown;
+}): Promise<{ allowed: boolean }> => {
+  const parsed = parseGroupSrn(args.resource);
+  if (!parsed) {
+    throw invalid(
+      `resource '${args.resource}' must be srn:group:<group_id>:<resource_type>/<id|*> or srn:group:<group_id>:*`
+    );
+  }
+  const types = GROUP_ACTION_RESOURCE_TYPES[args.action];
+  if (!types.includes(parsed.resourceType)) {
+    throw invalid(
+      `resource type '${parsed.resourceType}' is not one group action '${args.action}' is checked on`
+    );
+  }
+  if (args.tags !== undefined)
+    throw invalid('a group resource carries no tags');
+  const allowed = await args.isAllowedOnGroup({
+    groupPublicId: parsed.groupPublicId,
+    action: args.action,
+    resource: args.resource,
+  });
+  log(
+    'checkGroupPermission: action=%s resource=%s allowed=%s',
+    args.action,
+    args.resource,
+    allowed
+  );
+  return { allowed };
+};
+
+/** Whether a check is on a group; a group action is checked nowhere else. */
+const isOnGroup = (args: { action: string; resource: unknown }): boolean => {
+  const onGroup =
+    typeof args.resource === 'string' && isGroupSrn(args.resource);
+  if (onGroup !== isGroupAction(args.action)) {
+    throw invalid(
+      `action '${args.action}' and resource must both be a group's, srn:group:<group_id>:..., or neither`
+    );
+  }
+  return onGroup;
+};
+
+/** A project action on an SRN of one project, through `isAllowed`. */
+const checkProjectPermission = async (args: {
   isAllowed: AuthUser['isAllowed'];
-  action: unknown;
+  action: string;
   resource: unknown;
   tags: unknown;
 }): Promise<{ allowed: boolean }> => {
-  if (typeof args.action !== 'string') throw invalid('action is required');
   const checkable = checkableResourceTypes(args.action);
   if (!checkable) {
     throw invalid(
@@ -131,4 +178,28 @@ export const checkIamPermission = async (args: {
     allowed
   );
   return { allowed };
+};
+
+/**
+ * Whether the caller's own policies allow a deployment-registered or built-in
+ * action on an SRN, through the same `isAllowed` the
+ * runtime's routes call. It evaluates policies only: it neither reads nor
+ * asserts that the resource exists.
+ */
+export const checkIamPermission = async (args: {
+  isAllowed: AuthUser['isAllowed'];
+  isAllowedOnGroup: AuthUser['isAllowedOnGroup'];
+  action: unknown;
+  resource: unknown;
+  tags: unknown;
+}): Promise<{ allowed: boolean }> => {
+  if (typeof args.action !== 'string') throw invalid('action is required');
+  if (isOnGroup({ action: args.action, resource: args.resource })) {
+    return checkGroupPermission({
+      ...args,
+      action: args.action,
+      resource: args.resource as string,
+    });
+  }
+  return checkProjectPermission({ ...args, action: args.action });
 };

@@ -1,9 +1,11 @@
 import type { AuthUser, Context } from '../Context';
 import type { DeniedPrincipal } from '../lib/authorizationDenial';
+import { type CheckScope, loadGroupCap } from '../lib/groupAuthority';
 import type { PolicyDocument, PolicySets } from '../lib/iam';
 import {
   createPolicySetsIsAllowed,
   type LabeledPolicySets,
+  policyGroupsAllow,
   unlabelPolicySets,
   wrapIsAllowed,
 } from '../lib/permissions';
@@ -78,6 +80,7 @@ export type Authority = Pick<
   | 'operator'
   | 'narrowing'
   | 'declareRequestTags'
+  | 'isAllowedOnGroup'
 >;
 
 const ADMIN_WILDCARD_POLICY: PolicyDocument = {
@@ -133,8 +136,38 @@ const narrowingOf = (terms: AuthorityTerms): AuthUser['narrowing'] => {
 };
 
 /**
+ * The attached policies of the group a check lands in, as one more set every
+ * check there must satisfy; none for the operator, whose grant no group caps.
+ * Read once per request and scope.
+ */
+const createGroupCaps = (args: {
+  operator: boolean;
+}): ((scope: CheckScope) => Promise<LabeledPolicySets>) => {
+  const loaded = new Map<string, Promise<LabeledPolicySets>>();
+  return (scope) => {
+    if (args.operator) return Promise.resolve([]);
+    const key = 'group' in scope ? `group:${scope.group}` : scope.project;
+    let sets = loaded.get(key);
+    if (!sets) {
+      sets = loadGroupCap({ scope }).then((cap) => {
+        return cap
+          ? [
+              {
+                principal: { type: 'group' as const, id: cap.group },
+                sets: [[cap.document]],
+              },
+            ]
+          : [];
+      });
+      loaded.set(key, sets);
+    }
+    return sets;
+  };
+};
+
+/**
  * A request's effective authority: its grant ∩ every cap, inside the pinned
- * project. Each credential kind and each narrowing states its terms here, and
+ * project, ∩ the attached policies of the group the check lands in. Each credential kind and each narrowing states its terms here, and
  * checks, list filters, project resolution and key creation read one answer.
  */
 export const buildAuthority = (args: {
@@ -144,12 +177,19 @@ export const buildAuthority = (args: {
   const { terms, db } = args;
   const operator = terms.grant.bound.allows === 'everything';
   const unrestricted = operator && terms.pinned === null && uncapped(terms);
-  const getSets = () => {
-    return termsSets(terms);
+  const groupCaps = createGroupCaps({ operator });
+  const getSets = async (scope: CheckScope) => {
+    const [own, group] = await Promise.all([
+      termsSets(terms),
+      groupCaps(scope),
+    ]);
+    return [...own, ...group];
   };
   const checkPolicies = createPolicySetsIsAllowed({
     projectPublicId: terms.pinned ?? undefined,
-    getSets,
+    getSets: (project) => {
+      return getSets({ project });
+    },
   });
   // The tags this request writes, as `iam:RequestTag/<key>`: one request per
   // authority, so every check it makes reads them, the project probe of a
@@ -170,7 +210,7 @@ export const buildAuthority = (args: {
     if (terms.pinned !== null && projectPublicId !== terms.pinned) {
       return [{ principal: terms.grant.principal, sets: NOTHING_SETS }];
     }
-    return getSets();
+    return getSets({ project: projectPublicId });
   };
   return {
     isAllowed,
@@ -188,6 +228,17 @@ export const buildAuthority = (args: {
         },
         isAllowed,
         db,
+      });
+    },
+    isAllowedOnGroup: async (check) => {
+      if (terms.pinned !== null) return false;
+      return policyGroupsAllow({
+        groups: await getSets({ group: check.groupPublicId }),
+        check: {
+          action: check.action,
+          resource: check.resource,
+          context: { ...requestTagContext },
+        },
       });
     },
     unrestricted,

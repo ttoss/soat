@@ -31,41 +31,102 @@ type Issuer = {
   projectPublicId: string;
 };
 
-/**
- * Only an API key scoped to one project issues a token: the token is that key
- * held to a bound, so a user login, an unscoped key and every project-scoped
- * token (OAuth, IAM) are refused. A key narrowed by
- * `On-Behalf-Of` is refused too: the token would not carry that narrowing.
- */
-export const assertIamTokenIssuer = (args: {
+const refuseIssuer = (args: {
   authUser: AuthUser;
   onRefused: () => void;
-}): Issuer => {
+  message?: string;
+}): DomainError => {
+  log('assertIamTokenIssuer: refused user=%s', args.authUser.publicId);
+  args.onRefused();
+  return new DomainError(
+    'IAM_TOKEN_ISSUER_NOT_ALLOWED',
+    args.message ??
+      'Only an API key scoped to a project or to a group issues an IAM token.'
+  );
+};
+
+/**
+ * The project a group key's token acts in: `project_id`, a project of the
+ * key's group. A token acts in one project, whatever key issued it.
+ */
+const groupKeyProject = async (args: {
+  authUser: AuthUser;
+  projectId: unknown;
+  onRefused: () => void;
+}): Promise<{ id: number; publicId: string }> => {
+  const project =
+    typeof args.projectId === 'string'
+      ? await db.Project.findOne({
+          where: {
+            publicId: args.projectId,
+            groupId: args.authUser.apiKeyGroupId,
+          },
+          attributes: ['id', 'publicId'],
+        })
+      : null;
+  if (!project) {
+    throw refuseIssuer({
+      ...args,
+      message:
+        'A group key issues an IAM token for project_id, a project of its group.',
+    });
+  }
+  return { id: project.id as number, publicId: project.publicId as string };
+};
+
+/** The project the token acts in: a project key's own, or a group key's pick. */
+const issuerProject = async (args: {
+  authUser: AuthUser;
+  projectId: unknown;
+  onRefused: () => void;
+}): Promise<{ id: number; publicId: string }> => {
+  const { apiKeyProjectId, apiKeyProjectPublicId } = args.authUser;
+  if (apiKeyProjectId !== undefined && apiKeyProjectPublicId) {
+    if (
+      args.projectId !== undefined &&
+      args.projectId !== apiKeyProjectPublicId
+    ) {
+      throw refuseIssuer({
+        ...args,
+        message: 'A project key issues an IAM token for its own project only.',
+      });
+    }
+    return { id: apiKeyProjectId, publicId: apiKeyProjectPublicId };
+  }
+  if (args.authUser.apiKeyGroupId === undefined) throw refuseIssuer(args);
+  return groupKeyProject(args);
+};
+
+/**
+ * Only an API key scoped to one project, or to a group for `projectId` in it,
+ * issues a token: the token is that key held to a bound and pinned to that
+ * project, so a user login, an unscoped key and every project-scoped token
+ * (OAuth, IAM) are refused. A key narrowed by `On-Behalf-Of` is refused too:
+ * the token would not carry that narrowing.
+ */
+export const assertIamTokenIssuer = async (args: {
+  authUser: AuthUser;
+  projectId: unknown;
+  onRefused: () => void;
+}): Promise<Issuer> => {
   const { authUser } = args;
-  const { apiKeyPublicId, apiKeyProjectId, apiKeyProjectPublicId } = authUser;
-  const { publicId, role } = authUser;
+  const { apiKeyPublicId, publicId, role } = authUser;
   if (
     !publicId ||
     !role ||
     !apiKeyPublicId ||
-    apiKeyProjectId === undefined ||
-    !apiKeyProjectPublicId ||
     authUser.oauthProjectPublicId !== undefined ||
     authUser.onBehalfOf
   ) {
-    log('assertIamTokenIssuer: refused user=%s', authUser.publicId);
-    args.onRefused();
-    throw new DomainError(
-      'IAM_TOKEN_ISSUER_NOT_ALLOWED',
-      'Only an API key scoped to a project issues an IAM token.'
-    );
+    throw refuseIssuer(args);
   }
+  const project = await issuerProject(args);
   return {
     publicId,
     role,
     apiKeyPublicId,
-    projectId: apiKeyProjectId,
-    projectPublicId: apiKeyProjectPublicId,
+    projectId: project.id,
+    projectPublicId: project.publicId,
   };
 };
 

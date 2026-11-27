@@ -132,14 +132,14 @@ export const policyGroupsAllow = (args: {
 
 /**
  * Authorizer over policy sets that must each allow the request, confined to
- * one project. `getSets` is read per check, so a revoked policy takes effect
- * on the next one. `refusedBy` names the first group whose set refused a
+ * one project. `getSets` is read per check of its project, so a revoked policy
+ * takes effect on the next one. `refusedBy` names the first group whose set refused a
  * check and the denial that set's `Deny` declares; a refusal by the project
  * guards names none.
  */
 export const createPolicySetsIsAllowed = (args: {
   projectPublicId?: string;
-  getSets: () => Promise<LabeledPolicySets>;
+  getSets: (projectPublicId: string) => Promise<LabeledPolicySets>;
 }): ((reqArgs: PolicySetsCheck) => Promise<boolean>) & {
   refusedBy: RefusedBy;
 } => {
@@ -163,7 +163,7 @@ export const createPolicySetsIsAllowed = (args: {
     }
 
     const refusal = findRefusal({
-      groups: await args.getSets(),
+      groups: await args.getSets(reqArgs.projectPublicId),
       check: reqArgs,
     });
     if (!refusal) return true;

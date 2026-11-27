@@ -81,6 +81,7 @@ paths:
         - Otherwise the key inherits the user's permissions (confined to the key's project when scoped).
         - When the request is narrowed beyond its credential's own grant (an OAuth access token, an IAM token, an `On-Behalf-Of` assertion, or a call durable work makes under its stored authority), it returns `403 CREDENTIAL_NARROWED`: a key would outlive that narrowing.
         - When the request is authenticated with a **project-scoped API key**, the new key is confined to that same project: omitting `project_id` defaults to it, naming a different project returns `403 API_KEY_PROJECT_SCOPE`, and `project_id: null` (an unscoped key) is likewise refused. Minting an unscoped key requires an unscoped credential.
+        - With `group_id`, the key is a **group key**: it acts on the group's own resources and its projects, nowhere else, and manages only keys of the group or of a project in it. Revoking one needs `groups:RevokeApiKey` on `srn:group:<group_id>:api_key/<api_key_id>`.
         - When the request is authenticated with an **API key narrowed by `policy_ids`**, the new key stays inside that boundary: omitting `policy_ids` inherits the caller's own, a non-empty subset of them is accepted, and an empty list or any other policy returns `403 API_KEY_POLICY_BOUNDARY`.
       operationId: createApiKey
       x-raises:
@@ -117,6 +118,15 @@ paths:
                   description: Optional project ID to scope the key to. Omit or set null to create an unscoped key that spans projects.
                   example: proj_V1StGXR8Z5jdHi6B
                   x-soat-ref: projects
+                group_id:
+                  type: string
+                  nullable: true
+                  description: >-
+                    A group to scope the key to, in place of `project_id`: the
+                    key acts on the group's own resources and its projects
+                    only. Needs `groups:CreateApiKey` on
+                    `srn:group:<group_id>:api_key/*`.
+                  example: grp_V1StGXR8Z5jdHi6B
                 policy_ids:
                   x-soat-ref: policies
                   type: array
@@ -392,6 +402,11 @@ components:
           nullable: true
           description: The project this key is scoped to, or null for an unscoped key that spans projects
           example: proj_V1StGXR8Z5jdHi6B
+        group_id:
+          type: string
+          nullable: true
+          description: The group a group key acts in, or null for any other key
+          example: grp_V1StGXR8Z5jdHi6B
         policy_ids:
           x-soat-ref: policies
           type: array

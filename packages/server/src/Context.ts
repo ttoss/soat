@@ -53,6 +53,16 @@ export type AuthUser = {
   /** `getPolicies`, each set labeled with the principal that holds it. */
   getLabeledPolicies: (projectPublicId: string) => Promise<LabeledPolicySets>;
   /**
+   * Whether the caller may take a group action on a group's SRN: its grant ∩
+   * every cap ∩ the group's attached policies. A credential pinned to a
+   * project acts on no group.
+   */
+  isAllowedOnGroup: (args: {
+    groupPublicId: string;
+    action: string;
+    resource: string;
+  }) => Promise<boolean>;
+  /**
    * States the tags this request writes, so every later `isAllowed` of the
    * request reads them as `iam:RequestTag/<key>`. Called by each route that
    * writes caller tags, before it authorizes the write.
@@ -78,6 +88,10 @@ export type AuthUser = {
   apiKeyProjectId?: number;
   /** Public string id of the project the API key is scoped to. */
   apiKeyProjectPublicId?: string;
+  /** Internal numeric id of the group a group key acts in. */
+  apiKeyGroupId?: number;
+  /** Public string id of the group a group key acts in. */
+  apiKeyGroupPublicId?: string;
   /**
    * Internal numeric ids of the policies the API key is narrowed to. Absent
    * when the key carries no policy boundary.

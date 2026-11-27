@@ -312,7 +312,12 @@ export const ERROR_CODES = {
   POLICY_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The policy is in the `policy_ids` of one or more triggers, agents, webhooks, users, API keys, evals, deciders, ingestion rules, memory rules or playbooks, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.<carrier>s` and `meta.<carrier>_sample` do the same for each other carrier (`agents`, `webhooks`, `users`, `api_keys`, `evals`, `deciders`, `ingestion_rules`, `memory_rules`, `playbooks`).',
+      'The policy is in the `policy_ids` of one or more triggers, agents, webhooks, users, groups, API keys, evals, deciders, ingestion rules, memory rules or playbooks, and cannot be deleted. `meta.triggers` counts the triggers and `meta.sample` lists up to five trigger IDs; `meta.<carrier>s` and `meta.<carrier>_sample` do the same for each other carrier (`agents`, `webhooks`, `users`, `groups`, `api_keys`, `evals`, `deciders`, `ingestion_rules`, `memory_rules`, `playbooks`).',
+  },
+  GROUP_HAS_PROJECTS: {
+    httpStatus: 409,
+    description:
+      'The group holds one or more projects and cannot be deleted. `meta.projects` counts them.',
   },
   PROJECT_PAUSED: {
     httpStatus: 409,
@@ -375,7 +380,7 @@ export const ERROR_CODES = {
   IAM_TOKEN_ISSUER_NOT_ALLOWED: {
     httpStatus: 403,
     description:
-      'Only an API key scoped to one project issues an IAM token. A user token, an unscoped key, a project-scoped token (OAuth or IAM) and a request carrying `On-Behalf-Of` are refused.',
+      'Only an API key scoped to one project, or a group key for `project_id` in its group, issues an IAM token. A user token, an unscoped key, a project-scoped token (OAuth or IAM), a project key naming another project and a request carrying `On-Behalf-Of` are refused.',
   },
   CREDENTIAL_NARROWED: {
     httpStatus: 403,

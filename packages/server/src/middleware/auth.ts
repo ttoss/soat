@@ -77,6 +77,32 @@ const withAuthority = async (args: {
 };
 
 /**
+ * The project or group a key is scoped to; null when the one it names is gone,
+ * which leaves the key not live.
+ */
+const loadKeyScope = async (args: {
+  db: Context['db'];
+  row: { projectId: number | null; groupId: number | null };
+}) => {
+  const { db, row } = args;
+  const [project, group] = await Promise.all([
+    row.projectId === null
+      ? null
+      : db.Project.findOne({ where: { id: row.projectId } }),
+    row.groupId === null
+      ? null
+      : db.Group.findOne({ where: { id: row.groupId } }),
+  ]);
+  if (
+    (row.projectId !== null && !project) ||
+    (row.groupId !== null && !group)
+  ) {
+    return null;
+  }
+  return { project, group };
+};
+
+/**
  * A raw `sk_` key, or undefined when it is not live: its owner's grant capped
  * by the key's own `policy_ids`, pinned to its project when it has one. A key
  * whose project is gone is not live.
@@ -92,12 +118,9 @@ const resolveApiKey = async (args: {
   const apiKeyPolicyIds = row.policyIds;
   const apiKeyPublicId = row.publicId as string;
 
-  const rawProjectId = row.projectId as number | null;
-  const project =
-    rawProjectId === null
-      ? null
-      : await db.Project.findOne({ where: { id: rawProjectId } });
-  if (rawProjectId !== null && !project) return;
+  const scope = await loadKeyScope({ db, row });
+  if (!scope) return;
+  const { project, group } = scope;
 
   return {
     authUser: {
@@ -110,6 +133,12 @@ const resolveApiKey = async (args: {
         ? {
             apiKeyProjectId: project.id as number,
             apiKeyProjectPublicId: project.publicId as string,
+          }
+        : {}),
+      ...(group
+        ? {
+            apiKeyGroupId: group.id as number,
+            apiKeyGroupPublicId: group.publicId as string,
           }
         : {}),
       ...(apiKeyPolicyIds.length > 0 ? { apiKeyPolicyIds } : {}),
@@ -126,7 +155,11 @@ const resolveApiKey = async (args: {
         role: keyUser.role as string,
         policyIds: keyUser.policyIds,
       },
-      key: { publicId: apiKeyPublicId, policyIds: apiKeyPolicyIds },
+      key: {
+        publicId: apiKeyPublicId,
+        policyIds: apiKeyPolicyIds,
+        groupId: row.groupId,
+      },
     },
   };
 };

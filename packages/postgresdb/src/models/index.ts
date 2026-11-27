@@ -32,6 +32,7 @@ export { FormationResource } from './FormationResource';
 export { Generation } from './Generation';
 export { GenerationChain } from './GenerationChain';
 export { GenerationProgressEvent } from './GenerationProgressEvent';
+export { Group } from './Group';
 export { Guardrail } from './Guardrail';
 export { GuardrailEvaluation } from './GuardrailEvaluation';
 export { GuardrailVersion } from './GuardrailVersion';

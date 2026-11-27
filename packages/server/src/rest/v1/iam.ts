@@ -47,6 +47,7 @@ iamRouter.post('/iam/check', async (ctx: Context) => {
   };
   ctx.body = await checkIamPermission({
     isAllowed: ctx.authUser.isAllowed,
+    isAllowedOnGroup: ctx.authUser.isAllowedOnGroup,
     action: body.action,
     resource: body.resource,
     tags: body.context?.tags,
@@ -61,8 +62,10 @@ iamRouter.post('/iam/check', async (ctx: Context) => {
 iamRouter.post('/iam/tokens', async (ctx: Context) => {
   requireAuth(ctx);
   const action = 'iam:CreateToken';
-  const issuer = assertIamTokenIssuer({
+  const body = ctx.request.body as Record<string, unknown>;
+  const issuer = await assertIamTokenIssuer({
     authUser: ctx.authUser,
+    projectId: body.project_id,
     onRefused: () => {
       recordAuthorizationDecision(ctx, { action, allowed: false });
     },
@@ -77,7 +80,6 @@ iamRouter.post('/iam/tokens', async (ctx: Context) => {
   if (!allowed) {
     throw callerDenied({ authUser: ctx.authUser, action, resource });
   }
-  const body = ctx.request.body as Record<string, unknown>;
   const toolContext = parseToolContextBody({
     raw: body.tool_context,
     reservedPrefix: 'pass',

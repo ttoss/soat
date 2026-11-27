@@ -61,6 +61,7 @@ const NOT_NULL_FOREIGN_KEYS = [
   'generation_progress_events.generation_id',
   'generations.project_id',
   'generations.trace_id',
+  'groups.owner_user_id',
   'guardrail_evaluations.project_id',
   'guardrail_versions.guardrail_id',
   'guardrails.project_id',
