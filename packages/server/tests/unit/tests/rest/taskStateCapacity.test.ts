@@ -92,8 +92,10 @@ beforeAll(async () => {
       'workflows:CreateWorkflow',
       'workflows:GetWorkflow',
       'workflows:UpdateWorkflow',
+      'workflows:GetWorkflowVersion',
       'tasks:CreateTask',
       'tasks:GetTask',
+      'tasks:ListTasks',
       'tasks:TransitionTask',
       'tasks:MigrateTask',
       'approvals:ListApprovals',
@@ -121,14 +123,24 @@ describe('POST /api/v1/workflows — max_tasks', () => {
     expect(version.body.config.states[1].max_tasks).toBe(1);
   });
 
-  test.each([0, -1, 1.5])('refuses max_tasks %p', async (maxTasks) => {
-    const res = await postWorkflow({
+  const oneState = (maxTasks: number) => {
+    return {
       states: [
         { name: 'todo', initial: true, max_tasks: maxTasks },
         { name: 'done', terminal: true },
       ],
       transitions: [{ name: 'finish', from: ['todo'], to: 'done' }],
-    });
+    };
+  };
+
+  test('refuses a non-integer max_tasks at the request schema', async () => {
+    const res = await postWorkflow(oneState(1.5));
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test.each([0, -1])('refuses max_tasks %p', async (maxTasks) => {
+    const res = await postWorkflow(oneState(maxTasks));
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
     expect(res.body.error.meta.problems).toEqual([
