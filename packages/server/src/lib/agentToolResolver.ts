@@ -23,6 +23,7 @@ import { withOutboundToolHeaders } from './causationHeader';
 import { HttpToolError, toToolUnreachableError } from './httpToolError';
 import {
   parseResponseMode,
+  parseToolJsonBody,
   readBase64ToolResponse,
   readToolErrorBody,
   readToolResponseBody,
@@ -305,13 +306,15 @@ export const toHttpToolDomainError = (error: unknown): DomainError | null => {
   }
 
   // A stored tool's answer is data: its body, whatever code it names, stays in
-  // `tool_response_body` and never becomes this response's code.
+  // `tool_response_body` and `tool_response_json` and never becomes this
+  // response's code.
   return new DomainError(
     'TOOL_HTTP_ERROR',
     `Tool target returned HTTP ${error.status}: ${error.message}`,
     {
       tool_status_code: error.status,
       tool_response_body: error.body,
+      ...(error.json && { tool_response_json: error.json.value }),
       tool_url: error.url,
       tool_method: error.method,
     }
@@ -542,7 +545,7 @@ const readHttpToolResponse = async (args: {
   if (!response.ok) {
     const body = await readToolErrorBody({ response });
     throw new HttpToolError(
-      `HTTP ${response.status} ${method} ${url}: ${body}`,
+      `HTTP ${response.status} ${method} ${url}: ${body.text}`,
       response.status,
       body,
       url,
@@ -559,11 +562,8 @@ const readHttpToolResponse = async (args: {
   const responseText = new TextDecoder().decode(
     await readToolResponseBody({ response, url })
   );
-  try {
-    return JSON.parse(responseText);
-  } catch {
-    return responseText;
-  }
+  const parsed = parseToolJsonBody(responseText);
+  return parsed ? parsed.value : responseText;
 };
 
 const ALLOWED_METHODS = [

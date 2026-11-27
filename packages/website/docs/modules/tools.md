@@ -632,7 +632,16 @@ SOAT verifies the assertion against its own key, `iss` and `exp`, and requires a
 On a `builtin` tool without a body `action`, an `action` in `input` or `preset_parameters` selects the action and is not sent to it. With a body `action`, an input `action` reaches only an action that declares one: a tool binding `call-tool` takes `{ "action": "call-tool", "input": { "action": "list-agents" } }` and runs its target's `list-agents`.
 
 - A target neither publicly routable nor in `TOOL_EGRESS_ALLOWED_HOSTS` is `403 TOOL_EGRESS_BLOCKED` before any connection is opened — [Where a Tool May Reach](#where-a-tool-may-reach-egress).
-- A non-2xx target response is `502 TOOL_HTTP_ERROR`; error `meta` carries `tool_status_code`, `tool_response_body` (cut to [`TOOL_RESPONSE_MAX_BYTES`](#configuration)), `tool_url` and `tool_method`.
+- A non-2xx target response is `502 TOOL_HTTP_ERROR`; error `meta` carries:
+
+  | Key | Value |
+  | --- | --- |
+  | `tool_status_code` | the target's status |
+  | `tool_response_body` | the body as text, cut to [`TOOL_RESPONSE_MAX_BYTES`](#configuration) |
+  | `tool_response_json` | the body parsed; present only when the whole body is JSON, so absent for a text body and for one the ceiling cut |
+  | `tool_url`, `tool_method` | the URL as written and the method |
+
+  The body is the target's data: a `code` in it never becomes the response's `code`, and nothing retries or routes on it.
 - A 2xx body over [`TOOL_RESPONSE_MAX_BYTES`](#configuration) is `502 TOOL_RESPONSE_TOO_LARGE`, in either `response_mode`, refused while it streams.
 - A target that never answers (the host does not resolve, refuses or drops the connection, or times out) is `502 TOOL_UNREACHABLE`; the message names the network failure and error `meta` carries `tool_url` and `tool_method`. The same holds for an `mcp` tool's server, whose `tool_url` shows a `{{secret:}}` value as its reference.
 - [`execute.auth`](#computed-credentials-executeauth) failing to produce the credential is `502 TOOL_AUTH_FAILED`; an `oauth_connection` tool whose actor holds no connected connection is `409 OAUTH_CONNECTION_REQUIRED` ([Using a connection from a tool](./oauth-connections.md#using-a-connection-from-a-tool)).

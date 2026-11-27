@@ -99,6 +99,7 @@ describe('error logs carry no external content', () => {
     expect(res.status).toBe(502);
     expect(res.body.error.code).toBe('TOOL_HTTP_ERROR');
     expect(res.body.error.meta.tool_response_body).toContain(MARKER);
+    expect(res.body.error.meta.tool_response_json.record).toBe(MARKER);
     expect(logged()).toContain('Request failed');
     expect(logged()).not.toContain(MARKER);
   });

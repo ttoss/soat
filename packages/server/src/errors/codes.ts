@@ -728,7 +728,7 @@ export const ERROR_CODES = {
   TOOL_HTTP_ERROR: {
     httpStatus: 502,
     description:
-      "An http-type tool's target returned a non-2xx response. The error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url` and `tool_method`.",
+      "An http-type tool's target returned a non-2xx response. The error `meta` carries `tool_status_code`, `tool_response_body` (the body as text, cut to `TOOL_RESPONSE_MAX_BYTES`), `tool_response_json` (the body parsed, present only when the whole body is JSON), `tool_url` and `tool_method`. The body is the target's data: a code it names is never this response's code.",
   },
   BUILTIN_ACTION_FAILED: {
     httpStatus: 502,

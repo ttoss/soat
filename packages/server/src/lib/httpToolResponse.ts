@@ -82,17 +82,41 @@ export const readToolResponseBody = (args: {
   });
 };
 
+/**
+ * A tool target's body as JSON, or `null` when the whole body is not JSON.
+ * Boxed, so a body that is JSON `null` is told apart from one that is not JSON.
+ */
+export const parseToolJsonBody = (text: string): { value: unknown } | null => {
+  try {
+    return { value: JSON.parse(text) };
+  } catch {
+    return null;
+  }
+};
+
+export type ToolErrorBody = {
+  text: string;
+  // Absent when the body is not JSON, or the ceiling cut it.
+  json: { value: unknown } | null;
+};
+
 /** A non-2xx body only explains the status, so it is cut rather than refused. */
 export const readToolErrorBody = async (args: {
   response: Response;
-}): Promise<string> => {
-  const body = await readCappedBody({
+}): Promise<ToolErrorBody> => {
+  const maxBytes = getToolResponseMaxBytes();
+  // One byte past the ceiling tells a cut body from one that fits exactly.
+  const read = await readCappedBody({
     response: args.response,
-    maxBytes: getToolResponseMaxBytes(),
+    maxBytes: maxBytes + 1,
     onOverflow: 'cut',
     onReadError: 'rethrow',
   });
-  return new TextDecoder().decode(body);
+  const cut = read.byteLength > maxBytes;
+  const text = new TextDecoder().decode(
+    cut ? read.subarray(0, maxBytes) : read
+  );
+  return { text, json: cut ? null : parseToolJsonBody(text) };
 };
 
 // RFC 5987 `filename*=charset'lang'value`; a non-UTF-8 value falls back.
