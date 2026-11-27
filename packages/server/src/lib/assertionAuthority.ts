@@ -17,7 +17,7 @@ export type AssertionCap = { by: DeniedPrincipal; sets: PolicySets };
  * The authority of the work a tool assertion was sent for: the caps a
  * callback presenting it is held to, the opaque principal it acts for, and
  * the `tool_context` layer it pins. Sealed with a key only this deployment
- * derives, so a tool server that verifies the assertion reads none of them.
+ * derives; of it, a tool server reads only `principal`, as `acts_for`.
  */
 export type AssertionAuthority = {
   caps: AssertionCap[];
