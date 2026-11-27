@@ -139,6 +139,24 @@ export const resolveEndUserAttribution = async (
 };
 
 /**
+ * A turn with no session or actor of its own runs for the actor its authority
+ * serves, so work started for an actor (a playbook case) reaches every
+ * generation it starts, however deep.
+ */
+export const withServedActor = <
+  T extends {
+    sessionId?: string;
+    actorId?: string;
+    authority: WorkAuthority | null;
+  },
+>(
+  args: T
+): T => {
+  if (args.sessionId || args.actorId || !args.authority?.actor) return args;
+  return { ...args, actorId: args.authority.actor };
+};
+
+/**
  * Resolves the trusted identity `pinServerIdentityToolContext` stamps into a
  * generation's `tool_context`. `sessionId` is a typed argument set only
  * by server code, never read from a caller bag, so it is stamped even when the
