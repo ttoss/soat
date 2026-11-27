@@ -52,6 +52,24 @@ describe('parseAdmissionRegistration', () => {
     ]);
   });
 
+  test('on_unavailable defaults to refuse and reads allow', () => {
+    const actions = ['triggers:CreateTrigger'];
+    expect(parse({ handler, actions })?.onUnavailable).toBe('refuse');
+    expect(
+      parse({ handler, actions, on_unavailable: 'allow' })?.onUnavailable
+    ).toBe('allow');
+  });
+
+  test('fails on an on_unavailable other than refuse or allow', () => {
+    expect(() => {
+      return parse({
+        handler,
+        actions: ['triggers:CreateTrigger'],
+        on_unavailable: 'retry',
+      });
+    }).toThrow(/`admission.on_unavailable` must be 'refuse' or 'allow'/);
+  });
+
   test('declares nothing when absent', () => {
     expect(parse(undefined)).toBeNull();
   });

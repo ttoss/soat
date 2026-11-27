@@ -1,12 +1,14 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { authUserOfWork, workCaller } from '../middleware/auth';
+import { assertWorkAdmitted } from './admission';
 import {
   type AgentAuthority,
   agentPolicyOf,
   projectCapOf,
 } from './agentAuthority';
 import { callerDenied } from './authorizationDenial';
+import { principalFromAuthUser } from './principals';
 import {
   agentHeldGrant,
   type AuthorityCap,
@@ -114,6 +116,32 @@ const assertEach = async (args: {
   }
 };
 
+/** `srn:<project>:<type>:<id>` → its type and id; a `*` id names none. */
+const srnParts = (
+  resource: string | null
+): { resourceType: string | null; targetId: string | null } => {
+  const [, , resourceType, id] = resource?.split(':') ?? [];
+  return {
+    resourceType: resourceType ?? null,
+    targetId: id && id !== '*' ? id : null,
+  };
+};
+
+/** Asks admission about each allowed check, as the work's own step. */
+const admitChecks = async (args: {
+  authUser: AuthUser;
+  checks: GateCheck[];
+}): Promise<void> => {
+  for (const check of args.checks) {
+    await assertWorkAdmitted({
+      action: check.action,
+      projectPublicId: check.projectPublicId,
+      ...srnParts(check.resource ?? check.resources?.[0] ?? null),
+      principal: principalFromAuthUser(args.authUser),
+    });
+  }
+};
+
 /**
  * The one check every agent tool call and content read crosses: each of
  * `checks` must be allowed under `authority`, else the denial names the set
@@ -131,18 +159,19 @@ export const assertAllowedUnder = async (args: {
   if (caller) {
     await assertEach({ authUser: caller, checks: args.checks });
     const own = captureAuthority({ authUser: caller });
-    if (sameWorkAuthority({ a: args.authority, b: own })) return;
+    if (sameWorkAuthority({ a: args.authority, b: own })) {
+      return admitChecks({ authUser: caller, checks: args.checks });
+    }
   }
-  await assertEach({
-    authUser: await workCaller({
-      db,
-      authority: args.authority,
-      work: `The call to ${args.checks
-        .map((check) => {
-          return check.action;
-        })
-        .join(', ')}`,
-    }),
-    checks: args.checks,
+  const authUser = await workCaller({
+    db,
+    authority: args.authority,
+    work: `The call to ${args.checks
+      .map((check) => {
+        return check.action;
+      })
+      .join(', ')}`,
   });
+  await assertEach({ authUser, checks: args.checks });
+  await admitChecks({ authUser, checks: args.checks });
 };

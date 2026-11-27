@@ -557,6 +557,8 @@ paths:
       operationId: callTool
       x-raises:
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE

@@ -45,7 +45,9 @@ components:
           description: The resource an edit targets; `null` on a create.
           example: null
         body:
-          description: The write as it will be applied, in its wire shape.
+          description: >-
+            The write as it will be applied, in its wire shape; `null` for a
+            step internal work takes (a generation, a tool call, a start).
           example: { name: nightly, type: schedule, cron: '0 3 * * *' }
         principal:
           $ref: '#/components/schemas/AdmissionPrincipal'

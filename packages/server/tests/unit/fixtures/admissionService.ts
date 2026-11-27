@@ -6,7 +6,7 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { registerAdmission } from 'src/lib/admission';
+import { type OnUnavailable, registerAdmission } from 'src/lib/admission';
 import {
   signatureHeader,
   verifyTimestampedSignature,
@@ -71,6 +71,7 @@ export type AdmissionService = {
     actions: string[];
     url?: string;
     timeoutMs?: number;
+    onUnavailable?: OnUnavailable;
   }) => void;
   /** Unregisters; call it after every test that declared. Throws when a question broke the contract. */
   undeclare: () => void;
@@ -153,6 +154,7 @@ export const startAdmissionService = async (): Promise<AdmissionService> => {
       actions: string[];
       url?: string;
       timeoutMs?: number;
+      onUnavailable?: OnUnavailable;
     }) => {
       state.asked.length = 0;
       registerAdmission({
@@ -163,6 +165,7 @@ export const startAdmissionService = async (): Promise<AdmissionService> => {
             timeoutMs: args.timeoutMs ?? 2000,
           },
           actions: new Set(args.actions),
+          onUnavailable: args.onUnavailable ?? 'refuse',
         },
       });
     },

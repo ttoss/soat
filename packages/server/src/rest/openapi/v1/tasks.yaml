@@ -128,6 +128,8 @@ paths:
       summary: Create a task
       operationId: createTask
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
         - IDEMPOTENCY_KEY_REUSED

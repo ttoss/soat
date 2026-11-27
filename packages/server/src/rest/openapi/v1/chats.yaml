@@ -280,6 +280,8 @@ paths:
         time.
       operationId: createChatCompletion
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AI_PROVIDER_ERROR
         - AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED
