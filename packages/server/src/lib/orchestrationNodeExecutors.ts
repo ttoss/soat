@@ -6,6 +6,7 @@ import { createGeneration } from './agentGeneration';
 import type { EmbeddingBilling } from './embedding';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
+import { loggableError } from './loggableError';
 import { parseDuration } from './orchestrationDuration';
 import { assertSafeMappingPath } from './orchestrationMappingPath';
 import { requireNodeField } from './orchestrationNodeFields';
@@ -108,8 +109,8 @@ const parseAgentOutputContent = (
     );
   } catch (error) {
     log(
-      'parseAgentOutput: output_schema configured but content did not parse as JSON: %s',
-      error instanceof Error ? error.message : String(error)
+      'parseAgentOutput: output_schema configured but content did not parse as JSON: %o',
+      loggableError(error)
     );
   }
   return null;

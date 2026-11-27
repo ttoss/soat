@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { emitActivityEntry } from './activity';
+import { loggableError } from './loggableError';
 import { createScheduler, createSweep } from './scheduler';
 import {
   failExhaustedEventFirings,
@@ -64,7 +65,7 @@ export const fireDueTriggers = createSweep({
       log(
         'fireDueTriggers: invalid cron trigger=%s %o',
         trigger.publicId,
-        error
+        loggableError(error)
       );
       return false;
     }

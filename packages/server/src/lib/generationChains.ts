@@ -22,6 +22,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { loggableError } from './loggableError';
 import { type Page, paginatedList } from './pagination';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -182,7 +183,11 @@ export const findOrCreateChain = async (args: {
     );
     return publicId;
   } catch (error) {
-    log('findOrCreateChain: failed root=%s %o', args.rootGenerationId, error);
+    log(
+      'findOrCreateChain: failed root=%s %o',
+      args.rootGenerationId,
+      loggableError(error)
+    );
     return null;
   }
 };
@@ -225,7 +230,7 @@ const withChain = async (
     /* istanbul ignore next -- only a broken DB write reaches here, and faking
        one would mean mocking the database this suite deliberately runs for
        real (`.claude/rules/tests.md`). */
-    log('withChain: failed root=%s %o', rootGenerationId, error);
+    log('withChain: failed root=%s %o', rootGenerationId, loggableError(error));
   }
 };
 

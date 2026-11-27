@@ -11,6 +11,7 @@ import { readsShowing } from 'src/lib/permissionCatalog';
 import { serveSse, type SseFrame } from 'src/lib/sse';
 import { traceRows } from 'src/lib/traces';
 
+import { loggableError } from '../../lib/loggableError';
 import { authorizeResource } from './resourceAccess';
 
 const log = createDebug('soat:generation-stream');
@@ -162,7 +163,7 @@ export async function* withProgressFrames(args: {
       }
     } catch (error) {
       // Progress rows are additive: the text stream still ends on its own.
-      log('withProgressFrames: progress failed: %o', error);
+      log('withProgressFrames: progress failed: %o', loggableError(error));
     } finally {
       state.pending -= 1;
       wake();

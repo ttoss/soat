@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
+import { loggableError } from './loggableError';
 import { emptyPage, type Page, paginatedList } from './pagination';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -404,9 +405,9 @@ export const evaluateProjectThresholds = async (args: {
     }
   } catch (error) {
     log(
-      'evaluateProjectThresholds: failed projectId=%d error=%s',
+      'evaluateProjectThresholds: failed projectId=%d error=%o',
       args.projectId,
-      error instanceof Error ? error.message : String(error)
+      loggableError(error)
     );
   }
 };

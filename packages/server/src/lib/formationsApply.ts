@@ -45,6 +45,7 @@ import {
   type FormationTemplate,
   type ResourceDeclaration,
 } from './formationsTypes';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:formations');
 
@@ -197,9 +198,9 @@ export const processResourceChange = async (args: {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log(
-      'processResourceChange: error for logicalId=%s error=%s',
+      'processResourceChange: error for logicalId=%s error=%o',
       logicalId,
-      errorMsg
+      loggableError(errorMsg)
     );
     await resourceRow.update({
       status: 'failed',
@@ -252,9 +253,9 @@ const runResourceChanges = async (args: {
     } catch (error) {
       const failure = formationFailure(error);
       log(
-        'applyFormationTemplate: failed logicalId=%s error=%s',
+        'applyFormationTemplate: failed logicalId=%s error=%o',
         logicalId,
-        failure.message
+        loggableError(failure)
       );
       const rollbackEvents = await rollbackAppliedChanges({
         applied,

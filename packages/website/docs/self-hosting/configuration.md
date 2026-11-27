@@ -190,7 +190,7 @@ SOAT_ERROR_LOGS_ENABLED=OFF pnpm dev
 SOAT_ERROR_LOGS_ENABLED=true DEBUG=soat:formations pnpm dev
 ```
 
-An error log line carries only what the server wrote:
+An error log line, and every `DEBUG` line that names an error, carries only what the server wrote:
 
 | Error | Logged |
 | --- | --- |

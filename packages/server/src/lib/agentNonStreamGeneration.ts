@@ -464,9 +464,9 @@ const callWithToolFallback = async (args: {
     // never for the model's own answer or input this API refused.
     if (isModelAnswerFault(error) || isInputBoundaryRefusal(error)) throw error;
     log(
-      'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
+      'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%o',
       args.callArgs.agentId,
-      error instanceof Error ? error.message : String(error)
+      loggableError(error)
     );
     // The retry replaces the abandoned attempt, as its result does on success.
     args.spend.abandoned = sumStepUsage(args.ranSteps);

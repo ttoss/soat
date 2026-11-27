@@ -2,6 +2,7 @@ import createDebug from 'debug';
 import { extractText, getDocumentProxy } from 'unpdf';
 
 import { DomainError } from '../errors';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:pdf');
 
@@ -36,7 +37,7 @@ export const readPdfPages = async (args: {
     });
     return pages;
   } catch (error) {
-    log('readPdfPages: unreadable %o', error);
+    log('readPdfPages: unreadable %o', loggableError(error));
     return null;
   }
 };

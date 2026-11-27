@@ -1,6 +1,8 @@
 import { Ajv, type ValidateFunction } from 'ajv';
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
+
 const log = createDebug('soat:schema');
 
 /**
@@ -50,8 +52,8 @@ export const compileJsonSchema = (
     compiled = ajv.compile(schema);
   } catch (error) {
     log(
-      'compileJsonSchema: schema could not be compiled, values will not be validated against it: %s',
-      error instanceof Error ? error.message : String(error)
+      'compileJsonSchema: schema could not be compiled, values will not be validated against it: %o',
+      loggableError(error)
     );
   }
 

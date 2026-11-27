@@ -12,6 +12,7 @@ import {
 import { buildEventEnvelope } from './eventEnvelope';
 import { subscriberReceivesEvent } from './eventMatching';
 import { fileException } from './exceptions';
+import { loggableError } from './loggableError';
 import { projectPausedError, readProjectPause } from './projectPause';
 import { evaluateRequestQuotas, quotaBreachError } from './quotaEnforcement';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
@@ -148,7 +149,7 @@ const admitFiring = async (args: {
   }).catch((error: unknown) => {
     // Fails open on a counter error, exactly as the request middleware does: a
     // quota is cost control, not authorization.
-    log('admitFiring: failing open on counter error %O', error);
+    log('admitFiring: failing open on counter error %O', loggableError(error));
     return null;
   });
 
@@ -296,7 +297,7 @@ const handleEvent = async (event: SoatEvent): Promise<void> => {
         'handleEvent: trigger=%s failed for %s %o',
         trigger.publicId,
         event.type,
-        error
+        loggableError(error)
       );
     });
   }

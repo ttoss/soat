@@ -138,7 +138,7 @@ const exchange = async (args: {
   if (!token) {
     // Every denial is the same opaque 401; the reason is in the Console's
     // authentication history, not in this body.
-    log('exchange failed: %d %s', response.status, body);
+    log('exchange failed: %d bodyLength=%d', response.status, body.length);
     throw new DomainError(
       'AI_PROVIDER_MISCONFIGURED',
       `Anthropic workload identity federation refused the token exchange (HTTP ${response.status}). The deny reason is in the Anthropic Console's workload identity authentication history.`

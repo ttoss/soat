@@ -10,6 +10,7 @@ import { buildEventEnvelope, envelopeEventId } from './eventEnvelope';
 import { subscriberReceivesEvent } from './eventMatching';
 import { soatHeader } from './headerPrefix';
 import { signatureHeader, timestampedSignature } from './hmacSignature';
+import { loggableError } from './loggableError';
 import { createScheduler, createSweep } from './scheduler';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { fetchWithEgressGuard } from './toolEgress';
@@ -193,11 +194,7 @@ const abandonDelivery = async (args: {
       leaseExpiresAt: null,
     },
   });
-  log(
-    'abandonDelivery: delivery=%s reason=%s',
-    args.delivery.publicId,
-    args.reason
-  );
+  log('abandonDelivery: delivery=%s', args.delivery.publicId);
 };
 
 /**
@@ -414,7 +411,11 @@ const handleEvent = async (event: SoatEvent) => {
         return attemptDelivery({ delivery }).catch((error: unknown) => {
           // The row exists; its own attempt bookkeeping and the sweep own the
           // retry from here.
-          log('handleEvent: first attempt failed for %s %o', event.type, error);
+          log(
+            'handleEvent: first attempt failed for %s %o',
+            event.type,
+            loggableError(error)
+          );
         });
       })
       .catch((error: unknown) => {

@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { isAdmissionRefusal, refusalPauseReason } from './admission';
+import { loggableError } from './loggableError';
 import { processNodeResultBatch } from './orchestrationBatchResults';
 import {
   cyclesExcludingLoopNodes,
@@ -410,7 +411,7 @@ export const executeRunLoop = async (args: {
     if (!pause) {
       runStatus = 'failed';
       runError = buildRunError(error);
-      log('executeRun error %o', runError);
+      log('executeRun error %o', loggableError(runError));
     }
   }
 

@@ -15,6 +15,7 @@ import { db } from '../db';
 import { pathPrefixPattern, systemPath } from './filePaths';
 import { upsertFileByPath } from './files';
 import { deleteStorageObjects, readFileBuffer } from './fileStorage';
+import { loggableError } from './loggableError';
 import { principalColumns } from './principals';
 import {
   resolveTraceContentModeForAgent,
@@ -338,7 +339,7 @@ export const writeTraceStep = async (args: {
       'writeTraceStep: failed %s#%d %o',
       args.target.generationId,
       index,
-      error
+      loggableError(error)
     );
   }
 };

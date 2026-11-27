@@ -15,6 +15,8 @@ import * as url from 'node:url';
 
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
+
 const log = createDebug('soat:permission-catalog');
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -95,7 +97,7 @@ const readPermissionFiles = (): PermissionFile[] => {
       log(
         'readPermissionFiles: skipping unreadable file=%s error=%o',
         file,
-        error
+        loggableError(error)
       );
       continue;
     }

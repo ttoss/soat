@@ -6,6 +6,7 @@ import type { ActsFor } from '../lib/actsFor';
 import type { AuditPrincipalType } from '../lib/auditLog';
 import { peekReadAuditEnabled } from '../lib/auditLog';
 import { enqueueAuditWrite } from '../lib/auditQueue';
+import { loggableError } from '../lib/loggableError';
 import { wrapIsAllowed } from '../lib/permissions';
 import { principalFromAuthUser } from '../lib/principals';
 
@@ -451,7 +452,10 @@ export const auditMiddleware = async (ctx: Context, next: Next) => {
       } catch (recordError) {
         // The write hook must never throw into the request it describes; guard
         // defensively so a malformed entry can't turn a 200 into a 500.
-        log('auditMiddleware: recordEntry failed %o', recordError);
+        log(
+          'auditMiddleware: recordEntry failed %o',
+          loggableError(recordError)
+        );
       }
     }
   }

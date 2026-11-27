@@ -14,6 +14,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import type { StorageObjectPath } from './fileStorageLayout';
+import { loggableError } from './loggableError';
 import type { StorageBody } from './storageBody';
 
 const log = createDebug('soat:file-storage');
@@ -322,10 +323,10 @@ export const deleteStorageObjects = async (
           await provider.delete({ storagePath: file.storagePath });
         } catch (error) {
           log(
-            'deleteStorageObjects: failed to delete storagePath=%s storageType=%s error=%s',
+            'deleteStorageObjects: failed to delete storagePath=%s storageType=%s error=%o',
             file.storagePath,
             file.storageType,
-            error instanceof Error ? error.message : String(error)
+            loggableError(error)
           );
         }
       })

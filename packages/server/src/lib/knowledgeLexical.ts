@@ -7,6 +7,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { Transaction } from './dbTransaction';
+import { loggableError } from './loggableError';
 import { withBoundedSearch } from './vectorSearch';
 
 const log = createDebug('soat:knowledge');
@@ -130,7 +131,7 @@ export const withLexicalDegrade = async <T>(args: {
     log(
       'withLexicalDegrade: lexical query over %s failed, degrading to vector-only: %o',
       args.source,
-      error
+      loggableError(error)
     );
     return [];
   }

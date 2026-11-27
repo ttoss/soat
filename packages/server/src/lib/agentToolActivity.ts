@@ -125,10 +125,9 @@ export const recordToolResolutionFailure = (args: {
   const { activity } = args;
 
   log(
-    'recordToolResolutionFailure: agentId=%s toolName=%s reason=%s',
+    'recordToolResolutionFailure: agentId=%s toolName=%s',
     activity.agentId,
-    args.toolName,
-    args.reason
+    args.toolName
   );
 
   void emitActivityEntry({

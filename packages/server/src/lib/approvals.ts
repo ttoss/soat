@@ -9,6 +9,7 @@ import {
 } from './approvalFilters';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
+import { loggableError } from './loggableError';
 import { emptyPage, type Page, pageOf, paginatedList } from './pagination';
 import { isPlainObject } from './plainObject';
 import {
@@ -189,7 +190,11 @@ const notifyResume = async (
     try {
       await handler({ item, decision, toolContext });
     } catch (error) {
-      log('notifyResume: handler failed id=%s %o', item.id, error);
+      log(
+        'notifyResume: handler failed id=%s %o',
+        item.id,
+        loggableError(error)
+      );
     }
   }
 };

@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { GenerationIds } from './agentGenerationTypes';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:accepted-turn');
 
@@ -30,7 +31,7 @@ export const acceptTurn = (args: {
           reject(error);
           return;
         }
-        log('acceptTurn: background turn failed %o', error);
+        log('acceptTurn: background turn failed %o', loggableError(error));
       });
   });
 };

@@ -19,6 +19,7 @@ import {
   type FormationEvent,
   formationFailure,
 } from './formationsTypes';
+import { loggableError } from './loggableError';
 
 const log = createDebug('soat:formations');
 
@@ -230,9 +231,9 @@ export const rollbackAppliedChanges = async (args: {
     } catch (error) {
       const failure = formationFailure(error);
       log(
-        'rollbackAppliedChanges: failed logicalId=%s error=%s',
+        'rollbackAppliedChanges: failed logicalId=%s error=%o',
         change.resourceRow.logicalId,
-        failure.message
+        loggableError(failure)
       );
       events.push(
         event(change.resourceRow, {

@@ -13,6 +13,8 @@
 import { asSchema, type Tool } from 'ai';
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
+
 const log = createDebug('soat:generation');
 
 /**
@@ -67,9 +69,9 @@ export const measureToolSurface = async (args: {
         // told about, so it keeps its place in the count and its name in the
         // bytes rather than vanishing from the measurement.
         log(
-          'measureToolSurface: unreadable schema tool=%s error=%s',
+          'measureToolSurface: unreadable schema tool=%s error=%o',
           name,
-          error instanceof Error ? error.message : String(error)
+          loggableError(error)
         );
         return { name, description: boundTool.description };
       }

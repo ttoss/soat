@@ -21,6 +21,7 @@ import {
   loadGenerationWithTrace,
 } from './generationTurn';
 import { withCallTimeout } from './inProcessApi';
+import { loggableError } from './loggableError';
 import { isTimeoutError } from './timeoutError';
 import { forWork, parseWorkAuthority } from './workAuthority';
 
@@ -123,7 +124,11 @@ const reportSettled = async (args: {
       await reportIfSettled({ childId: child.publicId });
     }
   } catch (error) {
-    log('reportSettled: generation=%s failed %o', args.generationId, error);
+    log(
+      'reportSettled: generation=%s failed %o',
+      args.generationId,
+      loggableError(error)
+    );
   }
 };
 

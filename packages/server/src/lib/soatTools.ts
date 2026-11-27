@@ -18,6 +18,7 @@ import createDebug from 'debug';
 import { load } from 'js-yaml';
 
 import { DomainError } from '../errors';
+import { loggableError } from './loggableError';
 import { getActionForOperation } from './permissionCatalog';
 import { deriveToolDefinitions } from './soatToolsDerivation';
 
@@ -112,7 +113,7 @@ const readSpec = (filePath: string): OpenApiSpec | null => {
   try {
     return load(fs.readFileSync(filePath, 'utf-8')) as OpenApiSpec;
   } catch (error) {
-    log('readSpec: error reading %s error=%o', filePath, error);
+    log('readSpec: error reading %s error=%o', filePath, loggableError(error));
     return null;
   }
 };

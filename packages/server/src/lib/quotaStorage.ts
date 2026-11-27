@@ -26,6 +26,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { loggableError } from './loggableError';
 import { type QuotaBreach, quotaBreachError } from './quotaBreach';
 import { fireQuotaExceeded } from './quotaEvents';
 import { lastSnapshotStoredBytes } from './usageStorage';
@@ -163,7 +164,7 @@ export const assertStorageQuota = async (args: {
     breach = await evaluateStorageQuotas(args);
   } catch (error) {
     if (error instanceof DomainError) throw error;
-    log('assertStorageQuota: failing open %O', error);
+    log('assertStorageQuota: failing open %O', loggableError(error));
     return;
   }
   if (breach) throw quotaBreachError(breach);

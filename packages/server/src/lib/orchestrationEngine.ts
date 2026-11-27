@@ -6,6 +6,7 @@ import type { DecisionOutput, MappedApproval } from './approvals';
 import { emitApproval, registerApprovalResumeHandler } from './approvals';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
 import { claimIdempotencyKey } from './idempotencyClaim';
+import { loggableError } from './loggableError';
 import { getOrchestrationQueueDriver } from './orchestration-queue-drivers';
 import {
   isParkedOnChildRuns,
@@ -1148,7 +1149,10 @@ const applyResumeOutcomeOrSettleFailure = async (args: {
     await applyResumeNodeOutcome(args);
     return null;
   } catch (error: unknown) {
-    log('resumeOrchestrationRunExecution: resume application failed %o', error);
+    log(
+      'resumeOrchestrationRunExecution: resume application failed %o',
+      loggableError(error)
+    );
     return settleRun({
       runRecord: args.run,
       runStatus: 'failed',

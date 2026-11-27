@@ -23,6 +23,7 @@ import {
   leaseExpiry,
   newLeaseToken,
 } from './leases';
+import { loggableError } from './loggableError';
 import { type TraceStepTarget, writeTraceStep } from './traceStepStore';
 
 const log = createDebug('soat:generation');
@@ -124,7 +125,7 @@ const renewLease = async (args: {
     );
     return renewed > 0;
   } catch (error) {
-    log('renewLease: failed %s %o', args.generationId, error);
+    log('renewLease: failed %s %o', args.generationId, loggableError(error));
     return undefined;
   }
 };

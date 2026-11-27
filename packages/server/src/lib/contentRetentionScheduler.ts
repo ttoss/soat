@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { sweepExpiredTraceContent } from './contentRetention';
+import { loggableError } from './loggableError';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:content-retention');
@@ -20,7 +21,7 @@ export const runContentRetentionSweep = async (): Promise<number> => {
   try {
     return await sweepExpiredTraceContent();
   } catch (error) {
-    log('runContentRetentionSweep: sweep failed %o', error);
+    log('runContentRetentionSweep: sweep failed %o', loggableError(error));
     return 0;
   }
 };

@@ -26,6 +26,7 @@ import {
   toKnowledgeRetrieval,
 } from './knowledgeRetrievalRecord';
 import type { KnowledgeSearchPolicy } from './knowledgeSearchPolicy';
+import { loggableError } from './loggableError';
 import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
 import { principalOfAuthority } from './principals';
@@ -294,7 +295,7 @@ const writeMemoryAsAgent = async (
     });
   } catch (error) {
     if (!isAuthorizationDenial(error)) throw error;
-    log('writeMemoryAsAgent: denied %s', error.message);
+    log('writeMemoryAsAgent: denied %o', loggableError(error));
     return errorToolResult(error);
   }
   const actorId = await resolveOwnerActorDbId({

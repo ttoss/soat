@@ -10,6 +10,7 @@ import {
   type RuntimeEntities,
   runtimeEntities,
 } from './guardrailRuntimeMetrics';
+import { loggableError } from './loggableError';
 import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
 import type { WorkAuthority } from './workAuthority';
@@ -110,7 +111,11 @@ const resolveMetricKey = async (args: {
     });
     return value === undefined ? UNRESOLVED : value;
   } catch (error) {
-    log('buildGuardrailRuntimeContext: failed path=%s %o', args.path, error);
+    log(
+      'buildGuardrailRuntimeContext: failed path=%s %o',
+      args.path,
+      loggableError(error)
+    );
     return null;
   }
 };
@@ -276,7 +281,7 @@ const fetchContextTool = async (args: {
       'fetchContextTool: failed guardrail=%s tool=%s %o',
       args.guardrailId,
       args.contextToolId,
-      error
+      loggableError(error)
     );
     return null;
   }

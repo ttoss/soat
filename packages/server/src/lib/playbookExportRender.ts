@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { systemPath } from './filePaths';
 import { deleteFile, upsertFileByPath } from './files';
+import { loggableError } from './loggableError';
 import { isPlainObject } from './plainObject';
 import { PLAYBOOK_EXPORT_FORMATS } from './playbookDefinition';
 import {
@@ -131,7 +132,11 @@ export const renderPlaybookExport = async (args: {
   try {
     settlement = { fileId: await renderFile({ ...args, exported }) };
   } catch (error) {
-    log('renderPlaybookExport: %s failed %o', exported.publicId, error);
+    log(
+      'renderPlaybookExport: %s failed %o',
+      exported.publicId,
+      loggableError(error)
+    );
     settlement = {
       error: toStoredError({
         error,

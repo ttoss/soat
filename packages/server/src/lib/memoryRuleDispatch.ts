@@ -10,6 +10,7 @@ import { generationPrincipal } from './embeddingAdmission';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import { loggableError } from './loggableError';
 import { assertMemoryStorageQuota, writeMemory } from './memories';
 import { buildTranscript, type ExtractionMessage } from './memoryExtraction';
 import type { HandlerTurn, MemoryFact } from './memoryRuleHandlers';
@@ -181,9 +182,9 @@ const writeCandidates = async (args: {
       summary[result.action] += 1;
     } catch (error) {
       log(
-        'writeCandidates: rule=%s write failed error=%s',
+        'writeCandidates: rule=%s write failed error=%o',
         args.rule.publicId,
-        error instanceof Error ? error.message : String(error)
+        loggableError(error)
       );
     }
   }

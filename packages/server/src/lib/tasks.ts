@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import type { ActsFor } from './actsFor';
 import type { Transaction } from './dbTransaction';
 import { claimIdempotencyKey } from './idempotencyClaim';
+import { loggableError } from './loggableError';
 import type { ResourceIncludes } from './modelIncludes';
 import type { ActingPrincipalType, RecordedPrincipal } from './principals';
 import { gateStart } from './startGate';
@@ -231,7 +232,7 @@ export const dispatchOnEnter = (args: {
       log(
         'dispatchOnEnter: automation failed task=%s %o',
         args.taskPublicId,
-        error
+        loggableError(error)
       );
     })
     .finally(() => {

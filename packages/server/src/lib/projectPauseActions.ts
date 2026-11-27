@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
+import { loggableError } from './loggableError';
 import {
   pauseOrchestrationRun,
   resumeOrchestrationRun,
@@ -42,7 +43,7 @@ const forEachRow = async <T extends { publicId: string }>(args: {
 }): Promise<void> => {
   for (const row of args.rows) {
     await args.step(row).catch((error: unknown) => {
-      log('%s: %s failed %o', args.label, row.publicId, error);
+      log('%s: %s failed %o', args.label, row.publicId, loggableError(error));
     });
   }
 };
@@ -182,7 +183,11 @@ const resumeRun = async (
       return undefined;
     })
     .catch((error: unknown) => {
-      log('resumeProject: run=%s did not resume %o', run.publicId, error);
+      log(
+        'resumeProject: run=%s did not resume %o',
+        run.publicId,
+        loggableError(error)
+      );
     })
     .finally(() => {
       inFlightResumes.delete(resumed);

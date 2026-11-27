@@ -31,6 +31,7 @@ import {
   type FormationEvent,
   formationFailure,
 } from './formationsTypes';
+import { loggableError } from './loggableError';
 import type { StoredError } from './storedError';
 
 const log = createDebug('soat:formations');
@@ -168,10 +169,10 @@ export const runPendingCleanups = async (args: {
       if (!isResourceAlreadyGone(error)) {
         const failure = formationFailure(error);
         log(
-          'runPendingCleanups: leaked %s id=%s error=%s',
+          'runPendingCleanups: leaked %s id=%s error=%o',
           resourceType,
           physicalResourceId,
-          failure.message
+          loggableError(failure)
         );
         events.push({
           timestamp: new Date().toISOString(),

@@ -11,6 +11,7 @@ import { db } from '../db';
 import { lockForTransaction } from './advisoryLocks';
 import type { Transaction } from './dbTransaction';
 import { notifyGenerationProgress } from './generationWakeup';
+import { loggableError } from './loggableError';
 import {
   type ListFilters,
   type Page,
@@ -112,7 +113,7 @@ export const recordProgress = async (args: {
       'recordProgress: failed generationId=%s type=%s %o',
       args.generationId,
       args.fact.type,
-      error
+      loggableError(error)
     );
   }
 };
