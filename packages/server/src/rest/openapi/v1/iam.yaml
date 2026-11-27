@@ -196,8 +196,9 @@ components:
           type: string
           description: >-
             A `module:Operation` action the deployment registered, a built-in
-            one (`agents:DeleteAgent`) or a project group action
-            (`project-groups:CreateApiKey`); an unknown action or a wildcard is `400`.
+            one (`agents:DeleteAgent`) or a project group action, built-in
+            (`project-groups:CreateApiKey`) or registered
+            (`billing:TopUp`); an unknown action or a wildcard is `400`.
           example: channels:GetChannel
         resource:
           type: string
@@ -208,7 +209,7 @@ components:
             no single resource (a create or a list). A `projects:*` action is
             checked on the whole project, `srn:<project_id>:*:*`, which takes
             no `context.tags`. A project group action is checked on its project group's SRN
-            alone, `srn:project-group:<project_group_id>:<resource_type>/<id|*>` or the whole
+            alone, on a type it is registered or built in on, `srn:project-group:<project_group_id>:<resource_type>/<id|*>` or the whole
             project group `srn:project-group:<project_group_id>:*`, which takes no `context.tags`.
           example: srn:proj_V1StGXR8Z5jdHi6B:channel:ch_1
         context:

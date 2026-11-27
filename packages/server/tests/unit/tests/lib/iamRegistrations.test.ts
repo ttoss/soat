@@ -110,6 +110,146 @@ describe('parseIamRegistrationConfig', () => {
   });
 });
 
+describe('project_group_actions', () => {
+  const BILLING = {
+    module: 'billing',
+    project_group_actions: [
+      {
+        action: 'billing:TopUp',
+        resource_types: ['top_up'],
+        description: 'Top up the balance',
+      },
+      { action: 'billing:GetPlan', resource_types: ['*'] },
+    ],
+  };
+
+  test('a module may declare project group actions alone', () => {
+    const [registration] = parse([BILLING]);
+
+    expect(registration.actions.size).toBe(0);
+    expect(registration.resourceTypes.size).toBe(0);
+    expect(registration.projectGroupActions.get('billing:TopUp')).toEqual({
+      resourceTypes: new Set(['top_up']),
+      description: 'Top up the balance',
+    });
+    expect(
+      registration.projectGroupActions.get('billing:GetPlan')?.resourceTypes
+    ).toEqual(new Set(['*']));
+  });
+
+  test('a module may declare both', () => {
+    const [registration] = parse([
+      {
+        ...CHANNELS,
+        project_group_actions: [
+          { action: 'channels:ListGroupChannels', resource_types: ['channel'] },
+        ],
+      },
+    ]);
+
+    expect(registration.actions.has('channels:CreateChannel')).toBe(true);
+    expect(
+      registration.projectGroupActions.has('channels:ListGroupChannels')
+    ).toBe(true);
+  });
+
+  test.each<[string, unknown[], string]>([
+    [
+      'a module declaring no action at all',
+      [{ module: 'billing' }],
+      '`actions` or `project_group_actions`',
+    ],
+    [
+      'project group actions not an array',
+      [{ ...BILLING, project_group_actions: {} }],
+      '`project_group_actions` must be a non-empty array',
+    ],
+    [
+      'the project group module',
+      [{ ...BILLING, module: 'project-groups' }],
+      'a built-in module',
+    ],
+    [
+      'an action of another module',
+      [
+        {
+          ...BILLING,
+          project_group_actions: [
+            {
+              action: 'project-groups:CreateApiKey',
+              resource_types: ['api_key'],
+            },
+          ],
+        },
+      ],
+      'must be billing:<Operation>',
+    ],
+    [
+      'an action without resource types',
+      [
+        {
+          ...BILLING,
+          project_group_actions: [{ action: 'billing:TopUp' }],
+        },
+      ],
+      "action 'billing:TopUp': `resource_types` must be a non-empty array",
+    ],
+    [
+      'a bad resource type',
+      [
+        {
+          ...BILLING,
+          project_group_actions: [
+            { action: 'billing:TopUp', resource_types: ['TopUp'] },
+          ],
+        },
+      ],
+      "resource type 'TopUp'",
+    ],
+    [
+      'a resource type a built-in project group action is checked on',
+      [
+        {
+          ...BILLING,
+          project_group_actions: [
+            { action: 'billing:TopUp', resource_types: ['balance'] },
+          ],
+        },
+      ],
+      "resource type 'balance' is a built-in project group type",
+    ],
+    [
+      'a project group resource type another module registered',
+      [
+        BILLING,
+        {
+          module: 'assistant',
+          project_group_actions: [
+            { action: 'assistant:CreateSession', resource_types: ['top_up'] },
+          ],
+        },
+      ],
+      "project group resource type 'top_up' is already registered by 'billing'",
+    ],
+    [
+      'an action declared on both scopes',
+      [
+        {
+          ...CHANNELS,
+          project_group_actions: [
+            { action: 'channels:CreateChannel', resource_types: ['channel'] },
+          ],
+        },
+      ],
+      'declared more than once',
+    ],
+  ])('rejects %s', (_label, modules, message) => {
+    expect(() => {
+      return parse(modules);
+    }).toThrow(message);
+  });
+});
+
 describe('loadIamRegistrationConfig', () => {
   test('returns nothing when the variable is unset', () => {
     expect(loadIamRegistrationConfig({ env: {} })).toEqual([]);

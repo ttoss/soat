@@ -7,14 +7,12 @@ import {
   UNTYPED_BUILT_IN_MODULES,
   WHOLE_PROJECT,
 } from './iamActionResourceTypes';
-import { findIamActionRegistration } from './iamRegistrations';
-import { listAllActions } from './permissionCatalog';
 import {
-  isProjectGroupAction,
-  isProjectGroupSrn,
-  parseProjectGroupSrn,
-  PROJECT_GROUP_ACTION_RESOURCE_TYPES,
-} from './projectGroupActions';
+  findIamActionRegistration,
+  findProjectGroupActionResourceTypes,
+} from './iamRegistrations';
+import { listAllActions } from './permissionCatalog';
+import { isProjectGroupSrn, parseProjectGroupSrn } from './projectGroupActions';
 import { buildResourceTagContext, readTagBag } from './tags';
 
 const log = createDebug('soat:iam:check');
@@ -84,6 +82,7 @@ export const assertDeclaredActionsCheckable = (args: {
 const checkProjectGroupPermission = async (args: {
   isAllowedOnProjectGroup: AuthUser['isAllowedOnProjectGroup'];
   action: string;
+  types: ReadonlySet<string>;
   resource: string;
   tags: unknown;
 }): Promise<{ allowed: boolean }> => {
@@ -93,8 +92,7 @@ const checkProjectGroupPermission = async (args: {
       `resource '${args.resource}' must be srn:project-group:<project_group_id>:<resource_type>/<id|*> or srn:project-group:<project_group_id>:*`
     );
   }
-  const types = PROJECT_GROUP_ACTION_RESOURCE_TYPES[args.action];
-  if (!types.includes(parsed.resourceType)) {
+  if (!args.types.has(parsed.resourceType)) {
     throw invalid(
       `resource type '${parsed.resourceType}' is not one project group action '${args.action}' is checked on`
     );
@@ -115,19 +113,23 @@ const checkProjectGroupPermission = async (args: {
   return { allowed };
 };
 
-/** Whether a check is on a project group; a project group action is checked nowhere else. */
-const isOnProjectGroup = (args: {
+/**
+ * The project group types a check on a project group is answered on, or `null` for a
+ * check on a project; a project group action is checked nowhere else.
+ */
+const projectGroupTypesOf = (args: {
   action: string;
   resource: unknown;
-}): boolean => {
+}): ReadonlySet<string> | null => {
   const onProjectGroup =
     typeof args.resource === 'string' && isProjectGroupSrn(args.resource);
-  if (onProjectGroup !== isProjectGroupAction(args.action)) {
+  const types = findProjectGroupActionResourceTypes(args.action);
+  if (onProjectGroup !== (types !== undefined)) {
     throw invalid(
       `action '${args.action}' and resource must both be a project group's, srn:project-group:<project_group_id>:..., or neither`
     );
   }
-  return onProjectGroup;
+  return types ?? null;
 };
 
 /** A project action on an SRN of one project, through `isAllowed`. */
@@ -197,11 +199,16 @@ export const checkIamPermission = async (args: {
   tags: unknown;
 }): Promise<{ allowed: boolean }> => {
   if (typeof args.action !== 'string') throw invalid('action is required');
-  if (isOnProjectGroup({ action: args.action, resource: args.resource })) {
+  const types = projectGroupTypesOf({
+    action: args.action,
+    resource: args.resource,
+  });
+  if (types && typeof args.resource === 'string') {
     return checkProjectGroupPermission({
       ...args,
       action: args.action,
-      resource: args.resource as string,
+      types,
+      resource: args.resource,
     });
   }
   return checkProjectPermission({ ...args, action: args.action });
