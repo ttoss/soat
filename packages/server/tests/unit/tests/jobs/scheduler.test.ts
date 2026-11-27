@@ -185,7 +185,7 @@ describe('createScheduler', () => {
     // startup run is the likeliest place to meet one, being the closest to boot.
     await Promise.resolve();
     expect(after).toHaveBeenCalledTimes(1);
-    expect(log).toHaveBeenCalledWith('sweep failed %o', failure);
+    expect(log).toHaveBeenCalledWith('sweep failed %o', failure.stack);
 
     scheduler.stop();
   });
