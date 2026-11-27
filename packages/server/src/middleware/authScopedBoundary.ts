@@ -5,13 +5,13 @@ import {
   resolveBoundSets,
 } from '../lib/attachedPolicies';
 import type { DeniedPrincipal } from '../lib/authorizationDenial';
-import {
-  loadGroupConfinement,
-  loadOwnedGroupsGrant,
-} from '../lib/groupAuthority';
 import type { PolicyDocument } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
 import type { PrincipalBound } from '../lib/principalBound';
+import {
+  loadOwnedProjectGroupsGrant,
+  loadProjectGroupConfinement,
+} from '../lib/projectGroupAuthority';
 import {
   type Bound,
   type Cap,
@@ -37,7 +37,7 @@ const policiesBound = (args: { policyIds: string[] }): Bound => {
 
 /**
  * What a user holds: everything for an `admin`, else its policies and the
- * own resources of every group it owns. A user holding neither holds nothing.
+ * own resources of every project group it owns. A user holding neither holds nothing.
  */
 export const userBound = (args: {
   role: 'admin' | 'user';
@@ -45,12 +45,14 @@ export const userBound = (args: {
   policyIds: string[];
 }): Bound => {
   if (args.role === 'admin') return EVERYTHING;
-  // Read once per request: owning a group is not revoked mid-request.
-  let ownedGroups: Promise<PolicyDocument | null> | undefined;
+  // Read once per request: owning a project group is not revoked mid-request.
+  let ownedProjectGroups: Promise<PolicyDocument | null> | undefined;
   return {
     allows: 'policies',
     load: async () => {
-      ownedGroups ??= loadOwnedGroupsGrant({ userPublicId: args.userPublicId });
+      ownedProjectGroups ??= loadOwnedProjectGroupsGrant({
+        userPublicId: args.userPublicId,
+      });
       const [own, owned] = await Promise.all([
         args.policyIds.length === 0
           ? null
@@ -58,7 +60,7 @@ export const userBound = (args: {
               policyIds: args.policyIds,
               actorId: null,
             }),
-        ownedGroups,
+        ownedProjectGroups,
       ]);
       return [
         [own, owned].filter((doc): doc is PolicyDocument => {
@@ -80,23 +82,25 @@ export const userGrant = (args: {
 
 /**
  * A key's own `policy_ids`: a key stored with none is not narrowed. A key no
- * longer stored narrows to nothing. A group key acts only in its group.
+ * longer stored narrows to nothing. A project group key acts only in its project group.
  */
 export const keyBound = (args: {
   policyIds: string[] | null;
-  groupId?: number | null;
+  projectGroupId?: number | null;
 }): Bound => {
   if (args.policyIds === null) return NOTHING;
-  const { groupId } = args;
+  const { projectGroupId } = args;
   const own =
     args.policyIds.length === 0
       ? EVERYTHING
       : policiesBound({ policyIds: args.policyIds });
-  if (groupId === undefined || groupId === null) return own;
+  if (projectGroupId === undefined || projectGroupId === null) return own;
   return {
     allows: 'policies',
     load: async () => {
-      const confinement = [await loadGroupConfinement({ groupId })];
+      const confinement = [
+        await loadProjectGroupConfinement({ projectGroupId }),
+      ];
       if (own.allows === 'everything') return [confinement];
       return [
         ...(own.allows === 'policies' ? await own.load() : [[]]),

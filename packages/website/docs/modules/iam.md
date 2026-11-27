@@ -61,7 +61,7 @@ It answers `201 { "token", "jti", "expires_at" }`; `jti` is the id the audit log
 - `ttl_seconds` runs from 30 to 900 (default 300). An expired token is `401`.
 - Every request is checked against the key's grant **as it stands at that request** ∩ the bound: an `Allow` beyond the key grants nothing, and a permission removed from the key, or the key deleted, leaves every live token too.
 - Work the token starts keeps the bound after the token expires: a generation (its tool calls, approvals and `tool-outputs` continuations), a session turn, a task dispatch, an orchestration run, a playbook version and a manual trigger fire. `policy_ids` are re-read by id; an inline `policy` is kept as a snapshot.
-- Only an API key scoped to a project issues one, or a [group key](./groups.md#group-keys) naming `project_id`, a project of its group: the token acts in that one project. A user login, an unscoped key, a project-scoped token (OAuth or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 CREDENTIAL_NARROWED`).
+- Only an API key scoped to a project issues one, or a [project group key](./project-groups.md#project-group-keys) naming `project_id`, a project of its project group: the token acts in that one project. A user login, an unscoped key, a project-scoped token (OAuth or IAM) and a request carrying `On-Behalf-Of` get `403 IAM_TOKEN_ISSUER_NOT_ALLOWED`. A token never creates an API key (`403 CREDENTIAL_NARROWED`).
 - Records name the issuing key as the principal; `principal` is opaque, grants nothing, and is recorded with the token's `jti` under `detail.iam_token` on every [audit log](./audit-log.md) entry the token makes, and as [`acts_for`](./audit-log.md#acting-for-a-principal) on every record naming who acted that the token writes.
 - An `mcp` tool called on the token, or by work it starts, carries the bound and `principal` encrypted in its [assertion](./tools.md#tool-assertions), and, when the tool sets [`mcp.forward_principal`](./tools.md#tool-assertions), `principal` signed in the clear as its `acts_for` claim; a tool server calling back with that assertion in [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) is capped by them, and the records it writes serve `principal` as [`acts_for`](./audit-log.md#acting-for-a-principal).
 - A request on the token may itself carry [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a call made in the token's project: it is held to the token's bound ∩ the assertion's authority, and so is work it starts.
@@ -240,12 +240,12 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 - `action` must be a registered `module:Operation` or a built-in action (`agents:DeleteAgent`); an unknown action or a wildcard is `400 VALIDATION_FAILED`.
 - The SRN's type must be one the action's module registered, or for a built-in action one its module's routes check it on (`agent` or `session` for `agents:*`); any other type is `400 VALIDATION_FAILED`. Each operation's spec names the type its route checks its action on in `x-iam-resource-type` (`agents:SendSessionMessage` → `session`), beside `x-iam-action`. A route that also checks the action on other types, each needed for the whole answer, lists them in `x-iam-also-checked-on`, each with the parameter that names the resources it is checked on (`pinned_by`; absent is any): `knowledge:SearchKnowledge` on `document`, then `memory_store` (pinned by `memory_store_ids`) and `memory`, whose denial leaves the memory half out. `projects:*` is checked on the whole project, `srn:<project_id>:*:*`, as the project's own routes check it, and that SRN takes no `context.tags`; `users:*` is an admin gate, not a policy, so it is always `400`. `<id>` may be `*` for a create or a list. The project and resource are not looked up.
 - `context.tags` feeds `iam:ResourceTag/<key>` conditions, and `iam:ResourceType` is the SRN's type.
-- A [group action](./groups.md#group-actions) is checked on its group's SRN, `srn:group:<group_id>:<type>/<id|*>` or `srn:group:<group_id>:*`, and nowhere else; it takes no `context.tags`. A credential pinned to a project is never allowed one.
+- A [project group action](./project-groups.md#project-group-actions) is checked on its project group's SRN, `srn:project-group:<project_group_id>:<type>/<id|*>` or `srn:project-group:<project_group_id>:*`, and nowhere else; it takes no `context.tags`. A credential pinned to a project is never allowed one.
 - A check is not an action, so it writes no [audit log](./audit-log.md) entry.
 
 ### The writer rule
 
-A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, [group](./groups.md), API key, orchestration, share, decider, eval, guardrail, ingestion rule, memory rule, playbook version, tool or [registered formation resource](./formations.md#what-a-write-performs) is checked against the resource as the write leaves it, whichever fields the request names:
+A resource that acts after the write that made it does no more than whoever writes it. Every create and every edit of an agent, trigger, webhook, user, [project group](./project-groups.md), API key, orchestration, share, decider, eval, guardrail, ingestion rule, memory rule, playbook version, tool or [registered formation resource](./formations.md#what-a-write-performs) is checked against the resource as the write leaves it, whichever fields the request names:
 
 | The resource           | The writer must hold                                                                                                                                                                              | Refusal                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
@@ -301,14 +301,14 @@ Each step work takes on its own is asked too, after the check that authorizes it
 
 A refused step stops what took it:
 
-| Work | On a refusal |
-| --- | --- |
-| Trigger firing | Recorded `failed` with the refusal as `error`; nothing generates |
-| Orchestration run | Parks on the operator pause (`awaiting_input`, `required_action.type: paused`), `pause_reason` naming the refusal |
-| Task automation | The task pauses, `pause_reason` naming the refusal; `automation_status: paused` |
-| Playbook case | The case pauses; the node's execution stays `queued` with the refusal as `error` |
-| Eval run | Fails with the refusal as `error`; its other items do not run |
-| Generation's tool call | The call's result carries the refusal, as for any failed call |
+| Work                   | On a refusal                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Trigger firing         | Recorded `failed` with the refusal as `error`; nothing generates                                                  |
+| Orchestration run      | Parks on the operator pause (`awaiting_input`, `required_action.type: paused`), `pause_reason` naming the refusal |
+| Task automation        | The task pauses, `pause_reason` naming the refusal; `automation_status: paused`                                   |
+| Playbook case          | The case pauses; the node's execution stays `queued` with the refusal as `error`                                  |
+| Eval run               | Fails with the refusal as `error`; its other items do not run                                                     |
+| Generation's tool call | The call's result carries the refusal, as for any failed call                                                     |
 
 Resuming is the caller's, through the work's own resume route ([`POST /api/v1/orchestration-runs/{orchestration_run_id}/resume`](/docs/api/orchestrations/resume-orchestration-run), [`POST /api/v1/tasks/{task_id}/resume`](/docs/api/tasks/resume-task), [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case)): the step is asked again when it runs.
 
@@ -467,7 +467,7 @@ Every `403 FORBIDDEN` has one shape, whoever was refused: the caller's credentia
 }
 ```
 
-- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, `project` (`id` the project, for its [`agent_policy_ids`](./projects.md#project-agent-cap) capping an agent), `group` (`id` the group, for its [attached policies](./groups.md#who-holds-what) capping every check in it), or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: the `principal` an [IAM token](#iam-tokens) was minted for, for its bound, else `iam_token` (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the credential that made the call an `On-Behalf-Of` assertion was sent for (the calling agent's `policy_ids` and its project's `agent_policy_ids` keep their own `agent` and `project` names through it), `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown.
+- `denied_by.type` is `user`, `api_key`, `agent`, `trigger`, `project` (`id` the project, for its [`agent_policy_ids`](./projects.md#project-agent-cap) capping an agent), `group` (`id` the project group, for its [attached policies](./project-groups.md#who-holds-what) capping every check in it), or `caller` where the check holds the caller's policies but not its id. A request narrowed beyond its credential names the set that refused: the `principal` an [IAM token](#iam-tokens) was minted for, for its bound, else `iam_token` (`id` its `jti`, `null` for work a token started), `on_behalf_of` for the credential that made the call an `On-Behalf-Of` assertion was sent for (the calling agent's `policy_ids` and its project's `agent_policy_ids` keep their own `agent` and `project` names through it), `generation` (`id` the generation) for that assertion's execution identity. The credential is named first when it refuses too. `denied_by.id` is `null` when it is unknown.
 - `resource` is `null` for a check that names none (an admin-only route, a resource-less boundary check). A refusal of several actions (a formation template, several secrets) names the first in `action`/`resource` and every one in the message.
 - The same body reaches an agent as a refused tool's result, the [MCP endpoint](../mcp/introduction.md) as an `isError` result whose text is `FORBIDDEN: <message>` and whose `structuredContent` is `{ status: 403, error }` with this body's `error`, and an `mcp` or `http` tool's caller when the server it calls answers this body: that denial is relayed with the same code, action and message.
 

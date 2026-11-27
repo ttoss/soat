@@ -3,18 +3,18 @@ import createDebug from 'debug';
 import type { AuthUser } from '../Context';
 import { DomainError } from '../errors';
 import {
-  GROUP_ACTION_RESOURCE_TYPES,
-  isGroupAction,
-  isGroupSrn,
-  parseGroupSrn,
-} from './groupActions';
-import {
   BUILT_IN_ACTION_RESOURCE_TYPES,
   UNTYPED_BUILT_IN_MODULES,
   WHOLE_PROJECT,
 } from './iamActionResourceTypes';
 import { findIamActionRegistration } from './iamRegistrations';
 import { listAllActions } from './permissionCatalog';
+import {
+  isProjectGroupAction,
+  isProjectGroupSrn,
+  parseProjectGroupSrn,
+  PROJECT_GROUP_ACTION_RESOURCE_TYPES,
+} from './projectGroupActions';
 import { buildResourceTagContext, readTagBag } from './tags';
 
 const log = createDebug('soat:iam:check');
@@ -80,34 +80,34 @@ export const assertDeclaredActionsCheckable = (args: {
   }
 };
 
-/** A group action on its group's SRN, through `isAllowedOnGroup`. */
-const checkGroupPermission = async (args: {
-  isAllowedOnGroup: AuthUser['isAllowedOnGroup'];
+/** A project group action on its project group's SRN, through `isAllowedOnProjectGroup`. */
+const checkProjectGroupPermission = async (args: {
+  isAllowedOnProjectGroup: AuthUser['isAllowedOnProjectGroup'];
   action: string;
   resource: string;
   tags: unknown;
 }): Promise<{ allowed: boolean }> => {
-  const parsed = parseGroupSrn(args.resource);
+  const parsed = parseProjectGroupSrn(args.resource);
   if (!parsed) {
     throw invalid(
-      `resource '${args.resource}' must be srn:group:<group_id>:<resource_type>/<id|*> or srn:group:<group_id>:*`
+      `resource '${args.resource}' must be srn:project-group:<project_group_id>:<resource_type>/<id|*> or srn:project-group:<project_group_id>:*`
     );
   }
-  const types = GROUP_ACTION_RESOURCE_TYPES[args.action];
+  const types = PROJECT_GROUP_ACTION_RESOURCE_TYPES[args.action];
   if (!types.includes(parsed.resourceType)) {
     throw invalid(
-      `resource type '${parsed.resourceType}' is not one group action '${args.action}' is checked on`
+      `resource type '${parsed.resourceType}' is not one project group action '${args.action}' is checked on`
     );
   }
   if (args.tags !== undefined)
-    throw invalid('a group resource carries no tags');
-  const allowed = await args.isAllowedOnGroup({
-    groupPublicId: parsed.groupPublicId,
+    throw invalid('a project group resource carries no tags');
+  const allowed = await args.isAllowedOnProjectGroup({
+    projectGroupPublicId: parsed.projectGroupPublicId,
     action: args.action,
     resource: args.resource,
   });
   log(
-    'checkGroupPermission: action=%s resource=%s allowed=%s',
+    'checkProjectGroupPermission: action=%s resource=%s allowed=%s',
     args.action,
     args.resource,
     allowed
@@ -115,16 +115,19 @@ const checkGroupPermission = async (args: {
   return { allowed };
 };
 
-/** Whether a check is on a group; a group action is checked nowhere else. */
-const isOnGroup = (args: { action: string; resource: unknown }): boolean => {
-  const onGroup =
-    typeof args.resource === 'string' && isGroupSrn(args.resource);
-  if (onGroup !== isGroupAction(args.action)) {
+/** Whether a check is on a project group; a project group action is checked nowhere else. */
+const isOnProjectGroup = (args: {
+  action: string;
+  resource: unknown;
+}): boolean => {
+  const onProjectGroup =
+    typeof args.resource === 'string' && isProjectGroupSrn(args.resource);
+  if (onProjectGroup !== isProjectGroupAction(args.action)) {
     throw invalid(
-      `action '${args.action}' and resource must both be a group's, srn:group:<group_id>:..., or neither`
+      `action '${args.action}' and resource must both be a project group's, srn:project-group:<project_group_id>:..., or neither`
     );
   }
-  return onGroup;
+  return onProjectGroup;
 };
 
 /** A project action on an SRN of one project, through `isAllowed`. */
@@ -188,14 +191,14 @@ const checkProjectPermission = async (args: {
  */
 export const checkIamPermission = async (args: {
   isAllowed: AuthUser['isAllowed'];
-  isAllowedOnGroup: AuthUser['isAllowedOnGroup'];
+  isAllowedOnProjectGroup: AuthUser['isAllowedOnProjectGroup'];
   action: unknown;
   resource: unknown;
   tags: unknown;
 }): Promise<{ allowed: boolean }> => {
   if (typeof args.action !== 'string') throw invalid('action is required');
-  if (isOnGroup({ action: args.action, resource: args.resource })) {
-    return checkGroupPermission({
+  if (isOnProjectGroup({ action: args.action, resource: args.resource })) {
+    return checkProjectGroupPermission({
       ...args,
       action: args.action,
       resource: args.resource as string,

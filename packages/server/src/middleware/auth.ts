@@ -77,25 +77,25 @@ const withAuthority = async (args: {
 };
 
 /**
- * The project or group a key is scoped to; null when the one it names is gone,
+ * The project or project group a key is scoped to; null when the one it names is gone,
  * which leaves the key not live.
  */
 const loadKeyScope = async (args: {
   db: Context['db'];
-  row: { projectId: number | null; groupId: number | null };
+  row: { projectId: number | null; projectGroupId: number | null };
 }) => {
   const { db, row } = args;
   const [project, group] = await Promise.all([
     row.projectId === null
       ? null
       : db.Project.findOne({ where: { id: row.projectId } }),
-    row.groupId === null
+    row.projectGroupId === null
       ? null
-      : db.Group.findOne({ where: { id: row.groupId } }),
+      : db.ProjectGroup.findOne({ where: { id: row.projectGroupId } }),
   ]);
   if (
     (row.projectId !== null && !project) ||
-    (row.groupId !== null && !group)
+    (row.projectGroupId !== null && !group)
   ) {
     return null;
   }
@@ -137,8 +137,8 @@ const resolveApiKey = async (args: {
         : {}),
       ...(group
         ? {
-            apiKeyGroupId: group.id as number,
-            apiKeyGroupPublicId: group.publicId as string,
+            apiKeyProjectGroupId: group.id as number,
+            apiKeyProjectGroupPublicId: group.publicId as string,
           }
         : {}),
       ...(apiKeyPolicyIds.length > 0 ? { apiKeyPolicyIds } : {}),
@@ -158,7 +158,7 @@ const resolveApiKey = async (args: {
       key: {
         publicId: apiKeyPublicId,
         policyIds: apiKeyPolicyIds,
-        groupId: row.groupId,
+        projectGroupId: row.projectGroupId,
       },
     },
   };

@@ -34,7 +34,7 @@ const NAMED_THROUGH_ASSERTION: Record<DeniedPrincipal['type'], boolean> = {
   on_behalf_of: false,
   generation: true,
   project: true,
-  group: true,
+  project_group: true,
   agent: true,
   trigger: true,
   eval: true,

@@ -41,15 +41,15 @@ const refuseIssuer = (args: {
   return new DomainError(
     'IAM_TOKEN_ISSUER_NOT_ALLOWED',
     args.message ??
-      'Only an API key scoped to a project or to a group issues an IAM token.'
+      'Only an API key scoped to a project or to a project group issues an IAM token.'
   );
 };
 
 /**
- * The project a group key's token acts in: `project_id`, a project of the
- * key's group. A token acts in one project, whatever key issued it.
+ * The project a project group key's token acts in: `project_id`, a project of the
+ * key's project group. A token acts in one project, whatever key issued it.
  */
-const groupKeyProject = async (args: {
+const projectGroupKeyProject = async (args: {
   authUser: AuthUser;
   projectId: unknown;
   onRefused: () => void;
@@ -59,7 +59,7 @@ const groupKeyProject = async (args: {
       ? await db.Project.findOne({
           where: {
             publicId: args.projectId,
-            groupId: args.authUser.apiKeyGroupId,
+            projectGroupId: args.authUser.apiKeyProjectGroupId,
           },
           attributes: ['id', 'publicId'],
         })
@@ -68,13 +68,13 @@ const groupKeyProject = async (args: {
     throw refuseIssuer({
       ...args,
       message:
-        'A group key issues an IAM token for project_id, a project of its group.',
+        'A project group key issues an IAM token for project_id, a project of its project group.',
     });
   }
   return { id: project.id as number, publicId: project.publicId as string };
 };
 
-/** The project the token acts in: a project key's own, or a group key's pick. */
+/** The project the token acts in: a project key's own, or a project group key's pick. */
 const issuerProject = async (args: {
   authUser: AuthUser;
   projectId: unknown;
@@ -93,12 +93,13 @@ const issuerProject = async (args: {
     }
     return { id: apiKeyProjectId, publicId: apiKeyProjectPublicId };
   }
-  if (args.authUser.apiKeyGroupId === undefined) throw refuseIssuer(args);
-  return groupKeyProject(args);
+  if (args.authUser.apiKeyProjectGroupId === undefined)
+    throw refuseIssuer(args);
+  return projectGroupKeyProject(args);
 };
 
 /**
- * Only an API key scoped to one project, or to a group for `projectId` in it,
+ * Only an API key scoped to one project, or to a project group for `projectId` in it,
  * issues a token: the token is that key held to a bound and pinned to that
  * project, so a user login, an unscoped key and every project-scoped token
  * (OAuth, IAM) are refused. A key narrowed by `On-Behalf-Of` is refused too:

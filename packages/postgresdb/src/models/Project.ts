@@ -8,7 +8,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { Group } from './Group';
+import { ProjectGroup } from './ProjectGroup';
 
 @Table({
   tableName: 'projects',
@@ -40,20 +40,20 @@ export class Project extends Model {
   })
   declare name: string;
 
-  /** The group whose policies cap the project; `null` is none. */
+  /** The project group whose policies cap the project; `null` is none. */
   @ForeignKey(() => {
-    return Group;
+    return ProjectGroup;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare groupId: number | null;
+  declare projectGroupId: number | null;
 
   @BelongsTo(
     () => {
-      return Group;
+      return ProjectGroup;
     },
-    { foreignKey: 'groupId', as: 'group', onDelete: 'SET NULL' }
+    { foreignKey: 'projectGroupId', as: 'projectGroup', onDelete: 'SET NULL' }
   )
-  declare group: Group | null;
+  declare projectGroup: ProjectGroup | null;
 
   // The baseline floor governing every tool call by every agent in the project.
   @Column({ type: DataType.JSON, allowNull: true })

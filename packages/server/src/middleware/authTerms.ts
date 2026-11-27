@@ -28,7 +28,7 @@ type UserRow = { publicId: string; role: string; policyIds: string[] };
 type KeyRow = {
   publicId: string;
   policyIds: string[];
-  groupId: number | null;
+  projectGroupId: number | null;
 };
 
 /** Rows the caller already loaded, so authenticating costs no second read. */
@@ -69,13 +69,13 @@ const loadKey = async (args: {
   }
   const key = await args.db.ApiKey.findOne({
     where: { publicId: args.publicId },
-    attributes: ['publicId', 'policyIds', 'groupId'],
+    attributes: ['publicId', 'policyIds', 'projectGroupId'],
   });
   return key
     ? {
         publicId: key.publicId as string,
         policyIds: key.policyIds,
-        groupId: key.groupId,
+        projectGroupId: key.projectGroupId,
       }
     : null;
 };
@@ -169,7 +169,7 @@ const keyCap = async (args: CapArgs<'key'>): Promise<Cap> => {
     kind: own ? 'key_policies' : 'other',
     bound: keyBound({
       policyIds: key ? key.policyIds : null,
-      groupId: key?.groupId,
+      projectGroupId: key?.projectGroupId,
     }),
   };
 };

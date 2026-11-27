@@ -30,10 +30,10 @@ describe('stored policy documents are evaluated scoped', () => {
     // (scoped by `withinProject`). The rest read ids or write documents.
     assert.deepEqual(loaders, [
       'attachedPolicies.ts',
-      'groups.ts',
       'iamTokens.ts',
       'policies.ts',
       'policyGrantCoverage.ts',
+      'projectGroups.ts',
       'usageRenameBackfill.ts',
       'writerRule.ts',
     ]);

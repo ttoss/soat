@@ -234,21 +234,21 @@ export const POLICY_CARRIERS = {
       });
     },
   },
-  // A cap on every check in the group: its projects and its own resources.
-  groups: {
-    models: ['Group'],
+  // A cap on every check in the project group: its projects and its own resources.
+  projectGroups: {
+    models: ['ProjectGroup'],
     attach: 'writer_holds_grants',
     dependents: {
-      table: 'groups',
+      table: 'project_groups',
       column: 'array',
       also: ['fixed_policy_ids'],
-      noun: 'group',
-      meta: { count: 'groups', sample: 'group_sample' },
+      noun: 'project group',
+      meta: { count: 'project_groups', sample: 'project_group_sample' },
     },
     actsIn: (policy) => {
       return publicIdsOf({
         sql: `SELECT DISTINCT :every AS public_id
-                FROM groups g
+                FROM project_groups g
                WHERE :id = ANY(g.policy_ids)
                   OR :id = ANY(g.fixed_policy_ids)`,
         replacements: { id: policy.publicId, every: EVERY_PROJECT },

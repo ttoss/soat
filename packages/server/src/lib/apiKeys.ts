@@ -15,14 +15,14 @@ const log = createDebug('soat:apiKeys');
 type ApiKeyWithAssociations = InstanceType<(typeof db)['ApiKey']> & {
   user: InstanceType<(typeof db)['User']> | null;
   project: InstanceType<(typeof db)['Project']> | null;
-  group: InstanceType<(typeof db)['Group']> | null;
+  group: InstanceType<(typeof db)['ProjectGroup']> | null;
 };
 
 const keyAssociations = () => {
   return [
     { model: db.User, as: 'user' },
     { model: db.Project, as: 'project' },
-    { model: db.Group, as: 'group' },
+    { model: db.ProjectGroup, as: 'projectGroup' },
   ];
 };
 
@@ -43,7 +43,7 @@ const mapApiKeyWithAssociations = (apiKey: ApiKeyWithAssociations) => {
     ...mapApiKey(apiKey),
     user_id: apiKey.user?.publicId ?? null,
     project_id: apiKey.project?.publicId ?? null,
-    group_id: apiKey.group?.publicId ?? null,
+    project_group_id: apiKey.projectGroup?.publicId ?? null,
     policy_ids: apiKey.policyIds,
   };
 };
@@ -143,8 +143,8 @@ export const createApiKey = async (args: {
   name: string;
   /** Omit or pass null to create an unscoped key that spans projects. */
   projectId?: number | null;
-  /** A group key acts in its group alone; it has no project. */
-  groupId?: number | null;
+  /** A project group key acts in its project group alone; it has no project. */
+  projectGroupId?: number | null;
   policyIds?: string[];
 }) => {
   const random = generateSecretValue();
@@ -155,7 +155,7 @@ export const createApiKey = async (args: {
     userId: args.userId,
     name: args.name,
     projectId: args.projectId ?? null,
-    groupId: args.groupId ?? null,
+    projectGroupId: args.projectGroupId ?? null,
     policyIds: args.policyIds ?? [],
     keyPrefix,
     keyHashSha256: hashApiKey({ rawKey: key }),
@@ -216,15 +216,15 @@ export const updateApiKey = async (args: {
   return getApiKey({ id: args.id });
 };
 
-/** The keys of a group: its own and those of each project in it. */
-const groupKeysWhere = async (groupId: number) => {
+/** The keys of a project group: its own and those of each project in it. */
+const projectGroupKeysWhere = async (projectGroupId: number) => {
   const projects = await db.Project.findAll({
-    where: { groupId },
+    where: { projectGroupId },
     attributes: ['id'],
   });
   return {
     [Op.or]: [
-      { groupId },
+      { projectGroupId },
       {
         projectId: projects.map((project) => {
           return project.id as number;
@@ -237,8 +237,8 @@ const groupKeysWhere = async (groupId: number) => {
 export const listApiKeys = async (args: {
   userId?: number;
   projectId?: number;
-  /** Only the keys of this group, for a credential acting in it. */
-  groupId?: number;
+  /** Only the keys of this project group, for a credential acting in it. */
+  projectGroupId?: number;
   limit?: number;
   cursor?: string;
 }) => {
@@ -252,8 +252,8 @@ export const listApiKeys = async (args: {
     where.projectId = args.projectId;
   }
 
-  if (args.groupId !== undefined) {
-    Object.assign(where, await groupKeysWhere(args.groupId));
+  if (args.projectGroupId !== undefined) {
+    Object.assign(where, await projectGroupKeysWhere(args.projectGroupId));
   }
 
   return paginatedList({
@@ -262,7 +262,7 @@ export const listApiKeys = async (args: {
     filters: {
       userId: args.userId,
       projectId: args.projectId,
-      groupId: args.groupId,
+      projectGroupId: args.projectGroupId,
     },
     where: Reflect.ownKeys(where).length > 0 ? where : undefined,
     order: [['createdAt', 'DESC']],

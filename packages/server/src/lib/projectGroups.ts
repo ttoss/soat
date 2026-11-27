@@ -6,15 +6,15 @@ import { paginatedList } from './pagination';
 import { mapProject } from './projects';
 import { assertWriterHolds, type Writer } from './writerRule';
 
-const log = createDebug('soat:groups');
+const log = createDebug('soat:project-groups');
 
-type GroupRow = InstanceType<(typeof db)['Group']>;
+type ProjectGroupRow = InstanceType<(typeof db)['ProjectGroup']>;
 
-const mapGroup = async (group: GroupRow) => {
+const mapProjectGroup = async (group: ProjectGroupRow) => {
   const [owner, projects] = await Promise.all([
     db.User.findByPk(group.ownerUserId, { attributes: ['publicId'] }),
     db.Project.findAll({
-      where: { groupId: group.id },
+      where: { projectGroupId: group.id },
       attributes: ['publicId'],
       order: [['id', 'ASC']],
     }),
@@ -33,18 +33,20 @@ const mapGroup = async (group: GroupRow) => {
   };
 };
 
-export type GroupRecord = Awaited<ReturnType<typeof mapGroup>>;
+export type ProjectGroupRecord = Awaited<ReturnType<typeof mapProjectGroup>>;
 
-const notFound = (): DomainError => {
-  return new DomainError('RESOURCE_NOT_FOUND', 'Group not found');
+export const projectGroupNotFound = (): DomainError => {
+  return new DomainError('RESOURCE_NOT_FOUND', 'Project group not found');
 };
 
-/** The group named `publicId`, or `RESOURCE_NOT_FOUND`. */
-export const findGroup = async (args: {
+/** The project group named `publicId`, or `RESOURCE_NOT_FOUND`. */
+export const findProjectGroup = async (args: {
   publicId: string;
-}): Promise<GroupRow> => {
-  const group = await db.Group.findOne({ where: { publicId: args.publicId } });
-  if (!group) throw notFound();
+}): Promise<ProjectGroupRow> => {
+  const group = await db.ProjectGroup.findOne({
+    where: { publicId: args.publicId },
+  });
+  if (!group) throw projectGroupNotFound();
   return group;
 };
 
@@ -66,7 +68,7 @@ const heldFixedPolicyIds = async (args: {
   writer: Writer;
 }): Promise<string[]> => {
   const policies = await assertWriterHolds({
-    carrier: 'groups',
+    carrier: 'projectGroups',
     writer: args.writer,
     projectId: null,
     carried: { policyIds: args.fixedPolicyIds as string[] | undefined },
@@ -96,15 +98,15 @@ const heldFixedPolicyIds = async (args: {
 
 /**
  * The owner's policies once the writer holds them: global ones, or policies
- * of a project in the group.
+ * of a project in the project group.
  */
 const heldPolicyIds = async (args: {
-  group: GroupRow | null;
+  group: ProjectGroupRow | null;
   policyIds: unknown;
   writer: Writer;
 }): Promise<string[]> => {
   const policies = await assertWriterHolds({
-    carrier: 'groups',
+    carrier: 'projectGroups',
     writer: args.writer,
     projectId: null,
     carried: { policyIds: args.policyIds as string[] | undefined },
@@ -116,18 +118,20 @@ const heldPolicyIds = async (args: {
       }),
     },
     attributes: ['publicId', 'projectId'],
-    include: [{ model: db.Project, as: 'project', attributes: ['groupId'] }],
+    include: [
+      { model: db.Project, as: 'project', attributes: ['projectGroupId'] },
+    ],
   });
   const outside = rows.find((row) => {
     return (
       row.projectId !== null &&
-      (args.group === null || row.project?.groupId !== args.group.id)
+      (args.group === null || row.project?.projectGroupId !== args.group.id)
     );
   });
   if (outside) {
     throw new DomainError(
       'POLICY_OUTSIDE_PROJECT',
-      `Policy '${outside.publicId}' belongs to a project outside the group.`,
+      `Policy '${outside.publicId}' belongs to a project outside the project group.`,
       { policy_id: outside.publicId }
     );
   }
@@ -136,13 +140,13 @@ const heldPolicyIds = async (args: {
   });
 };
 
-export const createGroup = async (args: {
+export const createProjectGroup = async (args: {
   name: unknown;
   ownerId: unknown;
   policyIds: unknown;
   fixedPolicyIds: unknown;
   writer: Writer;
-}): Promise<GroupRecord> => {
+}): Promise<ProjectGroupRecord> => {
   const name = requireName(args.name);
   const owner =
     typeof args.ownerId === 'string'
@@ -153,7 +157,7 @@ export const createGroup = async (args: {
       field: 'owner_id',
     });
   }
-  const group = await db.Group.create({
+  const group = await db.ProjectGroup.create({
     name,
     ownerUserId: owner.id,
     policyIds: await heldPolicyIds({
@@ -166,18 +170,18 @@ export const createGroup = async (args: {
       writer: args.writer,
     }),
   });
-  log('createGroup: %s owner=%s', group.publicId, owner.publicId);
-  return mapGroup(group);
+  log('createProjectGroup: %s owner=%s', group.publicId, owner.publicId);
+  return mapProjectGroup(group);
 };
 
-export const getGroup = async (args: {
+export const getProjectGroup = async (args: {
   publicId: string;
-}): Promise<GroupRecord> => {
-  return mapGroup(await findGroup(args));
+}): Promise<ProjectGroupRecord> => {
+  return mapProjectGroup(await findProjectGroup(args));
 };
 
-/** Every group, or the groups `ownerUserId` owns. */
-export const listGroups = async (args: {
+/** Every group, or the project groups `ownerUserId` owns. */
+export const listProjectGroups = async (args: {
   ownerUserId?: number;
   limit?: number;
   cursor?: string;
@@ -193,9 +197,9 @@ export const listGroups = async (args: {
     where,
     order: [['createdAt', 'DESC']],
     query: ({ where: pageWhere, limit, order }) => {
-      return db.Group.findAll({ where: pageWhere, order, limit });
+      return db.ProjectGroup.findAll({ where: pageWhere, order, limit });
     },
-    map: mapGroup,
+    map: mapProjectGroup,
   });
 };
 
@@ -203,13 +207,13 @@ export const listGroups = async (args: {
  * Writes what the body names: `fixedPolicyIds` only when the caller is the
  * operator, which the route decides.
  */
-export const updateGroup = async (args: {
-  group: GroupRow;
+export const updateProjectGroup = async (args: {
+  group: ProjectGroupRow;
   name?: unknown;
   policyIds?: unknown;
   fixedPolicyIds?: unknown;
   writer: Writer;
-}): Promise<GroupRecord> => {
+}): Promise<ProjectGroupRecord> => {
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) updates.name = requireName(args.name);
   if (args.policyIds !== undefined) {
@@ -226,18 +230,24 @@ export const updateGroup = async (args: {
     });
   }
   await args.group.update(updates);
-  return mapGroup(args.group);
+  return mapProjectGroup(args.group);
 };
 
-/** Deletes a group holding no project. */
-export const deleteGroup = async (args: { group: GroupRow }): Promise<void> => {
+/** Deletes a project group holding no project. */
+export const deleteProjectGroup = async (args: {
+  group: ProjectGroupRow;
+}): Promise<void> => {
   const projects = await db.Project.count({
-    where: { groupId: args.group.id },
+    where: { projectGroupId: args.group.id },
   });
   if (projects > 0) {
-    throw new DomainError('GROUP_HAS_PROJECTS', 'The group holds projects.', {
-      projects,
-    });
+    throw new DomainError(
+      'PROJECT_GROUP_HAS_PROJECTS',
+      'The project group holds projects.',
+      {
+        projects,
+      }
+    );
   }
   await args.group.destroy();
 };
@@ -249,35 +259,38 @@ const findProject = async (publicId: string) => {
   return project;
 };
 
-/** Creates a project in the group. */
-export const createGroupProject = async (args: {
-  group: GroupRow;
+/** Creates a project in the project group. */
+export const createProjectGroupProject = async (args: {
+  group: ProjectGroupRow;
   name: unknown;
 }) => {
   const project = await db.Project.create({
     name: requireName(args.name),
-    groupId: args.group.id,
+    projectGroupId: args.group.id,
   });
   return mapProject(project);
 };
 
-/** Puts a project in the group, out of any other it was in. */
-export const addGroupProject = async (args: {
-  group: GroupRow;
+/** Puts a project in the project group, out of any other it was in. */
+export const addProjectGroupProject = async (args: {
+  group: ProjectGroupRow;
   projectPublicId: string;
 }): Promise<void> => {
   const project = await findProject(args.projectPublicId);
-  await project.update({ groupId: args.group.id });
+  await project.update({ projectGroupId: args.group.id });
 };
 
-/** Takes a project of the group out of it. */
-export const removeGroupProject = async (args: {
-  group: GroupRow;
+/** Takes a project of the project group out of it. */
+export const removeProjectGroupProject = async (args: {
+  group: ProjectGroupRow;
   projectPublicId: string;
 }): Promise<void> => {
   const project = await findProject(args.projectPublicId);
-  if (project.groupId !== args.group.id) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Project not found in group');
+  if (project.projectGroupId !== args.group.id) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      'Project not found in project group'
+    );
   }
-  await project.update({ groupId: null });
+  await project.update({ projectGroupId: null });
 };

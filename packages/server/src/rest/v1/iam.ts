@@ -47,7 +47,7 @@ iamRouter.post('/iam/check', async (ctx: Context) => {
   };
   ctx.body = await checkIamPermission({
     isAllowed: ctx.authUser.isAllowed,
-    isAllowedOnGroup: ctx.authUser.isAllowedOnGroup,
+    isAllowedOnProjectGroup: ctx.authUser.isAllowedOnProjectGroup,
     action: body.action,
     resource: body.resource,
     tags: body.context?.tags,
