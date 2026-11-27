@@ -15,7 +15,8 @@ import { DECIDER_USAGE_SOURCE } from './deciderQuestions';
 import { EVAL_USAGE_SOURCE } from './evaluationRunExecution';
 import { SCORER_USAGE_SOURCE } from './evaluationToolScorer';
 import { isFileClaimRefusal } from './fileLifetime';
-import { type GenerationConversation } from './generationAttribution';
+import type { GenerationConversation } from './generationAttribution';
+import { withServedActor } from './generationAttribution';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import {
   claimKeyedGeneration,
@@ -305,8 +306,9 @@ const admitWithinQuota = async (args: CreateGenerationArgs): Promise<void> => {
 };
 
 const prepareGeneration = async (
-  args: CreateGenerationArgs
+  request: CreateGenerationArgs
 ): Promise<GenerationPrep> => {
+  const args = withServedActor(request);
   // Rejects a key that could not become a header before any provider call or
   // metering happens, covering every path but the session's own write-time check.
   assertValidToolContext(args.toolContext);

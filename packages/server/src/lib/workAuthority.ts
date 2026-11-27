@@ -86,6 +86,11 @@ export type WorkAuthority = Omit<CredentialTerms, 'pinned'> & {
   actsFor: { type: string; id: string } | null;
   /** The IAM token's `tool_context` layer, stamped over every tool call. */
   toolContext: Record<string, string> | null;
+  /**
+   * The actor the work serves: a generation it starts with no session or
+   * actor of its own runs for it (`createGeneration`). Server-set only.
+   */
+  actor: string | null;
 };
 
 const serializeCap = (cap: AuthorityCap): object => {
@@ -105,6 +110,7 @@ export const serializeWorkAuthority = (authority: WorkAuthority): object => {
     work: authority.work,
     acts_for: authority.actsFor,
     ...(authority.toolContext ? { tool_context: authority.toolContext } : {}),
+    ...(authority.actor ? { actor: authority.actor } : {}),
   };
 };
 
@@ -235,7 +241,7 @@ const nullableStr = (value: unknown): string | null | undefined => {
 
 type Chain = Pick<
   WorkAuthority,
-  'project' | 'trigger' | 'work' | 'actsFor' | 'toolContext'
+  'project' | 'trigger' | 'work' | 'actsFor' | 'toolContext' | 'actor'
 >;
 
 /** A stored layer: absent is none, a malformed one does not read. */
@@ -252,18 +258,20 @@ const parseChain = (value: Record<string, unknown>): Chain | null => {
     work: nullableStr(value.work),
     actsFor: parseActsFor(value.acts_for),
     toolContext: parseLayer(value.tool_context),
+    actor: nullableStr(value.actor ?? null),
   };
-  const { project, trigger, work, actsFor, toolContext } = chain;
+  const { project, trigger, work, actsFor, toolContext, actor } = chain;
   if (
     project === undefined ||
     trigger === undefined ||
     work === undefined ||
     actsFor === undefined ||
-    toolContext === undefined
+    toolContext === undefined ||
+    actor === undefined
   ) {
     return null;
   }
-  return { project, trigger, work, actsFor, toolContext };
+  return { project, trigger, work, actsFor, toolContext, actor };
 };
 
 /**
@@ -346,6 +354,7 @@ const requestChain = (authUser: AuthUser): Omit<Chain, 'project'> => {
     work: authUser.work?.work ?? null,
     actsFor: actsForOf(authUser),
     toolContext: authUser.toolContextLayer ?? null,
+    actor: null,
   };
 };
 
@@ -447,6 +456,7 @@ export const triggerAuthority = (args: {
     work: null,
     actsFor: null,
     toolContext: null,
+    actor: null,
   };
 };
 
@@ -456,6 +466,21 @@ export const agentHeldGrant = (args: {
   policy: PolicyDocument | null;
 }): AuthorityGrant => {
   return { holder: 'agent', agent: args.agent, policy: args.policy };
+};
+
+/** The chain work carries on, or an empty one. */
+const chainOf = (chain?: WorkAuthority | null): Omit<Chain, 'project'> => {
+  if (!chain) {
+    return {
+      trigger: null,
+      work: null,
+      actsFor: null,
+      toolContext: null,
+      actor: null,
+    };
+  }
+  const { trigger, work, actsFor, toolContext, actor } = chain;
+  return { trigger, work, actsFor, toolContext, actor };
 };
 
 /**
@@ -473,9 +498,6 @@ export const resourceGrantAuthority = (args: {
     grant: { holder: 'resource', carrier: args.carrier, id: args.id },
     caps: [],
     principal: { type: RESOURCE_GRANT_PRINCIPALS[args.carrier], id: args.id },
-    trigger: args.chain?.trigger ?? null,
-    work: args.chain?.work ?? null,
-    actsFor: args.chain?.actsFor ?? null,
-    toolContext: args.chain?.toolContext ?? null,
+    ...chainOf(args.chain),
   };
 };

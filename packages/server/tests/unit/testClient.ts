@@ -169,6 +169,7 @@ export const workAuthorityOf = (args: {
     work: args.work ?? null,
     actsFor: null,
     toolContext: null,
+    actor: null,
   };
 };
 

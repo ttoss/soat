@@ -310,7 +310,7 @@ Every read of a store narrows to one actor when the call names `actor_id`:
 
 Without it, every actor's memories are read. A repeated `actor_id` is `400`. A [builtin tool](./tools.md#builtin) whose [`preset_parameters`](./tools.md#pinning-to-a-per-run-value-context) pin `actor_id` to `{{context:actor_id}}` confines an agent to the memories of the end user it serves.
 
-An agent's own memory follows the turn's actor, the [session](./sessions.md)'s, with no tool to configure: retrieval from `memory_store_ids` reads that actor's memories only, `write_memory` writes memories of that actor, and a [memory rule](#memory-rules) writes the facts of a conversation turn as memories of the conversation's actor. A turn with no actor reads every memory and writes memories of no actor.
+An agent's own memory follows the turn's actor, the [session](./sessions.md)'s or the [playbook case](./playbooks.md#cases-of-an-end-user)'s, with no tool to configure: retrieval from `memory_store_ids` reads that actor's memories only, `write_memory` writes memories of that actor, and a [memory rule](#memory-rules) writes the facts of a conversation turn as memories of the conversation's actor. A turn with no actor reads every memory and writes memories of no actor.
 
 ### NDJSON export
 

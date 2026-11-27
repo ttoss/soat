@@ -47,8 +47,8 @@ export const caseAuthority = async (args: {
 
 /**
  * Work's authority (the case's when none is given), resolved as a request
- * would be. Work holding none, or whose authority no longer resolves, is
- * refused.
+ * would be, serving the case's actor or none. Work holding none, or whose
+ * authority no longer resolves, is refused.
  */
 export const resolveRunAs = async (args: {
   row: PlaybookCaseRow;
@@ -65,7 +65,12 @@ export const resolveRunAs = async (args: {
     work,
   });
   await workCaller({ db, authority, work });
-  return { authority: forWork({ authority, work }) };
+  return {
+    authority: {
+      ...forWork({ authority, work }),
+      actor: row.actor?.publicId ?? null,
+    },
+  };
 };
 
 /**
@@ -119,6 +124,7 @@ export const executeClaimed = async (args: {
         executor,
         values: view.values,
         input: execution.input as Record<string, unknown>,
+        knowledge: definition.knowledge,
         projectId: row.projectId,
         executionPublicId: execution.publicId,
         title: `${row.subject} · ${node.title}`,
