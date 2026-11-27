@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.135.0](https://github.com/ttoss/soat/compare/v0.134.0...v0.135.0) (2026-11-27)
+
+### Features
+
+* **iam:** project groups, an authorization scope above the project ([#2222](https://github.com/ttoss/soat/issues/2222)) ([5d0a6f2](https://github.com/ttoss/soat/commit/5d0a6f2eb83ba4316ff54fb5d894117d4ff87e3b))
+
 # [0.134.0](https://github.com/ttoss/soat/compare/v0.133.0...v0.134.0) (2026-11-26)
 
 **Note:** Version bump only for package @soat/sdk
