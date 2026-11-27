@@ -171,7 +171,7 @@ export const emitEvent = (event: SoatEvent) => {
  *
  * The filter is here rather than in each subscriber because the names it takes
  * are checked against the registry: a renamed event breaks the subscription at
- * compile time, where a hand-rolled `if (event.type === '…')` just stopped
+ * compile time, where a hand-rolled `if (event.type === '…')` silently stops
  * matching. A subscriber that genuinely needs everything — the webhook
  * dispatcher, which forwards user-authored orchestration events too — omits
  * `types` and says so.

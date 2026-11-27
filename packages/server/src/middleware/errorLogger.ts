@@ -63,18 +63,9 @@ const isKoaHttpError = (error: unknown): error is KoaHttpError => {
 
 /**
  * A body-parse failure from `co-body`: a client sent something that is not
- * parseable as the declared content type.
- *
- * It carries `status = 400` and the offending payload as `body`, but **not**
- * `expose`, so `isKoaHttpError` rejects it and the request answered `500` with
- * `{"error":"Internal Server Error"}` — blaming the server for a malformed
- * client request, and in the one response shape a client cannot branch on.
- * `POST` with `Content-Type: application/json` and a body of `null` reproduces
- * it on any route.
- *
- * Recognised here rather than guarded at each parse site because this middleware
- * is the single place that maps an error to a response — the same reason the
- * route handlers stopped writing error bodies of their own.
+ * parseable as the declared content type. It carries `status = 400` and the
+ * payload as `body` but no `expose`, so `isKoaHttpError` does not match it;
+ * recognised here, the one place that maps an error to a response.
  */
 const isBodyParseError = (
   error: unknown
@@ -90,10 +81,9 @@ const isBodyParseError = (
 
 /**
  * Multer aborts a stream that breaks one of its `limits` with an error of its
- * own class, which carries neither `status` nor `expose` — so an upload over
- * the ceiling answered `500` and blamed the server for a client's oversized
- * request. Recognised by shape rather than by importing multer's class, which
- * `@koa/multer` does not re-export.
+ * own class, which carries neither `status` nor `expose`. Recognised by shape
+ * rather than by importing multer's class, which `@koa/multer` does not
+ * re-export.
  */
 const isMulterLimitError = (
   error: unknown
