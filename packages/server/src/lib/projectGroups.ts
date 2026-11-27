@@ -79,15 +79,15 @@ const heldFixedPolicyIds = async (args: {
         return policy.id;
       }),
     },
-    attributes: ['publicId', 'projectId'],
+    attributes: ['publicId', 'projectId', 'projectGroupId'],
   });
   const scoped = rows.find((row) => {
-    return row.projectId !== null;
+    return row.projectId !== null || row.projectGroupId !== null;
   });
   if (scoped) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `fixed_policy_ids names only global policies; '${scoped.publicId}' belongs to a project.`,
+      `fixed_policy_ids names only global policies; '${scoped.publicId}' belongs to a project or a project group.`,
       { field: 'fixed_policy_ids' }
     );
   }
@@ -97,8 +97,8 @@ const heldFixedPolicyIds = async (args: {
 };
 
 /**
- * The owner's policies once the writer holds them: global ones, or policies
- * of a project in the project group.
+ * The owner's policies once the writer holds them: global ones, the project
+ * group's own, or policies of a project in the project group.
  */
 const heldPolicyIds = async (args: {
   group: ProjectGroupRow | null;
@@ -109,6 +109,7 @@ const heldPolicyIds = async (args: {
     carrier: 'projectGroups',
     writer: args.writer,
     projectId: null,
+    projectGroupId: args.group?.id ?? null,
     carried: { policyIds: args.policyIds as string[] | undefined },
   });
   const rows = await db.Policy.findAll({

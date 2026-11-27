@@ -23,6 +23,11 @@ export const PROJECT_GROUP_ACTION_RESOURCE_TYPES: Readonly<
   'project-groups:GetUsage': ['usage'],
   'project-groups:GetBalance': ['balance'],
   'project-groups:ListStatements': ['statement'],
+  'project-groups:ListPolicies': ['policy'],
+  'project-groups:CreatePolicy': ['policy'],
+  'project-groups:GetPolicy': ['policy'],
+  'project-groups:UpdatePolicy': ['policy'],
+  'project-groups:DeletePolicy': ['policy'],
 };
 
 const PROJECT_GROUP_SRN_PREFIX = 'srn:project-group:';

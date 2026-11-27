@@ -128,13 +128,15 @@ export const startsOfRow = async (args: {
 };
 
 /**
- * The one reading of "these ids name policies": every id resolves, and a
- * carrier of `projectId` names only that project's policies or global ones.
+ * The one reading of "these ids name policies": every id resolves, a carrier
+ * of `projectId` names only that project's policies or global ones, and only
+ * a carrier of `projectGroupId` names that project group's policies.
  * `projectId` `null` is a carrier acting in every project.
  */
 const resolvePolicies = async (args: {
   policyIds: string[];
   projectId: number | null;
+  projectGroupId: number | null;
 }) => {
   const rows = await db.Policy.findAll({
     where: { publicId: args.policyIds },
@@ -159,6 +161,18 @@ const resolvePolicies = async (args: {
       'POLICY_OUTSIDE_PROJECT',
       `Policy '${foreign.publicId}' belongs to another project.`,
       { policy_id: foreign.publicId }
+    );
+  }
+  const foreignGroup = rows.find((row) => {
+    return (
+      row.projectGroupId !== null && row.projectGroupId !== args.projectGroupId
+    );
+  });
+  if (foreignGroup) {
+    throw new DomainError(
+      'POLICY_OUTSIDE_PROJECT',
+      `Policy '${foreignGroup.publicId}' belongs to a project group this resource is not of.`,
+      { policy_id: foreignGroup.publicId }
     );
   }
   return rows;
@@ -199,11 +213,16 @@ const assertPoliciesHeld = async (args: {
   writer: Writer;
   policyIds: string[] | null | undefined;
   projectId: number | null;
+  projectGroupId: number | null;
   actsIn: string;
 }): Promise<{ id: number; publicId: string }[]> => {
   const policyIds = readPolicyIds(args);
   if (!args.carrier.policies || policyIds.length === 0) return [];
-  const rows = await resolvePolicies({ policyIds, projectId: args.projectId });
+  const rows = await resolvePolicies({
+    policyIds,
+    projectId: args.projectId,
+    projectGroupId: args.projectGroupId,
+  });
   await assertWriterMayAttach({
     carrier: args.carrier.policies,
     getPolicies: args.writer.getPolicies,
@@ -259,6 +278,8 @@ export const assertWriterHolds = async (args: {
   writer: Writer;
   /** The carrier's project, or `null` for one acting in every project. */
   projectId: number | null;
+  /** The project group whose policies the carrier may name; none when absent. */
+  projectGroupId?: number | null;
   carried: {
     policyIds?: string[] | null;
     actions?: CarriedAction[];
@@ -278,6 +299,7 @@ export const assertWriterHolds = async (args: {
     writer: args.writer,
     policyIds: args.carried.policyIds,
     projectId: args.projectId,
+    projectGroupId: args.projectGroupId ?? null,
     actsIn: project?.publicId ?? EVERY_PROJECT,
   });
   if (project) {

@@ -156,11 +156,12 @@ const parsePolicyIds = async (args: {
   const ids = [...new Set(policyIds)];
   const rows = await db.Policy.findAll({
     where: { publicId: ids },
-    attributes: ['publicId', 'projectId'],
+    attributes: ['publicId', 'projectId', 'projectGroupId'],
   });
   const usable = new Set(
     rows
       .filter((row) => {
+        if (row.projectGroupId !== null) return false;
         return (
           row.projectId === null || row.projectId === args.issuer.projectId
         );

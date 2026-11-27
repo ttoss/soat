@@ -89,7 +89,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   POLICY_DENIAL_RESERVED:
     'Remove `denial` from every statement, or have an unrestricted admin write the policy.',
   POLICY_OUTSIDE_PROJECT:
-    "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
+    "Name a policy whose `project_id` is this resource's project, whose `project_group_id` is this project group or this key's, or a global one, in place of `meta.policy_id`.",
   POLICY_HAS_DEPENDENTS:
     'Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`{{PATCH /triggers/{trigger_id}}}`), the agents `meta.agent_sample` lists (`{{PATCH /agents/{agent_id}}}`) the webhooks `meta.webhook_sample` lists (`{{PUT /webhooks/{webhook_id}}}`), the users `meta.user_sample` lists (`{{PUT /users/{user_id}/policies}}`), the project groups `meta.project_group_sample` lists (`{{PATCH /project-groups/{project_group_id}}}`) and the API keys `meta.api_key_sample` lists (`{{PUT /api-keys/{api_key_id}}}`), or delete them, then delete the policy.',
   PROJECT_GROUP_HAS_PROJECTS:

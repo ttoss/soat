@@ -968,7 +968,7 @@
     },
     "POLICY_OUTSIDE_PROJECT": {
       "http_status": 400,
-      "hint": "Name a policy whose `project_id` is this resource's project, or a global one, in place of `meta.policy_id`.",
+      "hint": "Name a policy whose `project_id` is this resource's project, whose `project_group_id` is this project group or this key's, or a global one, in place of `meta.policy_id`.",
       "routes": []
     },
     "PROBE_FAILED": {

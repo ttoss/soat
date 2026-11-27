@@ -29,15 +29,19 @@ paths:
       summary: List policies
       description: >
         Returns the policies of the project `project_id` names, or of the
-        project a project-scoped credential is bound to. Without either, the
-        unrestricted admin lists every policy, global and project ones. Pass
-        `user_id` (unrestricted admin only) to list only the policies attached
-        to that user.
+        project a project-scoped credential is bound to. `project_group_id`
+        lists that project group's policies instead, which needs
+        `project-groups:ListPolicies` on
+        `srn:project-group:<project_group_id>:policy/*`. Without any, the
+        unrestricted admin lists every policy, global, project and project
+        group ones. Pass `user_id` (unrestricted admin only) to list only the
+        policies attached to that user.
       operationId: listPolicies
       x-raises:
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
         - INVALID_CURSOR
+        - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
       x-iam-action: policies:ListPolicies
@@ -47,6 +51,14 @@ paths:
           in: query
           required: false
           description: List only this project's policies (proj_...)
+          schema:
+            type: string
+        - name: project_group_id
+          in: query
+          required: false
+          description: >-
+            List only this project group's policies (pgrp_...); never with
+            `project_id` or `user_id`
           schema:
             type: string
         - name: user_id
@@ -86,6 +98,13 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            The project group does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '429':
           $ref: './errors.yaml#/components/responses/TooManyRequests'
         '500':
@@ -99,13 +118,23 @@ paths:
         is bound to a project: its `Allow` statements may name only that
         project's resources (`srn:<project_id>:<type>:<id>`), else `400`; an
         `Allow` without `resource` grants every resource of that project.
-        Without a project, creates a global policy, which only the
-        unrestricted admin may.
+        With `project_group_id`, creates a project group policy, which needs
+        `project-groups:CreatePolicy` on
+        `srn:project-group:<project_group_id>:policy/*`: its `Allow`
+        statements may name only the project group's own resources
+        (`srn:project-group:<project_group_id>:<type>/<id>`) and those of a
+        project in it, else `400`; an `Allow` without `resource` grants a
+        project group action on the project group and any other action on
+        its projects, read when the policy is evaluated. Only the project
+        group and its keys may carry it in `policy_ids`. Without a project or
+        a project group, creates a global policy, which only the unrestricted
+        admin may.
       operationId: createPolicy
       x-raises:
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
         - POLICY_DENIAL_RESERVED
+        - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
       x-iam-action: policies:CreatePolicy
@@ -128,6 +157,12 @@ paths:
                     a project-scoped credential's own project; omitted
                     otherwise, the policy is global.
                   example: proj_V1StGXR8Z5jdHi6B
+                project_group_id:
+                  type: string
+                  description: >-
+                    The project group the policy belongs to (pgrp_...); never
+                    with `project_id`.
+                  example: pgrp_V1StGXR8Z5jdHi6B
                 name:
                   type: string
                   example: ReadOnlyAccess
@@ -163,6 +198,13 @@ paths:
             application/json:
               schema:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            The project group does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           $ref: './errors.yaml#/components/responses/PayloadTooLarge'
         '429':
@@ -180,7 +222,9 @@ paths:
       summary: Get a policy
       description: >-
         Returns a policy. A project policy needs `policies:GetPolicy` in its
-        project; a global one, the unrestricted admin.
+        project; a project group policy, `project-groups:GetPolicy` on
+        `srn:project-group:<project_group_id>:policy/<policy_id>`; a global
+        one, the unrestricted admin.
       operationId: getPolicy
       x-raises:
         - AGENT_NOT_FOUND
@@ -237,8 +281,11 @@ paths:
       summary: Update a policy
       description: >-
         Updates a policy. A project policy needs `policies:UpdatePolicy` in its
-        project and its `Allow` statements stay within that project; a global
-        one, the unrestricted admin. The project never changes.
+        project and its `Allow` statements stay within that project; a project
+        group policy, `project-groups:UpdatePolicy` on
+        `srn:project-group:<project_group_id>:policy/<policy_id>`, and its
+        `Allow` statements stay within the project group; a global one, the
+        unrestricted admin. The project or project group never changes.
       operationId: updatePolicy
       x-raises:
         - AGENT_NOT_FOUND
@@ -327,9 +374,11 @@ paths:
       summary: Delete a policy
       description: >-
         Deletes a policy. A project policy needs `policies:DeletePolicy` in its
-        project; a global one, the unrestricted admin. Refused with `409
-        POLICY_HAS_DEPENDENTS` while a trigger, agent, webhook, user or API key names it in
-        its `policy_ids`.
+        project; a project group policy, `project-groups:DeletePolicy` on
+        `srn:project-group:<project_group_id>:policy/<policy_id>`; a global
+        one, the unrestricted admin. Refused with `409
+        POLICY_HAS_DEPENDENTS` while a trigger, agent, webhook, user, project
+        group or API key names it in its `policy_ids`.
       operationId: deletePolicy
       x-raises:
         - AGENT_NOT_FOUND
@@ -420,7 +469,9 @@ components:
           description: >-
             Resource SRN patterns. Omitted, an `Allow` in a project policy
             matches every resource of the policy's project
-            (`srn:<project_id>:*:*`); anywhere else it matches every resource.
+            (`srn:<project_id>:*:*`); in a project group policy, the project
+            group's own resources and those of its projects; anywhere else
+            every resource.
           example: ['srn:proj_abc:files:*']
         condition:
           type: object
@@ -484,8 +535,16 @@ components:
           type: string
           nullable: true
           description: >-
-            The project the policy belongs to; `null` for a global policy.
+            The project the policy belongs to; `null` for a global or a
+            project group policy.
           example: proj_V1StGXR8Z5jdHi6B
+        project_group_id:
+          type: string
+          nullable: true
+          description: >-
+            The project group the policy belongs to; `null` for a global or a
+            project policy.
+          example: pgrp_V1StGXR8Z5jdHi6B
         name:
           type: string
           nullable: true
