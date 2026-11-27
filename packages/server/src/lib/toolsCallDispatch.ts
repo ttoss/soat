@@ -267,6 +267,7 @@ export const prepareMcpCall = async (args: {
   const mcpConfig = tool.mcp as {
     url: string;
     headers?: Record<string, string>;
+    forward_principal?: boolean;
   } | null;
   if (!mcpConfig?.url) {
     throw new DomainError(

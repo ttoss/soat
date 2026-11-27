@@ -946,6 +946,7 @@ type AgentToolRow = {
     url: string;
     headers?: Record<string, string>;
     pin_definitions?: boolean;
+    forward_principal?: boolean;
   } | null;
   mcpPins?: Record<string, string> | null;
   actions: string[] | null;

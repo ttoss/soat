@@ -14,10 +14,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import {
-  type AssertionAuthority,
-  sealAssertionAuthority,
-} from './assertionAuthority';
+import type { AssertionAuthority } from './assertionAuthority';
 import { readCappedText } from './cappedBody';
 import { withOutboundToolHeaders } from './causationHeader';
 import type { FormationResourceTypeRegistration } from './formationResourceTypeConfig';
@@ -199,9 +196,8 @@ const assertionHeaders = (args: {
     identity: {
       toolId: null,
       projectId: args.assertion.projectPublicId,
-      authority: sealAssertionAuthority({
-        authority: args.assertion.authority,
-      }),
+      authority: args.assertion.authority,
+      forwardPrincipal: false,
     },
     url: args.url,
     body: args.body,

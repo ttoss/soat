@@ -76,6 +76,11 @@ export type CallableToolDefinition = {
   outputMapping?: object | null;
 };
 
+// Pins are stored on the tool's row, which an inline definition lacks; the
+// principal goes only to a server its project registered, never to a URL the
+// caller names.
+const PERSISTED_ONLY_MCP_FLAGS = ['pin_definitions', 'forward_principal'];
+
 /**
  * Ephemeral tool definitions (an agent's inline `tools`, a pipeline step's
  * inline `tool`) are resolved/executed directly from their definition without
@@ -92,14 +97,15 @@ export const assertEphemeralTypeSupported = (
       'Ephemeral tool definitions of type "pipeline" are not supported; a pipeline tool runs only persisted, referenced by ID.'
     );
   }
-  // Pins are stored on the tool's row, which an inline definition does not have.
-  if (
-    isPlainObject(definition.mcp) &&
-    definition.mcp.pin_definitions === true
-  ) {
+  const { mcp } = definition;
+  if (!isPlainObject(mcp)) return;
+  const persistedOnly = PERSISTED_ONLY_MCP_FLAGS.find((flag) => {
+    return mcp[flag] === true;
+  });
+  if (persistedOnly) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'An inline mcp tool cannot set mcp.pin_definitions; only a persisted tool, referenced by ID, can.'
+      `An inline mcp tool cannot set mcp.${persistedOnly}; only a persisted tool, referenced by ID, can.`
     );
   }
 };

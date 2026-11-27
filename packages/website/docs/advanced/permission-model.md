@@ -260,7 +260,7 @@ Full reference: [IAM Tokens](../modules/iam.md#iam-tokens).
 
 ## What a tool server receives
 
-An `mcp` tool call, and a call of an action the deployment [adds to `builtin`](../modules/iam.md#the-builtin-catalog), carries a signed assertion in `X-Soat-Tool-Assertion`. It names the tool, project, agent, generation and durable work that made the call, and carries the call's authority encrypted in `ath`: the receiver can read the identity claims and cannot read or alter the authority.
+An `mcp` tool call, and a call of an action the deployment [adds to `builtin`](../modules/iam.md#the-builtin-catalog), carries a signed assertion in `X-Soat-Tool-Assertion`. It names the tool, project, agent, generation and durable work that made the call, the principal its chain of work acts for (`acts_for`) when the `mcp` tool sets [`mcp.forward_principal`](../modules/tools.md#tool-assertions), and carries the call's authority encrypted in `ath`: the receiver can read the identity claims and cannot read or alter the authority.
 
 A tool server that writes back sends the assertion unchanged in `X-Soat-On-Behalf-Of`, with its project's API key or an IAM token that key issued. The request is then held to the key ∩ the authority the call was sent with ∩ the calling agent's `policy_ids` (and the generation's execution identity), and so is any work it starts. The assertion never widens: the principal stays the key.
 

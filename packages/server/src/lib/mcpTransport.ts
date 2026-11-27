@@ -1,7 +1,6 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { sealAssertionAuthority } from './assertionAuthority';
 import { resolveSenderAuthority } from './assertionSender';
 import { withOutboundToolHeaders } from './causationHeader';
 import { SOAT_TOOL_CALL_TIMEOUT_MS } from './externalToolCall';
@@ -45,7 +44,14 @@ export type McpTransport = {
   trust: ToolTrust;
 };
 
+type McpConfig = {
+  url: string;
+  headers?: Record<string, string> | null;
+  forward_principal?: boolean;
+};
+
 const identityOf = async (args: {
+  mcp: McpConfig;
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
 }): Promise<ToolAssertionIdentity> => {
@@ -55,10 +61,6 @@ const identityOf = async (args: {
   if (!project) {
     throw new Error(`Tool project ${args.meter.projectId} does not exist.`);
   }
-  const authority = await resolveSenderAuthority({
-    sender: args.meter.sender,
-    projectPublicId: project.publicId,
-  });
   return {
     toolId: args.meter.toolId,
     projectId: project.publicId,
@@ -66,7 +68,11 @@ const identityOf = async (args: {
     generationId: args.meter.attribution.generationId,
     workId: args.meter.workId,
     context: args.toolContext,
-    authority: sealAssertionAuthority({ authority }),
+    authority: await resolveSenderAuthority({
+      sender: args.meter.sender,
+      projectPublicId: project.publicId,
+    }),
+    forwardPrincipal: args.mcp.forward_principal === true,
   };
 };
 
@@ -76,7 +82,7 @@ const identityOf = async (args: {
  * references. Throws a missing context key or secret before anything is sent.
  */
 export const openMcpTransport = async (args: {
-  mcp: { url: string; headers?: Record<string, string> | null };
+  mcp: McpConfig;
   meter: ToolExecutionMeter;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;

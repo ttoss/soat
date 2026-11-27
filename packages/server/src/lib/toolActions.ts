@@ -30,6 +30,7 @@ export const listToolActions = async (
   const mcp = tool.mcp as {
     url?: string;
     headers?: Record<string, string>;
+    forward_principal?: boolean;
   } | null;
   if (tool.type !== 'mcp' || !mcp?.url) {
     throw new DomainError(
@@ -39,7 +40,11 @@ export const listToolActions = async (
   }
 
   const transport = await openMcpTransport({
-    mcp: { url: mcp.url, headers: mcp.headers },
+    mcp: {
+      url: mcp.url,
+      headers: mcp.headers,
+      forward_principal: mcp.forward_principal,
+    },
     meter: {
       projectId: tool.projectId,
       toolId: tool.publicId,
