@@ -168,7 +168,7 @@ describe('Usage — storage metering', () => {
       await runStorageSnapshot({ now: new Date('2026-07-27T00:00:00.000Z') });
       expect(errorLog).toHaveBeenCalledWith(
         expect.stringContaining('runStorageSnapshot'),
-        expect.any(Error)
+        expect.stringContaining('usage table unavailable')
       );
     } finally {
       jest.restoreAllMocks();

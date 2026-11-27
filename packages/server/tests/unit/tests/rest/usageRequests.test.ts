@@ -117,7 +117,7 @@ describe('Usage — API-request metering', () => {
       expect(await flushRequestCounters({ now: new Date() })).toBe(0);
       expect(errorLog).toHaveBeenCalledWith(
         expect.stringContaining('flushRequestCounters'),
-        expect.any(Error)
+        expect.stringContaining('usage table unavailable')
       );
       insert.mockRestore();
       expect(await flushRequestCounters({ now: new Date() })).toBe(1);
