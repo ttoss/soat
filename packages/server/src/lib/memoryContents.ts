@@ -6,6 +6,8 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { getEmbedding } from 'src/lib/embedding';
+import { askEmbeddingWrite } from 'src/lib/embeddingAdmission';
+import type { RequestPrincipal } from 'src/lib/principals';
 
 const log = createDebug('soat:memories');
 
@@ -14,7 +16,14 @@ const embedOrNull = async (args: {
   memoryStoreId: number;
   projectId: number | null;
   generationId: string | null | undefined;
+  embedAs: RequestPrincipal | null;
 }): Promise<number[] | null> => {
+  // Outside the catch: a refused write raises rather than storing unembedded.
+  const ask = await askEmbeddingWrite({
+    projectId: args.projectId,
+    principal: args.embedAs,
+    work: 'The memory write',
+  });
   try {
     return await getEmbedding({
       text: args.content,
@@ -26,6 +35,7 @@ const embedOrNull = async (args: {
               generationId: args.generationId ?? null,
             },
       subject: { memoryStoreId: args.memoryStoreId },
+      ask,
     });
   } catch {
     // An embedding is optional: a fact must never be lost because the embedder
@@ -51,6 +61,8 @@ export const resolveMemoryContent = async (args: {
    * Required, though it may be undefined, so a caller has to pass it through.
    */
   generationId: string | null | undefined;
+  /** Who the write's embedding acts as; asked only when the text is embedded. */
+  embedAs: RequestPrincipal | null;
 }): Promise<InstanceType<(typeof db)['MemoryContent']>> => {
   const contentHash = hashMemoryContent({ content: args.content });
   const existing = await db.MemoryContent.findOne({

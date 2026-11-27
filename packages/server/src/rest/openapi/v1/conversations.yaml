@@ -224,6 +224,8 @@ paths:
       description: Updates the status of a conversation
       operationId: updateConversation
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - EMBEDDING_NOT_CONFIGURED
         - FORBIDDEN
@@ -231,6 +233,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
       parameters:

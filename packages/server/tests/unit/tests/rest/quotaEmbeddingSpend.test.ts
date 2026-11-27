@@ -154,12 +154,17 @@ describe('token and cost quotas on embedding spend', () => {
 
     test('an embedding billed to no project has no budget to refuse', async () => {
       await expect(
-        createEmbeddings({ inputs: ['hello world'], projectPublicId: null })
+        createEmbeddings({
+          inputs: ['hello world'],
+          projectPublicId: null,
+          embedAs: null,
+        })
       ).resolves.toHaveLength(1);
       await expect(
         createEmbeddings({
           inputs: ['hello world'],
           projectPublicId: 'proj_unknown',
+          embedAs: null,
         })
       ).resolves.toHaveLength(1);
     });
@@ -332,6 +337,7 @@ describe('token and cost quotas on embedding spend', () => {
         embedForProject({
           projectId: ctx.projectInternalId,
           texts: ['output', 'expected'],
+          embedAs: null,
         })
       ).rejects.toMatchObject({
         code: 'QUOTA_EXCEEDED',

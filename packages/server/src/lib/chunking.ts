@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { getEmbedding, projectEmbeddingBilling } from './embedding';
+import type { EmbeddingWriteAsk } from './embeddingAdmission';
 import type { GenerationEndUser } from './generationAttribution';
 
 const log = createDebug('soat:chunking');
@@ -151,10 +152,10 @@ const embedChunk = async (args: {
   chunk: PreparedChunk;
   projectId: number;
   documentId: number;
-  embed?: boolean;
+  ask: EmbeddingWriteAsk | null;
   endUser?: GenerationEndUser;
 }): Promise<number[] | null> => {
-  if (args.embed === false) return null;
+  if (args.ask === null) return null;
   try {
     return await getEmbedding({
       text: args.chunk.content,
@@ -163,6 +164,7 @@ const embedChunk = async (args: {
         endUser: args.endUser,
       }),
       subject: { documentId: args.documentId },
+      ask: args.ask,
     });
   } catch {
     // embedding is optional — continue without it
@@ -179,6 +181,7 @@ export type EmbeddedChunk = PreparedChunk & { embedding: number[] | null };
 export const embedChunks = async (args: {
   projectId: number;
   documentId: number;
+  ask: EmbeddingWriteAsk;
   chunks: PreparedChunk[];
   concurrency?: number;
 }): Promise<EmbeddedChunk[]> => {
@@ -194,6 +197,7 @@ export const embedChunks = async (args: {
           chunk,
           projectId: args.projectId,
           documentId: args.documentId,
+          ask: args.ask,
         }),
       };
     }
@@ -207,11 +211,11 @@ export const persistChunks = async (args: {
   chunks: PreparedChunk[];
   concurrency?: number;
   /**
-   * Off leaves every chunk's vector null: the text is still stored, still read
-   * back and still reachable by the lexical channel, and no embedding is
-   * billed. Defaults on, which is what an uploaded document wants.
+   * The write's admission ask; `null` leaves every chunk's vector null: the
+   * text is still stored, still read back and still reachable by the lexical
+   * channel, and no embedding is billed.
    */
-  embed?: boolean;
+  ask: EmbeddingWriteAsk | null;
   /** Who the ingest runs for; its embeddings are metered against them. */
   endUser?: GenerationEndUser;
   onProgress?: (completed: number) => Promise<void> | void;
@@ -232,7 +236,7 @@ export const persistChunks = async (args: {
       chunk,
       projectId: args.projectId,
       documentId: args.documentId,
-      embed: args.embed,
+      ask: args.ask,
       endUser: args.endUser,
     });
 

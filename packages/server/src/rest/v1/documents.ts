@@ -260,6 +260,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
     createdBy: requestPrincipalFromCtx(ctx),
+    embedAs: requestPrincipalFromCtx(ctx),
     assertFiling: assertDocumentFiling(ctx),
   });
   ctx.status = 201;
@@ -324,6 +325,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     expectedVersion: writePreconditionOf(ctx),
     createdBy: requestPrincipalFromCtx(ctx),
+    embedAs: requestPrincipalFromCtx(ctx),
   });
   ctx.body = updated;
 });

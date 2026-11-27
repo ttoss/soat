@@ -149,6 +149,7 @@ const documentVersionArchive = makeVersionArchive({
       chunkOverlap: configNumber(args.config.chunk_overlap) ?? undefined,
       versionLabel: args.label,
       createdBy: args.createdBy,
+      embedAs: args.createdBy,
     });
 
     /* istanbul ignore next -- the archive loaded the document to find the

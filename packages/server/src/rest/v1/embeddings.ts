@@ -6,6 +6,7 @@ import { EMBEDDING_SPEND } from 'src/lib/embeddingSpend';
 import { MAX_EMBEDDINGS_INPUTS } from 'src/lib/requestBounds';
 
 import {
+  requestPrincipalFromCtx,
   requireAuth,
   resolveWriteProjectId,
   resolveWriteProjectPublicId,
@@ -83,6 +84,7 @@ embeddingsRouter.post('/embeddings', async (ctx: Context) => {
     const results = await createEmbeddings({
       inputs: [body.input!],
       projectPublicId: billingProjectPublicId,
+      embedAs: requestPrincipalFromCtx(ctx),
     });
     response.embedding = results[0];
   }
@@ -91,6 +93,7 @@ embeddingsRouter.post('/embeddings', async (ctx: Context) => {
     response.embeddings = await createEmbeddings({
       inputs: body.inputs!,
       projectPublicId: billingProjectPublicId,
+      embedAs: requestPrincipalFromCtx(ctx),
     });
   }
 

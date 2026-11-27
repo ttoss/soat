@@ -125,6 +125,7 @@ export const seedGoldenCorpus = async (args: {
   for (const fixture of args.golden.corpus.documents) {
     const created = await createDocument({
       createdBy: null,
+      embedAs: null,
       projectId,
       content: fixture.content,
       path: fixture.path,
@@ -176,6 +177,7 @@ export const seedGoldenCorpus = async (args: {
         principalId: 'user_seed',
         actsFor: null,
       },
+      embedAs: null,
     });
     // `writeMemory` deduplicates against the most similar existing entry
     // at 0.95. A fixture that merges into another is silently absent from the

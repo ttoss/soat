@@ -36,6 +36,8 @@ paths:
         `embeddings:CreateEmbeddings` on the project billed.
       operationId: createEmbeddings
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - API_KEY_PROJECT_SCOPE
         - EMBEDDING_NOT_CONFIGURED
@@ -47,6 +49,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: embeddings:CreateEmbeddings
       x-iam-resource-type: embedding
       requestBody:

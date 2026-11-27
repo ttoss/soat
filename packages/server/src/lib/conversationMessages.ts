@@ -15,6 +15,7 @@ import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import type { ProvenanceCounts } from './generationProvenance';
 import { assertMessageFilesReadable } from './messageFileParts';
+import type { RequestPrincipal } from './principals';
 import { makeResourceAccessor } from './resourceAccessor';
 import { agentReferences } from './resourceReferences';
 import type { PublicMessages, VendorOptions } from './vendorOptions';
@@ -179,6 +180,8 @@ type AddConversationMessageArgs = {
   idempotencyKey?: string | null;
   idempotencyDigest?: string | null;
   provenance: ProvenanceCounts;
+  /** Who the turn's embedding acts as, when the conversation embeds turns. */
+  embedAs: RequestPrincipal | null;
 };
 
 type ConversationRow = InstanceType<(typeof db)['Conversation']>;
@@ -210,6 +213,7 @@ const createTextMessage = async (
     system: { module: 'conversations', dir: args.conversationId },
     // The turn's author is an actor or agent, recorded in its tags.
     createdBy: null,
+    embedAs: args.embedAs,
     tags: conversationMessageTags({
       conversationPublicId: args.conversationId,
       ownerActorPublicId: ownerActorPublicId(conversation),

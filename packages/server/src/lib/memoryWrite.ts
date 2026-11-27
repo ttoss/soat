@@ -14,6 +14,7 @@ import {
   resolveOutcome,
   type SettledWrite,
 } from 'src/lib/memoryWriteOutcome';
+import type { RequestPrincipal } from 'src/lib/principals';
 import { withIterativeVectorScan } from 'src/lib/vectorSearch';
 
 const log = createDebug('soat:memories');
@@ -291,6 +292,8 @@ export type WriteMemoryArgs = {
   supersedes?: string;
   /** Who is asserting, and through which door. */
   assertion: MemoryAssertionSource;
+  /** Who the write's embedding acts as: the caller, or the turn's authority. */
+  embedAs: RequestPrincipal | null;
 };
 
 /**
@@ -414,6 +417,7 @@ export const writeMemory = async (
     content: args.content,
     projectId: store.projectId,
     generationId: args.assertion.generationId,
+    embedAs: args.embedAs,
   });
 
   const { match, similarity } = await measureWrite({

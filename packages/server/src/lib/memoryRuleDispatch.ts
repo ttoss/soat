@@ -6,6 +6,7 @@ import { db } from '../db';
 import type { ActsFor } from './actsFor';
 import { readGeneratedMessageContent } from './conversationMessages';
 import { conversationProvenanceTags } from './conversationSystemTags';
+import { generationPrincipal } from './embeddingAdmission';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
@@ -149,6 +150,10 @@ const writeCandidates = async (args: {
     conversationPublicId: args.turn.conversationPublicId,
   });
 
+  const embedAs = await generationPrincipal({
+    generationId: args.turn.generationPublicId,
+  });
+
   for (const fact of args.facts) {
     try {
       await assertMemoryStorageQuota({ memoryStoreId, content: fact.content });
@@ -171,6 +176,7 @@ const writeCandidates = async (args: {
           principalId: args.turn.agentPublicId,
           actsFor: args.actsFor,
         },
+        embedAs,
       });
       summary[result.action] += 1;
     } catch (error) {

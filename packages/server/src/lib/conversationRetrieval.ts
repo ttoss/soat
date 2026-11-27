@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { getEmbedding, projectEmbeddingBilling } from './embedding';
+import type { EmbeddingWriteAsk } from './embeddingAdmission';
 
 const log = createDebug('soat:conversations');
 
@@ -44,6 +45,20 @@ export const conversationEmbedsTurns = async (args: {
   );
 };
 
+/** Whether setting a conversation's `retrieval` to `retrieval` embeds its turns. */
+export const retrievalEmbeds = async (args: {
+  projectId: number;
+  retrieval: RetrievalMode | null;
+}): Promise<boolean> => {
+  const project = await db.Project.findByPk(args.projectId);
+  return (
+    resolveRetrievalMode({
+      conversation: args.retrieval,
+      project: project?.defaultConversationRetrieval,
+    }) === 'embed'
+  );
+};
+
 /**
  * Embeds the turns a conversation accumulated while it was not embedding them,
  * so switching it on makes the whole conversation retrievable rather than only
@@ -55,6 +70,8 @@ export const conversationEmbedsTurns = async (args: {
 export const embedConversationBacklog = async (args: {
   conversationId: number;
   projectId: number;
+  /** Asked before the retrieval change that starts the backlog was stored. */
+  ask: EmbeddingWriteAsk;
 }): Promise<number> => {
   const messages = await db.ConversationMessage.findAll({
     where: { conversationId: args.conversationId },
@@ -76,6 +93,7 @@ export const embedConversationBacklog = async (args: {
         text: chunk.content,
         billing: projectEmbeddingBilling({ projectId: args.projectId }),
         subject: { documentId: chunk.documentId },
+        ask: args.ask,
       });
       await chunk.update({ embedding });
       embedded += 1;

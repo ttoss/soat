@@ -4,6 +4,7 @@ import { type EmbeddingModel, embedMany } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import type { EmbeddingWriteAsk } from './embeddingAdmission';
 import type { GenerationEndUser } from './generationAttribution';
 import { resolveBedrockCredentials } from './linkedProviderSecret';
 import { recordEmbeddingUsage } from './usageEmbeddingRecording';
@@ -121,6 +122,14 @@ export type EmbeddingSubject =
   { documentId: number } | { memoryStoreId: number } | null;
 
 /**
+ * A stored subject only with the write's admission ask (`embeddingAdmission.ts`),
+ * so no write embeds what it stores unasked.
+ */
+export type EmbeddingTarget =
+  | { subject: null; ask?: never }
+  | { subject: NonNullable<EmbeddingSubject>; ask: EmbeddingWriteAsk };
+
+/**
  * Embeds `texts` one provider call at a time, as `embedMany` would split them,
  * and settles every call before answering: the provider bills each call that
  * completed, so a batch whose later call fails still reports the tokens the
@@ -200,13 +209,14 @@ const configuredEmbeddingModel = (): EmbeddingModelChoice => {
   return { provider, model };
 };
 
-export const getEmbeddings = async (args: {
-  texts: string[];
-  billing: EmbeddingBilling;
-  subject: EmbeddingSubject;
-  /** A model pinned earlier (an eval run's); the deployment's when absent. */
-  pinned?: EmbeddingModelChoice;
-}): Promise<number[][]> => {
+export const getEmbeddings = async (
+  args: {
+    texts: string[];
+    billing: EmbeddingBilling;
+    /** A model pinned earlier (an eval run's); the deployment's when absent. */
+    pinned?: EmbeddingModelChoice;
+  } & EmbeddingTarget
+): Promise<number[][]> => {
   const { provider, model } = args.pinned ?? configuredEmbeddingModel();
 
   log(
@@ -241,15 +251,10 @@ export const getEmbeddings = async (args: {
   return batch.embeddings;
 };
 
-export const getEmbedding = async (args: {
-  text: string;
-  billing: EmbeddingBilling;
-  subject: EmbeddingSubject;
-}): Promise<number[]> => {
-  const [embedding] = await getEmbeddings({
-    texts: [args.text],
-    billing: args.billing,
-    subject: args.subject,
-  });
+export const getEmbedding = async (
+  args: { text: string; billing: EmbeddingBilling } & EmbeddingTarget
+): Promise<number[]> => {
+  const { text, ...rest } = args;
+  const [embedding] = await getEmbeddings({ ...rest, texts: [text] });
   return embedding;
 };
