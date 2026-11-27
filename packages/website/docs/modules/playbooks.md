@@ -276,6 +276,8 @@ Every operation on one case also takes `actor_id` as a query parameter: given, t
 
 The pin reaches the create, the listing and every case operation alike, and the model cannot override it. `actor_id` in `tool_context` is server-set from the [session](./sessions.md)'s actor, so a turn with no actor fails the call with `400 MISSING_TOOL_CONTEXT_KEY` rather than reaching every case. Deleting an actor leaves its cases with `actor_id: null`.
 
+A case's nodes run for its actor: every [generation](./agents.md) an executor starts — an agent node's, a decider's, and those of the task or [orchestration](./orchestrations.md) run it starts — runs as a session of that actor would. Retrieval reads the actor's [memories](./memories.md) only, `write_memory` writes memories of the actor, and `actor_id` in `tool_context` is the actor's, so the pinned tool above works inside a node. The nodes of a case with no actor run for none.
+
 ### Upstream cases
 
 A playbook declares `upstreams`, other playbooks of its project, and reads one of their nodes through an `upstream` node; later nodes read its output with an ordinary `{ node_id, field }` source. One `company` case (CNPJ, regime) can feed one DRE case per month this way, without copying a value.
