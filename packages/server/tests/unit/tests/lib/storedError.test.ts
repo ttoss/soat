@@ -35,21 +35,26 @@ describe('toStoredError', () => {
     ).toEqual({ code: 'VALIDATION_FAILED', message: 'bad' });
   });
 
-  test.each([
-    ['an Error', new Error('relation "secrets" does not exist')],
-    ['a primitive', 'kaboom'],
-    ['an object', { type: 'internal' }],
-  ])('%s records the opaque failure and logs the raw value', (_, error) => {
-    const logged = jest.spyOn(console, 'error').mockImplementation(() => {});
+  const internal = new Error('relation "secrets" does not exist');
 
-    expect(
-      toStoredError({ error, opaque: INTERNAL_FAILURE, label: 'test' })
-    ).toEqual({ code: 'INTERNAL_ERROR', message: 'Internal Server Error' });
-    expect(logged).toHaveBeenCalledWith(
-      'test: recorded as INTERNAL_ERROR',
-      error
-    );
-  });
+  test.each([
+    ['an Error', internal, internal.stack],
+    ['a primitive', 'kaboom', 'kaboom'],
+    ['an object', { type: 'internal' }, { keys: ['type'] }],
+  ])(
+    '%s records the opaque failure and logs it as loggableError renders it',
+    (_, error, rendered) => {
+      const logged = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(
+        toStoredError({ error, opaque: INTERNAL_FAILURE, label: 'test' })
+      ).toEqual({ code: 'INTERNAL_ERROR', message: 'Internal Server Error' });
+      expect(logged).toHaveBeenCalledWith(
+        'test: recorded as INTERNAL_ERROR',
+        rendered
+      );
+    }
+  );
 
   test('the caller names the opaque failure', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
