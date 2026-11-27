@@ -64,6 +64,30 @@ export const markDispatchPaused = async (args: {
   );
 };
 
+/**
+ * Admission refused the state's dispatch: the task takes the operator pause,
+ * the refusal as its reason, and the dispatch is recorded as suppressed so
+ * `resumeTask` dispatches it again. Answers the task when it still sat in the state.
+ */
+export const pauseDispatchOnRefusal = async (args: {
+  taskPublicId: string;
+  stateName: string;
+  token: number;
+  reason: string;
+}) => {
+  log('pauseDispatchOnRefusal: task=%s', args.taskPublicId);
+  return applyLocked({
+    taskPublicId: args.taskPublicId,
+    guard: stillInState({ stateName: args.stateName, token: args.token }),
+    mutate: (task) => {
+      task.pauseRequestedAt = task.pauseRequestedAt ?? new Date();
+      task.pauseReason = task.pauseReason ?? args.reason;
+      task.activeDispatch = null;
+      task.automationStatus = PAUSED_AUTOMATION_STATUS;
+    },
+  });
+};
+
 /** {@link adoptProjectPause} for a task about to dispatch. */
 export const adoptTaskProjectPause = (args: {
   taskId: number;

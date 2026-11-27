@@ -1,6 +1,8 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type { DomainError } from '../errors';
+import { isAdmissionRefusal } from './admission';
 import type { Transaction } from './dbTransaction';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import { advancePlaybookCase } from './playbookCascade';
@@ -167,6 +169,7 @@ const settleOnce = async (args: {
         output: settlement.output,
         outputRevision: revision,
         runId: settlement.runId ?? execution.runId,
+        error: null,
         finishedAt,
       },
       { transaction }
@@ -191,6 +194,39 @@ export const settleExecution = async (args: {
 
 type PendingOutcome = Extract<ExecutorOutcome, { kind: 'pending' }>;
 
+/**
+ * Admission refused the executor's start: the execution goes back to `queued`,
+ * the refusal as its `error`, and its case pauses, so resuming the case runs it.
+ */
+const parkRefusedExecution = async (args: {
+  execution: ExecutionRow;
+  error: DomainError;
+}): Promise<void> => {
+  const { execution } = args;
+  log('parkRefusedExecution: %s refused', execution.publicId);
+  await db.sequelize.transaction(async (transaction) => {
+    await execution.update(
+      {
+        status: 'queued',
+        leaseExpiresAt: null,
+        error: toStoredError({
+          error: args.error,
+          opaque: INTERNAL_FAILURE,
+          label: 'playbook execution',
+        }),
+      },
+      { transaction }
+    );
+    await db.PlaybookCase.update(
+      { pauseRequestedAt: new Date() },
+      {
+        where: { id: execution.caseId, pauseRequestedAt: null },
+        transaction,
+      }
+    );
+  });
+};
+
 /** Settles from an outcome or the error it threw; answers it if pending. */
 const settleUnlessPending = async (args: {
   execution: ExecutionRow;
@@ -201,6 +237,10 @@ const settleUnlessPending = async (args: {
   try {
     outcome = await args.outcome();
   } catch (error) {
+    if (isAdmissionRefusal(error)) {
+      await parkRefusedExecution({ execution: args.execution, error });
+      return null;
+    }
     await settleExecution({
       executionId,
       settlement: {

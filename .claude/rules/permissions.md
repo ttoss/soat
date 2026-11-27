@@ -107,8 +107,12 @@ test that fails when a new site skips it.
   `builtin`) and `defineFormationModule` (create, update). A route authorizing
   outside `isAllowed`/`resolveProjectIds` asks through `admitAuthorized`.
   `tests/harness/admissionChokepoint.test.mjs`.
-- A refusal or no answer refuses; never turn either into a pass.
-  `tests/unit/tests/rest/admission.test.ts`.
+- A step of internal work (generation, tool call, start) asks through
+  `assertWorkAdmitted`, called only by `assertAllowedUnder`; a refusal stops
+  the work per kind (`isAdmissionRefusal`).
+  `admissionChokepoint.test.mjs`, `tests/unit/tests/rest/admissionWork.test.ts`.
+- A refusal or no answer refuses; only `on_unavailable: allow` passes an
+  unanswered internal step. `tests/unit/tests/rest/admission.test.ts`.
 
 ## Agents, tokens, keys
 

@@ -292,7 +292,26 @@ A deployment that gates runtime writes for its own reasons (a plan limit, a cap)
 - A `4xx` with `{ "error": { "code", "message", "hint"?, "meta"? } }` refuses it: the caller receives that status, `code`, `message`, `hint` and `meta` as sent (without a `hint`, the `ADMISSION_REFUSED` one), on every write the service can be asked about (each documents it as its `4XX` response). `code` is any identifier matching `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, so a service's own lowercase codes pass unchanged.
 - Anything else (unreachable, timed out, `5xx`, a refusal outside that shape) refuses it with `502 ADMISSION_UNAVAILABLE`. An unanswered question is never a pass.
 
-It is asked where the write is decided, so every way in is covered: a REST call, a `builtin` tool call (which runs through the same stack, see [Tools](./tools.md#builtin)) and a formation's create or update ([Formations](./formations.md#admission)). A start is a declared action like any other (`agents:CreateAgentGeneration`, `orchestrations:StartRun`, `triggers:FireTrigger`, `tools:CallTool`): asked once where a caller starts the work, before a streamed answer opens, and not again for the steps the run takes or for a scheduled firing, which runs the trigger's own work. A read and an undeclared action never call it. Admission only refuses: it cannot allow what authorization refused.
+It is asked where the write is decided, so every way in is covered: a REST call, a `builtin` tool call (which runs through the same stack, see [Tools](./tools.md#builtin)) and a formation's create or update ([Formations](./formations.md#admission)). A start is a declared action like any other (`agents:CreateAgentGeneration`, `orchestrations:StartRun`, `triggers:FireTrigger`, `tools:CallTool`): asked before a streamed answer opens. A read and an undeclared action never call it. Admission only refuses: it cannot allow what authorization refused.
+
+#### Steps of internal work
+
+Each step work takes on its own is asked too, after the check that authorizes it: a generation (`agents:CreateAgentGeneration`, or `agents:SendSessionMessage` in a session), a tool call (`tools:CallTool`) and a start (`orchestrations:StartRun`, `evaluations:RunEval`, `deciders:CreateDecision`, `tasks:CreateTask`), whether a trigger firing, an orchestration node, a task's automation, a playbook node, an eval item or a generation's own tool call takes it. The question carries `body: null` and names the principal the work acts as. A step the request itself was asked about ([`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) and the turn it starts) is not asked again.
+
+A refused step stops what took it:
+
+| Work | On a refusal |
+| --- | --- |
+| Trigger firing | Recorded `failed` with the refusal as `error`; nothing generates |
+| Orchestration run | Parks on the operator pause (`awaiting_input`, `required_action.type: paused`), `pause_reason` naming the refusal |
+| Task automation | The task pauses, `pause_reason` naming the refusal; `automation_status: paused` |
+| Playbook case | The case pauses; the node's execution stays `queued` with the refusal as `error` |
+| Eval run | Fails with the refusal as `error`; its other items do not run |
+| Generation's tool call | The call's result carries the refusal, as for any failed call |
+
+Resuming is the caller's, through the work's own resume route ([`POST /api/v1/orchestration-runs/{orchestration_run_id}/resume`](/docs/api/orchestrations/resume-orchestration-run), [`POST /api/v1/tasks/{task_id}/resume`](/docs/api/tasks/resume-task), [`POST /api/v1/playbook-cases/{case_id}/resume`](/docs/api/playbooks/resume-playbook-case)): the step is asked again when it runs.
+
+A step's ask left unanswered is refused with `ADMISSION_UNAVAILABLE`, unless the registration sets `on_unavailable: "allow"`, which passes it. REST calls, `builtin` calls and formations are refused whatever `on_unavailable` says.
 
 ## Conditions
 
@@ -772,7 +791,8 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
       "secret_env": "ADMISSION_SIGNING_SECRET",
       "timeout_seconds": 5
     },
-    "actions": ["triggers:CreateTrigger", "triggers:UpdateTrigger"]
+    "actions": ["triggers:CreateTrigger", "triggers:UpdateTrigger"],
+    "on_unavailable": "refuse"
   },
   "denial_codes": [
     {
@@ -783,4 +803,4 @@ For user identity management, roles, authentication, and bootstrap, see the [Use
 }
 ```
 
-Read once at boot, by the API and the worker alike; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`. Each `admission.actions` entry is an action a runtime write operation declares; `secret_env` names the variable holding the signing secret, which must be set; `timeout_seconds` defaults to 30. Each `denial_codes` entry is an UPPER_SNAKE code no built-in error code uses, once, with a non-empty `hint`.
+Read once at boot, by the API and the worker alike; an invalid file fails the boot. A module may not reuse a built-in module's name, each action is `<module>:<Operation>`, and a resource type belongs to one module. Each `mcp_tools` URL appears once, and each tool declares at least one action `iam/check` answers on its `resource_type`. Each `admission.actions` entry is an action a runtime write operation declares; `secret_env` names the variable holding the signing secret, which must be set; `timeout_seconds` defaults to 30; `on_unavailable` is `refuse` (the default) or `allow`, for [steps of internal work](#steps-of-internal-work) only. Each `denial_codes` entry is an UPPER_SNAKE code no built-in error code uses, once, with a non-empty `hint`.

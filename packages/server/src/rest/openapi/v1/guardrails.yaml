@@ -637,6 +637,8 @@ paths:
         widely-attached one. Pass an optional `tool_id` to resolve `runtime.tools.*`.
       operationId: evaluateGuardrail
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE

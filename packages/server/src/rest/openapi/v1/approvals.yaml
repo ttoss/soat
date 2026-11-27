@@ -270,6 +270,8 @@ paths:
       operationId: approveApproval
       x-raises:
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND

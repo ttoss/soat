@@ -1,5 +1,7 @@
 import createDebug from 'debug';
 
+import type { DomainError } from '../errors';
+import { isAdmissionRefusal, refusalPauseReason } from './admission';
 import { INTERNAL_FAILURE, toStoredError } from './storedError';
 import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
@@ -15,7 +17,11 @@ import {
   failedDispatchIds,
   runDispatch,
 } from './tasksDispatch';
-import { isTaskPaused, markDispatchPaused } from './tasksPause';
+import {
+  isTaskPaused,
+  markDispatchPaused,
+  pauseDispatchOnRefusal,
+} from './tasksPause';
 import type { WorkAuthority } from './workAuthority';
 import type { RetryPolicy, WorkflowDispatch } from './workflowsValidation';
 
@@ -251,6 +257,28 @@ const prepareRetry = async (args: {
   });
 };
 
+/** Pauses the task on admission's refusal and announces it like an operator pause. */
+const pauseRefusedDispatch = async (args: {
+  taskPublicId: string;
+  stateName: string;
+  token: number;
+  projectId: number;
+  error: DomainError;
+}): Promise<void> => {
+  const paused = await pauseDispatchOnRefusal({
+    taskPublicId: args.taskPublicId,
+    stateName: args.stateName,
+    token: args.token,
+    reason: refusalPauseReason(args.error),
+  });
+  if (!paused) return;
+  await emitTaskEvent({
+    type: 'tasks.paused',
+    projectId: args.projectId,
+    task: await presentTask({ task: paused }),
+  });
+};
+
 /**
  * Runs one state dispatch, retrying its **execution** failures (a tool/agent
  * error, an orchestration run that ends `failed`) up to `retry.max_attempts`
@@ -261,7 +289,8 @@ const prepareRetry = async (args: {
  *
  * Attempts respect the same cancellation-on-exit token a single attempt does: if
  * the task leaves the state between attempts the remaining ones are abandoned
- * (`kind: 'abandoned'`).
+ * (`kind: 'abandoned'`). Admission's refusal is never retried: the task
+ * pauses and the dispatch is abandoned too.
  */
 export const runDispatchWithRetry = async (
   args: AttemptContext
@@ -280,6 +309,16 @@ export const runDispatchWithRetry = async (
         attempt: attemptNumber(attempt),
       };
     } catch (error) {
+      if (isAdmissionRefusal(error)) {
+        await pauseRefusedDispatch({
+          taskPublicId: args.taskPublicId,
+          stateName: args.stateName,
+          token: args.token,
+          projectId: args.projectId,
+          error,
+        });
+        return { kind: 'abandoned' };
+      }
       if (attempt >= maxAttempts) {
         return { kind: 'failed', error, attempt: attemptNumber(attempt) };
       }

@@ -439,6 +439,8 @@ paths:
       description: Creates a document from the message text and attaches it to the conversation at the given position. If position is omitted, it is appended at the end.
       operationId: addConversationMessage
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
@@ -586,6 +588,8 @@ paths:
       operationId: generateConversationMessage
       x-raises:
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR

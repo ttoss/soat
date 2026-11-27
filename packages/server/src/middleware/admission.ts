@@ -1,5 +1,9 @@
 import type { AuthUser, Context } from '../Context';
-import { assertAdmitted, isAdmissionDeclared } from '../lib/admission';
+import {
+  assertAdmitted,
+  isAdmissionDeclared,
+  runInAdmissionScope,
+} from '../lib/admission';
 import { getOperationIam, matchOpenApiPath } from '../lib/openapiSpec';
 import { wrapIsAllowed } from '../lib/permissions';
 import { principalFromAuthUser } from '../lib/principals';
@@ -94,8 +98,9 @@ export const admissionMiddleware = async (ctx: Context, next: Next) => {
   const iam = template
     ? getOperationIam({ method: ctx.method, path: template })
     : null;
+  // Every request opens a scope, so a nested call never inherits its caller's asks.
   if (!ctx.authUser || !iam || !isAdmissionDeclared(iam.action)) {
-    return next();
+    return runInAdmissionScope(next);
   }
   const gate = buildGate({
     ctx,
@@ -105,7 +110,7 @@ export const admissionMiddleware = async (ctx: Context, next: Next) => {
   });
   gates.set(ctx, gate);
   instrument({ authUser: ctx.authUser, gate });
-  return next();
+  return runInAdmissionScope(next);
 };
 
 /** For a decision made outside `isAllowed`: asks admission when `action` is the route's. */

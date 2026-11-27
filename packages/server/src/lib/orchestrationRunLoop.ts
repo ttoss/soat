@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { isAdmissionRefusal, refusalPauseReason } from './admission';
 import { processNodeResultBatch } from './orchestrationBatchResults';
 import {
   cyclesExcludingLoopNodes,
@@ -15,7 +16,7 @@ import {
   recordSkippedNodeExecutions,
 } from './orchestrationNodeRecorder';
 import type { RequiredAction, ScheduledWait } from './orchestrationNodeTypes';
-import { readRunPause } from './orchestrationRunPause';
+import { flagRunTreePaused, readRunPause } from './orchestrationRunPause';
 import type {
   MappedOrchestrationRun,
   OrchestrationEdge,
@@ -102,6 +103,27 @@ type RunBatchResult = {
    * travels with it because the caller writes the `required_action`.
    */
   pauseReason: { reason: string | null } | null;
+};
+
+/**
+ * Admission's refusal of a step parks the run under the operator pause, the
+ * refusal as its reason, so `resume` re-drives the frontier. Anything else fails it.
+ */
+const pauseOnRefusal = async (args: {
+  error: unknown;
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  frontier: string[];
+}): Promise<RunLoopResult['pause']> => {
+  if (!isAdmissionRefusal(args.error)) return null;
+  const reason = refusalPauseReason(args.error);
+  log('executeRun: admission refused run=%s', args.runRecord.publicId);
+  await flagRunTreePaused({
+    runPublicId: args.runRecord.publicId,
+    reason,
+    requestedAt: new Date(),
+    origin: 'operator',
+  });
+  return { reason, frontier: args.frontier };
 };
 
 /** Executes this round's activated nodes concurrently, recording each. */
@@ -383,11 +405,13 @@ export const executeRunLoop = async (args: {
       await recordSkippedNodeExecutions({ runRecord, nodes });
     }
   } catch (error: unknown) {
-    runStatus = 'failed';
-    runError = buildRunError(error);
     scheduledWait = null;
-    pause = null;
-    log('executeRun error %o', runError);
+    pause = await pauseOnRefusal({ error, runRecord, frontier: activeNodeIds });
+    if (!pause) {
+      runStatus = 'failed';
+      runError = buildRunError(error);
+      log('executeRun error %o', runError);
+    }
   }
 
   return { runStatus, requiredAction, runError, scheduledWait, traceId, pause };

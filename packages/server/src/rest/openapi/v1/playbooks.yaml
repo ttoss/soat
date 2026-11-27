@@ -322,6 +322,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -545,6 +547,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -691,6 +695,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -837,6 +843,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -1003,6 +1011,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -1381,6 +1391,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -1706,6 +1718,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -1997,6 +2011,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -2306,6 +2322,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -2593,6 +2611,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR
@@ -2754,6 +2774,8 @@ paths:
       x-raises:
         - ACTION_NOT_HELD
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AGENT_NOT_FOUND
         - AGENT_TOOL_NOT_OFFERED
         - AI_PROVIDER_ERROR

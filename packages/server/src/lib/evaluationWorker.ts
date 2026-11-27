@@ -14,6 +14,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { isAdmissionRefusal } from './admission';
 import { openRunProbeGate } from './evaluationProbeRuns';
 import {
   ackEvalItemTask,
@@ -38,7 +39,11 @@ import { readScorerModels } from './evaluationScorerModels';
 import { runAsJob } from './requestCorrelation';
 import { agentReferences } from './resourceReferences';
 import { createScheduler } from './scheduler';
-import type { OwnStoredError } from './storedError';
+import {
+  INTERNAL_FAILURE,
+  type OwnStoredError,
+  toStoredError,
+} from './storedError';
 import { parseWorkAuthority } from './workAuthority';
 
 const log = createDebug('soat:evaluations');
@@ -213,6 +218,33 @@ const markRunUnderWay = async (args: {
 };
 
 /**
+ * Admission's refusal of an item's step stops the run: it fails with the
+ * refusal, and its other items drop as they are claimed.
+ */
+const stopOnRefusal = async (
+  args: { run: LoadedRun['run']; projectId: number },
+  fn: () => Promise<unknown>
+): Promise<void> => {
+  try {
+    await fn();
+  } catch (error) {
+    if (!isAdmissionRefusal(error)) throw error;
+    await args.run.reload();
+    if (!isLiveRunStatus(args.run.status)) return;
+    log('stopOnRefusal: run=%s refused', args.run.publicId);
+    await failEvalRun({
+      run: args.run,
+      projectId: args.projectId,
+      error: toStoredError({
+        error,
+        opaque: INTERNAL_FAILURE,
+        label: 'eval item',
+      }),
+    });
+  }
+};
+
+/**
  * Executes one claimed item task.
  *
  * A run that is no longer live (cancelled between the claim and here) drops the
@@ -268,24 +300,26 @@ const handleEvalItemTask = async (args: {
     args.task.attempts
   );
 
-  await executeAndRecordItem({
-    authority: parseWorkAuthority(run.authority),
-    projectId: context.projectId,
-    runDbId: run.id as number,
-    agent,
-    agentVersion: run.agentVersion as number,
-    scorers: definition.scorers,
-    deciderScoring: {
-      versions: run.deciderVersions,
-      evalId: context.evalPublicId,
-      runId: run.publicId,
-    },
-    scorerModels: readScorerModels(run.scorerModels),
-    item,
-    // Re-read from the row per item: this process has no request behind it, and
-    // the bag is what makes the item's generation match production.
-    toolContext:
-      (run.toolContext as Record<string, string> | null) ?? undefined,
+  await stopOnRefusal({ run, projectId: context.projectId }, () => {
+    return executeAndRecordItem({
+      authority: parseWorkAuthority(run.authority),
+      projectId: context.projectId,
+      runDbId: run.id as number,
+      agent,
+      agentVersion: run.agentVersion as number,
+      scorers: definition.scorers,
+      deciderScoring: {
+        versions: run.deciderVersions,
+        evalId: context.evalPublicId,
+        runId: run.publicId,
+      },
+      scorerModels: readScorerModels(run.scorerModels),
+      item,
+      // Re-read from the row per item: this process has no request behind it, and
+      // the bag is what makes the item's generation match production.
+      toolContext:
+        (run.toolContext as Record<string, string> | null) ?? undefined,
+    });
   });
 
   // The run may have been cancelled while this item was in flight. A cancelled

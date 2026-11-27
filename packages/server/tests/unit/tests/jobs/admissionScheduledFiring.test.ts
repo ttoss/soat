@@ -14,9 +14,8 @@ import { pollFor } from '../../fixtures/poll';
 const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * A start is asked where a caller starts the work; a scheduled firing is the
- * trigger's own work, admitted when the trigger was written, so the tick never
- * asks.
+ * A scheduled firing's generation is a step of the trigger's own work, asked
+ * like any other: a refusal is recorded on the firing and nothing generates.
  */
 describe('admission — a scheduled firing', () => {
   let service: AdmissionService;
@@ -50,7 +49,7 @@ describe('admission — a scheduled firing', () => {
     await service.close();
   });
 
-  test('starts the generation without asking', async () => {
+  test('is recorded refused when its generation is', async () => {
     const agentId = await turn.createAgent({});
     const policy = await turn.createPolicy({
       statement: [
@@ -79,7 +78,14 @@ describe('admission — a scheduled firing', () => {
     });
 
     const firing = await settledFiring(trigger.body.id);
-    expect(firing.status).toBe('completed');
-    expect(service.asked).toHaveLength(0);
+    expect(firing.status).toBe('failed');
+    expect(firing.error.code).toBe('PLAN_LIMIT_REACHED');
+    expect(service.asked).toHaveLength(1);
+    expect(service.asked[0].body).toMatchObject({
+      action: 'agents:CreateAgentGeneration',
+      resource_id: agentId,
+      body: null,
+      principal: { type: 'trigger', id: trigger.body.id },
+    });
   });
 });

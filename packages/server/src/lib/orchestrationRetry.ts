@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { isAdmissionRefusal } from './admission';
 import { errorLabel, hasErrorRoute } from './orchestrationGraph';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type {
@@ -121,7 +122,8 @@ export const nextAfterFailure = (args: {
   edges: OrchestrationEdge[];
 }): Extract<NodeExecutionResult, { kind: 'wait' | 'routed' }> | null => {
   const { nodeId, nodeDefn, attempt } = args;
-  if (!nodeDefn) return null;
+  // Admission's refusal parks the run (`executeRunLoop`); no retry or error edge.
+  if (!nodeDefn || isAdmissionRefusal(args.error)) return null;
   const policy = resolveRetryPolicy(nodeDefn);
   if (isRetriableError(args.error) && attempt < policy.maxAttempts) {
     log(

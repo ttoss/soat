@@ -233,3 +233,52 @@ describe('admission chokepoints', () => {
     assert.deepEqual(withoutAdmission, []);
   });
 });
+
+/** The body of `export const <name> = ...` up to the next top-level const. */
+const exportedBody = (file, name) => {
+  const source = code(path.join(srcDir, file));
+  const start = source.indexOf(`export const ${name} = `);
+  assert.notEqual(start, -1, `${file} exports ${name}`);
+  const end = source.indexOf('\nexport const ', start + 1);
+  return source.slice(start, end === -1 ? undefined : end);
+};
+
+/**
+ * Work the runtime does on its own (a generation, a tool call, a start) is
+ * asked at the gates every such step crosses (`startChokepoint.test.mjs`
+ * holds every step to them), all of which authorize through
+ * `assertAllowedUnder`.
+ */
+describe('admission on internal work', () => {
+  test('every start gate authorizes through assertAllowedUnder', () => {
+    for (const [file, gate] of [
+      ['lib/generationStartGate.ts', 'gateGenerationStart'],
+      ['lib/toolCallGate.ts', 'gateToolCall'],
+      ['lib/startGate.ts', 'gateStart'],
+    ]) {
+      assert.match(exportedBody(file, gate), /\bassertAllowedUnder\(/, gate);
+    }
+  });
+
+  test('assertAllowedUnder asks admission on every allowed path', () => {
+    const body = exportedBody('lib/turnAuthority.ts', 'assertAllowedUnder');
+    assert.equal(body.match(/\badmitChecks\(/g)?.length, 2);
+    assert.doesNotMatch(body, /\breturn;/);
+    assert.match(
+      code(path.join(srcDir, 'lib/turnAuthority.ts')),
+      /const admitChecks = [\s\S]*?\bassertWorkAdmitted\(/
+    );
+  });
+
+  test('only the REST middleware opens a request scope', () => {
+    assert.deepEqual(
+      sourceFiles.filter((entry) => {
+        return (
+          entry !== 'lib/admission.ts' &&
+          /\brunInAdmissionScope\(/.test(code(path.join(srcDir, entry)))
+        );
+      }),
+      ['middleware/admission.ts']
+    );
+  });
+});

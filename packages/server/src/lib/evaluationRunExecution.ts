@@ -14,6 +14,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { isAdmissionRefusal } from './admission';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
 import { embedForProject } from './embeddings';
@@ -237,6 +238,8 @@ export const runEvalItem = async (args: {
       toolContext: args.toolContext,
     });
   } catch (error) {
+    // Admission's refusal stops the run, rather than erroring every item left.
+    if (isAdmissionRefusal(error)) throw error;
     return erroredOutcome(generationFailure(error), null);
   }
 
