@@ -30,7 +30,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `name`         | string         | Human-readable name, unique per project                                                                                             |
 | `description`  | string \| null | Optional                                                                                                                            |
 | `version`      | integer        | The definition's version; see [Versions](#versions)                                                                                 |
-| `definition`   | object         | `{ upstreams?, nodes }`: up to 20 [upstreams](#upstream) and 1 to 200 [nodes](#node)                                                |
+| `definition`   | object         | `{ knowledge?, upstreams?, nodes }`: the [knowledge](#knowledge) every agent node retrieves, up to 20 [upstreams](#upstream) and 1 to 200 [nodes](#node)                                                |
 | `policy_ids`   | string[]       | Required on create. The policies every node of a case acts under; see [Who a node runs as](#who-a-node-runs-as)                     |
 | `auto_upgrade` | boolean        | Default `false`. Whether each new version moves the playbook's cases to it; see [Upgrading automatically](#upgrading-automatically) |
 | `created_at`   | string         | ISO 8601 creation timestamp                                                                                                         |
@@ -46,7 +46,7 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 | `kind`            | string  | `collect` (its output is its inputs), `execute` (its executor produces the output), `confirm` (a person confirms its inputs), `upstream` (its output is a node of a bound [upstream case](#upstream-cases))                                                                                                                                                                  |
 | `final`           | boolean | A goal of the playbook. Default `false`                                                                                                                                                                                                                                                                                                                                      |
 | `inputs`          | array   | Up to 50 [inputs](#input)                                                                                                                                                                                                                                                                                                                                                    |
-| `executor`        | object  | Required on an `execute` node, refused on any other: `{ type, id, operation_id?, input? }`, `type` one of `agent`, `tool`, `decider`, `workflow`, `orchestration`; `operation_id`, only on a `tool` executor, names the action of a multi-action tool and is required by an `mcp` tool; `input` maps each field of the executor's input to JSON Logic over the node's inputs |
+| `executor`        | object  | Required on an `execute` node, refused on any other: `{ type, id, operation_id?, input?, knowledge? }`, `type` one of `agent`, `tool`, `decider`, `workflow`, `orchestration`; `operation_id`, only on a `tool` executor, names the action of a multi-action tool and is required by an `mcp` tool; `input` maps each field of the executor's input to JSON Logic over the node's inputs; `knowledge`, only on an `agent` executor, merges over the definition's (see [Knowledge](#knowledge)) |
 | `upstream`        | object  | Required on an `upstream` node, refused on any other: `{ name, node_id }`, the declared upstream and the node of its playbook it pulls. An `upstream` node has no inputs and no executor                                                                                                                                                                                     |
 | `transformations` | array   | Final nodes only: `{ name, format, tool }`, a tool that renders the node's output as a file of `format`; see [Exports](#exports)                                                                                                                                                                                                                                             |
 
@@ -302,6 +302,31 @@ A confirmed node whose inputs change is `stale`, and holds everything reading it
 A case refuses input writes, confirmations and upgrades made under the stored authority of its own work — the case, one of its executions in flight, or the task or orchestration run one started, with each `loop` or `sub_orchestration` run beneath it — with `403 PLAYBOOK_SELF_WRITE`. So does a write on a project key carrying the [`On-Behalf-Of`](./tools.md#writing-on-behalf-of-a-tool-call) of a tool call that work made while its execution runs — a `tool` executor's call, a call from a node of an `orchestration` or `workflow` executor's run, or one an `agent` executor's generation made. An executor's result reaches its case only as the node's output.
 
 The same holds for the work of every case that reads it as an [upstream](#upstream-cases), at any depth: a monthly DRE case's executor cannot write the `company` case it reads. A sibling bound to the same upstream case is not upstream of it and takes the write.
+
+### Knowledge
+
+A definition's `knowledge` is what every `agent` node's generation retrieves, so one agent serves every node of a playbook and the knowledge is versioned with it. It takes the fields of a generation's per-call [`knowledge_config`](./agents.md#knowledge-config): `document_paths`, `document_ids`, `memory_store_ids`, `tags`, `limit`, `min_score`, `rrf_k`, `recency_half_life_days`. An `agent` executor's own `knowledge` merges over it as a per-call config merges over an agent's stored one: arrays unioned, `tags` merged with the executor winning per key, scalars overriding. The result is sent as the node generation's per-call `knowledge_config`, so it is read under the version's `policy_ids` like any config a caller names: a path or document they deny is not retrieved. The generation's `retrieval` names what was served.
+
+```json
+{
+  "knowledge": { "document_paths": ["/handbook/"] },
+  "nodes": [
+    {
+      "id": "regime",
+      "title": "Tax regime",
+      "kind": "execute",
+      "inputs": [],
+      "executor": {
+        "type": "agent",
+        "id": "agent_V1StGXR8Z5jdHi6B",
+        "knowledge": { "document_paths": ["/regimes/"] }
+      }
+    }
+  ]
+}
+```
+
+A change to `knowledge` is a change to `definition`, so it archives a new [version](#versions); a case keeps the knowledge of the version it is on until it is [upgraded](#upgrading-a-case). `knowledge` on any other executor type, `null`, a field outside the list above (`write_memory_store_id` included) or a value of the wrong type is `400 VALIDATION_FAILED`.
 
 ### Who a node runs as
 

@@ -22,6 +22,9 @@ export type PlaybookInput = {
   source: PlaybookInputSource;
 };
 
+/** A generation's per-call `knowledge_config`, in the wire casing. */
+export type PlaybookKnowledge = { [field: string]: JsonValue };
+
 export type PlaybookExecutor = {
   type: PlaybookExecutorType;
   id: string;
@@ -29,6 +32,8 @@ export type PlaybookExecutor = {
   operation_id?: string;
   /** JSON Logic over the node's inputs, as an orchestration's `input_mapping`. */
   input?: Record<string, JsonValue>;
+  /** Only on an `agent` executor: merged over the definition's `knowledge`. */
+  knowledge?: PlaybookKnowledge;
 };
 
 /** The content type an export of each format must carry. */
@@ -84,6 +89,8 @@ export type PlaybookNode = {
 
 /** `upstreams` is absent, never empty, so a definition without one is unchanged. */
 export type PlaybookDefinition = {
+  /** What every `agent` node's generation retrieves. */
+  knowledge?: PlaybookKnowledge;
   upstreams?: PlaybookUpstream[];
   nodes: PlaybookNode[];
 };

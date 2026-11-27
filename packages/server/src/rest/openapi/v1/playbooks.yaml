@@ -3050,6 +3050,14 @@ components:
             JSON Logic over the node's inputs, as an orchestration's
             `input_mapping`: each key is a field of the executor's input. Absent,
             the executor receives the node's input values as they are.
+        knowledge:
+          description: >-
+            Only on an `agent` executor: merged over the definition's
+            `knowledge` (arrays unioned, `tags` merged per key, scalars
+            overriding) into the per-call `knowledge_config` of the node's
+            generation. `null` is refused.
+          allOf:
+            - $ref: './agents.yaml#/components/schemas/GenerationKnowledgeConfig'
     PlaybookTransformation:
       type: object
       additionalProperties: false
@@ -3184,6 +3192,14 @@ components:
       required:
         - nodes
       properties:
+        knowledge:
+          description: >-
+            What every `agent` node's generation retrieves, sent as its per-call
+            `knowledge_config` and read under the version's `policy_ids`; an
+            executor's own `knowledge` merges over it. Part of the definition,
+            so a case keeps the knowledge of its version. `null` is refused.
+          allOf:
+            - $ref: './agents.yaml#/components/schemas/GenerationKnowledgeConfig'
         upstreams:
           type: array
           maxItems: 20
