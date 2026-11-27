@@ -12,6 +12,7 @@ import {
   removeProjectGroupProject,
   updateProjectGroup,
 } from 'src/lib/projectGroups';
+import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import { parsePagination, requireAdmin, requireAuth } from './helpers';
@@ -47,6 +48,7 @@ projectGroupsRouter.get('/project-groups', async (ctx: Context) => {
     action: 'project-groups:ListProjectGroups',
     allowed: true,
   });
+  await admitAuthorized(ctx, 'project-groups:ListProjectGroups');
   if (ctx.authUser.unrestricted) {
     ctx.body = await listProjectGroups(parsePagination(ctx));
     return;

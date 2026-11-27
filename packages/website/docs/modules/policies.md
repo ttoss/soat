@@ -1,5 +1,5 @@
 ---
-description: 'Reusable IAM policy documents, global or owned by one project or project group, attached to users, API keys, agents, triggers and webhooks and evaluated at request time.'
+description: 'Reusable IAM policy documents, global or owned by a project or project group, attached to users, keys, agents, triggers and webhooks and evaluated per request.'
 ---
 
 import Tabs from '@theme/Tabs';

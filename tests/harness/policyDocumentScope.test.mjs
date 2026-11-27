@@ -14,9 +14,10 @@ const read = (file) => {
 const LOADS_POLICY_ROWS = /\bdb\.Policy\.(findAll|findOne|findByPk)\(/;
 
 /**
- * A project policy's `Allow` without `resource` grants its project only, a
- * meaning the stored document does not carry: every evaluation of a stored
- * policy reads it through `scopePolicyDocument`.
+ * A project policy's `Allow` without `resource` grants its project only, and a
+ * project group policy's `Allow` only its project group: a meaning the stored
+ * document does not carry. Every evaluation of a stored policy reads it through
+ * `grantedPolicyDocuments`, which scopes both.
  */
 describe('stored policy documents are evaluated scoped', () => {
   test('only the known modules load policy rows', () => {
@@ -27,7 +28,8 @@ describe('stored policy documents are evaluated scoped', () => {
       })
       .sort();
     // Evaluation: attachedPolicies.ts (scoped here), policyGrantCoverage.ts
-    // (scoped by `withinProject`). The rest read ids or write documents.
+    // (project policies scoped by `withinProject`, project group ones here).
+    // The rest read ids or write documents.
     assert.deepEqual(loaders, [
       'attachedPolicies.ts',
       'iamTokens.ts',
@@ -39,7 +41,11 @@ describe('stored policy documents are evaluated scoped', () => {
     ]);
   });
 
-  test('the evaluation loader scopes every document', () => {
-    assert.match(read('attachedPolicies.ts'), /\bscopePolicyDocument\(/);
+  test('the evaluation loaders scope every document', () => {
+    assert.match(read('attachedPolicies.ts'), /\bgrantedPolicyDocuments\(/);
+    assert.match(read('policyGrantCoverage.ts'), /\bgrantedPolicyDocuments\(/);
+    const granted = read('projectGroupPolicies.ts');
+    assert.match(granted, /\bscopePolicyDocument\(/);
+    assert.match(granted, /\bscopeProjectGroupPolicyDocument\(/);
   });
 });
