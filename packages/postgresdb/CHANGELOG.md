@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.135.0](https://github.com/ttoss/soat/compare/v0.134.0...v0.135.0) (2026-11-27)
+
+### Features
+
+* **iam:** project groups, an authorization scope above the project ([#2222](https://github.com/ttoss/soat/issues/2222)) ([5d0a6f2](https://github.com/ttoss/soat/commit/5d0a6f2eb83ba4316ff54fb5d894117d4ff87e3b))
+* **tasks:** typed links between tasks that do not gate readiness ([#2214](https://github.com/ttoss/soat/issues/2214)) ([6dae277](https://github.com/ttoss/soat/commit/6dae2779b5c17cb11929c09496b72305ca8c6dbe))
+
 # [0.134.0](https://github.com/ttoss/soat/compare/v0.133.0...v0.134.0) (2026-11-26)
 
 ### Features

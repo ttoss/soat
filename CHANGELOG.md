@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.135.0](https://github.com/ttoss/soat/compare/v0.134.0...v0.135.0) (2026-11-27)
+
+### Bug Fixes
+
+* **errors:** follow re-exports and stop at detached calls in the x-raises scan ([#2216](https://github.com/ttoss/soat/issues/2216)) ([89a8427](https://github.com/ttoss/soat/commit/89a84277fffb18042f196cb6bff7ee70ce48e85c))
+* **playbooks:** a node's generations run as the case's actor ([#2219](https://github.com/ttoss/soat/issues/2219)) ([ef3f0a9](https://github.com/ttoss/soat/commit/ef3f0a9480cc4ced8c49411785e1d8b2368c1d21))
+
+### Features
+
+* **admission:** ask admission at each step of internal work ([#2220](https://github.com/ttoss/soat/issues/2220)) ([b1861a4](https://github.com/ttoss/soat/commit/b1861a4c979e177cbebaad0ffcae832acee4aeb2))
+* **admission:** ask admission once per embedding write ([#2221](https://github.com/ttoss/soat/issues/2221)) ([58b25af](https://github.com/ttoss/soat/commit/58b25af4b9b799f8d23b948a89439028a5617ba6))
+* **iam:** project groups, an authorization scope above the project ([#2222](https://github.com/ttoss/soat/issues/2222)) ([5d0a6f2](https://github.com/ttoss/soat/commit/5d0a6f2eb83ba4316ff54fb5d894117d4ff87e3b))
+* **playbooks:** a playbook and an agent executor declare knowledge ([#2218](https://github.com/ttoss/soat/issues/2218)) ([ac49739](https://github.com/ttoss/soat/commit/ac497395d37a2e29061218902934baf37ce5f694))
+* **tasks:** typed links between tasks that do not gate readiness ([#2214](https://github.com/ttoss/soat/issues/2214)) ([6dae277](https://github.com/ttoss/soat/commit/6dae2779b5c17cb11929c09496b72305ca8c6dbe))
+* **tools:** sign the chain's principal as acts_for to a server that opts in ([#2217](https://github.com/ttoss/soat/issues/2217)) ([360df49](https://github.com/ttoss/soat/commit/360df4952d1be91ae5b5e97e2c13229e4ccd72d8))
+* **workflows:** a per-state task limit refused at the transition ([#2215](https://github.com/ttoss/soat/issues/2215)) ([620306b](https://github.com/ttoss/soat/commit/620306b884b7ef9fec04b8b3fb064ca34dd831b4))
+
 # [0.134.0](https://github.com/ttoss/soat/compare/v0.133.0...v0.134.0) (2026-11-26)
 
 ### Bug Fixes
