@@ -255,7 +255,7 @@ describe('Playbook knowledge', () => {
       const policyId = await create('/api/v1/policies', {
         document: {
           statement: [
-            { effect: 'Allow', action: ['*'], resource: ['*'] },
+            { effect: 'Allow', action: ['*'] },
             {
               effect: 'Deny',
               action: ['knowledge:SearchKnowledge'],
