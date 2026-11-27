@@ -111,6 +111,10 @@ test that fails when a new site skips it.
   `assertWorkAdmitted`, called only by `assertAllowedUnder`; a refusal stops
   the work per kind (`isAdmissionRefusal`).
   `admissionChokepoint.test.mjs`, `tests/unit/tests/rest/admissionWork.test.ts`.
+- A write that embeds what it stores asks once through `askEmbeddingWrite`
+  (`lib/embeddingAdmission.ts`) before it writes; `getEmbeddings` takes a
+  stored subject only with that ask. `admissionChokepoint.test.mjs`,
+  `tests/unit/tests/rest/admissionEmbeddingWrites.test.ts`.
 - A refusal or no answer refuses; only `on_unavailable: allow` passes an
   unanswered internal step. `tests/unit/tests/rest/admission.test.ts`.
 

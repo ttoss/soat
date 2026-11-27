@@ -313,6 +313,10 @@ Resuming is the caller's, through the work's own resume route ([`POST /api/v1/or
 
 A step's ask left unanswered is refused with `ADMISSION_UNAVAILABLE`, unless the registration sets `on_unavailable: "allow"`, which passes it. REST calls, `builtin` calls and formations are refused whatever `on_unavailable` says.
 
+#### Embedding writes
+
+A write that embeds what it stores asks `embeddings:CreateEmbeddings` once, before it writes or embeds anything, however many chunks it embeds: a document create, a content or chunking update, an ingest or re-ingest (asked when it is enqueued; a converter's callback finishes under that ask), a conversation message in a conversation that embeds its turns, a memory write that embeds new text, a `retrieval` change that embeds a conversation's backlog, [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) and an eval's `embedding_similarity` scorer. The question names the principal the write acts as: the caller, or the authority of the work making it. A refused write raises the refusal and stores nothing; it is never stored unembedded. A write with no principal to name is refused with `WORK_AUTHORITY_MISSING` while the action is declared. A refused eval scorer fails its run, as a refused step does.
+
 ## Conditions
 
 Conditions add attribute-based constraints: an operator mapped to key-value pairs that must all hold.

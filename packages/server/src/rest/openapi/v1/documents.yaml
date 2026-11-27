@@ -121,6 +121,8 @@ paths:
       description: Creates a new text document and generates an embedding vector for semantic search. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createDocument
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - API_KEY_PROJECT_SCOPE
         - DOCUMENT_PATH_OUTSIDE_PREFIX
@@ -138,6 +140,7 @@ paths:
         - UNAUTHORIZED
         - VALIDATION_FAILED
         - VERSION_CONFLICT
+        - WORK_AUTHORITY_MISSING
       x-iam-action: documents:CreateDocument
       x-iam-resource-type: document
       parameters:
@@ -655,6 +658,8 @@ paths:
       description: Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
       operationId: updateDocument
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - CONVERSION_TIMEOUT
         - DOCUMENT_PATH_OUTSIDE_PREFIX
@@ -675,6 +680,7 @@ paths:
         - UNAUTHORIZED
         - VALIDATION_FAILED
         - VERSION_CONFLICT
+        - WORK_AUTHORITY_MISSING
       x-iam-action: documents:UpdateDocument
       x-iam-resource-type: document
       parameters:
@@ -1203,6 +1209,8 @@ paths:
         carrying no content.
       operationId: listDocumentVersions
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - EMBEDDING_NOT_CONFIGURED
         - FILE_STORAGE_MISCONFIGURED
@@ -1217,6 +1225,7 @@ paths:
         - UNAUTHORIZED
         - VALIDATION_FAILED
         - VERSION_CONFLICT
+        - WORK_AUTHORITY_MISSING
       x-iam-action: documents:ListDocumentVersions
       x-iam-resource-type: document
       parameters:
@@ -1277,6 +1286,8 @@ paths:
         read.
       operationId: getDocumentVersion
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - EMBEDDING_NOT_CONFIGURED
         - FILE_STORAGE_MISCONFIGURED
@@ -1291,6 +1302,7 @@ paths:
         - UNAUTHORIZED
         - VALIDATION_FAILED
         - VERSION_CONFLICT
+        - WORK_AUTHORITY_MISSING
       x-iam-action: documents:GetDocumentVersion
       x-iam-resource-type: document
       parameters:
@@ -1364,6 +1376,8 @@ paths:
         `400 VALIDATION_FAILED`: restore the version before it instead.
       operationId: restoreDocumentVersion
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - EMBEDDING_NOT_CONFIGURED
         - FILE_STORAGE_MISCONFIGURED
@@ -1378,6 +1392,7 @@ paths:
         - UNAUTHORIZED
         - VALIDATION_FAILED
         - VERSION_CONFLICT
+        - WORK_AUTHORITY_MISSING
       x-iam-action: documents:RestoreDocumentVersion
       x-iam-resource-type: document
       parameters:

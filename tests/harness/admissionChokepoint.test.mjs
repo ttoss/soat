@@ -282,3 +282,91 @@ describe('admission on internal work', () => {
     );
   });
 });
+
+/** Each `getEmbedding(s)(...)` call in `source`, its parentheses balanced. */
+const embeddingCalls = (source) => {
+  return [...source.matchAll(/\bgetEmbeddings?\(/g)].map((match) => {
+    let depth = 0;
+    for (let i = match.index + match[0].length - 1; i < source.length; i++) {
+      if (source[i] === '(') depth += 1;
+      if (source[i] === ')') depth -= 1;
+      if (depth === 0) return source.slice(match.index, i + 1);
+    }
+    return source.slice(match.index);
+  });
+};
+
+/**
+ * A write that embeds what it stores asks admission once, before anything is
+ * written (`lib/embeddingAdmission.ts`); `getEmbeddings` takes a stored
+ * subject only with that ask.
+ */
+describe('admission on embedding writes', () => {
+  test('a stored subject is embedded only with its ask', () => {
+    const unasked = sourceFiles.flatMap((entry) => {
+      return embeddingCalls(code(path.join(srcDir, entry)))
+        .filter((call) => {
+          return /\bsubject: \{/.test(call) && !/\bask\b/.test(call);
+        })
+        .map(() => {
+          return entry;
+        });
+    });
+    assert.deepEqual(unasked, []);
+    assert.match(
+      code(path.join(srcDir, 'lib/embedding.ts')),
+      /subject: NonNullable<EmbeddingSubject>; ask: EmbeddingWriteAsk/
+    );
+  });
+
+  test('only embeddingAdmission.ts mints an ask', () => {
+    assert.deepEqual(
+      sourceFiles.filter((entry) => {
+        return (
+          entry !== 'lib/embeddingAdmission.ts' &&
+          /\bas EmbeddingWriteAsk\b/.test(code(path.join(srcDir, entry)))
+        );
+      }),
+      []
+    );
+  });
+
+  test('every embedding write asks before it writes', () => {
+    for (const [file, names] of [
+      ['lib/embeddings.ts', ['embedForProject']],
+      [
+        'lib/documentIngestion.ts',
+        ['enqueueDocumentIngestion', 'reingestDocument'],
+      ],
+      ['lib/documentContent.ts', ['prepareDocumentChunkChanges']],
+    ]) {
+      for (const name of names) {
+        assert.match(exportedBody(file, name), /\baskEmbeddingWrite\(/, name);
+      }
+    }
+    assert.match(
+      exportedBody('lib/documents.ts', 'createDocument'),
+      /\baskDocumentEmbedding\([\s\S]*\bcreateDocumentTextFile\(/
+    );
+    assert.match(
+      exportedBody('lib/conversations.ts', 'updateConversation'),
+      /\baskBacklogEmbedding\([\s\S]*\bconversation\.update\(/
+    );
+    assert.match(
+      code(path.join(srcDir, 'lib/memoryContents.ts')),
+      /const embedOrNull = [\s\S]*?\baskEmbeddingWrite\([\s\S]*?\btry \{/
+    );
+  });
+
+  test('only the converter callback reuses an ingest ask', () => {
+    assert.deepEqual(
+      sourceFiles.filter((entry) => {
+        return (
+          entry !== 'lib/embeddingAdmission.ts' &&
+          /\baskOfClaimedConversion\(/.test(code(path.join(srcDir, entry)))
+        );
+      }),
+      ['lib/ingestionCallback.ts']
+    );
+  });
+});
