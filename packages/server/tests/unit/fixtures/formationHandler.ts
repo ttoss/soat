@@ -193,6 +193,7 @@ export const startFakeFormationHandler =
         {
           module: 'test-channels',
           resourceTypes: new Set(['test_channel']),
+          projectGroupActions: new Map(),
           actions: new Map(
             TEST_CHANNEL_ACTIONS.map((action) => {
               return [action, ''];

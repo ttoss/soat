@@ -236,11 +236,30 @@ A deployment fronting SOAT with routes of its own registers their actions and re
 }
 ```
 
+A module may also register project group actions in `project_group_actions`, each with the [project group](./project-groups.md#registered-project-group-actions) types it is checked on, `*` for the whole project group. A module declares `actions` (with `resource_types`), `project_group_actions`, or both:
+
+```json
+{
+  "modules": [
+    {
+      "module": "billing",
+      "project_group_actions": [
+        { "action": "billing:TopUp", "resource_types": ["top_up"] },
+        { "action": "billing:GetPlan", "resource_types": ["*"] }
+      ]
+    }
+  ]
+}
+```
+
+- The boot fails on a module named like a built-in one (`project-groups`, `agents`), an action of another module or declared twice, a project group type a built-in project group action is checked on (`api_key`, `balance`) or that another module registered.
+- A policy naming an action no module registered and no built-in module serves is `400`.
+
 - The answer is `200 { "allowed": true | false }`, never `403`: the caller's own policies (owner, key or OAuth boundary, project scope), evaluated as for a built-in route.
 - `action` must be a registered `module:Operation` or a built-in action (`agents:DeleteAgent`); an unknown action or a wildcard is `400 VALIDATION_FAILED`.
 - The SRN's type must be one the action's module registered, or for a built-in action one its module's routes check it on (`agent` or `session` for `agents:*`); any other type is `400 VALIDATION_FAILED`. Each operation's spec names the type its route checks its action on in `x-iam-resource-type` (`agents:SendSessionMessage` → `session`), beside `x-iam-action`. A route that also checks the action on other types, each needed for the whole answer, lists them in `x-iam-also-checked-on`, each with the parameter that names the resources it is checked on (`pinned_by`; absent is any): `knowledge:SearchKnowledge` on `document`, then `memory_store` (pinned by `memory_store_ids`) and `memory`, whose denial leaves the memory half out. `projects:*` is checked on the whole project, `srn:<project_id>:*:*`, as the project's own routes check it, and that SRN takes no `context.tags`; `users:*` is an admin gate, not a policy, so it is always `400`. `<id>` may be `*` for a create or a list. The project and resource are not looked up.
 - `context.tags` feeds `iam:ResourceTag/<key>` conditions, and `iam:ResourceType` is the SRN's type.
-- A [project group action](./project-groups.md#project-group-actions) is checked on its project group's SRN, `srn:project-group:<project_group_id>:<type>/<id|*>` or `srn:project-group:<project_group_id>:*`, and nowhere else; it takes no `context.tags`. A credential pinned to a project is never allowed one.
+- A [project group action](./project-groups.md#project-group-actions), built-in or registered, is checked on its project group's SRN, `srn:project-group:<project_group_id>:<type>/<id|*>` or `srn:project-group:<project_group_id>:*`, and nowhere else; it takes no `context.tags`. A credential pinned to a project is never allowed one.
 - A check is not an action, so it writes no [audit log](./audit-log.md) entry.
 
 ### The writer rule

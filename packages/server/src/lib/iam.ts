@@ -1,11 +1,11 @@
 import {
   findIamActionRegistration,
+  findProjectGroupActionResourceTypes,
   isRegisteredIamModule,
 } from './iamRegistrations';
 import { listAllActions, listModuleNames } from './permissionCatalog';
 import { collectUndeclaredDenialCodeErrors } from './policyDenial';
 import { hasUnboundPolicyVariable } from './policyVariables';
-import { isProjectGroupAction } from './projectGroupActions';
 
 export type Effect = 'Allow' | 'Deny';
 
@@ -51,7 +51,7 @@ export type PolicySets = PolicyDocument[][];
  * True when `action` names a real, enforceable permission: the `*` super
  * wildcard, a `module:*` wildcard for a module that exists, or an exact
  * `module:Operation` present in the permission catalog (`src/permissions/*`),
- * a project group action (`projectGroupActions.ts`) or one the deployment registered
+ * or a project group action, built-in or one the deployment registered
  * (`iamRegistrations.ts`).
  *
  * Degrades safely: if the catalog could not be loaded (empty — e.g. a bundle
@@ -60,7 +60,9 @@ export type PolicySets = PolicyDocument[][];
  * typo check; runtime enforcement is unaffected.
  */
 const isKnownAction = (action: string): boolean => {
-  if (action === '*' || isProjectGroupAction(action)) return true;
+  if (action === '*' || findProjectGroupActionResourceTypes(action)) {
+    return true;
+  }
   const knownActions = listAllActions();
   if (knownActions.size === 0) return true;
   const wildcard = /^([a-zA-Z0-9_-]+):\*$/.exec(action);

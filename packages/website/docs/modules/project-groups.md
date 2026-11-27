@@ -32,7 +32,7 @@ The unrestricted admin creates a project group for an owner (a [user](./users.md
 
 ### The project group's SRN
 
-A project group's own resources are `srn:project-group:<project_group_id>:<type>/<id>`, the type one of `project`, `api_key`, `member`, `usage`, `balance` and `statement`, the id `*` for a create or a list. The whole project group is `srn:project-group:<project_group_id>:*`. A project's resources keep their own SRN, `srn:<project_id>:<type>:<id>`.
+A project group's own resources are `srn:project-group:<project_group_id>:<type>/<id>`, the type one of `project`, `api_key`, `member`, `usage`, `balance`, `statement` and the types a deployment [registers](#registered-project-group-actions), the id `*` for a create or a list. The whole project group is `srn:project-group:<project_group_id>:*`. A project's resources keep their own SRN, `srn:<project_id>:<type>:<id>`.
 
 ### Project group actions
 
@@ -50,9 +50,13 @@ Each is checked on its project group's SRN alone; `iam/check` refuses one on a p
 
 The runtime serves `GetProjectGroup`, `UpdateProjectGroup`, `CreateProject` ([`POST /api/v1/project-groups/{project_group_id}/projects`](/docs/api/project-groups/create-project-group-project)), `CreateApiKey` and `RevokeApiKey` (a key's `project_group_id`); a service fronting the runtime asks `iam/check` for the rest.
 
+### Registered project group actions
+
+A deployment fronting the runtime registers project group actions of its own in `project_group_actions` of a module in its [IAM registrations](./iam.md#deployment-registered-actions), each with the types it is checked on (`billing:TopUp` on `srn:project-group:<project_group_id>:top_up/*`). They are project group actions like the built-in ones: policies name them, `iam/check` answers them on a project group's SRN alone, the owner holds them, and the project group's policies and a key's `policy_ids` narrow them.
+
 ### Who holds what
 
-- The **owner** holds every project group action on its project group, `project-groups:*` on `srn:project-group:<project_group_id>:*`, never on its projects: a project grants as it does outside a project group.
+- The **owner** holds every project group action on its project group, `project-groups:*` and every [registered](#registered-project-group-actions) one on `srn:project-group:<project_group_id>:*`, never on its projects: a project grants as it does outside a project group.
 - The project group's policies, `fixed_policy_ids` and `policy_ids` together, are one more set every check in the project group must satisfy, on its projects and on its own resources. A project group with none caps nothing. They cap everyone but the unrestricted admin, so a `Deny` in them holds against every credential acting in the project group; `meta.denied_by` names `{ "type": "project_group", "id": "<project_group_id>" }`.
 - **Attaching** goes through the grant check: the writer holds every grant the policy carries ([`POLICY_GRANT_NOT_HELD`](../error-codes.md#policy_grant_not_held)), as for any carrier; a `Deny`-only policy carries none. A project policy outside the project group is `400 POLICY_OUTSIDE_PROJECT`.
 - **Fixed policies** are global and written only by the unrestricted admin: the owner can neither detach one ([`PATCH /api/v1/project-groups/{project_group_id}`](/docs/api/project-groups/update-project-group) with `fixed_policy_ids` is `403`) nor edit it (a global policy is the admin's). A policy a project group names cannot be deleted (`409 POLICY_HAS_DEPENDENTS`, `meta.project_groups`).

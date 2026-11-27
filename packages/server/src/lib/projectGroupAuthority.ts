@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { resolveAttachedPolicies } from './attachedPolicies';
 import type { PolicyDocument } from './iam';
+import { listProjectGroupActionPatterns } from './iamRegistrations';
 import { projectGroupSrnPattern } from './projectGroupActions';
 
 /** Where a check lands: a project, or a project group's own resources. */
@@ -58,8 +59,8 @@ export const loadProjectGroupCap = async (args: {
 };
 
 /**
- * What the owner of a project group holds on it: every project group action on the project group's
- * own resources, never on its projects. Null for a user owning none.
+ * What the owner of a project group holds on it: every project group action, built-in or
+ * registered, on the project group's own resources, never on its projects. Null for a user owning none.
  */
 export const loadOwnedProjectGroupsGrant = async (args: {
   userPublicId: string;
@@ -80,7 +81,7 @@ export const loadOwnedProjectGroupsGrant = async (args: {
     statement: [
       {
         effect: 'Allow',
-        action: ['project-groups:*'],
+        action: listProjectGroupActionPatterns(),
         resource: groups.map((group) => {
           return projectGroupSrnPattern(group.publicId as string);
         }),
