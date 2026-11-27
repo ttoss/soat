@@ -606,6 +606,7 @@ paths:
         - TASK_MIGRATION_STATE_UNMAPPED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
@@ -779,6 +780,17 @@ components:
             transition). Must be a positive integer when set. Omit or null to
             never stall. The event does not move the task — route on it with a
             webhook/trigger.
+        max_tasks:
+          type: integer
+          nullable: true
+          description: >-
+            The most open tasks the state holds, counted across every version
+            of the workflow. A create, transition or migration into the state
+            while it holds that many answers `409 TASK_STATE_FULL` and leaves
+            the task where it was; a task leaving the state frees a slot. The
+            limit is the one the entering task's version declares. A positive
+            integer when set; refused on a terminal state. Omit or null for no
+            limit.
         on_enter:
           type: object
           nullable: true

@@ -1099,6 +1099,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The transition guard evaluated to false for this task.',
   },
+  TASK_STATE_FULL: {
+    httpStatus: 409,
+    description:
+      'The state the task would enter already holds its `max_tasks` open tasks, counted across every version of the workflow. `meta.state` names the state and `meta.max_tasks` its limit. The task stays where it was; a task leaving the state frees a slot.',
+  },
   TASK_TRANSITION_CONFLICT: {
     httpStatus: 409,
     description:

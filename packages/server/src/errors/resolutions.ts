@@ -212,6 +212,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Name a task of the same project in `to_task_id`.',
   TASK_GRAPH_TOO_LARGE:
     'Narrow the graph with `upstream_of`, `status=open`, `workflow_id` or `metadata`, or page through {{GET /tasks}} with the same filters.',
+  TASK_STATE_FULL:
+    'Move a task out of the state `meta.state` names, then retry; or raise its `max_tasks` with {{PATCH /workflows/{workflow_id}}} and move the task onto that version with {{POST /tasks/{task_id}/migrate}}.',
   TASK_MIGRATION_CONFLICT:
     'Let the dispatch settle or resolve the pending approval, then migrate again; a closed task stays on its version.',
   VERSION_CONFLICT:

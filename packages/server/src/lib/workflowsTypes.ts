@@ -52,6 +52,8 @@ export type WorkflowState = {
   kind?: string;
   /** Seconds parked in this state before the sweeper emits `tasks.stalled`. */
   stalledAfter?: number | null;
+  /** Open tasks the state holds at most; an entry into a full state is refused. */
+  maxTasks?: number | null;
   onEnter?: OnEnter | null;
 };
 

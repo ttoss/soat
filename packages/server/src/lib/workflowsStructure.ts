@@ -94,6 +94,34 @@ const onEnterDispatchProblems = (args: {
   return problems;
 };
 
+// A terminal state holds no open task, so a limit on one could never apply.
+const maxTasksProblems = (args: {
+  state: WorkflowState;
+  path: string;
+}): ValidationProblem[] => {
+  const { state, path } = args;
+  if (state.maxTasks == null) return [];
+  if (!Number.isInteger(state.maxTasks) || state.maxTasks <= 0) {
+    return [
+      {
+        code: 'INVALID_VALUE',
+        path: `${path}.max_tasks`,
+        message: `State '${state.name}' max_tasks must be a positive integer.`,
+      },
+    ];
+  }
+  if (state.terminal === true) {
+    return [
+      {
+        code: 'FIELD_NOT_ALLOWED',
+        path: `${path}.max_tasks`,
+        message: `Terminal state '${state.name}' cannot declare max_tasks: it holds no open task.`,
+      },
+    ];
+  }
+  return [];
+};
+
 const stateEntryProblems = (args: {
   state: WorkflowState;
   path: string;
@@ -135,6 +163,7 @@ const stateEntryProblems = (args: {
       message: `State '${state.name}' stalled_after must be a positive number of seconds.`,
     });
   }
+  problems.push(...maxTasksProblems({ state, path }));
   if (state.onEnter) {
     problems.push(
       ...onEnterDispatchProblems({ state, path: `${path}.on_enter` }),
@@ -298,7 +327,8 @@ const transitionProblems = (args: {
 
 /**
  * Statically validates a workflow definition (§5): unique state names, exactly
- * one initial state, a positive `stalled_after` where present, transitions
+ * one initial state, a positive `stalled_after` and `max_tasks` where present
+ * (none on a terminal state), transitions
  * referencing existing states, well-formed guards, and on_enter automation whose
  * routing targets exist. Throws `WORKFLOW_VALIDATION_FAILED` listing every
  * problem; a definition with no states is refused on that alone, since every

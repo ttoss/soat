@@ -10,7 +10,6 @@ import {
   migrateTask,
   type TaskPrincipal,
   transitionTask,
-  updateTask,
 } from 'src/lib/tasks';
 import { TASK_AUTOMATION_STATUSES } from 'src/lib/tasksAutomationStatus';
 import { createTaskRequestDigest } from 'src/lib/tasksCreateIdempotency';
@@ -20,6 +19,7 @@ import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 import { TASK_PRIORITIES } from 'src/lib/tasksPriority';
 import { TASK_LIST_ORDERS } from 'src/lib/tasksPullOrder';
 import { transitionRequestDigest } from 'src/lib/tasksTransitionIdempotency';
+import { updateTask } from 'src/lib/tasksUpdate';
 import { captureAuthority } from 'src/lib/workAuthority';
 
 import {

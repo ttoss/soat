@@ -22,12 +22,12 @@ import {
 } from './tasks';
 import { assertTransitionAllowed } from './tasksTransitionCheck';
 import type { TransitionIdempotency } from './tasksTransitionIdempotency';
-import type { WorkflowTransition } from './workflowsValidation';
+import type { WorkflowState, WorkflowTransition } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
 
 // Long enough for a human queue, but bounded so a gate can never park a task
-// forever. There is no per-transition override in the workflow schema yet.
+// forever. The workflow schema has no per-transition override.
 const DEFAULT_APPROVAL_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 
 // The approved move can no longer be applied — its guard now rejects it, or a
@@ -35,6 +35,7 @@ const DEFAULT_APPROVAL_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
   'TASK_PAYLOAD_INVALID',
+  'TASK_STATE_FULL',
   'TASK_TRANSITION_CONFLICT',
 ]);
 
@@ -103,6 +104,8 @@ export const parkTransitionForApproval = async (args: {
    * transition was validated against a moment earlier.
    */
   transitions: WorkflowTransition[];
+  /** The states of that version. */
+  states: WorkflowState[];
   /** Who fired the move; never `approval`, which applies rather than parks. */
   principal: TaskPrincipal;
   note: string | null;
@@ -136,6 +139,7 @@ export const parkTransitionForApproval = async (args: {
     task,
     transition,
     transitions,
+    states: args.states,
     principal: args.principal,
   });
   // Refused before parking; re-validated against the payload committed when

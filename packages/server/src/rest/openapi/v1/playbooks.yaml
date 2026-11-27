@@ -398,6 +398,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -621,6 +622,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -766,6 +768,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -911,6 +914,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -1068,6 +1072,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -1447,6 +1452,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -1770,6 +1776,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -2371,6 +2378,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -2654,6 +2662,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -2816,6 +2825,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
