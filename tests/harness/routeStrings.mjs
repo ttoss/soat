@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-import { importOf, isFunction, parse } from './iamRouteChecks.mjs';
+import { importOf, isFunction, parse } from './sourceBindings.mjs';
 
 /**
  * The strings a route's handlers reach on every path, read by

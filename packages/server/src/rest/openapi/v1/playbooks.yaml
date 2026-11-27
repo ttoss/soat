@@ -118,6 +118,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:CreatePlaybook
       x-iam-resource-type: playbook
       requestBody:
@@ -329,7 +330,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -341,11 +341,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -360,6 +358,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
         - NAME_CONFLICT
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
@@ -393,11 +392,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -414,7 +410,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:UpdatePlaybook
       x-iam-resource-type: playbook
@@ -490,6 +488,8 @@ paths:
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:DeletePlaybook
       x-iam-resource-type: playbook
       parameters:
@@ -552,7 +552,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -564,11 +563,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -584,6 +581,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
         - NAME_CONFLICT
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
@@ -617,11 +615,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -638,7 +633,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ListPlaybookVersions
       x-iam-resource-type: playbook
@@ -700,7 +697,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -712,11 +708,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -732,6 +726,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
         - NAME_CONFLICT
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
@@ -765,11 +760,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -786,7 +778,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:GetPlaybookVersion
       x-iam-resource-type: playbook
@@ -848,7 +842,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -860,11 +853,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -880,6 +871,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
         - NAME_CONFLICT
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
@@ -913,11 +905,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -934,7 +923,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:RestorePlaybookVersion
       x-iam-resource-type: playbook
@@ -1016,7 +1007,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -1028,11 +1018,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -1047,7 +1035,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -1074,11 +1062,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -1095,7 +1080,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:CreatePlaybookCase
       x-iam-resource-type: playbook
@@ -1266,6 +1253,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:GetPlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -1319,6 +1307,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:DeletePlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -1395,7 +1384,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -1407,11 +1395,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -1426,7 +1412,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -1455,11 +1441,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -1476,7 +1459,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:WritePlaybookCaseInputs
       x-iam-resource-type: playbook_case
@@ -1555,11 +1540,13 @@ paths:
         - AGENT_NOT_FOUND
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - EXPRESSION_FAILED
         - FORBIDDEN
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:GetPlaybookCaseMissing
       x-iam-resource-type: playbook_case
       parameters:
@@ -1721,7 +1708,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -1733,11 +1719,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -1752,7 +1736,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -1770,6 +1754,7 @@ paths:
         - PIPELINE_DEPTH_EXCEEDED
         - PIPELINE_INVALID_STEP
         - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_PAUSED
         - PLAYBOOK_EXECUTION_FAILED
         - PLAYBOOK_NODE_NOT_RUNNABLE
         - PROJECT_PAUSED
@@ -1779,11 +1764,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -1800,7 +1782,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:RunPlaybookCaseNode
       x-iam-resource-type: playbook_case
@@ -2014,7 +1998,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - EMBEDDING_NOT_CONFIGURED
         - EXPRESSION_FAILED
@@ -2024,11 +2007,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -2043,7 +2024,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -2061,18 +2042,19 @@ paths:
         - PIPELINE_DEPTH_EXCEEDED
         - PIPELINE_INVALID_STEP
         - PIPELINE_STEP_FAILED
+        - PLAYBOOK_CASE_PAUSED
         - PLAYBOOK_EXPORT_FAILED
         - PLAYBOOK_EXPORT_FORMAT_MISMATCH
         - PLAYBOOK_NODE_NOT_EXPORTABLE
         - PROJECT_PAUSED
         - QUERY_TIMEOUT
         - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TEXT_ENCODED_TOOL_CALL
@@ -2086,6 +2068,7 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ExportPlaybookCaseNode
       x-iam-resource-type: playbook_case
@@ -2169,12 +2152,14 @@ paths:
         - AGENT_NOT_FOUND
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - EXPRESSION_FAILED
         - FORBIDDEN
         - INVALID_CURSOR
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:ListPlaybookCaseExports
       x-iam-resource-type: playbook_case
       parameters:
@@ -2239,11 +2224,13 @@ paths:
         - AGENT_NOT_FOUND
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - EXPRESSION_FAILED
         - FORBIDDEN
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:GetPlaybookCaseExport
       x-iam-resource-type: playbook_case
       parameters:
@@ -2320,7 +2307,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -2332,11 +2318,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -2351,7 +2335,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -2381,11 +2365,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -2402,7 +2383,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:UpgradePlaybookCase
       x-iam-resource-type: playbook_case
@@ -2546,6 +2529,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: playbooks:PausePlaybookCase
       x-iam-resource-type: playbook_case
       parameters:
@@ -2609,7 +2593,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -2621,11 +2604,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -2640,7 +2621,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -2667,11 +2648,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -2688,7 +2666,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ResumePlaybookCase
       x-iam-resource-type: playbook_case
@@ -2773,7 +2753,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -2785,11 +2764,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
@@ -2804,7 +2781,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -2833,11 +2810,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
@@ -2854,7 +2828,9 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
+        - WORKFLOW_VALIDATION_FAILED
         - WORK_AUTHORITY_MISSING
       x-iam-action: playbooks:ConfirmPlaybookCaseNode
       x-iam-resource-type: playbook_case

@@ -110,6 +110,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: deciders:CreateDecider
       x-iam-resource-type: decider
       requestBody:
@@ -234,6 +235,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: deciders:UpdateDecider
       x-iam-resource-type: decider
       parameters:
@@ -304,6 +306,8 @@ paths:
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: deciders:DeleteDecider
       x-iam-resource-type: decider
       parameters:
@@ -366,6 +370,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: deciders:ListDeciderVersions
       x-iam-resource-type: decider
       parameters:
@@ -433,6 +438,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: deciders:GetDeciderVersion
       x-iam-resource-type: decider
       parameters:
@@ -497,6 +503,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: deciders:RestoreDeciderVersion
       x-iam-resource-type: decider
       parameters:
@@ -594,7 +601,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -606,12 +612,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
-        - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
         - INPUT_MODALITY_UNSUPPORTED
@@ -623,7 +626,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -639,11 +642,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TEXT_ENCODED_TOOL_CALL
@@ -748,7 +748,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - DECIDER_AGENT_NOT_TOOL_LESS
         - DECIDER_TOOL_NOT_CALLABLE
@@ -760,12 +759,9 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
-        - GENERATION_NOT_FOUND
-        - IDEMPOTENCY_KEY_REUSED
         - INGESTION_TIMEOUT
         - INPUT_LIMIT_EXCEEDED
         - INPUT_MODALITY_UNSUPPORTED
@@ -777,7 +773,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -793,11 +789,8 @@ paths:
         - QUOTA_STORAGE_EXCEEDED
         - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TEXT_ENCODED_TOOL_CALL

@@ -319,6 +319,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: conversations:DeleteConversation
       x-iam-resource-type: conversation
       parameters:
@@ -453,6 +454,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORK_AUTHORITY_MISSING
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
@@ -601,7 +603,6 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
@@ -618,6 +619,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
         - NAME_CONFLICT
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
@@ -630,12 +632,13 @@ paths:
         - PIPELINE_STEP_FAILED
         - PROJECT_PAUSED
         - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
         - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TEXT_ENCODED_TOOL_CALL
@@ -650,6 +653,7 @@ paths:
         - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORK_AUTHORITY_MISSING
       x-iam-action: conversations:GenerateConversationMessage
       x-iam-resource-type: conversation
@@ -817,6 +821,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: conversations:UpdateConversation
       x-iam-resource-type: conversation
       parameters:

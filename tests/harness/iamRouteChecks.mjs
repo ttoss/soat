@@ -4,6 +4,14 @@ import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
 
+import {
+  isFunction,
+  literalProp,
+  lookup,
+  parse,
+  propName,
+} from './sourceBindings.mjs';
+
 /**
  * Reads, from a route's source, the authorization checks its handlers reach
  * and the SRN types each names. Read by `iamAlsoCheckedOn.test.mjs`.
@@ -36,133 +44,11 @@ const TAG_ROUTE_METHODS = ['get', 'put', 'patch'];
 /** A check naming no action of its own: the caller's. */
 export const INHERIT = 'inherit';
 
-const sources = new Map();
-export const parse = (file) => {
-  if (!sources.has(file)) {
-    sources.set(
-      file,
-      ts.createSourceFile(
-        file,
-        fs.readFileSync(file, 'utf8'),
-        ts.ScriptTarget.Latest,
-        true
-      )
-    );
-  }
-  return sources.get(file);
-};
-
-const resolveImport = (from, specifier) => {
-  const base = specifier.startsWith('src/')
-    ? path.join(serverRoot, specifier)
-    : specifier.startsWith('.')
-      ? path.resolve(path.dirname(from), specifier)
-      : undefined;
-  if (!base) return undefined;
-  return [`${base}.ts`, path.join(base, 'index.ts')].find((candidate) => {
-    return fs.existsSync(candidate);
-  });
-};
-
-const propName = (node) => {
-  return (ts.isPropertyAssignment(node) ||
-    ts.isShorthandPropertyAssignment(node)) &&
-    !ts.isComputedPropertyName(node.name)
-    ? node.name.text
-    : undefined;
-};
-
 const calleeName = (call) => {
   const callee = call.expression;
   if (ts.isIdentifier(callee)) return callee.text;
   if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
   return undefined;
-};
-
-const literalProp = (node, name) => {
-  if (!node || !ts.isObjectLiteralExpression(node)) return undefined;
-  const prop = node.properties.find((candidate) => {
-    return propName(candidate) === name;
-  });
-  return prop &&
-    ts.isPropertyAssignment(prop) &&
-    ts.isStringLiteralLike(prop.initializer)
-    ? prop.initializer.text
-    : undefined;
-};
-
-export const isFunction = (node) => {
-  return (
-    node !== undefined &&
-    (ts.isArrowFunction(node) ||
-      ts.isFunctionExpression(node) ||
-      ts.isFunctionDeclaration(node))
-  );
-};
-
-const addImports = (bindings, file, statement) => {
-  const target = resolveImport(file, statement.moduleSpecifier.text);
-  const named = statement.importClause?.namedBindings;
-  if (!target || !named || !ts.isNamedImports(named)) return;
-  for (const element of named.elements) {
-    bindings.imports.set(element.name.text, {
-      file: target,
-      name: (element.propertyName ?? element.name).text,
-    });
-  }
-};
-
-const addDeclaration = (bindings, { name, initializer }) => {
-  if (!ts.isIdentifier(name) || !initializer) return;
-  if (ts.isStringLiteralLike(initializer)) {
-    bindings.consts.set(name.text, initializer.text);
-  } else if (isFunction(initializer)) {
-    bindings.functions.set(name.text, initializer);
-  } else if (ts.isCallExpression(initializer)) {
-    // `makeItemRouteAuthorizer({ resourceType: 'collection', … })`
-    const type = literalProp(initializer.arguments[0], 'resourceType');
-    if (type) bindings.typed.set(name.text, type);
-  }
-};
-
-/** A file's top-level functions, string consts, imports and typed factories. */
-const bindingsCache = new Map();
-const bindingsOf = (file) => {
-  if (bindingsCache.has(file)) return bindingsCache.get(file);
-  const bindings = {
-    functions: new Map(),
-    consts: new Map(),
-    imports: new Map(),
-    typed: new Map(),
-  };
-  bindingsCache.set(file, bindings);
-  for (const statement of parse(file).statements) {
-    if (ts.isImportDeclaration(statement)) {
-      addImports(bindings, file, statement);
-    } else if (ts.isFunctionDeclaration(statement) && statement.name) {
-      bindings.functions.set(statement.name.text, statement);
-    } else if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        addDeclaration(bindings, declaration);
-      }
-    }
-  }
-  return bindings;
-};
-
-/** The file and exported name `file` imports `name` from. */
-export const importOf = (file, name) => {
-  return bindingsOf(file).imports.get(name);
-};
-
-/** `name` as `file` sees it: its own binding, else the one it imports. */
-export const lookup = (file, name, kind) => {
-  const own = bindingsOf(file);
-  if (own[kind].has(name)) return { file, value: own[kind].get(name) };
-  const imported = own.imports.get(name);
-  if (!imported) return undefined;
-  const value = bindingsOf(imported.file)[kind].get(imported.name);
-  return value === undefined ? undefined : { file: imported.file, value };
 };
 
 /** The `action` a call's arguments name, at their top or under a carrier. */

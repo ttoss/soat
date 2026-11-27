@@ -266,8 +266,13 @@ paths:
         while `groups` is empty.
       operationId: getUsageAggregate
       x-raises:
+        - AGENT_NOT_FOUND
+        - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
+        - INTERNAL_ERROR
+        - INVALID_CURSOR
+        - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
       x-iam-action: usage:GetAggregate
@@ -532,6 +537,7 @@ paths:
       x-raises:
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
+        - INVALID_CURSOR
         - UNAUTHORIZED
         - VALIDATION_FAILED
       x-iam-action: usage:ListThresholds
@@ -588,6 +594,7 @@ paths:
       x-raises:
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
+        - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
       x-iam-action: usage:ManageThresholds
@@ -708,6 +715,7 @@ paths:
       x-raises:
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
+        - ORCHESTRATION_RUN_NOT_FOUND
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED

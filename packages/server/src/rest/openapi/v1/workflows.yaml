@@ -89,9 +89,11 @@ paths:
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
         - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:CreateWorkflow
       x-iam-resource-type: workflow
@@ -207,9 +209,11 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - FORBIDDEN
         - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
         - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:UpdateWorkflow
@@ -278,7 +282,10 @@ paths:
       operationId: deleteWorkflow
       x-raises:
         - FORBIDDEN
+        - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_HAS_OPEN_TASKS
         - WORKFLOW_NOT_FOUND
       x-iam-action: workflows:DeleteWorkflow
@@ -346,9 +353,11 @@ paths:
         - FORBIDDEN
         - INVALID_CURSOR
         - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
         - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:ListWorkflowVersions
@@ -417,9 +426,11 @@ paths:
         - FORBIDDEN
         - INVALID_CURSOR
         - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
         - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:GetWorkflowVersion
@@ -501,9 +512,11 @@ paths:
         - FORBIDDEN
         - INVALID_CURSOR
         - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORKFLOW_NOT_FOUND
         - WORKFLOW_VALIDATION_FAILED
       x-iam-action: workflows:RestoreWorkflowVersion
