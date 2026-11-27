@@ -9,6 +9,7 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
+import { ProjectGroup } from './ProjectGroup';
 
 @Table({
   tableName: 'policies',
@@ -19,6 +20,10 @@ import { Project } from './Project';
       fields: ['public_id'],
     },
     { name: 'policies_project_id_idx', fields: ['project_id'] },
+    {
+      name: 'policies_project_group_id_idx',
+      fields: ['project_group_id'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: Policy) => {
@@ -35,8 +40,8 @@ export class Policy extends Model {
   })
   declare publicId: string;
 
-  // `null` is a global policy; set, the project whose resources alone its
-  // document may grant on.
+  // `null` with no `projectGroupId` is a global policy; set, the project whose
+  // resources alone its document may grant on.
   @ForeignKey(() => {
     return Project;
   })
@@ -50,6 +55,24 @@ export class Policy extends Model {
     { onDelete: 'CASCADE' }
   )
   declare project: Project | null;
+
+  /**
+   * The project group whose own resources and projects alone its document may
+   * grant on. Set only on a policy with no `projectId`.
+   */
+  @ForeignKey(() => {
+    return ProjectGroup;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare projectGroupId: number | null;
+
+  @BelongsTo(
+    () => {
+      return ProjectGroup;
+    },
+    { foreignKey: 'projectGroupId', as: 'projectGroup', onDelete: 'CASCADE' }
+  )
+  declare projectGroup: ProjectGroup | null;
 
   @Column({
     type: DataType.STRING,

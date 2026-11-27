@@ -80,6 +80,18 @@ const resolveProjectId = async (args: {
   return { id: project.id as number };
 };
 
+/** The database id of the project group a key is of; null for none. */
+const keyProjectGroupId = async (
+  projectGroupPublicId: string | null
+): Promise<number | null> => {
+  if (projectGroupPublicId === null) return null;
+  const group = await db.ProjectGroup.findOne({
+    where: { publicId: projectGroupPublicId },
+    attributes: ['id'],
+  });
+  return (group?.id as number | undefined) ?? null;
+};
+
 /**
  * Numeric id of the project a scoped OAuth token is confined to, for the list
  * filter (an API key already carries its own as `apiKeyProjectId`).
@@ -193,7 +205,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     authUser: ctx.authUser,
     key: {
       project_id: targetProjectId ?? null,
-      project_group_id: group?.publicId ?? null,
+      project_group_id: group.publicId,
     },
     action: 'api-keys:CreateApiKey',
   });
@@ -211,6 +223,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
       writer: ctx.authUser,
       policyIds,
       projectId: projectResult.id ?? null,
+      projectGroupId: group.id,
     }),
     inheritWhenOmitted: true,
     onRefused: () => {
@@ -235,7 +248,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     userId,
     name,
     projectId: projectResult.id,
-    projectGroupId: group?.id ?? null,
+    projectGroupId: group.id,
     policyIds: boundedPolicyIds,
   });
 
@@ -338,6 +351,7 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
               await resolveProjectId({ projectId: existing.project_id ?? null })
             ).id ?? null)
           : projectResult.id,
+      projectGroupId: await keyProjectGroupId(existing.project_group_id),
     }),
     inheritWhenOmitted: false,
     onRefused: () => {

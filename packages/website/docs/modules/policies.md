@@ -1,5 +1,5 @@
 ---
-description: 'Reusable IAM policy documents, global or owned by one project, attached to users, API keys, agents, triggers and webhooks and evaluated at request time.'
+description: 'Reusable IAM policy documents, global or owned by one project or project group, attached to users, API keys, agents, triggers and webhooks and evaluated at request time.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -7,11 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # Policies
 
-Reusable IAM policy documents, global or owned by one project, evaluated at request time.
+Reusable IAM policy documents, global or owned by one project or [project group](./project-groups.md), evaluated at request time.
 
 ## Overview
 
-A Policy is a named [policy document](./iam.md#policy-documents), either **global** or a **project policy** (see [Project and Global Policies](#project-and-global-policies)), attached to **users** and **API keys**. Filter the listing by project, or (unrestricted admin) by user. Ids are prefixed `pol_`. A policy a trigger names in its [`policy_ids`](./triggers.md#execution-identity), an agent in its [`policy_ids`](./agents.md#execution-identity), a webhook in its [`policy_ids`](./webhooks.md#policy-ids-and-the-read-guard), a user or API key, or an [eval](./evaluations.md#run-authority), [decider](./deciders.md#decision-authority), ingestion rule, memory rule or playbook in its `policy_ids`, cannot be deleted (`409 POLICY_HAS_DEPENDENTS`, a `meta.<carrier>_sample` per carrier); detach it first. Whoever creates or edits a trigger, agent, webhook, user, eval, decider, ingestion rule, memory rule or playbook holds every grant of the policies it carries after the write, whichever fields the write names (`403 POLICY_GRANT_NOT_HELD`). Editing a policy a trigger, an agent, a webhook, an API key or a user carries needs an editor who holds its new grants where that carrier acts (`403 POLICY_GRANT_NOT_HELD`, see [Execution Identity](./triggers.md#execution-identity)): the resource's or a project-scoped key's project, else every project, which a project policy narrows to its own. A key narrowed by `policy_ids` therefore cannot widen its own policy. A condition value may name [`${iam:ActorId}`](./iam.md#policy-variables).
+A Policy is a named [policy document](./iam.md#policy-documents), **global**, a **project policy** or a **project group policy** (see [Project and Global Policies](#project-and-global-policies) and [Project Group Policies](#project-group-policies)), attached to **users** and **API keys**. Filter the listing by project, by project group, or (unrestricted admin) by user. Ids are prefixed `pol_`. A policy a trigger names in its [`policy_ids`](./triggers.md#execution-identity), an agent in its [`policy_ids`](./agents.md#execution-identity), a webhook in its [`policy_ids`](./webhooks.md#policy-ids-and-the-read-guard), a user or API key, or an [eval](./evaluations.md#run-authority), [decider](./deciders.md#decision-authority), ingestion rule, memory rule or playbook in its `policy_ids`, cannot be deleted (`409 POLICY_HAS_DEPENDENTS`, a `meta.<carrier>_sample` per carrier); detach it first. Whoever creates or edits a trigger, agent, webhook, user, eval, decider, ingestion rule, memory rule or playbook holds every grant of the policies it carries after the write, whichever fields the write names (`403 POLICY_GRANT_NOT_HELD`). Editing a policy a trigger, an agent, a webhook, an API key or a user carries needs an editor who holds its new grants where that carrier acts (`403 POLICY_GRANT_NOT_HELD`, see [Execution Identity](./triggers.md#execution-identity)): the resource's or a project-scoped key's project, else every project, which a project policy narrows to its own. A key narrowed by `policy_ids` therefore cannot widen its own policy. A condition value may name [`${iam:ActorId}`](./iam.md#policy-variables).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -25,15 +25,16 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 
 ## Data Model
 
-| Field         | Type   | Description                                |
-| ------------- | ------ | ------------------------------------------ |
-| `id`          | string | Public identifier prefixed with `pol_`     |
-| `project_id`  | string | Owning project; `null` for a global policy |
-| `name`        | string | Human-readable policy name                 |
-| `description` | string | Optional description                       |
-| `document`    | object | Policy document (see [IAM](./iam.md))      |
-| `created_at`  | string | ISO 8601 creation timestamp                |
-| `updated_at`  | string | ISO 8601 last-updated timestamp            |
+| Field              | Type   | Description                                                |
+| ------------------ | ------ | ---------------------------------------------------------- |
+| `id`               | string | Public identifier prefixed with `pol_`                     |
+| `project_id`       | string | Owning project; `null` for a global policy                 |
+| `project_group_id` | string | Owning project group; `null` unless a project group policy |
+| `name`             | string | Human-readable policy name                                 |
+| `description`      | string | Optional description                                       |
+| `document`         | object | Policy document (see [IAM](./iam.md))                      |
+| `created_at`       | string | ISO 8601 creation timestamp                                |
+| `updated_at`       | string | ISO 8601 last-updated timestamp                            |
 
 ## Key Concepts
 
@@ -73,6 +74,21 @@ Format and evaluation: [IAM — Policy Documents](./iam.md#policy-documents). Ex
 - Listing returns only the projects' policies the caller may list; the unrestricted admin also sees global ones.
 - A project policy read outside the caller's reach is `404`, and so is a `GET`, `PUT` or `DELETE` of an id that names no policy; a global policy is `403` to anyone but the unrestricted admin.
 - Every resource carrying `policy_ids` (or a project's `agent_policy_ids`) checks it the same way on create, update and formation apply: a value that is not a list of non-empty ids is `400 VALIDATION_FAILED` (`meta.field` names the field), an id that names no policy is `400 POLICY_NOT_FOUND`, and one naming another project's policy is `400 POLICY_OUTSIDE_PROJECT` (`meta.policy_id`). Attaching or editing an attached policy still needs a writer who holds its grants (`403 POLICY_GRANT_NOT_HELD`).
+
+### Project Group Policies
+
+A policy created with `project_group_id` belongs to that [project group](./project-groups.md) (never with `project_id`, `400`).
+
+|                                           | Project group policy (`project_group_id` set)                                                                                                                                                                                |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Created, listed, read, edited, deleted by | a caller holding `project-groups:CreatePolicy`, `ListPolicies`, `GetPolicy`, `UpdatePolicy`, `DeletePolicy` on `srn:project-group:<project_group_id>:policy/<policy_id>` (`*` for create and list); the owner holds them all |
+| `Allow` resources                         | only the project group's own resources, `srn:project-group:<project_group_id>:<type>/<id>`, and those of a project in it, `srn:<project_id>:<type>:<id>`, else `400`                                                         |
+| Carried in `policy_ids` by                | the project group itself and its keys only; anywhere else `400 POLICY_OUTSIDE_PROJECT`                                                                                                                                       |
+
+- An `Allow` with no `resource` grants a project group action on the project group and any other action on the projects in it, read when the policy is evaluated: a project leaving the project group leaves its reach.
+- [`GET /api/v1/policies?project_group_id=<project_group_id>`](/docs/api/policies/list-policies) lists them; a project listing holds none. A caller who may not read the project group gets `404`.
+- Attaching and editing follow the carrier's grant check: a key narrowed by `policy_ids` cannot widen the policy narrowing it (`403 POLICY_GRANT_NOT_HELD`) nor write a key carrying a policy outside them (`403 API_KEY_POLICY_BOUNDARY`).
+- An IAM token's `policy_ids` take none. Deleting the project group deletes its policies.
 
 ### Attaching Policies to Users
 
@@ -239,6 +255,62 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl "https://api.example.com/api/v1/policies?project_id=proj_ABC" \
   -H "Authorization: Bearer <project-key>"
+```
+
+</TabItem>
+</Tabs>
+
+### Create a project group policy
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-policy \
+  --project-group-id pgrp_ABC \
+  --name "Usage readers" \
+  --document '{"statement":[{"effect":"Allow","action":["project-groups:GetUsage","secrets:ListSecrets"]}]}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data, error } = await soat.policies.createPolicy({
+  body: {
+    project_group_id: 'pgrp_ABC',
+    name: 'Usage readers',
+    document: {
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['project-groups:GetUsage', 'secrets:ListSecrets'],
+        },
+      ],
+    },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/policies \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_group_id": "pgrp_ABC",
+    "name": "Usage readers",
+    "document": {
+      "statement": [{
+        "effect": "Allow",
+        "action": ["project-groups:GetUsage", "secrets:ListSecrets"]
+      }]
+    }
+  }'
 ```
 
 </TabItem>

@@ -15,6 +15,7 @@ import {
   type PolicyCarrier,
   type PolicyCarrierName,
 } from './policyCarriers';
+import { grantedPolicyDocuments } from './projectGroupPolicies';
 
 const log = createDebug('soat:policyGrantCoverage');
 
@@ -302,6 +303,7 @@ const assertCoveredIn = async (args: {
   }
 };
 
+/** A project group policy's grants read as its scoped document, in every scope. */
 const loadScopedPolicies = async (
   policyIds: number[]
 ): Promise<ScopedPolicy[]> => {
@@ -309,10 +311,14 @@ const loadScopedPolicies = async (
     where: { id: policyIds },
     include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
   });
-  return rows.map((row) => {
+  const granted = await grantedPolicyDocuments(rows);
+  return rows.map((row, index) => {
     return {
       policyId: row.publicId as string,
-      document: row.document as PolicyDocument,
+      document:
+        row.projectGroupId === null
+          ? (row.document as PolicyDocument)
+          : granted[index],
       projectPublicId: row.project?.publicId ?? null,
     };
   });
@@ -352,10 +358,24 @@ export const assertWriterMayAttach = async (args: {
  */
 export const assertWriterHoldsAttachedEdit = async (args: {
   getPolicies: GetWriterPolicies;
-  policy: { id: number; publicId: string; projectPublicId: string | null };
+  policy: {
+    id: number;
+    publicId: string;
+    projectPublicId: string | null;
+    projectGroupId: number | null;
+  };
   document: PolicyDocument;
 }): Promise<void> => {
   log('assertWriterHoldsAttachedEdit: policy=%s', args.policy.publicId);
+  const [document] =
+    args.policy.projectGroupId === null
+      ? [args.document]
+      : await grantedPolicyDocuments([
+          {
+            document: args.document,
+            projectGroupId: args.policy.projectGroupId,
+          },
+        ]);
   const carriers: PolicyCarrier[] = Object.values(POLICY_CARRIERS);
   const actsIn = await Promise.all(
     carriers.map((carrier) => {
@@ -368,7 +388,7 @@ export const assertWriterHoldsAttachedEdit = async (args: {
     policies: [
       {
         policyId: args.policy.publicId,
-        document: args.document,
+        document,
         projectPublicId: args.policy.projectPublicId,
       },
     ],
