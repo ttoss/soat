@@ -1,4 +1,9 @@
 import { db } from 'src/db';
+import {
+  askEmbeddingWrite,
+  askOfClaimedConversion,
+  generationPrincipal,
+} from 'src/lib/embeddingAdmission';
 import { drainEvalQueueOnce } from 'src/lib/evaluationWorker';
 import { EMBEDDING_USAGE_SOURCE } from 'src/lib/usageEmbeddingRecording';
 
@@ -238,5 +243,90 @@ describe('admission — embedding writes', () => {
     expect(stopped.status).toBe('failed');
     expect(stopped.error.code).toBe('PLAN_LIMIT_REACHED');
     expect(await embeddingMeters()).toBe(meters);
+  });
+});
+
+describe('admission — embedding writes without a request', () => {
+  test("a generation's stored authority is the principal its write asks as", async () => {
+    const agentId = await turn.createAgent({});
+    const generation = await turn.generate({ agentId, calls: [] });
+    const principal = await generationPrincipal({
+      generationId: generation.id,
+    });
+    expect(principal).not.toBeNull();
+    const before = service.asked.length;
+
+    const ask = await askEmbeddingWrite({
+      projectId: projectDbId,
+      principal,
+      work: 'The memory rule',
+    });
+
+    expect(ask.projectId).toBe(projectDbId);
+    expect(service.asked).toHaveLength(before + 1);
+    expect(service.asked[before].body).toMatchObject({
+      action: EMBEDDINGS,
+      project_id: turn.projectId,
+    });
+  });
+
+  test('work with no stored generation holds no principal', async () => {
+    expect(await generationPrincipal({ generationId: null })).toBeNull();
+    expect(await generationPrincipal({ generationId: undefined })).toBeNull();
+    expect(
+      await generationPrincipal({ generationId: 'gen_does_not_exist' })
+    ).toBeNull();
+  });
+
+  test('a write holding no principal is refused while declared, unasked', async () => {
+    await expect(
+      askEmbeddingWrite({
+        projectId: projectDbId,
+        principal: null,
+        work: 'The memory rule',
+      })
+    ).rejects.toMatchObject({ code: 'WORK_AUTHORITY_MISSING' });
+    expect(service.asked).toHaveLength(0);
+  });
+
+  test('an undeclared write is not asked, principal or not', async () => {
+    service.undeclare();
+
+    const ask = await askEmbeddingWrite({
+      projectId: projectDbId,
+      principal: null,
+      work: 'The memory rule',
+    });
+
+    expect(ask.projectId).toBe(projectDbId);
+    expect(service.asked).toHaveLength(0);
+  });
+
+  test('a write billed to no known project asks under none', async () => {
+    const agentId = await turn.createAgent({});
+    const generation = await turn.generate({ agentId, calls: [] });
+    const principal = await generationPrincipal({
+      generationId: generation.id,
+    });
+    const before = service.asked.length;
+
+    await askEmbeddingWrite({ projectId: null, principal, work: 'The call' });
+    await askEmbeddingWrite({ projectId: -1, principal, work: 'The call' });
+
+    expect(
+      service.asked.slice(before).map((asked) => {
+        return asked.body.project_id;
+      })
+    ).toEqual([null, null]);
+  });
+
+  test("a converter's callback reuses its ingest's ask, asking nothing", () => {
+    const ask = askOfClaimedConversion({
+      projectId: projectDbId,
+      claimed: true,
+    });
+
+    expect(ask.projectId).toBe(projectDbId);
+    expect(service.asked).toHaveLength(0);
   });
 });
