@@ -2,6 +2,7 @@ import { USAGE_EVENT_DURABLE_IDS } from '@soat/postgresdb';
 
 import { db } from '../db';
 import type { Transaction } from './dbTransaction';
+import { loggableError } from './loggableError';
 import { asSqlRow } from './sqlRow';
 
 type DurablePair = (typeof USAGE_EVENT_DURABLE_IDS)[number];
@@ -88,6 +89,6 @@ export const reportLostUsageEvent = (args: {
   // eslint-disable-next-line no-console
   console.error(
     `${args.recorder}: usage event not written (${args.detail})`,
-    args.error
+    loggableError(args.error)
   );
 };

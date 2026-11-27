@@ -19,6 +19,7 @@ export const SOAT_TOOL_CALL_TIMEOUT_MS = toolCallTimeoutMs();
 export type LogToolCallingError = (args: {
   toolName: string;
   toolType: 'http' | 'mcp' | 'builtin' | 'client';
+  // As authored: a resolved URL carries the call's arguments.
   url?: string;
   method?: string;
   error: unknown;

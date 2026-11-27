@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 
 import { db } from '../db';
 import { currentCausationChain } from './eventCausation';
+import { loggableError } from './loggableError';
 import type {
   SoatEventName,
   SoatEventType,
@@ -66,7 +67,7 @@ export const recordDroppedEvent = (args: {
   // eslint-disable-next-line no-console
   console.error(
     `event dropped at ${args.stage}: ${args.type} (${args.resourceId})`,
-    args.error
+    loggableError(args.error)
   );
 };
 
@@ -170,7 +171,7 @@ export const emitEvent = (event: SoatEvent) => {
  *
  * The filter is here rather than in each subscriber because the names it takes
  * are checked against the registry: a renamed event breaks the subscription at
- * compile time, where a hand-rolled `if (event.type === '…')` just stopped
+ * compile time, where a hand-rolled `if (event.type === '…')` silently stops
  * matching. A subscriber that genuinely needs everything — the webhook
  * dispatcher, which forwards user-authored orchestration events too — omits
  * `types` and says so.

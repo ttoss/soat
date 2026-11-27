@@ -25,7 +25,7 @@ describe('HttpToolError', () => {
     const error = new HttpToolError(
       'HTTP 401 GET https://api.example.com/items: Unauthorized',
       401,
-      'Unauthorized',
+      { text: 'Unauthorized', json: null },
       'https://api.example.com/items',
       'GET'
     );
@@ -51,7 +51,7 @@ describe('HttpToolError', () => {
     const error = new HttpToolError(
       'HTTP 500 POST https://api.example.com/items: Internal Server Error',
       500,
-      'Internal Server Error',
+      { text: 'Internal Server Error', json: null },
       'https://api.example.com/items',
       'POST'
     );

@@ -221,7 +221,7 @@ describe('logDatabaseConnectionError', () => {
 
     expect(errorSpy).toHaveBeenCalledWith(
       'failed to connect to database:',
-      error
+      error.stack
     );
   });
 });

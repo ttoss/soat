@@ -11,20 +11,23 @@ import { isFetchFailure } from './providerError';
 export class HttpToolError extends Error {
   status: number;
   body: string;
+  // The body parsed, when the whole of it is JSON (`readToolErrorBody`).
+  json: { value: unknown } | null;
   url: string;
   method: string;
 
   constructor(
     message: string,
     status: number,
-    body: string,
+    body: { text: string; json: { value: unknown } | null },
     url: string,
     method: string
   ) {
     super(message);
     this.name = 'HttpToolError';
     this.status = status;
-    this.body = body;
+    this.body = body.text;
+    this.json = body.json;
     this.url = url;
     this.method = method;
   }

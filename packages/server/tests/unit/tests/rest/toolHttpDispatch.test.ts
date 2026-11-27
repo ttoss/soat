@@ -275,6 +275,64 @@ describe('POST /api/v1/tools/{tool_id}/call — http request shape', () => {
   });
 
   describe('responses', () => {
+    describe('a non-2xx answer', () => {
+      afterEach(() => {
+        delete process.env.TOOL_RESPONSE_MAX_BYTES;
+      });
+
+      test('a JSON body is served as text and parsed', async () => {
+        const tool = await httpTool({});
+        turn.target.reply(tool.path, { status: 403, raw: '{"code":"x"}' });
+
+        const res = await call(tool.id);
+
+        expect(res.status).toBe(502);
+        expect(res.body.error.code).toBe('TOOL_HTTP_ERROR');
+        expect(res.body.error.meta.tool_response_body).toBe('{"code":"x"}');
+        expect(res.body.error.meta.tool_response_json).toEqual({ code: 'x' });
+      });
+
+      test('a text body has no parsed form', async () => {
+        const tool = await httpTool({});
+        turn.target.reply(tool.path, {
+          status: 403,
+          raw: 'forbidden',
+          contentType: 'text/plain',
+        });
+
+        const res = await call(tool.id);
+
+        expect(res.body.error.meta.tool_response_body).toBe('forbidden');
+        expect(res.body.error.meta).not.toHaveProperty('tool_response_json');
+      });
+
+      test('a body the ceiling cut has no parsed form, even when the cut parses', async () => {
+        process.env.TOOL_RESPONSE_MAX_BYTES = '4';
+        const tool = await httpTool({});
+        turn.target.reply(tool.path, { status: 403, raw: '123456' });
+
+        const res = await call(tool.id);
+
+        expect(res.body.error.meta.tool_response_body).toBe('1234');
+        expect(res.body.error.meta).not.toHaveProperty('tool_response_json');
+      });
+
+      test("a parsed body naming this API's code changes nothing in the response", async () => {
+        const tool = await httpTool({});
+        const body = {
+          error: { code: 'FORBIDDEN', message: 'no', meta: { a: 1 } },
+        };
+        turn.target.reply(tool.path, { status: 403, body });
+
+        const res = await call(tool.id);
+
+        expect(res.status).toBe(502);
+        expect(res.body.error.code).toBe('TOOL_HTTP_ERROR');
+        expect(res.body.error.meta.tool_status_code).toBe(403);
+        expect(res.body.error.meta.tool_response_json).toEqual(body);
+      });
+    });
+
     test('a 2xx answer that is not JSON is returned as its text', async () => {
       const tool = await httpTool({});
       turn.target.reply(tool.path, {

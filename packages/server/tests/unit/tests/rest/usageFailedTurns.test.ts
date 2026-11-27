@@ -422,7 +422,7 @@ describe('Usage — provider calls a failed turn completed', () => {
       expect(res.status).toBe(200);
       expect(errorLog).toHaveBeenCalledWith(
         expect.stringContaining('recordGenerationUsage'),
-        expect.any(Error)
+        expect.stringContaining('usage table unavailable')
       );
     });
   });

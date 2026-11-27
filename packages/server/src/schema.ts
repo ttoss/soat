@@ -5,6 +5,7 @@ import createDebug from 'debug';
 
 import pkg from '../package.json' with { type: 'json' };
 import { getSchemaSyncLockTimeoutMs, syncSchemaWithAdvisoryLock } from './db';
+import { loggableError } from './lib/loggableError';
 
 const log = createDebug('soat:schema');
 
@@ -200,7 +201,7 @@ export const prepareSchemaOrExit = async (args: {
     // one sends an operator to the wrong place entirely. Unconditional stderr
     // rather than the opt-in `debug` logger: this terminates the process.
     // eslint-disable-next-line no-console
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(loggableError(error));
     process.exit(1);
   }
 };

@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { initialize, parseArgv, runMigrationsCli } from '@ttoss/postgresdb';
 
 import { buildDatabaseConfig, syncSchemaWithAdvisoryLock } from './db';
+import { loggableError } from './lib/loggableError';
 import { schemaRunnerOptions } from './schema';
 
 /**
@@ -50,6 +51,6 @@ main().catch((error: unknown) => {
   // Fatal and process-terminating, so it goes to stderr unconditionally rather
   // than through the opt-in `debug` logger.
   // eslint-disable-next-line no-console
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(loggableError(error));
   process.exitCode = 1;
 });

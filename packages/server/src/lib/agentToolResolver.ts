@@ -23,12 +23,14 @@ import { withOutboundToolHeaders } from './causationHeader';
 import { HttpToolError, toToolUnreachableError } from './httpToolError';
 import {
   parseResponseMode,
+  parseToolJsonBody,
   readBase64ToolResponse,
   readToolErrorBody,
   readToolResponseBody,
   type ResponseMode,
 } from './httpToolResponse';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
+import { loggableError } from './loggableError';
 import { mcpDefinitionGate } from './mcpDefinitionPins';
 import { openMcpTransport } from './mcpTransport';
 import { isPlainObject } from './plainObject';
@@ -186,14 +188,6 @@ const isErrorLoggingEnabled = () => {
   return !['false', '0', 'off', 'no'].includes(value.toLowerCase());
 };
 
-const toToolErrorText = (args: { error: unknown }) => {
-  if (args.error instanceof Error) {
-    return args.error.stack ?? args.error.message;
-  }
-
-  return String(args.error);
-};
-
 const logToolCallingError = (args: {
   toolName: string;
   toolType: 'http' | 'mcp' | 'builtin' | 'client';
@@ -206,12 +200,12 @@ const logToolCallingError = (args: {
   }
 
   log(
-    'logToolCallError: tool call failed toolName=%s toolType=%s url=%s method=%s error=%s',
+    'logToolCallError: tool call failed toolName=%s toolType=%s url=%s method=%s error=%o',
     args.toolName,
     args.toolType,
     args.url,
     args.method,
-    toToolErrorText({ error: args.error })
+    loggableError(args.error)
   );
 };
 
@@ -312,13 +306,15 @@ export const toHttpToolDomainError = (error: unknown): DomainError | null => {
   }
 
   // A stored tool's answer is data: its body, whatever code it names, stays in
-  // `tool_response_body` and never becomes this response's code.
+  // `tool_response_body` and `tool_response_json` and never becomes this
+  // response's code.
   return new DomainError(
     'TOOL_HTTP_ERROR',
     `Tool target returned HTTP ${error.status}: ${error.message}`,
     {
       tool_status_code: error.status,
       tool_response_body: error.body,
+      ...(error.json && { tool_response_json: error.json.value }),
       tool_url: error.url,
       tool_method: error.method,
     }
@@ -549,7 +545,7 @@ const readHttpToolResponse = async (args: {
   if (!response.ok) {
     const body = await readToolErrorBody({ response });
     throw new HttpToolError(
-      `HTTP ${response.status} ${method} ${url}: ${body}`,
+      `HTTP ${response.status} ${method} ${url}: ${body.text}`,
       response.status,
       body,
       url,
@@ -566,11 +562,8 @@ const readHttpToolResponse = async (args: {
   const responseText = new TextDecoder().decode(
     await readToolResponseBody({ response, url })
   );
-  try {
-    return JSON.parse(responseText);
-  } catch {
-    return responseText;
-  }
+  const parsed = parseToolJsonBody(responseText);
+  return parsed ? parsed.value : responseText;
 };
 
 const ALLOWED_METHODS = [
@@ -716,7 +709,7 @@ const sendHttpToolRequest = async (
     logToolCallingError({
       toolName: args.toolName,
       toolType: 'http',
-      url,
+      url: args.execute.url,
       method,
       error,
     });

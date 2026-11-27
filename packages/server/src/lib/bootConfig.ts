@@ -5,6 +5,7 @@ import {
   readEmbeddingInputTokenPriceUsd,
 } from './embeddingPrice';
 import { headerPrefix } from './headerPrefix';
+import { loggableError } from './loggableError';
 import { readSecretsEncryptionKey } from './secretsEncryptionKey';
 import { reservedToolContextPrefix } from './toolContext';
 import { readUploadUrlTemplate } from './uploadUrlTemplate';
@@ -34,7 +35,7 @@ export const loadBootConfigOrExit = (): void => {
     // Fatal and process-terminating, so it goes to stderr unconditionally
     // rather than through the opt-in `debug` logger.
     // eslint-disable-next-line no-console
-    console.error(String(error));
+    console.error(loggableError(error));
     process.exit(1);
   }
 

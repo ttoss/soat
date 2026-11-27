@@ -706,7 +706,9 @@ paths:
             Upstream tool target error (TOOL_HTTP_ERROR). Returned when an
             `http`-type tool's target responds with a non-2xx status. The
             error `meta` carries the real upstream `tool_status_code`,
-            `tool_response_body`, `tool_url`, and `tool_method`. A target that
+            `tool_response_body` (the body as text), `tool_response_json` (the
+            body parsed, present only when the whole body is JSON),
+            `tool_url`, and `tool_method`. A target that
             never answers (`http` or `mcp`) is `TOOL_UNREACHABLE`, its message
             naming the network failure and its `meta` the `tool_url` and
             `tool_method`. An `mcp` tool whose server answers a failure is
@@ -882,7 +884,7 @@ components:
             downloaded file. `filename` comes from `Content-Disposition` and is
             omitted when the target names none. In either mode a 2xx body over
             `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`; a non-2xx
-            body over it is cut to it.
+            body over it is cut to it, with no `tool_response_json`.
 
 
             `auth` adds a computed request credential, for targets whose
@@ -1472,7 +1474,7 @@ components:
         downloaded file. `filename` comes from `Content-Disposition` and is
         omitted when the target names none. In either mode a 2xx body over
         `TOOL_RESPONSE_MAX_BYTES` is `502 TOOL_RESPONSE_TOO_LARGE`; a non-2xx
-        body over it is cut to it.
+        body over it is cut to it, with no `tool_response_json`.
 
 
         `auth` adds a computed request credential, for targets whose
