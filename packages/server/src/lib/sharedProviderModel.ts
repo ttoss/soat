@@ -2,6 +2,7 @@ import type { LanguageModelMiddleware } from 'ai';
 import { APICallError } from 'ai';
 import createDebug from 'debug';
 
+import { loggableError } from './loggableError';
 import { isFetchFailure } from './providerError';
 import { withheldVendorFault } from './replayRefusal';
 import { admitSharedCall } from './shareCaps';
@@ -35,7 +36,7 @@ const withheld = (args: {
   // eslint-disable-next-line no-console
   console.error(
     `shared AI provider ${args.providerPublicId} failed:`,
-    args.error
+    loggableError(args.error)
   );
   return sharedFailure({
     error: args.error,
@@ -99,7 +100,7 @@ export const throughShare = (args: {
               // eslint-disable-next-line no-console
               console.error(
                 `shared AI provider ${args.providerPublicId} streamed an error:`,
-                part.error
+                loggableError(part.error)
               );
               controller.enqueue({
                 ...part,

@@ -119,10 +119,10 @@ export const recordGenerationFailure = async (args: {
     args.usage ?? spentUsageOf(args.error) ?? usageFromFailure(args.error);
 
   log(
-    'recordGenerationFailure: generationId=%s traceId=%s error=%o',
+    'recordGenerationFailure: generationId=%s traceId=%s code=%s',
     args.generationId,
     args.traceId,
-    errorPayload
+    errorPayload.code
   );
 
   // Persistence failures must not mask the original generation error. The

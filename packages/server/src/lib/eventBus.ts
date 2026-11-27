@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 
 import { db } from '../db';
 import { currentCausationChain } from './eventCausation';
+import { loggableError } from './loggableError';
 import type {
   SoatEventName,
   SoatEventType,
@@ -66,7 +67,7 @@ export const recordDroppedEvent = (args: {
   // eslint-disable-next-line no-console
   console.error(
     `event dropped at ${args.stage}: ${args.type} (${args.resourceId})`,
-    args.error
+    loggableError(args.error)
   );
 };
 

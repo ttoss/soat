@@ -29,6 +29,7 @@ import {
   type ResponseMode,
 } from './httpToolResponse';
 import { actionOfType, applyToolOutputMapping } from './jsonLogicMapping';
+import { loggableError } from './loggableError';
 import { mcpDefinitionGate } from './mcpDefinitionPins';
 import { openMcpTransport } from './mcpTransport';
 import { isPlainObject } from './plainObject';
@@ -186,14 +187,6 @@ const isErrorLoggingEnabled = () => {
   return !['false', '0', 'off', 'no'].includes(value.toLowerCase());
 };
 
-const toToolErrorText = (args: { error: unknown }) => {
-  if (args.error instanceof Error) {
-    return args.error.stack ?? args.error.message;
-  }
-
-  return String(args.error);
-};
-
 const logToolCallingError = (args: {
   toolName: string;
   toolType: 'http' | 'mcp' | 'builtin' | 'client';
@@ -206,12 +199,12 @@ const logToolCallingError = (args: {
   }
 
   log(
-    'logToolCallError: tool call failed toolName=%s toolType=%s url=%s method=%s error=%s',
+    'logToolCallError: tool call failed toolName=%s toolType=%s url=%s method=%s error=%o',
     args.toolName,
     args.toolType,
     args.url,
     args.method,
-    toToolErrorText({ error: args.error })
+    loggableError(args.error)
   );
 };
 
@@ -716,7 +709,7 @@ const sendHttpToolRequest = async (
     logToolCallingError({
       toolName: args.toolName,
       toolType: 'http',
-      url,
+      url: args.execute.url,
       method,
       error,
     });

@@ -1,6 +1,7 @@
 import { DomainError } from '../errors';
 import { ERROR_CODES, type ErrorCode } from '../errors/codes';
 import { servedErrorMeta } from '../errors/errorBody';
+import { loggableError } from './loggableError';
 
 /** The `error` a resource records when its work fails, as its `GET` answers it. */
 export type StoredError = {
@@ -51,7 +52,10 @@ export const toStoredError = (args: {
   const { error } = args;
   if (error instanceof DomainError) return fromDomainError(error);
   // eslint-disable-next-line no-console
-  console.error(`${args.label}: recorded as ${args.opaque.code}`, error);
+  console.error(
+    `${args.label}: recorded as ${args.opaque.code}`,
+    loggableError(error)
+  );
   return args.opaque;
 };
 

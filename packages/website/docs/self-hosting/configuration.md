@@ -190,6 +190,16 @@ SOAT_ERROR_LOGS_ENABLED=OFF pnpm dev
 SOAT_ERROR_LOGS_ENABLED=true DEBUG=soat:formations pnpm dev
 ```
 
+An error log line carries only what the server wrote:
+
+| Error | Logged |
+| --- | --- |
+| An API error (a response with a `code`) | method, path, status, request id, user agent, the `code` and the names of its `meta` keys; never its `message` or a `meta` value |
+| A tool target's non-2xx answer, a provider's failed request | status, method or provider URL; never the body |
+| Any other error | its text and stack, and for a database error the statement without its bound values |
+
+A `message` or `meta` that quotes what another party wrote (a tool target's body, an MCP server's failure, a provider's answer) reaches the caller in the response and no log. Read it there, by the request id the log line names.
+
 ### Admin Bootstrap
 
 | Variable              | Required | Description                                                                     |

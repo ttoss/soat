@@ -1,10 +1,10 @@
 import { inspect } from 'node:util';
 
 import { DatabaseError } from '@ttoss/postgresdb';
-import { APICallError } from 'ai';
 
 import type { Context } from '../Context';
 import { DomainError, domainErrorBody, errorBody } from '../errors';
+import { loggableError } from '../lib/loggableError';
 
 type Next = () => Promise<void>;
 
@@ -16,28 +16,6 @@ const isErrorLoggingEnabled = () => {
   }
 
   return !['false', '0', 'off', 'no'].includes(value.toLowerCase());
-};
-
-const toErrorText = (args: { error: unknown }) => {
-  if (args.error instanceof Error) {
-    return args.error.stack ?? args.error.message;
-  }
-
-  return String(args.error);
-};
-
-const toApiCallErrorDetails = (
-  error: unknown
-): Record<string, unknown> | undefined => {
-  if (error instanceof APICallError) {
-    return {
-      url: error.url,
-      statusCode: error.statusCode,
-      responseBody: error.responseBody,
-    };
-  }
-
-  return undefined;
 };
 
 const toDatabaseErrorDetails = (
@@ -169,8 +147,7 @@ const writeErrorLog = (args: {
     status: args.status,
     requestId: args.ctx.state?.requestId,
     userAgent: args.ctx.get('user-agent') || undefined,
-    error: toErrorText({ error: args.error }),
-    ...toApiCallErrorDetails(args.error),
+    error: loggableError(args.error),
     ...toDatabaseErrorDetails(args.error),
   };
 

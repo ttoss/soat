@@ -4,6 +4,8 @@ import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize, syncWithAdvisoryLock } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
+import { loggableError } from './lib/loggableError';
+
 const log = createDebug('soat:db');
 
 export { models };
@@ -125,7 +127,7 @@ export const buildDatabaseConfig = () => {
  */
 export const logDatabaseConnectionError = (error: unknown) => {
   // eslint-disable-next-line no-console
-  console.error('failed to connect to database:', error);
+  console.error('failed to connect to database:', loggableError(error));
 };
 
 // PostgreSQL error codes for "this object already exists": a unique violation

@@ -46,6 +46,7 @@ import {
 import type { GenerationProvenance } from './generationProvenance';
 import { segmentCallOptions } from './generationSegment';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { loggableError } from './loggableError';
 import { isInputBoundaryRefusal } from './modelInputBoundary';
 import {
   collectSystemInstructions,
@@ -178,11 +179,9 @@ const callGenerateText = async (args: {
     });
   } catch (error) {
     log(
-      'callGenerateText FAILED agentId=%s errorType=%s message=%s stack=%s',
+      'callGenerateText FAILED agentId=%s error=%o',
       args.agentId,
-      error instanceof Error ? error.constructor.name : typeof error,
-      error instanceof Error ? error.message : String(error),
-      error instanceof Error ? error.stack : ''
+      loggableError(error)
     );
     throw toTurnFailure({
       budget: args.typedAgent,
