@@ -45,6 +45,7 @@ export const apiKeysFormationModule = defineFormationModule({
         policyIds: policyPublicIds,
         writer: actor,
         projectId,
+        projectGroupId: null,
       }),
       inheritWhenOmitted: true,
       onRefused: () => {
@@ -69,6 +70,7 @@ export const apiKeysFormationModule = defineFormationModule({
         policyIds: policyPublicIds,
         writer: actor,
         projectId,
+        projectGroupId: null,
       }),
       inheritWhenOmitted: false,
       onRefused: () => {

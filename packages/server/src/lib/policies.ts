@@ -12,6 +12,10 @@ import {
   assertWriterHoldsAttachedEdit,
   type GetWriterPolicies,
 } from './policyGrantCoverage';
+import {
+  loadPolicyProjectGroups,
+  validateProjectGroupPolicyDocument,
+} from './projectGroupPolicies';
 import { validateProjectPolicyDocument } from './projectPolicyValidation';
 import { projectScopeWhere } from './projectScope';
 import type { ResourceScope } from './resourceAccessor';
@@ -25,18 +29,37 @@ type PolicyRow = InstanceType<(typeof db)['Policy']>;
 /** The project a policy belongs to, or `null` for a global one. */
 type PolicyProject = { id: number; publicId: string } | null;
 
+/** A project group's database and public ids. */
+type PolicyGroupRef = { id: number; publicId: string };
+
 const projectInclude = () => {
-  return [{ model: db.Project, as: 'project', attributes: ['publicId'] }];
+  return [
+    { model: db.Project, as: 'project', attributes: ['publicId'] },
+    { model: db.ProjectGroup, as: 'projectGroup', attributes: ['publicId'] },
+  ];
 };
 
 /**
- * A project policy grants only on its own project's resources, so attaching
- * it anywhere reaches no further than that project.
+ * A project policy grants only on its own project's resources, and a project
+ * group policy only on its project group's and its projects', so attaching
+ * either anywhere reaches no further.
  */
-const validatePolicy = (args: {
+const validatePolicy = async (args: {
   document: PolicyDocument;
   project: PolicyProject;
-}): { valid: boolean; errors: string[] } => {
+  projectGroup: PolicyGroupRef | null;
+}): Promise<{ valid: boolean; errors: string[] }> => {
+  if (args.projectGroup) {
+    const groups = await loadPolicyProjectGroups([args.projectGroup.id]);
+    const errors = validateProjectGroupPolicyDocument({
+      document: args.document,
+      projectGroup: groups.get(args.projectGroup.id) ?? {
+        publicId: args.projectGroup.publicId,
+        projectPublicIds: [],
+      },
+    });
+    return { valid: errors.length === 0, errors };
+  }
   if (args.project) {
     const errors = validateProjectPolicyDocument({
       document: args.document,
@@ -49,10 +72,27 @@ const validatePolicy = (args: {
   return validatePolicyActions(args.document);
 };
 
+/** The project or project group a stored policy belongs to. */
+const ownerOf = (
+  policy: PolicyRow
+): { project: PolicyProject; projectGroup: PolicyGroupRef | null } => {
+  return {
+    project:
+      policy.projectId !== null && policy.project
+        ? { id: policy.projectId, publicId: policy.project.publicId }
+        : null,
+    projectGroup:
+      policy.projectGroupId !== null && policy.projectGroup
+        ? { id: policy.projectGroupId, publicId: policy.projectGroup.publicId }
+        : null,
+  };
+};
+
 export const mapPolicy = (policy: PolicyRow) => {
   return {
     id: policy.publicId,
     project_id: policy.project?.publicId ?? null,
+    project_group_id: policy.projectGroup?.publicId ?? null,
     name: policy.name,
     description: policy.description,
     document: policy.document as PolicyDocument | undefined,
@@ -62,21 +102,21 @@ export const mapPolicy = (policy: PolicyRow) => {
 };
 
 /**
- * `projectIds` narrows the listing to those projects' policies; `undefined`
- * lists every policy, global ones included.
- */
-/**
  * The listing's `where`, or `null` when a filter matches nothing. An unknown
- * user, or one with no policies, matches nothing.
+ * user, or one with no policies, matches nothing. `projectIds` narrows it to
+ * those projects' policies and `projectGroupId` to that project group's;
+ * neither lists every policy.
  */
 const listWhere = async (args: {
   userId?: string;
   projectIds?: number[];
+  projectGroupId?: number;
 }): Promise<Record<string, unknown> | null> => {
   if (args.projectIds?.length === 0) return null;
-  const where: Record<string, unknown> = projectScopeWhere({
-    projectIds: args.projectIds,
-  });
+  const where: Record<string, unknown> =
+    args.projectGroupId === undefined
+      ? projectScopeWhere({ projectIds: args.projectIds })
+      : { projectGroupId: args.projectGroupId };
   if (args.userId !== undefined) {
     const user = await db.User.findOne({ where: { publicId: args.userId } });
     const policyIds = user?.policyIds ?? [];
@@ -89,6 +129,7 @@ const listWhere = async (args: {
 export const listPolicies = async (args: {
   userId?: string;
   projectIds?: number[];
+  projectGroupId?: number;
   limit?: number;
   cursor?: string;
 }) => {
@@ -99,7 +140,11 @@ export const listPolicies = async (args: {
   return paginatedList({
     limit: args.limit,
     cursor: args.cursor,
-    filters: { userId: args.userId, projectIds: args.projectIds },
+    filters: {
+      userId: args.userId,
+      projectIds: args.projectIds,
+      projectGroupId: args.projectGroupId,
+    },
     where: Object.keys(where).length > 0 ? where : undefined,
     order: [['createdAt', 'ASC']],
     query: ({ where: pageWhere, limit, order }) => {
@@ -118,16 +163,22 @@ export const listPolicies = async (args: {
 
 /**
  * Where a policy lives, for the route to authorize against before acting on
- * it: `scope` `null` is a global policy, and `null` overall names nothing.
+ * it: a project group's, a project's (`scope`), or global (`scope` `null`);
+ * `null` overall names nothing.
  */
 export const findPolicyScope = async (args: {
   policyId: string;
-}): Promise<{ scope: ResourceScope | null } | null> => {
+}): Promise<
+  { scope: ResourceScope | null } | { projectGroupPublicId: string } | null
+> => {
   const policy = await db.Policy.findOne({
     where: { publicId: args.policyId },
     include: projectInclude(),
   });
   if (!policy) return null;
+  if (policy.projectGroup) {
+    return { projectGroupPublicId: policy.projectGroup.publicId };
+  }
   if (policy.projectId === null || !policy.project) return { scope: null };
   return {
     scope: {
@@ -142,18 +193,24 @@ export const createPolicy = async (args: {
   name?: string;
   description?: string;
   document: PolicyDocument;
-  /** Omit for a global policy. */
+  /** Omit with `projectGroup` for a global policy. */
   project?: { id: number; publicId: string };
+  /** The project group a project group policy belongs to; never with `project`. */
+  projectGroup?: PolicyGroupRef;
   /** Whether the writer may write a statement `denial`. */
   writerUnrestricted: boolean;
 }): Promise<
   ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
 > => {
-  log('createPolicy: project=%s', args.project?.publicId);
-  assertMayWriteDenial(args);
-  const validation = validatePolicy({
-    document: args.document,
+  const owner = {
     project: args.project ?? null,
+    projectGroup: args.projectGroup ?? null,
+  };
+  log('createPolicy: owner=%o', owner);
+  assertMayWriteDenial(args);
+  const validation = await validatePolicy({
+    document: args.document,
+    ...owner,
   });
   if (!validation.valid) {
     return { invalid: true, errors: validation.errors };
@@ -161,7 +218,8 @@ export const createPolicy = async (args: {
 
   const policy = await db.Policy.create({
     publicId: generatePublicId(PUBLIC_ID_PREFIXES.policy),
-    projectId: args.project?.id ?? null,
+    projectId: owner.project?.id ?? null,
+    projectGroupId: owner.projectGroup?.id ?? null,
     name: args.name ?? null,
     description: args.description ?? null,
     document: args.document as object,
@@ -184,7 +242,11 @@ export const updatePolicy = async (args: {
   ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
 > => {
   assertMayWriteDenial(args);
-  const structural = validatePolicy({ document: args.document, project: null });
+  const structural = await validatePolicy({
+    document: args.document,
+    project: null,
+    projectGroup: null,
+  });
   if (!structural.valid) {
     return { invalid: true, errors: structural.errors };
   }
@@ -199,11 +261,11 @@ export const updatePolicy = async (args: {
       `Policy '${args.policyId}' not found.`
     );
   }
-  const project =
-    policy.projectId !== null && policy.project
-      ? { id: policy.projectId, publicId: policy.project.publicId }
-      : null;
-  const validation = validatePolicy({ document: args.document, project });
+  const owner = ownerOf(policy);
+  const validation = await validatePolicy({
+    document: args.document,
+    ...owner,
+  });
   if (!validation.valid) {
     return { invalid: true, errors: validation.errors };
   }
@@ -212,7 +274,8 @@ export const updatePolicy = async (args: {
     policy: {
       id: policy.id as number,
       publicId: args.policyId,
-      projectPublicId: project?.publicId ?? null,
+      projectPublicId: owner.project?.publicId ?? null,
+      projectGroupId: owner.projectGroup?.id ?? null,
     },
     document: args.document,
   });

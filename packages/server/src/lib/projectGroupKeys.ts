@@ -32,15 +32,17 @@ const assertProjectGroupKeyAction = async (args: {
 
 /**
  * The project group a key create names in `project_group_id`, once the caller may create a
- * key of it; `null` when it names none. A project group key has no project.
+ * key of it; both ids `null` when it names none. A project group key has no project.
  */
 export const resolveCreatedKeyProjectGroup = async (args: {
   authUser: AuthUser;
   projectGroupId: unknown;
   projectId: unknown;
-}): Promise<{ id: number; publicId: string } | null> => {
+}): Promise<
+  { id: number; publicId: string } | { id: null; publicId: null }
+> => {
   if (args.projectGroupId === undefined || args.projectGroupId === null)
-    return null;
+    return { id: null, publicId: null };
   if (args.projectId !== undefined && args.projectId !== null) {
     throw new DomainError(
       'VALIDATION_FAILED',

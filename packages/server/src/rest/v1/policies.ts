@@ -13,6 +13,7 @@ import {
 } from 'src/lib/policies';
 
 import {
+  type AuthenticatedContext,
   parsePagination,
   requireAdmin,
   requireAuth,
@@ -20,6 +21,7 @@ import {
   resolveWriteProjectId,
   resolveWriteProjectPublicId,
 } from './helpers';
+import { authorizeProjectGroup } from './projectGroupAccess';
 import { authorizeResource } from './resourceAccess';
 
 const policiesRouter = new Router<Context>();
@@ -40,9 +42,46 @@ const targetsProject = (args: {
   );
 };
 
+/** The project group action each policy action is on a project group policy. */
+const PROJECT_GROUP_POLICY_ACTIONS: Readonly<Record<string, string>> = {
+  'policies:ListPolicies': 'project-groups:ListPolicies',
+  'policies:CreatePolicy': 'project-groups:CreatePolicy',
+  'policies:GetPolicy': 'project-groups:GetPolicy',
+  'policies:UpdatePolicy': 'project-groups:UpdatePolicy',
+  'policies:DeletePolicy': 'project-groups:DeletePolicy',
+};
+
 /**
- * A project policy authorizes against its own SRN; a global one, and every
- * policy for the unrestricted admin, stays behind the admin gate.
+ * The project group a policy request names, once the caller may take the
+ * project group action `action` maps to on its policies (`policyId` one of
+ * them).
+ */
+const authorizeProjectGroupPolicy = (args: {
+  ctx: AuthenticatedContext;
+  projectGroupPublicId: string;
+  action: string;
+  policyId?: string;
+}) => {
+  return authorizeProjectGroup({
+    ctx: args.ctx,
+    projectGroupPublicId: args.projectGroupPublicId,
+    action: PROJECT_GROUP_POLICY_ACTIONS[args.action],
+    projectGroupType: 'policy',
+    resourceId: args.policyId,
+  });
+};
+
+const refuseProjectGroupWith = (field: string): DomainError => {
+  return new DomainError(
+    'VALIDATION_FAILED',
+    `project_group_id and ${field} are mutually exclusive.`
+  );
+};
+
+/**
+ * A project group policy authorizes as a project group action, a project
+ * policy against its own SRN; a global one, and every policy for the
+ * unrestricted admin, stays behind the admin gate.
  */
 const authorizePolicy = async (args: {
   ctx: Context;
@@ -59,6 +98,15 @@ const authorizePolicy = async (args: {
   const found = await findPolicyScope({ policyId });
   if (found === null) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Policy not found');
+  }
+  if ('projectGroupPublicId' in found) {
+    await authorizeProjectGroupPolicy({
+      ctx,
+      projectGroupPublicId: found.projectGroupPublicId,
+      action: args.action,
+      policyId,
+    });
+    return;
   }
   if (found.scope === null) {
     await requireAdmin(ctx, args.action);
@@ -91,7 +139,24 @@ policiesRouter.get('/policies', async (ctx: Context) => {
   const action = 'policies:ListPolicies';
   const userId = ctx.query.user_id as string | undefined;
   const projectPublicId = ctx.query.project_id as string | undefined;
+  const projectGroupPublicId = ctx.query.project_group_id as string | undefined;
   requireAuth(ctx);
+
+  if (projectGroupPublicId !== undefined) {
+    if (projectPublicId !== undefined)
+      throw refuseProjectGroupWith('project_id');
+    if (userId !== undefined) throw refuseProjectGroupWith('user_id');
+    const group = await authorizeProjectGroupPolicy({
+      ctx,
+      projectGroupPublicId,
+      action,
+    });
+    ctx.body = await listPolicies({
+      projectGroupId: group.id as number,
+      ...parsePagination(ctx),
+    });
+    return;
+  }
 
   if (userId !== undefined || !targetsProject({ ctx, projectPublicId })) {
     await requireAdmin(ctx, action);
@@ -118,6 +183,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
   const action = 'policies:CreatePolicy';
   const body = ctx.request.body as {
     project_id?: string;
+    project_group_id?: string;
     name?: string;
     description?: string;
     document?: object;
@@ -125,7 +191,20 @@ policiesRouter.post('/policies', async (ctx: Context) => {
   requireAuth(ctx);
 
   let project: { id: number; publicId: string } | undefined;
-  if (targetsProject({ ctx, projectPublicId: body.project_id })) {
+  let projectGroup: { id: number; publicId: string } | undefined;
+  if (body.project_group_id !== undefined) {
+    if (body.project_id !== undefined)
+      throw refuseProjectGroupWith('project_id');
+    const group = await authorizeProjectGroupPolicy({
+      ctx,
+      projectGroupPublicId: body.project_group_id,
+      action,
+    });
+    projectGroup = {
+      id: group.id as number,
+      publicId: group.publicId as string,
+    };
+  } else if (targetsProject({ ctx, projectPublicId: body.project_id })) {
     project = {
       id: await resolveWriteProjectId({
         ctx,
@@ -149,6 +228,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
       description: body.description,
       document: body.document as PolicyDocument,
       project,
+      projectGroup,
       writerUnrestricted: ctx.authUser.unrestricted,
     })
   );

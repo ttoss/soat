@@ -2,9 +2,9 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { PolicyDocument, PolicySets } from './iam';
-import { scopePolicyDocument } from './iam';
 import { bindPolicyVariables } from './policyVariables';
 import type { PrincipalBound } from './principalBound';
+import { grantedPolicyDocuments } from './projectGroupPolicies';
 
 const log = createDebug('soat:attachedPolicies');
 
@@ -40,12 +40,10 @@ export const resolveAttachedPolicies = async (args: {
     log('resolveAttachedPolicies: unresolved in %o', args.policyIds);
     return DENY_ALL;
   }
+  const granted = await grantedPolicyDocuments(rows);
   const merged: PolicyDocument = {
-    statement: rows.flatMap((row) => {
-      return scopePolicyDocument({
-        document: row.document as PolicyDocument,
-        projectPublicId: row.project?.publicId ?? null,
-      }).statement;
+    statement: granted.flatMap((document) => {
+      return document.statement;
     }),
   };
   return bindPolicyVariables({ document: merged, actorId: args.actorId });

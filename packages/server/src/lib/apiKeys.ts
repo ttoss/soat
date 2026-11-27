@@ -91,12 +91,15 @@ export const heldKeyPolicyIds = async (args: {
   policyIds: string[] | undefined;
   writer: Writer;
   projectId: number | null;
+  /** A project group key's project group, whose own policies it may carry. */
+  projectGroupId: number | null;
 }): Promise<string[] | undefined> => {
   if (args.policyIds === undefined) return undefined;
   await assertWriterHolds({
     carrier: 'apiKeys',
     writer: args.writer,
     projectId: args.projectId,
+    projectGroupId: args.projectGroupId,
     carried: { policyIds: args.policyIds },
   });
   return args.policyIds;

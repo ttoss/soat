@@ -62,7 +62,7 @@ export const ERROR_CODES = {
   POLICY_OUTSIDE_PROJECT: {
     httpStatus: 400,
     description:
-      "A `policy_ids` entry names a policy of another project. A resource may carry only its own project's policies and global ones. `meta.policy_id` names it.",
+      "A `policy_ids` entry names a policy of another project or project group. A resource may carry only its own project's policies and global ones; only a project group and its keys carry that project group's policies. `meta.policy_id` names it.",
   },
   AI_PROVIDER_ERROR: {
     httpStatus: 502,

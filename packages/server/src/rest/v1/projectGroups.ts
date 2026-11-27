@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { callerDenied } from 'src/lib/authorizationDenial';
 import { buildProjectGroupSrn } from 'src/lib/projectGroupActions';
 import {
   addProjectGroupProject,
@@ -10,61 +9,16 @@ import {
   findProjectGroup,
   getProjectGroup,
   listProjectGroups,
-  projectGroupNotFound,
   removeProjectGroupProject,
   updateProjectGroup,
 } from 'src/lib/projectGroups';
 import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
-import {
-  type AuthenticatedContext,
-  parsePagination,
-  requireAdmin,
-  requireAuth,
-} from './helpers';
+import { parsePagination, requireAdmin, requireAuth } from './helpers';
+import { authorizeProjectGroup } from './projectGroupAccess';
 
 const projectGroupsRouter = new Router<Context>();
-
-/**
- * The project group the path names, once the caller may take `action` on `resource`
- * of it: `404` when it may not even read the project group, `403` otherwise.
- */
-const authorizeProjectGroup = async (args: {
-  ctx: AuthenticatedContext;
-  action: string;
-  /** The project group resource type the action is on; the whole project group when absent. */
-  projectGroupType?: string;
-}) => {
-  const { ctx, action } = args;
-  const group = await findProjectGroup({
-    publicId: ctx.params.project_group_id,
-  });
-  const projectGroupPublicId = group.publicId as string;
-  const resource = buildProjectGroupSrn({
-    projectGroupPublicId,
-    resourceType: args.projectGroupType,
-  });
-  const allowed = await ctx.authUser.isAllowedOnProjectGroup({
-    projectGroupPublicId,
-    action,
-    resource,
-  });
-  recordAuthorizationDecision(ctx, { action, allowed });
-  if (!allowed) {
-    const readable =
-      action !== 'project-groups:GetProjectGroup' &&
-      (await ctx.authUser.isAllowedOnProjectGroup({
-        projectGroupPublicId,
-        action: 'project-groups:GetProjectGroup',
-        resource: buildProjectGroupSrn({ projectGroupPublicId }),
-      }));
-    if (!readable) throw projectGroupNotFound();
-    throw callerDenied({ authUser: ctx.authUser, action, resource });
-  }
-  await admitAuthorized(ctx, action);
-  return group;
-};
 
 /**
  * @openapi
@@ -94,6 +48,7 @@ projectGroupsRouter.get('/project-groups', async (ctx: Context) => {
     action: 'project-groups:ListProjectGroups',
     allowed: true,
   });
+  await admitAuthorized(ctx, 'project-groups:ListProjectGroups');
   if (ctx.authUser.unrestricted) {
     ctx.body = await listProjectGroups(parsePagination(ctx));
     return;
@@ -129,6 +84,7 @@ projectGroupsRouter.get(
     requireAuth(ctx);
     const group = await authorizeProjectGroup({
       ctx,
+      projectGroupPublicId: ctx.params.project_group_id,
       action: 'project-groups:GetProjectGroup',
     });
     ctx.body = await getProjectGroup({ publicId: group.publicId as string });
@@ -150,6 +106,7 @@ projectGroupsRouter.patch(
     }
     const group = await authorizeProjectGroup({
       ctx,
+      projectGroupPublicId: ctx.params.project_group_id,
       action: 'project-groups:UpdateProjectGroup',
     });
     ctx.body = await updateProjectGroup({
@@ -187,6 +144,7 @@ projectGroupsRouter.post(
     requireAuth(ctx);
     const group = await authorizeProjectGroup({
       ctx,
+      projectGroupPublicId: ctx.params.project_group_id,
       action: 'project-groups:CreateProject',
       projectGroupType: 'project',
     });
