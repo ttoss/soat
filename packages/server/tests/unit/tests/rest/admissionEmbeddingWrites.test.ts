@@ -68,16 +68,13 @@ afterAll(async () => {
 
 describe('admission — embedding writes', () => {
   test('a document asks once for all its chunks', async () => {
-    const res = await turn
-      .api()
-      .post('/api/v1/documents')
-      .send({
-        project_id: turn.projectId,
-        content: 'one two three four five six seven eight nine ten',
-        chunk_strategy: 'size',
-        chunk_size: 10,
-        chunk_overlap: 0,
-      });
+    const res = await turn.api().post('/api/v1/documents').send({
+      project_id: turn.projectId,
+      content: 'one two three four five six seven eight nine ten',
+      chunk_strategy: 'size',
+      chunk_size: 10,
+      chunk_overlap: 0,
+    });
 
     expect(res.status).toBe(201);
     const doc = await db.Document.findOne({
@@ -192,7 +189,7 @@ describe('admission — embedding writes', () => {
     expect(await embeddingMeters()).toBe(meters);
   });
 
-  test("a refused eval embedding scorer fails the run and embeds nothing", async () => {
+  test('a refused eval embedding scorer fails the run and embeds nothing', async () => {
     const agentId = await turn.createAgent({});
     const dataset = await turn
       .api()
