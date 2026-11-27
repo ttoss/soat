@@ -15,7 +15,12 @@ import { readTagQuery } from 'src/lib/tags';
 
 import { requireConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
-import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  requireAuth,
+  resolveWriteProjectId,
+} from './helpers';
 import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 
@@ -160,6 +165,7 @@ conversationsRouter.patch(
       status: body.status,
       name: body.name,
       retrieval: body.retrieval,
+      embedAs: requestPrincipalFromCtx(ctx),
     });
 
     ctx.body = updated;

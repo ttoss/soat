@@ -9,6 +9,7 @@ import {
   emitIngestFailed,
   finalizeIngestedPages,
 } from './documentIngestionCore';
+import { askOfClaimedConversion } from './embeddingAdmission';
 import {
   getConversionStallTimeoutMs,
   verifyIngestionCallbackToken,
@@ -220,5 +221,6 @@ export const completeIngestionCallback = async (args: {
     chunkSize: doc.chunkSize ?? undefined,
     chunkOverlap: doc.chunkOverlap ?? undefined,
     endUser: { sessionId: doc.pendingSessionId, actorId: doc.pendingActorId },
+    ask: askOfClaimedConversion({ projectId, claimed }),
   });
 };

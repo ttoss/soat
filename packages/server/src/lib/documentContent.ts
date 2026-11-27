@@ -10,6 +10,10 @@ import {
   persistChunks,
 } from './chunking';
 import type { Transaction } from './dbTransaction';
+import {
+  askEmbeddingWrite,
+  type EmbeddingWriteAsk,
+} from './embeddingAdmission';
 import { resolveProjectPublicId } from './eventBus';
 import { rethrowAsPathConflict } from './filePathConflict';
 import {
@@ -18,6 +22,7 @@ import {
   streamToBuffer,
 } from './fileStorage';
 import { categoryFromPath, persistFileBytes } from './fileStorageLayout';
+import type { RequestPrincipal } from './principals';
 import { bufferBody } from './storageBody';
 
 const log = createDebug('soat:documents');
@@ -131,7 +136,8 @@ export const chunkDocumentText = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
-  embed?: boolean;
+  /** The write's admission ask; `null` stores the chunks without vectors. */
+  ask: EmbeddingWriteAsk | null;
 }) => {
   const chunks = chunkPages({
     pages: [{ text: args.content }],
@@ -143,7 +149,7 @@ export const chunkDocumentText = async (args: {
     documentId: args.documentId,
     projectId: args.projectId,
     chunks,
-    embed: args.embed,
+    ask: args.ask,
   });
   await db.Document.update(
     { totalChunks: chunks.length },
@@ -187,6 +193,8 @@ export const prepareDocumentChunkChanges = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
+  /** Who the re-chunk's embedding write acts as. */
+  embedAs: RequestPrincipal | null;
 }): Promise<PreparedChunkChange | null> => {
   const chunkConfigChanged =
     args.chunkStrategy !== undefined ||
@@ -218,6 +226,11 @@ export const prepareDocumentChunkChanges = async (args: {
     rows: await embedChunks({
       projectId: file.projectId,
       documentId: args.doc.id as number,
+      ask: await askEmbeddingWrite({
+        projectId: file.projectId,
+        principal: args.embedAs,
+        work: `The update of document ${args.doc.publicId}`,
+      }),
       chunks,
     }),
   };

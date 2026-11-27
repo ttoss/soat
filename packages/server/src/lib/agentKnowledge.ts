@@ -28,6 +28,7 @@ import {
 import type { KnowledgeSearchPolicy } from './knowledgeSearchPolicy';
 import { writeMemory } from './memories';
 import { findMemoryStoreIamScope } from './memoryStores';
+import { principalOfAuthority } from './principals';
 import { agentReferences } from './resourceReferences';
 import { buildResourceTagContext } from './tags';
 import { errorToolResult } from './toolErrorRelay';
@@ -325,6 +326,7 @@ const writeMemoryAsAgent = async (
       principalId: args.agentId,
       actsFor: args.authority?.actsFor ?? null,
     },
+    embedAs: principalOfAuthority(turnAuthority(args)),
   });
   return { action: result.action, memoryId: result.entry.id };
 };

@@ -4,6 +4,7 @@ import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
 import { DOCUMENT_FAILURES } from './documentFailures';
 import { mapDocument } from './documentMapper';
+import type { EmbeddingWriteAsk } from './embeddingAdmission';
 import { emitResourceEvent } from './eventBus';
 import { rethrowAsPathConflict } from './filePathConflict';
 import type { GenerationEndUser } from './generationAttribution';
@@ -129,6 +130,7 @@ const persistChunksWithProgress = async (args: {
   totalPages: number;
   chunks: { content: string; chunkIndex: number; pageNumber?: number }[];
   endUser?: GenerationEndUser;
+  ask: EmbeddingWriteAsk;
 }): Promise<void> => {
   const writeProgress = (indexed: number) => {
     return args.doc.update({
@@ -146,6 +148,7 @@ const persistChunksWithProgress = async (args: {
     projectId: args.projectId,
     chunks: args.chunks,
     endUser: args.endUser,
+    ask: args.ask,
     onProgress: async (indexed) => {
       const now = Date.now();
       if (now - lastTouch < 10_000 && indexed < args.chunks.length) return;
@@ -174,6 +177,8 @@ export const finalizeIngestedPages = async (
     rule: MappedIngestionRule | null;
     /** Who the ingest runs for; its embeddings are metered against them. */
     endUser?: GenerationEndUser;
+    /** The ingest's admission ask, made when it was enqueued. */
+    ask: EmbeddingWriteAsk;
   }
 ): Promise<void> => {
   const { doc, docId } = args;
@@ -206,6 +211,7 @@ export const finalizeIngestedPages = async (
     totalPages: args.pages.length,
     chunks,
     endUser: args.endUser,
+    ask: args.ask,
   });
 
   const file = await db.File.findByPk(doc.fileId);

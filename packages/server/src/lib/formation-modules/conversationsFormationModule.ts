@@ -34,11 +34,12 @@ export const conversationsFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actor }) => {
     await updateConversation({
       id: physicalResourceId,
       name: toNullableString(properties.name),
       status: toOptionalString(properties.status) ?? undefined,
+      embedAs: actor.author,
     });
   },
 

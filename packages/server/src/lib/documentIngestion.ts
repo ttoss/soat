@@ -18,6 +18,10 @@ import {
 } from './documentIngestionCore';
 import { countIndexedChunks } from './documentLoaders';
 import { mapDocument } from './documentMapper';
+import {
+  askEmbeddingWrite,
+  type EmbeddingWriteAsk,
+} from './embeddingAdmission';
 import { assertIngestible } from './fileLifetime';
 import { assertFilePathFree } from './filePathConflict';
 import { normalizeCallerPath } from './filePaths';
@@ -26,6 +30,7 @@ import {
   type GenerationEndUser,
 } from './generationAttribution';
 import { resolveIngestionRule } from './ingestionRules';
+import { principalOfAuthority } from './principals';
 import {
   resolveSourcePages,
   SUPPORTED_CONTENT_TYPES,
@@ -147,6 +152,7 @@ type IngestionPipelineArgs = ChunkConfigInput & {
   endUser: GenerationEndUser;
   /** The ingest request's authority, which the converter runs under. */
   authority: WorkAuthority | null;
+  ask: EmbeddingWriteAsk;
 };
 
 const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
@@ -218,6 +224,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
     endUser: args.endUser,
+    ask: args.ask,
   });
 };
 
@@ -232,6 +239,8 @@ const processDocumentIngestion = async (args: {
   endUser: GenerationEndUser;
   /** The ingest request's authority, which the converter runs under. */
   authority: WorkAuthority | null;
+  /** Asked when the ingest was enqueued, before its document was written. */
+  ask: EmbeddingWriteAsk;
 }): Promise<void> => {
   log('processDocumentIngestion: docId=%d fileId=%s', args.docId, args.fileId);
 
@@ -338,6 +347,11 @@ export const enqueueDocumentIngestion = async (args: {
   // measured by the next snapshot — so the refusal is on the footprint as last
   // measured, which is what stops an over-cap project from indexing more.
   await assertCorpusWriteQuotas({ projectId: args.projectId, addedBytes: 0 });
+  const ask = await askEmbeddingWrite({
+    projectId: args.projectId,
+    principal: principalOfAuthority(args.authority),
+    work: 'The document ingest',
+  });
 
   const filename = file.filename ?? 'document';
   const docPath = normalizeCallerPath(
@@ -372,6 +386,7 @@ export const enqueueDocumentIngestion = async (args: {
     isAsync: runAsync,
     endUser: args.endUser,
     authority: args.authority,
+    ask,
   };
 
   return startDocumentIngestion({ pipelineArgs, runAsync });
@@ -432,6 +447,11 @@ export const reingestDocument = async (args: {
   }
 
   await assertCorpusWriteQuotas({ projectId: file.projectId, addedBytes: 0 });
+  const ask = await askEmbeddingWrite({
+    projectId: file.projectId,
+    principal: principalOfAuthority(args.authority),
+    work: `The re-ingest of document ${args.id}`,
+  });
 
   log(
     'reingestDocument: id=%s wait=%s strategy=%s',
@@ -471,6 +491,7 @@ export const reingestDocument = async (args: {
     isAsync: runAsync,
     endUser: args.endUser,
     authority: args.authority,
+    ask,
   };
 
   return startDocumentIngestion({ pipelineArgs, runAsync });

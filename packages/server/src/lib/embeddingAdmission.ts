@@ -11,9 +11,12 @@ declare const asked: unique symbol;
  * Proof that admission was asked about an embedding write. Only this module
  * mints one, and `getEmbeddings` takes a stored subject only with it.
  */
-export type EmbeddingWriteAsk = { readonly [asked]: true; projectId: number };
+export type EmbeddingWriteAsk = {
+  readonly [asked]: true;
+  projectId: number | null;
+};
 
-const mint = (projectId: number): EmbeddingWriteAsk => {
+const mint = (projectId: number | null): EmbeddingWriteAsk => {
   return { projectId } as EmbeddingWriteAsk;
 };
 
@@ -23,7 +26,7 @@ const mint = (projectId: number): EmbeddingWriteAsk => {
  * while the action is declared.
  */
 export const askEmbeddingWrite = async (args: {
-  projectId: number;
+  projectId: number | null;
   principal: RequestPrincipal | null;
   /** The write, as a refusal for a missing principal names it. */
   work: string;
@@ -32,9 +35,10 @@ export const askEmbeddingWrite = async (args: {
     return mint(args.projectId);
   }
   if (!args.principal) throw workAuthorityMissing({ work: args.work });
-  const project = await db.Project.findByPk(args.projectId, {
-    attributes: ['publicId'],
-  });
+  const project =
+    args.projectId === null
+      ? null
+      : await db.Project.findByPk(args.projectId, { attributes: ['publicId'] });
   await assertWorkAdmitted({
     action: EMBEDDING_WRITE_ACTION,
     projectPublicId: (project?.publicId as string | undefined) ?? null,

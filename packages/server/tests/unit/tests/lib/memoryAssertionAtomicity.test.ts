@@ -92,6 +92,7 @@ describe('a memory write commits with its assertion', () => {
           actorId: null,
           content: `Created fact ${Date.now()}`,
           assertion: SEED_ASSERTION,
+          embedAs: null,
         });
       },
     });
@@ -107,6 +108,7 @@ describe('a memory write commits with its assertion', () => {
       actorId: null,
       content: `Superseded fact ${Date.now()}`,
       assertion: SEED_ASSERTION,
+      embedAs: null,
     });
     await setMemorySimilarity({ memoryId: first.entry.id, similarity: 0.92 });
     const before = await storeRows(memoryStoreId);
@@ -119,6 +121,7 @@ describe('a memory write commits with its assertion', () => {
           actorId: null,
           content: `Superseding fact ${Date.now()}`,
           assertion: SEED_ASSERTION,
+          embedAs: null,
         });
       },
     });
@@ -141,6 +144,7 @@ describe('a memory write commits with its assertion', () => {
           memoryStoreId,
           content: `Declared fact ${Date.now()}`,
           assertion: SEED_ASSERTION,
+          embedAs: null,
         });
       },
     });
@@ -155,6 +159,7 @@ describe('a memory write commits with its assertion', () => {
       memoryStoreId,
       content: `Retracted fact ${Date.now()}`,
       assertion: SEED_ASSERTION,
+      embedAs: null,
     });
     const before = await storeRows(memoryStoreId);
 

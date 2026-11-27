@@ -7,6 +7,7 @@ import {
 } from './conversationMessages';
 import { countOf } from './generationProvenance';
 import { resolveMessageContent } from './messageContent';
+import { principalFromAuthUser, type RequestPrincipal } from './principals';
 import type { WorkAuthority } from './workAuthority';
 import { captureAuthority } from './workAuthority';
 
@@ -29,6 +30,13 @@ export const assertSessionMessageInput = (args: {
       'document_id is mutually exclusive with message and file_ids'
     );
   }
+};
+
+/** Who a session message's embedding acts as: its caller, when it has one. */
+const principalOf = (
+  authUser: AuthUser | undefined
+): RequestPrincipal | null => {
+  return authUser ? principalFromAuthUser(authUser) : null;
 };
 
 export const addResolvedSessionUserMessage = async (args: {
@@ -77,6 +85,7 @@ export const addResolvedSessionUserMessage = async (args: {
         idempotencyKey: args.idempotencyKey,
         idempotencyDigest: args.idempotencyDigest,
         provenance,
+        embedAs: principalOf(args.authUser),
       });
 
   if (!userMsg) {

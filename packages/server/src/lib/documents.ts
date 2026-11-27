@@ -25,6 +25,10 @@ import {
   documentVersionStore,
 } from './documentVersionSnapshot';
 import { assertDocumentUpdatable } from './documentWriteGuard';
+import {
+  askEmbeddingWrite,
+  type EmbeddingWriteAsk,
+} from './embeddingAdmission';
 import { assertCallerPath, pathPrefixPattern } from './filePaths';
 import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
@@ -32,6 +36,7 @@ import { assertCreatedDocumentMetadataValid } from './metadataSchemas';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
+import type { RequestPrincipal } from './principals';
 import { type ProjectScope, projectScopeWhere } from './projectScope';
 import { toResourceRef } from './resourceVersions';
 import {
@@ -203,6 +208,20 @@ export const getDocument = async (args: {
   return { ...mapDocument(doc), content: await readDocumentText(doc) };
 };
 
+/** The ask of a document write that embeds its chunks; `null` when it does not. */
+const askDocumentEmbedding = (args: {
+  projectId: number;
+  embed?: boolean;
+  embedAs: RequestPrincipal | null;
+}): Promise<EmbeddingWriteAsk | null> => {
+  if (args.embed === false) return Promise.resolve(null);
+  return askEmbeddingWrite({
+    projectId: args.projectId,
+    principal: args.embedAs,
+    work: 'The document write',
+  });
+};
+
 export const createDocument = async (
   args: {
     projectId: number;
@@ -219,6 +238,8 @@ export const createDocument = async (
     system?: DocumentFiling;
     /** Off stores the chunks without vectors. See `persistChunks`. */
     embed?: boolean;
+    /** Who the write's embedding acts as, asked about before anything is written. */
+    embedAs: RequestPrincipal | null;
     /** Refuses a filing outside the caller's pins, before anything is written. */
     assertFiling?: (values: { path: string | null }) => void;
   } & VersionedWrite
@@ -241,6 +262,8 @@ export const createDocument = async (
     path: filing.normalizedPath,
     metadata: args.metadata ?? null,
   });
+
+  const ask = await askDocumentEmbedding(args);
 
   const file = await createDocumentTextFile({
     projectId: args.projectId,
@@ -267,7 +290,7 @@ export const createDocument = async (
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
-    embed: args.embed,
+    ask,
   });
 
   const created = await fetchDocumentByIdWithContext(doc.id as number);
@@ -343,6 +366,8 @@ export const updateDocument = async (
     chunkOverlap?: number;
     /** Brings a withdrawn document back: the tombstone is the state replaced. */
     revivesWithdrawn?: boolean;
+    /** Who a re-chunk's embedding acts as. */
+    embedAs: RequestPrincipal | null;
   } & VersionedWrite
 ) => {
   const doc = await fetchDocumentWithContext(args.id);
@@ -378,6 +403,7 @@ export const updateDocument = async (
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
+    embedAs: args.embedAs,
   });
 
   let refreshed = doc;

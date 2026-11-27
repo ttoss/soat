@@ -7,6 +7,8 @@ import {
   getEmbeddings,
   projectEmbeddingBilling,
 } from './embedding';
+import { askEmbeddingWrite } from './embeddingAdmission';
+import type { RequestPrincipal } from './principals';
 import { assertProjectSpendWithinQuota } from './quotaEnforcement';
 
 const log = createDebug('soat:embeddings');
@@ -34,8 +36,15 @@ export const embedForProject = async (args: {
   projectId: number;
   texts: string[];
   pinned?: EmbeddingModelChoice;
+  /** Who the embedding acts as; admission is asked unless its request asked. */
+  embedAs: RequestPrincipal | null;
 }): Promise<number[][]> => {
   await assertProjectSpendWithinQuota({ projectId: args.projectId });
+  await askEmbeddingWrite({
+    projectId: args.projectId,
+    principal: args.embedAs,
+    work: 'The embedding call',
+  });
   return getEmbeddings({
     texts: args.texts,
     billing: projectEmbeddingBilling({ projectId: args.projectId }),
@@ -47,6 +56,7 @@ export const embedForProject = async (args: {
 export const createEmbeddings = async (args: {
   inputs: string[];
   projectPublicId: string | null;
+  embedAs: RequestPrincipal | null;
 }): Promise<number[][]> => {
   log(
     'createEmbeddings: count=%d projectId=%s',
@@ -71,7 +81,11 @@ export const createEmbeddings = async (args: {
           billing: projectEmbeddingBilling({ projectId: null }),
           subject: null,
         })
-      : await embedForProject({ projectId, texts: args.inputs });
+      : await embedForProject({
+          projectId,
+          texts: args.inputs,
+          embedAs: args.embedAs,
+        });
 
   log('createEmbeddings: done count=%d', embeddings.length);
   return embeddings;
