@@ -7,12 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
 
-import {
-  isFunction,
-  lookup,
-  mountedRoutes,
-  ROUTE_METHODS,
-} from './iamRouteChecks.mjs';
+import { mountedRoutes, ROUTE_METHODS } from './iamRouteChecks.mjs';
+import { isFunction, lookup } from './sourceBindings.mjs';
 
 /**
  * A request header a route reads is declared `in: header` on its operation:

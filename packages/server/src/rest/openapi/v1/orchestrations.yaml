@@ -42,9 +42,11 @@ paths:
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
         - POLICY_OUTSIDE_PROJECT
+        - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: orchestrations:CreateOrchestration
       x-iam-resource-type: orchestration
       requestBody:
@@ -385,6 +387,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: orchestrations:UpdateOrchestration
       x-iam-resource-type: orchestration
       parameters:
@@ -455,6 +458,8 @@ paths:
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: orchestrations:DeleteOrchestration
       x-iam-resource-type: orchestration
       parameters:
@@ -521,6 +526,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: orchestrations:ListOrchestrationVersions
       x-iam-resource-type: orchestration
       parameters:
@@ -593,6 +599,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: orchestrations:GetOrchestrationVersion
       x-iam-resource-type: orchestration
       parameters:
@@ -678,6 +685,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: orchestrations:RestoreOrchestrationVersion
       x-iam-resource-type: orchestration
       parameters:
@@ -756,11 +764,79 @@ paths:
         reaches a terminal or awaiting_input state.
       operationId: startOrchestrationRun
       x-raises:
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_CONSUMED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - IDEMPOTENCY_KEY_REUSED
+        - INGESTION_TIMEOUT
+        - INPUT_LIMIT_EXCEEDED
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TEMPLATE_TOKEN
         - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MEDIA_PARSE_FAILED
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
+        - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_DEPTH_LIMIT
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PDF_PARSE_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUEUE_DRIVER_MISCONFIGURED
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: orchestrations:StartRun
       x-iam-resource-type: orchestration
       parameters:
@@ -971,6 +1047,7 @@ paths:
         - API_KEY_PROJECT_SCOPE
         - FORBIDDEN
         - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_CANCELLABLE
         - ORCHESTRATION_RUN_NOT_FOUND
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
@@ -1056,6 +1133,7 @@ paths:
         - FORBIDDEN
         - ORCHESTRATION_NOT_FOUND
         - ORCHESTRATION_RUN_NOT_FOUND
+        - ORCHESTRATION_RUN_NOT_PAUSABLE
         - RESOURCE_NOT_FOUND
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
@@ -1121,16 +1199,79 @@ paths:
       description: Provides human input to a run that is awaiting_input at a human node.
       operationId: submitHumanInput
       x-raises:
+        - ACTOR_NOT_FOUND
         - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED
+        - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_CONSUMED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - INGESTION_TIMEOUT
+        - INPUT_LIMIT_EXCEEDED
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MEDIA_PARSE_FAILED
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_HUMAN_NODE_MISMATCH
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
         - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_NOT_AWAITING_INPUT
         - ORCHESTRATION_RUN_NOT_FOUND
+        - ORCHESTRATION_RUN_PAUSED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PDF_PARSE_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
         - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: orchestrations:SubmitHumanInput
       x-iam-resource-type: orchestration
       parameters:
@@ -1207,15 +1348,77 @@ paths:
         mid-timer goes back to `sleeping` for the wake it was already due.
       operationId: resumeOrchestrationRun
       x-raises:
+        - ACTOR_NOT_FOUND
         - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED
+        - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSION_TIMEOUT
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_CONSUMED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - INGESTION_TIMEOUT
+        - INPUT_LIMIT_EXCEEDED
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - LOOP_ITEM_TOOL_CONTEXT_INVALID
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MEDIA_PARSE_FAILED
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - ORCHESTRATION_CYCLE_DETECTED
+        - ORCHESTRATION_MAX_ITERATIONS_EXCEEDED
+        - ORCHESTRATION_NODE_FAILED
         - ORCHESTRATION_NOT_FOUND
+        - ORCHESTRATION_POLL_EXHAUSTED
+        - ORCHESTRATION_RUN_NOT_AWAITING_INPUT
         - ORCHESTRATION_RUN_NOT_FOUND
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PDF_PARSE_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
         - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
+        - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: orchestrations:ResumeRun
       x-iam-resource-type: orchestration
       parameters:

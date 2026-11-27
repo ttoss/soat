@@ -137,6 +137,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: documents:CreateDocument
       x-iam-resource-type: document
       parameters:
@@ -270,11 +271,81 @@ paths:
         ingested: `409 FILE_NOT_INGESTIBLE`.
       operationId: ingestDocument
       x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
+        - CONVERSION_TIMEOUT
+        - CONVERTER_FAILED
+        - CONVERTER_OUTPUT_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_ALREADY_INGESTED
+        - FILE_CONSUMED
+        - FILE_DOWNLOAD_URL_NOT_CONFIGURED
+        - FILE_NOT_FOUND
+        - FILE_NOT_INGESTIBLE
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FILE_TOO_LARGE_FOR_SYNC
         - FORBIDDEN
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - INGESTION_FAILED
+        - INGESTION_TIMEOUT
+        - INPUT_LIMIT_EXCEEDED
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MEDIA_PARSE_FAILED
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PDF_PARSE_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
         - RESERVED_TAG_KEY
+        - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_NOT_FOUND
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
+        - UNSUPPORTED_FILE_TYPE
         - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: documents:IngestDocument
       x-iam-resource-type: document
       parameters:
@@ -532,6 +603,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: documents:DeleteDocument
       x-iam-resource-type: document
       parameters:
@@ -600,6 +672,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: documents:UpdateDocument
       x-iam-resource-type: document
       parameters:
@@ -955,7 +1028,11 @@ paths:
         transitioned to `failed` with `error=INGESTION_TIMEOUT` on read.
       operationId: getDocumentStatus
       x-raises:
+        - CONVERSION_TIMEOUT
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
         - FORBIDDEN
+        - INGESTION_TIMEOUT
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
@@ -1027,8 +1104,10 @@ paths:
       x-raises:
         - DOCUMENT_ALREADY_WITHDRAWN
         - RESERVED_PATH
+        - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: documents:WithdrawDocument
       x-iam-resource-type: document
       parameters:
@@ -1135,6 +1214,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: documents:ListDocumentVersions
       x-iam-resource-type: document
       parameters:
@@ -1208,6 +1288,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: documents:GetDocumentVersion
       x-iam-resource-type: document
       parameters:
@@ -1294,6 +1375,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: documents:RestoreDocumentVersion
       x-iam-resource-type: document
       parameters:
@@ -1392,10 +1474,77 @@ paths:
         `?wait=true` to run synchronously (`201`).
       operationId: reingestDocument
       x-raises:
+        - ACTION_NOT_HELD
+        - ACTOR_NOT_FOUND
+        - AGENT_NOT_FOUND
+        - AGENT_TOOL_NOT_OFFERED
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED
+        - AI_PROVIDER_MISCONFIGURED
+        - AI_PROVIDER_NOT_FOUND
+        - BUILTIN_ACTION_FAILED
+        - CONVERSION_TIMEOUT
+        - CONVERTER_FAILED
+        - CONVERTER_OUTPUT_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_CONSUMED
+        - FILE_DOWNLOAD_URL_NOT_CONFIGURED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - FILE_STORAGE_MISCONFIGURED
+        - FILE_TOO_LARGE_FOR_SYNC
         - FORBIDDEN
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - INGESTION_FAILED
+        - INGESTION_TIMEOUT
+        - INPUT_LIMIT_EXCEEDED
+        - INPUT_MODALITY_UNSUPPORTED
+        - INTERNAL_ERROR
+        - INVALID_TOOL_CONTEXT_KEY
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MEDIA_PARSE_FAILED
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
+        - NAME_CONFLICT
+        - NO_MESSAGE_TO_ANSWER
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_STREAMING_UNSUPPORTED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PDF_PARSE_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
+        - REPLAY_REFUSED
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SESSION_NOT_FOUND
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
+        - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
+        - UNSUPPORTED_FILE_TYPE
         - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: documents:IngestDocument
       x-iam-resource-type: document
       parameters:
@@ -1519,7 +1668,18 @@ paths:
         out, or was superseded by a re-ingest.
       operationId: completeIngestionCallback
       x-raises:
+        - AI_PROVIDER_MISCONFIGURED
+        - CONVERSION_TIMEOUT
+        - CONVERTER_OUTPUT_INVALID
+        - EMBEDDING_NOT_CONFIGURED
+        - FILE_NOT_FOUND
+        - FILE_PARSE_FAILED
+        - INGESTION_CALLBACK_CONFLICT
         - INGESTION_CALLBACK_INVALID_TOKEN
+        - INGESTION_TIMEOUT
+        - INTERNAL_ERROR
+        - NAME_CONFLICT
+        - RESOURCE_NOT_FOUND
       parameters:
         - name: document_id
           in: path

@@ -50,6 +50,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
@@ -59,6 +60,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:CreateAgent
       x-iam-resource-type: agent
       requestBody:
@@ -254,6 +256,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
@@ -263,6 +266,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:UpdateAgent
       x-iam-resource-type: agent
       parameters:
@@ -335,6 +339,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
@@ -344,6 +349,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:UpdateAgent
       x-iam-resource-type: agent
       parameters:
@@ -417,6 +423,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:DeleteAgent
       x-iam-resource-type: agent
       parameters:
@@ -505,7 +512,6 @@ paths:
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
         - BUILTIN_ACTION_FAILED
-        - CONVERSATION_POSITION_CONFLICT
         - CONVERSION_TIMEOUT
         - EMBEDDING_NOT_CONFIGURED
         - EXPRESSION_FAILED
@@ -514,7 +520,6 @@ paths:
         - FILE_PARSE_FAILED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
-        - GENERATION_ALREADY_IN_PROGRESS
         - GENERATION_DEADLINE_EXCEEDED
         - GENERATION_FAILED
         - GENERATION_INTERRUPTED
@@ -531,7 +536,7 @@ paths:
         - MISSING_TOOL_CONTEXT_KEY
         - MODEL_NOT_OFFERED
         - MODEL_NOT_PRICED
-        - NAME_CONFLICT
+        - MODEL_ROUTE_NOT_FOUND
         - NO_MESSAGE_TO_ANSWER
         - OAUTH_CONNECTION_REFRESH_FAILED
         - OAUTH_CONNECTION_REQUIRED
@@ -543,12 +548,12 @@ paths:
         - PIPELINE_STEP_FAILED
         - PROJECT_PAUSED
         - QUERY_TIMEOUT
+        - QUOTA_EXCEEDED
+        - QUOTA_STORAGE_EXCEEDED
+        - QUOTA_UNENFORCEABLE
         - REPLAY_REFUSED
-        - RESERVED_PATH
         - RESOURCE_NOT_FOUND
         - SECRET_NOT_FOUND
-        - SESSION_CLOSED
-        - SESSION_EXPIRED
         - SHARED_AI_PROVIDER_ERROR
         - SHARE_CAP_EXCEEDED
         - TEXT_ENCODED_TOOL_CALL
@@ -785,23 +790,64 @@ paths:
         a resume never widens what the turn may do.
       operationId: submitAgentToolOutputs
       x-raises:
+        - ACTOR_NOT_FOUND
         - AGENT_NOT_FOUND
+        - AI_PROVIDER_ERROR
+        - AI_PROVIDER_FUNCTIONALITY_UNSUPPORTED
         - AI_PROVIDER_MISCONFIGURED
         - AI_PROVIDER_NOT_FOUND
         - API_KEY_PROJECT_SCOPE
+        - BUILTIN_ACTION_FAILED
         - CONVERSATION_POSITION_CONFLICT
         - EMBEDDING_NOT_CONFIGURED
+        - EXPRESSION_FAILED
+        - FILE_CONSUMED
         - FILE_STORAGE_MISCONFIGURED
         - FORBIDDEN
+        - GENERATION_DEADLINE_EXCEEDED
+        - GENERATION_FAILED
+        - GENERATION_INTERRUPTED
+        - GENERATION_NOT_AWAITING_TOOL_OUTPUTS
         - GENERATION_NOT_FOUND
         - IDEMPOTENCY_KEY_REUSED
+        - INPUT_LIMIT_EXCEEDED
+        - INPUT_MODALITY_UNSUPPORTED
         - INTERNAL_ERROR
+        - MAX_STEPS_REACHED
+        - MCP_TOOL_ERROR
+        - MEDIA_PARSE_FAILED
+        - MISSING_TOOL_CONTEXT_KEY
+        - MODEL_NOT_OFFERED
+        - MODEL_NOT_PRICED
+        - MODEL_ROUTE_NOT_FOUND
         - NAME_CONFLICT
+        - OAUTH_CONNECTION_REFRESH_FAILED
+        - OAUTH_CONNECTION_REQUIRED
+        - OUTPUT_SCHEMA_VALIDATION_FAILED
+        - PDF_PARSE_FAILED
+        - PIPELINE_DEPTH_EXCEEDED
+        - PIPELINE_INVALID_STEP
+        - PIPELINE_STEP_FAILED
+        - PROJECT_PAUSED
+        - QUERY_TIMEOUT
+        - REPLAY_REFUSED
         - RESERVED_PATH
         - RESOURCE_NOT_FOUND
+        - SECRET_NOT_FOUND
+        - SHARED_AI_PROVIDER_ERROR
+        - SHARE_CAP_EXCEEDED
+        - TEXT_ENCODED_TOOL_CALL
+        - TOOL_AUTH_FAILED
+        - TOOL_CALL_NOT_SUPPORTED
+        - TOOL_DISPATCH_FAILED
+        - TOOL_EGRESS_BLOCKED
+        - TOOL_HTTP_ERROR
         - TOOL_NOT_FOUND
+        - TOOL_RESPONSE_TOO_LARGE
+        - TOOL_UNREACHABLE
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
         - WORK_AUTHORITY_MISSING
       x-iam-action: generations:ResumeGeneration
       x-iam-resource-type: generation
@@ -915,6 +961,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
@@ -924,6 +971,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:ListAgentVersions
       x-iam-resource-type: agent
       parameters:
@@ -994,6 +1042,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
@@ -1003,6 +1052,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:GetAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -1068,6 +1118,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:GetAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -1139,6 +1190,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:GetAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -1222,6 +1274,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
         - POLICY_NOT_FOUND
@@ -1231,6 +1284,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:RestoreAgentVersion
       x-iam-resource-type: agent
       parameters:
@@ -1320,6 +1374,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
       parameters:
@@ -1427,6 +1482,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - NO_ACTIVE_RELEASE
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
@@ -1439,6 +1495,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
       parameters:
@@ -1515,6 +1572,7 @@ paths:
         - LITERAL_CREDENTIAL
         - MEMORY_STORE_NOT_FOUND
         - MODEL_NOT_OFFERED
+        - MODEL_ROUTE_NOT_FOUND
         - NO_ACTIVE_RELEASE
         - PIPELINE_INVALID_STEP
         - POLICY_GRANT_NOT_HELD
@@ -1525,6 +1583,7 @@ paths:
         - TOOL_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - VERSION_CONFLICT
       x-iam-action: agents:SetAgentRelease
       x-iam-resource-type: agent
       parameters:

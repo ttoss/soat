@@ -59,6 +59,25 @@ describe('route error code declaration', () => {
     }
   });
 
+  test('the scan follows a re-export to the file declaring it', () => {
+    // `rest/v1/tasks.ts` imports `transitionTask` through `lib/tasks.ts`.
+    const key = 'post /api/v1/tasks/{task_id}/transitions';
+    assert.deepEqual(
+      absent({
+        codes: ['TASK_GUARD_REJECTED', 'TASK_TRANSITION_CONFLICT'],
+        from: reached.get(key) ?? [],
+      }),
+      [],
+      key
+    );
+  });
+
+  test('a detached async call raises nothing to its caller', () => {
+    // `dispatchOnEnter` runs the on_enter automation detached, behind `.catch`.
+    const key = 'post /api/v1/tasks/{task_id}/transitions';
+    assert.ok(!(reached.get(key) ?? []).includes('AI_PROVIDER_ERROR'), key);
+  });
+
   test('every code a route reaches is a registered code', () => {
     const unknown = [...reached].flatMap(([key, codes]) => {
       return report({ key, label: '', codes, from: Object.keys(ERROR_CODES) });

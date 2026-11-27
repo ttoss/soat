@@ -33,6 +33,7 @@ paths:
         JSON object or as a YAML/JSON string.
       operationId: validateFormation
       x-raises:
+        - INVALID_TOOL_CONTEXT_KEY
         - UNAUTHORIZED
       x-iam-action: formations:ValidateFormation
       x-iam-resource-type: formation
@@ -564,6 +565,9 @@ paths:
       operationId: deleteFormation
       x-raises:
         - FORBIDDEN
+        - FORMATION_DELETE_FAILED
+        - FORMATION_RESOURCE_TYPE_UNREGISTERED
+        - INTERNAL_ERROR
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
       x-iam-action: formations:DeleteFormation

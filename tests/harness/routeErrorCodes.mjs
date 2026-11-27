@@ -6,13 +6,8 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 import { ERROR_CODES } from '../../packages/server/src/errors/codes.ts';
-import {
-  importOf,
-  lookup,
-  mountedRoutes,
-  parse,
-  ROUTE_METHODS,
-} from './iamRouteChecks.mjs';
+import { mountedRoutes, ROUTE_METHODS } from './iamRouteChecks.mjs';
+import { importOf, lookup, parse } from './sourceBindings.mjs';
 
 /**
  * The `DomainError` codes each route's handlers reach, following the
@@ -105,6 +100,44 @@ const valueOf = (file, name) => {
   return value ? { file: imported.file, value } : undefined;
 };
 
+const throws = (node) => {
+  return ts.isThrowStatement(node) || Boolean(ts.forEachChild(node, throws));
+};
+
+const isAsyncCall = (file, node) => {
+  if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) {
+    return false;
+  }
+  const fn = lookup(file, node.expression.text, 'functions')?.value;
+  return Boolean(
+    fn &&
+    ts.getModifiers(fn)?.some((modifier) => {
+      return modifier.kind === ts.SyntaxKind.AsyncKeyword;
+    })
+  );
+};
+
+/**
+ * A detached call to an async function, `void f(x)` or `f(x).catch(handler)`
+ * whose handler never throws: what `f` raises never reaches the caller, but
+ * its arguments and the handler run here.
+ */
+const detachedCall = (file, node) => {
+  if (ts.isVoidExpression(node) && isAsyncCall(file, node.expression)) {
+    return { call: node.expression, handlers: [] };
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === 'catch' &&
+    isAsyncCall(file, node.expression.expression) &&
+    !node.arguments.some(throws)
+  ) {
+    return { call: node.expression.expression, handlers: node.arguments };
+  }
+  return undefined;
+};
+
 const codesIn = (args) => {
   const { file, node, seen, found } = args;
   // A value is followed into its initializer: `agentAccess.authorizeRead`
@@ -127,6 +160,13 @@ const codesIn = (args) => {
     const handed = handedCode(child);
     if (handed) found.add(handed);
     if (ts.isIdentifier(child)) follow(child);
+    const detached = detachedCall(file, child);
+    if (detached) {
+      for (const node of [...detached.call.arguments, ...detached.handlers]) {
+        visit(node);
+      }
+      return;
+    }
     ts.forEachChild(child, visit);
   };
   visit(node);
