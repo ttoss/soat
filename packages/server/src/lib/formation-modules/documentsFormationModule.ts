@@ -45,6 +45,7 @@ export const documentsFormationModule = defineFormationModule({
     return createDocument({
       projectId,
       createdBy: actor.author,
+      embedAs: actor.author,
       content,
       path: toOptionalString(properties.path) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
@@ -76,6 +77,7 @@ export const documentsFormationModule = defineFormationModule({
     await updateDocument({
       id: physicalResourceId,
       createdBy: actor.author,
+      embedAs: actor.author,
       content,
       path: toNullableString(properties.path),
       title: toOptionalString(properties.title) ?? undefined,

@@ -16,6 +16,7 @@ import { validMemoryWhere } from 'src/lib/memoryValidity';
 import { paginatedList } from 'src/lib/pagination';
 import { registerResourceFieldMap } from 'src/lib/policyCompiler';
 import { hasPolicyConstraints } from 'src/lib/policyWhere';
+import type { RequestPrincipal } from 'src/lib/principals';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { applyTagFilter } from 'src/lib/tags';
 import {
@@ -125,6 +126,8 @@ export const createMemory = async (args: {
   tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
   assertion: MemoryAssertionSource;
+  /** Who the write's embedding acts as. */
+  embedAs: RequestPrincipal | null;
 }) => {
   const content = await resolveMemoryContent({
     memoryStoreId: args.memoryStoreId,
@@ -133,6 +136,7 @@ export const createMemory = async (args: {
       memoryStoreId: args.memoryStoreId,
     }),
     generationId: args.assertion.generationId,
+    embedAs: args.embedAs,
   });
 
   const entry = await writeAssertedMemory({
@@ -253,6 +257,8 @@ export const updateMemory = async (args: {
   metadata?: Record<string, unknown> | null;
   /** `null`/absent states no precondition; see {@link readWritePrecondition}. */
   expectedVersion?: number | null;
+  /** Who a content change's embedding acts as. */
+  embedAs: RequestPrincipal | null;
 }) => {
   const entry = await db.Memory.findOne({
     where: { publicId: args.id },
@@ -284,6 +290,7 @@ export const updateMemory = async (args: {
       }),
       // An edit through the API runs for no generation.
       generationId: null,
+      embedAs: args.embedAs,
     });
     updates.contentId = content.id as number;
   }

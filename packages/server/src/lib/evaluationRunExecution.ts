@@ -37,6 +37,7 @@ import { scorerOutcomeKey } from './evaluationScorerValidation';
 import { runToolScorerCall, SCORER_USAGE_SOURCE } from './evaluationToolScorer';
 import { runVerdict } from './evaluationVerdict';
 import type { GenerationInputMessage } from './generationInputMessages';
+import { principalOfAuthority } from './principals';
 import { type StoredError, toStoredErrorKeepingMessage } from './storedError';
 import type { WorkAuthority } from './workAuthority';
 
@@ -177,6 +178,7 @@ export const buildScorerRunners = (args: {
         projectId: args.projectId,
         texts: embed.texts,
         pinned: embeddingChoiceOf(pinOf(embed.scorer)),
+        embedAs: principalOfAuthority(args.authority),
       });
     },
     runDecider: (call: { scorer: Record<string, unknown>; input: unknown }) => {
@@ -277,6 +279,7 @@ export const runEvalItem = async (args: {
       ...buildScorerRunners(args),
     });
   } catch (error) {
+    if (isAdmissionRefusal(error)) throw error;
     // An ungraded answer is an item error, not a 0 — recording 0 would
     // fabricate a regression. The generation and output are kept: they happened
     // and cost money, and the output is what the failed scorer was looking at.

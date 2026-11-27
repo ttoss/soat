@@ -358,6 +358,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
       mechanism: 'api',
       ...requestPrincipalFromCtx(ctx),
     },
+    embedAs: requestPrincipalFromCtx(ctx),
   });
 
   ctx.status = result.action === 'created' ? 201 : 200;
@@ -442,6 +443,7 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
     ),
     metadata: readNullableMetadataBag(body.metadata),
     expectedVersion: writePreconditionOf(ctx),
+    embedAs: requestPrincipalFromCtx(ctx),
   });
 });
 

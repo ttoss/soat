@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import { createGeneration, type CreateGenerationArgs } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
+import { generationPrincipal } from './embeddingAdmission';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import {
@@ -329,6 +330,7 @@ const storeGeneratedTurn = async (args: {
       generationId: args.generationId,
       withoutReplayed: true,
     }),
+    embedAs: await generationPrincipal({ generationId: args.generationId }),
   });
 
   if (!message) {

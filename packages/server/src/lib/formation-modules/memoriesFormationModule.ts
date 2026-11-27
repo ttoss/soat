@@ -51,10 +51,11 @@ export const memoriesFormationModule = defineFormationModule({
       // The apply is the asserter here, under the credential that ran it: a
       // formation write has no generation and no agent behind it.
       assertion: { mechanism: 'formation', ...actor.author },
+      embedAs: actor.author,
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actor }) => {
     const entry = await db.Memory.findOne({
       where: { publicId: physicalResourceId },
     });
@@ -89,6 +90,7 @@ export const memoriesFormationModule = defineFormationModule({
           : isObjectRecord(properties.metadata)
             ? properties.metadata
             : null,
+      embedAs: actor.author,
     });
   },
 

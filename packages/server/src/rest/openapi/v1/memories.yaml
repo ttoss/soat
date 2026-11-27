@@ -128,6 +128,8 @@ paths:
       operationId: createMemory
       x-raises:
         - ACTOR_NOT_FOUND
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - EMBEDDING_NOT_CONFIGURED
         - FORBIDDEN
@@ -140,6 +142,7 @@ paths:
         - RESOURCE_NOT_FOUND
         - UNAUTHORIZED
         - VALIDATION_FAILED
+        - WORK_AUTHORITY_MISSING
       x-iam-action: memories:CreateMemory
       x-iam-resource-type: memory_store
       requestBody:
@@ -369,6 +372,8 @@ paths:
       description: Updates an existing memory. Regenerates the embedding if content changes.
       operationId: updateMemory
       x-raises:
+        - ADMISSION_REFUSED
+        - ADMISSION_UNAVAILABLE
         - AI_PROVIDER_MISCONFIGURED
         - EMBEDDING_NOT_CONFIGURED
         - FORBIDDEN
@@ -381,6 +386,7 @@ paths:
         - UNAUTHORIZED
         - VALIDATION_FAILED
         - VERSION_CONFLICT
+        - WORK_AUTHORITY_MISSING
       x-iam-action: memories:UpdateMemory
       x-iam-resource-type: memory_store
       parameters:

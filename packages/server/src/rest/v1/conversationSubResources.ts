@@ -28,6 +28,7 @@ import {
   type AuthenticatedContext,
   parsePagination,
   parseToolContextBody,
+  requestPrincipalFromCtx,
   requireAuth,
 } from './helpers';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -123,6 +124,7 @@ conversationSubResourcesRouter.post(
         : undefined,
       // Caller-written text: it carries no block that feeds a counter.
       provenance: NO_PROVENANCE,
+      embedAs: requestPrincipalFromCtx(ctx),
     });
 
     if (!message) {

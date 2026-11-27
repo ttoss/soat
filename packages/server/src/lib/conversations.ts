@@ -1,11 +1,15 @@
 import { db } from '../db';
 import { mapMessage } from './conversationMessages';
 import {
-  conversationEmbedsTurns,
   embedConversationBacklog,
+  retrievalEmbeds,
   type RetrievalMode,
 } from './conversationRetrieval';
 import { destroyConversation } from './conversationTurnDocuments';
+import {
+  askEmbeddingWrite,
+  type EmbeddingWriteAsk,
+} from './embeddingAdmission';
 import { assertEnumField } from './enumField';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
@@ -14,6 +18,7 @@ import {
   registerResourceFieldMap,
 } from './policyCompiler';
 import { hasPolicyConstraints } from './policyWhere';
+import type { RequestPrincipal } from './principals';
 import { projectScopeWhere } from './projectScope';
 import { makeResourceAccessor } from './resourceAccessor';
 import { applyTagFilter, mergeTags } from './tags';
@@ -163,11 +168,30 @@ export const createConversation = async (args: {
   return mapped;
 };
 
+/** The ask of a `retrieval` change that embeds the backlog; `null` when it does not. */
+const askBacklogEmbedding = async (args: {
+  projectId: number;
+  retrieval: RetrievalMode | null | undefined;
+  embedAs: RequestPrincipal | null;
+}): Promise<EmbeddingWriteAsk | null> => {
+  if (args.retrieval === undefined) return null;
+  if (!(await retrievalEmbeds({ ...args, retrieval: args.retrieval }))) {
+    return null;
+  }
+  return askEmbeddingWrite({
+    projectId: args.projectId,
+    principal: args.embedAs,
+    work: 'The conversation backlog embed',
+  });
+};
+
 export const updateConversation = async (args: {
   id: string;
   name?: string | null;
   status?: string;
   retrieval?: RetrievalMode | null;
+  /** Who embedding the backlog acts as, when the change switches retrieval on. */
+  embedAs: RequestPrincipal | null;
 }) => {
   assertEnumField({
     field: 'status',
@@ -194,21 +218,22 @@ export const updateConversation = async (args: {
     updates.retrieval = args.retrieval;
   }
 
+  const backlogAsk = await askBacklogEmbedding({
+    projectId: conversation.projectId,
+    retrieval: args.retrieval,
+    embedAs: args.embedAs,
+  });
+
   await conversation.update(updates);
 
   // Switching retrieval on makes the whole conversation retrievable, not just
   // what is said next — otherwise the turns that prompted the switch stay
   // invisible to the vector channel forever.
-  if (
-    args.retrieval !== undefined &&
-    (await conversationEmbedsTurns({
-      conversationId: conversation.id as number,
-      projectId: conversation.projectId,
-    }))
-  ) {
+  if (backlogAsk) {
     await embedConversationBacklog({
       conversationId: conversation.id as number,
       projectId: conversation.projectId,
+      ask: backlogAsk,
     });
   }
 
