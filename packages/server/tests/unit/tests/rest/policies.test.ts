@@ -554,6 +554,8 @@ describe('Policies', () => {
         api_key_sample: [],
         users: 0,
         user_sample: [],
+        project_groups: 0,
+        project_group_sample: [],
         evals: 0,
         eval_sample: [],
         deciders: 0,

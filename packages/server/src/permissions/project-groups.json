@@ -1,0 +1,45 @@
+{
+  "module": "project-groups",
+  "operations": [
+    {
+      "operationId": "listProjectGroups",
+      "action": "project-groups:ListProjectGroups",
+      "description": "List the project groups the caller owns (every project group for the admin)"
+    },
+    {
+      "operationId": "createProjectGroup",
+      "action": "project-groups:CreateProjectGroup",
+      "description": "Create a project group (admin only)"
+    },
+    {
+      "operationId": "getProjectGroup",
+      "action": "project-groups:GetProjectGroup",
+      "description": "Get a project group, checked on `srn:project-group:<project_group_id>:*`"
+    },
+    {
+      "operationId": "updateProjectGroup",
+      "action": "project-groups:UpdateProjectGroup",
+      "description": "Update a project group's name and owner policies, checked on `srn:project-group:<project_group_id>:*`"
+    },
+    {
+      "operationId": "deleteProjectGroup",
+      "action": "project-groups:DeleteProjectGroup",
+      "description": "Delete a project group holding no project (admin only)"
+    },
+    {
+      "operationId": "createProjectGroupProject",
+      "action": "project-groups:CreateProject",
+      "description": "Create a project in a project group, checked on `srn:project-group:<project_group_id>:project/*`"
+    },
+    {
+      "operationId": "addProjectGroupProject",
+      "action": "project-groups:AddProjectGroupProject",
+      "description": "Add a project to a project group (admin only)"
+    },
+    {
+      "operationId": "removeProjectGroupProject",
+      "action": "project-groups:RemoveProjectGroupProject",
+      "description": "Remove a project from a project group (admin only)"
+    }
+  ]
+}

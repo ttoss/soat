@@ -59,6 +59,7 @@ export const WRITER_RULE_CARRIERS = {
   },
   apiKeys: { policies: 'apiKeys' },
   users: { policies: 'users' },
+  projectGroups: { policies: 'projectGroups' },
   orchestrations: { models: ['Orchestration'] },
   shares: { models: ['Share'] },
   deciders: {

@@ -12,6 +12,11 @@ import {
   updateApiKey,
 } from 'src/lib/apiKeys';
 import { buildSrn } from 'src/lib/iam';
+import {
+  assertCredentialProjectGroupScope,
+  assertProjectGroupKeyRevocable,
+  resolveCreatedKeyProjectGroup,
+} from 'src/lib/projectGroupKeys';
 import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
@@ -144,9 +149,10 @@ apiKeysRouter.get('/api-keys', async (ctx: Context) => {
     return;
   }
 
-  // Anyone else sees only their own.
+  // Anyone else sees only their own, a project group key only those of its project group.
   ctx.body = await listApiKeys({
     userId: ctx.authUser.id,
+    projectGroupId: ctx.authUser.apiKeyProjectGroupId,
     ...parsePagination(ctx),
   });
 });
@@ -157,10 +163,12 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   const {
     name,
     project_id: projectId,
+    project_group_id: projectGroupId,
     policy_ids: policyIds,
   } = ctx.request.body as {
     name: string;
     project_id?: string | null;
+    project_group_id?: string | null;
     policy_ids?: string[];
   };
 
@@ -174,6 +182,19 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   assertCredentialProjectScope({
     ctx,
     requestedProjectPublicId: targetProjectId ?? null,
+    action: 'api-keys:CreateApiKey',
+  });
+  const group = await resolveCreatedKeyProjectGroup({
+    authUser: ctx.authUser,
+    projectGroupId,
+    projectId: targetProjectId,
+  });
+  await assertCredentialProjectGroupScope({
+    authUser: ctx.authUser,
+    key: {
+      project_id: targetProjectId ?? null,
+      project_group_id: group?.publicId ?? null,
+    },
     action: 'api-keys:CreateApiKey',
   });
 
@@ -214,6 +235,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     userId,
     name,
     projectId: projectResult.id,
+    projectGroupId: group?.id ?? null,
     policyIds: boundedPolicyIds,
   });
 
@@ -232,6 +254,11 @@ apiKeysRouter.get('/api-keys/:api_key_id', async (ctx: Context) => {
   assertCredentialProjectScope({
     ctx,
     requestedProjectPublicId: apiKey.project_id,
+    action: 'api-keys:GetApiKey',
+  });
+  await assertCredentialProjectGroupScope({
+    authUser: ctx.authUser,
+    key: apiKey,
     action: 'api-keys:GetApiKey',
   });
 
@@ -276,7 +303,18 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
       requestedProjectPublicId: projectId,
       action: 'api-keys:UpdateApiKey',
     });
+    if (existing.project_group_id !== null) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'A project group key keeps its project group; it takes no project_id.'
+      );
+    }
   }
+  await assertCredentialProjectGroupScope({
+    authUser: ctx.authUser,
+    key: { ...existing, project_id: projectId ?? existing.project_id },
+    action: 'api-keys:UpdateApiKey',
+  });
 
   await requireOwnerOrAdmin(ctx, {
     ownerPublicId: existing.user_id,
@@ -335,10 +373,19 @@ apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
     requestedProjectPublicId: existing.project_id,
     action: 'api-keys:DeleteApiKey',
   });
+  await assertCredentialProjectGroupScope({
+    authUser: ctx.authUser,
+    key: existing,
+    action: 'api-keys:DeleteApiKey',
+  });
 
   await requireOwnerOrAdmin(ctx, {
     ownerPublicId: existing.user_id,
     action: 'api-keys:DeleteApiKey',
+  });
+  await assertProjectGroupKeyRevocable({
+    authUser: ctx.authUser,
+    key: existing,
   });
 
   await deleteApiKey({ id: ctx.params.api_key_id });

@@ -33,6 +33,7 @@ describe('stored policy documents are evaluated scoped', () => {
       'iamTokens.ts',
       'policies.ts',
       'policyGrantCoverage.ts',
+      'projectGroups.ts',
       'usageRenameBackfill.ts',
       'writerRule.ts',
     ]);

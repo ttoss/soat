@@ -9,6 +9,7 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
+import { ProjectGroup } from './ProjectGroup';
 import { User } from './User';
 
 @Table({
@@ -75,6 +76,24 @@ export class ApiKey extends Model {
     { onDelete: 'CASCADE' }
   )
   declare project: Project;
+
+  /**
+   * The project group a project group key acts in: its project group's own resources and the
+   * projects in it. Set only on a key with no `projectId`.
+   */
+  @ForeignKey(() => {
+    return ProjectGroup;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare projectGroupId: number | null;
+
+  @BelongsTo(
+    () => {
+      return ProjectGroup;
+    },
+    { foreignKey: 'projectGroupId', as: 'projectGroup', onDelete: 'CASCADE' }
+  )
+  declare projectGroup: ProjectGroup | null;
 
   /** Public ids of the policies capping the owner's grant; empty caps nothing. */
   @Column({

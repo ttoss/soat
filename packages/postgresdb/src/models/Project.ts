@@ -1,6 +1,14 @@
-import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  Table,
+} from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { ProjectGroup } from './ProjectGroup';
 
 @Table({
   tableName: 'projects',
@@ -31,6 +39,21 @@ export class Project extends Model {
     allowNull: false,
   })
   declare name: string;
+
+  /** The project group whose policies cap the project; `null` is none. */
+  @ForeignKey(() => {
+    return ProjectGroup;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare projectGroupId: number | null;
+
+  @BelongsTo(
+    () => {
+      return ProjectGroup;
+    },
+    { foreignKey: 'projectGroupId', as: 'projectGroup', onDelete: 'SET NULL' }
+  )
+  declare projectGroup: ProjectGroup | null;
 
   // The baseline floor governing every tool call by every agent in the project.
   @Column({ type: DataType.JSON, allowNull: true })

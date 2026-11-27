@@ -24,15 +24,21 @@ type PolicyDependents = {
   column: 'jsonb' | 'array';
   /** The column's name, when it is not `policy_ids`. */
   name?: string;
+  /** Further columns of the row naming policies the same way. */
+  also?: string[];
   noun: string;
   meta: { count: string; sample: string };
 };
 
 const namingPolicy = (dependents: PolicyDependents): string => {
-  const name = dependents.name ?? 'policy_ids';
-  return dependents.column === 'jsonb'
-    ? `${name} @> :ids::jsonb`
-    : `:id = ANY(${name})`;
+  const names = [dependents.name ?? 'policy_ids', ...(dependents.also ?? [])];
+  return names
+    .map((name) => {
+      return dependents.column === 'jsonb'
+        ? `${name} @> :ids::jsonb`
+        : `:id = ANY(${name})`;
+    })
+    .join(' OR ');
 };
 
 export type PolicyCarrier = {
@@ -228,6 +234,27 @@ export const POLICY_CARRIERS = {
       });
     },
   },
+  // A cap on every check in the project group: its projects and its own resources.
+  projectGroups: {
+    models: ['ProjectGroup'],
+    attach: 'writer_holds_grants',
+    dependents: {
+      table: 'project_groups',
+      column: 'array',
+      also: ['fixed_policy_ids'],
+      noun: 'project group',
+      meta: { count: 'project_groups', sample: 'project_group_sample' },
+    },
+    actsIn: (policy) => {
+      return publicIdsOf({
+        sql: `SELECT DISTINCT :every AS public_id
+                FROM project_groups g
+               WHERE :id = ANY(g.policy_ids)
+                  OR :id = ANY(g.fixed_policy_ids)`,
+        replacements: { id: policy.publicId, every: EVERY_PROJECT },
+      });
+    },
+  },
   users: {
     models: ['User'],
     attach: 'writer_holds_grants',
@@ -268,7 +295,7 @@ export const findPolicyDependents = async (args: {
   return Promise.all(
     carriers.flatMap(({ dependents }) => {
       if (!dependents) return [];
-      const where = `FROM ${dependents.table} WHERE ${namingPolicy(dependents)}`;
+      const where = `FROM ${dependents.table} WHERE (${namingPolicy(dependents)})`;
       return [
         (async () => {
           const [sample, [rows]] = await Promise.all([

@@ -67,6 +67,7 @@ export { Policy } from './Policy';
 export { PriceBook } from './PriceBook';
 export { PrincipalRevocation } from './PrincipalRevocation';
 export { Project } from './Project';
+export { ProjectGroup } from './ProjectGroup';
 export { Quota } from './Quota';
 export { QuotaWindowCounter } from './QuotaWindowCounter';
 export { Secret } from './Secret';

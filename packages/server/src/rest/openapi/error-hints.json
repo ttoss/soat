@@ -933,7 +933,7 @@
     },
     "POLICY_HAS_DEPENDENTS": {
       "http_status": 409,
-      "hint": "Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}`), the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}`) the webhooks `meta.webhook_sample` lists (`PUT /api/v1/webhooks/{webhook_id}`), the users `meta.user_sample` lists (`PUT /api/v1/users/{user_id}/policies`) and the API keys `meta.api_key_sample` lists (`PUT /api/v1/api-keys/{api_key_id}`), or delete them, then delete the policy.",
+      "hint": "Remove the policy from the `policy_ids` of the triggers `meta.sample` lists (`PATCH /api/v1/triggers/{trigger_id}`), the agents `meta.agent_sample` lists (`PATCH /api/v1/agents/{agent_id}`) the webhooks `meta.webhook_sample` lists (`PUT /api/v1/webhooks/{webhook_id}`), the users `meta.user_sample` lists (`PUT /api/v1/users/{user_id}/policies`), the project groups `meta.project_group_sample` lists (`PATCH /api/v1/project-groups/{project_group_id}`) and the API keys `meta.api_key_sample` lists (`PUT /api/v1/api-keys/{api_key_id}`), or delete them, then delete the policy.",
       "routes": [
         {
           "method": "PATCH",
@@ -950,6 +950,10 @@
         {
           "method": "PUT",
           "path": "/users/{user_id}/policies"
+        },
+        {
+          "method": "PATCH",
+          "path": "/project-groups/{project_group_id}"
         },
         {
           "method": "PUT",
@@ -981,6 +985,16 @@
       "http_status": 409,
       "hint": "The request is well-formed but the resource is not in a state that allows it. Resolve the conflicting state named in the message, then retry.",
       "routes": []
+    },
+    "PROJECT_GROUP_HAS_PROJECTS": {
+      "http_status": 409,
+      "hint": "Take each project out of the project group (`DELETE /api/v1/project-groups/{project_group_id}/projects/{project_id}`), then delete the project group.",
+      "routes": [
+        {
+          "method": "DELETE",
+          "path": "/project-groups/{project_group_id}/projects/{project_id}"
+        }
+      ]
     },
     "PROJECT_HAS_DEPENDENTS": {
       "http_status": 409,

@@ -60,6 +60,10 @@ export const WHOLE_PROJECT = '*';
 export const UNTYPED_BUILT_IN_MODULES: Readonly<
   Record<string, { checkedOn: typeof WHOLE_PROJECT | null; why: string }>
 > = {
+  'project-groups': {
+    checkedOn: null,
+    why: 'checked on the project group, srn:project-group:<project_group_id>:..., or an admin role gate',
+  },
   projects: { checkedOn: WHOLE_PROJECT, why: 'checked on the whole project' },
   users: { checkedOn: null, why: 'an admin role gate, not a policy' },
 };

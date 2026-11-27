@@ -62,6 +62,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'modules/users',
             'modules/projects',
+            'modules/project-groups',
             'modules/iam',
             'modules/policies',
             'modules/api-keys',

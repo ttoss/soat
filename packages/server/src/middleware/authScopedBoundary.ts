@@ -9,6 +9,10 @@ import type { PolicyDocument } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
 import type { PrincipalBound } from '../lib/principalBound';
 import {
+  loadOwnedProjectGroupsGrant,
+  loadProjectGroupConfinement,
+} from '../lib/projectGroupAuthority';
+import {
   type Bound,
   type Cap,
   docsBound,
@@ -32,20 +36,45 @@ const policiesBound = (args: { policyIds: string[] }): Bound => {
 };
 
 /**
- * What a user holds: everything for an `admin`, else its policies. A user
- * holding no policy holds nothing.
+ * What a user holds: everything for an `admin`, else its policies and the
+ * own resources of every project group it owns. A user holding neither holds nothing.
  */
 export const userBound = (args: {
   role: 'admin' | 'user';
+  userPublicId: string;
   policyIds: string[];
 }): Bound => {
   if (args.role === 'admin') return EVERYTHING;
-  return args.policyIds.length === 0 ? NOTHING : policiesBound(args);
+  // Read once per request: owning a project group is not revoked mid-request.
+  let ownedProjectGroups: Promise<PolicyDocument | null> | undefined;
+  return {
+    allows: 'policies',
+    load: async () => {
+      ownedProjectGroups ??= loadOwnedProjectGroupsGrant({
+        userPublicId: args.userPublicId,
+      });
+      const [own, owned] = await Promise.all([
+        args.policyIds.length === 0
+          ? null
+          : resolveAttachedPolicies({
+              policyIds: args.policyIds,
+              actorId: null,
+            }),
+        ownedProjectGroups,
+      ]);
+      return [
+        [own, owned].filter((doc): doc is PolicyDocument => {
+          return doc !== null;
+        }),
+      ];
+    },
+  };
 };
 
 export const userGrant = (args: {
   principal: DeniedPrincipal;
   role: 'admin' | 'user';
+  userPublicId: string;
   policyIds: string[];
 }): Grant => {
   return { principal: args.principal, holder: 'user', bound: userBound(args) };
@@ -53,13 +82,32 @@ export const userGrant = (args: {
 
 /**
  * A key's own `policy_ids`: a key stored with none is not narrowed. A key no
- * longer stored narrows to nothing.
+ * longer stored narrows to nothing. A project group key acts only in its project group.
  */
-export const keyBound = (args: { policyIds: string[] | null }): Bound => {
+export const keyBound = (args: {
+  policyIds: string[] | null;
+  projectGroupId?: number | null;
+}): Bound => {
   if (args.policyIds === null) return NOTHING;
-  return args.policyIds.length === 0
-    ? EVERYTHING
-    : policiesBound({ policyIds: args.policyIds });
+  const { projectGroupId } = args;
+  const own =
+    args.policyIds.length === 0
+      ? EVERYTHING
+      : policiesBound({ policyIds: args.policyIds });
+  if (projectGroupId === undefined || projectGroupId === null) return own;
+  return {
+    allows: 'policies',
+    load: async () => {
+      const confinement = [
+        await loadProjectGroupConfinement({ projectGroupId }),
+      ];
+      if (own.allows === 'everything') return [confinement];
+      return [
+        ...(own.allows === 'policies' ? await own.load() : [[]]),
+        confinement,
+      ];
+    },
+  };
 };
 
 /** An OAuth token's consented scope, rebuilt from its `scope` claim. */

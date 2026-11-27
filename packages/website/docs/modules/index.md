@@ -1,5 +1,5 @@
 ---
-description: "Overview of SOAT platform modules exposed through the REST API, MCP server, CLI, and SDK."
+description: 'Overview of SOAT platform modules exposed through the REST API, MCP server, CLI, and SDK.'
 title: Platform
 sidebar_label: Platform Overview
 slug: /modules
@@ -15,6 +15,7 @@ Who can do what, and with which credentials.
 
 - [Users](./users.md) — accounts, roles, and authentication
 - [Projects](./projects.md) — the primary resource boundary; almost everything belongs to a project
+- [Project groups](./project-groups.md) — projects grouped under one owner, with policies capping every check in them
 - [IAM & Policies](./iam.md) — how permissions are evaluated
 - [Policies](./policies.md) — reusable policy documents granting `resource:Action` permissions
 - [API Keys](./api-keys.md) — project-scoped and personal keys with policy attachments

@@ -13,6 +13,7 @@ type DeniedPrincipalType =
   | 'on_behalf_of'
   | 'generation'
   | 'project'
+  | 'project_group'
   | 'agent'
   | 'trigger'
   | ResourceGrantPrincipalType;
@@ -24,7 +25,8 @@ export type MintedPrincipal = { type: string; id: string };
  * Whose policies refused: the request's credential (`user`, `api_key`, or
  * `caller` where the site holds its policies but not its id), what narrows it
  * (an `iam_token` bound, an `on_behalf_of` assertion's cap, a `generation`'s
- * execution identity, a `project`'s `agent_policy_ids`), or a resource acting
+ * execution identity, a `project`'s `agent_policy_ids`, a `project_group`'s attached
+ * policies), or a resource acting
  * under its own `policy_ids` (`agent`, `trigger`, or a
  * `RESOURCE_GRANT_PRINCIPALS` type). `id` is `null` where the refusing site holds the policy
  * but not its owner's id. An `iam_token` minted for a `principal` carries it.
@@ -62,6 +64,7 @@ const PRINCIPAL_LABELS: Record<DeniedPrincipal['type'], string> = {
   on_behalf_of: 'On-Behalf-Of assertion',
   generation: 'generation',
   project: 'project',
+  project_group: 'project group',
   agent: 'agent',
   trigger: 'trigger',
   eval: 'eval',

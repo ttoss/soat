@@ -9,6 +9,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
+import { escapeMdx } from './mdx';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const PERMISSIONS_DIR = path.resolve(__dirname, '../../server/src/permissions');
@@ -45,7 +47,7 @@ const toTitleCase = (kebab: string): string => {
 };
 
 /** Load all permissions JSON files, sorted by module name. */
-const loadPermissionsFiles = (): PermissionsJson[] => {
+export const loadPermissionsFiles = (): PermissionsJson[] => {
   return fs
     .readdirSync(PERMISSIONS_DIR)
     .filter((f) => {
@@ -68,7 +70,7 @@ const renderPermissionsTable = (operations: PermissionOperation[]): string => {
   ];
 
   const rows = operations.map(({ action, description }) => {
-    return `| \`${action}\` | ${description} |`;
+    return `| \`${action}\` | ${escapeMdx(description)} |`;
   });
 
   return [...header, ...rows].join('\n');
@@ -77,14 +79,14 @@ const renderPermissionsTable = (operations: PermissionOperation[]): string => {
 const renderSrnPatternsTable = (patterns: SrnPattern[]): string => {
   const header = ['| Pattern | Description |', '| ------- | ----------- |'];
   const rows = patterns.map(({ pattern, description }) => {
-    return `| \`${pattern}\` | ${description} |`;
+    return `| \`${pattern}\` | ${escapeMdx(description)} |`;
   });
   return [...header, ...rows].join('\n');
 };
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
-const main = () => {
+export const renderPermissionsPage = (): string => {
   const permissionsFiles = loadPermissionsFiles();
 
   const sections: string[] = [
@@ -119,9 +121,9 @@ const main = () => {
 
   sections.push('');
 
-  fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
-  fs.writeFileSync(OUTPUT_FILE, sections.join('\n'), 'utf-8');
-  console.log(`✓ Generated ${OUTPUT_FILE}`);
+  return sections.join('\n');
 };
 
-main();
+fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
+fs.writeFileSync(OUTPUT_FILE, renderPermissionsPage(), 'utf-8');
+console.log(`✓ Generated ${OUTPUT_FILE}`);

@@ -36,6 +36,7 @@ import {
   Orchestrations as OrchestrationsSdk,
   Playbooks as PlaybooksSdk,
   Policies as PoliciesSdk,
+  ProjectGroups as ProjectGroupsSdk,
   Projects as ProjectsSdk,
   Quotas as QuotasSdk,
   Secrets as SecretsSdk,
@@ -140,6 +141,7 @@ export class SoatClient {
   readonly files: typeof FilesSdk;
   readonly formations: typeof FormationsSdk;
   readonly generations: typeof GenerationsSdk;
+  readonly projectGroups: typeof ProjectGroupsSdk;
   readonly guardrails: typeof GuardrailsSdk;
   readonly iam: typeof IamSdk;
   readonly ingestionRules: typeof IngestionRulesSdk;
@@ -200,6 +202,7 @@ export class SoatClient {
     this.files = bindResource(FilesSdk, httpClient);
     this.formations = bindResource(FormationsSdk, httpClient);
     this.generations = bindResource(GenerationsSdk, httpClient);
+    this.projectGroups = bindResource(ProjectGroupsSdk, httpClient);
     this.guardrails = bindResource(GuardrailsSdk, httpClient);
     this.iam = bindResource(IamSdk, httpClient);
     this.ingestionRules = bindResource(IngestionRulesSdk, httpClient);

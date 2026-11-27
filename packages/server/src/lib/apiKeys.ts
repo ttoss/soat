@@ -1,4 +1,5 @@
 import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -14,6 +15,15 @@ const log = createDebug('soat:apiKeys');
 type ApiKeyWithAssociations = InstanceType<(typeof db)['ApiKey']> & {
   user: InstanceType<(typeof db)['User']> | null;
   project: InstanceType<(typeof db)['Project']> | null;
+  group: InstanceType<(typeof db)['ProjectGroup']> | null;
+};
+
+const keyAssociations = () => {
+  return [
+    { model: db.User, as: 'user' },
+    { model: db.Project, as: 'project' },
+    { model: db.ProjectGroup, as: 'projectGroup' },
+  ];
 };
 
 const mapApiKey = (apiKey: InstanceType<(typeof db)['ApiKey']>) => {
@@ -33,6 +43,7 @@ const mapApiKeyWithAssociations = (apiKey: ApiKeyWithAssociations) => {
     ...mapApiKey(apiKey),
     user_id: apiKey.user?.publicId ?? null,
     project_id: apiKey.project?.publicId ?? null,
+    project_group_id: apiKey.projectGroup?.publicId ?? null,
     policy_ids: apiKey.policyIds,
   };
 };
@@ -132,6 +143,8 @@ export const createApiKey = async (args: {
   name: string;
   /** Omit or pass null to create an unscoped key that spans projects. */
   projectId?: number | null;
+  /** A project group key acts in its project group alone; it has no project. */
+  projectGroupId?: number | null;
   policyIds?: string[];
 }) => {
   const random = generateSecretValue();
@@ -142,6 +155,7 @@ export const createApiKey = async (args: {
     userId: args.userId,
     name: args.name,
     projectId: args.projectId ?? null,
+    projectGroupId: args.projectGroupId ?? null,
     policyIds: args.policyIds ?? [],
     keyPrefix,
     keyHashSha256: hashApiKey({ rawKey: key }),
@@ -153,12 +167,7 @@ export const createApiKey = async (args: {
    * what it just minted. Reloading the associations (rather than spreading the
    * bare `mapApiKey`) is what makes `project_id` an explicit `null` for an
    * unscoped key instead of an absent field indistinguishable from one. */
-  await apiKey.reload({
-    include: [
-      { model: db.User, as: 'user' },
-      { model: db.Project, as: 'project' },
-    ],
-  });
+  await apiKey.reload({ include: keyAssociations() });
 
   return {
     ...mapApiKeyWithAssociations(apiKey as ApiKeyWithAssociations),
@@ -169,10 +178,7 @@ export const createApiKey = async (args: {
 export const getApiKey = async (args: { id: string }) => {
   const apiKey = await db.ApiKey.findOne({
     where: { publicId: args.id },
-    include: [
-      { model: db.User, as: 'user' },
-      { model: db.Project, as: 'project' },
-    ],
+    include: keyAssociations(),
   });
 
   if (!apiKey) {
@@ -210,13 +216,33 @@ export const updateApiKey = async (args: {
   return getApiKey({ id: args.id });
 };
 
+/** The keys of a project group: its own and those of each project in it. */
+const projectGroupKeysWhere = async (projectGroupId: number) => {
+  const projects = await db.Project.findAll({
+    where: { projectGroupId },
+    attributes: ['id'],
+  });
+  return {
+    [Op.or]: [
+      { projectGroupId },
+      {
+        projectId: projects.map((project) => {
+          return project.id as number;
+        }),
+      },
+    ],
+  };
+};
+
 export const listApiKeys = async (args: {
   userId?: number;
   projectId?: number;
+  /** Only the keys of this project group, for a credential acting in it. */
+  projectGroupId?: number;
   limit?: number;
   cursor?: string;
 }) => {
-  const where: Record<string, unknown> = {};
+  const where: Record<string | symbol, unknown> = {};
 
   if (args.userId !== undefined) {
     where.userId = args.userId;
@@ -226,19 +252,24 @@ export const listApiKeys = async (args: {
     where.projectId = args.projectId;
   }
 
+  if (args.projectGroupId !== undefined) {
+    Object.assign(where, await projectGroupKeysWhere(args.projectGroupId));
+  }
+
   return paginatedList({
     limit: args.limit,
     cursor: args.cursor,
-    filters: { userId: args.userId, projectId: args.projectId },
-    where: Object.keys(where).length > 0 ? where : undefined,
+    filters: {
+      userId: args.userId,
+      projectId: args.projectId,
+      projectGroupId: args.projectGroupId,
+    },
+    where: Reflect.ownKeys(where).length > 0 ? where : undefined,
     order: [['createdAt', 'DESC']],
     query: ({ where: pageWhere, limit, order }) => {
       return db.ApiKey.findAll({
         where: pageWhere,
-        include: [
-          { model: db.User, as: 'user' },
-          { model: db.Project, as: 'project' },
-        ],
+        include: keyAssociations(),
         order,
         limit,
       });

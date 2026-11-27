@@ -25,7 +25,11 @@ import {
 } from './authScopedBoundary';
 
 type UserRow = { publicId: string; role: string; policyIds: string[] };
-type KeyRow = { publicId: string; policyIds: string[] };
+type KeyRow = {
+  publicId: string;
+  policyIds: string[];
+  projectGroupId: number | null;
+};
 
 /** Rows the caller already loaded, so authenticating costs no second read. */
 export type PreloadedRows = { user?: UserRow; key?: KeyRow };
@@ -65,10 +69,14 @@ const loadKey = async (args: {
   }
   const key = await args.db.ApiKey.findOne({
     where: { publicId: args.publicId },
-    attributes: ['publicId', 'policyIds'],
+    attributes: ['publicId', 'policyIds', 'projectGroupId'],
   });
   return key
-    ? { publicId: key.publicId as string, policyIds: key.policyIds }
+    ? {
+        publicId: key.publicId as string,
+        policyIds: key.policyIds,
+        projectGroupId: key.projectGroupId,
+      }
     : null;
 };
 
@@ -98,6 +106,7 @@ const grantOf = async (args: {
       ? userGrant({
           principal,
           role: roleOf(user.role),
+          userPublicId: user.publicId,
           policyIds: user.policyIds,
         })
       : null;
@@ -158,7 +167,10 @@ const keyCap = async (args: CapArgs<'key'>): Promise<Cap> => {
   return {
     principal: { type: 'api_key', id: cap.key },
     kind: own ? 'key_policies' : 'other',
-    bound: keyBound({ policyIds: key ? key.policyIds : null }),
+    bound: keyBound({
+      policyIds: key ? key.policyIds : null,
+      projectGroupId: key?.projectGroupId,
+    }),
   };
 };
 

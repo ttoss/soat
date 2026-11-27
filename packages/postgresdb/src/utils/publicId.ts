@@ -7,6 +7,7 @@ import { customAlphabet } from 'nanoid';
 export const PUBLIC_ID_PREFIXES = {
   file: 'file_',
   project: 'proj_',
+  projectGroup: 'pgrp_',
   policy: 'pol_',
   apiKey: 'key_',
   document: 'doc_',
