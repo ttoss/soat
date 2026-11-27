@@ -129,6 +129,10 @@ Key management is self-service, so the boundary also guards the key being writte
 
 An OAuth access token, an [IAM token](./iam.md#iam-tokens), an `On-Behalf-Of` assertion and every call durable work makes under its stored authority narrow a request beyond its credential's own grant (the consented scope, the token's bound, the work the assertion serves, the trigger's policy or the starting key's policies), and a key cannot carry that narrowing. Under any of them, [`POST /api-keys`](/docs/api/api-keys/create-api-key), [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) and an `api_key` [formation](./formations.md) resource return `403 CREDENTIAL_NARROWED`. Create and update keys with a user token or an API key; reading, listing and deleting keys are unaffected.
 
+### Group keys
+
+A key created with `group_id` in place of `project_id` acts on its [group](./groups.md#group-keys)'s own resources and the projects in it, and manages only keys of the group or of a project in it. Creating one needs `groups:CreateApiKey`, deleting one `groups:RevokeApiKey`, on the group's SRN.
+
 ### Revoking a Key
 
 [`DELETE /api/v1/api-keys/:id`](/docs/api/api-keys/delete-api-key) stops the key immediately. There is no rotation endpoint: create a new key, delete the old.

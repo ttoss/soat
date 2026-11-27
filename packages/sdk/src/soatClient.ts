@@ -22,6 +22,7 @@ import {
   Files as FilesSdk,
   Formations as FormationsSdk,
   Generations as GenerationsSdk,
+  Groups as GroupsSdk,
   Guardrails as GuardrailsSdk,
   Iam as IamSdk,
   IngestionRules as IngestionRulesSdk,
@@ -140,6 +141,7 @@ export class SoatClient {
   readonly files: typeof FilesSdk;
   readonly formations: typeof FormationsSdk;
   readonly generations: typeof GenerationsSdk;
+  readonly groups: typeof GroupsSdk;
   readonly guardrails: typeof GuardrailsSdk;
   readonly iam: typeof IamSdk;
   readonly ingestionRules: typeof IngestionRulesSdk;
@@ -200,6 +202,7 @@ export class SoatClient {
     this.files = bindResource(FilesSdk, httpClient);
     this.formations = bindResource(FormationsSdk, httpClient);
     this.generations = bindResource(GenerationsSdk, httpClient);
+    this.groups = bindResource(GroupsSdk, httpClient);
     this.guardrails = bindResource(GuardrailsSdk, httpClient);
     this.iam = bindResource(IamSdk, httpClient);
     this.ingestionRules = bindResource(IngestionRulesSdk, httpClient);

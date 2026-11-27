@@ -55,21 +55,33 @@ iamRouter.post('/iam/check', async (ctx: Context) => {
   discardAuthorizationChecks(ctx);
 });
 
+/** The key issuing a token, its refusal recorded as `action`'s. */
+const tokenIssuer = (args: {
+  ctx: Context & { authUser: NonNullable<Context['authUser']> };
+  body: Record<string, unknown>;
+  action: string;
+}) => {
+  return assertIamTokenIssuer({
+    authUser: args.ctx.authUser,
+    projectId: args.body.project_id,
+    onRefused: () => {
+      recordAuthorizationDecision(args.ctx, {
+        action: args.action,
+        allowed: false,
+      });
+    },
+  });
+};
+
 /**
  * @openapi
  * Managed via packages/server/src/rest/openapi/v1/iam.yaml
  */
 iamRouter.post('/iam/tokens', async (ctx: Context) => {
   requireAuth(ctx);
-  const action = 'iam:CreateToken';
   const body = ctx.request.body as Record<string, unknown>;
-  const issuer = await assertIamTokenIssuer({
-    authUser: ctx.authUser,
-    projectId: body.project_id,
-    onRefused: () => {
-      recordAuthorizationDecision(ctx, { action, allowed: false });
-    },
-  });
+  const action = 'iam:CreateToken';
+  const issuer = await tokenIssuer({ ctx, body, action });
   const { projectPublicId } = issuer;
   const resource = projectSrn({ projectPublicId, resourceType: 'iam_token' });
   const allowed = await ctx.authUser.isAllowed({
