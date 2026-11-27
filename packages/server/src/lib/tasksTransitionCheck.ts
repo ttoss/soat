@@ -8,12 +8,15 @@ import { taskExpressionContext } from './taskExpressionContext';
 import { readinessOfTask, type TaskReadiness } from './taskReadiness';
 import {
   findTaskInstance,
+  stateByName,
   type TaskInstance,
   type TaskPrincipal,
 } from './tasks';
+import { stateCapacityRefusal } from './tasksStateCapacity';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import {
   findValidTransition,
+  type WorkflowState,
   type WorkflowTransition,
 } from './workflowsValidation';
 
@@ -50,15 +53,19 @@ const guardRejection = (args: {
  * park and the transition list, so the three cannot disagree.
  *
  * A `requires_approval` transition fired by anyone but `approval` parks rather
- * than moves, and the park defers the guard to resolution time.
+ * than moves, and the park defers the guard and the target's `max_tasks` to
+ * resolution time.
  */
-export const transitionRefusal = (args: {
+const transitionRefusal = async (args: {
   task: TaskInstance;
   readiness: TaskReadiness;
   transition: WorkflowTransition;
   transitions: WorkflowTransition[];
+  states: WorkflowState[];
   principal: TaskPrincipal;
-}): DomainError | null => {
+  /** Given, the target's `max_tasks` is counted under its lock. */
+  transaction?: Transaction;
+}): Promise<DomainError | null> => {
   const { task, transition, principal } = args;
   if (task.status === 'closed') {
     return new DomainError(
@@ -90,11 +97,20 @@ export const transitionRefusal = (args: {
   const parks =
     valid.requiresApproval === true && principal.kind !== 'approval';
   if (parks) return null;
-  return guardRejection({
+  const rejected = guardRejection({
     transition: valid,
     task,
     readiness: args.readiness,
     principal,
+  });
+  if (rejected) return rejected;
+  const target = stateByName({ states: args.states, name: valid.to });
+  if (!target) return null;
+  return stateCapacityRefusal({
+    workflowDbId: task.workflowId as number,
+    state: target,
+    taskId: task.id as number,
+    transaction: args.transaction,
   });
 };
 
@@ -102,10 +118,11 @@ export const assertTransitionAllowed = async (args: {
   task: TaskInstance;
   transition: WorkflowTransition;
   transitions: WorkflowTransition[];
+  states: WorkflowState[];
   principal: TaskPrincipal;
   transaction?: Transaction;
 }): Promise<void> => {
-  const refusal = transitionRefusal({
+  const refusal = await transitionRefusal({
     ...args,
     readiness: await readinessOfTask({
       taskId: args.task.id as number,
@@ -138,7 +155,7 @@ export const listTaskTransitions = async (args: {
   if (!task) {
     throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
   }
-  const { transitions } = await resolveTaskDefinition({
+  const { transitions, states } = await resolveTaskDefinition({
     task,
     workflow: task.workflow!,
   });
@@ -149,21 +166,24 @@ export const listTaskTransitions = async (args: {
     filters: { id: args.id },
   });
   const readiness = await readinessOfTask({ taskId: task.id as number });
-  const data = page.data.map((transition) => {
-    const refusal = transitionRefusal({
-      task,
-      readiness,
-      transition,
-      transitions,
-      principal: args.principal,
-    });
-    return {
-      name: transition.name,
-      to: transition.to,
-      requires_approval: transition.requiresApproval === true,
-      allowed: refusal === null,
-      error_code: refusal?.code ?? null,
-    };
-  });
+  const data = await Promise.all(
+    page.data.map(async (transition) => {
+      const refusal = await transitionRefusal({
+        task,
+        readiness,
+        transition,
+        transitions,
+        states,
+        principal: args.principal,
+      });
+      return {
+        name: transition.name,
+        to: transition.to,
+        requires_approval: transition.requiresApproval === true,
+        allowed: refusal === null,
+        error_code: refusal?.code ?? null,
+      };
+    })
+  );
   return { ...page, data };
 };

@@ -196,6 +196,7 @@ paths:
         - SHARE_CAP_EXCEEDED
         - TASK_NOT_FOUND
         - TASK_PAYLOAD_INVALID
+        - TASK_STATE_FULL
         - TASK_STATE_NOT_FOUND
         - TEXT_ENCODED_TOOL_CALL
         - TOOL_AUTH_FAILED
@@ -267,7 +268,8 @@ paths:
         '409':
           description: >-
             The idempotency key names a task created by a different request
-            (`IDEMPOTENCY_KEY_REUSED`)
+            (`IDEMPOTENCY_KEY_REUSED`), or the entry state already holds its
+            `max_tasks` open tasks (`TASK_STATE_FULL`)
           content:
             application/json:
               schema:
@@ -670,7 +672,9 @@ paths:
         '409':
           description: >-
             A concurrent transition made this one invalid, the task is closed,
-            or the idempotency key names a different request
+            the target state already holds its `max_tasks` open tasks
+            (`TASK_STATE_FULL`), or the idempotency key names a different
+            request
           content:
             application/json:
               schema:
@@ -695,8 +699,10 @@ paths:
         `payload_schema`. The mapped state's `on_enter` is not fired: transition
         the task when you want the target's automation. A task with a dispatch
         in flight or a transition pending approval is refused, since both
-        belong to the version they started under. Recorded in history as a row
-        with `transition: null` and both versions.
+        belong to the version they started under. Mapping it to another state
+        counts against that state's `max_tasks`; a task kept in its state keeps
+        its slot. Recorded in history as a row with `transition: null` and both
+        versions.
       tags:
         - Tasks
       summary: Migrate a task to a newer workflow version
@@ -758,8 +764,9 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
-            The task is closed, has a transition pending approval, or has a
-            dispatch in flight
+            The task is closed, has a transition pending approval, has a
+            dispatch in flight, or the state it would be mapped to already holds
+            its `max_tasks` open tasks (`TASK_STATE_FULL`)
           content:
             application/json:
               schema:
@@ -2409,12 +2416,14 @@ components:
           enum:
             - TASK_TRANSITION_CONFLICT
             - TASK_GUARD_REJECTED
+            - TASK_STATE_FULL
             - null
           description: >-
             The code firing it would answer: `TASK_TRANSITION_CONFLICT` when
             the task is closed, has a transition pending approval, or is not in
             one of the transition's `from` states; `TASK_GUARD_REJECTED` when
-            its guard fails. Null when `allowed`.
+            its guard fails; `TASK_STATE_FULL` when its target state already
+            holds its `max_tasks` open tasks. Null when `allowed`.
     CreateTaskRequest:
       type: object
       required:
