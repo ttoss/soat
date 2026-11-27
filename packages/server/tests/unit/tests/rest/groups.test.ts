@@ -215,6 +215,24 @@ describe('groups', () => {
       ).toBe(true);
     });
 
+    test('a capped project still lists what the cap allows', async () => {
+      const res = await authenticatedTestClient(ownerToken).get(
+        `/api/v1/secrets?project_id=${projectId}`
+      );
+      expect(res.status).toBe(200);
+    });
+
+    test('the cap refuses the route, naming the group', async () => {
+      const res = await authenticatedTestClient(ownerToken)
+        .post('/api/v1/secrets')
+        .send({ project_id: projectId, name: 'capped', value: 'v' });
+      expect(res.status).toBe(403);
+      expect(res.body.error.meta.denied_by).toEqual({
+        type: 'group',
+        id: groupId,
+      });
+    });
+
     test('the owner can neither detach nor edit it', async () => {
       const detach = await authenticatedTestClient(ownerToken)
         .patch(`/api/v1/groups/${groupId}`)
@@ -320,6 +338,10 @@ describe('groups', () => {
           `srn:${otherProjectId}:secret:*`
         )
       ).toBe(false);
+      const inside = await authenticatedTestClient(key).get(
+        `/api/v1/secrets?project_id=${projectId}`
+      );
+      expect(inside.status).toBe(200);
     });
 
     test('narrowed by policy_ids, it cannot reach a group action they deny', async () => {
