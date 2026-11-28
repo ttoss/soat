@@ -285,5 +285,6 @@ export {
   extractProjectIdsFromPolicies,
   findAllowResourcesOutsideEveryProject,
   policySetsConcernProject,
+  policySetsConcernProjectGroup,
   scopePolicyDocument,
 } from './policyProjectIds';

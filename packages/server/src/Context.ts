@@ -63,6 +63,14 @@ export type AuthUser = {
     resource: string;
   }) => Promise<boolean>;
   /**
+   * The caller's effective policy sets for a project group's own resources,
+   * as `isAllowedOnProjectGroup` reads them; a set allowing nothing for a
+   * credential pinned to a project.
+   */
+  getProjectGroupPolicies: (
+    projectGroupPublicId: string
+  ) => Promise<PolicySets>;
+  /**
    * States the tags this request writes, so every later `isAllowed` of the
    * request reads them as `iam:RequestTag/<key>`. Called by each route that
    * writes caller tags, before it authorizes the write.
