@@ -56,6 +56,22 @@ export const registerResourceFieldMap = (map: ResourceFieldMap): void => {
   registeredMaps.set(map.resourceType, map);
 };
 
+/**
+ * The types whose SRN id is their path: those whose field map declares a
+ * `pathColumn`. A write to one is authorized on the path it writes
+ * (`rest/v1/pathWriteAccess.ts`).
+ */
+export const pathAddressedResourceTypes = (): string[] => {
+  return [...registeredMaps.values()]
+    .filter((map) => {
+      return map.pathColumn !== undefined;
+    })
+    .map((map) => {
+      return map.resourceType;
+    })
+    .sort();
+};
+
 const prefixColumn = (spec: ColumnSpec, root: string): ColumnSpec => {
   return {
     column: spec.column,

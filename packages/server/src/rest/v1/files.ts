@@ -6,6 +6,7 @@ import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { readFileLifetime } from 'src/lib/fileLifetime';
+import { buildPath } from 'src/lib/filePaths';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { parseMetadataBag, parseMetadataBagField } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
@@ -15,9 +16,9 @@ import { readTagQuery } from 'src/lib/tags';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
-import { resolveFileWriteProjectId } from './fileWriteAccess';
 import { parsePagination, requireAuth } from './helpers';
 import { resolveListScope } from './listScope';
+import { resolvePathWriteProjectId } from './pathWriteAccess';
 import { compileReadPolicy } from './readPolicy';
 
 type Next = () => Promise<unknown>;
@@ -121,12 +122,14 @@ filesRouter.post('/files', async (ctx: Context) => {
     metadata?: unknown;
   };
 
-  const targetProjectId = await resolveFileWriteProjectId({
+  const targetProjectId = await resolvePathWriteProjectId({
     ctx,
     projectPublicId: body.project_id,
     action: 'files:CreateFile',
-    prefix: body.prefix,
-    filename: body.filename,
+    resourceType: 'file',
+    key: () => {
+      return buildPath({ prefix: body.prefix, filename: body.filename });
+    },
   });
   // The key (`path`) is built from `prefix` (directory, default /) + `filename`.
   // storageType / storagePath are system-managed, so any storage_* / path a
@@ -167,12 +170,14 @@ filesRouter.post(
 
     // The uploaded file's name is the default filename unless overridden.
     const filename = body.filename ?? file.originalname;
-    const targetProjectId = await resolveFileWriteProjectId({
+    const targetProjectId = await resolvePathWriteProjectId({
       ctx,
       projectPublicId: projectId,
       action: 'files:UploadFile',
-      prefix: body.prefix,
-      filename,
+      resourceType: 'file',
+      key: () => {
+        return buildPath({ prefix: body.prefix, filename });
+      },
     });
     const record = await uploadFile({
       projectId: Number(targetProjectId),
@@ -200,12 +205,14 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     metadata?: unknown;
   };
 
-  const targetProjectId = await resolveFileWriteProjectId({
+  const targetProjectId = await resolvePathWriteProjectId({
     ctx,
     projectPublicId: body.project_id,
     action: 'files:UploadFile',
-    prefix: body.prefix,
-    filename: body.filename,
+    resourceType: 'file',
+    key: () => {
+      return buildPath({ prefix: body.prefix, filename: body.filename });
+    },
   });
   const record = await uploadFile({
     projectId: Number(targetProjectId),
@@ -232,12 +239,14 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     max_bytes?: number;
   };
 
-  const targetProjectId = await resolveFileWriteProjectId({
+  const targetProjectId = await resolvePathWriteProjectId({
     ctx,
     projectPublicId: body.project_id,
     action: 'files:UploadFile',
-    prefix: body.prefix,
-    filename: body.filename,
+    resourceType: 'file',
+    key: () => {
+      return buildPath({ prefix: body.prefix, filename: body.filename });
+    },
   });
 
   const token = await createPresignedUrl({

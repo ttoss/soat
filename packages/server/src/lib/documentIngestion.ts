@@ -16,6 +16,7 @@ import {
   type IngestedDoc,
   resolveChunkConfig,
 } from './documentIngestionCore';
+import { ingestedDocumentPath, sourceFilename } from './documentIngestPath';
 import { countIndexedChunks } from './documentLoaders';
 import { mapDocument } from './documentMapper';
 import {
@@ -24,7 +25,6 @@ import {
 } from './embeddingAdmission';
 import { assertIngestible } from './fileLifetime';
 import { assertFilePathFree } from './filePathConflict';
-import { normalizeCallerPath } from './filePaths';
 import {
   assertCallerEndUser,
   type GenerationEndUser,
@@ -354,12 +354,11 @@ export const enqueueDocumentIngestion = async (args: {
     work: 'The document ingest',
   });
 
-  const filename = file.filename ?? 'document';
-  const docPath = normalizeCallerPath(
-    args.pathPrefix
-      ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
-      : `/${filename}`
-  );
+  const filename = sourceFilename(file);
+  const docPath = ingestedDocumentPath({
+    pathPrefix: args.pathPrefix,
+    filename,
+  });
 
   // Filed only once the source converts, which may be long after this answer:
   // a path taken now is refused now rather than as a failed document later.

@@ -1,6 +1,7 @@
 import type { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { rebuildKey } from 'src/lib/filePaths';
 import {
   deleteFile,
   downloadFile,
@@ -16,6 +17,7 @@ import { db } from '../../db';
 import { canAccessFile } from '../../lib/fileAuthorization';
 import { verifyFileDownloadToken } from '../../lib/fileDownloadToken';
 import { type AuthenticatedContext, requireAuth } from './helpers';
+import { assertPathMoveAllowed } from './pathWriteAccess';
 import { resourceRefusal } from './resourceAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -230,6 +232,23 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
       expires_at?: unknown;
       delete_after?: unknown;
     };
+    if (body.prefix !== undefined || body.filename !== undefined) {
+      await assertPathMoveAllowed({
+        ctx,
+        projectPublicId: file.project_id!,
+        tags: file.tags,
+        action: 'files:UpdateFileMetadata',
+        resourceType: 'file',
+        key: () => {
+          return rebuildKey({
+            currentPath: file.path ?? null,
+            currentFilename: file.filename,
+            prefix: body.prefix,
+            filename: body.filename,
+          }).path;
+        },
+      });
+    }
     ctx.body = await updateFileMetadata({
       id: ctx.params.file_id,
       metadata: readNullableMetadataBag(body.metadata),

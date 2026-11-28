@@ -18,6 +18,19 @@ import {
  */
 export type DocumentFiling = { module: SystemModule; dir?: string };
 
+/**
+ * The path a caller's document is filed at: `path`, else its `filename` at the
+ * root, else none. The create route authorizes on this value and the store
+ * writes it.
+ */
+export const callerDocumentPath = (args: {
+  path?: string;
+  filename?: string;
+}): string | null => {
+  const rawPath = assertCallerPath(args.path ?? args.filename ?? null);
+  return rawPath === null ? null : normalizeCallerPath(rawPath);
+};
+
 export const resolveDocumentFiling = (args: {
   system?: DocumentFiling;
   path?: string;
@@ -33,8 +46,8 @@ export const resolveDocumentFiling = (args: {
       filename: `${args.publicId}.txt`,
     };
   }
-  const rawPath = assertCallerPath(args.path ?? args.filename ?? null);
-  if (rawPath === null) {
+  const normalizedPath = callerDocumentPath(args);
+  if (normalizedPath === null) {
     // A document with no path is reachable only by its id, because every
     // prefix read is a `LIKE` and `LIKE` never matches null — so listing `/`
     // would not be the whole project. Its own id is the one leaf that is
@@ -45,7 +58,6 @@ export const resolveDocumentFiling = (args: {
       filename: `${args.publicId}.txt`,
     };
   }
-  const normalizedPath = normalizeCallerPath(rawPath);
   return {
     normalizedPath,
     filename: args.filename ?? filenameFromPath(normalizedPath),

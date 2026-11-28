@@ -422,6 +422,16 @@ Policies can target documents by `path`; the server evaluates **both** the id-ba
 | `srn:proj_ABC:document:*`               | All documents in the project (id wildcard)   |
 | `*`                                      | All resources in the project                 |
 
+A write is checked on the path it writes: a grant on `srn:proj_ABC:document:/reports/*` admits writes under `/reports/` and refuses the rest.
+
+| Write                                                                                                            | Checked on                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [`POST /documents`](/docs/api/documents/create-document) (`documents:CreateDocument`)                            | `path`, else `/` + `filename`; neither: `srn:proj_ABC:document:*`                                            |
+| [`POST /documents/ingest`](/docs/api/documents/ingest-document) (`documents:IngestDocument`)                     | `path_prefix` + `/` + the source file's `filename`; a source file that does not exist: `srn:proj_ABC:document:*` |
+| [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) with `path` (`documents:UpdateDocument`) | the document, and the destination `path`; `null`: `srn:proj_ABC:document:*`                                  |
+
+A path the server refuses to read (a `..` segment, the reserved root) is checked on `srn:proj_ABC:document:*` before it is refused.
+
 List and search apply policy filters in SQL, so pagination counts are accurate. SRN syntax: [IAM Reference](iam.md).
 
 ### Project ID Resolution
