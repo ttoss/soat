@@ -3,12 +3,12 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { assertCorpusWriteQuotas } from 'src/lib/corpusWriteQuotas';
 import { streamDocumentsNdjson } from 'src/lib/documentExport';
+import { callerDocumentPath } from 'src/lib/documentFiling';
 import { findDocumentProjectId } from 'src/lib/documentLoaders';
 import { relatedDocumentRowIds } from 'src/lib/documentRelations';
 import {
   createDocument,
   deleteDocument,
-  enqueueDocumentIngestion,
   getDocument,
   getDocumentStatus,
   getDocumentTags,
@@ -17,6 +17,7 @@ import {
   updateDocument,
   updateDocumentTags,
 } from 'src/lib/documents';
+import { normalizeStatedPath } from 'src/lib/documentWriteGuard';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag, readNullableMetadataBag } from 'src/lib/metadataBag';
 import { emptyPage } from 'src/lib/pagination';
@@ -30,6 +31,7 @@ import {
 } from 'src/lib/tags';
 import { captureAuthority } from 'src/lib/workAuthority';
 
+import { registerDocumentIngestRoute } from './documentIngestRoute';
 import { assertDocumentFiling, assertDocumentReachable } from './documentPins';
 import { registerDocumentRelationRoutes } from './documentRelationRoutes';
 import { registerDocumentVersionRoutes } from './documentVersionRoutes';
@@ -38,12 +40,15 @@ import {
   parsePagination,
   requestPrincipalFromCtx,
   requireAuth,
-  resolveWriteProjectId,
   writePreconditionOf,
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 import { resolveListScope } from './listScope';
 import { sendNdjson } from './ndjsonResponse';
+import {
+  assertPathMoveAllowed,
+  resolvePathWriteProjectId,
+} from './pathWriteAccess';
 import { compileReadPolicy } from './readPolicy';
 import { resourceRefusal } from './resourceAccess';
 import {
@@ -236,11 +241,14 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     chunk_overlap?: number;
   };
 
-  const targetProjectId = await resolveWriteProjectId({
+  const targetProjectId = await resolvePathWriteProjectId({
     ctx,
     projectPublicId: body.project_id,
     action: 'documents:CreateDocument',
     resourceType: 'document',
+    key: () => {
+      return callerDocumentPath({ path: body.path, filename: body.filename });
+    },
   });
   // Asserted here rather than inside `createDocument`: every conversation
   // message is a Document too, and that path must never be refused mid-turn.
@@ -305,6 +313,20 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
   };
 
   assertDocumentFiling(ctx)(body);
+
+  if (body.path !== undefined) {
+    const destination = body.path;
+    await assertPathMoveAllowed({
+      ctx,
+      projectPublicId: doc.project_id!,
+      tags: doc.tags,
+      action: 'documents:UpdateDocument',
+      resourceType: 'document',
+      key: () => {
+        return normalizeStatedPath(destination);
+      },
+    });
+  }
 
   if (body.content !== undefined) {
     const projectId = await findDocumentProjectId({
@@ -384,46 +406,7 @@ registerTagRoutes({
   },
 });
 
-documentsRouter.post('/documents/ingest', async (ctx: Context) => {
-  declareBodyTags(ctx);
-  requireAuth(ctx);
-  const body = ctx.request.body as {
-    file_id: string;
-    project_id?: string;
-    path_prefix?: string;
-    tags?: unknown;
-    chunk_strategy?: 'page' | 'whole' | 'size';
-    chunk_size?: number;
-    chunk_overlap?: number;
-    session_id?: string;
-    actor_id?: string;
-  };
-
-  // Background by default; ?wait=true blocks and returns 201.
-  const wait = ctx.query['wait'] === 'true';
-
-  const targetProjectId = await resolveWriteProjectId({
-    ctx,
-    projectPublicId: body.project_id,
-    action: 'documents:IngestDocument',
-    resourceType: 'document',
-  });
-  const result = await enqueueDocumentIngestion({
-    authority: captureAuthority({ authUser: ctx.authUser }),
-    fileId: body.file_id,
-    projectId: Number(targetProjectId),
-    pathPrefix: body.path_prefix,
-    tags: assertNoSystemTagKeys(readTagBag(body.tags)),
-    chunkStrategy: body.chunk_strategy,
-    chunkSize: body.chunk_size,
-    chunkOverlap: body.chunk_overlap,
-    wait,
-    endUser: { sessionId: body.session_id, actorId: body.actor_id },
-  });
-
-  ctx.status = wait ? 201 : 202;
-  ctx.body = result;
-});
+registerDocumentIngestRoute({ documentsRouter });
 
 documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
   requireAuth(ctx);
