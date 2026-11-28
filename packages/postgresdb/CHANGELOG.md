@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.137.0](https://github.com/ttoss/soat/compare/v0.136.0...v0.137.0) (2026-11-28)
+
+### Features
+
+* **policies:** policies owned by a project group ([#2228](https://github.com/ttoss/soat/issues/2228)) ([b5d1ab1](https://github.com/ttoss/soat/commit/b5d1ab15f4022fb7bca179da8383f1a659d7a16a))
+
 # [0.136.0](https://github.com/ttoss/soat/compare/v0.135.0...v0.136.0) (2026-11-27)
 
 **Note:** Version bump only for package @soat/postgresdb
