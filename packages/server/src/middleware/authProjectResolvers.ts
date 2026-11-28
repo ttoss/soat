@@ -10,16 +10,17 @@ export type IsAllowedFn = ((args: {
 }) => Promise<boolean>) & { refusedBy?: RefusedBy };
 
 /**
- * SRN used to probe project accessibility for a list/scoping check. When a
- * `resourceType` is known the probe is scoped to the type
- * (`srn:{project}:{type}:*`) so resource-scoped policies are enforced; without
- * one it falls back to the project-wildcard (`srn:{project}:*:*`), used only
- * where the project itself is the target.
+ * SRN a project probe asks on: the resource a write names
+ * (`srn:{project}:{type}:{id}`), else the type (`srn:{project}:{type}:*`) so
+ * resource-scoped policies are enforced, else the project-wildcard
+ * (`srn:{project}:*:*`), used only where the project itself is the target.
  */
-const scopingSrn = (projectPublicId: string, resourceType?: string): string => {
-  return resourceType
-    ? `srn:${projectPublicId}:${resourceType}:*`
-    : `srn:${projectPublicId}:*:*`;
+export const scopingSrn = (args: {
+  projectPublicId: string;
+  resourceType?: string;
+  resourceId?: string;
+}): string => {
+  return `srn:${args.projectPublicId}:${args.resourceType ?? '*'}:${args.resourceId ?? '*'}`;
 };
 
 /** The project ids of `projectPublicIds` (every project when `null`) it may reach. */
@@ -27,6 +28,7 @@ const filterAccessibleProjects = async (args: {
   projectPublicIds: string[] | null;
   action: string;
   resourceType?: string;
+  resourceId?: string;
   isAllowed: IsAllowedFn;
   db: Context['db'];
 }): Promise<number[]> => {
@@ -39,7 +41,11 @@ const filterAccessibleProjects = async (args: {
     const allowed = await args.isAllowed({
       projectPublicId: proj.publicId as string,
       action: args.action,
-      resource: scopingSrn(proj.publicId as string, args.resourceType),
+      resource: scopingSrn({
+        projectPublicId: proj.publicId as string,
+        resourceType: args.resourceType,
+        resourceId: args.resourceId,
+      }),
     });
     if (allowed) accessible.push(proj.id as number);
   }
@@ -71,6 +77,7 @@ export const resolveReachableProjectIds = async (args: {
   projectPublicId?: string;
   action: string;
   resourceType?: string;
+  resourceId?: string;
   pinned: string | null;
   unrestricted: boolean;
   grantSets: () => Promise<PolicySets>;

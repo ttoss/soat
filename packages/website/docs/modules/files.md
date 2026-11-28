@@ -154,6 +154,8 @@ Policies can target files by `path`; with a `path` set, **both** the id-based an
 | `srn:proj_ABC:file:/exports/*`       | All files under `/exports/`               |
 | `srn:proj_ABC:file:*`                | All files in the project (id wildcard)    |
 
+A write (`files:CreateFile`, `files:UploadFile`, including the upload token request) is checked on the path it writes, `prefix` + `filename`: a grant on `srn:proj_ABC:file:/exports/*` admits uploads under `/exports/` and refuses the rest. A write with no path is checked on `srn:proj_ABC:file:*`.
+
 List queries apply policy filters in SQL. SRN syntax: [IAM](./iam.md); worked example: [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions).
 
 ### Upload Tokens (decoupled uploads)

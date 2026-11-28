@@ -15,7 +15,8 @@ import { readTagQuery } from 'src/lib/tags';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
-import { parsePagination, requireAuth, resolveWriteProjectId } from './helpers';
+import { resolveFileWriteProjectId } from './fileWriteAccess';
+import { parsePagination, requireAuth } from './helpers';
 import { resolveListScope } from './listScope';
 import { compileReadPolicy } from './readPolicy';
 
@@ -120,11 +121,12 @@ filesRouter.post('/files', async (ctx: Context) => {
     metadata?: unknown;
   };
 
-  const targetProjectId = await resolveWriteProjectId({
+  const targetProjectId = await resolveFileWriteProjectId({
     ctx,
     projectPublicId: body.project_id,
     action: 'files:CreateFile',
-    resourceType: 'file',
+    prefix: body.prefix,
+    filename: body.filename,
   });
   // The key (`path`) is built from `prefix` (directory, default /) + `filename`.
   // storageType / storagePath are system-managed, so any storage_* / path a
@@ -163,18 +165,20 @@ filesRouter.post(
       throw new DomainError('VALIDATION_FAILED', 'No file provided');
     }
 
-    const targetProjectId = await resolveWriteProjectId({
+    // The uploaded file's name is the default filename unless overridden.
+    const filename = body.filename ?? file.originalname;
+    const targetProjectId = await resolveFileWriteProjectId({
       ctx,
       projectPublicId: projectId,
       action: 'files:UploadFile',
-      resourceType: 'file',
+      prefix: body.prefix,
+      filename,
     });
     const record = await uploadFile({
       projectId: Number(targetProjectId),
       body: spooledBody(file),
       prefix: body.prefix,
-      // The uploaded file's name is the default filename unless overridden.
-      filename: body.filename ?? file.originalname,
+      filename,
       contentType: file.mimetype,
       metadata: parseMetadataBagField(body.metadata),
       lifetime: lifetimeOf(body),
@@ -196,11 +200,12 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     metadata?: unknown;
   };
 
-  const targetProjectId = await resolveWriteProjectId({
+  const targetProjectId = await resolveFileWriteProjectId({
     ctx,
     projectPublicId: body.project_id,
     action: 'files:UploadFile',
-    resourceType: 'file',
+    prefix: body.prefix,
+    filename: body.filename,
   });
   const record = await uploadFile({
     projectId: Number(targetProjectId),
@@ -227,11 +232,12 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     max_bytes?: number;
   };
 
-  const targetProjectId = await resolveWriteProjectId({
+  const targetProjectId = await resolveFileWriteProjectId({
     ctx,
     projectPublicId: body.project_id,
     action: 'files:UploadFile',
-    resourceType: 'file',
+    prefix: body.prefix,
+    filename: body.filename,
   });
 
   const token = await createPresignedUrl({
