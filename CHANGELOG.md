@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.137.1](https://github.com/ttoss/soat/compare/v0.137.0...v0.137.1) (2026-11-28)
+
+### Bug Fixes
+
+* **server:** a group key refuses a policy outside its group ([#2230](https://github.com/ttoss/soat/issues/2230)) ([cd26edb](https://github.com/ttoss/soat/commit/cd26edbc7e868a03f748143f3e2fef8f51a1442d))
+* **server:** a key of the group is refused with 403, not 404 ([#2231](https://github.com/ttoss/soat/issues/2231)) ([c3dad31](https://github.com/ttoss/soat/commit/c3dad31afd24fea2efed97d731e2a5a9d352ca2d))
+* **server:** file writes ask iam on the written path ([#2232](https://github.com/ttoss/soat/issues/2232)) ([3e289ad](https://github.com/ttoss/soat/commit/3e289ad1c8ac5cc842878001ceb97888c8dd621b))
+
 # [0.137.0](https://github.com/ttoss/soat/compare/v0.136.0...v0.137.0) (2026-11-28)
 
 ### Features
