@@ -403,6 +403,55 @@ describe('policies of a project group', () => {
     });
   });
 
+  describe("a project group key's policy_ids", () => {
+    const projectPolicy = async (project: string) => {
+      const res = await admin()
+        .post('/api/v1/policies')
+        .send({
+          project_id: project,
+          document: {
+            statement: [{ effect: 'Allow', action: ['secrets:ListSecrets'] }],
+          },
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    test.each([
+      [
+        'a project in it',
+        () => {
+          return projectId;
+        },
+      ],
+      [
+        'a project outside it',
+        () => {
+          return otherProjectId;
+        },
+      ],
+    ])('take no policy of %s on create', async (_, project) => {
+      const policyId = await projectPolicy(project());
+      const res = await mintKey({
+        project_group_id: projectGroupId,
+        policy_ids: [policyId],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('POLICY_OUTSIDE_PROJECT');
+    });
+
+    test('take no project policy on update', async () => {
+      const created = await mintKey({ project_group_id: projectGroupId });
+      expect(created.status).toBe(201);
+      const policyId = await projectPolicy(otherProjectId);
+      const res = await authenticatedTestClient(ownerToken)
+        .put(`/api/v1/api-keys/${created.body.id}`)
+        .send({ policy_ids: [policyId] });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('POLICY_OUTSIDE_PROJECT');
+    });
+  });
+
   describe('a key narrowed by policy_ids', () => {
     let narrowId: string;
     let key: string;

@@ -1,3 +1,4 @@
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -112,23 +113,18 @@ const heldPolicyIds = async (args: {
     projectGroupId: args.group?.id ?? null,
     carried: { policyIds: args.policyIds as string[] | undefined },
   });
-  const rows = await db.Policy.findAll({
-    where: {
-      id: policies.map((policy) => {
-        return policy.id;
-      }),
-    },
-    attributes: ['publicId', 'projectId'],
-    include: [
-      { model: db.Project, as: 'project', attributes: ['projectGroupId'] },
-    ],
-  });
-  const outside = rows.find((row) => {
-    return (
-      row.projectId !== null &&
-      (args.group === null || row.project?.projectGroupId !== args.group.id)
-    );
-  });
+  // A project group being created has no projects yet.
+  const outside =
+    args.group === null &&
+    (await db.Policy.findOne({
+      where: {
+        id: policies.map((policy) => {
+          return policy.id;
+        }),
+        projectId: { [Op.ne]: null },
+      },
+      attributes: ['publicId'],
+    }));
   if (outside) {
     throw new DomainError(
       'POLICY_OUTSIDE_PROJECT',
