@@ -512,6 +512,32 @@ describe('policies of a project group', () => {
       }
     });
 
+    test('is 403 naming the action for the owner an attached policy denies', async () => {
+      const third = await admin()
+        .post('/api/v1/project-groups')
+        .send({ name: 'Third', owner_id: ownerId });
+      expect(third.status).toBe(201);
+      const deny = await createGroupPolicy({
+        projectGroupId: third.body.id,
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['project-groups:*'] },
+            { effect: 'Deny', action: ['project-groups:ListPolicies'] },
+          ],
+        },
+      });
+      expect(deny.status).toBe(201);
+      const attached = await authenticatedTestClient(ownerToken)
+        .patch(`/api/v1/project-groups/${third.body.id}`)
+        .send({ policy_ids: [deny.body.id] });
+      expect(attached.status).toBe(200);
+      const res = await authenticatedTestClient(ownerToken).get(
+        `/api/v1/policies?project_group_id=${third.body.id}`
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('project-groups:ListPolicies');
+    });
+
     test('lets the owner through', async () => {
       const res = await authenticatedTestClient(ownerToken).get(
         `/api/v1/policies?project_group_id=${projectGroupId}`
