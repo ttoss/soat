@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.138.0](https://github.com/ttoss/soat/compare/v0.137.1...v0.138.0) (2026-11-28)
+
+### Bug Fixes
+
+* **server:** every write to a path-addressed resource asks iam on its path ([#2234](https://github.com/ttoss/soat/issues/2234)) ([b0c679b](https://github.com/ttoss/soat/commit/b0c679bdd3d28c7862300393d8b2fb367d9f7fbf))
+
+### Features
+
+* **server:** any tenant credential lists and reads the global policies ([#2235](https://github.com/ttoss/soat/issues/2235)) ([9d76af1](https://github.com/ttoss/soat/commit/9d76af14cdd34b69719dcfe4d49cb79e266b5a12))
+
 ## [0.137.1](https://github.com/ttoss/soat/compare/v0.137.0...v0.137.1) (2026-11-28)
 
 ### Bug Fixes
