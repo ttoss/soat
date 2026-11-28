@@ -14,6 +14,7 @@ describe('Global policies read by tenant credentials', () => {
   let noPermToken: string;
   let projectId: string;
   let projectGroupId: string;
+  let foreignProjectGroupId: string;
   let globalPolicyId: string;
   let unpublishedPolicyId: string;
   let projectPolicyId: string;
@@ -72,6 +73,16 @@ describe('Global policies read by tenant credentials', () => {
       .send({ name: 'group key', project_group_id: group.body.id });
     expect(groupKey.status).toBe(201);
     callers['project group key'] = groupKey.body.key;
+
+    const foreignOwner = await admin.post('/api/v1/users').send({
+      username: 'globalreadforeign',
+      password: 'globalreadforeignpass',
+    });
+    const foreign = await admin
+      .post('/api/v1/project-groups')
+      .send({ name: 'Foreign readers', owner_id: foreignOwner.body.id });
+    expect(foreign.status).toBe(201);
+    foreignProjectGroupId = foreign.body.id;
 
     const global = await admin
       .post('/api/v1/policies')
@@ -155,17 +166,56 @@ describe('Global policies read by tenant credentials', () => {
       expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
-    test.each(['project_id', 'project_group_id', 'user_id'])(
-      '400 with %s',
-      async (param) => {
-        const res = await authenticatedTestClient(adminToken).get(
-          `/api/v1/policies?scope=global&${param}=x`
+    test.each(['project group owner', 'project group key'])(
+      'a %s lists only the published global policies with its own project_group_id',
+      async (name) => {
+        const res = await authenticatedTestClient(callers[name]).get(
+          `/api/v1/policies?scope=global&project_group_id=${projectGroupId}&limit=100`
         );
 
-        expect(res.status).toBe(400);
-        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.status).toBe(200);
+        const ids = res.body.data.map((p: { id: string }) => {
+          return p.id;
+        });
+        expect(ids).toContain(globalPolicyId);
+        expect(ids).not.toContain(unpublishedPolicyId);
+        expect(ids).not.toContain(projectPolicyId);
       }
     );
+
+    test.each(['project group owner', 'project group key'])(
+      'a project group beyond the reach of a %s is 404',
+      async (name) => {
+        const res = await authenticatedTestClient(callers[name]).get(
+          `/api/v1/policies?scope=global&project_group_id=${foreignProjectGroupId}`
+        );
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      }
+    );
+
+    test('the unrestricted admin lists every global policy with a project_group_id', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies?scope=global&project_group_id=${projectGroupId}&limit=100`
+      );
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((p: { id: string }) => {
+        return p.id;
+      });
+      expect(ids).toContain(globalPolicyId);
+      expect(ids).toContain(unpublishedPolicyId);
+    });
+
+    test.each(['project_id', 'user_id'])('400 with %s', async (param) => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies?scope=global&${param}=x`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
 
     test('400 for an unknown scope', async () => {
       const res = await authenticatedTestClient(callers['project key']).get(
