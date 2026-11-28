@@ -92,6 +92,10 @@ export class Policy extends Model {
   })
   declare document: object;
 
+  /** A global policy every tenant credential may read; never set on any other. */
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare published: boolean;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

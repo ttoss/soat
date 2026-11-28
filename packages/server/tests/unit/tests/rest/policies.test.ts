@@ -346,12 +346,12 @@ describe('Policies', () => {
       expect(response.status).toBe(401);
     });
 
-    test('non-admin user returns 403', async () => {
+    test('an unpublished global policy is 404 to a non-admin user', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/policies/${policyId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('returns 404 for non-existent policy', async () => {
@@ -413,12 +413,12 @@ describe('Policies', () => {
       expect(response.status).toBe(401);
     });
 
-    test('non-admin user returns 403', async () => {
+    test('an unpublished global policy is 404 to a non-admin user', async () => {
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/policies/${policyId}`)
         .send({ document: { statement: [] } });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('keeps the existing name when name is omitted', async () => {
@@ -495,10 +495,22 @@ describe('Policies', () => {
       expect(response.status).toBe(401);
     });
 
-    test('non-admin user returns 403', async () => {
+    test('an unpublished global policy is 404 to a non-admin user', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send(sendDoc());
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/policies/${createRes.body.id}`
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    test('a published global policy is 403 to a non-admin user', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({ ...sendDoc(), published: true });
 
       const response = await authenticatedTestClient(userToken).delete(
         `/api/v1/policies/${createRes.body.id}`

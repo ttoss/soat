@@ -3,9 +3,10 @@ info:
   title: SOAT Policies API
   version: 1.0.0
   description: >-
-    API for managing policies: global ones (unrestricted admin only) and
-    project policies, managed by whoever holds the `policies:*` actions in
-    their project.
+    API for managing policies: global ones (written by the unrestricted admin
+    only; once published, read by any caller holding the policy reads
+    somewhere) and project policies, managed by whoever holds the
+    `policies:*` actions in their project.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -35,7 +36,10 @@ paths:
         `srn:project-group:<project_group_id>:policy/*`. Without any, the
         unrestricted admin lists every policy, global, project and project
         group ones. Pass `user_id` (unrestricted admin only) to list only the
-        policies attached to that user.
+        policies attached to that user. `scope=global` lists only the global
+        policies: every one to the unrestricted admin, the published ones to
+        any caller holding `policies:ListPolicies` in a project or
+        `project-groups:ListPolicies` in a project group.
       operationId: listPolicies
       x-raises:
         - API_KEY_PROJECT_SCOPE
@@ -67,6 +71,17 @@ paths:
           description: Return only policies attached to this user (user_...)
           schema:
             type: string
+        - name: scope
+          in: query
+          required: false
+          description: >-
+            `global` lists only the global policies (no `project_id` and no
+            `project_group_id`); never with `project_id`, `project_group_id` or
+            `user_id`
+          schema:
+            type: string
+            enum:
+              - global
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
@@ -92,8 +107,9 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: >-
-            Forbidden: the caller may not list policies in the project, or
-            lists global policies without being the unrestricted admin
+            Forbidden: the caller may not list policies in the project, lists
+            every policy without being the unrestricted admin, or lists the
+            global ones holding the policy list nowhere
           content:
             application/json:
               schema:
@@ -171,6 +187,12 @@ paths:
                   example: Allows read-only access to all resources
                 document:
                   $ref: '#/components/schemas/PolicyDocument'
+                published:
+                  type: boolean
+                  description: >-
+                    Defaults to `false`. Whether every tenant credential may
+                    read this global policy; set only by the unrestricted
+                    admin, on a global policy only (`400` otherwise).
       responses:
         '201':
           description: Policy created successfully
@@ -223,8 +245,10 @@ paths:
       description: >-
         Returns a policy. A project policy needs `policies:GetPolicy` in its
         project; a project group policy, `project-groups:GetPolicy` on
-        `srn:project-group:<project_group_id>:policy/<policy_id>`; a global
-        one, the unrestricted admin.
+        `srn:project-group:<project_group_id>:policy/<policy_id>`; a published
+        global one, `policies:GetPolicy` in a project or
+        `project-groups:GetPolicy` in a project group. An unpublished global
+        one is `404` to all but the unrestricted admin.
       operationId: getPolicy
       x-raises:
         - AGENT_NOT_FOUND
@@ -285,7 +309,8 @@ paths:
         group policy, `project-groups:UpdatePolicy` on
         `srn:project-group:<project_group_id>:policy/<policy_id>`, and its
         `Allow` statements stay within the project group; a global one, the
-        unrestricted admin. The project or project group never changes.
+        unrestricted admin, and an unpublished one is `404` to anyone else.
+        The project or project group never changes.
       operationId: updatePolicy
       x-raises:
         - AGENT_NOT_FOUND
@@ -325,6 +350,12 @@ paths:
                   type: string
                 document:
                   $ref: '#/components/schemas/PolicyDocument'
+                published:
+                  type: boolean
+                  description: >-
+                    Unchanged when omitted. Whether every tenant credential may
+                    read this global policy; set only by the unrestricted
+                    admin, on a global policy only (`400` otherwise).
       responses:
         '200':
           description: Policy updated successfully
@@ -376,7 +407,8 @@ paths:
         Deletes a policy. A project policy needs `policies:DeletePolicy` in its
         project; a project group policy, `project-groups:DeletePolicy` on
         `srn:project-group:<project_group_id>:policy/<policy_id>`; a global
-        one, the unrestricted admin. Refused with `409
+        one, the unrestricted admin, and an unpublished one is `404` to anyone
+        else. Refused with `409
         POLICY_HAS_DEPENDENTS` while a trigger, agent, webhook, user, project
         group or API key names it in its `policy_ids`.
       operationId: deletePolicy
@@ -554,6 +586,12 @@ components:
           nullable: true
         document:
           $ref: '#/components/schemas/PolicyDocument'
+        published:
+          type: boolean
+          description: >-
+            Whether every tenant credential may read this global policy;
+            always `false` on a project or project group policy.
+          example: false
         created_at:
           type: string
           format: date-time
