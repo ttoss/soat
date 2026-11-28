@@ -121,6 +121,18 @@ describe('groups', () => {
       );
       expect(added.status).toBe(204);
     });
+
+    test('a project group being created takes no project policy', async () => {
+      const scoped = await createPolicy({
+        document: { statement: [{ effect: 'Deny', action: ['files:*'] }] },
+        projectId: otherProjectId,
+      });
+      const res = await admin()
+        .post('/api/v1/project-groups')
+        .send({ name: 'Acme', owner_id: ownerId, policy_ids: [scoped] });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('POLICY_OUTSIDE_PROJECT');
+    });
   });
 
   describe('reading a project group', () => {
