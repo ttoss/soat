@@ -7,7 +7,8 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 /**
  * A policy with a `project_id` belongs to that project: its document grants
  * only there, and whoever holds `policies:*` there manages it. A policy
- * without one is global and stays the unrestricted admin's.
+ * without one is global: the unrestricted admin writes it, and a caller
+ * holding the policy reads in a project reads it.
  */
 describe('Project policies', () => {
   let adminToken: string;
@@ -340,7 +341,16 @@ describe('Project policies', () => {
       expect(res.status).toBe(200);
     });
 
-    test.each(['get', 'put', 'delete'] as const)(
+    test('a project caller reads a global policy', async () => {
+      const res = await authenticatedTestClient(projectAdminToken).get(
+        `/api/v1/policies/${globalPolicyId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.project_id).toBeNull();
+    });
+
+    test.each(['put', 'delete'] as const)(
       'a global policy is 403 to a project caller (%s)',
       async (method) => {
         const req = authenticatedTestClient(projectAdminToken)[method](

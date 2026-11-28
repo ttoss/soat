@@ -177,6 +177,19 @@ export const getProjectGroup = async (args: {
   return mapProjectGroup(await findProjectGroup(args));
 };
 
+/** The public ids of every project group `ownerUserId` owns. */
+export const listOwnedProjectGroupPublicIds = async (args: {
+  ownerUserId: number;
+}): Promise<string[]> => {
+  const groups = await db.ProjectGroup.findAll({
+    where: { ownerUserId: args.ownerUserId },
+    attributes: ['publicId'],
+  });
+  return groups.map((group) => {
+    return group.publicId as string;
+  });
+};
+
 /** Every group, or the project groups `ownerUserId` owns. */
 export const listProjectGroups = async (args: {
   ownerUserId?: number;

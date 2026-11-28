@@ -101,22 +101,35 @@ export const mapPolicy = (policy: PolicyRow) => {
   };
 };
 
+/** The policies a listing spans: every one, or only the global ones. */
+type PolicyListScope = 'all' | 'global';
+
+/** A listing's owner filter: the global policies, a project group's, or projects'. */
+const ownerWhere = (args: {
+  scope: PolicyListScope;
+  projectIds?: number[];
+  projectGroupId?: number;
+}): Record<string, unknown> => {
+  if (args.scope === 'global') return { projectId: null, projectGroupId: null };
+  return args.projectGroupId === undefined
+    ? projectScopeWhere({ projectIds: args.projectIds })
+    : { projectGroupId: args.projectGroupId };
+};
+
 /**
  * The listing's `where`, or `null` when a filter matches nothing. An unknown
  * user, or one with no policies, matches nothing. `projectIds` narrows it to
- * those projects' policies and `projectGroupId` to that project group's;
- * neither lists every policy.
+ * those projects' policies, `projectGroupId` to that project group's and
+ * scope `global` to the global ones; none lists every policy.
  */
 const listWhere = async (args: {
+  scope: PolicyListScope;
   userId?: string;
   projectIds?: number[];
   projectGroupId?: number;
 }): Promise<Record<string, unknown> | null> => {
   if (args.projectIds?.length === 0) return null;
-  const where: Record<string, unknown> =
-    args.projectGroupId === undefined
-      ? projectScopeWhere({ projectIds: args.projectIds })
-      : { projectGroupId: args.projectGroupId };
+  const where = ownerWhere(args);
   if (args.userId !== undefined) {
     const user = await db.User.findOne({ where: { publicId: args.userId } });
     const policyIds = user?.policyIds ?? [];
@@ -127,6 +140,7 @@ const listWhere = async (args: {
 };
 
 export const listPolicies = async (args: {
+  scope: PolicyListScope;
   userId?: string;
   projectIds?: number[];
   projectGroupId?: number;
@@ -141,6 +155,7 @@ export const listPolicies = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: {
+      scope: args.scope,
       userId: args.userId,
       projectIds: args.projectIds,
       projectGroupId: args.projectGroupId,

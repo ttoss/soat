@@ -3,9 +3,10 @@ info:
   title: SOAT Policies API
   version: 1.0.0
   description: >-
-    API for managing policies: global ones (unrestricted admin only) and
-    project policies, managed by whoever holds the `policies:*` actions in
-    their project.
+    API for managing policies: global ones (written by the unrestricted admin
+    only, read by any caller holding the policy reads somewhere) and project
+    policies, managed by whoever holds the `policies:*` actions in their
+    project.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -35,7 +36,9 @@ paths:
         `srn:project-group:<project_group_id>:policy/*`. Without any, the
         unrestricted admin lists every policy, global, project and project
         group ones. Pass `user_id` (unrestricted admin only) to list only the
-        policies attached to that user.
+        policies attached to that user. `scope=global` lists only the global
+        policies, to any caller holding `policies:ListPolicies` in a project or
+        `project-groups:ListPolicies` in a project group.
       operationId: listPolicies
       x-raises:
         - API_KEY_PROJECT_SCOPE
@@ -67,6 +70,17 @@ paths:
           description: Return only policies attached to this user (user_...)
           schema:
             type: string
+        - name: scope
+          in: query
+          required: false
+          description: >-
+            `global` lists only the global policies (no `project_id` and no
+            `project_group_id`); never with `project_id`, `project_group_id` or
+            `user_id`
+          schema:
+            type: string
+            enum:
+              - global
         - $ref: './pagination.yaml#/components/parameters/Limit'
         - $ref: './pagination.yaml#/components/parameters/Cursor'
       responses:
@@ -92,8 +106,9 @@ paths:
                 $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: >-
-            Forbidden: the caller may not list policies in the project, or
-            lists global policies without being the unrestricted admin
+            Forbidden: the caller may not list policies in the project, lists
+            every policy without being the unrestricted admin, or lists the
+            global ones holding the policy list nowhere
           content:
             application/json:
               schema:
@@ -224,7 +239,8 @@ paths:
         Returns a policy. A project policy needs `policies:GetPolicy` in its
         project; a project group policy, `project-groups:GetPolicy` on
         `srn:project-group:<project_group_id>:policy/<policy_id>`; a global
-        one, the unrestricted admin.
+        one, `policies:GetPolicy` in a project or `project-groups:GetPolicy`
+        in a project group.
       operationId: getPolicy
       x-raises:
         - AGENT_NOT_FOUND
@@ -376,7 +392,8 @@ paths:
         Deletes a policy. A project policy needs `policies:DeletePolicy` in its
         project; a project group policy, `project-groups:DeletePolicy` on
         `srn:project-group:<project_group_id>:policy/<policy_id>`; a global
-        one, the unrestricted admin. Refused with `409
+        one, `policies:GetPolicy` in a project or `project-groups:GetPolicy`
+        in a project group. Refused with `409
         POLICY_HAS_DEPENDENTS` while a trigger, agent, webhook, user, project
         group or API key names it in its `policy_ids`.
       operationId: deletePolicy

@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { callerDenied } from 'src/lib/authorizationDenial';
 import type { PolicyDocument } from 'src/lib/iam';
 import { readsShowing } from 'src/lib/permissionCatalog';
 import {
@@ -11,13 +12,19 @@ import {
   listPolicies,
   updatePolicy,
 } from 'src/lib/policies';
+import { buildProjectGroupSrn } from 'src/lib/projectGroupActions';
+import { listOwnedProjectGroupPublicIds } from 'src/lib/projectGroups';
+import { admitAuthorized } from 'src/middleware/admission';
+import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
   type AuthenticatedContext,
+  parseEnumQuery,
   parsePagination,
   requireAdmin,
   requireAuth,
   requireProjectAccess,
+  resolveReadProjectIds,
   resolveWriteProjectId,
   resolveWriteProjectPublicId,
 } from './helpers';
@@ -79,9 +86,93 @@ const refuseProjectGroupWith = (field: string): DomainError => {
 };
 
 /**
+ * The policy actions a caller other than the unrestricted admin takes on a
+ * global policy, each resolving the projects where the caller holds it.
+ */
+const GLOBAL_POLICY_READS: Readonly<
+  Record<string, (ctx: AuthenticatedContext) => Promise<number[] | undefined>>
+> = {
+  'policies:ListPolicies': (ctx) => {
+    return resolveReadProjectIds({
+      ctx,
+      action: 'policies:ListPolicies',
+      resourceType: 'policy',
+    });
+  },
+  'policies:GetPolicy': (ctx) => {
+    return resolveReadProjectIds({
+      ctx,
+      action: 'policies:GetPolicy',
+      resourceType: 'policy',
+    });
+  },
+};
+
+/**
+ * The project groups whose policies the caller may reach: a project group
+ * key's own, else those its user owns.
+ */
+const callerProjectGroups = (ctx: AuthenticatedContext): Promise<string[]> => {
+  const { authUser } = ctx;
+  if (authUser.apiKeyProjectGroupPublicId !== undefined) {
+    return Promise.resolve([authUser.apiKeyProjectGroupPublicId]);
+  }
+  return listOwnedProjectGroupPublicIds({ ownerUserId: authUser.id ?? -1 });
+};
+
+/**
+ * Whether the caller takes `action`, as its project group action, on the
+ * policies of some project group it reaches.
+ */
+const holdsInProjectGroup = async (args: {
+  ctx: AuthenticatedContext;
+  action: string;
+}): Promise<boolean> => {
+  for (const projectGroupPublicId of await callerProjectGroups(args.ctx)) {
+    const allowed = await args.ctx.authUser.isAllowedOnProjectGroup({
+      projectGroupPublicId,
+      action: PROJECT_GROUP_POLICY_ACTIONS[args.action],
+      resource: buildProjectGroupSrn({
+        projectGroupPublicId,
+        resourceType: 'policy',
+      }),
+    });
+    if (allowed) return true;
+  }
+  return false;
+};
+
+/**
+ * Authorizes `action` on the global policies, which carry no tenant data: a
+ * read for any caller holding it in a project or in a project group, every
+ * write for the unrestricted admin only.
+ */
+const authorizeGlobalPolicies = async (args: {
+  ctx: AuthenticatedContext;
+  action: string;
+}): Promise<void> => {
+  const { ctx, action } = args;
+  const projectsHolding = GLOBAL_POLICY_READS[action];
+  if (projectsHolding === undefined) {
+    await requireAdmin(ctx, action);
+    return;
+  }
+  const projectIds = await projectsHolding(ctx);
+  const allowed =
+    projectIds === undefined ||
+    projectIds.length > 0 ||
+    (await holdsInProjectGroup({ ctx, action }));
+  recordAuthorizationDecision(ctx, { action, allowed });
+  if (!allowed) {
+    throw callerDenied({ authUser: ctx.authUser, action, resource: null });
+  }
+  await admitAuthorized(ctx, action);
+};
+
+/**
  * A project group policy authorizes as a project group action, a project
- * policy against its own SRN; a global one, and every policy for the
- * unrestricted admin, stays behind the admin gate.
+ * policy against its own SRN, a global one as the global policies do; every
+ * policy for the unrestricted admin stays behind the admin gate.
  */
 const authorizePolicy = async (args: {
   ctx: Context;
@@ -109,7 +200,7 @@ const authorizePolicy = async (args: {
     return;
   }
   if (found.scope === null) {
-    await requireAdmin(ctx, args.action);
+    await authorizeGlobalPolicies({ ctx, action: args.action });
     return;
   }
   await authorizeResource({
@@ -135,12 +226,43 @@ const throwIfInvalid = <T extends object>(
   return result;
 };
 
+/** `GET /policies?scope=global`, which no owner or user filter narrows. */
+const listGlobalPolicies = async (args: {
+  ctx: AuthenticatedContext;
+  filters: Record<string, string | undefined>;
+}): Promise<void> => {
+  const { ctx } = args;
+  for (const [field, value] of Object.entries(args.filters)) {
+    if (value !== undefined) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `scope=global and ${field} are mutually exclusive.`
+      );
+    }
+  }
+  await authorizeGlobalPolicies({ ctx, action: 'policies:ListPolicies' });
+  ctx.body = await listPolicies({ scope: 'global', ...parsePagination(ctx) });
+};
+
 policiesRouter.get('/policies', async (ctx: Context) => {
   const action = 'policies:ListPolicies';
   const userId = ctx.query.user_id as string | undefined;
   const projectPublicId = ctx.query.project_id as string | undefined;
   const projectGroupPublicId = ctx.query.project_group_id as string | undefined;
+  const scope = parseEnumQuery({ ctx, name: 'scope', allowed: ['global'] });
   requireAuth(ctx);
+
+  if (scope === 'global') {
+    await listGlobalPolicies({
+      ctx,
+      filters: {
+        project_id: projectPublicId,
+        project_group_id: projectGroupPublicId,
+        user_id: userId,
+      },
+    });
+    return;
+  }
 
   if (projectGroupPublicId !== undefined) {
     if (projectPublicId !== undefined)
@@ -152,6 +274,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
       action,
     });
     ctx.body = await listPolicies({
+      scope: 'all',
       projectGroupId: group.id as number,
       ...parsePagination(ctx),
     });
@@ -173,6 +296,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
   if (projectIds === undefined) await requireAdmin(ctx, action);
 
   ctx.body = await listPolicies({
+    scope: 'all',
     userId,
     projectIds,
     ...parsePagination(ctx),
@@ -218,7 +342,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
       }),
     };
   } else {
-    await requireAdmin(ctx, action);
+    await authorizeGlobalPolicies({ ctx, action });
   }
 
   ctx.status = 201;
