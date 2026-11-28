@@ -9,6 +9,7 @@ import { enqueueAuditWrite } from '../lib/auditQueue';
 import { loggableError } from '../lib/loggableError';
 import { wrapIsAllowed } from '../lib/permissions';
 import { principalFromAuthUser } from '../lib/principals';
+import { scopingSrn } from './authProjectResolvers';
 
 const log = createDebug('soat:audit');
 
@@ -126,10 +127,13 @@ const instrumentAuthUser = (
   authUser.resolveProjectIds = async (reqArgs) => {
     const result = await originalResolveProjectIds(reqArgs);
     if (reqArgs.projectPublicId) {
-      const type = reqArgs.resourceType ?? '*';
       checks.push({
         action: reqArgs.action,
-        resource: `srn:${reqArgs.projectPublicId}:${type}:*`,
+        resource: scopingSrn({
+          projectPublicId: reqArgs.projectPublicId,
+          resourceType: reqArgs.resourceType,
+          resourceId: reqArgs.resourceId,
+        }),
         projectPublicId: reqArgs.projectPublicId,
         resourceType: reqArgs.resourceType ?? null,
         allowed: result !== null,

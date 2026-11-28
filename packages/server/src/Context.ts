@@ -42,6 +42,11 @@ export type AuthUser = {
      * e.g. `projects:*` actions).
      */
     resourceType?: string;
+    /**
+     * The resource a write names within `resourceType` (a file's path): the
+     * probe asks on `srn:{project}:{resourceType}:{resourceId}` instead.
+     */
+    resourceId?: string;
   }) => Promise<number[] | undefined | null>;
   /**
    * The caller's effective policy sets for the given project, each of which a

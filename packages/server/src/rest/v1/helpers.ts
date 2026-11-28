@@ -30,6 +30,7 @@ import {
 import { readWritePrecondition } from 'src/lib/writePrecondition';
 import { admitAuthorized } from 'src/middleware/admission';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
+import { scopingSrn } from 'src/middleware/authProjectResolvers';
 
 /**
  * Throws `API_KEY_PROJECT_SCOPE` when a project-scoped
@@ -233,9 +234,10 @@ export const requireCallerUser = (
 export const scopeSrn = (args: {
   projectPublicId?: string;
   resourceType?: string;
+  resourceId?: string;
 }): string | null => {
   if (!args.projectPublicId) return null;
-  return `srn:${args.projectPublicId}:${args.resourceType ?? '*'}:*`;
+  return scopingSrn({ ...args, projectPublicId: args.projectPublicId });
 };
 
 /**
@@ -471,8 +473,10 @@ export const resolveWriteProjectId = async (args: {
   projectPublicId?: string;
   action: string;
   resourceType?: string;
+  /** The resource the write names, when its SRN is known before it exists. */
+  resourceId?: string;
 }): Promise<number> => {
-  const { ctx, action } = args;
+  const { ctx, action, resourceType, resourceId } = args;
   requireAuth(ctx);
 
   const projectPublicId = resolveWriteProjectPublicId({
@@ -495,14 +499,15 @@ export const resolveWriteProjectId = async (args: {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action,
-    resourceType: args.resourceType,
+    resourceType,
+    resourceId,
   });
 
   if (projectIds === null) {
     throw callerDenied({
       authUser: ctx.authUser,
       action,
-      resource: scopeSrn({ projectPublicId, resourceType: args.resourceType }),
+      resource: scopeSrn({ projectPublicId, resourceType, resourceId }),
     });
   }
 
