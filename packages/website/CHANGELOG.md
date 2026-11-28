@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.137.0](https://github.com/ttoss/soat/compare/v0.136.0...v0.137.0) (2026-11-28)
+
+### Features
+
+* **iam:** a deployment registers its own project group actions ([#2227](https://github.com/ttoss/soat/issues/2227)) ([2d99174](https://github.com/ttoss/soat/commit/2d991742ffc849dd9d69c1942a2db5bed06da529))
+* **policies:** policies owned by a project group ([#2228](https://github.com/ttoss/soat/issues/2228)) ([b5d1ab1](https://github.com/ttoss/soat/commit/b5d1ab15f4022fb7bca179da8383f1a659d7a16a))
+
 # [0.136.0](https://github.com/ttoss/soat/compare/v0.135.0...v0.136.0) (2026-11-27)
 
 ### Bug Fixes
