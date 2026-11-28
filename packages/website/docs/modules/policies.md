@@ -25,16 +25,17 @@ How authority is formed, stored and narrowed: [The Permission Model](../advanced
 
 ## Data Model
 
-| Field              | Type   | Description                                                |
-| ------------------ | ------ | ---------------------------------------------------------- |
-| `id`               | string | Public identifier prefixed with `pol_`                     |
-| `project_id`       | string | Owning project; `null` for a global policy                 |
-| `project_group_id` | string | Owning project group; `null` unless a project group policy |
-| `name`             | string | Human-readable policy name                                 |
-| `description`      | string | Optional description                                       |
-| `document`         | object | Policy document (see [IAM](./iam.md))                      |
-| `created_at`       | string | ISO 8601 creation timestamp                                |
-| `updated_at`       | string | ISO 8601 last-updated timestamp                            |
+| Field              | Type    | Description                                                                                                             |
+| ------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string  | Public identifier prefixed with `pol_`                                                                                  |
+| `project_id`       | string  | Owning project; `null` for a global policy                                                                              |
+| `project_group_id` | string  | Owning project group; `null` unless a project group policy                                                              |
+| `name`             | string  | Human-readable policy name                                                                                              |
+| `description`      | string  | Optional description                                                                                                    |
+| `document`         | object  | Policy document (see [IAM](./iam.md))                                                                                   |
+| `published`        | boolean | A global policy every tenant credential may read; always `false` on a project or project group policy (default `false`) |
+| `created_at`       | string  | ISO 8601 creation timestamp                                                                                             |
+| `updated_at`       | string  | ISO 8601 last-updated timestamp                                                                                         |
 
 ## Key Concepts
 
@@ -60,20 +61,21 @@ Format and evaluation: [IAM — Policy Documents](./iam.md#policy-documents). Ex
 
 ### Project and Global Policies
 
-|                            | Project policy (`project_id` set)                                  | Global policy (`project_id` `null`)                                                                                   |
-| -------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Created by                 | a caller holding `policies:CreatePolicy` in the project            | the unrestricted admin only                                                                                           |
-| Read                       | `policies:ListPolicies`, `policies:GetPolicy` in the project       | any caller holding them in a project, or `project-groups:ListPolicies`, `project-groups:GetPolicy` in a project group |
-| Edit, delete               | `policies:UpdatePolicy`, `policies:DeletePolicy` in the project    | the unrestricted admin only                                                                                           |
-| `Allow` resources          | only `srn:<project_id>:<type>:<id>` of its own project, else `400` | any                                                                                                                   |
-| Carried in `policy_ids` by | agents, triggers and webhooks of the same project                  | agents, triggers and webhooks of any project                                                                          |
+|                            | Project policy (`project_id` set)                                  | Global policy (`project_id` `null`)                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Created by                 | a caller holding `policies:CreatePolicy` in the project            | the unrestricted admin only                                                                                                                                     |
+| Read                       | `policies:ListPolicies`, `policies:GetPolicy` in the project       | the unrestricted admin; once `published`, any caller holding them in a project, or `project-groups:ListPolicies`, `project-groups:GetPolicy` in a project group |
+| Edit, delete               | `policies:UpdatePolicy`, `policies:DeletePolicy` in the project    | the unrestricted admin only                                                                                                                                     |
+| `Allow` resources          | only `srn:<project_id>:<type>:<id>` of its own project, else `400` | any                                                                                                                                                             |
+| Carried in `policy_ids` by | agents, triggers and webhooks of the same project                  | agents, triggers and webhooks of any project                                                                                                                    |
 
 - `POST` with `project_id`, or with a project-scoped API key (its project is the default), creates a project policy; without either, a global one. The project never changes; deleting the project deletes its policies.
 - A `policy` resource in a [formation](./formations.md) is a project policy of the formation's project.
 - An `Allow` with no `resource` grants every resource of the policy's project, as `srn:<project_id>:*:*`; the document is stored as written.
 - An `Allow` on `*`, `srn:*:…`, a project glob, or another project's SRN is refused (`400 VALIDATION_FAILED`, `meta.details`). Each refusal names the form an `Allow` resource takes: `srn:<project_id>:<type>:<id>`, or no `resource` for every resource of the project. A `Deny` may name anything.
-- Listing returns only the projects' policies the caller may list; the unrestricted admin also sees global ones. [`GET /api/v1/policies?scope=global`](/docs/api/policies/list-policies) lists only the global policies, to the same callers who read one; it takes no `project_id`, `project_group_id` or `user_id` (`400 VALIDATION_FAILED`). A global policy carries no tenant data.
-- A project policy read outside the caller's reach is `404`, and so is a `GET`, `PUT` or `DELETE` of an id that names no policy. A global policy is `403` to a `GET` from a caller holding the read nowhere, and to a `PUT` or `DELETE` from anyone but the unrestricted admin.
+- Listing returns only the projects' policies the caller may list; the unrestricted admin also sees global ones. [`GET /api/v1/policies?scope=global`](/docs/api/policies/list-policies) lists only the global policies: every one to the unrestricted admin, the published ones to the other callers who read one. It takes no `project_id`, `project_group_id` or `user_id` (`400 VALIDATION_FAILED`).
+- A global policy is private until the unrestricted admin sets `published` on it (`POST`, or `PUT` to set or clear it); a published one carries no tenant data. `published` on a project or project group policy is `400 VALIDATION_FAILED`.
+- A project policy read outside the caller's reach is `404`, and so is a `GET`, `PUT` or `DELETE` of an id that names no policy. An unpublished global policy is `404` to anyone but the unrestricted admin, as an unknown id is. A published one is `403` to a `GET` from a caller holding the read nowhere, and to a `PUT` or `DELETE` from anyone but the unrestricted admin.
 - Every resource carrying `policy_ids` (or a project's `agent_policy_ids`) checks it the same way on create, update and formation apply: a value that is not a list of non-empty ids is `400 VALIDATION_FAILED` (`meta.field` names the field), an id that names no policy is `400 POLICY_NOT_FOUND`, and one naming another project's policy is `400 POLICY_OUTSIDE_PROJECT` (`meta.policy_id`). Attaching or editing an attached policy still needs a writer who holds its grants (`403 POLICY_GRANT_NOT_HELD`).
 
 ### Project Group Policies

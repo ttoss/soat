@@ -142,31 +142,42 @@ const holdsInProjectGroup = async (args: {
   return false;
 };
 
+const policyNotFound = (): DomainError => {
+  return new DomainError('RESOURCE_NOT_FOUND', 'Policy not found');
+};
+
 /**
- * Authorizes `action` on the global policies, which carry no tenant data: a
- * read for any caller holding it in a project or in a project group, every
- * write for the unrestricted admin only.
+ * Authorizes `action` on the global policies: every write for the
+ * unrestricted admin only, a read for any caller holding it in a project or in
+ * a project group. An unpublished one (`policy`, the one acted on) is private,
+ * `404` to all but the unrestricted admin. Answers whether the caller sees only
+ * the published ones.
  */
 const authorizeGlobalPolicies = async (args: {
   ctx: AuthenticatedContext;
   action: string;
-}): Promise<void> => {
+  policy?: { published: boolean };
+}): Promise<{ publishedOnly: boolean }> => {
   const { ctx, action } = args;
+  const { unrestricted } = ctx.authUser;
+  if (!unrestricted && args.policy?.published === false) {
+    throw policyNotFound();
+  }
   const projectsHolding = GLOBAL_POLICY_READS[action];
-  if (projectsHolding === undefined) {
+  if (unrestricted || projectsHolding === undefined) {
     await requireAdmin(ctx, action);
-    return;
+    return { publishedOnly: false };
   }
   const projectIds = await projectsHolding(ctx);
   const allowed =
-    projectIds === undefined ||
-    projectIds.length > 0 ||
+    (projectIds !== undefined && projectIds.length > 0) ||
     (await holdsInProjectGroup({ ctx, action }));
   recordAuthorizationDecision(ctx, { action, allowed });
   if (!allowed) {
     throw callerDenied({ authUser: ctx.authUser, action, resource: null });
   }
   await admitAuthorized(ctx, action);
+  return { publishedOnly: true };
 };
 
 /**
@@ -187,9 +198,7 @@ const authorizePolicy = async (args: {
     return;
   }
   const found = await findPolicyScope({ policyId });
-  if (found === null) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Policy not found');
-  }
+  if (found === null) throw policyNotFound();
   if ('projectGroupPublicId' in found) {
     await authorizeProjectGroupPolicy({
       ctx,
@@ -200,7 +209,11 @@ const authorizePolicy = async (args: {
     return;
   }
   if (found.scope === null) {
-    await authorizeGlobalPolicies({ ctx, action: args.action });
+    await authorizeGlobalPolicies({
+      ctx,
+      action: args.action,
+      policy: { published: found.published },
+    });
     return;
   }
   await authorizeResource({
@@ -240,8 +253,14 @@ const listGlobalPolicies = async (args: {
       );
     }
   }
-  await authorizeGlobalPolicies({ ctx, action: 'policies:ListPolicies' });
-  ctx.body = await listPolicies({ scope: 'global', ...parsePagination(ctx) });
+  const { publishedOnly } = await authorizeGlobalPolicies({
+    ctx,
+    action: 'policies:ListPolicies',
+  });
+  ctx.body = await listPolicies({
+    scope: { owner: 'global', publishedOnly },
+    ...parsePagination(ctx),
+  });
 };
 
 policiesRouter.get('/policies', async (ctx: Context) => {
@@ -274,7 +293,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
       action,
     });
     ctx.body = await listPolicies({
-      scope: 'all',
+      scope: { owner: 'any' },
       projectGroupId: group.id as number,
       ...parsePagination(ctx),
     });
@@ -296,7 +315,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
   if (projectIds === undefined) await requireAdmin(ctx, action);
 
   ctx.body = await listPolicies({
-    scope: 'all',
+    scope: { owner: 'any' },
     userId,
     projectIds,
     ...parsePagination(ctx),
@@ -311,6 +330,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
     name?: string;
     description?: string;
     document?: object;
+    published?: boolean;
   };
   requireAuth(ctx);
 
@@ -351,6 +371,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
       name: body.name,
       description: body.description,
       document: body.document as PolicyDocument,
+      published: body.published,
       project,
       projectGroup,
       writerUnrestricted: ctx.authUser.unrestricted,
@@ -366,9 +387,7 @@ policiesRouter.get('/policies/:policy_id', async (ctx: Context) => {
   });
   const policy = await getPolicy({ policyId: ctx.params.policy_id });
 
-  if (!policy) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Policy not found');
-  }
+  if (!policy) throw policyNotFound();
 
   ctx.body = policy;
 });
@@ -380,10 +399,11 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
     onDenied: 'refuse',
   });
   requireAuth(ctx);
-  const { name, description, document } = ctx.request.body as {
+  const { name, description, document, published } = ctx.request.body as {
     name?: string;
     description?: string;
     document: object;
+    published?: boolean;
   };
 
   ctx.body = throwIfInvalid(
@@ -392,6 +412,7 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
       name,
       description,
       document: document as PolicyDocument,
+      published,
       writerPolicies: ctx.authUser.getPolicies,
       writerUnrestricted: ctx.authUser.unrestricted,
     })

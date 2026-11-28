@@ -7,8 +7,8 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 /**
  * A policy with a `project_id` belongs to that project: its document grants
  * only there, and whoever holds `policies:*` there manages it. A policy
- * without one is global: the unrestricted admin writes it, and a caller
- * holding the policy reads in a project reads it.
+ * without one is global: the unrestricted admin writes it, and once it is
+ * published a caller holding the policy reads in a project reads it.
  */
 describe('Project policies', () => {
   let adminToken: string;
@@ -77,7 +77,7 @@ describe('Project policies', () => {
 
     const globalRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
-      .send({ document: allowIn({ project: projectId }) });
+      .send({ document: allowIn({ project: projectId }), published: true });
     globalPolicyId = globalRes.body.id;
 
     const otherRes = await createProjectPolicy({

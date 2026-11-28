@@ -18,6 +18,9 @@ describe('Admin gate and credential scope', () => {
   let projectId: string;
   let otherProjectId: string;
   let readPolicyId: string;
+  const readPolicyDocument = {
+    statement: [{ effect: 'Allow', action: ['projects:GetProject'] }],
+  };
 
   const mintAdminKey = async (args: {
     projectId?: string;
@@ -53,9 +56,11 @@ describe('Admin gate and credential scope', () => {
         },
       },
       {
-        name: 'GET /policies/{global policy}',
+        name: 'PUT /policies/{global policy}',
         send: () => {
-          return client.get(`/api/v1/policies/${readPolicyId}`);
+          return client
+            .put(`/api/v1/policies/${readPolicyId}`)
+            .send({ document: readPolicyDocument });
         },
       },
       {
@@ -89,11 +94,7 @@ describe('Admin gate and credential scope', () => {
 
     const readPolicy = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [{ effect: 'Allow', action: ['projects:GetProject'] }],
-        },
-      });
+      .send({ document: readPolicyDocument, published: true });
     readPolicyId = readPolicy.body.id;
   });
 

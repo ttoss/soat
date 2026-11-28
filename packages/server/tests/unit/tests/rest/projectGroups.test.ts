@@ -289,7 +289,7 @@ describe('groups', () => {
       const edit = await authenticatedTestClient(ownerToken)
         .put(`/api/v1/policies/${planPolicyId}`)
         .send({ document: { statement: [] } });
-      expect(edit.status).toBe(403);
+      expect(edit.status).toBe(404);
       const group = await admin().get(
         `/api/v1/project-groups/${projectGroupId}`
       );

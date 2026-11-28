@@ -96,13 +96,18 @@ export const mapPolicy = (policy: PolicyRow) => {
     name: policy.name,
     description: policy.description,
     document: policy.document as PolicyDocument | undefined,
+    published: policy.published,
     created_at: policy.createdAt,
     updated_at: policy.updatedAt,
   };
 };
 
-/** The policies a listing spans: every one, or only the global ones. */
-type PolicyListScope = 'all' | 'global';
+/**
+ * The policies a listing spans: every one, or the global ones, only the
+ * published when `publishedOnly`.
+ */
+type PolicyListScope =
+  { owner: 'any' } | { owner: 'global'; publishedOnly: boolean };
 
 /** A listing's owner filter: the global policies, a project group's, or projects'. */
 const ownerWhere = (args: {
@@ -110,7 +115,13 @@ const ownerWhere = (args: {
   projectIds?: number[];
   projectGroupId?: number;
 }): Record<string, unknown> => {
-  if (args.scope === 'global') return { projectId: null, projectGroupId: null };
+  if (args.scope.owner === 'global') {
+    return {
+      projectId: null,
+      projectGroupId: null,
+      ...(args.scope.publishedOnly ? { published: true } : {}),
+    };
+  }
   return args.projectGroupId === undefined
     ? projectScopeWhere({ projectIds: args.projectIds })
     : { projectGroupId: args.projectGroupId };
@@ -155,7 +166,7 @@ export const listPolicies = async (args: {
     limit: args.limit,
     cursor: args.cursor,
     filters: {
-      scope: args.scope,
+      ...args.scope,
       userId: args.userId,
       projectIds: args.projectIds,
       projectGroupId: args.projectGroupId,
@@ -178,13 +189,16 @@ export const listPolicies = async (args: {
 
 /**
  * Where a policy lives, for the route to authorize against before acting on
- * it: a project group's, a project's (`scope`), or global (`scope` `null`);
- * `null` overall names nothing.
+ * it: a project group's, a project's (`scope`), or global (`scope` `null`,
+ * with whether it is published); `null` overall names nothing.
  */
 export const findPolicyScope = async (args: {
   policyId: string;
 }): Promise<
-  { scope: ResourceScope | null } | { projectGroupPublicId: string } | null
+  | { scope: ResourceScope }
+  | { scope: null; published: boolean }
+  | { projectGroupPublicId: string }
+  | null
 > => {
   const policy = await db.Policy.findOne({
     where: { publicId: args.policyId },
@@ -194,7 +208,9 @@ export const findPolicyScope = async (args: {
   if (policy.projectGroup) {
     return { projectGroupPublicId: policy.projectGroup.publicId };
   }
-  if (policy.projectId === null || !policy.project) return { scope: null };
+  if (policy.projectId === null || !policy.project) {
+    return { scope: null, published: policy.published };
+  }
   return {
     scope: {
       projectId: policy.projectId,
@@ -202,6 +218,26 @@ export const findPolicyScope = async (args: {
       tags: null,
     },
   };
+};
+
+/**
+ * The `published` a write leaves: the one it names, on a global policy only,
+ * else `current`.
+ */
+const publishedOf = (args: {
+  published: boolean | undefined;
+  current: boolean;
+  owner: { project: PolicyProject; projectGroup: PolicyGroupRef | null };
+}): boolean => {
+  if (args.published === undefined) return args.current;
+  if (args.owner.project !== null || args.owner.projectGroup !== null) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'published is set only on a global policy.',
+      { field: 'published' }
+    );
+  }
+  return args.published;
 };
 
 export const createPolicy = async (args: {
@@ -212,6 +248,8 @@ export const createPolicy = async (args: {
   project?: { id: number; publicId: string };
   /** The project group a project group policy belongs to; never with `project`. */
   projectGroup?: PolicyGroupRef;
+  /** Whether a global policy is published; refused on any other. */
+  published?: boolean;
   /** Whether the writer may write a statement `denial`. */
   writerUnrestricted: boolean;
 }): Promise<
@@ -223,6 +261,11 @@ export const createPolicy = async (args: {
   };
   log('createPolicy: owner=%o', owner);
   assertMayWriteDenial(args);
+  const published = publishedOf({
+    published: args.published,
+    current: false,
+    owner,
+  });
   const validation = await validatePolicy({
     document: args.document,
     ...owner,
@@ -238,6 +281,7 @@ export const createPolicy = async (args: {
     name: args.name ?? null,
     description: args.description ?? null,
     document: args.document as object,
+    published,
   });
   await policy.reload({ include: projectInclude() });
 
@@ -249,6 +293,8 @@ export const updatePolicy = async (args: {
   name?: string;
   description?: string;
   document: PolicyDocument;
+  /** Whether a global policy is published; refused on any other. */
+  published?: boolean;
   /** The writer's policy sets, which must hold the edit where it is attached. */
   writerPolicies: GetWriterPolicies;
   /** Whether the writer may write a statement `denial`. */
@@ -277,6 +323,11 @@ export const updatePolicy = async (args: {
     );
   }
   const owner = ownerOf(policy);
+  const published = publishedOf({
+    published: args.published,
+    current: policy.published,
+    owner,
+  });
   const validation = await validatePolicy({
     document: args.document,
     ...owner,
@@ -299,6 +350,7 @@ export const updatePolicy = async (args: {
     name: args.name ?? policy.name,
     description: args.description ?? policy.description,
     document: args.document as object,
+    published,
   });
 
   return mapPolicy(policy);
