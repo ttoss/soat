@@ -149,19 +149,25 @@ const policyNotFound = (): DomainError => {
 /**
  * Authorizes `action` on the global policies: every write for the
  * unrestricted admin only, a read for any caller holding it in a project or in
- * a project group. An unpublished one (`policy`, the one acted on) is private,
- * `404` to all but the unrestricted admin. Answers whether the caller sees only
- * the published ones.
+ * a project group, or in the one `projectGroupPublicId` names when given. An
+ * unpublished one (`policy`, the one acted on) is private, `404` to all but
+ * the unrestricted admin. Answers whether the caller sees only the published
+ * ones.
  */
 const authorizeGlobalPolicies = async (args: {
   ctx: AuthenticatedContext;
   action: string;
   policy?: { published: boolean };
+  projectGroupPublicId?: string;
 }): Promise<{ publishedOnly: boolean }> => {
-  const { ctx, action } = args;
+  const { ctx, action, projectGroupPublicId } = args;
   const { unrestricted } = ctx.authUser;
   if (!unrestricted && args.policy?.published === false) {
     throw policyNotFound();
+  }
+  if (projectGroupPublicId !== undefined) {
+    await authorizeProjectGroupPolicy({ ctx, projectGroupPublicId, action });
+    return { publishedOnly: !unrestricted };
   }
   const projectsHolding = GLOBAL_POLICY_READS[action];
   if (unrestricted || projectsHolding === undefined) {
@@ -239,10 +245,14 @@ const throwIfInvalid = <T extends object>(
   return result;
 };
 
-/** `GET /policies?scope=global`, which no owner or user filter narrows. */
+/**
+ * `GET /policies?scope=global`, which no owner or user filter narrows; a
+ * `project_group_id` names the project group the read is authorized on.
+ */
 const listGlobalPolicies = async (args: {
   ctx: AuthenticatedContext;
   filters: Record<string, string | undefined>;
+  projectGroupPublicId?: string;
 }): Promise<void> => {
   const { ctx } = args;
   for (const [field, value] of Object.entries(args.filters)) {
@@ -256,6 +266,7 @@ const listGlobalPolicies = async (args: {
   const { publishedOnly } = await authorizeGlobalPolicies({
     ctx,
     action: 'policies:ListPolicies',
+    projectGroupPublicId: args.projectGroupPublicId,
   });
   ctx.body = await listPolicies({
     scope: { owner: 'global', publishedOnly },
@@ -274,11 +285,8 @@ policiesRouter.get('/policies', async (ctx: Context) => {
   if (scope === 'global') {
     await listGlobalPolicies({
       ctx,
-      filters: {
-        project_id: projectPublicId,
-        project_group_id: projectGroupPublicId,
-        user_id: userId,
-      },
+      filters: { project_id: projectPublicId, user_id: userId },
+      projectGroupPublicId,
     });
     return;
   }

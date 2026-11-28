@@ -62,7 +62,8 @@ paths:
           required: false
           description: >-
             List only this project group's policies (pgrp_...); never with
-            `project_id` or `user_id`
+            `project_id` or `user_id`. With `scope=global`, the project group
+            the global policies are read through instead
           schema:
             type: string
         - name: user_id
@@ -76,8 +77,9 @@ paths:
           required: false
           description: >-
             `global` lists only the global policies (no `project_id` and no
-            `project_group_id`); never with `project_id`, `project_group_id` or
-            `user_id`
+            `project_group_id`); never with `project_id` or `user_id`. A
+            `project_group_id` the caller reaches authorizes the read on that
+            project group's `project-groups:ListPolicies`
           schema:
             type: string
             enum:
