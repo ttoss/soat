@@ -64,7 +64,7 @@ A deployment fronting the runtime registers project group actions of its own in 
 
 ### Project group keys
 
-A key created with `project_group_id` in place of `project_id` acts on its project group's own resources and on the projects in it, nowhere else, read live as projects join and leave. Creating one needs `project-groups:CreateApiKey` on `srn:project-group:<project_group_id>:api_key/*`; deleting one, `project-groups:RevokeApiKey` on its own SRN. A project group key's `policy_ids` take global policies and the project group's own; narrowed by them, it reaches no project group action they deny. It lists and manages only keys of its project group or of a project in it.
+A key created with `project_group_id` in place of `project_id` acts on its project group's own resources and on the projects in it, nowhere else, read live as projects join and leave. Creating one needs `project-groups:CreateApiKey` on `srn:project-group:<project_group_id>:api_key/*`; deleting one, `project-groups:RevokeApiKey` on its own SRN. A project group key's `policy_ids` take global policies and the project group's own, and any other, a project's included, is `400 POLICY_OUTSIDE_PROJECT`; narrowed by them, it reaches no project group action they deny. It lists and manages only keys of its project group or of a project in it.
 
 An [IAM token](./iam.md#iam-tokens) minted from a project group key names `project_id`, a project of the project group, and acts in that project alone, as one minted from a project key.
 

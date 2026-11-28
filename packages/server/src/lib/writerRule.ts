@@ -37,6 +37,8 @@ type WriterRuleCarrier = {
   policiesRequired?: string;
   /** Models whose rows hold what it acts on, for a carrier without policies. */
   models?: string[];
+  /** As a project group carrier, it also names its projects' policies. */
+  groupNamesItsProjects?: true;
 };
 
 /**
@@ -59,7 +61,7 @@ export const WRITER_RULE_CARRIERS = {
   },
   apiKeys: { policies: 'apiKeys' },
   users: { policies: 'users' },
-  projectGroups: { policies: 'projectGroups' },
+  projectGroups: { policies: 'projectGroups', groupNamesItsProjects: true },
   orchestrations: { models: ['Orchestration'] },
   shares: { models: ['Share'] },
   deciders: {
@@ -128,18 +130,71 @@ export const startsOfRow = async (args: {
 };
 
 /**
- * The one reading of "these ids name policies": every id resolves, a carrier
- * of `projectId` names only that project's policies or global ones, and only
- * a carrier of `projectGroupId` names that project group's policies.
- * `projectId` `null` is a carrier acting in every project.
+ * Where a carrier acts: one project, a project group, or every project.
+ * `withItsProjects` lets a project group carrier also name its projects'
+ * policies.
+ */
+type PolicyScope =
+  | { kind: 'project'; projectId: number }
+  | { kind: 'projectGroup'; projectGroupId: number; withItsProjects: boolean }
+  | { kind: 'everyProject' };
+
+type ScopedPolicyRow = {
+  projectId: number | null;
+  projectGroupId: number | null;
+  project?: { projectGroupId: number | null } | null;
+};
+
+/** Why a project's policy lies outside `scope`, or `null` when inside. */
+const projectPolicyOutside = (args: {
+  row: ScopedPolicyRow;
+  scope: PolicyScope;
+}): string | null => {
+  const { row, scope } = args;
+  switch (scope.kind) {
+    case 'everyProject':
+      return null;
+    case 'project':
+      return row.projectId === scope.projectId
+        ? null
+        : 'belongs to another project';
+    case 'projectGroup':
+      return scope.withItsProjects &&
+        row.project?.projectGroupId === scope.projectGroupId
+        ? null
+        : 'belongs to a project, not to this project group';
+  }
+};
+
+/** Why `row` lies outside `scope`, or `null` when the carrier may name it. */
+const outsideScope = (args: {
+  row: ScopedPolicyRow;
+  scope: PolicyScope;
+}): string | null => {
+  const { row, scope } = args;
+  if (row.projectGroupId !== null) {
+    return scope.kind === 'projectGroup' &&
+      row.projectGroupId === scope.projectGroupId
+      ? null
+      : 'belongs to a project group this resource is not of';
+  }
+  if (row.projectId === null) return null;
+  return projectPolicyOutside(args);
+};
+
+/**
+ * The one reading of "these ids name policies": every id resolves, and each
+ * is global or inside the carrier's scope ({@link outsideScope}).
  */
 const resolvePolicies = async (args: {
   policyIds: string[];
-  projectId: number | null;
-  projectGroupId: number | null;
+  scope: PolicyScope;
 }) => {
   const rows = await db.Policy.findAll({
     where: { publicId: args.policyIds },
+    include: [
+      { model: db.Project, as: 'project', attributes: ['projectGroupId'] },
+    ],
   });
   const missing = args.policyIds.find((id) => {
     return !rows.some((row) => {
@@ -149,30 +204,13 @@ const resolvePolicies = async (args: {
   if (missing !== undefined) {
     throw new DomainError('POLICY_NOT_FOUND', `Policy '${missing}' not found.`);
   }
-  const foreign = rows.find((row) => {
-    return (
-      args.projectId !== null &&
-      row.projectId !== null &&
-      row.projectId !== args.projectId
-    );
-  });
-  if (foreign) {
+  for (const row of rows) {
+    const reason = outsideScope({ row, scope: args.scope });
+    if (reason === null) continue;
     throw new DomainError(
       'POLICY_OUTSIDE_PROJECT',
-      `Policy '${foreign.publicId}' belongs to another project.`,
-      { policy_id: foreign.publicId }
-    );
-  }
-  const foreignGroup = rows.find((row) => {
-    return (
-      row.projectGroupId !== null && row.projectGroupId !== args.projectGroupId
-    );
-  });
-  if (foreignGroup) {
-    throw new DomainError(
-      'POLICY_OUTSIDE_PROJECT',
-      `Policy '${foreignGroup.publicId}' belongs to a project group this resource is not of.`,
-      { policy_id: foreignGroup.publicId }
+      `Policy '${row.publicId}' ${reason}.`,
+      { policy_id: row.publicId }
     );
   }
   return rows;
@@ -212,17 +250,12 @@ const assertPoliciesHeld = async (args: {
   carrier: WriterRuleCarrier;
   writer: Writer;
   policyIds: string[] | null | undefined;
-  projectId: number | null;
-  projectGroupId: number | null;
+  scope: PolicyScope;
   actsIn: string;
 }): Promise<{ id: number; publicId: string }[]> => {
   const policyIds = readPolicyIds(args);
   if (!args.carrier.policies || policyIds.length === 0) return [];
-  const rows = await resolvePolicies({
-    policyIds,
-    projectId: args.projectId,
-    projectGroupId: args.projectGroupId,
-  });
+  const rows = await resolvePolicies({ policyIds, scope: args.scope });
   await assertWriterMayAttach({
     carrier: args.carrier.policies,
     getPolicies: args.writer.getPolicies,
@@ -234,6 +267,29 @@ const assertPoliciesHeld = async (args: {
   return rows.map((row) => {
     return { id: row.id as number, publicId: row.publicId as string };
   });
+};
+
+const scopeOf = (args: {
+  carrier: WriterRuleCarrier;
+  projectId: number | null;
+  projectGroupId: number | null;
+}): PolicyScope => {
+  if (args.projectId !== null && args.projectGroupId !== null) {
+    throw new Error(
+      'A carrier acts in a project or a project group, not both.'
+    );
+  }
+  if (args.projectId !== null) {
+    return { kind: 'project', projectId: args.projectId };
+  }
+  if (args.projectGroupId !== null) {
+    return {
+      kind: 'projectGroup',
+      projectGroupId: args.projectGroupId,
+      withItsProjects: args.carrier.groupNamesItsProjects === true,
+    };
+  }
+  return { kind: 'everyProject' };
 };
 
 /**
@@ -298,8 +354,11 @@ export const assertWriterHolds = async (args: {
     carrier,
     writer: args.writer,
     policyIds: args.carried.policyIds,
-    projectId: args.projectId,
-    projectGroupId: args.projectGroupId ?? null,
+    scope: scopeOf({
+      carrier,
+      projectId: args.projectId,
+      projectGroupId: args.projectGroupId ?? null,
+    }),
     actsIn: project?.publicId ?? EVERY_PROJECT,
   });
   if (project) {
