@@ -62,6 +62,10 @@ A deployment fronting the runtime registers project group actions of its own in 
 - **Attaching** goes through the grant check: the writer holds every grant the policy carries ([`POLICY_GRANT_NOT_HELD`](../error-codes.md#policy_grant_not_held)), as for any carrier; a `Deny`-only policy carries none. A project policy outside the project group, or another project group's policy, is `400 POLICY_OUTSIDE_PROJECT`.
 - **Fixed policies** are global and written only by the unrestricted admin: the owner can neither detach one ([`PATCH /api/v1/project-groups/{project_group_id}`](/docs/api/project-groups/update-project-group) with `fixed_policy_ids` is `403`) nor edit it (a global policy is the admin's). A policy a project group names cannot be deleted (`409 POLICY_HAS_DEPENDENTS`, `meta.project_groups`).
 
+### Refusals
+
+A caller refused a project group action gets `404 RESOURCE_NOT_FOUND`, as for a project group that does not exist, when the project group is beyond its reach: its credential is a key of another project group or of a project, or one of its policy sets names nothing of the project group. A key of the project group, or a caller each of whose policy sets names it (the owner signed in), gets `403 FORBIDDEN` naming the action it lacks, as a [write on a project's resource](./iam.md#what-a-denial-looks-like) is refused in a project its policies name.
+
 ### Project group keys
 
 A key created with `project_group_id` in place of `project_id` acts on its project group's own resources and on the projects in it, nowhere else, read live as projects join and leave. Creating one needs `project-groups:CreateApiKey` on `srn:project-group:<project_group_id>:api_key/*`; deleting one, `project-groups:RevokeApiKey` on its own SRN. A project group key's `policy_ids` take global policies and the project group's own, and any other, a project's included, is `400 POLICY_OUTSIDE_PROJECT`; narrowed by them, it reaches no project group action they deny. It lists and manages only keys of its project group or of a project in it.

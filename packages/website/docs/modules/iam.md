@@ -465,6 +465,7 @@ A denial's status code depends on what the route does, not on which policy faile
 | **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                                                                                                                      | `403 FORBIDDEN`                                                                        |
 | Scoped credential naming another project (`project_id`)                                                                                                                                           | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                      |
 | Scoped credential addressing, by id, a resource in another project                                                                                                                                | `404` — the module's not-found, as for an id that names nothing                        |
+| A project group action ([Refusals](./project-groups.md#refusals))                                                                                                                                 | `404` beyond the caller's reach, else `403 FORBIDDEN`                                  |
 
 A list without `project_id` spans every project the caller may read, which for an unrestricted admin is every project; `project_id` narrows it to one. An export reads one project, so without `project_id` it is `400 VALIDATION_FAILED`.
 

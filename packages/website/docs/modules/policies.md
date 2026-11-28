@@ -86,7 +86,7 @@ A policy created with `project_group_id` belongs to that [project group](./proje
 | Carried in `policy_ids` by                | the project group itself and its keys only; anywhere else `400 POLICY_OUTSIDE_PROJECT`                                                                                                                                       |
 
 - An `Allow` with no `resource` grants a project group action on the project group and any other action on the projects in it, read when the policy is evaluated: a project leaving the project group leaves its reach.
-- [`GET /api/v1/policies?project_group_id=<project_group_id>`](/docs/api/policies/list-policies) lists them; a project listing holds none. A caller who may not read the project group gets `404`.
+- [`GET /api/v1/policies?project_group_id=<project_group_id>`](/docs/api/policies/list-policies) lists them; a project listing holds none. A refusal is `404` or `403` as for every project group route ([Refusals](./project-groups.md#refusals)).
 - Attaching and editing follow the carrier's grant check: a key narrowed by `policy_ids` cannot widen the policy narrowing it (`403 POLICY_GRANT_NOT_HELD`) nor write a key carrying a policy outside them (`403 API_KEY_POLICY_BOUNDARY`).
 - An IAM token's `policy_ids` take none. Deleting the project group deletes its policies.
 

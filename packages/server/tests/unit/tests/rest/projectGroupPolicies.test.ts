@@ -503,4 +503,95 @@ describe('policies of a project group', () => {
       expect(res.body.error.code).toBe('API_KEY_POLICY_BOUNDARY');
     });
   });
+
+  describe('a refusal on a project group', () => {
+    let groupKey: string;
+    let otherGroupKey: string;
+
+    beforeAll(async () => {
+      const narrow = await groupPolicy({
+        statement: [{ effect: 'Allow', action: ['secrets:ListSecrets'] }],
+      });
+      const res = await mintKey({
+        project_group_id: projectGroupId,
+        policy_ids: [narrow],
+      });
+      expect(res.status).toBe(201);
+      groupKey = res.body.key;
+      const other = await mintKey({ project_group_id: otherProjectGroupId });
+      expect(other.status).toBe(201);
+      otherGroupKey = other.body.key;
+    });
+
+    test('is 403 naming the action for a key of the project group', async () => {
+      const list = await authenticatedTestClient(groupKey).get(
+        `/api/v1/policies?project_group_id=${projectGroupId}`
+      );
+      expect(list.status).toBe(403);
+      expect(list.body.error.code).toBe('FORBIDDEN');
+      expect(list.body.error.message).toContain('project-groups:ListPolicies');
+      const read = await authenticatedTestClient(groupKey).get(
+        `/api/v1/project-groups/${projectGroupId}`
+      );
+      expect(read.status).toBe(403);
+      expect(read.body.error.message).toContain(
+        'project-groups:GetProjectGroup'
+      );
+    });
+
+    test('is 404 for a key of another project group', async () => {
+      const list = await authenticatedTestClient(otherGroupKey).get(
+        `/api/v1/policies?project_group_id=${projectGroupId}`
+      );
+      expect(list.status).toBe(404);
+      const read = await authenticatedTestClient(otherGroupKey).get(
+        `/api/v1/project-groups/${projectGroupId}`
+      );
+      expect(read.status).toBe(404);
+    });
+
+    test('is 404 for a project key and for a user it names nothing for', async () => {
+      const projectKey = await mintKey({ project_id: projectId });
+      expect(projectKey.status).toBe(201);
+      for (const token of [projectKey.body.key, noPermToken]) {
+        const res = await authenticatedTestClient(token).get(
+          `/api/v1/policies?project_group_id=${projectGroupId}`
+        );
+        expect(res.status).toBe(404);
+      }
+    });
+
+    test('is 403 naming the action for the owner an attached policy denies', async () => {
+      const third = await admin()
+        .post('/api/v1/project-groups')
+        .send({ name: 'Third', owner_id: ownerId });
+      expect(third.status).toBe(201);
+      const deny = await createGroupPolicy({
+        projectGroupId: third.body.id,
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['project-groups:*'] },
+            { effect: 'Deny', action: ['project-groups:ListPolicies'] },
+          ],
+        },
+      });
+      expect(deny.status).toBe(201);
+      const attached = await authenticatedTestClient(ownerToken)
+        .patch(`/api/v1/project-groups/${third.body.id}`)
+        .send({ policy_ids: [deny.body.id] });
+      expect(attached.status).toBe(200);
+      const res = await authenticatedTestClient(ownerToken).get(
+        `/api/v1/policies?project_group_id=${third.body.id}`
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('project-groups:ListPolicies');
+    });
+
+    test('lets the owner through', async () => {
+      const res = await authenticatedTestClient(ownerToken).get(
+        `/api/v1/policies?project_group_id=${projectGroupId}`
+      );
+      expect(res.status).toBe(200);
+    });
+  });
 });

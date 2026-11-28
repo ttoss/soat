@@ -126,38 +126,70 @@ export const extractProjectIdsFromPolicies = (
   return Array.from(projectIds);
 };
 
-const policyReachesProject = (args: {
+/** Whether some `Allow` of the policy names a resource `reaches` accepts. */
+const policyReaches = (args: {
   policy: PolicyDocument;
-  projectPublicId: string;
+  reaches: (resource: string) => boolean;
 }): boolean => {
   return args.policy.statement.some((statement) => {
     if (statement.effect !== 'Allow') return false;
-    return (statement.resource ?? ['*']).some((resource) => {
-      const segment = projectSegment(resource);
-      return (
-        segment !== null &&
-        matchesPattern({ pattern: segment, value: args.projectPublicId })
-      );
+    return (statement.resource ?? ['*']).some(args.reaches);
+  });
+};
+
+/**
+ * Whether every set has a policy `reaches` accepts: a request must satisfy
+ * each set, so it concerns only what they all reach. No set concerns nothing.
+ */
+const policySetsReach = (args: {
+  sets: PolicySets;
+  reaches: (resource: string) => boolean;
+}): boolean => {
+  if (args.sets.length === 0) return false;
+  return args.sets.every((policies) => {
+    return policies.some((policy) => {
+      return policyReaches({ policy, reaches: args.reaches });
     });
   });
 };
 
 /**
- * Whether every set has an `Allow` whose project segment matches the project:
- * a request must satisfy each set, so it concerns only what they all reach.
- * No set concerns no project.
+ * Whether every set has an `Allow` whose project segment matches the project.
  */
 export const policySetsConcernProject = (args: {
   sets: PolicySets;
   projectPublicId: string;
 }): boolean => {
-  if (args.sets.length === 0) return false;
-  return args.sets.every((policies) => {
-    return policies.some((policy) => {
-      return policyReachesProject({
-        policy,
-        projectPublicId: args.projectPublicId,
-      });
-    });
+  return policySetsReach({
+    sets: args.sets,
+    reaches: (resource) => {
+      const segment = projectSegment(resource);
+      return (
+        segment !== null &&
+        matchesPattern({ pattern: segment, value: args.projectPublicId })
+      );
+    },
+  });
+};
+
+/**
+ * Whether every set has an `Allow` naming the project group: `*`, or an SRN
+ * whose first two segments match `project-group` and its id.
+ */
+export const policySetsConcernProjectGroup = (args: {
+  sets: PolicySets;
+  projectGroupPublicId: string;
+}): boolean => {
+  return policySetsReach({
+    sets: args.sets,
+    reaches: (resource) => {
+      if (resource === '*') return true;
+      const parts = resource.split(':');
+      if (parts[0] !== 'srn' || parts.length < 4) return false;
+      return (
+        matchesPattern({ pattern: parts[1], value: 'project-group' }) &&
+        matchesPattern({ pattern: parts[2], value: args.projectGroupPublicId })
+      );
+    },
   });
 };

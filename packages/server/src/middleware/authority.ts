@@ -84,6 +84,7 @@ export type Authority = Pick<
   | 'narrowing'
   | 'declareRequestTags'
   | 'isAllowedOnProjectGroup'
+  | 'getProjectGroupPolicies'
 >;
 
 const ADMIN_WILDCARD_POLICY: PolicyDocument = {
@@ -175,6 +176,38 @@ const createProjectGroupCaps = (args: {
 };
 
 /**
+ * What a caller holds on a project group's own resources: the sets every check
+ * there reads, none for a credential pinned to a project.
+ */
+const buildProjectGroupChecks = (args: {
+  pinned: string | null;
+  getSets: (scope: CheckScope) => Promise<LabeledPolicySets>;
+  requestTagContext: Record<string, string>;
+}): Pick<Authority, 'getProjectGroupPolicies' | 'isAllowedOnProjectGroup'> => {
+  const groupSets = async (projectGroup: string) => {
+    return args.pinned === null ? args.getSets({ projectGroup }) : null;
+  };
+  return {
+    getProjectGroupPolicies: async (projectGroupPublicId) => {
+      const sets = await groupSets(projectGroupPublicId);
+      return sets ? unlabelPolicySets(sets) : NOTHING_SETS;
+    },
+    isAllowedOnProjectGroup: async (check) => {
+      const groups = await groupSets(check.projectGroupPublicId);
+      if (!groups) return false;
+      return policyGroupsAllow({
+        groups,
+        check: {
+          action: check.action,
+          resource: check.resource,
+          context: { ...args.requestTagContext },
+        },
+      });
+    },
+  };
+};
+
+/**
  * A request's effective authority: its grant ∩ every cap, inside the pinned
  * project, ∩ the attached policies of the project group the check lands in. Each credential kind and each narrowing states its terms here, and
  * checks, list filters, project resolution and key creation read one answer.
@@ -239,17 +272,11 @@ export const buildAuthority = (args: {
         db,
       });
     },
-    isAllowedOnProjectGroup: async (check) => {
-      if (terms.pinned !== null) return false;
-      return policyGroupsAllow({
-        groups: await getSets({ projectGroup: check.projectGroupPublicId }),
-        check: {
-          action: check.action,
-          resource: check.resource,
-          context: { ...requestTagContext },
-        },
-      });
-    },
+    ...buildProjectGroupChecks({
+      pinned: terms.pinned,
+      getSets,
+      requestTagContext,
+    }),
     unrestricted,
     operator,
     narrowing: narrowingOf(terms),
